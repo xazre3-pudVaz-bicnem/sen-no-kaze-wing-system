@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { getPublicBundleBySlug } from '@/lib/data/public-catalog';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { JsonLd } from '@/components/ui';
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
@@ -11,8 +12,8 @@ type Search = Promise<{ c?: string; resume?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
-  const store = await getStore();
-  const model = await store.getModelBySlug(slug);
+  const bundle = await getPublicBundleBySlug(slug);
+  const model = bundle?.model;
   return buildMetadata({
     title: model ? `${model.name} 見積シミュレーター｜オプションを選んで概算金額と完成イメージを確認` : '見積シミュレーター',
     description: `${model?.name ?? 'Wing'}のベースにトイレ・お風呂・キッチン・エアコン・ウッドデッキなどのオプションを加え、完成イメージと概算金額をその場で確認。保存して後から再編集、見積依頼・見積書PDFの発行まで。`,
@@ -23,11 +24,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function SimulatorPage({ params, searchParams }: { params: Params; searchParams: Search }) {
   const { slug } = await params;
   const { c, resume } = await searchParams;
-  const store = await getStore();
-  const model = await store.getModelBySlug(slug);
-  if (!model) notFound();
-  const bundle = await store.getCatalogBundle(model.id);
+  const bundle = await getPublicBundleBySlug(slug);
   if (!bundle) notFound();
+  const model = bundle.model;
   const user = await getSessionUser();
 
   let initial: SimulatorInitial | null = null;
@@ -36,6 +35,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
     if (!user) {
       loadError = '保存した仕様を開くにはログインが必要です。';
     } else {
+      const store = await getStore();
       const found = await store.getConfiguration(c, user);
       if (!found) loadError = '保存した仕様が見つからないか、閲覧権限がありません。';
       else

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { faqItems } from '@/data/site-content';
-import { getStore } from '@/lib/data/store';
+import { getPublicCatalog } from '@/lib/data/public-catalog';
 import { buildMetadata, faqJsonLd, organizationJsonLd } from '@/lib/seo';
 import { JsonLd } from '@/components/ui';
 import { Reveal } from '@/components/ui/reveal';
@@ -29,15 +29,13 @@ export const metadata = buildMetadata({
 });
 
 export default async function HomePage() {
-  const store = await getStore();
-  const models = await store.listModels();
-  const bundles = await Promise.all(models.map((m) => store.getCatalogBundle(m.id)));
+  const { models, bundles } = await getPublicCatalog();
   const primary = models[0] ?? null;
   const simulatorHref = primary ? `/simulator/${primary.slug}` : '/products';
-  const chapters = models.map((m, i) => ({
-    model: m,
-    image: bundles[i]?.images.find((img) => img.kind === 'exterior') ?? bundles[i]?.images.find((img) => img.kind === 'hero') ?? null,
-  }));
+  const chapters = models.map((m) => {
+    const imgs = bundles[m.id]?.images ?? [];
+    return { model: m, image: imgs.find((img) => img.kind === 'exterior') ?? imgs.find((img) => img.kind === 'hero') ?? null };
+  });
 
   return (
     <>

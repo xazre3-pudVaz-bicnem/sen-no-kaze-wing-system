@@ -188,6 +188,16 @@
   }
 }
 
+/* JavaScript が動かない環境では出現演出を無効化して常に表示する */
+@media (scripting: none) {
+  .reveal-on-scroll,
+  .reveal-image,
+  .reveal-image img {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     animation: none;

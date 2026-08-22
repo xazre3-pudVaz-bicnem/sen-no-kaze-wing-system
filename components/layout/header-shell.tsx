@@ -88,7 +88,7 @@ export function HeaderShell({ items, user }: Props) {
 
           <button
             type="button"
-            className="inline-flex size-11 items-center justify-center rounded-full text-white hover:bg-white/10 lg:hidden"
+            className="inline-flex size-11 items-center justify-center rounded-full text-white hover:bg-white/10 xl:hidden"
             aria-expanded={open}
             aria-controls="mobile-menu"
             aria-label={open ? 'メニューを閉じる' : 'メニューを開く'}
@@ -101,7 +101,10 @@ export function HeaderShell({ items, user }: Props) {
 
       <div
         id="mobile-menu"
-        className={cn('fixed inset-x-0 top-16 bottom-0 z-50 overflow-y-auto bg-forest-deep transition-opacity duration-200 lg:hidden', open ? 'opacity-100' : 'pointer-events-none opacity-0')}
+        className={cn(
+          'fixed inset-x-0 top-16 bottom-0 z-50 overflow-y-auto bg-forest-deep transition-opacity duration-200 lg:top-[6.5rem] xl:hidden',
+          open ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
         aria-hidden={!open}
       >
         <nav aria-label="モバイルナビゲーション" className="container-x flex flex-col gap-1 py-6">

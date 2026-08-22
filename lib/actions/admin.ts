@@ -1,8 +1,9 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin } from '@/lib/auth/session';
+import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, StoreError } from '@/lib/data/store';
 import {
   categorySchema,
@@ -87,6 +88,7 @@ export async function saveModelAction(_prev: AdminFormState, formData: FormData)
     const store = await getStore();
     const m = await store.upsertModel(parsed.data);
     revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
     if (!parsed.data.id) createdId = m.id;
   } catch (e) {
     return errState(e);
@@ -112,6 +114,7 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
     const store = await getStore();
     await store.upsertCategory(parsed.data);
     revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
     return { ok: true, message: '保存しました' };
   } catch (e) {
     return errState(e);
@@ -169,6 +172,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
       conflicts.filter((c) => c.conflicts_with_option_id !== o.id)
     );
     revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
     if (!parsed.data.id) createdId = o.id;
   } catch (e) {
     return errState(e);
@@ -187,6 +191,7 @@ export async function deleteOptionAction(formData: FormData): Promise<void> {
     redirect(`/admin/options/${id}?error=${encodeURIComponent(errState(e).error ?? '')}`);
   }
   revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
   redirect('/admin/options?deleted=1');
 }
 
@@ -215,6 +220,7 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
     const store = await getStore();
     await store.upsertPreviewRule(parsed.data);
     revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
     return { ok: true, message: '保存しました' };
   } catch (e) {
     return errState(e);
@@ -226,6 +232,7 @@ export async function deletePreviewRuleAction(formData: FormData): Promise<void>
   const store = await getStore();
   await store.deletePreviewRule(String(formData.get('id') ?? ''));
   revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
   redirect('/admin/preview-rules?deleted=1');
 }
 
@@ -250,6 +257,7 @@ export async function addProductImageAction(_prev: AdminFormState, formData: For
     const store = await getStore();
     await store.addProductImage(parsed.data);
     revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
     return { ok: true, message: '画像を追加しました' };
   } catch (e) {
     return errState(e);
@@ -261,6 +269,7 @@ export async function deleteProductImageAction(formData: FormData): Promise<void
   const store = await getStore();
   await store.deleteProductImage(String(formData.get('id') ?? ''));
   revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
   redirect(`/admin/models/${String(formData.get('base_model_id') ?? '')}?image_deleted=1`);
 }
 

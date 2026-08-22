@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { getStore } from '@/lib/data/store';
+import { getPublicModels } from '@/lib/data/public-catalog';
 import { getSiteUrl } from '@/lib/site';
 
 export const dynamic = 'force-dynamic';
@@ -7,8 +7,7 @@ export const dynamic = 'force-dynamic';
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = getSiteUrl();
   if (!base) return [];
-  const store = await getStore();
-  const models = await store.listModels();
+  const models = await getPublicModels();
   const now = new Date();
   return [
     { url: `${base}/`, lastModified: now, changeFrequency: 'weekly', priority: 1 },

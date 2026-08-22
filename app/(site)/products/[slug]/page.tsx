@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Check } from 'lucide-react';
-import { getStore } from '@/lib/data/store';
+import { getPublicBundleBySlug } from '@/lib/data/public-catalog';
 import { baseTotalOf, formatManYen, formatYen } from '@/lib/domain/pricing';
 import { IMAGE_KIND_LABELS, type ProductImageKind } from '@/lib/domain/types';
 import { breadcrumbJsonLd, buildMetadata, productJsonLd } from '@/lib/seo';
@@ -15,10 +15,9 @@ type Params = Promise<{ slug: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
-  const store = await getStore();
-  const model = await store.getModelBySlug(slug);
+  const bundle = await getPublicBundleBySlug(slug);
+  const model = bundle?.model;
   if (!model) return buildMetadata({ title: '商品が見つかりません', description: '', path: `/products/${slug}`, noindex: true });
-  const bundle = await store.getCatalogBundle(model.id);
   const img = bundle?.images.find((i) => i.kind === 'hero')?.url ?? bundle?.images.find((i) => i.kind === 'exterior')?.url;
   return buildMetadata({
     title: `${model.name}｜折り畳み式木造コンテナの仕様・価格・オプション`,
@@ -37,11 +36,9 @@ const flowSteps = [
 
 export default async function ProductDetailPage({ params }: { params: Params }) {
   const { slug } = await params;
-  const store = await getStore();
-  const model = await store.getModelBySlug(slug);
-  if (!model) notFound();
-  const bundle = await store.getCatalogBundle(model.id);
+  const bundle = await getPublicBundleBySlug(slug);
   if (!bundle) notFound();
+  const model = bundle.model;
 
   const hero = bundle.images.find((i) => i.kind === 'hero') ?? bundle.images.find((i) => i.kind === 'exterior') ?? null;
   const galleryKinds: ProductImageKind[] = ['exterior', 'interior', 'floorplan', 'transport'];

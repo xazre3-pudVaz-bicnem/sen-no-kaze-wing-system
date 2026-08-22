@@ -21,7 +21,7 @@ export function ContactForm({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
   const v = state.values ?? {};
   const dark = tone === 'dark';
   return (
-    <form action={action} className={dark ? 'space-y-6' : 'card space-y-6 p-6 sm:p-10'} noValidate encType="multipart/form-data" data-testid="contact-form">
+    <form action={action} className={dark ? 'space-y-6' : 'card space-y-6 p-6 sm:p-10'} noValidate data-testid="contact-form">
       {state.error && <Alert tone="danger">{state.error}</Alert>}
       <div className="grid gap-6 sm:grid-cols-2">
         <Field label="お名前" htmlFor="full_name" required errors={state.fieldErrors?.full_name}>

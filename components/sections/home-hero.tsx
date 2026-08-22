@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, ChevronDown } from 'lucide-react';
 import { hero } from '@/data/site-content';
 
-/** ファーストビュー：全面写真＋「− 折畳木造コンテナホテル − Wing」＋能登拠点のお知らせ */
+/** ファーストビュー：全面写真＋「− 折畳木造コンテナホテル − Wing」 */
 export function HomeHero() {
   return (
     <section className="relative isolate min-h-[100svh] overflow-hidden bg-forest-deep text-white">
@@ -17,18 +17,8 @@ export function HomeHero() {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-forest-deep/55 via-transparent to-forest-deep/75" aria-hidden="true" />
 
-      <div className="relative flex min-h-[100svh] flex-col">
-        {/* 能登拠点のお知らせ */}
-        <div className="container-x pt-24 sm:pt-32 lg:pt-36">
-          <div className="reveal max-w-xl border border-gold/60 bg-forest-deep/70 p-5 backdrop-blur-sm sm:p-6">
-            <p className="font-serif text-lg text-gold sm:text-xl">{hero.notice.title}</p>
-            <p className="mt-1 font-serif text-base text-white sm:text-lg">{hero.notice.strong}</p>
-            <p className="mt-3 text-xs leading-relaxed text-white/80 sm:text-sm">{hero.notice.body}</p>
-          </div>
-        </div>
-
-        {/* タイトル */}
-        <div className="container-x mt-auto pb-24 text-center sm:pb-28">
+      <div className="relative flex min-h-[100svh] flex-col justify-center">
+        <div className="container-x pt-24 pb-24 text-center sm:pb-28">
           <p className="reveal reveal-delay-1 font-serif text-sm tracking-[0.3em] text-white/90 sm:text-lg">{hero.eyebrow}</p>
           <h1 className="reveal reveal-delay-1 mt-3 font-serif text-[4.5rem] leading-none tracking-[0.06em] text-gold-light drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)] sm:text-[7rem] lg:text-[8.5rem]">
             Wing

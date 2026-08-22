@@ -1,4 +1,4 @@
-import { getStore } from '@/lib/data/store';
+import { getPublicCatalog } from '@/lib/data/public-catalog';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { Breadcrumbs, Container, JsonLd } from '@/components/ui';
 import { Reveal } from '@/components/ui/reveal';
@@ -12,13 +12,11 @@ export const metadata = buildMetadata({
 });
 
 export default async function ProductsPage() {
-  const store = await getStore();
-  const models = await store.listModels();
-  const bundles = await Promise.all(models.map((m) => store.getCatalogBundle(m.id)));
-  const chapters = models.map((m, i) => ({
-    model: m,
-    image: bundles[i]?.images.find((img) => img.kind === 'exterior') ?? bundles[i]?.images.find((img) => img.kind === 'hero') ?? null,
-  }));
+  const { models, bundles } = await getPublicCatalog();
+  const chapters = models.map((m) => {
+    const imgs = bundles[m.id]?.images ?? [];
+    return { model: m, image: imgs.find((img) => img.kind === 'exterior') ?? imgs.find((img) => img.kind === 'hero') ?? null };
+  });
 
   return (
     <>

@@ -1,20 +1,39 @@
 /** サイト共通定数（会社情報・SEO） */
 
-export const SITE_NAME = 'Wing｜折り畳み式木造コンテナ';
+export const SITE_NAME = '千の風プロジェクト｜折畳木造コンテナホテル Wing';
 export const SITE_SHORT_NAME = 'Wing';
 export const PROJECT_NAME = '千の風プロジェクト';
 
+export interface Office {
+  name: string;
+  postal: string;
+  address: string;
+  tel?: string;
+}
+
+export const OFFICES: Office[] = [
+  { name: '本社', postal: '〒262-0016', address: '千葉県千葉市花見川区西小中台２番' },
+  { name: '穴水事務所', postal: '〒927-0026', address: '石川県鳳珠郡穴水町字大町に１番２' },
+  { name: '七尾事務所', postal: '〒926-0831', address: '石川県七尾市池崎町５番地甲', tel: '0767-58-3688' },
+];
+
 export const COMPANY = {
   name: '株式会社 技術の杜',
-  nameEn: 'Technology Forest Co., Ltd.',
+  nameEn: 'gijyutsunomori Inc.',
   url: 'https://gijutsu.co.jp/',
+  /** フリーダイヤル（パンフレット記載） */
   tel: '0120-030-205',
+  /** 七尾事務所（特商法表記の連絡先） */
+  officeTel: '0767-58-3688',
   telHours: '受付時間 9:00〜18:00（土日祝を除く）※要確認',
-  headOffice: '千葉県千葉市花見川区西小中台2番29棟202',
-  branches: [
-    { name: '七尾営業所', address: '石川県七尾市池崎町（番地は確認中）' },
-    { name: '穴水営業所', address: '石川県鳳珠郡穴水町大町（番地は確認中）' },
-  ],
+  representative: '千代川 健裕',
+  representativeBio: '建築業界に約45年。木造住宅の設計・施工に長年携わり、構造計算による設計から大工としての施工まで一貫して手がける。',
+  established: '2022年4月28日',
+  capital: '2,950万円',
+  business: ['木造建築の設計・施工（構造計算を含む）', '折り畳み式木造コンテナの製造・販売', '宿泊施設の運営・開業支援'],
+  licenses: ['二級建築士事務所 千葉県知事登録 第2-2206-7434号', '建設業 千葉県知事許可 (般-4) 第055799号'],
+  headOffice: '千葉県千葉市花見川区西小中台２番',
+  offices: OFFICES,
   /** 適格請求書発行事業者登録番号（見積書テンプレートより） */
   invoiceRegistrationNo: 'T6040001123237',
   /** 振込先（見積書テンプレートより） */

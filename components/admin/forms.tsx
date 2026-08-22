@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import {
   addProductImageAction,
+  updateContactStatusAction,
   saveCategoryAction,
   saveModelAction,
   saveOptionAction,
@@ -309,6 +310,23 @@ export function PreviewRuleForm({
         </Field>
       </div>
       <SubmitButton pending={pending} />
+    </form>
+  );
+}
+
+/* ---------- お問い合わせ ---------- */
+
+export function ContactStatusForm({ id, status }: { id: string; status: 'new' | 'handled' }) {
+  const [state, action, pending] = useActionState(updateContactStatusAction, initial);
+  const next = status === 'new' ? 'handled' : 'new';
+  return (
+    <form action={action}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="status" value={next} />
+      <button type="submit" disabled={pending} className="text-xs underline underline-offset-4 hover:text-ink disabled:opacity-50">
+        {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
+      </button>
+      {state.error && <span className="ml-2 text-xs text-danger">{state.error}</span>}
     </form>
   );
 }

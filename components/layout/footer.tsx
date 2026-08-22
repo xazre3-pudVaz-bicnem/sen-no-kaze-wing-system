@@ -1,61 +1,77 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { LP_NAV } from '@/data/site-content';
 import { COMPANY, PROJECT_NAME } from '@/lib/site';
 
+/** 先方サイトと同じ構成：3拠点の住所 ＋ Contact Us ＋ ナビ ＋ 規程リンク */
 export function Footer() {
   return (
-    <footer className="border-t border-line bg-sand/60">
-      <div className="container-x grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-4">
-            <Image src="/images/brand/sennokaze-logo.png" alt={`${PROJECT_NAME} ロゴ`} width={120} height={76} className="h-auto w-24" />
-            <div>
-              <p className="font-serif text-2xl tracking-[0.08em]">Wing</p>
-              <p className="text-xs tracking-[0.2em] text-muted">{PROJECT_NAME}</p>
-            </div>
-          </div>
-          <p className="mt-5 max-w-md text-sm text-ink-soft">
-            4tユニック1台で運び、現地で約30分で展開する折り畳み式木造コンテナ。別荘・宿泊施設・事務所・店舗・住まいに。
-          </p>
-          <p className="mt-5 text-sm">
-            <span className="text-muted">お電話でのご相談</span>
-            <br />
-            <a href={`tel:${COMPANY.tel.replace(/-/g, '')}`} className="font-serif text-2xl tracking-wider text-ink">
+    <footer className="border-t border-forest-line bg-forest-deep text-white">
+      <div className="container-x grid gap-12 py-16 lg:grid-cols-[1.1fr_1fr]">
+        <div>
+          <Image src="/images/brand/sennokaze-logo.png" alt={`${PROJECT_NAME} ロゴ`} width={140} height={88} className="h-16 w-auto" />
+          <dl className="mt-8 space-y-5 text-sm">
+            {COMPANY.offices.map((o) => (
+              <div key={o.name}>
+                <dt className="font-semibold text-gold">{o.name}</dt>
+                <dd className="text-white/80">
+                  {o.postal}　{o.address}
+                  {o.tel && (
+                    <>
+                      <br />
+                      <a href={`tel:${o.tel.replace(/-/g, '')}`} className="hover:text-gold">
+                        ☎︎ {o.tel}
+                      </a>
+                    </>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-6 text-sm text-white/70">
+            フリーダイヤル{' '}
+            <a href={`tel:${COMPANY.tel.replace(/-/g, '')}`} className="font-serif text-xl tracking-wider text-white hover:text-gold">
               {COMPANY.tel}
             </a>
           </p>
         </div>
+
         <div>
-          <p className="mb-3 text-sm font-semibold">Wing について</p>
-          <ul className="space-y-2 text-sm text-ink-soft">
-            <li><Link href="/#about" className="hover:text-ink">Wingとは</Link></li>
-            <li><Link href="/products" className="hover:text-ink">商品一覧</Link></li>
-            <li><Link href="/#cases" className="hover:text-ink">施工事例</Link></li>
-            <li><Link href="/#flow" className="hover:text-ink">導入の流れ</Link></li>
-            <li><Link href="/#faq" className="hover:text-ink">よくある質問</Link></li>
-            <li><a href="/downloads/wing-pamphlet.pdf" target="_blank" rel="noopener" className="hover:text-ink">パンフレット（PDF）</a></li>
-          </ul>
-        </div>
-        <div>
-          <p className="mb-3 text-sm font-semibold">ご利用案内</p>
-          <ul className="space-y-2 text-sm text-ink-soft">
-            <li><Link href="/simulator/wing-01" className="hover:text-ink">見積シミュレーション</Link></li>
-            <li><Link href="/mypage" className="hover:text-ink">マイページ</Link></li>
-            <li><Link href="/login" className="hover:text-ink">ログイン</Link></li>
-            <li><Link href="/register" className="hover:text-ink">新規会員登録</Link></li>
-            <li><Link href="/contact" className="hover:text-ink">お問い合わせ</Link></li>
-            <li><Link href="/terms" className="hover:text-ink">利用規約</Link></li>
-            <li><Link href="/privacy" className="hover:text-ink">プライバシーポリシー</Link></li>
-          </ul>
+          <Link href="/#contact" className="btn-outline-gold font-serif tracking-wider">
+            Contact&nbsp;Us
+          </Link>
+          <nav aria-label="フッターナビゲーション" className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            {LP_NAV.map((it) => (
+              <Link key={it.href} href={it.href} className="text-white/80 hover:text-gold">
+                {it.label}
+              </Link>
+            ))}
+            <Link href="/products" className="text-white/80 hover:text-gold">
+              商品ラインナップ
+            </Link>
+            <Link href="/simulator/wing-01" className="text-white/80 hover:text-gold">
+              見積シミュレーション
+            </Link>
+            <Link href="/mypage" className="text-white/80 hover:text-gold">
+              マイページ
+            </Link>
+            <Link href="/login" className="text-white/80 hover:text-gold">
+              ログイン
+            </Link>
+            <Link href="/privacy" className="text-white/80 hover:text-gold">
+              プライバシーポリシー
+            </Link>
+            <Link href="/sct" className="text-white/80 hover:text-gold">
+              特定商取引法の表示
+            </Link>
+            <Link href="/terms" className="text-white/80 hover:text-gold">
+              利用規約
+            </Link>
+          </nav>
         </div>
       </div>
-      <div className="border-t border-line">
-        <div className="container-x flex flex-col gap-2 py-5 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            {COMPANY.name}　本社：{COMPANY.headOffice}
-          </p>
-          <p>© {new Date().getFullYear()} {COMPANY.name}</p>
-        </div>
+      <div className="border-t border-forest-line">
+        <div className="container-x py-5 text-center text-xs text-white/60">© {new Date().getFullYear()} {COMPANY.nameEn}</div>
       </div>
     </footer>
   );

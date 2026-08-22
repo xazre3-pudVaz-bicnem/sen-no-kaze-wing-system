@@ -15,10 +15,12 @@
   --color-brown-dark: #3f2a1c;
   --color-navy: #1e2a3a;
   --color-navy-light: #2c3c52;
-  --color-forest: #22392e;
-  --color-forest-deep: #16281f;
-  --color-ivory: #f6f1e7;
-  --color-gold: #b3975a;
+  --color-forest: #1e3d31;
+  --color-forest-deep: #162c23;
+  --color-forest-line: #2f5545;
+  --color-ivory: #f0ede4;
+  --color-gold: #c9a86a;
+  --color-gold-light: #ddc490;
   --color-success: #2f6b4f;
   --color-warn: #9a6b1f;
   --color-danger: #a83a2e;
@@ -147,6 +149,16 @@
   }
   .label-en {
     @apply text-[0.7rem] font-semibold tracking-[0.28em] uppercase;
+  }
+  /* 先方サイトの見出し様式：左に金の縦罫 ＋ 英字ラベル ＋ 明朝の大見出し */
+  .rule-heading {
+    @apply border-l-2 border-gold pl-5 sm:pl-7;
+  }
+  .btn-outline-gold {
+    @apply btn border border-gold text-gold hover:bg-gold hover:text-forest-deep;
+  }
+  .btn-gold {
+    @apply btn bg-gold text-forest-deep hover:bg-gold-light;
   }
   .scrim-b {
     background: linear-gradient(to top, rgb(20 18 14 / 0.72) 0%, rgb(20 18 14 / 0.35) 40%, transparent 75%);

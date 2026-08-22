@@ -14,6 +14,7 @@ import type {
   ProductImage,
   ProductOption,
   Profile,
+  ContactMessage,
   Quote,
   QuoteDocument,
   QuoteItem,
@@ -52,6 +53,7 @@ export interface LocalDb {
   quoteDocuments: QuoteDocument[];
   quoteSequences: Record<string, number>;
   resetTokens: { token: string; user_id: string; expires_at: string }[];
+  contactMessages: ContactMessage[];
 }
 
 export function localDir(): string {
@@ -86,6 +88,7 @@ export function emptyDb(): LocalDb {
     quoteDocuments: [],
     quoteSequences: {},
     resetTokens: [],
+    contactMessages: [],
   };
 }
 

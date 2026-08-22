@@ -13,6 +13,7 @@ const items = [
   { href: '/admin/customers', label: '顧客一覧' },
   { href: '/admin/configurations', label: '保存された仕様' },
   { href: '/admin/quotes', label: '見積依頼・見積書' },
+  { href: '/admin/contacts', label: 'お問い合わせ' },
 ];
 
 export function AdminNav() {

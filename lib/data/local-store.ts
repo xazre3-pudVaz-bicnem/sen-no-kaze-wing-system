@@ -17,6 +17,8 @@ import type {
   QuoteRequest,
   QuoteRequestStatus,
   QuoteStatus,
+  ContactMessage,
+  ContactStatus,
 } from '@/lib/domain/types';
 import { computePricing } from '@/lib/domain/pricing';
 import { validateSelection } from '@/lib/domain/rules';
@@ -25,6 +27,7 @@ import { addDays, yearMonthJst } from '@/lib/utils';
 import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
 import {
   StoreError,
+  type ContactInput,
   type CategoryInput,
   type DataStore,
   type ModelInput,
@@ -573,6 +576,45 @@ export class LocalStore implements DataStore {
       db.images = db.images.filter((i) => i.id !== id);
     });
   }
+  // ---------- お問い合わせ ----------
+  async createContactMessage(input: ContactInput): Promise<ContactMessage> {
+    let attachment_path: string | null = null;
+    if (input.attachment) {
+      const ext = path.extname(input.attachment.fileName).toLowerCase() || '.bin';
+      const rel = path.posix.join('contact', `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`);
+      const abs = path.join(filesDir(), rel);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, input.attachment.bytes);
+      attachment_path = rel;
+    }
+    return this.mutate((db) => {
+      const row: ContactMessage = {
+        id: randomUUID(),
+        full_name: input.full_name,
+        email: input.email,
+        phone: input.phone,
+        topic: input.topic,
+        message: input.message,
+        attachment_path,
+        attachment_name: input.attachment?.fileName ?? null,
+        status: 'new',
+        created_at: nowIso(),
+      };
+      db.contactMessages.push(row);
+      return row;
+    });
+  }
+  async listContactMessages() {
+    return this.read((db) => [...db.contactMessages].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+  }
+  async updateContactStatus(id: string, status: ContactStatus) {
+    this.mutate((db) => {
+      const m = db.contactMessages.find((x) => x.id === id);
+      if (!m) throw new StoreError('NOT_FOUND', 'お問い合わせが見つかりません');
+      m.status = status;
+    });
+  }
+
   async uploadImage(file: UploadInput, folder: string) {
     const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'uploads';
     const ext = path.extname(file.fileName).toLowerCase() || '.jpg';

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { VIEW_KEYS } from '@/lib/domain/types';
+import { contactTopics } from '@/data/site-content';
 
 const trimmed = (max: number) => z.string().trim().max(max);
 const optional = (max: number) =>
@@ -74,7 +75,9 @@ export const contactSchema = z.object({
   full_name: trimmed(60).min(1, 'お名前を入力してください'),
   email: z.email('メールアドレスの形式が正しくありません'),
   phone: optional(20),
+  topic: z.enum(contactTopics, { error: 'お問い合わせの種類を選択してください' }),
   message: trimmed(2000).min(1, 'お問い合わせ内容を入力してください'),
+  agree: z.literal('on', { error: 'プライバシーポリシーへの同意が必要です' }),
   // ハニーポット
   website: z.string().max(0).optional(),
 });
@@ -127,7 +130,10 @@ export const optionSchema = z.object({
   is_default: boolFromForm,
   is_installation: boolFromForm,
   price_on_request: boolFromForm,
-  preview_key: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? null : v), z.string().regex(/^[a-z0-9_]+$/, 'プレビューキーは英小文字・数字・アンダースコア').nullable()),
+  preview_key: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().regex(/^[a-z0-9_]+$/, 'プレビューキーは英小文字・数字・アンダースコア').nullable()
+  ),
   affects_views: z.array(z.enum(VIEW_KEYS)),
   sort_order: intFromForm,
   status: statusSchema,

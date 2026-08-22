@@ -264,6 +264,21 @@ export async function deleteProductImageAction(formData: FormData): Promise<void
   redirect(`/admin/models/${String(formData.get('base_model_id') ?? '')}?image_deleted=1`);
 }
 
+export async function updateContactStatusAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireAdmin();
+  const id = String(formData.get('id') ?? '');
+  const status = String(formData.get('status') ?? '');
+  if (!id || (status !== 'new' && status !== 'handled')) return { ok: false, error: '入力内容が正しくありません' };
+  try {
+    const store = await getStore();
+    await store.updateContactStatus(id, status);
+    revalidatePath('/admin/contacts');
+    return { ok: true, message: '更新しました' };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
 export async function updateQuoteStatusAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireAdmin();
   const parsed = quoteStatusSchema.safeParse({

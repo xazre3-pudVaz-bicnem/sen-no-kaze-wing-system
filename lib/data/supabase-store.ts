@@ -17,11 +17,14 @@ import type {
   QuoteRequest,
   QuoteRequestStatus,
   QuoteStatus,
+  ContactMessage,
+  ContactStatus,
 } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   StoreError,
+  type ContactInput,
   type CategoryInput,
   type DataStore,
   type ModelInput,
@@ -387,6 +390,46 @@ export class SupabaseStore implements DataStore {
     const { error } = await db.from('product_images').delete().eq('id', id);
     if (error) mapPgError(error);
   }
+  // ---------- お問い合わせ（保存は service role、閲覧は管理者 RLS） ----------
+  async createContactMessage(input: ContactInput): Promise<ContactMessage> {
+    const admin = createAdminClient();
+    let attachment_path: string | null = null;
+    if (input.attachment) {
+      const ext = (input.attachment.fileName.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
+      attachment_path = `contact/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+      const up = await admin.storage
+        .from('contact-attachments')
+        .upload(attachment_path, input.attachment.bytes, { contentType: input.attachment.contentType, upsert: false });
+      if (up.error) throw new StoreError('INTERNAL', up.error.message);
+    }
+    const { data, error } = await admin
+      .from('contact_messages')
+      .insert({
+        full_name: input.full_name,
+        email: input.email,
+        phone: input.phone,
+        topic: input.topic,
+        message: input.message,
+        attachment_path,
+        attachment_name: input.attachment?.fileName ?? null,
+      })
+      .select('*')
+      .single();
+    if (error) mapPgError(error);
+    return data as ContactMessage;
+  }
+  async listContactMessages() {
+    const db = await this.db();
+    const { data, error } = await db.from('contact_messages').select('*').order('created_at', { ascending: false });
+    if (error) mapPgError(error);
+    return (data ?? []) as ContactMessage[];
+  }
+  async updateContactStatus(id: string, status: ContactStatus) {
+    const db = await this.db();
+    const { error } = await db.from('contact_messages').update({ status }).eq('id', id);
+    if (error) mapPgError(error);
+  }
+
   async uploadImage(file: UploadInput, folder: string) {
     const admin = createAdminClient();
     const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'uploads';

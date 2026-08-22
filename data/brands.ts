@@ -1,15 +1,13 @@
-/** 3ブランド（縦長のブランドビジュアル） */
+/** Wing 煌／灯／翠（土地の性格に合わせた活用モデル。先方サイトの定義に準拠） */
 export interface Brand {
   code: 'kirameki' | 'tomoshibi' | 'midori';
   kanji: string;
+  kana: string;
   roman: string;
+  scene: string;
   copy: string;
-  lead: string;
   image: string;
   alt: string;
-  /** 建物が切れないための object-position（PC / SP） */
-  position: string;
-  positionMobile: string;
   tone: 'light' | 'dark';
 }
 
@@ -17,37 +15,34 @@ export const brands: Brand[] = [
   {
     code: 'kirameki',
     kanji: '煌',
+    kana: 'きらめき',
     roman: 'KIRAMEKI',
-    copy: '海と光を取り込む、開放的な滞在空間。',
-    lead: '朝日が昇る海辺の高台に。ウッドデッキから水平線を眺め、光とともに一日が始まる滞在のかたち。',
+    scene: '海沿い向け',
+    copy: '海沿いや眺望のよい土地での宿泊施設づくりを想定したモデルです。',
     image: '/images/brands/kirameki.jpg',
-    alt: '朝日に輝く海を見下ろす高台に建つデッキ付きのWing',
-    position: '50% 62%',
-    positionMobile: '50% 70%',
+    alt: '海を望む高台に建つデッキ付きの Wing 煌',
     tone: 'light',
   },
   {
     code: 'tomoshibi',
     kanji: '灯',
+    kana: 'ともしび',
     roman: 'TOMOSHIBI',
-    copy: '静かな夜に、人を迎える温かな灯り。',
-    lead: '森の中の小道を進むと、窓から漏れる明かりが迎えてくれる。宿泊施設としての Wing が持つ、もうひとつの表情。',
+    scene: '町中向け',
+    copy: '町中や既存施設の近くでの活用を想定したモデルです。',
     image: '/images/brands/tomoshibi.jpg',
-    alt: '夜の森に建ち、室内の灯りが窓から漏れるWing',
-    position: '50% 60%',
-    positionMobile: '50% 68%',
+    alt: '夜、室内の灯りが窓から漏れる Wing 灯',
     tone: 'dark',
   },
   {
     code: 'midori',
     kanji: '翠',
+    kana: 'みどり',
     roman: 'MIDORI',
-    copy: '森と呼吸する、自然に溶け込む空間。',
-    lead: '木立の間に置かれた一棟。造成を最小限に抑え、木々の緑と山並みをそのまま借景にする。',
+    scene: '里山向け',
+    copy: '里山や自然に囲まれた土地での活用を想定したモデルです。',
     image: '/images/brands/midori.jpg',
-    alt: '新緑の森に囲まれた斜面に建つデッキ付きのWing',
-    position: '50% 58%',
-    positionMobile: '50% 66%',
+    alt: '新緑の木立に囲まれて建つ Wing 翠',
     tone: 'light',
   },
 ];

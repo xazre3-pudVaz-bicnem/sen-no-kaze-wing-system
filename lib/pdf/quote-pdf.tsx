@@ -134,9 +134,9 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             <Text style={s.companyName}>{COMPANY.name}</Text>
             <Text>{PROJECT_NAME}</Text>
             <Text>本社：{COMPANY.headOffice}</Text>
-            {COMPANY.branches.map((b) => (
-              <Text key={b.name}>
-                {b.name}：{b.address}
+            {COMPANY.offices.slice(1).map((o) => (
+              <Text key={o.name}>
+                {o.name}：{o.postal} {o.address}
               </Text>
             ))}
             <Text>TEL：{COMPANY.tel}</Text>

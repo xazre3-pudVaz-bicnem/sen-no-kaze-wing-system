@@ -33,7 +33,11 @@ test.describe('顧客フロー', () => {
   test('1-2. トップ → 商品詳細 → シミュレーター開始', async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('もうひとつの可能性');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
+    // 先方サイトと同じセクション構成
+    for (const t of ['コンセプト動画', 'Wing 開発の原点', '木造コンテナについて', '活用アイディア', '費用・比較', '導入のご相談', 'プロジェクトの参加', 'よくあるご質問', 'お知らせ']) {
+      await expect(page.getByRole('heading', { name: t })).toBeVisible();
+    }
     await page.getByRole('link', { name: '商品詳細を見る' }).first().click();
     await expect(page).toHaveURL(/\/products\/wing-01$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
@@ -236,5 +240,45 @@ test.describe('顧客フロー', () => {
     await page.locator('#password_confirm').fill('Wing-Test2!');
     await page.getByRole('button', { name: 'パスワードを更新する' }).click();
     await expect(page).toHaveURL(/\/mypage\?password=updated/);
+  });
+});
+
+test.describe('公開ページ（先方サイト構成）', () => {
+  test('お知らせ一覧・詳細・特商法・プライバシーが表示される', async ({ page }) => {
+    await page.goto('/news');
+    await expect(page.getByRole('heading', { name: 'お知らせ' })).toBeVisible();
+    const first = page.locator('main a[href^="/news/"]').first();
+    const href = await first.getAttribute('href');
+    await first.click();
+    await expect(page).toHaveURL(new RegExp(href!));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.goto('/sct');
+    await expect(page.getByRole('heading', { name: '特定商取引法に基づく表記' })).toBeVisible();
+    await expect(page.getByText('二級建築士事務所 千葉県知事登録 第2-2206-7434号')).toBeVisible();
+    await page.goto('/privacy');
+    await expect(page.getByRole('heading', { name: 'プライバシーポリシー' })).toBeVisible();
+  });
+
+  test('お問い合わせフォームを送信でき、管理画面に表示される', async ({ page }) => {
+    await page.goto('/contact');
+    await page.locator('#full_name').fill('問合 太郎');
+    await page.locator('#email').fill('toiawase@example.com');
+    await page.locator('#phone').fill('090-3333-4444');
+    await page.locator('#topic').selectOption('土地活用について');
+    await page.locator('#message').fill('傾斜地の遊休地があります。宿泊事業を検討しています。');
+    await page.getByRole('checkbox', { name: /プライバシーポリシー/ }).check();
+    await page.getByTestId('contact-submit').click();
+    await expect(page.getByText('お問い合わせを受け付けました')).toBeVisible();
+
+    // 管理者で確認
+    await page.goto('/login');
+    await page.locator('#email').fill('admin@example.com');
+    await page.locator('#password').fill('Wing-Test1!');
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    const ok = await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 10_000 }).then(() => true).catch(() => false);
+    if (!ok) await register(page, 'admin@example.com', '/admin', '管理者');
+    await page.goto('/admin/contacts');
+    await expect(page.getByTestId('contact-row').first()).toContainText('問合 太郎');
+    await expect(page.getByTestId('contact-row').first()).toContainText('土地活用について');
   });
 });

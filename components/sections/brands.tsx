@@ -43,8 +43,8 @@ export function BrandsSection() {
                   <span className="text-7xl leading-none sm:text-8xl lg:text-9xl">{b.kanji}</span>
                   <span className="text-lg tracking-[0.35em] sm:text-2xl">{b.roman}</span>
                 </h3>
-                <p className="mt-6 text-xl leading-snug sm:text-3xl">{b.copy}</p>
-                <p className={cn('mt-5 max-w-md text-sm leading-[1.9] sm:text-base', dark ? 'text-white/80' : 'text-ink-soft')}>{b.lead}</p>
+                <p className="mt-3 text-sm tracking-wider text-gold">{b.scene}｜活用シーンのイメージ</p>
+                <p className={cn('mt-6 max-w-md text-lg leading-snug sm:text-2xl', dark ? 'text-white' : 'text-ink')}>{b.copy}</p>
               </Reveal>
             </div>
           </article>

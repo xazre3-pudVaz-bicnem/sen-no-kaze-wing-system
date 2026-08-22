@@ -17,6 +17,8 @@ import type {
   QuoteRequestStatus,
   QuoteStatus,
   RoleCode,
+  ContactMessage,
+  ContactStatus,
 } from '@/lib/domain/types';
 
 export interface SessionUser {
@@ -52,6 +54,15 @@ export interface QuoteDetail {
   document: QuoteDocument | null;
   /** 管理者向け: 顧客プロフィール */
   profile?: Profile | null;
+}
+
+export interface ContactInput {
+  full_name: string;
+  email: string;
+  phone: string | null;
+  topic: string;
+  message: string;
+  attachment?: { bytes: Uint8Array; contentType: string; fileName: string } | null;
 }
 
 export interface UploadInput {
@@ -128,6 +139,11 @@ export interface DataStore {
   deleteProductImage(id: string): Promise<void>;
   /** 画像をストレージへ保存し公開 URL を返す */
   uploadImage(file: UploadInput, folder: string): Promise<string>;
+
+  // ---- お問い合わせ ----
+  createContactMessage(input: ContactInput): Promise<ContactMessage>;
+  listContactMessages(): Promise<ContactMessage[]>;
+  updateContactStatus(id: string, status: ContactStatus): Promise<void>;
 }
 
 function hasSupabaseEnv(): boolean {

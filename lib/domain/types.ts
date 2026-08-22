@@ -297,6 +297,22 @@ export interface QuoteItem {
   sort_order: number;
 }
 
+export type ContactStatus = 'new' | 'handled';
+
+/** お問い合わせ（トップ／お問い合わせページのフォーム） */
+export interface ContactMessage {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  topic: string;
+  message: string;
+  attachment_path: string | null;
+  attachment_name: string | null;
+  status: ContactStatus;
+  created_at: string;
+}
+
 export interface QuoteDocument {
   id: string;
   quote_id: string;

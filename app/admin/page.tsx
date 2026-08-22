@@ -9,11 +9,12 @@ import { AdminPage, Stat, Table, Td, Th } from '@/components/admin/ui';
 
 export default async function AdminDashboard() {
   const store = await getStore();
-  const [models, profiles, configurations, requests] = await Promise.all([
+  const [models, profiles, configurations, requests, contacts] = await Promise.all([
     store.listModels({ includeDraft: true }),
     store.listProfiles(),
     store.listAllConfigurations(),
     store.listQuoteRequests(),
+    store.listContactMessages(),
   ]);
   const warnings: { model: string; view: string; keys: string[] }[] = [];
   for (const m of models) {
@@ -26,11 +27,12 @@ export default async function AdminDashboard() {
 
   return (
     <AdminPage title="ダッシュボード" lead="商品・オプション・画像の管理と、見積依頼の確認を行います。">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="公開中モデル" value={models.filter((m) => m.status === 'published').length} href="/admin/models" />
         <Stat label="顧客数" value={profiles.length} href="/admin/customers" />
         <Stat label="保存された仕様" value={configurations.length} href="/admin/configurations" />
         <Stat label="未対応の見積依頼" value={requests.filter((r) => r.status === 'new').length} href="/admin/quotes" />
+        <Stat label="未対応のお問い合わせ" value={contacts.filter((c) => c.status === 'new').length} href="/admin/contacts" />
       </div>
 
       {warnings.length > 0 ? (

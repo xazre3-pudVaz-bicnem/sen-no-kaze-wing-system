@@ -15,6 +15,8 @@ import {
   quoteStatusSchema,
   flattenErrors,
   type FieldErrors,
+  assignDealerSchema,
+  dealerRevisionSchema,
 } from '@/lib/validation';
 
 export interface AdminFormState {
@@ -328,4 +330,65 @@ export async function updateQuoteStatusAction(_prev: AdminFormState, formData: F
   } catch (e) {
     return errState(e);
   }
+}
+
+/** 管理者：見積へ担当代理店を割り当てる */
+export async function assignQuoteDealerAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  const admin = await requireAdmin();
+  const parsed = assignDealerSchema.safeParse({
+    quote_id: formData.get('quote_id'),
+    dealer_id: formData.get('dealer_id'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  try {
+    const store = await getStore();
+    await store.assignQuoteDealer(parsed.data.quote_id, parsed.data.dealer_id, admin);
+    revalidatePath(`/admin/quotes/${parsed.data.quote_id}`);
+    revalidatePath('/admin/quotes');
+    return { ok: true, message: parsed.data.dealer_id ? '担当代理店を割り当てました' : '担当代理店を外しました' };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+/**
+ * 代理店：別途工事・フリー商品を入力して確定見積（次の版）を発行する。
+ * 発行済みの版は書き換えず、新しい版として作り直す。
+ */
+export async function createDealerRevisionAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const rows: unknown[] = [];
+  for (const [key, value] of formData.entries()) {
+    const m = key.match(/^items\.(\d+)\.kind$/);
+    if (!m) continue;
+    const i = m[1];
+    rows.push({
+      kind: value,
+      name: formData.get(`items.${i}.name`),
+      description: formData.get(`items.${i}.description`),
+      unit_price: formData.get(`items.${i}.unit_price`) || 0,
+      quantity: formData.get(`items.${i}.quantity`) || 1,
+    });
+  }
+  const parsed = dealerRevisionSchema.safeParse({
+    quote_id: formData.get('quote_id'),
+    items: rows,
+    dealer_note: formData.get('dealer_note'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  let newId: string | null = null;
+  try {
+    const store = await getStore();
+    const quote = await store.createDealerRevision(
+      parsed.data.quote_id,
+      { items: parsed.data.items, dealer_note: parsed.data.dealer_note },
+      actor
+    );
+    newId = quote.id;
+    revalidatePath('/admin/quotes');
+    revalidatePath('/mypage');
+  } catch (e) {
+    return errState(e);
+  }
+  redirect(`/admin/quotes/${newId}?revised=1`);
 }

@@ -323,13 +323,14 @@ export interface QuoteRequest {
   updated_at: string;
 }
 
-export type QuoteStatus = 'issued' | 'expired' | 'accepted' | 'declined' | 'cancelled';
+export type QuoteStatus = 'issued' | 'expired' | 'accepted' | 'declined' | 'cancelled' | 'superseded';
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   issued: '発行済み',
   expired: '期限切れ',
   accepted: '承諾',
   declined: '辞退',
   cancelled: '取消',
+  superseded: '改訂済み',
 };
 
 export interface Quote {
@@ -357,8 +358,14 @@ export interface Quote {
   tax_rate: number;
   tax: number;
   total: number;
-  /** 第二段階: 別途工事を入力した代理店（partners.id）。第一段階では null */
+  /** 別途工事を入力した代理店（profiles.id）。未割り当ては null */
   dealer_id: string | null;
+  /** 代理店からの申し送り（現地条件・工期など） */
+  dealer_note: string | null;
+  /** 版数。1 = 技術の杜の概算見積、2 以降 = 代理店が別途工事を入れた確定見積 */
+  revision: number;
+  /** 直前の版 */
+  parent_quote_id: string | null;
   preview_image_url: string | null;
   notes: string | null;
   created_at: string;

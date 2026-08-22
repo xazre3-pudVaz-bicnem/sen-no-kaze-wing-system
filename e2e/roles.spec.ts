@@ -1,21 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
-import { logout, openFreshSimulator, PASSWORD, readTotal, register } from './helpers';
-
-const MASTER = 'master@example.com'; // playwright.config の WING_LOCAL_MASTER_DEALER_EMAILS
-const DEALER = 'dealer@example.com'; // playwright.config の WING_LOCAL_DEALER_EMAILS
-
-/** 既に登録済みならログイン、未登録なら登録する（ローカルモードは初回登録で権限が決まる） */
-async function signIn(page: Page, email: string, next: string, name: string) {
-  await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.locator('#email').fill(email);
-  await page.locator('#password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'ログイン' }).click();
-  const ok = await page
-    .waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 8_000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!ok) await register(page, email, next, name);
-}
+import { expect, test } from '@playwright/test';
+import {
+  DEALER_EMAIL as DEALER,
+  MASTER_EMAIL as MASTER,
+  ensureDealerFreeProduct,
+  logout,
+  openFreshSimulator,
+  readTotal,
+  register,
+  signInOrRegister as signIn,
+} from './helpers';
 
 test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () => {
   test('総代理店は商品台帳を編集でき、代理店はフリー商品だけを扱える', async ({ page }) => {
@@ -39,7 +32,8 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     await expect(dealerNav.getByRole('link', { name: 'フリー商品' })).toBeVisible();
     await expect(dealerNav.getByRole('link', { name: 'オプション', exact: true })).toBeHidden();
     await expect(dealerNav.getByRole('link', { name: 'ベースコンテナ' })).toBeHidden();
-    await expect(dealerNav.getByRole('link', { name: '見積依頼・見積書' })).toBeHidden();
+    // 見積メニューは代理店にも出るが、中身は自分に割り当てられた見積だけ
+    await expect(dealerNav.getByRole('link', { name: '見積依頼・見積書' })).toBeVisible();
 
     // 追加画面ではフリー商品カテゴリーしか選べない
     await page.goto('/admin/free-products');
@@ -48,19 +42,18 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     const categorySelect = page.locator('#category_id');
     await expect(categorySelect.locator('option')).toHaveCount(1);
     await expect(categorySelect.locator('option')).toHaveText('フリー商品');
+    await page.goto('/admin/free-products');
 
     // 商品を登録する
-    await page.getByTestId('option-name').fill('代理店オリジナルベッド');
-    await page.locator('#code').fill('dealer-bed');
-    await page.getByTestId('option-price').fill('100000');
-    await page.getByTestId('admin-submit').click();
-    await expect(page.getByText('保存しました')).toBeVisible();
+    await ensureDealerFreeProduct(page);
     await page.goto('/admin/free-products');
     await expect(page.getByTestId('free-product-dealer-bed')).toContainText('代理店オリジナルベッド');
     await logout(page);
   });
 
   test('登録したフリー商品は見積書の別途工事の下に諸費用なしで載る', async ({ page }) => {
+    await ensureDealerFreeProduct(page);
+    await logout(page);
     await openFreshSimulator(page);
     const before = await readTotal(page);
     const beforeExpense = Number(

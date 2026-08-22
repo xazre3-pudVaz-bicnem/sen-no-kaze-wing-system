@@ -154,6 +154,12 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
       </dl>
 
       <div className="space-y-2 border-t border-line px-6 py-4 text-xs text-ink-soft sm:px-8">
+        {quote.dealer_note && (
+          <p className="rounded-lg bg-ivory px-3 py-2" data-testid="dealer-note">
+            <strong className="font-semibold">代理店より：</strong>
+            {quote.dealer_note}
+          </p>
+        )}
         <p data-testid="quote-scope">
           <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong> — {levelInfo.lead}
         </p>

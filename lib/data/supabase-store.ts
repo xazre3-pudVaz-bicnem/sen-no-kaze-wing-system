@@ -37,6 +37,7 @@ import {
   type SaveConfigurationInput,
   type SessionUser,
   type UploadInput,
+  type DealerRevisionInput,
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -273,6 +274,41 @@ export class SupabaseStore implements DataStore {
       ({ profiles, quotes, ...r }) => ({ ...r, quote_no: quotes?.quote_no ?? null, user_email: profiles?.email ?? '' })
     );
   }
+  async assignQuoteDealer(id: string, dealerId: string | null) {
+    const db = await this.db();
+    const { data, error } = await db.rpc('assign_quote_dealer', { p_quote_id: id, p_dealer_id: dealerId });
+    if (error) mapPgError(error);
+    return data as Quote;
+  }
+
+  async listDealerQuotes(dealerId: string) {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('quotes')
+      .select('*, profiles!quotes_user_id_fkey(email)')
+      .eq('dealer_id', dealerId)
+      .order('issued_at', { ascending: false });
+    if (error) mapPgError(error);
+    return ((data ?? []) as (Quote & { profiles?: { email?: string } })[]).map((q) => ({
+      ...q,
+      user_email: q.profiles?.email ?? '',
+    })) as (Quote & { user_email: string })[];
+  }
+
+  async createDealerRevision(id: string, input: DealerRevisionInput) {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_dealer_revision', {
+      p_quote_id: id,
+      p_items: input.items,
+      p_dealer_note: input.dealer_note,
+    });
+    if (error) mapPgError(error);
+    const newId = data as string;
+    const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', newId).single();
+    if (e2) mapPgError(e2);
+    return q as Quote;
+  }
+
   async updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null) {
     const db = await this.db();
     const { data, error } = await db.from('quotes').update({ status }).eq('id', id).select('quote_request_id, configuration_id').single();

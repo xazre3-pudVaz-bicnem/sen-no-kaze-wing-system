@@ -7,7 +7,7 @@
 | 型チェック | `npm run typecheck` | エラー 0 |
 | Lint | `npm run lint` | エラー 0 |
 | 単体テスト（価格計算・選択ルール・注文範囲・フリー商品・画像解決） | `npm run test` | 31 / 31 passed（テンプレートの本体価格計・オプション価格計・千円切捨てを再現） |
-| E2E（Playwright・ローカルモード・Chromium） | `npm run test:e2e` | 17 / 17 passed（desktop 16 + mobile 1） |
+| E2E（Playwright・ローカルモード・Chromium） | `npm run test:e2e` | 19 / 19 passed（desktop 18 + mobile 1） |
 | 本番ビルド | `npm run build` | 成功（警告 1 件：ローカル検証モードの動的パス参照。本番動作に影響なし） |
 
 ## 先方フィードバックとの対応
@@ -32,6 +32,7 @@
 | 代理店以下はオプションのその他・別途工事の見積部分を変更可能 | `dealer` 権限を新設。管理画面に入れるがフリー商品のみ編集可。見積明細（`installation` / `free`）の編集を RLS で担当見積に限定 | `roles.spec.ts`「代理店は他社のフリー商品を編集できない」 |
 | 見積書の別途工事の下に【フリー商品】。代理店が自作商品（ベッド・イスなど）を登録 | 分類「フリー商品」＋ `options.owner_id`。見積書に「５ フリー商品」欄（画面・マイページ・管理画面・PDF）。諸費用 15% は乗せない | `roles.spec.ts`「登録したフリー商品は見積書の別途工事の下に諸費用なしで載る」＋ `pricing.test.ts` |
 | エンドユーザー同士のフリーマーケット | **第一段階では見送りを提案**（特商法・決済・古物営業法が絡むため）。代理店のフリー商品で先に運用 | `docs/assumptions.md` に理由を記載 |
+| 代理店が別途工事を入力して顧客へ見積提出 | 管理者が担当代理店を割り当て → 代理店が別途工事・フリー商品を入力 → **第2版の確定見積**を発行。第1版は改訂済みとして金額そのまま残る | `dealer-quote.spec.ts`「割り当て → 別途工事の入力 → 第2版の発行」「割り当てられていない代理店は他の見積を開けない」 |
 
 ## 完了条件との対応（E2E で実機確認）
 
@@ -65,6 +66,7 @@
 | マイグレーション未適用の DB にアプリだけ配信すると全ページ 500 | `preview_hotspots` 不在をエラーとして扱っていた | `lib/data/schema-compat.ts` で旧スキーマを既定値に寄せる |
 | 本体のみの構成で見積依頼すると内装が必須だと言われて弾かれた | 見積作成側の検証に注文範囲を渡していなかった | `createQuoteFromConfiguration` と SQL の `validate_configuration_items` に `finish_level` を渡す |
 | 高断熱仕様が「スマートロック・鍵」に入っており、本体のみでは選べなかった | 台帳上の分類が実態と合っていなかった | 新設の「断熱仕様」カテゴリー（本体のみから選択可）へ移動 |
+| 担当代理店が自分の見積を開けず 404 になった | SQL の RLS は許可していたが、ローカル実装の `getQuote` が顧客本人と管理者しか通していなかった | `LocalStore.getQuote` に担当代理店の判定を追加 |
 
 ## Supabase 実環境での状態（2026-08-22 時点）
 
@@ -72,7 +74,7 @@
 |---|---|
 | migrations 0001〜0007 | 適用済み（`contact_messages` を含む） |
 | migrations 0008（商品台帳の3階層化） | 適用済み・商品台帳投入済み（options 60・categories 20・rules 18・hotspots 13） |
-| **migrations 0009（注文範囲）・0010（権限とフリー商品）** | **未適用。デプロイ前に適用が必要**（手順は README 参照） |
+| **migrations 0009（注文範囲）・0010（権限とフリー商品）・0011（確定見積）** | **未適用。デプロイ前に適用が必要**（手順は README 参照） |
 | 初期データ | 新台帳を投入済み（base_models 3・categories 20・options 60・rules 18・hotspots 13）。0009 適用後に `npm run seed:supabase -- --prune` を再実行して 断熱仕様カテゴリー と finish_level を反映する |
 | Storage | `product-images`（公開）／`quote-documents`（非公開） |
 

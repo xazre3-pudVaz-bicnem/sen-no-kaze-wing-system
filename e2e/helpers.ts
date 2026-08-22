@@ -107,3 +107,52 @@ export function withExpenseAndTax(amount: number): number {
 export function near(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1100;
 }
+
+export const ADMIN_EMAIL = 'admin@example.com';
+export const MASTER_EMAIL = 'master@example.com';
+export const DEALER_EMAIL = 'dealer@example.com';
+
+/** 既に登録済みならログイン、未登録なら登録する（ローカルモードは初回登録時に権限が決まる） */
+export async function signInOrRegister(page: Page, email: string, next: string, name: string) {
+  await page.goto(`/login?next=${encodeURIComponent(next)}`);
+  // 既にログイン済みなら /login から追い出されるので何もしない
+  if (!new URL(page.url()).pathname.startsWith('/login')) return;
+  await page.locator('#email').fill(email);
+  await page.locator('#password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'ログイン' }).click();
+  const ok = await page
+    .waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 8_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!ok) await register(page, email, next, name);
+}
+
+/** 代理店のフリー商品「代理店オリジナルベッド」を用意する（既にあれば何もしない） */
+export async function ensureDealerFreeProduct(page: Page, code = 'dealer-bed', name = '代理店オリジナルベッド', price = 100_000) {
+  await signInOrRegister(page, DEALER_EMAIL, '/admin', '代理店 担当');
+  await page.goto('/admin/free-products');
+  if (await page.getByTestId(`free-product-${code}`).isVisible().catch(() => false)) return;
+  await page.getByRole('link', { name: 'フリー商品を追加' }).click();
+  await page.getByTestId('option-name').fill(name);
+  await page.locator('#code').fill(code);
+  await page.getByTestId('option-price').fill(String(price));
+  await page.getByTestId('admin-submit').click();
+  await expect(page.getByText('保存しました')).toBeVisible();
+}
+
+/** 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す */
+export async function requestQuoteAsCustomer(page: Page, email: string, configName: string) {
+  await register(page, email, '/simulator/wing-01');
+  await openFreshSimulator(page);
+  const total = await readTotal(page);
+  await page.getByTestId('save-button').click();
+  await page.getByTestId('config-name-input').fill(configName);
+  await page.getByTestId('save-confirm').click();
+  await page.waitForURL(/\?c=[0-9a-f-]{36}/);
+  const configId = new URL(page.url()).searchParams.get('c')!;
+  await page.goto(`/mypage/configurations/${configId}/request-quote`);
+  await expect(page.getByTestId('quote-request-form')).toBeVisible();
+  await page.getByTestId('submit-quote-request').click();
+  await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
+  return { quoteId: page.url().match(/quotes\/([0-9a-f-]{36})/)![1], total, configId };
+}

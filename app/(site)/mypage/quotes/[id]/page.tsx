@@ -38,6 +38,13 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
               発行日 {formatDate(quote.issued_at)}　有効期限 {formatDate(quote.valid_until)}
               {quote.customer_no && <>　顧客番号 <span className="font-mono">{quote.customer_no}</span></>}
             </p>
+            <p className="mt-1 text-sm" data-testid="quote-revision">
+              {quote.revision > 1 ? (
+                <span className="font-semibold text-forest">第{quote.revision}版・確定見積（代理店が別途工事を確認済み）</span>
+              ) : (
+                <span className="text-muted">第1版・概算見積（別途工事は現地確認後に確定します）</span>
+              )}
+            </p>
           </div>
           <Badge tone={quote.status === 'issued' ? 'navy' : quote.status === 'accepted' ? 'success' : 'neutral'} className="text-sm">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
         </div>

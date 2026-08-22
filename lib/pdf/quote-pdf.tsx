@@ -83,6 +83,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
   const sitework = items.filter((i) => i.kind === 'installation');
   const freeItems = items.filter((i) => i.kind === 'free');
+  const revisionLabel = quote.revision > 1 ? `（第${quote.revision}版・確定見積）` : '（概算）';
   const freeAmount = freeItems.reduce((sum, i) => sum + i.amount, 0);
   const transport = sitework.find((i) => /運送費/.test(i.name));
   const otherSitework = sitework.filter((i) => i !== transport);
@@ -111,7 +112,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
               {quote.customer_company ? <Text>{quote.customer_company}</Text> : null}
               <Text>{quote.customer_name} 様</Text>
             </View>
-            <Text style={s.subject}>件名：折り畳み式木造コンテナ {quote.base_model_name} 一式（{FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].name}・工場生産分・概算）</Text>
+            <Text style={s.subject}>件名：折り畳み式木造コンテナ {quote.base_model_name} 一式（{FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].name}・工場生産分）{revisionLabel}</Text>
             <View style={s.totalBox}>
               <Text style={s.totalLabel}>御見積金額（税込）</Text>
               <Text style={s.totalValue}>{yen(quote.total)}</Text>
@@ -257,6 +258,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
           ))}
           <Text>・注文範囲：{FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].name} — {FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].lead}</Text>
           <Text>・運搬、設置費など設置場所によって変動する費用は別途工事です。現地の代理店・工務店にお問合せください。</Text>
+          {quote.dealer_note ? <Text>・代理店より：{quote.dealer_note}</Text> : null}
         </View>
 
         {withImages.length > 0 ? (

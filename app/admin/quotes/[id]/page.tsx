@@ -1,20 +1,36 @@
 import { notFound } from 'next/navigation';
-import { requireAdmin } from '@/lib/auth/session';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
-import { Badge } from '@/components/ui';
+import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { QuoteStatusForm } from '@/components/admin/forms';
+import { AssignDealerForm, DealerRevisionForm } from '@/components/admin/dealer-forms';
 import { QuoteTable } from '@/components/mypage/quote-table';
 
 export default async function AdminQuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const admin = await requireAdmin();
+  const actor = await requireStaff();
   const store = await getStore();
-  const detail = await store.getQuote(id, admin);
+  const detail = await store.getQuote(id, actor);
   if (!detail) notFound();
   const { quote, items, request, profile, document } = detail;
+  const isAdmin = actor.role === 'admin';
+  // 代理店は自分に割り当てられた見積だけ
+  if (!isAdmin && quote.dealer_id !== actor.id) notFound();
+
+  const canRevise = quote.status !== 'superseded' && (isAdmin || quote.dealer_id === actor.id);
+  const [profiles, categories, options] = await Promise.all([
+    isAdmin ? store.listProfiles() : Promise.resolve([]),
+    store.listCategories(),
+    store.listOptions(),
+  ]);
+  const dealers = profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer');
+  const freeCategory = categories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
+  const freeProducts = options
+    .filter((o) => o.category_id === freeCategory?.id && o.status === 'published' && (isAdmin || o.owner_id === actor.id))
+    .map((o) => ({ code: o.code, name: o.name, price: o.price }));
   return (
     <AdminPage
       title={`見積書 ${quote.quote_no}`}
@@ -32,10 +48,18 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
           <div className="card overflow-hidden">
             <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" />
           </div>
-          <p className="text-xs text-muted">金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。別途工事の金額入力（代理店）は第二段階で追加予定です。</p>
-          <QuoteStatusForm quote={quote} request={request} />
+          <p className="text-xs text-muted">
+            金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。
+            別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
+          </p>
+          {canRevise && <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} />}
+          {quote.status === 'superseded' && (
+            <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>
+          )}
+          {isAdmin && <QuoteStatusForm quote={quote} request={request} />}
         </div>
         <aside className="space-y-4">
+          {isAdmin && <AssignDealerForm quote={quote} dealers={dealers} />}
           <div className="card p-4 text-sm">
             <p className="font-semibold">状態</p>
             <div className="mt-2 flex flex-wrap gap-2">

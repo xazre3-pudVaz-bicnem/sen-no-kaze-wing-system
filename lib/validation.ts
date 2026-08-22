@@ -184,3 +184,24 @@ export function flattenErrors(error: z.ZodError): FieldErrors {
   }
   return out;
 }
+
+/** 管理者が見積へ代理店を割り当てる */
+export const assignDealerSchema = z.object({
+  quote_id: z.uuid(),
+  dealer_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+});
+
+/** 代理店が入力する別途工事・フリー商品の 1 行 */
+export const dealerRevisionItemSchema = z.object({
+  kind: z.enum(['installation', 'free']),
+  name: trimmed(80).min(1, '項目名を入力してください'),
+  description: optional(200).nullable(),
+  unit_price: z.coerce.number().int().min(0, '金額は 0 円以上で入力してください').max(100_000_000),
+  quantity: z.coerce.number().int().min(1).max(999),
+});
+
+export const dealerRevisionSchema = z.object({
+  quote_id: z.uuid(),
+  items: z.array(dealerRevisionItemSchema).max(60),
+  dealer_note: optional(1000).nullable(),
+});

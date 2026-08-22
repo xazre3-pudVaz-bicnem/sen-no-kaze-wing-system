@@ -30,14 +30,14 @@ import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from
 
 const initial: AdminFormState = { ok: false };
 
-function Status({ state }: { state: AdminFormState }) {
+export function Status({ state }: { state: AdminFormState }) {
   if (state.error) return <Alert tone="danger">{state.error}</Alert>;
   if (state.fieldErrors?._form) return <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>;
   if (state.ok && state.message) return <Alert tone="success">{state.message}</Alert>;
   return null;
 }
 
-function SubmitButton({ pending, label = '保存する' }: { pending: boolean; label?: string }) {
+export function SubmitButton({ pending, label = '保存する' }: { pending: boolean; label?: string }) {
   return (
     <Button type="submit" disabled={pending} data-testid="admin-submit">
       {pending && <Spinner />}

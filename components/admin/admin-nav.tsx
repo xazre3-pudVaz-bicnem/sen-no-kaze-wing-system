@@ -16,7 +16,7 @@ const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 
   { href: '/admin/preview-rules', label: 'プレビュー画像', need: 'catalog' },
   { href: '/admin/customers', label: '顧客一覧', need: 'admin' },
   { href: '/admin/configurations', label: '保存された仕様', need: 'admin' },
-  { href: '/admin/quotes', label: '見積依頼・見積書', need: 'admin' },
+  { href: '/admin/quotes', label: '見積依頼・見積書' },
   { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
 ];
 

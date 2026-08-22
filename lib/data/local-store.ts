@@ -24,6 +24,8 @@ import type {
 } from '@/lib/domain/types';
 import { computePricing } from '@/lib/domain/pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
+import { hasRoleAtLeast } from '@/lib/domain/types';
+import { ROUNDING_UNIT } from '@/lib/domain/pricing';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
 import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
@@ -41,6 +43,8 @@ import {
   type SaveConfigurationInput,
   type SessionUser,
   type UploadInput,
+  type DealerRevisionInput,
+  type DealerRevisionItem,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
@@ -307,6 +311,9 @@ export class LocalStore implements DataStore {
         customer_company: contact.company_name,
         base_model_name: model.name,
         finish_level: cfg.finish_level,
+        dealer_note: null,
+        revision: 1,
+        parent_quote_id: null,
         base_price: pricing.base_price,
         base_expense: pricing.base_expense,
         option_subtotal: pricing.option_subtotal,
@@ -403,7 +410,9 @@ export class LocalStore implements DataStore {
   async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
     return this.read((db) => {
       const quote = db.quotes.find((q) => q.id === id);
-      if (!quote || !this.canAccess(actor, quote.user_id)) return null;
+      // 顧客本人・管理者に加え、担当代理店も閲覧できる（別途工事を入力するため）
+      const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;
+      if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return null;
       return {
         quote,
         items: db.quoteItems.filter((i) => i.quote_id === id).sort((a, b) => a.sort_order - b.sort_order),
@@ -431,6 +440,113 @@ export class LocalStore implements DataStore {
         }))
     );
   }
+  async assignQuoteDealer(id: string, dealerId: string | null, actor: SessionUser) {
+    return this.mutate((db) => {
+      if (actor.role !== 'admin') throw new StoreError('FORBIDDEN', '権限がありません');
+      const q = db.quotes.find((x) => x.id === id);
+      if (!q) throw new StoreError('NOT_FOUND', '見積が見つかりません');
+      if (dealerId) {
+        const p = db.profiles.find((x) => x.id === dealerId);
+        if (!p || !hasRoleAtLeast(p.role_code, 'dealer')) {
+          throw new StoreError('VALIDATION', '代理店以上の権限を持つユーザーを指定してください');
+        }
+      }
+      q.dealer_id = dealerId;
+      q.updated_at = nowIso();
+      return q;
+    });
+  }
+
+  async listDealerQuotes(dealerId: string) {
+    return this.read((db) => {
+      const email = new Map(db.profiles.map((p) => [p.id, p.email]));
+      return db.quotes
+        .filter((q) => q.dealer_id === dealerId)
+        .sort((a, b) => b.issued_at.localeCompare(a.issued_at))
+        .map((q) => ({ ...q, user_email: email.get(q.user_id) ?? '' }));
+    });
+  }
+
+  async createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser) {
+    return this.mutate((db) => {
+      const parent = db.quotes.find((x) => x.id === id);
+      if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
+      if (!(actor.role === 'admin' || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
+        throw new StoreError('FORBIDDEN', 'この見積の担当代理店ではありません');
+      }
+      if (parent.status === 'superseded') {
+        throw new StoreError('LOCKED', 'この版はすでに改訂されています。最新の版から作成してください。');
+      }
+      for (const it of input.items) {
+        if (it.kind !== 'installation' && it.kind !== 'free') {
+          throw new StoreError('VALIDATION', '代理店が入力できるのは別途工事とフリー商品だけです');
+        }
+        if (it.unit_price < 0 || it.quantity < 1) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
+      }
+
+      const amount = (it: DealerRevisionItem) => it.unit_price * Math.max(1, Math.floor(it.quantity));
+      const installation = input.items.reduce((sum, it) => sum + amount(it), 0);
+      const baseTotal = parent.base_price + parent.base_expense;
+      const optionTotal = parent.option_subtotal + parent.option_expense;
+      const subRaw = baseTotal + optionTotal + installation;
+      const subtotal = Math.floor(subRaw / ROUNDING_UNIT) * ROUNDING_UNIT;
+      const tax = Math.floor(subtotal * parent.tax_rate);
+      const issued = new Date();
+
+      const next: Quote = {
+        ...parent,
+        id: randomUUID(),
+        quote_no: `${parent.quote_no}-${parent.revision + 1}`,
+        status: 'issued',
+        issued_at: issued.toISOString(),
+        valid_until: addDays(issued, QUOTE_VALID_DAYS).toISOString(),
+        installation_subtotal: installation,
+        adjustment: subtotal - subRaw,
+        subtotal,
+        tax,
+        total: subtotal + tax,
+        notes: '本見積書は現地の代理店・工務店が別途工事を確認したうえで作成した確定見積です。',
+        dealer_id: parent.dealer_id ?? actor.id,
+        dealer_note: input.dealer_note,
+        revision: parent.revision + 1,
+        parent_quote_id: parent.id,
+        created_at: issued.toISOString(),
+        updated_at: issued.toISOString(),
+      };
+      db.quotes.push(next);
+
+      // 本体・オプションの明細は親からそのまま複製
+      for (const it of db.quoteItems.filter((x) => x.quote_id === parent.id && x.kind !== 'installation' && x.kind !== 'free')) {
+        db.quoteItems.push({ ...it, id: randomUUID(), quote_id: next.id });
+      }
+      let sort = 1000;
+      for (const it of input.items) {
+        db.quoteItems.push({
+          id: randomUUID(),
+          quote_id: next.id,
+          kind: it.kind,
+          name: it.name || '（名称未設定）',
+          description: it.description,
+          unit_price: it.unit_price,
+          quantity: Math.max(1, Math.floor(it.quantity)),
+          amount: amount(it),
+          image_url: null,
+          sort_order: ++sort,
+        });
+      }
+
+      parent.status = 'superseded';
+      parent.updated_at = nowIso();
+      const req = db.quoteRequests.find((x) => x.id === parent.quote_request_id);
+      if (req) {
+        req.quote_id = next.id;
+        req.status = 'sent';
+        req.updated_at = nowIso();
+      }
+      return next;
+    });
+  }
+
   async updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null) {
     this.mutate((db) => {
       const q = db.quotes.find((x) => x.id === id);

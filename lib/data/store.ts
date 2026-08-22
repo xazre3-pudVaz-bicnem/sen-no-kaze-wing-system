@@ -51,6 +51,19 @@ export interface SaveConfigurationInput {
   finish_level?: FinishLevel;
 }
 
+export interface DealerRevisionItem {
+  kind: 'installation' | 'free';
+  name: string;
+  description: string | null;
+  unit_price: number;
+  quantity: number;
+}
+
+export interface DealerRevisionInput {
+  items: DealerRevisionItem[];
+  dealer_note: string | null;
+}
+
 export interface QuoteDetail {
   quote: Quote;
   items: QuoteItem[];
@@ -120,6 +133,12 @@ export interface DataStore {
   listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
   listQuoteRequests(): Promise<(QuoteRequest & { quote_no: string | null; user_email: string })[]>;
   updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null): Promise<void>;
+  /** 管理者が見積の担当代理店を割り当てる */
+  assignQuoteDealer(id: string, dealerId: string | null, actor: SessionUser): Promise<Quote>;
+  /** 代理店に割り当てられた見積の一覧 */
+  listDealerQuotes(dealerId: string): Promise<(Quote & { user_email: string })[]>;
+  /** 代理店が別途工事・フリー商品を入れた確定見積（次の版）を発行する。元の版は改訂済みとして残る */
+  createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser): Promise<Quote>;
 
   // ---- 見積書PDF ----
   getQuoteDocumentFile(quoteId: string): Promise<{ bytes: Uint8Array; document: QuoteDocument } | null>;

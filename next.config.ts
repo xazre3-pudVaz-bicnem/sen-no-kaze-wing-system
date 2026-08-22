@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
   images: {
     formats: ['image/avif', 'image/webp'],
+    // Next.js 16 は許可した quality しか最適化しない（未許可だと本番で 400）。
+    // 90 は建築写真（ブランドビジュアル）用。
+    qualities: [75, 90],
     remotePatterns: supabaseHost ? [{ protocol: 'https', hostname: supabaseHost }] : [],
   },
   // 見積書PDFのフォント（assets/fonts）をサーバーレス関数へ同梱する

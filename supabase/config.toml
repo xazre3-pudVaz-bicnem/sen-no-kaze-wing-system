@@ -1,0 +1,24 @@
+# Supabase プロジェクト設定（`supabase config push` でリモートへ反映する項目のみ）
+project_id = "sen-no-kaze-wing-system"
+
+[auth]
+enabled = true
+site_url = "https://sen-no-kaze-wing-system.vercel.app"
+additional_redirect_urls = [
+  "https://sen-no-kaze-wing-system.vercel.app/auth/callback",
+  "https://sen-no-kaze-wing-system.vercel.app/**",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/**",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 8
+
+[auth.email]
+enable_signup = true
+# MVP: 確認メール（SMTP 未設定）を待たずにログインできるようにする
+enable_confirmations = false
+double_confirm_changes = true
+secure_password_change = false

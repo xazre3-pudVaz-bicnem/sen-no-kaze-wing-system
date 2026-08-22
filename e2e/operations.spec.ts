@@ -2,8 +2,11 @@ import { expect, test } from '@playwright/test';
 import {
   ADMIN_EMAIL as ADMIN,
   DEALER_EMAIL as DEALER,
+  PASSWORD,
   ensureAccount,
   logout,
+  openFreshSimulator,
+  register,
   requestQuoteAsCustomer,
   signInOrRegister as signIn,
   uniqueEmail,
@@ -128,6 +131,56 @@ test.describe('運用機能（通知・承諾・変更履歴）', () => {
     await back.getByRole('combobox').selectOption('dealer');
     await back.getByRole('button', { name: '変更' }).click();
     await expect(back.getByText('保存しました')).toBeVisible();
+    await logout(page);
+  });
+});
+
+test.describe('マイページと管理画面の導線', () => {
+  test('見積を発行した仕様は削除できず、生の DB エラーも出ない', async ({ page }) => {
+    const customer = uniqueEmail('nodelete');
+    await requestQuoteAsCustomer(page, customer, '削除できない仕様');
+    await page.goto('/mypage');
+
+    // 削除ボタンは出さず、理由を表示する
+    await expect(page.getByTestId('configuration-card')).toContainText('見積発行済みのため削除できません');
+    await expect(page.getByTestId('delete-button')).toBeHidden();
+    await logout(page);
+  });
+
+  test('見積前の仕様は削除できる', async ({ page }) => {
+    const customer = uniqueEmail('candelete');
+    await register(page, customer, '/simulator/wing-01');
+    await openFreshSimulator(page);
+    await page.getByTestId('save-button').click();
+    await page.getByTestId('config-name-input').fill('まだ見積していない仕様');
+    await page.getByTestId('save-confirm').click();
+    await page.waitForURL(/\?c=[0-9a-f-]{36}/);
+    await page.goto('/mypage');
+    page.on('dialog', (d) => d.accept());
+    await page.getByTestId('delete-button').click();
+    await page.waitForURL(/deleted=1/);
+    await expect(page.getByTestId('configuration-card')).toHaveCount(0);
+    await logout(page);
+  });
+
+  test('代理店はログイン後に管理画面へ入り、ヘッダーからも戻れる', async ({ page }) => {
+    await ensureAccount(page, DEALER, '代理店 担当');
+    // 明示的な next を付けずにログインすると管理画面へ
+    await page.goto('/login');
+    await page.locator('#email').fill(DEALER);
+    await page.locator('#password').fill(PASSWORD);
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForURL(/\/admin$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ダッシュボード');
+
+    // 公開サイトのヘッダーは「管理画面」になる
+    await page.goto('/');
+    await expect(page.getByRole('banner').getByRole('link', { name: '管理画面' })).toBeVisible();
+
+    // マイページからも戻れる
+    await page.goto('/mypage');
+    await expect(page.getByTestId('to-admin')).toBeVisible();
+    await expect(page.getByText('代理店・工務店としてログインしています')).toBeVisible();
     await logout(page);
   });
 });

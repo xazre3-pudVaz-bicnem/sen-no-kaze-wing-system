@@ -367,6 +367,9 @@ export class LocalStore implements DataStore {
       const cfg = db.configurations.find((c) => c.id === id);
       if (!cfg) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
       if (!this.canAccess(actor, cfg.user_id)) throw new StoreError('FORBIDDEN', '権限がありません');
+      if (db.quotes.some((q) => q.configuration_id === id)) {
+        throw new StoreError('VALIDATION', '見積を発行済みの仕様は削除できません。見積履歴として残ります。');
+      }
       db.configurations = db.configurations.filter((c) => c.id !== id);
       db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== id);
       db.snapshots = db.snapshots.filter((s) => s.configuration_id !== id);

@@ -5,7 +5,7 @@ import { signOutAction } from '@/lib/actions/auth';
 import { duplicateConfigurationAction } from '@/lib/actions/configurations';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { CONFIGURATION_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { ROLE_LABELS, canEditDealerItems, CONFIGURATION_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge, ButtonLink, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -38,7 +38,7 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/mypage/profile" className="btn-ghost btn-sm">登録情報の変更</Link>
-            {user.role === 'admin' && <Link href="/admin" className="btn-secondary btn-sm">管理画面へ</Link>}
+            {canEditDealerItems(user.role) && <Link href="/admin" className="btn-secondary btn-sm" data-testid="to-admin">管理画面へ</Link>}
             <form action={signOutAction}>
               <button type="submit" className="btn-ghost btn-sm" data-testid="logout-button">ログアウト</button>
             </form>
@@ -46,6 +46,15 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
         </div>
 
         <div className="mt-6 space-y-3">
+          {canEditDealerItems(user.role) && user.role !== 'admin' && (
+            <Alert tone="info" title={`${ROLE_LABELS[user.role]}としてログインしています`}>
+              担当の見積・フリー商品・商品台帳は
+              <Link href="/admin" className="mx-1 font-semibold underline">
+                管理画面
+              </Link>
+              から操作します。このページはご自身が見積を検討するときに使います。
+            </Alert>
+          )}
           {sp.forbidden && <Alert tone="warn">管理画面へのアクセス権限がありません。</Alert>}
           {sp.password === 'updated' && <Alert tone="success">パスワードを更新しました。</Alert>}
           {sp.duplicated && <Alert tone="success">仕様を複製しました。</Alert>}
@@ -124,7 +133,12 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                             複製
                           </button>
                         </form>
-                        <DeleteConfigurationButton id={c.id} name={c.name} />
+                        {/* 見積を発行した仕様は見積書が参照しているので消せない */}
+                        {quote ? (
+                          <p className="self-center text-center text-xs text-muted">見積発行済みのため削除できません</p>
+                        ) : (
+                          <DeleteConfigurationButton id={c.id} name={c.name} />
+                        )}
                       </div>
                     </div>
                   </li>

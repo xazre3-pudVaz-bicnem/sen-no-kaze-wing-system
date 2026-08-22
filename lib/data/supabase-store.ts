@@ -57,6 +57,9 @@ function mapPgError(e: { code?: string; message?: string } | null): never {
   if (msg.startsWith('NOT_FOUND') || e?.code === 'P0002' || e?.code === 'PGRST116') throw new StoreError('NOT_FOUND', 'データが見つかりません');
   if (msg.startsWith('UNAUTHENTICATED')) throw new StoreError('UNAUTHENTICATED', 'ログインが必要です');
   if (msg.startsWith('QUOTE_IMMUTABLE')) throw new StoreError('LOCKED', '発行済み見積の金額は変更できません');
+  // 外部キー違反。DB のメッセージをそのまま画面に出さない
+  if (e?.code === '23503') throw new StoreError('VALIDATION', '他のデータから参照されているため削除できません');
+  if (e?.code === '23505') throw new StoreError('VALIDATION', '同じ値が既に登録されています');
   throw new StoreError('INTERNAL', msg);
 }
 
@@ -242,6 +245,15 @@ export class SupabaseStore implements DataStore {
   }
   async deleteConfiguration(id: string) {
     const db = await this.db();
+    // 見積を発行した仕様は消せない（見積書が参照しているため）。FK エラーになる前に説明する
+    const { count: quoted, error: qErr } = await db
+      .from('quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('configuration_id', id);
+    if (qErr) mapPgError(qErr);
+    if (quoted) {
+      throw new StoreError('VALIDATION', '見積を発行済みの仕様は削除できません。見積履歴として残ります。');
+    }
     const { error, count } = await db.from('configurations').delete({ count: 'exact' }).eq('id', id);
     if (error) mapPgError(error);
     if (!count) throw new StoreError('NOT_FOUND', '保存データが見つかりません');

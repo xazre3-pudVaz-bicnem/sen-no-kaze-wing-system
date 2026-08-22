@@ -42,6 +42,7 @@ export function HeaderShell({ items, user }: Props) {
   }, [open]);
 
   const solid = !overlay || scrolled || open;
+  // isAdmin は「管理画面に入れる権限（代理店以上）」の意味
   const accountHref = user ? (user.isAdmin ? '/admin' : '/mypage') : '/login';
   const accountLabel = user ? (user.isAdmin ? '管理画面' : 'マイページ') : 'ログイン';
   const close = () => setOpen(false);

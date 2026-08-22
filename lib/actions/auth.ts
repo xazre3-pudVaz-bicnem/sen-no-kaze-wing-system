@@ -75,6 +75,19 @@ export async function signUpAction(_prev: AuthFormState, formData: FormData): Pr
   redirect(next);
 }
 
+/**
+ * ログイン直後の行き先。
+ * 明示的な next（保存の続きなど）があればそれを優先し、既定の /mypage のときだけ
+ * 権限を見て管理画面へ振り分ける。
+ */
+async function landingPath(next: string): Promise<string> {
+  if (next !== '/mypage') return next;
+  const { getSessionUser } = await import('@/lib/auth/session');
+  const user = await getSessionUser();
+  const { canEditDealerItems } = await import('@/lib/domain/types');
+  return canEditDealerItems(user?.role) ? '/admin' : '/mypage';
+}
+
 export async function signInAction(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const parsed = signInSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error), values: valuesOf(formData, ['email']) };
@@ -84,7 +97,7 @@ export async function signInAction(_prev: AuthFormState, formData: FormData): Pr
     const { localSignIn } = await import('@/lib/auth/local-auth');
     const r = await localSignIn(parsed.data.email, parsed.data.password);
     if (!r.ok) return { ok: false, error: r.error, values: valuesOf(formData, ['email']) };
-    redirect(next);
+    redirect(await landingPath(next));
   }
   if (!hasSupabaseEnv()) return notConfigured();
   const supabase = await createClient();
@@ -95,7 +108,7 @@ export async function signInAction(_prev: AuthFormState, formData: FormData): Pr
       : 'メールアドレスまたはパスワードが正しくありません。';
     return { ok: false, error: msg, values: valuesOf(formData, ['email']) };
   }
-  redirect(next);
+  redirect(await landingPath(next));
 }
 
 export async function signOutAction(): Promise<void> {

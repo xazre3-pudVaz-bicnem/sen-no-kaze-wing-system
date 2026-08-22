@@ -1,0 +1,745 @@
+<title>Wing 本部運用マニュアル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --paper: #FBFAF7;
+    --surface: #FFFFFF;
+    --sunk: #F4F1EA;
+    --ink: #1F1C18;
+    --ink-soft: #56504A;
+    --ink-faint: #8A8177;
+    --rule: #E4DFD5;
+    --accent: #2F5D4B;
+    --accent-soft: #E6EDE9;
+    --caution: #9C5218;
+    --caution-soft: #FBEFE4;
+    --stop: #8E3B32;
+    --stop-soft: #F9EBE8;
+
+    --serif: 'Zen Old Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+    --sans: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15140F;
+      --surface: #1D1B16;
+      --sunk: #24211B;
+      --ink: #F1EDE4;
+      --ink-soft: #BCB4A7;
+      --ink-faint: #8B8377;
+      --rule: #35312A;
+      --accent: #7FB79E;
+      --accent-soft: #1E2E27;
+      --caution: #D69A63;
+      --caution-soft: #2E241A;
+      --stop: #D98B80;
+      --stop-soft: #2E1E1B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #15140F;
+    --surface: #1D1B16;
+    --sunk: #24211B;
+    --ink: #F1EDE4;
+    --ink-soft: #BCB4A7;
+    --ink-faint: #8B8377;
+    --rule: #35312A;
+    --accent: #7FB79E;
+    --accent-soft: #1E2E27;
+    --caution: #D69A63;
+    --caution-soft: #2E241A;
+    --stop: #D98B80;
+    --stop-soft: #2E1E1B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.9;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 3.5rem 0 2.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .masthead h1 {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3rem);
+    line-height: 1.25;
+    letter-spacing: 0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .masthead p {
+    margin: 0;
+    max-width: 46rem;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    margin-top: 0.5rem;
+  }
+
+  /* ---------- layout ---------- */
+  .layout {
+    display: grid;
+    gap: 3rem;
+    padding-top: 3rem;
+  }
+  @media (min-width: 60rem) {
+    .layout { grid-template-columns: 15rem minmax(0, 1fr); gap: 4rem; }
+  }
+
+  nav.toc { align-self: start; }
+  @media (min-width: 60rem) {
+    nav.toc { position: sticky; top: 2rem; max-height: calc(100vh - 4rem); overflow-y: auto; }
+  }
+  nav.toc h2 {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 0.75rem;
+    font-weight: 500;
+  }
+  nav.toc ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    border-left: 1px solid var(--rule);
+  }
+  nav.toc a {
+    display: block;
+    padding: 0.3rem 0 0.3rem 0.9rem;
+    margin-left: -1px;
+    border-left: 2px solid transparent;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  nav.toc a:hover { color: var(--ink); }
+  nav.toc a.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 700;
+  }
+  nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  main { display: flex; flex-direction: column; gap: 3.5rem; min-width: 0; }
+
+  section { scroll-margin-top: 2rem; display: flex; flex-direction: column; gap: 1.1rem; }
+  section > h2 {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    margin: 0;
+    padding-bottom: 0.6rem;
+    border-bottom: 2px solid var(--ink);
+    text-wrap: balance;
+  }
+  section > h3 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin: 0.75rem 0 0;
+    color: var(--ink);
+  }
+  p { margin: 0; max-width: 44rem; }
+  p + p { margin-top: -0.2rem; }
+  .lede { color: var(--ink-soft); }
+
+  code.path, code.k {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--sunk);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 0.1em 0.4em;
+    white-space: nowrap;
+  }
+  code.path { color: var(--accent); }
+
+  strong { font-weight: 700; }
+
+  /* ---------- steps ---------- */
+  ol.steps {
+    counter-reset: step;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.9rem;
+    align-items: start;
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.7rem;
+    text-align: center;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-top: 0.15rem;
+  }
+  ol.steps > li > div { display: flex; flex-direction: column; gap: 0.3rem; }
+  ol.steps b { font-weight: 700; }
+  ol.steps small { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.8; }
+
+  /* ---------- plain lists ---------- */
+  ul.plain {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-width: 44rem;
+  }
+  ul.plain > li {
+    padding-left: 1.1rem;
+    position: relative;
+    font-size: 0.95rem;
+  }
+  ul.plain > li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.8em;
+    width: 0.4rem;
+    height: 1px;
+    background: var(--ink-faint);
+  }
+
+  /* ---------- callouts ---------- */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 0.9rem 1.1rem;
+    border-radius: 0 4px 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-width: 46rem;
+  }
+  .callout .tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .callout p { font-size: 0.9rem; line-height: 1.85; }
+  .callout.caution { border-left-color: var(--caution); background: var(--caution-soft); }
+  .callout.caution .tag { color: var(--caution); }
+  .callout.stop { border-left-color: var(--stop); background: var(--stop-soft); }
+  .callout.stop .tag { color: var(--stop); }
+
+  /* ---------- tables ---------- */
+  .table-scroll { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 32rem;
+    font-size: 0.9rem;
+  }
+  caption {
+    text-align: left;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    padding-bottom: 0.5rem;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--rule);
+    line-height: 1.75;
+  }
+  thead th {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    font-weight: 500;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  th.num { text-align: right; }
+
+  /* ---------- flow ---------- */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .flow-row {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 1rem;
+    padding: 0.85rem 1.1rem;
+    border-bottom: 1px solid var(--rule);
+    align-items: baseline;
+  }
+  .flow-row:last-child { border-bottom: none; }
+  .flow-who {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+  .flow-row.hq .flow-who { color: var(--accent); }
+  .flow-what { font-size: 0.92rem; }
+  .flow-what b { font-weight: 700; }
+
+  /* ---------- role chips ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip {
+    font-size: 0.75rem;
+    font-family: var(--mono);
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 0.15rem 0.7rem;
+    color: var(--ink-soft);
+  }
+  .chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  footer.doc {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Wing / Head Office</p>
+    <h1>Wing 本部運用マニュアル</h1>
+    <p>折り畳み式木造コンテナ「Wing」見積システムを、本部（管理者・総代理店）が操作するための手引きです。画面の左メニューと同じ並びで章立てしています。</p>
+    <div class="meta">
+      <span>株式会社技術の杜</span>
+      <span>対象：管理者／総代理店</span>
+      <span>2026年8月版</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="目次">
+      <h2>目次</h2>
+      <ol>
+        <li><a href="#start">はじめに</a></li>
+        <li><a href="#flow">受注までの流れ</a></li>
+        <li><a href="#notifications">お知らせ</a></li>
+        <li><a href="#quotes">見積依頼・見積書</a></li>
+        <li><a href="#ledger">商品台帳</a></li>
+        <li><a href="#catalog">価格・商品の登録</a></li>
+        <li><a href="#images">プレビュー画像</a></li>
+        <li><a href="#users">ユーザー・権限</a></li>
+        <li><a href="#configs">保存された仕様</a></li>
+        <li><a href="#contacts">お問い合わせ</a></li>
+        <li><a href="#audit">変更履歴</a></li>
+        <li><a href="#rules">運用上の約束</a></li>
+        <li><a href="#trouble">困ったときは</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <section id="start">
+        <h2>はじめに</h2>
+        <p class="lede">管理画面は <code class="path">/admin</code> です。会員登録したメールアドレスとパスワードで <code class="path">/login</code> からログインすると、権限に応じたメニューが出ます。</p>
+
+        <h3>4つの権限</h3>
+        <div class="table-scroll">
+          <table>
+            <caption>権限は上位ほど広い操作ができます。付与は「ユーザー・権限」から行います。</caption>
+            <thead>
+              <tr><th>権限</th><th>できること</th><th>主な担当</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>管理者</strong></td>
+                <td>すべて。ユーザーの権限付与、代理店の割り当て、変更履歴の確認</td>
+                <td>技術の杜</td>
+              </tr>
+              <tr>
+                <td><strong>総代理店</strong></td>
+                <td>商品台帳への商品登録と価格の編集。本体・カテゴリー・商品・画像・プレビュー</td>
+                <td>総代理店</td>
+              </tr>
+              <tr>
+                <td><strong>代理店・工務店</strong></td>
+                <td>商品台帳の閲覧、自社フリー商品の登録、担当見積の別途工事入力</td>
+                <td>地域の代理店</td>
+              </tr>
+              <tr>
+                <td><strong>顧客</strong></td>
+                <td>見積シミュレーション・保存・見積依頼・見積への回答。管理画面には入れません</td>
+                <td>エンドユーザー</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <span class="tag">Note</span>
+          <p>権限の判定はサーバー側とデータベース側の二重で行っています。メニューを隠しているだけではないので、URL を直接開いても操作はできません。</p>
+        </div>
+      </section>
+
+      <section id="flow">
+        <h2>受注までの流れ</h2>
+        <p class="lede">お客様の見積依頼から確定見積までの標準的な流れです。各段階で関係者に自動でお知らせが届きます。</p>
+
+        <div class="flow">
+          <div class="flow-row">
+            <span class="flow-who">お客様</span>
+            <span class="flow-what">シミュレーターで仕様を組み、<b>見積を依頼</b>する</span>
+          </div>
+          <div class="flow-row hq">
+            <span class="flow-who">本部</span>
+            <span class="flow-what">お知らせで受け取り、見積を開いて<b>担当代理店を割り当てる</b></span>
+          </div>
+          <div class="flow-row">
+            <span class="flow-who">代理店</span>
+            <span class="flow-what">現地を確認し、<b>別途工事とフリー商品を入力</b>して確定見積（第2版）を発行する</span>
+          </div>
+          <div class="flow-row">
+            <span class="flow-who">お客様</span>
+            <span class="flow-what">確定見積を見て<b>「この見積で進める」または「今回は見送る」</b>を選ぶ</span>
+          </div>
+          <div class="flow-row hq">
+            <span class="flow-who">本部</span>
+            <span class="flow-what">回答のお知らせを受け取り、以降の手続きへ進む</span>
+          </div>
+        </div>
+
+        <h3>見積の「版」について</h3>
+        <p>お客様が依頼した時点の見積が<strong>第1版（概算見積）</strong>です。ここには工場生産分（本体・オプション）だけが入り、別途工事は「別途」と表示されます。代理店が金額を入れると<strong>第2版（確定見積）</strong>が新しく作られ、第1版は「改訂済み」として金額そのまま残ります。</p>
+        <p>見積番号は <code class="k">Q202608-0001</code> → <code class="k">Q202608-0001-2</code> と枝番が付きます。</p>
+
+        <div class="callout caution">
+          <span class="tag">Caution</span>
+          <p>発行済みの見積は金額を書き換えられません。マスターの価格を変えても、過去に発行した見積書の金額は変わらない設計です。金額を直したいときは、必ず新しい版を発行してください。</p>
+        </div>
+      </section>
+
+      <section id="notifications">
+        <h2>お知らせ</h2>
+        <p class="lede"><code class="path">/admin/notifications</code>　見積依頼・お問い合わせ・お客様の回答がここに届きます。まずこの画面を見れば、対応すべきことが分かります。</p>
+
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>届くタイミング</th><th>宛先</th></tr></thead>
+            <tbody>
+              <tr><td>お客様が見積を依頼した</td><td>本部</td></tr>
+              <tr><td>本部が代理店を割り当てた</td><td>その代理店</td></tr>
+              <tr><td>代理店が確定見積を発行した</td><td>お客様</td></tr>
+              <tr><td>お客様が承諾・辞退した</td><td>本部と担当代理店</td></tr>
+              <tr><td>お問い合わせフォームが送信された</td><td>本部</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ol class="steps">
+          <li><div><b>未読を確認する</b><small>未読には赤いラベルが付きます。件名の右の「開く」で対象の画面へ移動します。</small></div></li>
+          <li><div><b>対応が終わったら既読にする</b><small>右上の「すべて既読にする」でまとめて消せます。</small></div></li>
+        </ol>
+
+        <div class="callout">
+          <span class="tag">メール通知について</span>
+          <p>環境変数 <code class="k">RESEND_API_KEY</code> と <code class="k">MAIL_FROM</code> を設定すると、同じ内容がメールでも届きます。未設定でもこの画面には必ず残るので、運用は止まりません。各お知らせに「メール送信済み／未送信」の状態が表示されます。</p>
+        </div>
+      </section>
+
+      <section id="quotes">
+        <h2>見積依頼・見積書</h2>
+        <p class="lede"><code class="path">/admin/quotes</code>　受け付けた見積依頼の一覧です。担当代理店の割り当てと、見積書 PDF の確認をここで行います。</p>
+
+        <h3>担当代理店を割り当てる</h3>
+        <ol class="steps">
+          <li><div><b>一覧から見積を開く</b><small>「担当代理店」の列が「未割当」のものが対象です。</small></div></li>
+          <li><div><b>右側の「担当代理店」から選ぶ</b><small>代理店・総代理店の権限を持つ方だけが候補に出ます。候補にいない場合は先に「ユーザー・権限」で権限を付与してください。</small></div></li>
+          <li><div><b>「割り当てる」を押す</b><small>その代理店にお知らせが届き、別途工事を入力できるようになります。</small></div></li>
+        </ol>
+
+        <h3>見積書 PDF</h3>
+        <ul class="plain">
+          <li>「見積書PDF」で表示・ダウンロードできます。お客様のマイページからも同じものが取得できます。</li>
+          <li>レイアウトを変更したあとは「PDF再生成」で作り直せます。<strong>金額は変わりません。</strong></li>
+        </ul>
+
+        <h3>見積書の構成</h3>
+        <div class="table-scroll">
+          <table>
+            <caption>先方指定の区分です。1・2 は工場生産分、3・4・5 は現地の代理店が確定させます。</caption>
+            <thead><tr><th>区分</th><th>内容</th><th>諸費用15%</th></tr></thead>
+            <tbody>
+              <tr><td>1 本体価格</td><td>躯体・金物・断熱・屋根外壁・サッシ建具</td><td>かかる</td></tr>
+              <tr><td>2 オプション価格</td><td>選ばれた設備・仕上げ（2-1 に明細）</td><td>かかる</td></tr>
+              <tr><td>3 別途工事</td><td>設計監理・梱包養生・現場設置・電気・給排水・基礎・廃材処分・現場諸費用</td><td>かからない</td></tr>
+              <tr><td>4 運送費</td><td>設置場所までの運搬</td><td>かからない</td></tr>
+              <tr><td>5 フリー商品</td><td>代理店・工務店の取扱商品（家具など）</td><td>かからない</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>合計は 小計 → 値引き等調整額（千円未満切捨て）→ 税抜請負額 → 消費税10% → 合計 の順に、必ずサーバー側で計算します。</p>
+
+        <h3>ステータス</h3>
+        <div class="chips">
+          <span class="chip on">発行済み</span>
+          <span class="chip">承諾</span>
+          <span class="chip">辞退</span>
+          <span class="chip">改訂済み</span>
+          <span class="chip">期限切れ</span>
+          <span class="chip">取消</span>
+        </div>
+        <p>「承諾」「辞退」はお客様の回答で自動的に付きます。「改訂済み」は代理店が次の版を発行したときに付きます。手動で変えたいときは詳細画面の「ステータス変更」を使います。</p>
+      </section>
+
+      <section id="ledger">
+        <h2>商品台帳</h2>
+        <p class="lede"><code class="path">/admin/ledger</code>　登録されているすべての商品を、階層で一覧できます。代理店も閲覧できます。</p>
+
+        <div class="flow">
+          <div class="flow-row hq"><span class="flow-who">第1階層</span><span class="flow-what"><b>本体</b>　Wing（片ウィング）／BOX／フラット</span></div>
+          <div class="flow-row"><span class="flow-who">第2階層</span><span class="flow-what"><b>仕様</b>　ホテル仕様／住宅仕様／事務所・店舗用</span></div>
+          <div class="flow-row"><span class="flow-who">第3階層</span><span class="flow-what"><b>分類フォルダ</b>　内外装仕上げ／サッシ／内部建具／設備機器／照明器具／家具／その他／防火仕様／別途工事／フリー商品</span></div>
+          <div class="flow-row"><span class="flow-who">第4階層</span><span class="flow-what"><b>カテゴリー</b>　床材・壁天井・浴室・トイレ など</span></div>
+          <div class="flow-row"><span class="flow-who">第5階層</span><span class="flow-what"><b>商品</b>　個々の製品と価格</span></div>
+        </div>
+
+        <p>各カテゴリーには「本体のみから」「本体＋設備から」「フル装備のみ」という<strong>注文範囲</strong>が付いています。これはお客様がどこまで頼むかを選んだときに、その項目が出るかどうかを決めるものです。</p>
+
+        <div class="callout">
+          <span class="tag">分類フォルダは増やせます</span>
+          <p>「オプションカテゴリー」から分類フォルダ名・分類コード・表示順を入力できます。コードを書き換える作業は不要です。</p>
+        </div>
+      </section>
+
+      <section id="catalog">
+        <h2>価格・商品の登録</h2>
+        <p class="lede">総代理店以上の操作です。<code class="path">/admin/models</code>（ベースコンテナ）、<code class="path">/admin/categories</code>（オプションカテゴリー）、<code class="path">/admin/options</code>（オプション）で編集します。</p>
+
+        <h3>商品の価格を変える</h3>
+        <ol class="steps">
+          <li><div><b>「オプション」からカテゴリーを探し、商品の「編集」を押す</b></div></li>
+          <li><div><b>「価格（税別・円）」を書き換えて保存する</b><small>諸費用15%と消費税は自動で計算されるので、税別の本体価格だけを入れてください。</small></div></li>
+          <li><div><b>反映を確認する</b><small>シミュレーターの新しい計算にはすぐ反映されます。発行済みの見積書は変わりません。</small></div></li>
+        </ol>
+
+        <h3>新しいカテゴリーを追加する</h3>
+        <ol class="steps">
+          <li><div><b>「オプションカテゴリー」→ 新規作成</b></div></li>
+          <li><div><b>分類フォルダ名・分類コード・表示順を入れる</b><small>既存のフォルダに入れるときは、同じ分類コードを指定します。</small></div></li>
+          <li><div><b>注文範囲を選ぶ</b><small>本体のみ／本体＋設備から／フル装備のみ。内装や造作はフル装備のみが適切です。</small></div></li>
+          <li><div><b>選択方式を決める</b><small>「1つ選択」はラジオ、「複数選択」はチェックボックスになります。</small></div></li>
+        </ol>
+
+        <div class="callout caution">
+          <span class="tag">Caution</span>
+          <p>価格の変更は「変更履歴」に自動で記録されます。誰がいつどの商品をいくらに変えたかが残るので、複数人で運用しても追跡できます。</p>
+        </div>
+      </section>
+
+      <section id="images">
+        <h2>プレビュー画像</h2>
+        <p class="lede"><code class="path">/admin/preview-rules</code>　お客様が設備を選んだときに切り替わる完成イメージを管理します。</p>
+
+        <h3>画像が見つからないときの動き</h3>
+        <ol class="steps">
+          <li><div><b>完全一致する画像を探す</b><small>選ばれた設備の組み合わせにぴったりの画像があれば、それを表示します。</small></div></li>
+          <li><div><b>レイヤー合成を試す</b><small>透過 PNG が揃っていれば重ねて合成します。</small></div></li>
+          <li><div><b>最も近い画像を出す</b><small>「画像に未反映：◯◯」と注記を付けて表示し、管理画面に不足として警告します。</small></div></li>
+        </ol>
+
+        <div class="callout stop">
+          <span class="tag">絶対にしないこと</span>
+          <p>存在しない完成画像を作ったり、別仕様の写真を正しい完成図として出すことはしません。お客様に誤解を与えるためです。画像が足りない組み合わせは、必ず「未反映」と表示されます。</p>
+        </div>
+
+        <p>ダッシュボードに「プレビュー画像が不足している組み合わせ」の件数が出ます。素材が届いたら、この画面から登録してください。不足している画像の一覧は <code class="k">docs/required-preview-assets.md</code> にまとめてあります。</p>
+      </section>
+
+      <section id="users">
+        <h2>ユーザー・権限</h2>
+        <p class="lede"><code class="path">/admin/customers</code>　登録ユーザーの一覧と、権限の付与を行います。管理者のみ。</p>
+
+        <ol class="steps">
+          <li><div><b>対象の方に会員登録してもらう</b><small>まず <code class="path">/register</code> から通常のお客様として登録していただきます。</small></div></li>
+          <li><div><b>一覧からその方の行を探す</b><small>メールアドレスで見つけられます。</small></div></li>
+          <li><div><b>権限を選んで「変更」を押す</b><small>代理店・工務店／総代理店／管理者から選びます。</small></div></li>
+          <li><div><b>再ログインしてもらう</b><small>次回ログイン時から管理画面に入れるようになります。</small></div></li>
+        </ol>
+
+        <div class="callout caution">
+          <span class="tag">Caution</span>
+          <p>自分自身の権限は変更できません（管理者が誤って自分を降格し、誰も入れなくなるのを防ぐためです）。管理者を減らすときは、別の管理者から操作してください。</p>
+        </div>
+      </section>
+
+      <section id="configs">
+        <h2>保存された仕様</h2>
+        <p class="lede"><code class="path">/admin/configurations</code>　お客様がマイページに保存した仕様の一覧です。まだ見積依頼に至っていないものも含まれます。</p>
+        <ul class="plain">
+          <li>どのモデル・どの注文範囲で検討しているかが分かります。</li>
+          <li>金額はマスターの現在価格で再計算した概算です。見積依頼が出ると、その時点の金額で見積書に固定されます。</li>
+          <li>追客の材料として使えます。保存だけで止まっている方には、お問い合わせ経由でご連絡ください。</li>
+        </ul>
+      </section>
+
+      <section id="contacts">
+        <h2>お問い合わせ</h2>
+        <p class="lede"><code class="path">/admin/contacts</code>　サイトのお問い合わせフォームから届いた内容です。</p>
+        <ul class="plain">
+          <li>添付ファイルは非公開の保管領域に入ります。この画面からのみ開けます。</li>
+          <li>対応状況を「新規／確認中／対応済み」に変更できます。</li>
+          <li>新着があるとダッシュボードとお知らせに出ます。</li>
+        </ul>
+      </section>
+
+      <section id="audit">
+        <h2>変更履歴</h2>
+        <p class="lede"><code class="path">/admin/audit</code>　価格・公開状態・権限が変更された記録です。管理者のみ閲覧できます。</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>種別</th><th>記録される内容</th></tr></thead>
+            <tbody>
+              <tr><td>価格変更</td><td>商品・本体の価格を変えたとき（変更前後の金額つき）</td></tr>
+              <tr><td>公開状態</td><td>商品・本体を公開／非公開にしたとき</td></tr>
+              <tr><td>権限変更</td><td>ユーザーの権限を変えたとき</td></tr>
+              <tr><td>追加</td><td>商品を新しく登録したとき</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>記録はデータベース側で自動的に作られます。画面を経由しない変更でも残ります。</p>
+      </section>
+
+      <section id="rules">
+        <h2>運用上の約束</h2>
+        <p class="lede">システムの設計としてこう決めている、という点です。運用のときに前提としてください。</p>
+        <ul class="plain">
+          <li><strong>発行済みの見積は金額を変えない。</strong>マスターの価格を変えても過去の見積書は当時の金額のままです。修正は新しい版を発行して行います。</li>
+          <li><strong>価格・権限・見積番号はクライアント側では決めない。</strong>すべてサーバー側で再計算・採番します。</li>
+          <li><strong>存在しない完成画像は作らない。</strong>足りない組み合わせは「未反映」と明示します。</li>
+          <li><strong>お客様は自分のデータしか見られない。</strong>他人の保存仕様や見積は開けません。代理店も割り当てられた見積だけです。</li>
+          <li><strong>マイページと管理画面は検索エンジンに載せない。</strong>noindex を設定しています。</li>
+        </ul>
+      </section>
+
+      <section id="trouble">
+        <h2>困ったときは</h2>
+
+        <h3>代理店が候補に出てこない</h3>
+        <p>その方の権限がまだ「顧客」のままです。「ユーザー・権限」で代理店・工務店に変更してください。会員登録が済んでいない場合は、先に登録していただく必要があります。</p>
+
+        <h3>価格を変えたのに見積書の金額が変わらない</h3>
+        <p>正しい動作です。発行済みの見積はその時点のスナップショットです。新しい金額で出すには、代理店に確定見積（次の版）を発行してもらうか、お客様に見積を取り直していただきます。</p>
+
+        <h3>お知らせは出るがメールが届かない</h3>
+        <p>メール送信が未設定です。お知らせ画面の各行に「メール未送信」と表示されます。<code class="k">RESEND_API_KEY</code> と <code class="k">MAIL_FROM</code> を設定すると届くようになります。</p>
+
+        <h3>お客様が「画像が未反映と出る」と言っている</h3>
+        <p>その設備の組み合わせに対応する完成画像がまだ登録されていません。最も近い画像を出したうえで、正直に「未反映」と表示しています。プレビュー画像を登録すると解消します。</p>
+
+        <h3>商品を削除できない</h3>
+        <p>お客様が保存した仕様で使われている商品は削除できません。データが壊れるためです。代わりに<strong>非公開</strong>にしてください。新規の見積には出なくなります。</p>
+      </section>
+
+      <footer class="doc">
+        <span>Wing 見積システム 本部運用マニュアル／株式会社技術の杜</span>
+        <span>この手引きは画面の実装に合わせて更新します。手順が画面と違う場合は実装側が正です。</span>
+      </footer>
+    </main>
+  </div>
+</div>
+
+<script>
+  // 目次の現在地表示。閲覧の補助だけなので、失敗しても本文は読める
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var map = {};
+    links.forEach(function (a) {
+      var id = a.getAttribute('href').slice(1);
+      var el = document.getElementById(id);
+      if (el) map[id] = a;
+    });
+    if (!('IntersectionObserver' in window)) return;
+    var seen = {};
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
+      var current = null;
+      Object.keys(map).forEach(function (id) { if (seen[id] && !current) current = id; });
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (current && map[current]) map[current].classList.add('active');
+    }, { rootMargin: '-10% 0px -70% 0px' });
+    Object.keys(map).forEach(function (id) { io.observe(document.getElementById(id)); });
+  })();
+</script>

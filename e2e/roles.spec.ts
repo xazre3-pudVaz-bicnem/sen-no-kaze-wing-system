@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  ADMIN_EMAIL as ADMIN,
   DEALER_EMAIL as DEALER,
   MASTER_EMAIL as MASTER,
   ensureDealerFreeProduct,
@@ -8,6 +9,7 @@ import {
   readTotal,
   register,
   signInOrRegister as signIn,
+  uniqueEmail,
 } from './helpers';
 
 test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () => {
@@ -20,7 +22,7 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     await expect(nav.getByRole('link', { name: 'オプションカテゴリー' })).toBeVisible();
     await expect(nav.getByRole('link', { name: '商品台帳' })).toBeVisible();
     // 顧客一覧・見積は管理者のみ
-    await expect(nav.getByRole('link', { name: '顧客一覧' })).toBeHidden();
+    await expect(nav.getByRole('link', { name: 'ユーザー・権限' })).toBeHidden();
     // 台帳の商品を開ける
     await page.goto('/admin/options');
     await expect(page.getByTestId('admin-option-ub-1216')).toBeVisible();
@@ -74,6 +76,38 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     expect(afterExpense).toBe(beforeExpense);
     // 100,000 に税 10% だけが乗る（千円未満切捨てのため ±1,100）
     expect(Math.abs((await readTotal(page)) - (before + 100_000 * 1.1))).toBeLessThanOrEqual(1100);
+  });
+
+  test('管理者が画面から権限を付与でき、自分自身は変更できない', async ({ page }) => {
+    const promoted = uniqueEmail('promote');
+    await register(page, promoted, '/mypage', '昇格 太郎');
+    // 顧客のうちは管理画面に入れない
+    const before = await page.goto('/admin');
+    expect(before?.url()).toMatch(/\/mypage\?forbidden=1/);
+    await logout(page);
+
+    // 管理者が代理店へ変更する
+    await signIn(page, ADMIN, '/admin', '管理者');
+    await page.goto('/admin/customers');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ユーザー・権限');
+    const row = page.getByTestId(`user-row-${promoted}`);
+    await row.scrollIntoViewIfNeeded();
+    await row.getByRole('combobox').selectOption('dealer');
+    await row.getByRole('button', { name: '変更' }).click();
+    await expect(row.getByText('保存しました')).toBeVisible();
+
+    // 自分自身の行は変更できない
+    const selfRow = page.getByTestId(`user-row-${ADMIN}`);
+    await expect(selfRow.getByRole('combobox')).toBeDisabled();
+    await expect(selfRow.getByRole('button', { name: '変更' })).toBeDisabled();
+    await logout(page);
+
+    // 付与された人は代理店として管理画面に入れる
+    await signIn(page, promoted, '/admin', '昇格 太郎');
+    const nav = page.getByRole('navigation', { name: '管理メニュー' });
+    await expect(nav.getByRole('link', { name: 'フリー商品' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'ユーザー・権限' })).toBeHidden();
+    await logout(page);
   });
 
   test('顧客は管理画面に入れない', async ({ page }) => {

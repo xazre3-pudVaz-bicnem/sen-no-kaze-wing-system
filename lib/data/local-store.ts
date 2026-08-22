@@ -13,6 +13,7 @@ import type {
   ProductImage,
   ProductOption,
   Profile,
+  RoleCode,
   Quote,
   QuoteContact,
   QuoteDocument,
@@ -103,6 +104,17 @@ export class LocalStore implements DataStore {
       const p = db.profiles.find((x) => x.id === userId);
       if (!p) throw new StoreError('NOT_FOUND', 'プロフィールが見つかりません');
       Object.assign(p, patch, { updated_at: nowIso() });
+      return p;
+    });
+  }
+  async updateUserRole(userId: string, role: RoleCode, actor: SessionUser) {
+    return this.mutate((db) => {
+      if (actor.role !== 'admin') throw new StoreError('FORBIDDEN', '権限を変更できるのは管理者だけです');
+      if (actor.id === userId) throw new StoreError('VALIDATION', '自分自身の権限は変更できません');
+      const p = db.profiles.find((x) => x.id === userId);
+      if (!p) throw new StoreError('NOT_FOUND', 'ユーザーが見つかりません');
+      p.role_code = role;
+      p.updated_at = nowIso();
       return p;
     });
   }

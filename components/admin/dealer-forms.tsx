@@ -2,9 +2,9 @@
 
 import { useActionState, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { assignQuoteDealerAction, createDealerRevisionAction } from '@/lib/actions/admin';
+import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatYen } from '@/lib/domain/pricing';
-import type { Profile, Quote, QuoteItem } from '@/lib/domain/types';
+import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 
@@ -241,6 +241,35 @@ export function DealerRevisionForm({
       </dl>
 
       <SubmitButton pending={pending} label={`第${quote.revision + 1}版として発行する`} />
+    </form>
+  );
+}
+
+/** 管理者：ユーザーの権限を変更する（顧客一覧の各行） */
+export function UserRoleForm({ profile, isSelf }: { profile: Profile; isSelf: boolean }) {
+  const [state, action, pending] = useActionState(updateUserRoleAction, initial);
+  return (
+    <form action={action} className="flex items-center gap-1" noValidate data-testid={`role-form-${profile.id}`}>
+      <input type="hidden" name="user_id" value={profile.id} />
+      <Select
+        name="role_code"
+        defaultValue={profile.role_code}
+        disabled={isSelf}
+        aria-label={`${profile.full_name} さんの権限`}
+        className="min-w-[9rem] py-1 text-xs"
+        data-testid={`role-select-${profile.email}`}
+      >
+        {(Object.keys(ROLE_LABELS) as RoleCode[]).map((r) => (
+          <option key={r} value={r}>
+            {ROLE_LABELS[r]}
+          </option>
+        ))}
+      </Select>
+      <Button type="submit" variant="secondary" size="sm" disabled={pending || isSelf} title={isSelf ? '自分自身の権限は変更できません' : undefined}>
+        {pending ? '…' : '変更'}
+      </Button>
+      {state.error && <span className="text-xs text-warn">{state.error}</span>}
+      {state.ok && state.message && <span className="text-xs text-forest">保存しました</span>}
     </form>
   );
 }

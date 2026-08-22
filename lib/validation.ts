@@ -205,3 +205,9 @@ export const dealerRevisionSchema = z.object({
   items: z.array(dealerRevisionItemSchema).max(60),
   dealer_note: optional(1000).nullable(),
 });
+
+/** 管理者がユーザーの権限を変更する */
+export const userRoleSchema = z.object({
+  user_id: z.uuid(),
+  role_code: z.enum(['customer', 'dealer', 'master_dealer', 'admin']),
+});

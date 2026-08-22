@@ -11,6 +11,7 @@ import type {
   ProductImage,
   ProductOption,
   Profile,
+  RoleCode,
   Quote,
   QuoteContact,
   QuoteDocument,
@@ -143,6 +144,14 @@ export class SupabaseStore implements DataStore {
   async updateProfile(userId: string, patch: Partial<Profile>) {
     const db = await this.db();
     const { data, error } = await db.from('profiles').update(patch).eq('id', userId).select('*').single();
+    if (error) mapPgError(error);
+    return data as Profile;
+  }
+  async updateUserRole(userId: string, role: RoleCode, actor: SessionUser) {
+    if (actor.role !== 'admin') throw new StoreError('FORBIDDEN', '権限を変更できるのは管理者だけです');
+    if (actor.id === userId) throw new StoreError('VALIDATION', '自分自身の権限は変更できません');
+    const db = await this.db();
+    const { data, error } = await db.from('profiles').update({ role_code: role }).eq('id', userId).select('*').single();
     if (error) mapPgError(error);
     return data as Profile;
   }

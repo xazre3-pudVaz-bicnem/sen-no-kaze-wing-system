@@ -116,6 +116,8 @@ export interface DataStore {
     patch: Partial<Pick<Profile, 'full_name' | 'company_name' | 'phone' | 'postal_code' | 'address'>>
   ): Promise<Profile>;
   listProfiles(): Promise<Profile[]>;
+  /** 管理者がユーザーの権限を変更する。自分自身の権限は変更できない */
+  updateUserRole(userId: string, role: RoleCode, actor: SessionUser): Promise<Profile>;
 
   // ---- 保存した仕様 ----
   listConfigurations(userId: string): Promise<Configuration[]>;

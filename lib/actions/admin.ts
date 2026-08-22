@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS } from '@/lib/domain/types';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, StoreError } from '@/lib/data/store';
 import {
@@ -17,6 +17,7 @@ import {
   type FieldErrors,
   assignDealerSchema,
   dealerRevisionSchema,
+  userRoleSchema,
 } from '@/lib/validation';
 
 export interface AdminFormState {
@@ -391,4 +392,22 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
     return errState(e);
   }
   redirect(`/admin/quotes/${newId}?revised=1`);
+}
+
+/** 管理者：ユーザーの権限を変更する（自分自身は変更できない） */
+export async function updateUserRoleAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  const admin = await requireAdmin();
+  const parsed = userRoleSchema.safeParse({
+    user_id: formData.get('user_id'),
+    role_code: formData.get('role_code'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  try {
+    const store = await getStore();
+    const profile = await store.updateUserRole(parsed.data.user_id, parsed.data.role_code, admin);
+    revalidatePath('/admin/customers');
+    return { ok: true, message: `${profile.full_name} さんの権限を「${ROLE_LABELS[profile.role_code]}」に変更しました` };
+  } catch (e) {
+    return errState(e);
+  }
 }

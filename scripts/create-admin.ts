@@ -1,7 +1,10 @@
 /**
- * 管理者アカウントを作成（または既存ユーザーを管理者に昇格）する。
+ * アカウントを作成（または既存ユーザーの権限・パスワードを更新）する。
  *   node scripts/create-admin.ts --email admin@example.com --password 'Passw0rd!' --name '管理者'
- * - Supabase モード: service role で auth ユーザーを作成（メール確認済み）→ profiles.role_code='admin'
+ *   node scripts/create-admin.ts --email dealer@example.com --password 'Passw0rd!' --name '山田 太郎'  *     --role dealer --company '山田工務店'
+ *
+ * --role は customer / dealer / master_dealer / admin（既定は admin）
+ * - Supabase モード: service role で auth ユーザーを作成（メール確認済み）→ profiles を upsert
  * - ローカルモード（WING_LOCAL_MODE=1）: .wing-local/db.json に直接書き込む
  */
 import fs from 'node:fs';
@@ -14,8 +17,15 @@ loadEnv();
 const email = (arg('email') ?? '').toLowerCase();
 const password = arg('password') ?? '';
 const name = arg('name') ?? '管理者';
+const company = arg('company') ?? null;
+const ROLES = ['customer', 'dealer', 'master_dealer', 'admin'] as const;
+const role = (arg('role') ?? 'admin') as (typeof ROLES)[number];
 if (!email || !password) {
-  console.error('使い方: node scripts/create-admin.ts --email <email> --password <password> [--name <氏名>]');
+  console.error("使い方: node scripts/create-admin.ts --email <email> --password <password> [--name <氏名>] [--role <" + ROLES.join('|') + ">] [--company <法人名>]");
+  process.exit(1);
+}
+if (!ROLES.includes(role)) {
+  console.error(`--role は ${ROLES.join(' / ')} のいずれかを指定してください`);
   process.exit(1);
 }
 if (password.length < 8) {
@@ -44,13 +54,14 @@ if (process.env.WING_LOCAL_MODE === '1') {
   }
   const profile = db.profiles.find((p: { id: string }) => p.id === user.id);
   if (profile) {
-    profile.role_code = 'admin';
+    profile.role_code = role;
+    if (company) profile.company_name = company;
     profile.updated_at = now;
   } else {
-    db.profiles.push({ id: user.id, customer_no: `C${String(db.profiles.length + 1).padStart(6, '0')}`, email, full_name: name, company_name: null, phone: null, postal_code: null, address: null, role_code: 'admin', created_at: now, updated_at: now });
+    db.profiles.push({ id: user.id, customer_no: `C${String(db.profiles.length + 1).padStart(6, '0')}`, email, full_name: name, company_name: company, phone: null, postal_code: null, address: null, role_code: role, created_at: now, updated_at: now });
   }
   fs.writeFileSync(file, JSON.stringify(db, null, 2));
-  console.log(`ローカル管理者を作成しました: ${email}`);
+  console.log(`ローカルアカウントを作成しました: ${email}（${role}）`);
 } else {
   const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
@@ -75,9 +86,9 @@ if (process.env.WING_LOCAL_MODE === '1') {
   } else {
     userId = created.data.user.id;
   }
-  const { error } = await admin
-    .from('profiles')
-    .upsert({ id: userId, email, full_name: name, role_code: 'admin' }, { onConflict: 'id' });
+  const patch: Record<string, unknown> = { id: userId, email, full_name: name, role_code: role };
+  if (company) patch.company_name = company;
+  const { error } = await admin.from('profiles').upsert(patch, { onConflict: 'id' });
   if (error) throw error;
-  console.log(`管理者を作成/更新しました: ${email} (${userId})`);
+  console.log(`アカウントを作成/更新しました: ${email}（${role}）`);
 }

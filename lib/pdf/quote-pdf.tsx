@@ -34,8 +34,11 @@ const s = StyleSheet.create({
   rightCol: { width: 200, fontSize: 8, color: '#4b453d' },
   customer: { fontSize: 13, fontWeight: 700, borderBottomWidth: 1, borderBottomColor: '#1d1a16', paddingBottom: 3 },
   subject: { marginTop: 8, fontSize: 9.5 },
-  totalBox: { marginTop: 10, flexDirection: 'row', alignItems: 'flex-end', borderBottomWidth: 2, borderBottomColor: '#5a3e2b', paddingBottom: 3 },
-  totalLabel: { fontSize: 10, marginRight: 12 },
+  // ラベルと金額は文字サイズが違うので、行を分けず 1 つの Text に入れてベースラインを揃える
+  // （flexDirection: 'row' + alignItems: 'flex-end' だと箱の下端が揃うだけで、ベースラインが 11pt ほどずれる）
+  totalBox: { marginTop: 10, borderBottomWidth: 2, borderBottomColor: '#5a3e2b', paddingBottom: 4 },
+  totalLine: { lineHeight: 1.2 },
+  totalLabel: { fontSize: 10 },
   totalValue: { fontSize: 20, fontWeight: 700 },
   terms: { marginTop: 8, fontSize: 8, color: '#4b453d' },
   companyName: { fontSize: 11, fontWeight: 700, color: '#1d1a16' },
@@ -114,8 +117,10 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             </View>
             <Text style={s.subject}>件名：折り畳み式木造コンテナ {quote.base_model_name} 一式（{FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].name}・工場生産分）{revisionLabel}</Text>
             <View style={s.totalBox}>
-              <Text style={s.totalLabel}>御見積金額（税込）</Text>
-              <Text style={s.totalValue}>{yen(quote.total)}</Text>
+              <Text style={s.totalLine}>
+                <Text style={s.totalLabel}>御見積金額（税込）　</Text>
+                <Text style={s.totalValue}>{yen(quote.total)}</Text>
+              </Text>
             </View>
             <View style={s.terms}>
               <Text>支払条件：{COMPANY.paymentTerms}</Text>

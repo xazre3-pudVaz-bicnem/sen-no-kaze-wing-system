@@ -37,7 +37,7 @@ e2e/, tests/         Playwright / Vitest
    ```bash
    npx supabase login
    npx supabase link --project-ref <project-ref>
-   npx supabase db push            # supabase/migrations/0001〜0008 を適用
+   npx supabase db push            # supabase/migrations/0001〜0009 を適用
    ```
 
    DB パスワードが手元に無い場合は Management API 経由でも適用できます（Docker 不要）:
@@ -83,18 +83,19 @@ e2e/, tests/         Playwright / Vitest
 ## 現在のデプロイ
 
 - 本番: https://sen-no-kaze-wing-system.vercel.app （Vercel `cypress-projects1/sen-no-kaze-wing-system`、GitHub `xazre3-pudVaz-bicnem/sen-no-kaze-wing-system` の main に push で自動デプロイ）
-- Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0007 適用済み・初期データ投入済み
+- Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0008 適用済み・商品台帳投入済み
 
-> **⚠️ 次回デプロイ前に `0008_catalog_tree.sql` の適用が必要です。**
-> 商品台帳の3階層化（`options.spec_codes` / `option_categories.group_*` / `preview_hotspots`）で列とテーブルが増えています。
+> **⚠️ 次回デプロイ前に `0009_finish_level.sql` の適用が必要です。**
+> 注文範囲（本体のみ／本体＋設備／フル装備）の追加で、列と関数が増えています。
 >
 > ```bash
-> npx supabase db query --linked --file supabase/migrations/0008_catalog_tree.sql
-> npm run seed:supabase -- --prune   # 新しい商品台帳を投入し、旧台帳の残骸を削除
+> npx supabase migration repair --linked --status applied 0001 0002 0003 0004 0005 0006 0007 0008  # 初回のみ
+> npx supabase db push --linked
+> npm run seed:supabase -- --prune
 > ```
 >
-> 未適用のままアプリだけ配信しても画面は落ちません（仕様の絞り込みなしで表示され、図面のクリック領域が出ないだけ）が、
-> 先方要望の「仕様別の台帳」「平面図クリック」は適用後に有効になります。
+> 未適用のままアプリだけ配信しても画面は落ちません（すべて「フル装備」として動きます）が、
+> 本体のみ・本体＋設備の注文は適用後に有効になります。
 
 ## 環境変数なしでデプロイした場合（デモモード）
 

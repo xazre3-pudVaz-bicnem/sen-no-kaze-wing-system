@@ -6,6 +6,7 @@ import type {
   BaseModel,
   CatalogBundle,
   Configuration,
+  FinishLevel,
   OptionCategory,
   PreviewImageRule,
   PreviewHotspot,
@@ -22,7 +23,7 @@ import type {
   ContactStatus,
 } from '@/lib/domain/types';
 import { computePricing } from '@/lib/domain/pricing';
-import { validateSelection } from '@/lib/domain/rules';
+import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
 import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
@@ -149,13 +150,20 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const model = db.models.find((m) => m.id === input.base_model_id && m.status === 'published');
       if (!model) throw new StoreError('VALIDATION', '公開中のモデルではありません');
+      const level: FinishLevel = input.finish_level ?? 'full';
+      const scope = new Set(categoriesInScope(db.categories, level).map((c) => c.id));
       const valid = db.options.filter(
-        (o) => input.option_ids.includes(o.id) && o.status === 'published' && (o.base_model_id === null || o.base_model_id === model.id)
+        (o) =>
+          input.option_ids.includes(o.id) &&
+          o.status === 'published' &&
+          (o.base_model_id === null || o.base_model_id === model.id) &&
+          scope.has(o.category_id)
       );
       const ids = [...new Set(valid.map((o) => o.id))];
       const issues = validateSelection(
         { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },
-        ids
+        ids,
+        level
       );
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
 
@@ -169,6 +177,7 @@ export class LocalStore implements DataStore {
         }
         cfg = found;
         cfg.name = input.name || cfg.name;
+        cfg.finish_level = level;
         cfg.preview_image_url = input.preview_image_url;
         cfg.notes = input.notes;
         db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== cfg.id);
@@ -179,6 +188,7 @@ export class LocalStore implements DataStore {
           base_model_id: model.id,
           name: input.name || '無題の仕様',
           status: 'draft',
+          finish_level: level,
           base_price: 0,
           base_expense: 0,
           option_subtotal: 0,
@@ -265,7 +275,8 @@ export class LocalStore implements DataStore {
       const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
       const issues = validateSelection(
         { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },
-        items.map((i) => i.option_id)
+        items.map((i) => i.option_id),
+        cfg.finish_level ?? 'full'
       );
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
       const { pricing, model } = this.recalc(db, cfg);
@@ -295,6 +306,7 @@ export class LocalStore implements DataStore {
         customer_name: contact.full_name,
         customer_company: contact.company_name,
         base_model_name: model.name,
+        finish_level: cfg.finish_level,
         base_price: pricing.base_price,
         base_expense: pricing.base_expense,
         option_subtotal: pricing.option_subtotal,

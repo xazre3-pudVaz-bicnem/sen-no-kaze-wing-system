@@ -45,6 +45,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           name: found.configuration.name,
           option_ids: found.items.map((i) => i.option_id),
           status: found.configuration.status,
+          finish_level: found.configuration.finish_level ?? 'full',
         };
     }
   }

@@ -127,6 +127,70 @@ test.describe('顧客フロー', () => {
     await expectNoConsoleErrors(page, errors);
   });
 
+  test('注文範囲: 本体のみ → 本体＋設備 → フル装備で選べる項目と金額が変わる', async ({ page }) => {
+    await openFreshSimulator(page);
+    // 既定はフル装備
+    await expect(page.getByTestId('finish-level-full')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('equip-ub')).toBeVisible();
+    await expect(page.getByTestId('equip-floor')).toBeVisible();
+    const fullTotal = await readTotal(page);
+
+    // 本体のみ: 内装・造作・設備が消え、サッシ・外壁・断熱・防火だけが残る
+    await page.getByTestId('finish-level-shell').click();
+    await expect(page.getByTestId('finish-level-shell')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('equip-sash')).toBeVisible();
+    await expect(page.getByTestId('equip-exterior-wall')).toBeVisible();
+    await expect(page.getByTestId('equip-ub')).toBeHidden();
+    await expect(page.getByTestId('equip-floor')).toBeHidden();
+    await expect(page.getByTestId('equip-carpentry')).toBeHidden();
+    await expect(quoteLine(page, 'ub-1216')).toBeHidden();
+    await expect(quoteLine(page, 'carpentry-full-wing')).toBeHidden();
+    await expect(page.getByTestId('quote-scope')).toContainText('本体のみ');
+    const shellTotal = await readTotal(page);
+    expect(shellTotal).toBeLessThan(fullTotal);
+
+    // 本体＋設備: 設備は選べるが内装・造作は出ない
+    await page.getByTestId('finish-level-equipment').click();
+    await expect(page.getByTestId('equip-ub')).toBeVisible();
+    await expect(page.getByTestId('equip-floor')).toBeHidden();
+    await expect(page.getByTestId('equip-carpentry')).toBeHidden();
+    const equipTotal = await readTotal(page);
+    expect(equipTotal).toBeGreaterThan(shellTotal);
+    expect(equipTotal).toBeLessThan(fullTotal);
+
+    // フル装備へ戻すと内装・造作が復活し、金額も戻る
+    await page.getByTestId('finish-level-full').click();
+    await expect(page.getByTestId('equip-floor')).toBeVisible();
+    await expect(quoteLine(page, 'carpentry-full-wing')).toBeVisible();
+    expect(await readTotal(page)).toBe(fullTotal);
+  });
+
+  test('本体のみの構成を保存して見積依頼できる', async ({ page }) => {
+    const email = uniqueEmail('shell');
+    await register(page, email, '/simulator/wing-01');
+    await openFreshSimulator(page);
+    await page.getByTestId('finish-level-shell').click();
+    const total = await readTotal(page);
+    await page.getByTestId('save-button').click();
+    await page.getByTestId('config-name-input').fill('DIY用スケルトン');
+    await page.getByTestId('save-confirm').click();
+    await expect(page).toHaveURL(/\?c=[0-9a-f-]{36}/);
+    const configId = new URL(page.url()).searchParams.get('c')!;
+
+    // 開き直しても本体のみのまま
+    await page.goto(`/simulator/wing-01?c=${configId}`);
+    await waitForSimulator(page);
+    await expect(page.getByTestId('finish-level-shell')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('equip-ub')).toBeHidden();
+    expect(await readTotal(page)).toBe(total);
+
+    // 見積依頼まで通り、見積書にも注文範囲が出る
+    await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await page.getByTestId('submit-quote-request').click();
+    await expect(page).toHaveURL(/\/mypage\/quotes\//);
+    await expect(page.getByTestId('quote-scope')).toContainText('本体のみ');
+    expect(Number((await page.getByTestId('quote-total').textContent())!.replace(/[^0-9]/g, ''))).toBe(total);
+  });
   test('防火仕様は代理店相談として別途見積で表示される', async ({ page }) => {
     await openFreshSimulator(page);
     await expect(page.getByTestId('fireproof-button')).toContainText('非防火仕様');

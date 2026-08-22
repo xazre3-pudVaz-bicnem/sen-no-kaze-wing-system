@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
-import type { Quote, QuoteItem } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, type Quote, type QuoteItem } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 
 /**
@@ -18,6 +18,7 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
   const baseTotal = quote.base_price + quote.base_expense;
   const optionTotal = quote.option_subtotal + quote.option_expense;
   const withImages = optionItems.filter((i) => i.image_url);
+  const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
 
   return (
     <div data-testid="quote-table">
@@ -130,6 +131,9 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
       </dl>
 
       <div className="space-y-2 border-t border-line px-6 py-4 text-xs text-ink-soft sm:px-8">
+        <p data-testid="quote-scope">
+          <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong> — {levelInfo.lead}
+        </p>
         <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
         <Link href="/dealers" className="inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4">
           代理店・工務店を探す／お問い合わせ

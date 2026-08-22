@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import type { BaseModel, OptionCategory, ProductOption } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, type BaseModel, type OptionCategory, type ProductOption } from '@/lib/domain/types';
 import { Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
@@ -36,7 +36,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   return (
     <AdminPage
       title="商品台帳"
-      lead="本体 › 仕様 › 分類 › カテゴリー › 商品。分類フォルダとカテゴリーは「オプションカテゴリー」から追加できます。"
+      lead="本体 › 仕様 › 分類 › カテゴリー › 商品。分類フォルダとカテゴリーは「オプションカテゴリー」から追加できます。各カテゴリーの「◯◯から」は、その項目を頼めるようになる注文範囲（本体のみ／本体＋設備／フル装備）です。"
       actions={
         <>
           <Link href="/admin/categories" className="btn-secondary btn-sm">
@@ -84,6 +84,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
                                 {c.name}
                                 <span className="ml-1">{c.selection_mode === 'single' ? '（1つ選択）' : '（複数可）'}</span>
                                 {c.is_required && <span className="ml-1 text-warn">必須</span>}
+                                <span className="mt-0.5 block text-[0.65rem]">{FINISH_LEVEL_INFO[c.finish_level ?? 'full'].name}から</span>
                               </p>
                               <ul className="space-y-1">
                                 {items.map((o) => (

@@ -129,6 +129,13 @@ export function CategoryForm({ category }: { category: OptionCategory | null }) 
         <Field label="分類の表示順" htmlFor={`cat-gsort-${p}`} errors={e.group_sort}><Input id={`cat-gsort-${p}`} name="group_sort" type="number" defaultValue={category?.group_sort ?? 99} /></Field>
         <Field label="コード" htmlFor={`cat-code-${p}`} required errors={e.code}><Input id={`cat-code-${p}`} name="code" defaultValue={category?.code} required /></Field>
         <Field label="表示順" htmlFor={`cat-sort-${p}`} errors={e.sort_order}><Input id={`cat-sort-${p}`} name="sort_order" type="number" defaultValue={category?.sort_order ?? 0} /></Field>
+        <Field label="注文範囲" htmlFor={`cat-level-${p}`} required hint="このカテゴリーを頼めるようになる範囲。本体のみ＝スケルトン注文にも必ず含まれる" errors={e.finish_level}>
+          <Select id={`cat-level-${p}`} name="finish_level" defaultValue={category?.finish_level ?? 'full'}>
+            <option value="shell">本体のみ（サッシ・外壁・防火・別途工事）</option>
+            <option value="equipment">本体＋設備から</option>
+            <option value="full">フル装備のみ（内装・造作）</option>
+          </Select>
+        </Field>
         <Field label="選択方式" htmlFor={`cat-mode-${p}`} required errors={e.selection_mode}>
           <Select id={`cat-mode-${p}`} name="selection_mode" defaultValue={category?.selection_mode ?? 'multi'}>
             <option value="multi">複数選択（チェックボックス）</option>

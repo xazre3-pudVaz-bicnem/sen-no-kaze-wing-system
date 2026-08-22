@@ -108,6 +108,7 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
     group_name: formData.get('group_name'),
     group_sort: formData.get('group_sort') || 99,
     selection_mode: formData.get('selection_mode'),
+    finish_level: formData.get('finish_level') || 'full',
     is_required: formData.get('is_required'),
     sort_order: formData.get('sort_order'),
     status: formData.get('status'),

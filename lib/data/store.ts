@@ -1,5 +1,6 @@
 import 'server-only';
 import type {
+  FinishLevel,
   BaseModel,
   CatalogBundle,
   Configuration,
@@ -46,6 +47,8 @@ export interface SaveConfigurationInput {
   option_ids: string[];
   preview_image_url: string | null;
   notes: string | null;
+  /** どこまで仕上げるか（未指定は full） */
+  finish_level?: FinishLevel;
 }
 
 export interface QuoteDetail {

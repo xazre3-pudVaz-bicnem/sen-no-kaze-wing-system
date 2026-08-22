@@ -7,10 +7,11 @@ import { ArrowRight, Save } from 'lucide-react';
 import { saveConfigurationAction } from '@/lib/actions/configurations';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
-import { defaultSelection, explainBlocked, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
-import { VIEW_KEYS, type CatalogBundle, type ConfigurationStatus, type ViewKey } from '@/lib/domain/types';
+import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
+import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Breadcrumbs, Button } from '@/components/ui';
+import { FinishLevelPicker } from './finish-level-picker';
 import { PlanBoard } from './plan-board';
 import { EquipmentBoard } from './equipment-board';
 import { QuoteSheet } from './quote-sheet';
@@ -25,6 +26,7 @@ export interface SimulatorInitial {
   name: string;
   option_ids: string[];
   status: ConfigurationStatus;
+  finish_level: FinishLevel;
 }
 
 interface Props {
@@ -39,6 +41,7 @@ interface Props {
 
 interface Draft {
   selected: string[];
+  finishLevel?: FinishLevel;
   name: string;
   configId: string | null;
   pending: 'save' | 'quote' | null;
@@ -81,8 +84,10 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     });
   }, [bundle, ctx, defaults, model.presets]);
 
-  const initialSelection = initial?.option_ids ?? presetSelections[0]?.ids ?? defaults;
+  const initialLevel: FinishLevel = initial?.finish_level ?? 'full';
+  const initialSelection = pruneToScope(ctx, initial?.option_ids ?? presetSelections[0]?.ids ?? defaults, initialLevel);
 
+  const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
   const [specCode, setSpecCode] = useState<string>(model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
@@ -116,6 +121,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
       if (!initial && draft) {
         const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
+        if (draft.finishLevel) setFinishLevel(draft.finishLevel);
         if (valid.length) setSelected(valid);
         if (draft.name) setName(draft.name);
         if (draft.configId) setConfigId(draft.configId);
@@ -137,10 +143,10 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   const persistDraft = useCallback(
     (patch: Partial<Draft> = {}) => {
       if (typeof window === 'undefined') return;
-      const draft: Draft = { selected, name, configId, pending: null, savedAt: Date.now(), ...patch };
+      const draft: Draft = { selected, finishLevel, name, configId, pending: null, savedAt: Date.now(), ...patch };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, name, configId, model.slug]
+    [selected, finishLevel, name, configId, model.slug]
   );
 
   useEffect(() => {
@@ -152,17 +158,34 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     () => bundle.options.filter((o) => o.spec_codes.length === 0 || o.spec_codes.includes(specCode)),
     [bundle.options, specCode]
   );
+  /** 注文範囲に入っているカテゴリー（本体のみ → サッシ・外壁・断熱・防火・別途工事だけ） */
+  const scopedCategories = useMemo(() => categoriesInScope(bundle.categories, finishLevel), [bundle.categories, finishLevel]);
+  const scopedCategoryIds = useMemo(() => new Set(scopedCategories.map((c) => c.id)), [scopedCategories]);
   const specCategories = useMemo(
-    () => bundle.categories.filter((c) => specOptions.some((o) => o.category_id === c.id)),
-    [bundle.categories, specOptions]
+    () => scopedCategories.filter((c) => specOptions.some((o) => o.category_id === c.id)),
+    [scopedCategories, specOptions]
   );
+  /** 注文範囲を外れたカテゴリーの商品はポップアップにも出さない */
+  const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);
 
   // ---- 計算・画像解決 ----
   const pricing = useMemo(
     () => computePricing(model, bundle.options, bundle.categories, selected.map((sid) => ({ option_id: sid }))),
     [model, bundle, selected]
   );
-  const issues = useMemo(() => validateSelection(ctx, selected), [ctx, selected]);
+  /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
+  const levelTotals = useMemo(() => {
+    const preset = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+    const base = preset?.ids ?? defaults;
+    const out: Partial<Record<FinishLevel, number>> = {};
+    for (const lv of FINISH_LEVELS) {
+      const ids = pruneToScope(ctx, lv === finishLevel ? selected : base, lv);
+      out[lv] = computePricing(model, bundle.options, bundle.categories, ids.map((sid) => ({ option_id: sid }))).total;
+    }
+    return out;
+  }, [ctx, model, bundle, presetSelections, specCode, defaults, selected, finishLevel]);
+
+  const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const previews = useMemo(
     () =>
@@ -188,9 +211,37 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     if (readOnly) return;
     const p = presetSelections.find((x) => x.code === code);
     if (!p) return;
-    setSelected(p.ids);
+    setSelected(pruneToScope(ctx, p.ids, finishLevel));
     setDirty(true);
     pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準構成を読み込みました`, 'success');
+  };
+
+  /**
+   * 注文範囲の切り替え。
+   * 狭めるときは範囲外の選択を落とし、広げるときは仕様の標準構成から不足分を補う。
+   */
+  const changeFinishLevel = (level: FinishLevel) => {
+    if (readOnly || level === finishLevel) return;
+    const widening = finishLevelRank(level) > finishLevelRank(finishLevel);
+    if (widening) {
+      const preset = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+      const wanted = pruneToScope(ctx, preset?.ids ?? defaults, level);
+      let cur = selected;
+      for (const oid of wanted) {
+        if (cur.includes(oid)) continue;
+        const r = toggleOption(ctx, cur, oid);
+        if (!r.rejected) cur = r.next;
+      }
+      setSelected(cur);
+    } else {
+      const kept = pruneToScope(ctx, selected, level);
+      const dropped = selected.length - kept.length;
+      setSelected(kept);
+      if (dropped > 0) pushToast(`注文範囲を外れた ${dropped} 点を見積から外しました`, 'info');
+    }
+    setFinishLevel(level);
+    setDirty(true);
+    pushToast(`「${FINISH_LEVEL_INFO[level].name}」で見積を作ります`, 'success');
   };
 
   const applyPicker = (categoryId: string, nextInCategory: string[]) => {
@@ -249,7 +300,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
 
   const reset = () => {
     const p = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
-    setSelected(p?.ids ?? defaults);
+    setSelected(pruneToScope(ctx, p?.ids ?? defaults, finishLevel));
     setDirty(true);
     pushToast('標準構成に戻しました', 'info');
   };
@@ -270,6 +321,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         option_ids: selected,
         preview_image_url: thumbnailUrl,
         notes: null,
+        finish_level: finishLevel,
       });
       if (!result.ok) {
         if (result.code === 'UNAUTHENTICATED') {
@@ -410,6 +462,11 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         )}
       </div>
 
+      {/* どこまで頼むか */}
+      <div className="mt-6">
+        <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
+      </div>
+
       {/* 図面（左）＋ 標準設備及び仕上げ表（右） */}
       <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(0,52fr)_minmax(0,48fr)] lg:items-start lg:gap-8">
         <div className="min-w-0 space-y-4">
@@ -426,7 +483,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         </div>
 
         <div className="min-w-0 space-y-4 lg:sticky lg:top-24">
-          <EquipmentBoard categories={specCategories} options={specOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
+          <EquipmentBoard categories={specCategories} options={scopedOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
 
           {/* 完成イメージ（外観・室内・水まわり） */}
           <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
@@ -457,6 +514,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         <QuoteSheet
           modelName={model.name}
           specName={specName}
+          finishLevel={finishLevel}
           pricing={pricing}
           categories={bundle.categories}
           options={bundle.options}
@@ -489,7 +547,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       {picker && (
         <OptionPickerDialog
           category={bundle.categories.find((c) => c.id === picker)!}
-          options={specOptions.filter((o) => o.category_id === picker)}
+          options={scopedOptions.filter((o) => o.category_id === picker)}
           selectedIds={selected}
           blocked={blocked}
           onClose={() => setPicker(null)}

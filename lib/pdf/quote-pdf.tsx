@@ -2,7 +2,7 @@ import 'server-only';
 import path from 'node:path';
 import fs from 'node:fs';
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer';
-import type { Quote, QuoteItem } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, type Quote, type QuoteItem } from '@/lib/domain/types';
 import { COMPANY, PROJECT_NAME } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
 
@@ -109,7 +109,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
               {quote.customer_company ? <Text>{quote.customer_company}</Text> : null}
               <Text>{quote.customer_name} 様</Text>
             </View>
-            <Text style={s.subject}>件名：折り畳み式木造コンテナ {quote.base_model_name} 一式（工場生産分・概算）</Text>
+            <Text style={s.subject}>件名：折り畳み式木造コンテナ {quote.base_model_name} 一式（{FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].name}・工場生産分・概算）</Text>
             <View style={s.totalBox}>
               <Text style={s.totalLabel}>御見積金額（税込）</Text>
               <Text style={s.totalValue}>{yen(quote.total)}</Text>
@@ -229,6 +229,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
           {COMPANY.quoteNotes.map((n, i) => (
             <Text key={i}>・{n}</Text>
           ))}
+          <Text>・注文範囲：{FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].name} — {FINISH_LEVEL_INFO[quote.finish_level ?? 'full'].lead}</Text>
           <Text>・運搬、設置費など設置場所によって変動する費用は別途工事です。現地の代理店・工務店にお問合せください。</Text>
         </View>
 

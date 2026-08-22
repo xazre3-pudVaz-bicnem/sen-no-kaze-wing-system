@@ -1,4 +1,4 @@
-import type { OptionCategory, OptionConflict, OptionDependency, ProductOption } from './types';
+import { finishLevelRank, type FinishLevel, type OptionCategory, type OptionConflict, type OptionDependency, type ProductOption } from './types';
 
 export type RuleIssueType = 'conflict' | 'dependency' | 'required' | 'single';
 
@@ -15,13 +15,32 @@ export interface RuleContext {
   conflicts: OptionConflict[];
 }
 
+/**
+ * 注文範囲に入っているカテゴリーだけを返す。
+ * 本体のみ（shell）なら サッシ・外壁・防火仕様・別途工事 だけが対象になる。
+ */
+export function categoriesInScope(categories: OptionCategory[], level: FinishLevel): OptionCategory[] {
+  const max = finishLevelRank(level);
+  return categories.filter((c) => finishLevelRank(c.finish_level) <= max);
+}
+
+/** 注文範囲から外れたカテゴリーの選択を落とす（範囲を狭めたときに使う） */
+export function pruneToScope(ctx: RuleContext, selectedIds: string[], level: FinishLevel): string[] {
+  const ids = new Set(categoriesInScope(ctx.categories, level).map((c) => c.id));
+  return selectedIds.filter((id) => {
+    const o = ctx.options.find((x) => x.id === id);
+    return o ? ids.has(o.category_id) : false;
+  });
+}
+
 const nameOf = (ctx: RuleContext, id: string) => ctx.options.find((o) => o.id === id)?.name ?? '不明なオプション';
 
 /** 選択集合全体の整合性を検証する（サーバー側の保存・見積時にも使う） */
-export function validateSelection(ctx: RuleContext, selectedIds: string[]): RuleIssue[] {
+export function validateSelection(ctx: RuleContext, selectedIds: string[], level: FinishLevel = 'full'): RuleIssue[] {
   const selected = new Set(selectedIds);
   const issues: RuleIssue[] = [];
   const published = ctx.options.filter((o) => o.status === 'published');
+  const inScope = new Set(categoriesInScope(ctx.categories, level).map((c) => c.id));
 
   for (const c of ctx.conflicts) {
     if (selected.has(c.option_id) && selected.has(c.conflicts_with_option_id)) {
@@ -43,7 +62,7 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[]): Rule
       });
     }
   }
-  for (const cat of ctx.categories.filter((c) => c.status === 'published')) {
+  for (const cat of ctx.categories.filter((c) => c.status === 'published' && inScope.has(c.id))) {
     const inCat = published.filter((o) => o.category_id === cat.id);
     const chosen = inCat.filter((o) => selected.has(o.id));
     if (cat.selection_mode === 'single' && chosen.length > 1) {
@@ -61,9 +80,20 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[]): Rule
       });
     }
   }
-  for (const o of published.filter((o) => o.is_required)) {
+  for (const o of published.filter((o) => o.is_required && inScope.has(o.category_id))) {
     if (!selected.has(o.id)) {
       issues.push({ type: 'required', message: `「${o.name}」は必須です。`, option_ids: [o.id] });
+    }
+  }
+  for (const id of selectedIds) {
+    const o = ctx.options.find((x) => x.id === id);
+    if (o && !inScope.has(o.category_id)) {
+      const cat = ctx.categories.find((c) => c.id === o.category_id);
+      issues.push({
+        type: 'required',
+        message: `「${o.name}」は選択中の注文範囲に含まれません。${cat ? `「${cat.name}」を頼むには注文範囲を広げてください。` : ''}`,
+        option_ids: [o.id],
+      });
     }
   }
   return issues;
@@ -174,9 +204,10 @@ export function explainBlocked(ctx: RuleContext, selectedIds: string[]): Map<str
 }
 
 /** 初期選択（is_default ＋ 必須）を返す。前提オプションも満たす */
-export function defaultSelection(ctx: RuleContext): string[] {
+export function defaultSelection(ctx: RuleContext, level: FinishLevel = 'full'): string[] {
+  const inScope = new Set(categoriesInScope(ctx.categories, level).map((c) => c.id));
   const ids = ctx.options
-    .filter((o) => o.status === 'published' && (o.is_default || o.is_required))
+    .filter((o) => o.status === 'published' && inScope.has(o.category_id) && (o.is_default || o.is_required))
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((o) => o.id);
   let cur: string[] = [];

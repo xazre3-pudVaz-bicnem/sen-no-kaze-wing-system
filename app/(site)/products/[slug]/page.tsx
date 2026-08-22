@@ -9,6 +9,7 @@ import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
+import { OrderScopeSection } from '@/components/sections/order-scope';
 import { ProductGallery } from '@/components/sections/product-gallery';
 
 type Params = Promise<{ slug: string }>;
@@ -176,6 +177,9 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           </Reveal>
         </Container>
       </section>
+
+      {/* どこまで頼むか */}
+      <OrderScopeSection className="border-t border-line bg-white" />
 
       {/* オプション */}
       <section className="bg-ivory py-20 sm:py-28">

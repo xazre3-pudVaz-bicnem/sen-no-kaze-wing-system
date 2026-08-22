@@ -15,6 +15,37 @@ export const VIEW_LABELS: Record<ViewKey, string> = {
 export type PublishStatus = 'published' | 'draft';
 export type RoleCode = 'customer' | 'admin';
 
+/**
+ * 注文範囲（どこまで仕上げるか）。
+ * 本体＝木造躯体＋屋根＋外壁＋サッシが付いた状態で、そこから先をお客様が選ぶ。
+ */
+export type FinishLevel = 'shell' | 'equipment' | 'full';
+export const FINISH_LEVELS: FinishLevel[] = ['shell', 'equipment', 'full'];
+export const FINISH_LEVEL_INFO: Record<FinishLevel, { name: string; short: string; lead: string; includes: string[] }> = {
+  shell: {
+    name: '本体のみ',
+    short: 'DIY・自分で仕上げる',
+    lead: '木造躯体・屋根・外壁・サッシ・玄関ドアまでを工場で仕上げてお届けします。内装や設備はご自身で、あるいは地元の工務店で自由に仕上げられます。',
+    includes: ['折り畳み式木造躯体・金物一式', '断熱材（床・壁・天井）', '屋根・外壁（ガルバリウム鋼板）', 'サッシ・玄関ドア・窓一式'],
+  },
+  equipment: {
+    name: '本体＋設備',
+    short: '必要な設備だけ選ぶ',
+    lead: '本体に、ユニットバス・トイレ・キッチン・エアコン・照明などから必要なものだけを加えます。内装の仕上げはご自身で行えます。',
+    includes: ['本体のみに含まれるすべて', '浴室・トイレ・洗面・キッチン・給湯・空調', '照明器具・家具・家電・スマートロック'],
+  },
+  full: {
+    name: 'フル装備',
+    short: '完全仕上げで引き渡し',
+    lead: '床・壁・天井の内装仕上げと造作工事まで含めた、そのまま使える状態でお引き渡しします。ホテル・住宅・事務所の各仕様から選べます。',
+    includes: ['本体＋設備に含まれるすべて', '床材・壁／天井の仕上げ', '内部建具', '室内造作工事'],
+  },
+};
+/** shell < equipment < full。カテゴリーは自分のランク以上の注文範囲でだけ選べる */
+export function finishLevelRank(level: FinishLevel): number {
+  return FINISH_LEVELS.indexOf(level);
+}
+
 export interface Role {
   code: RoleCode;
   name: string;
@@ -97,7 +128,9 @@ export interface OptionCategory {
   group_sort: number;
   description: string | null;
   selection_mode: SelectionMode;
-  /** single のとき: 必ず 1 つ選ぶ（標準が is_default） */
+  /** このカテゴリーが含まれ始める注文範囲（shell=本体に必ず含まれる） */
+  finish_level: FinishLevel;
+  /** single のとき: 必ず 1 つ選ぶ（標準が is_default）。注文範囲に入っているときだけ効く */
   is_required: boolean;
   sort_order: number;
   status: PublishStatus;
@@ -199,6 +232,8 @@ export interface Configuration {
   base_model_id: string;
   name: string;
   status: ConfigurationStatus;
+  /** どこまで仕上げるか */
+  finish_level: FinishLevel;
   base_price: number;
   base_expense: number;
   option_subtotal: number;
@@ -283,6 +318,8 @@ export interface Quote {
   customer_name: string;
   customer_company: string | null;
   base_model_name: string;
+  /** 発行時の注文範囲（スナップショット） */
+  finish_level: FinishLevel;
   base_price: number;
   base_expense: number;
   option_subtotal: number;

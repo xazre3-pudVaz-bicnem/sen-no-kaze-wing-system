@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { ArrowRight, Pencil } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
-import type { OptionCategory, PricingResult, ProductOption } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
 interface Props {
   modelName: string;
   specName: string;
+  finishLevel: FinishLevel;
   pricing: PricingResult;
   categories: OptionCategory[];
   options: ProductOption[];
@@ -24,7 +25,8 @@ interface Props {
  *   4. 運送費        1式
  *   合計
  */
-export function QuoteSheet({ modelName, specName, pricing, categories, options, readOnly, onPickCategory }: Props) {
+export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
+  const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const byOption = new Map(options.map((o) => [o.id, o]));
   const optionLines = pricing.lines.filter((l) => !l.is_installation && l.amount > 0);
   const includedLines = pricing.lines.filter((l) => !l.is_installation && l.amount === 0);
@@ -44,8 +46,8 @@ export function QuoteSheet({ modelName, specName, pricing, categories, options, 
         <h2 id="quote-sheet-heading" className="font-serif text-lg">
           御見積書
         </h2>
-        <p className="text-xs text-muted">
-          {modelName}（{specName}）／概算・税込
+        <p className="text-xs text-muted" data-testid="quote-scope">
+          {modelName}（{specName}）／注文範囲：{levelInfo.name}／概算・税込
         </p>
       </div>
 
@@ -137,6 +139,10 @@ export function QuoteSheet({ modelName, specName, pricing, categories, options, 
       </div>
 
       <div className="space-y-2 border-t border-line px-5 py-4 text-xs text-ink-soft">
+        <p>
+          <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong>
+          — {levelInfo.lead}
+        </p>
         <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
         <Link href="/dealers" className={cn('inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4')} data-testid="dealers-link">
           代理店・工務店を探す／お問い合わせ

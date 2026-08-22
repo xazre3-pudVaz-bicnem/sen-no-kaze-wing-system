@@ -58,6 +58,7 @@ export const saveConfigurationSchema = z.object({
   option_ids: z.array(z.uuid()).max(100),
   preview_image_url: z.string().max(500).nullable(),
   notes: optional(1000).nullable(),
+  finish_level: z.enum(['shell', 'equipment', 'full']).default('full'),
 });
 
 export const quoteRequestSchema = z.object({
@@ -114,6 +115,7 @@ export const categorySchema = z.object({
   group_sort: intFromForm,
   description: optional(200),
   selection_mode: z.enum(['single', 'multi']),
+  finish_level: z.enum(['shell', 'equipment', 'full']),
   is_required: boolFromForm,
   sort_order: intFromForm,
   status: statusSchema,

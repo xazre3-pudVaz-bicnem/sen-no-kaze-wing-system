@@ -178,6 +178,7 @@ export class SupabaseStore implements DataStore {
       p_option_ids: input.option_ids,
       p_preview_image_url: input.preview_image_url,
       p_notes: input.notes,
+      p_finish_level: input.finish_level ?? 'full',
     });
     if (error) mapPgError(error);
     return data as Configuration;

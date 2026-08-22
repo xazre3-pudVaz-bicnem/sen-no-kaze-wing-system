@@ -31,8 +31,14 @@
 | 15 | コンソールエラーや主要な型エラーがない | `tsc` エラー 0。E2E で console error / pageerror を収集し 0 件 | ✅ |
 | 追加 | BOX・フラットのシミュレーター | `flow.spec.ts`：画像未登録でもプラン・金額が動き、プレビューは「準備中」表示 | ✅ |
 
-## Supabase 実環境での確認について
+## Supabase 実環境での確認（2026-08-22）
 
-Docker が使えない環境のため、Supabase（RLS・RPC・Storage）に対する E2E は未実施です。
+本番 https://sen-no-kaze-wing-system.vercel.app（Supabase `ljgbpbymdkrjcnezaqno`）で以下を確認:
+
+- トップ／商品一覧（3モデル）／シミュレーター（合計 ¥6,048,900 表示）が DB から描画される
+- 管理者ログイン → `/admin` ダッシュボード → オプション一覧 39 件 → ログアウト
+- Storage バケット `product-images`（公開）／`quote-documents`（非公開）が存在
+
+フル E2E（保存・見積・PDF・権限）は本番 DB にテストデータを残さないため未実施です。
 同じ `DataStore` インターフェースをローカル実装で通しており、Supabase 実装は SQL の関数・ポリシー（`0001`〜`0005`）に処理を委ねています。
 本番化の際は README の手順で `supabase db push` → `npm run seed:supabase` → `npm run admin:create` を実行し、`BASE_URL=https://<staging> npm run test:e2e` で同じ E2E を流せます（ローカルモード固有のパスワード再設定テストのみスキップが必要）。

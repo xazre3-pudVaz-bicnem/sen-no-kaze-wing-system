@@ -37,10 +37,15 @@ e2e/, tests/         Playwright / Vitest
    ```bash
    npx supabase login
    npx supabase link --project-ref <project-ref>
-   npx supabase db push            # supabase/migrations/0001〜0005 を適用
+   npx supabase db push            # supabase/migrations/0001〜0006 を適用
    ```
 
-   （ダッシュボードの SQL Editor で 0001→0005 の順に実行しても同じです）
+   DB パスワードが手元に無い場合は Management API 経由でも適用できます（Docker 不要）:
+
+   ```bash
+   for f in supabase/migrations/*.sql; do npx supabase db query --linked --file "$f"; done
+   npx supabase config push --yes   # Auth の site_url / redirect / メール確認 OFF（supabase/config.toml）
+   ```
 
 3. 環境変数 — `.env.example` をコピーして `.env.local` を作成し、`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `NEXT_PUBLIC_SITE_URL` を設定
 
@@ -71,6 +76,11 @@ e2e/, tests/         Playwright / Vitest
 - 顧客：`/register` から登録（Confirm email OFF なら即ログイン）
 - 管理者：`npm run admin:create`（既存ユーザーを指定すると管理者へ昇格）
 - 管理者権限は `profiles.role_code = 'admin'`。SQL で `update profiles set role_code='admin' where email='...'` でも可
+
+## 現在のデプロイ
+
+- 本番: https://sen-no-kaze-wing-system.vercel.app （Vercel `cypress-projects1/sen-no-kaze-wing-system`、GitHub `xazre3-pudVaz-bicnem/sen-no-kaze-wing-system` の main に push で自動デプロイ）
+- Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0006 適用済み・初期データ投入済み
 
 ## 環境変数なしでデプロイした場合（デモモード）
 

@@ -1,0 +1,133 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-paper: #fbfaf7;
+  --color-sand: #f3ede4;
+  --color-sand-dark: #e8dfd2;
+  --color-line: #e3dacd;
+  --color-ink: #1d1a16;
+  --color-ink-soft: #4b453d;
+  --color-muted: #7a7167;
+  --color-wood: #b9835a;
+  --color-wood-light: #e9d8c3;
+  --color-wood-dark: #8a5a37;
+  --color-brown: #5a3e2b;
+  --color-brown-dark: #3f2a1c;
+  --color-navy: #1e2a3a;
+  --color-navy-light: #2c3c52;
+  --color-success: #2f6b4f;
+  --color-warn: #9a6b1f;
+  --color-danger: #a83a2e;
+
+  --font-sans: var(--font-noto), 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --font-serif: var(--font-mincho), 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+
+  --shadow-soft: 0 1px 2px rgb(29 26 22 / 0.04), 0 8px 24px rgb(29 26 22 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(29 26 22 / 0.06), 0 16px 40px rgb(29 26 22 / 0.1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    font-feature-settings: 'palt' 1;
+    line-height: 1.8;
+    letter-spacing: 0.01em;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif text-ink;
+    line-height: 1.35;
+    letter-spacing: 0.02em;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-navy;
+  }
+  ::selection {
+    background: var(--color-wood-light);
+  }
+  img {
+    @apply select-none;
+  }
+}
+
+/* @apply から参照するため @utility で定義（Tailwind v4 は同じ @layer 内のクラスを @apply できない） */
+@utility btn {
+  @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-base font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility input {
+  @apply block w-full min-h-12 rounded-xl border border-line bg-white px-4 text-base text-ink placeholder:text-muted/70 focus:border-navy focus:ring-2 focus:ring-navy/15 focus:outline-none disabled:bg-sand;
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold tracking-[0.22em] text-wood-dark uppercase;
+  }
+  .lead {
+    @apply text-base text-ink-soft sm:text-lg;
+  }
+  .btn-primary {
+    @apply btn bg-brown text-white shadow-soft hover:bg-brown-dark hover:shadow-lift active:translate-y-px;
+  }
+  .btn-secondary {
+    @apply btn border border-ink/20 bg-white text-ink hover:border-ink/40 hover:bg-sand;
+  }
+  .btn-ghost {
+    @apply btn text-ink hover:bg-sand;
+  }
+  .btn-sm {
+    @apply min-h-10 px-4 text-sm;
+  }
+  .btn-lg {
+    @apply min-h-14 px-8 text-lg;
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-white;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-ink-soft;
+  }
+  .prose-wing p + p {
+    @apply mt-4;
+  }
+  .reveal {
+    animation: reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .reveal-delay-1 {
+    animation-delay: 0.12s;
+  }
+  .reveal-delay-2 {
+    animation-delay: 0.24s;
+  }
+  .reveal-delay-3 {
+    animation-delay: 0.36s;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

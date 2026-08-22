@@ -1,0 +1,585 @@
+import 'server-only';
+import fs from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import type {
+  BaseModel,
+  CatalogBundle,
+  Configuration,
+  OptionCategory,
+  PreviewImageRule,
+  ProductImage,
+  ProductOption,
+  Profile,
+  Quote,
+  QuoteContact,
+  QuoteDocument,
+  QuoteRequest,
+  QuoteRequestStatus,
+  QuoteStatus,
+} from '@/lib/domain/types';
+import { computePricing } from '@/lib/domain/pricing';
+import { validateSelection } from '@/lib/domain/rules';
+import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
+import { addDays, yearMonthJst } from '@/lib/utils';
+import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
+import {
+  StoreError,
+  type CategoryInput,
+  type DataStore,
+  type ModelInput,
+  type OptionInput,
+  type PreviewRuleInput,
+  type ProductImageInput,
+  type QuoteDetail,
+  type SaveConfigurationInput,
+  type SessionUser,
+  type UploadInput,
+} from './store';
+
+const nowIso = () => new Date().toISOString();
+
+export class LocalStore implements DataStore {
+  private mutate<T>(fn: (db: LocalDb) => T): T {
+    const db = loadDb();
+    const result = fn(db);
+    saveDb(db);
+    return result;
+  }
+  private read<T>(fn: (db: LocalDb) => T): T {
+    return fn(loadDb());
+  }
+
+  // ---------- 商品 ----------
+  async listModels(opts?: { includeDraft?: boolean }) {
+    return this.read((db) =>
+      db.models.filter((m) => opts?.includeDraft || m.status === 'published').sort((a, b) => a.sort_order - b.sort_order)
+    );
+  }
+  async getModelBySlug(slug: string, opts?: { includeDraft?: boolean }) {
+    return this.read((db) => db.models.find((m) => m.slug === slug && (opts?.includeDraft || m.status === 'published')) ?? null);
+  }
+  async getModelById(id: string, opts?: { includeDraft?: boolean }) {
+    return this.read((db) => db.models.find((m) => m.id === id && (opts?.includeDraft || m.status === 'published')) ?? null);
+  }
+  async getCatalogBundle(modelId: string, opts?: { includeDraft?: boolean }): Promise<CatalogBundle | null> {
+    return this.read((db) => {
+      const model = db.models.find((m) => m.id === modelId && (opts?.includeDraft || m.status === 'published'));
+      if (!model) return null;
+      const pub = <T extends { status: string }>(x: T) => opts?.includeDraft || x.status === 'published';
+      const options = db.options
+        .filter((o) => (o.base_model_id === null || o.base_model_id === modelId) && pub(o))
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const ids = new Set(options.map((o) => o.id));
+      return {
+        model,
+        images: db.images.filter((i) => i.base_model_id === modelId).sort((a, b) => a.sort_order - b.sort_order),
+        categories: db.categories.filter(pub).sort((a, b) => a.sort_order - b.sort_order),
+        options,
+        dependencies: db.dependencies.filter((d) => ids.has(d.option_id) && ids.has(d.requires_option_id)),
+        conflicts: db.conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
+        previewRules: db.previewRules.filter((r) => r.base_model_id === modelId && pub(r)),
+      };
+    });
+  }
+
+  // ---------- プロフィール ----------
+  async getProfile(userId: string) {
+    return this.read((db) => db.profiles.find((p) => p.id === userId) ?? null);
+  }
+  async updateProfile(userId: string, patch: Partial<Profile>) {
+    return this.mutate((db) => {
+      const p = db.profiles.find((x) => x.id === userId);
+      if (!p) throw new StoreError('NOT_FOUND', 'プロフィールが見つかりません');
+      Object.assign(p, patch, { updated_at: nowIso() });
+      return p;
+    });
+  }
+  async listProfiles() {
+    return this.read((db) => [...db.profiles].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+  }
+
+  // ---------- 仕様 ----------
+  private canAccess(actor: SessionUser, ownerId: string) {
+    return actor.role === 'admin' || actor.id === ownerId;
+  }
+  async listConfigurations(userId: string) {
+    return this.read((db) =>
+      db.configurations.filter((c) => c.user_id === userId).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    );
+  }
+  async getConfiguration(id: string, actor: SessionUser) {
+    return this.read((db) => {
+      const configuration = db.configurations.find((c) => c.id === id);
+      if (!configuration || !this.canAccess(actor, configuration.user_id)) return null;
+      return { configuration, items: db.configurationItems.filter((i) => i.configuration_id === id) };
+    });
+  }
+  private recalc(db: LocalDb, cfg: Configuration) {
+    const model = db.models.find((m) => m.id === cfg.base_model_id);
+    if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');
+    const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
+    const pricing = computePricing(
+      model,
+      db.options,
+      db.categories,
+      items.map((i) => ({ option_id: i.option_id, quantity: i.quantity }))
+    );
+    Object.assign(cfg, {
+      base_price: pricing.base_price,
+      base_expense: pricing.base_expense,
+      option_subtotal: pricing.option_subtotal,
+      option_expense: pricing.option_expense,
+      installation_subtotal: pricing.installation_subtotal,
+      adjustment: pricing.adjustment,
+      subtotal: pricing.subtotal,
+      tax: pricing.tax,
+      total: pricing.total,
+      updated_at: nowIso(),
+    });
+    return { pricing, model };
+  }
+  async saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
+    return this.mutate((db) => {
+      const model = db.models.find((m) => m.id === input.base_model_id && m.status === 'published');
+      if (!model) throw new StoreError('VALIDATION', '公開中のモデルではありません');
+      const valid = db.options.filter(
+        (o) => input.option_ids.includes(o.id) && o.status === 'published' && (o.base_model_id === null || o.base_model_id === model.id)
+      );
+      const ids = [...new Set(valid.map((o) => o.id))];
+      const issues = validateSelection(
+        { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },
+        ids
+      );
+      if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
+
+      let cfg: Configuration;
+      if (input.id) {
+        const found = db.configurations.find((c) => c.id === input.id);
+        if (!found) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
+        if (!this.canAccess(actor, found.user_id)) throw new StoreError('FORBIDDEN', '権限がありません');
+        if (found.status !== 'draft' && actor.role !== 'admin') {
+          throw new StoreError('LOCKED', '見積依頼済みの仕様は編集できません。複製して編集してください。');
+        }
+        cfg = found;
+        cfg.name = input.name || cfg.name;
+        cfg.preview_image_url = input.preview_image_url;
+        cfg.notes = input.notes;
+        db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== cfg.id);
+      } else {
+        cfg = {
+          id: randomUUID(),
+          user_id: actor.id,
+          base_model_id: model.id,
+          name: input.name || '無題の仕様',
+          status: 'draft',
+          base_price: 0,
+          base_expense: 0,
+          option_subtotal: 0,
+          option_expense: 0,
+          installation_subtotal: 0,
+          adjustment: 0,
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+          preview_image_url: input.preview_image_url,
+          notes: input.notes,
+          partner_id: null,
+          created_at: nowIso(),
+          updated_at: nowIso(),
+        };
+        db.configurations.push(cfg);
+      }
+      for (const id of ids) db.configurationItems.push({ id: randomUUID(), configuration_id: cfg.id, option_id: id, quantity: 1 });
+      const { pricing } = this.recalc(db, cfg);
+      db.snapshots.push({
+        id: randomUUID(),
+        configuration_id: cfg.id,
+        reason: 'saved',
+        snapshot: { ...pricing, model_name: model.name },
+        created_at: nowIso(),
+      });
+      return cfg;
+    });
+  }
+  async duplicateConfiguration(id: string, actor: SessionUser) {
+    return this.mutate((db) => {
+      const src = db.configurations.find((c) => c.id === id);
+      if (!src) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
+      if (!this.canAccess(actor, src.user_id)) throw new StoreError('FORBIDDEN', '権限がありません');
+      const copy: Configuration = {
+        ...src,
+        id: randomUUID(),
+        name: `${src.name}（コピー）`,
+        status: 'draft',
+        created_at: nowIso(),
+        updated_at: nowIso(),
+      };
+      db.configurations.push(copy);
+      for (const it of db.configurationItems.filter((i) => i.configuration_id === src.id)) {
+        db.configurationItems.push({ ...it, id: randomUUID(), configuration_id: copy.id });
+      }
+      this.recalc(db, copy);
+      return copy;
+    });
+  }
+  async deleteConfiguration(id: string, actor: SessionUser) {
+    this.mutate((db) => {
+      const cfg = db.configurations.find((c) => c.id === id);
+      if (!cfg) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
+      if (!this.canAccess(actor, cfg.user_id)) throw new StoreError('FORBIDDEN', '権限がありません');
+      db.configurations = db.configurations.filter((c) => c.id !== id);
+      db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== id);
+      db.snapshots = db.snapshots.filter((s) => s.configuration_id !== id);
+    });
+  }
+  async listAllConfigurations() {
+    return this.read((db) =>
+      [...db.configurations]
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .map((c) => {
+          const p = db.profiles.find((x) => x.id === c.user_id);
+          return { ...c, user_email: p?.email ?? '', user_name: p?.full_name ?? '' };
+        })
+    );
+  }
+
+  // ---------- 見積 ----------
+  private nextQuoteNo(db: LocalDb) {
+    const ym = yearMonthJst();
+    const n = (db.quoteSequences[ym] ?? 0) + 1;
+    db.quoteSequences[ym] = n;
+    return `Q${ym}-${String(n).padStart(4, '0')}`;
+  }
+  async createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null) {
+    return this.mutate((db) => {
+      const cfg = db.configurations.find((c) => c.id === configurationId);
+      if (!cfg) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
+      if (cfg.user_id !== actor.id) throw new StoreError('FORBIDDEN', '権限がありません');
+      const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
+      const issues = validateSelection(
+        { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },
+        items.map((i) => i.option_id)
+      );
+      if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
+      const { pricing, model } = this.recalc(db, cfg);
+
+      const req: QuoteRequest = {
+        id: randomUUID(),
+        configuration_id: cfg.id,
+        user_id: actor.id,
+        quote_id: null,
+        status: 'new',
+        message,
+        contact,
+        created_at: nowIso(),
+        updated_at: nowIso(),
+      };
+      const issued = new Date();
+      const quote: Quote = {
+        id: randomUUID(),
+        quote_no: this.nextQuoteNo(db),
+        quote_request_id: req.id,
+        configuration_id: cfg.id,
+        user_id: actor.id,
+        status: 'issued',
+        issued_at: issued.toISOString(),
+        valid_until: addDays(issued, QUOTE_VALID_DAYS).toISOString(),
+        customer_no: db.profiles.find((p) => p.id === actor.id)?.customer_no ?? null,
+        customer_name: contact.full_name,
+        customer_company: contact.company_name,
+        base_model_name: model.name,
+        base_price: pricing.base_price,
+        base_expense: pricing.base_expense,
+        option_subtotal: pricing.option_subtotal,
+        option_expense: pricing.option_expense,
+        installation_subtotal: pricing.installation_subtotal,
+        adjustment: pricing.adjustment,
+        subtotal: pricing.subtotal,
+        tax_rate: pricing.tax_rate,
+        tax: pricing.tax,
+        total: pricing.total,
+        dealer_id: null,
+        preview_image_url: cfg.preview_image_url,
+        notes: COMPANY.quoteNotes[0],
+        created_at: nowIso(),
+        updated_at: nowIso(),
+      };
+      req.quote_id = quote.id;
+      db.quoteRequests.push(req);
+      db.quotes.push(quote);
+      const ratePct = Math.round(pricing.expense_rate * 100);
+      db.quoteItems.push(
+        {
+          id: randomUUID(),
+          quote_id: quote.id,
+          kind: 'base',
+          name: `${model.name} 本体一式`,
+          description: '工場生産分（躯体・金物・断熱・屋根外壁・サッシ建具）',
+          unit_price: model.base_price,
+          quantity: 1,
+          amount: model.base_price,
+          image_url: null,
+          sort_order: 0,
+        },
+        {
+          id: randomUUID(),
+          quote_id: quote.id,
+          kind: 'base_expense',
+          name: '本体諸費用',
+          description: `交通費、労災、安全管理費等（${ratePct}%）`,
+          unit_price: pricing.base_expense,
+          quantity: 1,
+          amount: pricing.base_expense,
+          image_url: null,
+          sort_order: 1,
+        }
+      );
+      const ordered = [...pricing.lines].sort((a, b) => Number(a.is_installation) - Number(b.is_installation));
+      ordered.forEach((l, i) =>
+        db.quoteItems.push({
+          id: randomUUID(),
+          quote_id: quote.id,
+          kind: l.is_installation ? 'installation' : 'option',
+          name: l.name,
+          description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
+          unit_price: l.unit_price,
+          quantity: l.quantity,
+          amount: l.amount,
+          image_url: l.image_url,
+          sort_order: 10 + i,
+        })
+      );
+      db.quoteItems.push({
+        id: randomUUID(),
+        quote_id: quote.id,
+        kind: 'option_expense',
+        name: 'オプション諸費用',
+        description: `交通費、労災、安全管理費等（${ratePct}%）`,
+        unit_price: pricing.option_expense,
+        quantity: 1,
+        amount: pricing.option_expense,
+        image_url: null,
+        sort_order: 9000,
+      });
+      cfg.status = 'quote_requested';
+      db.snapshots.push({
+        id: randomUUID(),
+        configuration_id: cfg.id,
+        reason: 'quote_requested',
+        snapshot: { ...pricing, model_name: model.name },
+        created_at: nowIso(),
+      });
+      return quote;
+    });
+  }
+  async listQuotes(userId: string) {
+    return this.read((db) => db.quotes.filter((q) => q.user_id === userId).sort((a, b) => b.issued_at.localeCompare(a.issued_at)));
+  }
+  async listQuotesByConfiguration(userId: string) {
+    const list = await this.listQuotes(userId);
+    const map = new Map<string, Quote>();
+    for (const q of list) if (!map.has(q.configuration_id)) map.set(q.configuration_id, q);
+    return map;
+  }
+  async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
+    return this.read((db) => {
+      const quote = db.quotes.find((q) => q.id === id);
+      if (!quote || !this.canAccess(actor, quote.user_id)) return null;
+      return {
+        quote,
+        items: db.quoteItems.filter((i) => i.quote_id === id).sort((a, b) => a.sort_order - b.sort_order),
+        request: db.quoteRequests.find((r) => r.id === quote.quote_request_id) ?? null,
+        document: db.quoteDocuments.filter((d) => d.quote_id === id).sort((a, b) => b.generated_at.localeCompare(a.generated_at))[0] ?? null,
+        profile: db.profiles.find((p) => p.id === quote.user_id) ?? null,
+      };
+    });
+  }
+  async listAllQuotes() {
+    return this.read((db) =>
+      [...db.quotes]
+        .sort((a, b) => b.issued_at.localeCompare(a.issued_at))
+        .map((q) => ({ ...q, user_email: db.profiles.find((p) => p.id === q.user_id)?.email ?? '' }))
+    );
+  }
+  async listQuoteRequests() {
+    return this.read((db) =>
+      [...db.quoteRequests]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((r) => ({
+          ...r,
+          quote_no: db.quotes.find((q) => q.id === r.quote_id)?.quote_no ?? null,
+          user_email: db.profiles.find((p) => p.id === r.user_id)?.email ?? '',
+        }))
+    );
+  }
+  async updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null) {
+    this.mutate((db) => {
+      const q = db.quotes.find((x) => x.id === id);
+      if (!q) throw new StoreError('NOT_FOUND', '見積が見つかりません');
+      q.status = status;
+      q.updated_at = nowIso();
+      if (requestStatus) {
+        const r = db.quoteRequests.find((x) => x.id === q.quote_request_id);
+        if (r) {
+          r.status = requestStatus;
+          r.updated_at = nowIso();
+        }
+      }
+      const cfg = db.configurations.find((c) => c.id === q.configuration_id);
+      if (cfg) {
+        if (status === 'issued') cfg.status = 'quoted';
+        if (status === 'accepted' || status === 'declined' || status === 'cancelled') cfg.status = 'closed';
+      }
+    });
+  }
+
+  // ---------- PDF ----------
+  async getQuoteDocumentFile(quoteId: string) {
+    return this.read((db) => {
+      const doc = db.quoteDocuments.filter((d) => d.quote_id === quoteId).sort((a, b) => b.generated_at.localeCompare(a.generated_at))[0];
+      if (!doc) return null;
+      const p = path.join(filesDir(), doc.storage_path);
+      if (!fs.existsSync(p)) return null;
+      return { bytes: new Uint8Array(fs.readFileSync(p)), document: doc };
+    });
+  }
+  async saveQuoteDocument(quoteId: string, bytes: Uint8Array, fileName: string) {
+    return this.mutate((db) => {
+      const rel = path.posix.join('quotes', `${quoteId}.pdf`);
+      const abs = path.join(filesDir(), rel);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, bytes);
+      const doc: QuoteDocument = {
+        id: randomUUID(),
+        quote_id: quoteId,
+        storage_path: rel,
+        file_name: fileName,
+        byte_size: bytes.byteLength,
+        generated_at: nowIso(),
+      };
+      db.quoteDocuments = db.quoteDocuments.filter((d) => d.quote_id !== quoteId);
+      db.quoteDocuments.push(doc);
+      return doc;
+    });
+  }
+
+  // ---------- 管理 ----------
+  async upsertModel(input: ModelInput): Promise<BaseModel> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      if (id) {
+        const m = db.models.find((x) => x.id === id);
+        if (!m) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');
+        Object.assign(m, rest, { updated_at: nowIso() });
+        return m;
+      }
+      const m: BaseModel = { ...rest, id: randomUUID(), created_at: nowIso(), updated_at: nowIso() };
+      db.models.push(m);
+      return m;
+    });
+  }
+  async listCategories() {
+    return this.read((db) => [...db.categories].sort((a, b) => a.sort_order - b.sort_order));
+  }
+  async upsertCategory(input: CategoryInput): Promise<OptionCategory> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      if (id) {
+        const c = db.categories.find((x) => x.id === id);
+        if (!c) throw new StoreError('NOT_FOUND', 'カテゴリーが見つかりません');
+        Object.assign(c, rest);
+        return c;
+      }
+      const c: OptionCategory = { ...rest, id: randomUUID() };
+      db.categories.push(c);
+      return c;
+    });
+  }
+  async listOptions() {
+    return this.read((db) => [...db.options].sort((a, b) => a.sort_order - b.sort_order));
+  }
+  async getOption(id: string) {
+    return this.read((db) => db.options.find((o) => o.id === id) ?? null);
+  }
+  async upsertOption(input: OptionInput): Promise<ProductOption> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      if (db.options.some((o) => o.code === rest.code && o.id !== id)) {
+        throw new StoreError('VALIDATION', `コード「${rest.code}」は既に使われています`);
+      }
+      if (id) {
+        const o = db.options.find((x) => x.id === id);
+        if (!o) throw new StoreError('NOT_FOUND', 'オプションが見つかりません');
+        Object.assign(o, rest, { updated_at: nowIso() });
+        return o;
+      }
+      const o: ProductOption = { ...rest, id: randomUUID(), created_at: nowIso(), updated_at: nowIso() };
+      db.options.push(o);
+      return o;
+    });
+  }
+  async deleteOption(id: string) {
+    this.mutate((db) => {
+      if (db.configurationItems.some((i) => i.option_id === id)) {
+        throw new StoreError('VALIDATION', '保存済みの仕様で使用されているため削除できません。非公開にしてください。');
+      }
+      db.options = db.options.filter((o) => o.id !== id);
+      db.dependencies = db.dependencies.filter((d) => d.option_id !== id && d.requires_option_id !== id);
+      db.conflicts = db.conflicts.filter((c) => c.option_id !== id && c.conflicts_with_option_id !== id);
+    });
+  }
+  async setOptionRelations(
+    optionId: string,
+    dependencies: { requires_option_id: string; message: string | null }[],
+    conflicts: { conflicts_with_option_id: string; message: string | null }[]
+  ) {
+    this.mutate((db) => {
+      db.dependencies = db.dependencies.filter((d) => d.option_id !== optionId);
+      db.conflicts = db.conflicts.filter((c) => c.option_id !== optionId);
+      for (const d of dependencies) db.dependencies.push({ id: randomUUID(), option_id: optionId, ...d });
+      for (const c of conflicts) db.conflicts.push({ id: randomUUID(), option_id: optionId, ...c });
+    });
+  }
+  async upsertPreviewRule(input: PreviewRuleInput): Promise<PreviewImageRule> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      if (id) {
+        const r = db.previewRules.find((x) => x.id === id);
+        if (!r) throw new StoreError('NOT_FOUND', 'ルールが見つかりません');
+        Object.assign(r, rest);
+        return r;
+      }
+      const r: PreviewImageRule = { ...rest, id: randomUUID() };
+      db.previewRules.push(r);
+      return r;
+    });
+  }
+  async deletePreviewRule(id: string) {
+    this.mutate((db) => {
+      db.previewRules = db.previewRules.filter((r) => r.id !== id);
+    });
+  }
+  async addProductImage(input: ProductImageInput): Promise<ProductImage> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      const img: ProductImage = { ...rest, id: id ?? randomUUID() };
+      db.images.push(img);
+      return img;
+    });
+  }
+  async deleteProductImage(id: string) {
+    this.mutate((db) => {
+      db.images = db.images.filter((i) => i.id !== id);
+    });
+  }
+  async uploadImage(file: UploadInput, folder: string) {
+    const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'uploads';
+    const ext = path.extname(file.fileName).toLowerCase() || '.jpg';
+    const name = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
+    const abs = path.join(filesDir(), safeFolder, name);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, file.bytes);
+    return `/api/local-files/${safeFolder}/${name}`;
+  }
+}

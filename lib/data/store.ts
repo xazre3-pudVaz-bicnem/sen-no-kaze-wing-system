@@ -1,0 +1,149 @@
+import 'server-only';
+import type {
+  BaseModel,
+  CatalogBundle,
+  Configuration,
+  ConfigurationItem,
+  OptionCategory,
+  PreviewImageRule,
+  ProductImage,
+  ProductOption,
+  Profile,
+  Quote,
+  QuoteContact,
+  QuoteDocument,
+  QuoteItem,
+  QuoteRequest,
+  QuoteRequestStatus,
+  QuoteStatus,
+  RoleCode,
+} from '@/lib/domain/types';
+
+export interface SessionUser {
+  id: string;
+  email: string;
+  role: RoleCode;
+  full_name: string;
+}
+
+export class StoreError extends Error {
+  constructor(
+    public code: 'NOT_FOUND' | 'FORBIDDEN' | 'VALIDATION' | 'LOCKED' | 'UNAUTHENTICATED' | 'INTERNAL',
+    message: string
+  ) {
+    super(message);
+    this.name = 'StoreError';
+  }
+}
+
+export interface SaveConfigurationInput {
+  id: string | null;
+  base_model_id: string;
+  name: string;
+  option_ids: string[];
+  preview_image_url: string | null;
+  notes: string | null;
+}
+
+export interface QuoteDetail {
+  quote: Quote;
+  items: QuoteItem[];
+  request: QuoteRequest | null;
+  document: QuoteDocument | null;
+  /** 管理者向け: 顧客プロフィール */
+  profile?: Profile | null;
+}
+
+export interface UploadInput {
+  bytes: Uint8Array;
+  contentType: string;
+  fileName: string;
+}
+
+export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
+export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
+export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
+export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | null };
+export type ProductImageInput = Omit<ProductImage, 'id'> & { id?: string | null };
+
+/**
+ * データアクセス層のインターフェース。
+ * - SupabaseStore: 本番（RLS ＋ security definer RPC）
+ * - LocalStore   : Supabase なしの検証モード（.wing-local/ の JSON）
+ * 権限チェックは呼び出し側（Server Action）で requireUser / requireAdmin を通した上で、
+ * 各実装でも所有者チェックを二重に行う。
+ */
+export interface DataStore {
+  // ---- 商品マスター（公開） ----
+  listModels(opts?: { includeDraft?: boolean }): Promise<BaseModel[]>;
+  getModelBySlug(slug: string, opts?: { includeDraft?: boolean }): Promise<BaseModel | null>;
+  getModelById(id: string, opts?: { includeDraft?: boolean }): Promise<BaseModel | null>;
+  getCatalogBundle(modelId: string, opts?: { includeDraft?: boolean }): Promise<CatalogBundle | null>;
+
+  // ---- プロフィール ----
+  getProfile(userId: string): Promise<Profile | null>;
+  updateProfile(
+    userId: string,
+    patch: Partial<Pick<Profile, 'full_name' | 'company_name' | 'phone' | 'postal_code' | 'address'>>
+  ): Promise<Profile>;
+  listProfiles(): Promise<Profile[]>;
+
+  // ---- 保存した仕様 ----
+  listConfigurations(userId: string): Promise<Configuration[]>;
+  getConfiguration(id: string, actor: SessionUser): Promise<{ configuration: Configuration; items: ConfigurationItem[] } | null>;
+  saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration>;
+  duplicateConfiguration(id: string, actor: SessionUser): Promise<Configuration>;
+  deleteConfiguration(id: string, actor: SessionUser): Promise<void>;
+  listAllConfigurations(): Promise<(Configuration & { user_email: string; user_name: string })[]>;
+
+  // ---- 見積 ----
+  createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null): Promise<Quote>;
+  listQuotes(userId: string): Promise<Quote[]>;
+  listQuotesByConfiguration(userId: string): Promise<Map<string, Quote>>;
+  getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null>;
+  listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
+  listQuoteRequests(): Promise<(QuoteRequest & { quote_no: string | null; user_email: string })[]>;
+  updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null): Promise<void>;
+
+  // ---- 見積書PDF ----
+  getQuoteDocumentFile(quoteId: string): Promise<{ bytes: Uint8Array; document: QuoteDocument } | null>;
+  saveQuoteDocument(quoteId: string, bytes: Uint8Array, fileName: string): Promise<QuoteDocument>;
+
+  // ---- 管理: マスター編集 ----
+  upsertModel(input: ModelInput): Promise<BaseModel>;
+  listCategories(): Promise<OptionCategory[]>;
+  upsertCategory(input: CategoryInput): Promise<OptionCategory>;
+  listOptions(): Promise<ProductOption[]>;
+  getOption(id: string): Promise<ProductOption | null>;
+  upsertOption(input: OptionInput): Promise<ProductOption>;
+  deleteOption(id: string): Promise<void>;
+  setOptionRelations(
+    optionId: string,
+    dependencies: { requires_option_id: string; message: string | null }[],
+    conflicts: { conflicts_with_option_id: string; message: string | null }[]
+  ): Promise<void>;
+  upsertPreviewRule(input: PreviewRuleInput): Promise<PreviewImageRule>;
+  deletePreviewRule(id: string): Promise<void>;
+  addProductImage(input: ProductImageInput): Promise<ProductImage>;
+  deleteProductImage(id: string): Promise<void>;
+  /** 画像をストレージへ保存し公開 URL を返す */
+  uploadImage(file: UploadInput, folder: string): Promise<string>;
+}
+
+export function isLocalMode(): boolean {
+  return process.env.WING_LOCAL_MODE === '1';
+}
+
+let cached: DataStore | null = null;
+
+export async function getStore(): Promise<DataStore> {
+  if (cached) return cached;
+  if (isLocalMode()) {
+    const { LocalStore } = await import('./local-store');
+    cached = new LocalStore();
+  } else {
+    const { SupabaseStore } = await import('./supabase-store');
+    cached = new SupabaseStore();
+  }
+  return cached;
+}

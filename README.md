@@ -37,7 +37,7 @@ e2e/, tests/         Playwright / Vitest
    ```bash
    npx supabase login
    npx supabase link --project-ref <project-ref>
-   npx supabase db push            # supabase/migrations/0001〜0011 を適用
+   npx supabase db push            # supabase/migrations/0001〜0012 を適用
    ```
 
    DB パスワードが手元に無い場合は Management API 経由でも適用できます（Docker 不要）:
@@ -48,6 +48,9 @@ e2e/, tests/         Playwright / Vitest
    ```
 
 3. 環境変数 — `.env.example` をコピーして `.env.local` を作成し、`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `NEXT_PUBLIC_SITE_URL` を設定
+
+   通知メールを送る場合は `RESEND_API_KEY` と `MAIL_FROM`（例 `Wing <noreply@example.com>`）も設定します。
+   未設定でも通知は管理画面「お知らせ」に必ず残るため、運用は止まりません。
 
 4. 初期データ投入（モデル・オプション・画像ルール）
 
@@ -88,10 +91,10 @@ e2e/, tests/         Playwright / Vitest
 ## 現在のデプロイ
 
 - 本番: https://sen-no-kaze-wing-system.vercel.app （Vercel `cypress-projects1/sen-no-kaze-wing-system`、GitHub `xazre3-pudVaz-bicnem/sen-no-kaze-wing-system` の main に push で自動デプロイ）
-- Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0008 適用済み・商品台帳投入済み
+- Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0012 適用済み・商品台帳投入済み
 
-> **⚠️ 次回デプロイ前に `0009`〜`0011` の適用が必要です。**
-> 注文範囲・権限階層・フリー商品・確定見積（改訂版）の追加で、列・関数・ポリシーが増えています。
+> **✅ migrations 0001〜0012 は適用済みです。**
+> 新しいマイグレーションを足したときは以下を実行してからデプロイしてください。
 >
 > ```bash
 > npx supabase migration repair --linked --status applied 0001 0002 0003 0004 0005 0006 0007 0008  # 初回のみ
@@ -99,8 +102,8 @@ e2e/, tests/         Playwright / Vitest
 > npm run seed:supabase -- --prune
 > ```
 >
-> 未適用のままアプリだけ配信しても画面は落ちません（すべて「フル装備」・権限は管理者のみとして動きます）が、
-> 本体のみ・本体＋設備の注文、総代理店／代理店の権限、フリー商品、代理店の確定見積は適用後に有効になります。
+> 適用前にアプリだけ配信しても画面は落ちない作りにしてありますが（`lib/data/schema-compat.ts`）、
+> 新機能は適用後に有効になります。
 
 ## 環境変数なしでデプロイした場合（デモモード）
 

@@ -1,6 +1,7 @@
 'use server';
 
 import { getStore } from '@/lib/data/store';
+import { flushNotificationsSafely } from '@/lib/mail/send';
 import { contactSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 
 export interface ContactState {
@@ -15,7 +16,7 @@ const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 
 
 /**
  * お問い合わせを保存する（添付は非公開ストレージへ）。
- * 通知メールは第二段階（送信基盤の導入後）。管理画面 /admin/contacts で確認できる。
+ * 受付すると本部へ通知が入る（メール設定があればメールも送る）。管理画面 /admin/contacts で確認できる。
  */
 export async function submitContactAction(_prev: ContactState, formData: FormData): Promise<ContactState> {
   const raw = Object.fromEntries(formData);
@@ -26,7 +27,6 @@ export async function submitContactAction(_prev: ContactState, formData: FormDat
   );
   const parsed = contactSchema.safeParse(raw);
   if (!parsed.success) {
-    if (parsed.error.issues.some((i) => i.path[0] === 'website')) return { ok: true }; // bot
     return { ok: false, fieldErrors: flattenErrors(parsed.error), values };
   }
 
@@ -52,5 +52,6 @@ export async function submitContactAction(_prev: ContactState, formData: FormDat
     console.error('[wing] contact save failed', e);
     return { ok: false, error: '送信に失敗しました。時間をおいて再度お試しいただくか、お電話にてご連絡ください。', values };
   }
+  await flushNotificationsSafely();
   return { ok: true };
 }

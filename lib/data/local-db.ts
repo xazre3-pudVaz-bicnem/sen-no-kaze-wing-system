@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type {
+  AppNotification,
+  AuditLog,
   BaseModel,
   Configuration,
   ConfigurationItem,
@@ -56,6 +58,8 @@ export interface LocalDb {
   quoteSequences: Record<string, number>;
   resetTokens: { token: string; user_id: string; expires_at: string }[];
   contactMessages: ContactMessage[];
+  notifications: AppNotification[];
+  auditLogs: AuditLog[];
 }
 
 export function localDir(): string {
@@ -92,6 +96,8 @@ export function emptyDb(): LocalDb {
     quoteSequences: {},
     resetTokens: [],
     contactMessages: [],
+    notifications: [],
+    auditLogs: [],
   };
 }
 

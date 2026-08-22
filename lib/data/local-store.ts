@@ -12,6 +12,7 @@ import type {
   PreviewHotspot,
   ProductImage,
   ProductOption,
+  AppNotification,
   Profile,
   RoleCode,
   Quote,
@@ -95,6 +96,105 @@ export class LocalStore implements DataStore {
     });
   }
 
+  // ---------- 通知・監査ログ ----------
+  /** SQL 側はトリガーで作るので、ローカル実装でも同じ場所から呼ぶ */
+  private pushNotification(
+    db: LocalDb,
+    n: { recipient_id: string | null; audience: AppNotification['audience']; kind: string; title: string; body?: string | null; link?: string | null }
+  ) {
+    db.notifications.push({
+      id: randomUUID(),
+      recipient_id: n.recipient_id,
+      audience: n.audience,
+      kind: n.kind,
+      title: n.title,
+      body: n.body ?? null,
+      link: n.link ?? null,
+      read_at: null,
+      email_status: 'pending',
+      email_error: null,
+      created_at: nowIso(),
+    });
+  }
+
+  private pushAudit(
+    db: LocalDb,
+    actor: SessionUser | null,
+    a: { action: string; entity: string; entity_id: string | null; summary: string }
+  ) {
+    db.auditLogs.push({
+      id: randomUUID(),
+      actor_id: actor?.id ?? null,
+      actor_email: actor?.email ?? null,
+      action: a.action,
+      entity: a.entity,
+      entity_id: a.entity_id,
+      summary: a.summary,
+      created_at: nowIso(),
+    });
+  }
+
+  async listNotifications(actor: SessionUser, opts?: { limit?: number }) {
+    return this.read((db) =>
+      db.notifications
+        .filter((n) => (actor.role === 'admin' ? n.recipient_id === null || n.recipient_id === actor.id : n.recipient_id === actor.id))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, opts?.limit ?? 50)
+    );
+  }
+  async markNotificationRead(id: string, actor: SessionUser) {
+    this.mutate((db) => {
+      const n = db.notifications.find((x) => x.id === id);
+      if (!n) return;
+      if (!(actor.role === 'admin' || n.recipient_id === actor.id)) throw new StoreError('FORBIDDEN', '権限がありません');
+      n.read_at = nowIso();
+    });
+  }
+  async markAllNotificationsRead(actor: SessionUser) {
+    this.mutate((db) => {
+      for (const n of db.notifications) {
+        const mine = actor.role === 'admin' ? n.recipient_id === null || n.recipient_id === actor.id : n.recipient_id === actor.id;
+        if (mine && !n.read_at) n.read_at = nowIso();
+      }
+    });
+  }
+  async listAuditLogs(opts?: { limit?: number }) {
+    return this.read((db) => [...db.auditLogs].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, opts?.limit ?? 200));
+  }
+
+  async respondToQuote(id: string, status: 'accepted' | 'declined', actor: SessionUser) {
+    return this.mutate((db) => {
+      const q = db.quotes.find((x) => x.id === id);
+      if (!q) throw new StoreError('NOT_FOUND', '見積が見つかりません');
+      if (q.user_id !== actor.id) throw new StoreError('FORBIDDEN', '権限がありません');
+      if (q.status !== 'issued') throw new StoreError('LOCKED', 'この見積にはすでに回答済みです（または改訂されています）。');
+      q.status = status;
+      q.updated_at = nowIso();
+      const cfg = db.configurations.find((c) => c.id === q.configuration_id);
+      if (cfg) cfg.status = 'closed';
+      const label = status === 'accepted' ? '承諾' : '辞退';
+      this.pushNotification(db, {
+        recipient_id: null,
+        audience: 'admin',
+        kind: `quote_${status}`,
+        title: `見積が${label}されました：${q.quote_no}`,
+        body: `${q.customer_name} 様が回答しました。`,
+        link: `/admin/quotes/${q.id}`,
+      });
+      if (q.dealer_id) {
+        this.pushNotification(db, {
+          recipient_id: q.dealer_id,
+          audience: 'dealer',
+          kind: `quote_${status}`,
+          title: `担当見積が${label}されました：${q.quote_no}`,
+          body: `${q.customer_name} 様が回答しました。`,
+          link: `/admin/quotes/${q.id}`,
+        });
+      }
+      return q;
+    });
+  }
+
   // ---------- プロフィール ----------
   async getProfile(userId: string) {
     return this.read((db) => db.profiles.find((p) => p.id === userId) ?? null);
@@ -113,8 +213,15 @@ export class LocalStore implements DataStore {
       if (actor.id === userId) throw new StoreError('VALIDATION', '自分自身の権限は変更できません');
       const p = db.profiles.find((x) => x.id === userId);
       if (!p) throw new StoreError('NOT_FOUND', 'ユーザーが見つかりません');
+      const before = p.role_code;
       p.role_code = role;
       p.updated_at = nowIso();
+      this.pushAudit(db, actor, {
+        action: 'role',
+        entity: 'profile',
+        entity_id: p.id,
+        summary: `権限を変更：${p.full_name}（${before} → ${role}）`,
+      });
       return p;
     });
   }
@@ -345,6 +452,14 @@ export class LocalStore implements DataStore {
       req.quote_id = quote.id;
       db.quoteRequests.push(req);
       db.quotes.push(quote);
+      this.pushNotification(db, {
+        recipient_id: null,
+        audience: 'admin',
+        kind: 'quote_requested',
+        title: `新しい見積依頼：${quote.quote_no}`,
+        body: `${quote.customer_name} 様から見積依頼が届きました。担当代理店を割り当ててください。`,
+        link: `/admin/quotes/${quote.id}`,
+      });
       const ratePct = Math.round(pricing.expense_rate * 100);
       db.quoteItems.push(
         {
@@ -463,8 +578,19 @@ export class LocalStore implements DataStore {
           throw new StoreError('VALIDATION', '代理店以上の権限を持つユーザーを指定してください');
         }
       }
+      const changed = q.dealer_id !== dealerId;
       q.dealer_id = dealerId;
       q.updated_at = nowIso();
+      if (changed && dealerId) {
+        this.pushNotification(db, {
+          recipient_id: dealerId,
+          audience: 'dealer',
+          kind: 'quote_assigned',
+          title: `見積が割り当てられました：${q.quote_no}`,
+          body: `${q.customer_name} 様の見積です。別途工事・フリー商品を入力して確定見積を発行してください。`,
+          link: `/admin/quotes/${q.id}`,
+        });
+      }
       return q;
     });
   }
@@ -547,6 +673,14 @@ export class LocalStore implements DataStore {
         });
       }
 
+      this.pushNotification(db, {
+        recipient_id: next.user_id,
+        audience: 'customer',
+        kind: 'quote_revised',
+        title: `確定見積が届きました：${next.quote_no}`,
+        body: `代理店が別途工事を確認し、第${next.revision}版の確定見積を発行しました。`,
+        link: `/mypage/quotes/${next.id}`,
+      });
       parent.status = 'superseded';
       parent.updated_at = nowIso();
       const req = db.quoteRequests.find((x) => x.id === parent.quote_request_id);
@@ -657,11 +791,29 @@ export class LocalStore implements DataStore {
       if (id) {
         const o = db.options.find((x) => x.id === id);
         if (!o) throw new StoreError('NOT_FOUND', 'オプションが見つかりません');
+        const before = { price: o.price, status: o.status };
         Object.assign(o, rest, { updated_at: nowIso() });
+        if (before.price !== o.price) {
+          this.pushAudit(db, null, {
+            action: 'price',
+            entity: 'option',
+            entity_id: o.id,
+            summary: `価格を変更：${o.name}（${before.price} → ${o.price} 円）`,
+          });
+        }
+        if (before.status !== o.status) {
+          this.pushAudit(db, null, {
+            action: 'status',
+            entity: 'option',
+            entity_id: o.id,
+            summary: `公開状態を変更：${o.name}（${before.status} → ${o.status}）`,
+          });
+        }
         return o;
       }
       const o: ProductOption = { ...rest, id: randomUUID(), created_at: nowIso(), updated_at: nowIso() };
       db.options.push(o);
+      this.pushAudit(db, null, { action: 'create', entity: 'option', entity_id: o.id, summary: `商品を追加：${o.name}` });
       return o;
     });
   }
@@ -764,6 +916,14 @@ export class LocalStore implements DataStore {
         created_at: nowIso(),
       };
       db.contactMessages.push(row);
+      this.pushNotification(db, {
+        recipient_id: null,
+        audience: 'admin',
+        kind: 'contact_received',
+        title: `新しいお問い合わせ：${row.topic ?? 'その他'}`,
+        body: `${row.full_name} 様（${row.email}）`,
+        link: '/admin/contacts',
+      });
       return row;
     });
   }

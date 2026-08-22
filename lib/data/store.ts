@@ -10,6 +10,8 @@ import type {
   PreviewHotspot,
   ProductImage,
   ProductOption,
+  AppNotification,
+  AuditLog,
   Profile,
   Quote,
   QuoteContact,
@@ -141,6 +143,17 @@ export interface DataStore {
   listDealerQuotes(dealerId: string): Promise<(Quote & { user_email: string })[]>;
   /** 代理店が別途工事・フリー商品を入れた確定見積（次の版）を発行する。元の版は改訂済みとして残る */
   createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser): Promise<Quote>;
+
+  /** 顧客が見積を承諾／辞退する */
+  respondToQuote(id: string, status: 'accepted' | 'declined', actor: SessionUser): Promise<Quote>;
+
+  // ---- 通知 ----
+  listNotifications(actor: SessionUser, opts?: { limit?: number }): Promise<AppNotification[]>;
+  markNotificationRead(id: string, actor: SessionUser): Promise<void>;
+  markAllNotificationsRead(actor: SessionUser): Promise<void>;
+
+  // ---- 監査ログ ----
+  listAuditLogs(opts?: { limit?: number }): Promise<AuditLog[]>;
 
   // ---- 見積書PDF ----
   getQuoteDocumentFile(quoteId: string): Promise<{ bytes: Uint8Array; document: QuoteDocument } | null>;

@@ -156,3 +156,9 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
   await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
   return { quoteId: page.url().match(/quotes\/([0-9a-f-]{36})/)![1], total, configId };
 }
+
+/** 指定のアカウントを（未登録なら作って）用意し、ログアウトした状態に戻す */
+export async function ensureAccount(page: Page, email: string, name: string) {
+  await signInOrRegister(page, email, '/mypage', name);
+  await logout(page);
+}

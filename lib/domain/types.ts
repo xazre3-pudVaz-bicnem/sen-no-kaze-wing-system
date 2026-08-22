@@ -461,3 +461,45 @@ export interface PricingResult {
   /** 「別途見積」項目を含むか */
   has_price_on_request: boolean;
 }
+
+/** 通知（見積依頼・代理店割当・確定見積・お問い合わせ・承諾辞退） */
+export type NotificationAudience = 'admin' | 'dealer' | 'customer';
+export type NotificationEmailStatus = 'pending' | 'sent' | 'skipped' | 'failed';
+
+export interface AppNotification {
+  id: string;
+  /** null = 本部（管理者全員）宛 */
+  recipient_id: string | null;
+  audience: NotificationAudience;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  read_at: string | null;
+  email_status: NotificationEmailStatus;
+  email_error: string | null;
+  created_at: string;
+}
+
+/** 監査ログ（価格・公開状態・権限の変更） */
+export interface AuditLog {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  summary: string;
+  created_at: string;
+}
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  create: '追加',
+  price: '価格変更',
+  status: '公開状態',
+  role: '権限変更',
+};
+export const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  option: '商品',
+  base_model: '本体',
+  profile: 'ユーザー',
+};

@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { flushNotificationsSafely } from '@/lib/mail/send';
 import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
@@ -84,6 +85,25 @@ export async function requestQuoteAction(_prev: QuoteRequestState, formData: For
   } catch (e) {
     return { ok: false, error: fromStoreError(e).error, values };
   }
+  await flushNotificationsSafely();
   revalidatePath('/mypage');
   redirect(`/mypage/quotes/${quoteId}?requested=1`);
+}
+
+/** 顧客が見積を承諾／辞退する */
+export async function respondToQuoteAction(formData: FormData): Promise<void> {
+  const user = await getSessionUser();
+  if (!user) redirect('/login?next=/mypage');
+  const id = String(formData.get('quote_id') ?? '');
+  const status = String(formData.get('status') ?? '');
+  if (status !== 'accepted' && status !== 'declined') redirect('/mypage');
+  const store = await getStore();
+  try {
+    await store.respondToQuote(id, status, user);
+  } catch (e) {
+    redirect(`/mypage/quotes/${id}?error=${encodeURIComponent(fromStoreError(e).error)}`);
+  }
+  await flushNotificationsSafely();
+  revalidatePath('/mypage');
+  redirect(`/mypage/quotes/${id}?responded=${status}`);
 }

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS } from '@/lib/domain/types';
+import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, StoreError } from '@/lib/data/store';
 import {
@@ -344,6 +345,7 @@ export async function assignQuoteDealerAction(_prev: AdminFormState, formData: F
   try {
     const store = await getStore();
     await store.assignQuoteDealer(parsed.data.quote_id, parsed.data.dealer_id, admin);
+    await flushNotificationsSafely();
     revalidatePath(`/admin/quotes/${parsed.data.quote_id}`);
     revalidatePath('/admin/quotes');
     return { ok: true, message: parsed.data.dealer_id ? '担当代理店を割り当てました' : '担当代理店を外しました' };
@@ -386,6 +388,7 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
       actor
     );
     newId = quote.id;
+    await flushNotificationsSafely();
     revalidatePath('/admin/quotes');
     revalidatePath('/mypage');
   } catch (e) {
@@ -410,4 +413,14 @@ export async function updateUserRoleAction(_prev: AdminFormState, formData: Form
   } catch (e) {
     return errState(e);
   }
+}
+
+/** お知らせをすべて既読にする */
+export async function markAllNotificationsReadAction(): Promise<void> {
+  const actor = await requireStaff();
+  const store = await getStore();
+  await store.markAllNotificationsRead(actor);
+  revalidatePath('/admin/notifications');
+  revalidatePath('/admin');
+  redirect('/admin/notifications?read=1');
 }

@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 /** catalog: 総代理店以上のみ / admin: 管理者のみ / なし: 代理店も見られる */
 const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 'admin' }[] = [
   { href: '/admin', label: 'ダッシュボード', exact: true },
+  { href: '/admin/notifications', label: 'お知らせ' },
   { href: '/admin/ledger', label: '商品台帳' },
   { href: '/admin/free-products', label: 'フリー商品' },
   { href: '/admin/models', label: 'ベースコンテナ', need: 'catalog' },
@@ -18,6 +19,7 @@ const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 
   { href: '/admin/configurations', label: '保存された仕様', need: 'admin' },
   { href: '/admin/quotes', label: '見積依頼・見積書' },
   { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
+  { href: '/admin/audit', label: '変更履歴', need: 'admin' },
 ];
 
 export function AdminNav({ role }: { role: RoleCode }) {

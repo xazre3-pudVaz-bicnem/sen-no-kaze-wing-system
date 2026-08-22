@@ -4,6 +4,7 @@ import { Download, FileText } from 'lucide-react';
 import { requireUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { respondToQuoteAction } from '@/lib/actions/configurations';
 import { COMPANY } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge, Container, Section } from '@/components/ui';
@@ -59,6 +60,46 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
             ダウンロード
           </a>
         </div>
+
+        {/* 顧客の回答。改訂前の版や回答済みには出さない */}
+        {quote.status === 'issued' && (
+          <div className="card mt-6 flex flex-wrap items-center justify-between gap-4 p-5" data-testid="quote-respond">
+            <p className="text-sm text-ink-soft">
+              内容にご納得いただけましたら「この見積で進める」を押してください。担当より次のご案内をいたします。
+            </p>
+            <div className="flex gap-2">
+              <form action={respondToQuoteAction}>
+                <input type="hidden" name="quote_id" value={quote.id} />
+                <input type="hidden" name="status" value="accepted" />
+                <button type="submit" className="btn-primary btn-sm" data-testid="accept-quote">
+                  この見積で進める
+                </button>
+              </form>
+              <form action={respondToQuoteAction}>
+                <input type="hidden" name="quote_id" value={quote.id} />
+                <input type="hidden" name="status" value="declined" />
+                <button type="submit" className="btn-ghost btn-sm" data-testid="decline-quote">
+                  今回は見送る
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+        {quote.status === 'accepted' && (
+          <Alert tone="success" className="mt-6">
+            この見積で進めるご回答をいただきました。担当よりご連絡いたします。
+          </Alert>
+        )}
+        {quote.status === 'declined' && (
+          <Alert tone="info" className="mt-6">
+            今回は見送るとご回答いただきました。仕様を変えて再度お見積りすることもできます。
+          </Alert>
+        )}
+        {quote.status === 'superseded' && (
+          <Alert tone="info" className="mt-6">
+            この版は代理店の確定見積に置き換わっています。最新の版をご確認ください。
+          </Alert>
+        )}
 
         <div className="card mt-8 overflow-hidden">
           {quote.preview_image_url && (

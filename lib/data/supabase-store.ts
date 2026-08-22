@@ -10,6 +10,8 @@ import type {
   PreviewHotspot,
   ProductImage,
   ProductOption,
+  AppNotification,
+  AuditLog,
   Profile,
   RoleCode,
   Quote,
@@ -132,6 +134,45 @@ export class SupabaseStore implements DataStore {
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
     };
+  }
+
+  async respondToQuote(id: string, status: 'accepted' | 'declined') {
+    const db = await this.db();
+    const { data, error } = await db.rpc('respond_to_quote', { p_quote_id: id, p_status: status });
+    if (error) mapPgError(error);
+    return data as Quote;
+  }
+
+  // ---------- 通知 ----------
+  async listNotifications(actor: SessionUser, opts?: { limit?: number }) {
+    const db = await this.db();
+    // 管理者は本部宛（recipient_id null）と自分宛、それ以外は自分宛だけ
+    const q = db.from('notifications').select('*').order('created_at', { ascending: false }).limit(opts?.limit ?? 50);
+    const { data, error } =
+      actor.role === 'admin' ? await q.or(`recipient_id.is.null,recipient_id.eq.${actor.id}`) : await q.eq('recipient_id', actor.id);
+    if (error) mapPgError(error);
+    return (data ?? []) as AppNotification[];
+  }
+  async markNotificationRead(id: string) {
+    const db = await this.db();
+    const { error } = await db.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id);
+    if (error) mapPgError(error);
+  }
+  async markAllNotificationsRead(actor: SessionUser) {
+    const db = await this.db();
+    const now = new Date().toISOString();
+    const q = db.from('notifications').update({ read_at: now }).is('read_at', null);
+    const { error } =
+      actor.role === 'admin' ? await q.or(`recipient_id.is.null,recipient_id.eq.${actor.id}`) : await q.eq('recipient_id', actor.id);
+    if (error) mapPgError(error);
+  }
+
+  // ---------- 監査ログ ----------
+  async listAuditLogs(opts?: { limit?: number }) {
+    const db = await this.db();
+    const { data, error } = await db.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(opts?.limit ?? 200);
+    if (error) mapPgError(error);
+    return (data ?? []) as AuditLog[];
   }
 
   // ---------- プロフィール ----------

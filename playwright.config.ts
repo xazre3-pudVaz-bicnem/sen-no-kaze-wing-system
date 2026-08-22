@@ -29,6 +29,8 @@ export default defineConfig({
           WING_LOCAL_DIR: '.wing-local/e2e',
           WING_LOCAL_RESET: '1',
           WING_LOCAL_ADMIN_EMAILS: 'admin@example.com',
+          WING_LOCAL_MASTER_DEALER_EMAILS: 'master@example.com',
+          WING_LOCAL_DEALER_EMAILS: 'dealer@example.com',
           NEXT_PUBLIC_SITE_URL: '',
         },
       },

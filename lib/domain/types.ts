@@ -13,7 +13,32 @@ export const VIEW_LABELS: Record<ViewKey, string> = {
 };
 
 export type PublishStatus = 'published' | 'draft';
-export type RoleCode = 'customer' | 'admin';
+/**
+ * 権限階層。customer < dealer < master_dealer < admin。
+ *  - master_dealer（総代理店）以上：商品台帳への商品登録・価格編集
+ *  - dealer（代理店・工務店）：見積の別途工事・その他の入力と、自社のフリー商品登録
+ */
+export type RoleCode = 'customer' | 'dealer' | 'master_dealer' | 'admin';
+export const ROLE_RANK: Record<RoleCode, number> = { customer: 0, dealer: 1, master_dealer: 2, admin: 3 };
+export const ROLE_LABELS: Record<RoleCode, string> = {
+  customer: '顧客',
+  dealer: '代理店・工務店',
+  master_dealer: '総代理店',
+  admin: '管理者',
+};
+export function hasRoleAtLeast(role: RoleCode | undefined | null, min: RoleCode): boolean {
+  return ROLE_RANK[role ?? 'customer'] >= ROLE_RANK[min];
+}
+/** 商品台帳（本体・カテゴリー・商品・価格・画像）を編集できるか */
+export function canEditCatalog(role: RoleCode | undefined | null): boolean {
+  return hasRoleAtLeast(role, 'master_dealer');
+}
+/** 見積の別途工事・その他の入力と、自社フリー商品の登録ができるか */
+export function canEditDealerItems(role: RoleCode | undefined | null): boolean {
+  return hasRoleAtLeast(role, 'dealer');
+}
+/** 代理店が自分で登録する商品のカテゴリーコード（見積書では別途工事の下に別枠表示） */
+export const FREE_PRODUCT_CATEGORY_CODE = 'free-product';
 
 /**
  * 注文範囲（どこまで仕上げるか）。
@@ -154,6 +179,8 @@ export interface ProductOption {
   price_on_request: boolean;
   /** 対応する仕様（hotel / residence / office）。空配列 = 全仕様共通 */
   spec_codes: string[];
+  /** フリー商品の登録者（代理店）。null = 総代理店・管理者が登録した台帳商品 */
+  owner_id: string | null;
   /** プレビュー画像切替の識別子（null = 画像に影響しない） */
   preview_key: string | null;
   affects_views: ViewKey[];
@@ -339,7 +366,7 @@ export interface Quote {
 }
 
 /** base=本体一式 / base_expense=本体諸費用 / option=オプション / option_expense=オプション諸費用 / installation=別途工事（現地） */
-export type QuoteItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation';
+export type QuoteItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free' | 'discount';
 
 export interface QuoteItem {
   id: string;
@@ -387,10 +414,14 @@ export interface PricingLine {
   code: string;
   name: string;
   category_name: string;
+  category_code: string;
   unit_price: number;
   quantity: number;
   amount: number;
+  /** 諸費用（15%）を乗せない項目（別途工事・フリー商品） */
   is_installation: boolean;
+  /** 代理店が登録したフリー商品（見積書では別途工事の下に別枠表示） */
+  is_free_product: boolean;
   price_on_request: boolean;
   image_url: string | null;
 }
@@ -408,8 +439,10 @@ export interface PricingResult {
   option_expense: number;
   /** オプション価格計 */
   option_total: number;
-  /** 別途工事計（第一段階では要見積のため通常 0） */
+  /** 別途工事計（第一段階では要見積のため通常 0）。フリー商品もここに含む */
   installation_subtotal: number;
+  /** フリー商品の小計（installation_subtotal の内数） */
+  free_subtotal: number;
   subtotal_raw: number;
   /** 値引き等調整額（千円未満切捨て、0 以下） */
   adjustment: number;

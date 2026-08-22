@@ -143,6 +143,7 @@ export const optionSchema = z.object({
   spec_codes: z.array(z.string().regex(/^[a-z0-9-]+$/)),
   sort_order: intFromForm,
   status: statusSchema,
+  owner_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
 });
 
 export const previewRuleSchema = z.object({

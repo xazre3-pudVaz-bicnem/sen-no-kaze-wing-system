@@ -358,7 +358,7 @@ export class LocalStore implements DataStore {
         db.quoteItems.push({
           id: randomUUID(),
           quote_id: quote.id,
-          kind: l.is_installation ? 'installation' : 'option',
+          kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
           name: l.name,
           description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
           unit_price: l.unit_price,

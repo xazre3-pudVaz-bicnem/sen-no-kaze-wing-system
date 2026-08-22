@@ -69,10 +69,16 @@ export async function localSignUp(input: LocalSignUpInput): Promise<{ ok: true }
   const id = randomUUID();
   const salt = randomBytes(16).toString('hex');
   const now = new Date().toISOString();
-  const adminEmails = (process.env.WING_LOCAL_ADMIN_EMAILS || '')
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
+  const emailsFrom = (v: string | undefined) =>
+    (v || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  const adminEmails = emailsFrom(process.env.WING_LOCAL_ADMIN_EMAILS);
+  const masterDealerEmails = emailsFrom(process.env.WING_LOCAL_MASTER_DEALER_EMAILS);
+  const dealerEmails = emailsFrom(process.env.WING_LOCAL_DEALER_EMAILS);
+  const roleFor = (): Profile['role_code'] =>
+    adminEmails.includes(email) ? 'admin' : masterDealerEmails.includes(email) ? 'master_dealer' : dealerEmails.includes(email) ? 'dealer' : 'customer';
   db.users.push({ id, email, password_hash: hash(input.password, salt), salt, created_at: now });
   const customerNo = `C${String(db.profiles.length + 1).padStart(6, '0')}`;
   const profile: Profile = {
@@ -84,7 +90,7 @@ export async function localSignUp(input: LocalSignUpInput): Promise<{ ok: true }
     phone: input.phone,
     postal_code: input.postal_code,
     address: input.address,
-    role_code: adminEmails.includes(email) ? 'admin' : 'customer',
+    role_code: roleFor(),
     created_at: now,
     updated_at: now,
   };

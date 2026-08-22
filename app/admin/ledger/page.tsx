@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireAdmin } from '@/lib/auth/session';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type BaseModel, type OptionCategory, type ProductOption } from '@/lib/domain/types';
@@ -13,7 +13,7 @@ import { AdminPage, FlashMessages } from '@/components/admin/ui';
  * 分類フォルダ・カテゴリーは管理画面から増やせる。
  */
 export default async function AdminLedgerPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin();
+  await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
   const [models, categories, options] = await Promise.all([store.listModels({ includeDraft: true }), store.listCategories(), store.listOptions()]);

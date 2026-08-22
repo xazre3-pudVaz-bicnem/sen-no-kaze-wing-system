@@ -31,7 +31,8 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
   const optionLines = pricing.lines.filter((l) => !l.is_installation && l.amount > 0);
   const includedLines = pricing.lines.filter((l) => !l.is_installation && l.amount === 0);
   const transport = pricing.lines.find((l) => l.code === 'sw-transport');
-  const sitework = pricing.lines.filter((l) => l.is_installation && l.code !== 'sw-transport');
+  const freeLines = pricing.lines.filter((l) => l.is_free_product);
+  const sitework = pricing.lines.filter((l) => l.is_installation && !l.is_free_product && l.code !== 'sw-transport');
   const siteworkTotal = sitework.reduce((s, l) => s + l.amount, 0);
   const transportTotal = transport?.amount ?? 0;
 
@@ -122,6 +123,43 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               <td className="px-2 py-3 text-right text-muted">１式</td>
               <td className="px-4 py-3 text-right tabular-nums">{transportTotal > 0 ? formatYen(transportTotal) : '別途'}</td>
             </tr>
+
+            {/* 5. フリー商品（代理店・工務店が登録した自社商品） */}
+            {freeLines.length > 0 && (
+              <>
+                <tr className="bg-white" data-testid="quote-free-products">
+                  <td className="w-10 px-4 py-3 text-center text-muted">５</td>
+                  <td className="px-2 py-3 font-semibold">
+                    フリー商品
+                    <span className="ml-2 text-xs font-normal text-muted">（代理店・工務店の取扱商品／諸費用なし）</span>
+                  </td>
+                  <td className="px-2 py-3 text-right text-muted">１式</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatYen(pricing.free_subtotal)}</td>
+                </tr>
+                {freeLines.map((l) => {
+                  const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
+                  return (
+                    <tr key={l.option_id} className="bg-white">
+                      <td className="px-4 py-2"></td>
+                      <td className="px-2 py-2">
+                        <button
+                          type="button"
+                          disabled={readOnly || !cat}
+                          onClick={() => cat && onPickCategory(cat.id)}
+                          className="group inline-flex items-center gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
+                          data-testid={`quote-line-${l.code}`}
+                        >
+                          <span>{l.name}</span>
+                          {!readOnly && cat && <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
+                        </button>
+                      </td>
+                      <td className="px-2 py-2 text-right text-muted">{l.quantity}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatYen(l.amount)}</td>
+                    </tr>
+                  );
+                })}
+              </>
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-ink bg-ivory">

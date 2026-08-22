@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { isLocalMode, type SessionUser } from '@/lib/data/store';
+import { hasRoleAtLeast, type RoleCode } from '@/lib/domain/types';
 import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 
 /** 現在のログインユーザー（リクエスト内でキャッシュ） */
@@ -36,3 +37,18 @@ export async function requireAdmin(nextPath = '/admin'): Promise<SessionUser> {
   if (user.role !== 'admin') redirect('/mypage?forbidden=1');
   return user;
 }
+
+/**
+ * 指定した権限以上を要求する（customer < dealer < master_dealer < admin）。
+ * 管理画面は代理店以上が入れるが、商品台帳の編集は総代理店以上に限る。
+ */
+export async function requireRole(min: RoleCode, nextPath = '/admin'): Promise<SessionUser> {
+  const user = await requireUser(nextPath);
+  if (!hasRoleAtLeast(user.role, min)) redirect('/mypage?forbidden=1');
+  return user;
+}
+
+/** 管理画面に入れる（代理店以上） */
+export const requireStaff = (nextPath = '/admin') => requireRole('dealer', nextPath);
+/** 商品台帳を編集できる（総代理店以上） */
+export const requireCatalogEditor = (nextPath = '/admin') => requireRole('master_dealer', nextPath);

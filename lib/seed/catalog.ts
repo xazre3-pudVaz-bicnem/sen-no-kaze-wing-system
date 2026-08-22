@@ -288,6 +288,7 @@ export const C = {
   officeSupplies: cid(19),
   sitework: cid(20),
   insulation: cid(21),
+  freeProduct: cid(22),
 };
 
 const cat = (
@@ -323,6 +324,7 @@ const G = {
   other: ['other', 'その他', 7] as [string, string, number],
   fireproof: ['fireproof', '防火仕様', 8] as [string, string, number],
   sitework: ['sitework', '別途工事', 9] as [string, string, number],
+  free: ['free-product', 'フリー商品', 10] as [string, string, number],
 };
 
 export const seedCategories: OptionCategory[] = [
@@ -346,6 +348,11 @@ export const seedCategories: OptionCategory[] = [
   cat(C.officeSupplies, 'office-supplies', '事務所用品', G.other, 4, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.fireproof, 'fireproof', '防火仕様', G.fireproof, 1, { finish_level: 'shell', is_required: true, description: '建築する場所によって異なります。詳しくは近くの代理店にご相談ください' }),
   cat(C.insulation, 'insulation', '断熱仕様', G.finish, 4, { finish_level: 'shell', selection_mode: 'multi', description: '本体の断熱性能。あとから変更できないため本体注文時に選びます' }),
+  cat(C.freeProduct, 'free-product', 'フリー商品', G.free, 1, {
+    finish_level: 'equipment',
+    selection_mode: 'multi',
+    description: '代理店・工務店が登録した商品（家具など）。諸費用はかからず、見積書では別途工事の下に表示されます',
+  }),
   cat(C.sitework, 'sitework', '別途工事（現地施工）', G.sitework, 1, {
     finish_level: 'shell',
     selection_mode: 'multi',
@@ -435,6 +442,7 @@ const opt = (
   preview_key: null,
   affects_views: [],
   spec_codes: [],
+  owner_id: null,
   status: 'published',
   created_at: NOW,
   updated_at: NOW,

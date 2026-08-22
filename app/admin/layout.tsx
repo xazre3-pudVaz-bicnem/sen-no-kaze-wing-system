@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireAdmin } from '@/lib/auth/session';
+import { requireStaff } from '@/lib/auth/session';
 import { signOutAction } from '@/lib/actions/auth';
 import { AdminNav } from '@/components/admin/admin-nav';
 import { DemoBanner } from '@/components/layout/demo-banner';
+import { ROLE_LABELS } from '@/lib/domain/types';
 
 export const metadata: Metadata = {
   title: { default: '管理画面', template: '%s｜Wing 管理画面' },
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireAdmin();
+  const user = await requireStaff();
   return (
     <div className="min-h-dvh bg-sand/40 lg:grid lg:grid-cols-[15rem_1fr]">
       <div className="lg:col-span-2"><DemoBanner /></div>
@@ -21,9 +22,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="font-serif text-xl tracking-[0.08em]">Wing</span>
             <span className="text-xs text-muted">管理画面</span>
           </Link>
-          <p className="hidden truncate text-xs text-muted lg:mt-2 lg:block">{user.email}</p>
+          <p className="hidden truncate text-xs text-muted lg:mt-2 lg:block">
+            {user.email}
+            <span className="ml-1 rounded bg-sand px-1.5 py-0.5 text-[0.65rem]">{ROLE_LABELS[user.role]}</span>
+          </p>
         </div>
-        <AdminNav />
+        <AdminNav role={user.role} />
         <div className="hidden px-5 py-4 lg:block">
           <Link href="/" className="block text-sm text-ink-soft hover:text-ink">← 公開サイトを見る</Link>
           <form action={signOutAction} className="mt-2">

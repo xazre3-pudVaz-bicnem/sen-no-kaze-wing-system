@@ -82,6 +82,8 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const optionItems = items.filter((i) => i.kind === 'option');
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
   const sitework = items.filter((i) => i.kind === 'installation');
+  const freeItems = items.filter((i) => i.kind === 'free');
+  const freeAmount = freeItems.reduce((sum, i) => sum + i.amount, 0);
   const transport = sitework.find((i) => /運送費/.test(i.name));
   const otherSitework = sitework.filter((i) => i !== transport);
   const transportAmount = transport?.amount ?? 0;
@@ -214,6 +216,30 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             <Text style={s.cQty}>1式</Text>
             <Text style={[s.cAmount, { fontWeight: 700 }]}>{transportAmount > 0 ? yen(transportAmount) : '別途'}</Text>
           </View>
+
+          {/* 5. フリー商品（代理店・工務店の取扱商品） */}
+          {freeItems.length > 0 ? (
+            <>
+              <View style={s.tr} wrap={false}>
+                <Text style={s.cNo}>5</Text>
+                <Text style={[s.cName, { fontWeight: 700 }]}>フリー商品</Text>
+                <Text style={s.cDesc}>代理店・工務店の取扱商品（諸費用なし）</Text>
+                <Text style={s.cPrice}></Text>
+                <Text style={s.cQty}>1式</Text>
+                <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(freeAmount)}</Text>
+              </View>
+              {freeItems.map((it, i) => (
+                <View key={it.id} style={s.tr} wrap={false}>
+                  <Text style={s.cNo}>{`5-${i + 1}`}</Text>
+                  <Text style={s.cName}>{it.name}</Text>
+                  <Text style={s.cDesc}>{it.description ?? ''}</Text>
+                  <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
+                  <Text style={s.cQty}>{it.quantity}</Text>
+                  <Text style={s.cAmount}>{yen(it.amount)}</Text>
+                </View>
+              ))}
+            </>
+          ) : null}
         </View>
 
         <View style={s.sums} wrap={false}>

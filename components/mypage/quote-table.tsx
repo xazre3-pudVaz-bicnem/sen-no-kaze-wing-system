@@ -11,6 +11,8 @@ import { SmartImage } from '@/components/ui/smart-image';
 export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quote: Quote; items: QuoteItem[]; totalTestId?: string }) {
   const optionItems = items.filter((i) => i.kind === 'option');
   const siteworkItems = items.filter((i) => i.kind === 'installation');
+  const freeItems = items.filter((i) => i.kind === 'free');
+  const freeAmount = freeItems.reduce((s, i) => s + i.amount, 0);
   const transport = siteworkItems.find((i) => /運送費/.test(i.name));
   const otherSitework = siteworkItems.filter((i) => i !== transport);
   const transportAmount = transport?.amount ?? 0;
@@ -95,6 +97,27 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
               <td className="px-2 py-3 text-right text-muted">１式</td>
               <td className="px-4 py-3 text-right tabular-nums">{transportAmount > 0 ? formatYen(transportAmount) : '別途'}</td>
             </tr>
+            {freeItems.length > 0 && (
+              <>
+                <tr data-testid="quote-free-products">
+                  <td className="px-4 py-3 text-center text-muted">５</td>
+                  <td className="px-2 py-3 font-semibold">
+                    フリー商品
+                    <span className="ml-2 text-xs font-normal text-muted">（代理店・工務店の取扱商品／諸費用なし）</span>
+                  </td>
+                  <td className="px-2 py-3 text-right text-muted">１式</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatYen(freeAmount)}</td>
+                </tr>
+                {freeItems.map((it) => (
+                  <tr key={it.id}>
+                    <td className="px-4 py-2"></td>
+                    <td className="px-2 py-2 text-xs">{it.name}</td>
+                    <td className="px-2 py-2 text-right text-xs text-muted">{it.quantity}</td>
+                    <td className="px-4 py-2 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
+                  </tr>
+                ))}
+              </>
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-ink bg-ivory">

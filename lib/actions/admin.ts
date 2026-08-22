@@ -2,7 +2,8 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
-import { requireAdmin } from '@/lib/auth/session';
+import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, StoreError } from '@/lib/data/store';
 import {
@@ -62,7 +63,7 @@ const nullableId = (v: FormDataEntryValue | null) => {
 };
 
 export async function saveModelAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await requireAdmin();
+  await requireCatalogEditor();
   const parsed = modelSchema.safeParse({
     id: nullableId(formData.get('id')),
     slug: formData.get('slug'),
@@ -98,7 +99,7 @@ export async function saveModelAction(_prev: AdminFormState, formData: FormData)
 }
 
 export async function saveCategoryAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await requireAdmin();
+  await requireCatalogEditor();
   const parsed = categorySchema.safeParse({
     id: nullableId(formData.get('id')),
     code: formData.get('code'),
@@ -126,7 +127,8 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
 }
 
 export async function saveOptionAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await requireAdmin();
+  const actor = await requireStaff();
+  const catalogEditor = canEditCatalog(actor.role);
   let image_url: string;
   try {
     image_url = await resolveImageUrl(formData, 'options', 'image_url', 'image_file');
@@ -150,10 +152,26 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     preview_key: formData.get('preview_key'),
     affects_views: formData.getAll('affects_views'),
     spec_codes: formData.getAll('spec_codes'),
+    owner_id: catalogEditor ? nullableId(formData.get('owner_id')) : actor.id,
     sort_order: formData.get('sort_order'),
     status: formData.get('status'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  // 代理店はフリー商品カテゴリー以外を触れない（サーバー側で拒否）
+  if (!catalogEditor) {
+    const store = await getStore();
+    const categories = await store.listCategories();
+    const cat = categories.find((c) => c.id === parsed.data.category_id);
+    if (cat?.code !== FREE_PRODUCT_CATEGORY_CODE) {
+      return { ok: false, error: '代理店が登録できるのはフリー商品だけです。' };
+    }
+    if (parsed.data.id) {
+      const existing = (await store.listOptions()).find((o) => o.id === parsed.data.id);
+      if (existing && existing.owner_id !== actor.id) {
+        return { ok: false, error: '他の代理店が登録した商品は編集できません。' };
+      }
+    }
+  }
   const dependencies = formData
     .getAll('requires')
     .map(String)
@@ -187,7 +205,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
 }
 
 export async function deleteOptionAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireCatalogEditor();
   const id = String(formData.get('id') ?? '');
   const store = await getStore();
   try {
@@ -201,7 +219,7 @@ export async function deleteOptionAction(formData: FormData): Promise<void> {
 }
 
 export async function savePreviewRuleAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await requireAdmin();
+  await requireCatalogEditor();
   let url: string;
   try {
     url = await resolveImageUrl(formData, 'preview');
@@ -233,7 +251,7 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
 }
 
 export async function deletePreviewRuleAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireCatalogEditor();
   const store = await getStore();
   await store.deletePreviewRule(String(formData.get('id') ?? ''));
   revalidatePath('/', 'layout');
@@ -242,7 +260,7 @@ export async function deletePreviewRuleAction(formData: FormData): Promise<void>
 }
 
 export async function addProductImageAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await requireAdmin();
+  await requireCatalogEditor();
   let url: string;
   try {
     url = await resolveImageUrl(formData, 'products');
@@ -270,7 +288,7 @@ export async function addProductImageAction(_prev: AdminFormState, formData: For
 }
 
 export async function deleteProductImageAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireCatalogEditor();
   const store = await getStore();
   await store.deleteProductImage(String(formData.get('id') ?? ''));
   revalidatePath('/', 'layout');

@@ -1,4 +1,4 @@
-import type { BaseModel, OptionCategory, PricingResult, ProductOption } from './types';
+import { FREE_PRODUCT_CATEGORY_CODE, type BaseModel, type OptionCategory, type PricingResult, type ProductOption } from './types';
 
 export const TAX_RATE = 0.1;
 /** 諸費用（交通費・労災・安全管理費等）: 本体・オプションそれぞれの小計に対する率（見積書テンプレートより 15%） */
@@ -32,6 +32,7 @@ export function computePricing(
 ): PricingResult {
   const expenseRate = model.expense_rate ?? DEFAULT_EXPENSE_RATE;
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
+  const categoryCode = new Map(categories.map((c) => [c.id, c.code]));
   const byId = new Map(options.map((o) => [o.id, o]));
   const lines: PricingResult['lines'] = [];
   const seen = new Set<string>();
@@ -44,15 +45,20 @@ export function computePricing(
     seen.add(opt.id);
     const quantity = Math.max(1, Math.floor(sel.quantity ?? 1));
     const unit = opt.price_on_request ? 0 : opt.price;
+    const code = categoryCode.get(opt.category_id) ?? '';
+    // フリー商品は代理店の自社商品のため、技術の杜の諸費用（15%）は乗せない
+    const isFree = code === FREE_PRODUCT_CATEGORY_CODE;
     lines.push({
       option_id: opt.id,
       code: opt.code,
       name: opt.name,
       category_name: categoryName.get(opt.category_id) ?? '',
+      category_code: code,
       unit_price: unit,
       quantity,
       amount: unit * quantity,
-      is_installation: opt.is_installation,
+      is_installation: opt.is_installation || isFree,
+      is_free_product: isFree,
       price_on_request: opt.price_on_request,
       image_url: opt.image_url,
     });
@@ -67,6 +73,7 @@ export function computePricing(
   const option_total = option_subtotal + option_expense;
 
   const installation_subtotal = lines.filter((l) => l.is_installation).reduce((s, l) => s + l.amount, 0);
+  const free_subtotal = lines.filter((l) => l.is_free_product).reduce((s, l) => s + l.amount, 0);
 
   const subtotal_raw = base_total + option_total + installation_subtotal;
   const subtotal = Math.floor(subtotal_raw / ROUNDING_UNIT) * ROUNDING_UNIT;
@@ -84,6 +91,7 @@ export function computePricing(
     option_expense,
     option_total,
     installation_subtotal,
+    free_subtotal,
     subtotal_raw,
     adjustment,
     subtotal,

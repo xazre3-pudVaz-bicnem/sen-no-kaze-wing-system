@@ -37,7 +37,7 @@ e2e/, tests/         Playwright / Vitest
    ```bash
    npx supabase login
    npx supabase link --project-ref <project-ref>
-   npx supabase db push            # supabase/migrations/0001〜0009 を適用
+   npx supabase db push            # supabase/migrations/0001〜0010 を適用
    ```
 
    DB パスワードが手元に無い場合は Management API 経由でも適用できます（Docker 不要）:
@@ -79,14 +79,19 @@ e2e/, tests/         Playwright / Vitest
 - 顧客：`/register` から登録（Confirm email OFF なら即ログイン）
 - 管理者：`npm run admin:create`（既存ユーザーを指定すると管理者へ昇格）
 - 管理者権限は `profiles.role_code = 'admin'`。SQL で `update profiles set role_code='admin' where email='...'` でも可
+- 権限は 4 段階：`customer` < `dealer`（代理店・工務店）< `master_dealer`（総代理店）< `admin`（技術の杜）
+  - 総代理店：商品台帳への商品登録・価格編集
+  - 代理店：商品台帳の閲覧と、自社フリー商品の登録・編集
+  - 付与は `update profiles set role_code='master_dealer' where email='...'`
+  - ローカル検証モードでは `WING_LOCAL_MASTER_DEALER_EMAILS` / `WING_LOCAL_DEALER_EMAILS` で初回登録時に付与
 
 ## 現在のデプロイ
 
 - 本番: https://sen-no-kaze-wing-system.vercel.app （Vercel `cypress-projects1/sen-no-kaze-wing-system`、GitHub `xazre3-pudVaz-bicnem/sen-no-kaze-wing-system` の main に push で自動デプロイ）
 - Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0008 適用済み・商品台帳投入済み
 
-> **⚠️ 次回デプロイ前に `0009_finish_level.sql` の適用が必要です。**
-> 注文範囲（本体のみ／本体＋設備／フル装備）の追加で、列と関数が増えています。
+> **⚠️ 次回デプロイ前に `0009_finish_level.sql` と `0010_roles_and_free_products.sql` の適用が必要です。**
+> 注文範囲（本体のみ／本体＋設備／フル装備）と、権限階層・フリー商品の追加で、列・関数・ポリシーが増えています。
 >
 > ```bash
 > npx supabase migration repair --linked --status applied 0001 0002 0003 0004 0005 0006 0007 0008  # 初回のみ
@@ -94,8 +99,8 @@ e2e/, tests/         Playwright / Vitest
 > npm run seed:supabase -- --prune
 > ```
 >
-> 未適用のままアプリだけ配信しても画面は落ちません（すべて「フル装備」として動きます）が、
-> 本体のみ・本体＋設備の注文は適用後に有効になります。
+> 未適用のままアプリだけ配信しても画面は落ちません（すべて「フル装備」・権限は管理者のみとして動きます）が、
+> 本体のみ・本体＋設備の注文、総代理店／代理店の権限、フリー商品は適用後に有効になります。
 
 ## 環境変数なしでデプロイした場合（デモモード）
 

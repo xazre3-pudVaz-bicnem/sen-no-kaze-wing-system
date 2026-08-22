@@ -164,9 +164,11 @@ interface OptionFormProps {
   allOptions: ProductOption[];
   dependencies: OptionDependency[];
   conflicts: OptionConflict[];
+  /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
+  defaultCategoryId?: string;
 }
 
-export function OptionForm({ option, categories, models, allOptions, dependencies, conflicts }: OptionFormProps) {
+export function OptionForm({ option, categories, models, allOptions, dependencies, conflicts, defaultCategoryId }: OptionFormProps) {
   const [state, action, pending] = useActionState(saveOptionAction, initial);
   const e = state.fieldErrors ?? {};
   const others = allOptions.filter((o) => o.id !== option?.id);
@@ -175,6 +177,7 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
   return (
     <form action={action} className="space-y-6" noValidate>
       <input type="hidden" name="id" value={option?.id ?? ''} />
+      <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
       <Status state={state} />
       <div className="card space-y-5 p-6">
         <p className="font-semibold">基本情報</p>
@@ -182,7 +185,7 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
           <Field label="名称" htmlFor="name" required errors={e.name}><Input id="name" name="name" defaultValue={option?.name} required data-testid="option-name" /></Field>
           <Field label="コード" htmlFor="code" required hint="英小文字・数字・ハイフン（一意）" errors={e.code}><Input id="code" name="code" defaultValue={option?.code} required /></Field>
           <Field label="カテゴリー" htmlFor="category_id" required errors={e.category_id}>
-            <Select id="category_id" name="category_id" defaultValue={option?.category_id ?? categories[0]?.id}>
+            <Select id="category_id" name="category_id" defaultValue={option?.category_id ?? defaultCategoryId ?? categories[0]?.id}>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>

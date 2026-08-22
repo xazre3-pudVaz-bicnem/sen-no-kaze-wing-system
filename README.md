@@ -37,10 +37,10 @@ e2e/, tests/         Playwright / Vitest
    ```bash
    npx supabase login
    npx supabase link --project-ref <project-ref>
-   npx supabase db push            # supabase/migrations/0001〜0004 を適用
+   npx supabase db push            # supabase/migrations/0001〜0005 を適用
    ```
 
-   （ダッシュボードの SQL Editor で 0001→0004 の順に実行しても同じです）
+   （ダッシュボードの SQL Editor で 0001→0005 の順に実行しても同じです）
 
 3. 環境変数 — `.env.example` をコピーして `.env.local` を作成し、`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `NEXT_PUBLIC_SITE_URL` を設定
 
@@ -71,6 +71,11 @@ e2e/, tests/         Playwright / Vitest
 - 顧客：`/register` から登録（Confirm email OFF なら即ログイン）
 - 管理者：`npm run admin:create`（既存ユーザーを指定すると管理者へ昇格）
 - 管理者権限は `profiles.role_code = 'admin'`。SQL で `update profiles set role_code='admin' where email='...'` でも可
+
+## 環境変数なしでデプロイした場合（デモモード）
+
+Supabase の環境変数が未設定のままデプロイすると、自動的にローカル（デモ）モードで動作し、画面上部に注意バナーが出ます。
+閲覧・シミュレーション・会員登録・保存・見積は動きますが、**データは一時領域（/tmp）に保存されるため、インスタンスごと・再デプロイで消えます**。本番運用には必ず Supabase を設定してください。
 
 ## ローカル検証モード（Supabase なし）
 

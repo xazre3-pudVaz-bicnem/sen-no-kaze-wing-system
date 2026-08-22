@@ -5,14 +5,16 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Next.js 16 の proxy（旧 middleware）。
  * - Supabase セッションの更新（Cookie の再発行）
  * - /mypage・/admin の簡易ガード（最終防衛線は各ページの requireUser / requireAdmin）
- * ローカル検証モード（WING_LOCAL_MODE=1）では Supabase を呼ばず、Cookie の有無だけで振り分ける。
+ * ローカル検証モード（WING_LOCAL_MODE=1、または Supabase 環境変数が未設定のデモ状態）では
+ * Supabase を呼ばず、Cookie の有無だけで振り分ける。
  */
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProtected = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
   const isAuthPage = pathname === '/login' || pathname === '/register';
 
-  if (process.env.WING_LOCAL_MODE === '1') {
+  const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  if (process.env.WING_LOCAL_MODE === '1' || !hasSupabase) {
     const hasSession = Boolean(request.cookies.get('wing_local_session')?.value);
     if (isProtected && !hasSession) {
       const url = request.nextUrl.clone();
@@ -23,13 +25,10 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return NextResponse.next();
-  }
   if (!isProtected && !isAuthPage) return NextResponse.next();
 
   let response = NextResponse.next({ request });
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

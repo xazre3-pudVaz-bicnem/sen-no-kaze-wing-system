@@ -1,5 +1,6 @@
 import 'server-only';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type {
   BaseModel,
@@ -54,7 +55,10 @@ export interface LocalDb {
 }
 
 export function localDir(): string {
-  return path.resolve(process.cwd(), process.env.WING_LOCAL_DIR || '.wing-local');
+  if (process.env.WING_LOCAL_DIR) return path.resolve(process.cwd(), process.env.WING_LOCAL_DIR);
+  // Vercel 等のサーバーレス環境はプロジェクトディレクトリが読み取り専用のため一時領域を使う
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) return path.join(os.tmpdir(), 'wing-local');
+  return path.resolve(process.cwd(), '.wing-local');
 }
 
 function dbPath() {

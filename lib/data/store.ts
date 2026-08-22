@@ -130,8 +130,22 @@ export interface DataStore {
   uploadImage(file: UploadInput, folder: string): Promise<string>;
 }
 
+function hasSupabaseEnv(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
+
+/**
+ * ローカル検証モード（JSON ファイル DB）。
+ * WING_LOCAL_MODE=1 で明示、または Supabase の環境変数が未設定のときに自動で有効になる
+ * （環境変数なしでデプロイしても 500 にせず、デモとして閲覧できるようにするため）。
+ */
 export function isLocalMode(): boolean {
-  return process.env.WING_LOCAL_MODE === '1';
+  return process.env.WING_LOCAL_MODE === '1' || !hasSupabaseEnv();
+}
+
+/** Supabase 未設定のため自動的にローカルモードになっている（デモ）状態か */
+export function isDemoFallback(): boolean {
+  return process.env.WING_LOCAL_MODE !== '1' && !hasSupabaseEnv();
 }
 
 let cached: DataStore | null = null;

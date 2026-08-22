@@ -17,7 +17,10 @@ export default async function AdminOptionsPage({ searchParams }: { searchParams:
         if (!list.length) return null;
         return (
           <section key={cat.id}>
-            <h2 className="mb-2 text-lg">{cat.name} <span className="text-xs text-muted">{cat.selection_mode === 'single' ? '1つ選択' : '複数選択'}{cat.is_required ? '・必須' : ''}</span></h2>
+            <h2 className="mb-2 text-lg">
+              <span className="text-sm text-muted">{cat.group_name} ›</span> {cat.name}{' '}
+              <span className="text-xs text-muted">{cat.selection_mode === 'single' ? '1つ選択' : '複数選択'}{cat.is_required ? '・必須' : ''}</span>
+            </h2>
             <Table>
               <thead className="bg-sand/60"><tr><Th>名称</Th><Th>コード</Th><Th right>価格</Th><Th>プレビュー</Th><Th>フラグ</Th><Th>公開</Th><Th></Th></tr></thead>
               <tbody className="divide-y divide-line">

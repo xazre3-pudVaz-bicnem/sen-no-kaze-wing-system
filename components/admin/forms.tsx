@@ -124,6 +124,9 @@ export function CategoryForm({ category }: { category: OptionCategory | null }) 
       <Status state={state} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="カテゴリー名" htmlFor={`cat-name-${p}`} required errors={e.name}><Input id={`cat-name-${p}`} name="name" defaultValue={category?.name} required /></Field>
+        <Field label="分類フォルダ名" htmlFor={`cat-gname-${p}`} required hint="商品台帳の第1階層（内外装仕上げ・設備機器など）" errors={e.group_name}><Input id={`cat-gname-${p}`} name="group_name" defaultValue={category?.group_name ?? 'その他'} required /></Field>
+        <Field label="分類コード" htmlFor={`cat-gcode-${p}`} required errors={e.group_code}><Input id={`cat-gcode-${p}`} name="group_code" defaultValue={category?.group_code ?? 'other'} required /></Field>
+        <Field label="分類の表示順" htmlFor={`cat-gsort-${p}`} errors={e.group_sort}><Input id={`cat-gsort-${p}`} name="group_sort" type="number" defaultValue={category?.group_sort ?? 99} /></Field>
         <Field label="コード" htmlFor={`cat-code-${p}`} required errors={e.code}><Input id={`cat-code-${p}`} name="code" defaultValue={category?.code} required /></Field>
         <Field label="表示順" htmlFor={`cat-sort-${p}`} errors={e.sort_order}><Input id={`cat-sort-${p}`} name="sort_order" type="number" defaultValue={category?.sort_order ?? 0} /></Field>
         <Field label="選択方式" htmlFor={`cat-mode-${p}`} required errors={e.selection_mode}>
@@ -214,6 +217,15 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
             <p className="label">反映するビュー</p>
             <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
               {VIEW_KEYS.map((v) => <Checkbox key={v} name="affects_views" value={v} defaultChecked={option?.affects_views.includes(v)} label={VIEW_LABELS[v]} />)}
+            </div>
+          </div>
+          <div>
+            <p className="label">対応する仕様</p>
+            <p className="mb-2 text-xs text-muted">すべて未選択なら全仕様で表示されます。</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用']].map(([code, label]) => (
+                <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option?.spec_codes.includes(code)} label={label} />
+              ))}
             </div>
           </div>
         </div>

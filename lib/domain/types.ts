@@ -91,6 +91,10 @@ export interface OptionCategory {
   id: string;
   code: string;
   name: string;
+  /** 商品台帳の分類フォルダ（内外装仕上げ／サッシ／内部建具／設備機器／照明器具／家具／その他／防火仕様／別途工事） */
+  group_code: string;
+  group_name: string;
+  group_sort: number;
   description: string | null;
   selection_mode: SelectionMode;
   /** single のとき: 必ず 1 つ選ぶ（標準が is_default） */
@@ -115,6 +119,8 @@ export interface ProductOption {
   is_installation: boolean;
   /** 価格が現地確認後に確定する（0 円で「別途見積」表示） */
   price_on_request: boolean;
+  /** 対応する仕様（hotel / residence / office）。空配列 = 全仕様共通 */
+  spec_codes: string[];
   /** プレビュー画像切替の識別子（null = 画像に影響しない） */
   preview_key: string | null;
   affects_views: ViewKey[];
@@ -154,6 +160,20 @@ export interface PreviewImageRule {
   status: PublishStatus;
 }
 
+/** 平面図・立面図のクリック領域（カテゴリーの選択ポップアップを開く） */
+export interface PreviewHotspot {
+  id: string;
+  rule_id: string;
+  category_id: string;
+  label: string;
+  /** 画像に対する割合（%） */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  sort_order: number;
+}
+
 export interface CatalogBundle {
   model: BaseModel;
   images: ProductImage[];
@@ -162,6 +182,7 @@ export interface CatalogBundle {
   dependencies: OptionDependency[];
   conflicts: OptionConflict[];
   previewRules: PreviewImageRule[];
+  hotspots: PreviewHotspot[];
 }
 
 export type ConfigurationStatus = 'draft' | 'quote_requested' | 'quoted' | 'closed';

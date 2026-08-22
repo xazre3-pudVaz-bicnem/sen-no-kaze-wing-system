@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 
 const items = [
   { href: '/admin', label: 'ダッシュボード', exact: true },
+  { href: '/admin/ledger', label: '商品台帳' },
   { href: '/admin/models', label: 'ベースコンテナ' },
   { href: '/admin/categories', label: 'オプションカテゴリー' },
   { href: '/admin/options', label: 'オプション' },

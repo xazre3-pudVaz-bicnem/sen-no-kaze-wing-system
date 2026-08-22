@@ -11,12 +11,14 @@ import { defaultSelection, explainBlocked, toggleOption, validateSelection, type
 import { VIEW_KEYS, type CatalogBundle, type ConfigurationStatus, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Breadcrumbs, Button } from '@/components/ui';
-import { OptionPanel } from './option-panel';
+import { PlanBoard } from './plan-board';
+import { EquipmentBoard } from './equipment-board';
+import { QuoteSheet } from './quote-sheet';
 import { PreviewStage } from './preview-stage';
-import { SummaryPanel } from './summary-panel';
-import { SaveDialog } from './save-dialog';
 import { OptionPickerDialog } from './option-picker-dialog';
+import { SaveDialog } from './save-dialog';
 import { Toasts, type Toast } from './toasts';
+import { cn } from '@/lib/utils';
 
 export interface SimulatorInitial {
   id: string;
@@ -27,6 +29,8 @@ export interface SimulatorInitial {
 
 interface Props {
   bundle: CatalogBundle;
+  /** 立面図（モデル共通の図面。現状は Wing のみ） */
+  elevations: { url: string; label: string; alt: string }[];
   initial: SimulatorInitial | null;
   loadError: string | null;
   resume: boolean;
@@ -43,7 +47,7 @@ interface Draft {
 
 const storageKey = (slug: string) => `wing:sim:${slug}`;
 
-export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props) {
+export function SimulatorApp({ bundle, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
   const { model } = bundle;
   const ctx = useMemo<RuleContext>(
@@ -51,33 +55,36 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
     [bundle]
   );
   const defaults = useMemo(() => defaultSelection(ctx), [ctx]);
-  /** プラン（presets）をオプション ID の集合に展開。前提・必須を満たすよう toggle を通す */
+
+  /** 仕様（ホテル／住宅／事務所）＝ presets。選ぶと標準構成が入る */
   const presetSelections = useMemo(() => {
     const byCode = new Map(bundle.options.map((o) => [o.code, o.id]));
     return (model.presets ?? []).map((p) => {
       let cur: string[] = [];
       for (const code of p.option_codes) {
-        const id = byCode.get(code);
-        if (!id) continue;
-        const r = toggleOption(ctx, cur, id);
+        const oid = byCode.get(code);
+        if (!oid) continue;
+        const r = toggleOption(ctx, cur, oid);
         if (!r.rejected) cur = r.next;
       }
-      for (const id of defaults) {
-        if (cur.includes(id)) continue;
-        const opt = bundle.options.find((o) => o.id === id);
-        const cat = bundle.categories.find((c) => c.id === opt?.category_id);
-        const hasCat = cur.some((x) => bundle.options.find((o) => o.id === x)?.category_id === cat?.id);
-        if (opt?.is_required || (cat?.is_required && !hasCat)) {
-          const r = toggleOption(ctx, cur, id);
+      for (const oid of defaults) {
+        if (cur.includes(oid)) continue;
+        const o = bundle.options.find((x) => x.id === oid);
+        const cat = bundle.categories.find((c) => c.id === o?.category_id);
+        const hasCat = cur.some((x) => bundle.options.find((y) => y.id === x)?.category_id === cat?.id);
+        if (o?.is_required || (cat?.is_required && !hasCat)) {
+          const r = toggleOption(ctx, cur, oid);
           if (!r.rejected) cur = r.next;
         }
       }
       return { code: p.code, ids: [...new Set(cur)] };
     });
   }, [bundle, ctx, defaults, model.presets]);
+
   const initialSelection = initial?.option_ids ?? presetSelections[0]?.ids ?? defaults;
 
   const [selected, setSelected] = useState<string[]>(initialSelection);
+  const [specCode, setSpecCode] = useState<string>(model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
@@ -92,15 +99,15 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
+  const specName = model.presets?.find((p) => p.code === specCode)?.name ?? '';
 
   const pushToast = useCallback((message: string, tone: Toast['tone'] = 'info') => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setToasts((t) => [...t, { id, message, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 5000);
+    const tid = `${Date.now()}-${Math.random()}`;
+    setToasts((t) => [...t, { id: tid, message, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== tid)), 5000);
   }, []);
 
-  // ---- ローカル保存（ログイン前の選択を保持） ----
-  // SSR と初期描画を一致させるため、マウント後に localStorage の下書きを state へ反映する
+  // ---- ログイン前の選択を保持 ----
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -108,7 +115,7 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
       const raw = window.localStorage.getItem(storageKey(model.slug));
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
       if (!initial && draft) {
-        const valid = draft.selected.filter((id) => bundle.options.some((o) => o.id === id));
+        const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
         if (valid.length) setSelected(valid);
         if (draft.name) setName(draft.name);
         if (draft.configId) setConfigId(draft.configId);
@@ -140,72 +147,111 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
     if (hydrated) persistDraft();
   }, [hydrated, persistDraft]);
 
-  // ---- 計算 ----
-  const pricing = useMemo(() => computePricing(model, bundle.options, bundle.categories, selected.map((id) => ({ option_id: id }))), [model, bundle, selected]);
+  // ---- 仕様で絞り込んだカタログ ----
+  const specOptions = useMemo(
+    () => bundle.options.filter((o) => o.spec_codes.length === 0 || o.spec_codes.includes(specCode)),
+    [bundle.options, specCode]
+  );
+  const specCategories = useMemo(
+    () => bundle.categories.filter((c) => specOptions.some((o) => o.category_id === c.id)),
+    [bundle.categories, specOptions]
+  );
+
+  // ---- 計算・画像解決 ----
+  const pricing = useMemo(
+    () => computePricing(model, bundle.options, bundle.categories, selected.map((sid) => ({ option_id: sid }))),
+    [model, bundle, selected]
+  );
   const issues = useMemo(() => validateSelection(ctx, selected), [ctx, selected]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const previews = useMemo(
-    () => Object.fromEntries(VIEW_KEYS.map((v) => [v, resolvePreview(bundle.previewRules, v, selectedPreviewKeys(bundle.options, selected, v))])) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
+    () =>
+      Object.fromEntries(
+        VIEW_KEYS.map((v) => [v, resolvePreview(bundle.previewRules, v, selectedPreviewKeys(bundle.options, selected, v))])
+      ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
     [bundle, selected]
   );
+  /** 平面図として実際に表示されているルール（ホットスポットの紐付け元） */
+  const planRule = useMemo(() => {
+    const url = previews.floorplan.layers[0]?.url;
+    return bundle.previewRules.find((r) => r.view === 'floorplan' && r.url === url) ?? null;
+  }, [bundle.previewRules, previews.floorplan]);
+  const perspective = useMemo(() => {
+    const l = previews.exterior.layers[0];
+    return l ? { url: l.url, alt: l.alt } : null;
+  }, [previews.exterior]);
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 
-  const onToggle = useCallback(
-    (optionId: string) => {
-      if (readOnly) {
-        pushToast('見積依頼済みの仕様は編集できません。マイページから複製してください。', 'warn');
-        return;
-      }
-      const r = toggleOption(ctx, selected, optionId);
-      if (r.rejected) {
-        pushToast(r.notices[0] ?? '選択できません', 'warn');
-        return;
-      }
-      setSelected(r.next);
-      setDirty(true);
-      r.notices.forEach((n) => pushToast(n, 'info'));
-      const opt = bundle.options.find((o) => o.id === optionId);
-      if (opt?.affects_views.length && !opt.affects_views.includes(view)) setView(opt.affects_views[0]);
-    },
-    [ctx, selected, readOnly, pushToast, bundle.options, view]
-  );
-
-  const reset = () => {
-    setSelected(presetSelections[0]?.ids ?? defaults);
-    setDirty(true);
-    pushToast('標準構成に戻しました', 'info');
-  };
-
+  // ---- 操作 ----
   const applyPreset = (code: string) => {
+    setSpecCode(code);
     if (readOnly) return;
     const p = presetSelections.find((x) => x.code === code);
     if (!p) return;
     setSelected(p.ids);
     setDirty(true);
-    pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の構成を適用しました`, 'success');
+    pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準構成を読み込みました`, 'success');
   };
-  const activePreset = presetSelections.find((p) => p.ids.length === selected.length && p.ids.every((id) => selected.includes(id)))?.code ?? null;
 
-  /** ポップアップで確定したカテゴリー内の選択を、ルール（前提・競合）を通して反映 */
   const applyPicker = (categoryId: string, nextInCategory: string[]) => {
     const inCategory = bundle.options.filter((o) => o.category_id === categoryId).map((o) => o.id);
     let cur = selected;
     const notices: string[] = [];
-    for (const id of inCategory) {
-      const want = nextInCategory.includes(id);
-      const has = cur.includes(id);
-      if (want === has) continue;
-      const r = toggleOption(ctx, cur, id);
+
+    // 解除を先に行う。依存されている項目（例: 洗面器 ← 混合水栓）は依存元を外すまで解除できないため、
+    // 進捗がなくなるまで繰り返し、最後まで残ったものだけ理由を通知する。
+    let pending = inCategory.filter((oid) => cur.includes(oid) && !nextInCategory.includes(oid));
+    while (pending.length) {
+      const rest: string[] = [];
+      let progressed = false;
+      for (const oid of pending) {
+        const r = toggleOption(ctx, cur, oid);
+        if (r.rejected) rest.push(oid);
+        else {
+          cur = r.next;
+          notices.push(...r.notices);
+          progressed = true;
+        }
+      }
+      if (!progressed) {
+        for (const oid of rest) {
+          const r = toggleOption(ctx, cur, oid);
+          if (r.notices[0]) notices.push(r.notices[0]);
+        }
+        break;
+      }
+      pending = rest;
+    }
+
+    for (const oid of inCategory) {
+      if (!nextInCategory.includes(oid) || cur.includes(oid)) continue;
+      const r = toggleOption(ctx, cur, oid);
       if (r.rejected) notices.push(r.notices[0]);
       else {
         cur = r.next;
         notices.push(...r.notices);
       }
     }
+
     setSelected(cur);
     setDirty(true);
     setPicker(null);
     notices.forEach((n) => pushToast(n, 'info'));
+  };
+
+  const openPicker = (categoryId: string) => {
+    if (readOnly) {
+      pushToast('見積依頼済みの仕様は編集できません。マイページから複製してください。', 'warn');
+      return;
+    }
+    setPicker(categoryId);
+  };
+
+  const reset = () => {
+    const p = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+    setSelected(p?.ids ?? defaults);
+    setDirty(true);
+    pushToast('標準構成に戻しました', 'info');
   };
 
   // ---- 保存・見積依頼 ----
@@ -261,88 +307,163 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
     setDialog('quote');
   };
 
+  const fireproofCat = bundle.categories.find((c) => c.code === 'fireproof');
+  const fireproofChosen = bundle.options.find((o) => o.category_id === fireproofCat?.id && selected.includes(o.id));
+
   return (
-    <div className="bg-paper" data-testid="simulator" data-hydrated={hydrated ? 'true' : 'false'}>
+    <div className="bg-paper">
       <div className="container-x pt-5 sm:pt-8">
-        <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }, { name: '見積シミュレーター' }]} />
+        <Breadcrumbs
+          items={[
+            { name: 'ホーム', path: '/' },
+            { name: '商品一覧', path: '/products' },
+            { name: model.name, path: `/products/${model.slug}` },
+            { name: '見積シミュレーター' },
+          ]}
+        />
+
+        {/* 商品名 ＋ 仕様タブ ＋ 防火仕様（先方モックアップの上部） */}
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="eyebrow">Simulator</p>
-            <h1 className="mt-1 text-2xl sm:text-4xl">{model.name} 見積シミュレーター</h1>
+            <p className="label-en text-forest">Simulator</p>
+            <h1 className="mt-1 text-2xl sm:text-4xl">
+              {model.name}
+              {specName && <span className="text-xl sm:text-3xl">（{specName}）</span>}
+            </h1>
           </div>
-          <div className="flex items-center gap-3 text-sm text-ink-soft">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            {fireproofCat && (
+              <button
+                type="button"
+                onClick={() => openPicker(fireproofCat.id)}
+                disabled={readOnly}
+                className="rounded-full border border-line bg-white px-4 py-2 text-sm hover:border-ink/40 disabled:opacity-60"
+                data-testid="fireproof-button"
+              >
+                {fireproofChosen?.name ?? '防火仕様を選ぶ'}
+              </button>
+            )}
             {user ? (
-              <span>
-                {user.name} さん｜<Link href="/mypage" className="underline underline-offset-4">マイページ</Link>
+              <span className="text-ink-soft">
+                {user.name} さん｜
+                <Link href="/mypage" className="underline underline-offset-4">
+                  マイページ
+                </Link>
               </span>
             ) : (
-              <span>
-                保存には <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">ログイン</Link> が必要です（選択内容は保持されます）
+              <span className="text-ink-soft">
+                保存には{' '}
+                <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
+                  ログイン
+                </Link>{' '}
+                が必要です（選択内容は保持されます）
               </span>
             )}
           </div>
         </div>
-        {loadError && <Alert tone="warn" className="mt-4">{loadError}</Alert>}
+
+        {/* 仕様の切り替え */}
+        {(model.presets?.length ?? 0) > 0 && (
+          <div className="mt-5 flex flex-wrap items-center gap-2 border-y border-line py-3">
+            <span className="mr-1 text-xs font-semibold text-muted">仕様</span>
+            {model.presets.map((p) => (
+              <button
+                key={p.code}
+                type="button"
+                onClick={() => applyPreset(p.code)}
+                disabled={readOnly}
+                aria-pressed={specCode === p.code}
+                title={p.description}
+                className={cn(
+                  'rounded-full border px-4 py-1.5 text-sm font-medium transition disabled:opacity-50',
+                  specCode === p.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                )}
+                data-testid={`preset-${p.code}`}
+              >
+                {p.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={reset}
+              disabled={readOnly}
+              className="ml-auto text-xs text-muted underline underline-offset-4 hover:text-ink disabled:opacity-40"
+            >
+              標準構成に戻す
+            </button>
+          </div>
+        )}
+
+        {loadError && (
+          <Alert tone="warn" className="mt-4">
+            {loadError}
+          </Alert>
+        )}
         {readOnly && (
           <Alert tone="info" className="mt-4">
             この仕様は見積依頼済みのため編集できません。変更する場合は
-            <Link href="/mypage" className="mx-1 font-semibold underline">マイページ</Link>
+            <Link href="/mypage" className="mx-1 font-semibold underline">
+              マイページ
+            </Link>
             から複製してください。
           </Alert>
         )}
       </div>
 
-      {/* PC: 完成イメージ 62%（sticky）＋ 操作 38% / SP: 画像 → オプション → 金額 */}
-      <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:gap-10 lg:py-8">
-        <div className="min-w-0 lg:sticky lg:top-24">
+      {/* 図面（左）＋ 標準設備及び仕上げ表（右） */}
+      <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(0,52fr)_minmax(0,48fr)] lg:items-start lg:gap-8">
+        <div className="min-w-0 space-y-4">
+          <PlanBoard
+            plan={previews.floorplan}
+            planRule={planRule}
+            hotspots={bundle.hotspots}
+            categories={bundle.categories}
+            elevations={elevations}
+            perspective={perspective}
+            readOnly={readOnly}
+            onPickCategory={openPicker}
+          />
+        </div>
+
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-24">
+          <EquipmentBoard categories={specCategories} options={specOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
+
+          {/* 完成イメージ（外観・室内・水まわり） */}
           <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
-          {/* PC: 画像の直下に現在金額と導線（スクロール中も見える） */}
-          <div className="mt-4 hidden items-center justify-between gap-4 border-t border-line pt-4 lg:flex" data-testid="sticky-total">
-            <div>
-              <p className="text-xs text-muted">概算合計（税込）</p>
-              <p className="font-serif text-3xl leading-none">{formatYen(pricing.total)}</p>
-              <p className="mt-1 text-[0.7rem] text-muted">本体一式＋オプション＋諸費用。別途工事は設置場所確認後。</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={handleSaveClick} disabled={saving || readOnly}>
-                <Save className="size-4" aria-hidden="true" />
-                一時保存
-              </Button>
-              <Button size="sm" onClick={handleQuoteClick} disabled={saving}>
-                見積依頼へ
-                <ArrowRight className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
+
+          {issues.length > 0 && (
+            <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">
+              {issues.map((i, idx) => (
+                <li key={idx}>{i.message}</li>
+              ))}
+            </ul>
+          )}
+
+          <div className="hidden gap-2 lg:flex">
+            <Button variant="secondary" onClick={handleSaveClick} disabled={saving || readOnly} className="flex-1" data-testid="save-button">
+              <Save className="size-4" aria-hidden="true" />
+              一時保存
+            </Button>
+            <Button onClick={handleQuoteClick} disabled={saving} className="flex-1" data-testid="quote-button">
+              見積を依頼する
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Button>
           </div>
         </div>
-        <div className="min-w-0 space-y-6">
-          <OptionPanel
-            bundle={bundle}
-            selected={selected}
-            blocked={blocked}
-            onToggle={onToggle}
-            onReset={reset}
-            readOnly={readOnly}
-            presets={model.presets ?? []}
-            activePreset={activePreset}
-            onApplyPreset={applyPreset}
-          />
-          <SummaryPanel
-            model={model}
-            pricing={pricing}
-            issues={issues}
-            categories={bundle.categories}
-            options={bundle.options}
-            onPickCategory={(id) => setPicker(id)}
-            name={name}
-            configId={configId}
-            dirty={dirty}
-            readOnly={readOnly}
-            saving={saving}
-            onSave={handleSaveClick}
-            onQuote={handleQuoteClick}
-          />
-        </div>
+      </div>
+
+      {/* 御見積書 */}
+      <div className="container-x pb-10">
+        <QuoteSheet
+          modelName={model.name}
+          specName={specName}
+          pricing={pricing}
+          categories={bundle.categories}
+          options={bundle.options}
+          readOnly={readOnly}
+          onPickCategory={openPicker}
+        />
+        <p className="mt-3 text-xs text-muted">{PRICE_DISCLAIMER}</p>
       </div>
 
       {/* SP: 固定フッター */}
@@ -363,9 +484,18 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
             </Button>
           </div>
         </div>
-        <p className="mt-1 text-[0.65rem] text-muted">{PRICE_DISCLAIMER}</p>
       </div>
 
+      {picker && (
+        <OptionPickerDialog
+          category={bundle.categories.find((c) => c.id === picker)!}
+          options={specOptions.filter((o) => o.category_id === picker)}
+          selectedIds={selected}
+          blocked={blocked}
+          onClose={() => setPicker(null)}
+          onApply={(next) => applyPicker(picker, next)}
+        />
+      )}
       {dialog && (
         <SaveDialog
           mode={dialog}
@@ -380,17 +510,10 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
           onSubmit={(n) => doSave(n, dialog === 'quote' ? 'quote' : 'stay')}
         />
       )}
-      {picker && (
-        <OptionPickerDialog
-          category={bundle.categories.find((c) => c.id === picker)!}
-          options={bundle.options.filter((o) => o.category_id === picker)}
-          selectedIds={selected}
-          blocked={blocked}
-          onClose={() => setPicker(null)}
-          onApply={(next) => applyPicker(picker, next)}
-        />
-      )}
-      <Toasts toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+      <Toasts toasts={toasts} onDismiss={(tid) => setToasts((t) => t.filter((x) => x.id !== tid))} />
+      <div data-testid="simulator" data-hydrated={hydrated ? 'true' : 'false'} className="sr-only" aria-hidden="true">
+        {configId ? (dirty ? '未保存の変更あり' : '保存済み') : '未保存'}
+      </div>
     </div>
   );
 }

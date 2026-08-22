@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getPublicBundleBySlug } from '@/lib/data/public-catalog';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
+import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
 
@@ -53,6 +54,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }, { name: '見積シミュレーター', path: `/simulator/${model.slug}` }])} />
       <SimulatorApp
         bundle={bundle}
+        elevations={model.id === MODEL_WING01_ID ? ELEVATIONS : []}
         initial={initial}
         loadError={loadError}
         resume={resume === '1'}

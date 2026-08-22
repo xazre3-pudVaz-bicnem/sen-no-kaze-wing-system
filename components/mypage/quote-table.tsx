@@ -1,85 +1,141 @@
-import { ImageOff } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 
 /**
- * 見積書テンプレートの構造（本体／オプション／別途工事 → 小計・調整・税・合計）で明細を表示する。
- * マイページ・管理画面で共用。
+ * 先方指定の見積明細（1.本体価格／2.オプション価格＋明細／3.別途工事／4.運送費／合計）。
+ * マイページ・管理画面で共用。金額は発行時のスナップショット。
  */
 export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quote: Quote; items: QuoteItem[]; totalTestId?: string }) {
-  const sections: { key: string; label: string; rows: QuoteItem[]; subtotal: number; note?: string }[] = [
-    { key: 'base', label: '本体（工場生産分）', rows: items.filter((i) => i.kind === 'base' || i.kind === 'base_expense'), subtotal: quote.base_price + quote.base_expense },
-    { key: 'option', label: 'オプション', rows: items.filter((i) => i.kind === 'option' || i.kind === 'option_expense'), subtotal: quote.option_subtotal + quote.option_expense },
-    {
-      key: 'installation',
-      label: '別途工事（現地施工）',
-      rows: items.filter((i) => i.kind === 'installation'),
-      subtotal: quote.installation_subtotal,
-      note: '設置場所の確認後、代理店よりお見積りします',
-    },
-  ];
-  const withImages = items.filter((i) => i.kind === 'option' && i.image_url);
+  const optionItems = items.filter((i) => i.kind === 'option');
+  const siteworkItems = items.filter((i) => i.kind === 'installation');
+  const transport = siteworkItems.find((i) => /運送費/.test(i.name));
+  const otherSitework = siteworkItems.filter((i) => i !== transport);
+  const transportAmount = transport?.amount ?? 0;
+  const siteworkAmount = otherSitework.reduce((s, i) => s + i.amount, 0);
+  const baseTotal = quote.base_price + quote.base_expense;
+  const optionTotal = quote.option_subtotal + quote.option_expense;
+  const withImages = optionItems.filter((i) => i.image_url);
 
   return (
-    <div>
+    <div data-testid="quote-table">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[40rem] text-sm">
+        <table className="w-full min-w-[36rem] text-sm">
           <thead className="bg-sand/60 text-left text-xs text-muted">
             <tr>
-              <th className="px-6 py-3 font-semibold">項目</th>
-              <th className="px-6 py-3 font-semibold">摘要</th>
-              <th className="px-6 py-3 text-right font-semibold">単価</th>
-              <th className="px-6 py-3 text-right font-semibold">数量</th>
-              <th className="px-6 py-3 text-right font-semibold">金額</th>
+              <th className="w-12 px-4 py-3 text-center font-semibold">No</th>
+              <th className="px-2 py-3 font-semibold">項目</th>
+              <th className="w-20 px-2 py-3 text-right font-semibold">数量</th>
+              <th className="w-32 px-4 py-3 text-right font-semibold">金額</th>
             </tr>
           </thead>
-          {sections.map((s) =>
-            s.rows.length === 0 ? null : (
-              <tbody key={s.key} className="divide-y divide-line border-b border-line">
-                <tr className="bg-sand/30">
-                  <td colSpan={5} className="px-6 py-2 text-xs font-semibold text-ink-soft">
-                    {s.label}
-                    {s.note && <span className="ml-2 font-normal text-muted">（{s.note}）</span>}
-                  </td>
-                </tr>
-                {s.rows.map((it) => (
-                  <tr key={it.id} className={it.kind.endsWith('_expense') ? 'text-ink-soft' : ''}>
-                    <td className="px-6 py-3">
-                      <span className="flex items-center gap-2">
-                        {it.image_url && (
-                          <span className="relative size-9 shrink-0 overflow-hidden rounded bg-sand">
-                            <SmartImage src={it.image_url} alt="" fill sizes="36px" className="object-cover" />
-                          </span>
-                        )}
-                        {it.name}
+          <tbody className="divide-y divide-line">
+            <tr>
+              <td className="px-4 py-3 text-center text-muted">１</td>
+              <td className="px-2 py-3 font-semibold">本体価格</td>
+              <td className="px-2 py-3 text-right text-muted">１式</td>
+              <td className="px-4 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-3 text-center text-muted">２</td>
+              <td className="px-2 py-3 font-semibold">オプション価格</td>
+              <td className="px-2 py-3 text-right text-muted">１式</td>
+              <td className="px-4 py-3 text-right tabular-nums">{formatYen(optionTotal)}</td>
+            </tr>
+            <tr className="bg-sand/30">
+              <td colSpan={4} className="px-4 py-2 text-xs font-semibold text-ink-soft">
+                2-1 明細
+              </td>
+            </tr>
+            {optionItems.map((it) => (
+              <tr key={it.id}>
+                <td className="px-4 py-2"></td>
+                <td className="px-2 py-2">
+                  <span className="flex items-center gap-2">
+                    {it.image_url && (
+                      <span className="relative size-8 shrink-0 overflow-hidden rounded bg-sand">
+                        <SmartImage src={it.image_url} alt="" fill sizes="32px" className="object-cover" />
                       </span>
-                    </td>
-                    <td className="px-6 py-3 text-ink-soft">{it.description}</td>
-                    <td className="px-6 py-3 text-right tabular-nums">{it.kind === 'installation' && it.amount === 0 ? '別途' : formatYen(it.unit_price)}</td>
-                    <td className="px-6 py-3 text-right tabular-nums">{it.quantity}</td>
-                    <td className="px-6 py-3 text-right tabular-nums">{it.kind === 'installation' && it.amount === 0 ? '別途' : formatYen(it.amount)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-sand/20 font-semibold">
-                  <td colSpan={4} className="px-6 py-2 text-right text-xs">
-                    {s.key === 'base' ? '本体価格計' : s.key === 'option' ? 'オプション価格計' : '別途工事計'}
-                  </td>
-                  <td className="px-6 py-2 text-right tabular-nums">{s.key === 'installation' && s.subtotal === 0 ? '別途' : formatYen(s.subtotal)}</td>
+                    )}
+                    <span>
+                      {it.name}
+                      {it.description && <span className="ml-2 text-xs text-muted">{it.description}</span>}
+                    </span>
+                  </span>
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">{it.quantity}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{formatYen(it.amount)}</td>
+              </tr>
+            ))}
+            {items
+              .filter((i) => i.kind === 'option_expense')
+              .map((it) => (
+                <tr key={it.id} className="text-ink-soft">
+                  <td className="px-4 py-2"></td>
+                  <td className="px-2 py-2 text-xs">{it.name}</td>
+                  <td className="px-2 py-2"></td>
+                  <td className="px-4 py-2 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
                 </tr>
-              </tbody>
-            )
-          )}
+              ))}
+            <tr>
+              <td className="px-4 py-3 text-center text-muted">３</td>
+              <td className="px-2 py-3 font-semibold">
+                別途工事
+                <span className="ml-2 text-xs font-normal text-muted">（{otherSitework.length}項目）</span>
+              </td>
+              <td className="px-2 py-3 text-right text-muted">１式</td>
+              <td className="px-4 py-3 text-right tabular-nums">{siteworkAmount > 0 ? formatYen(siteworkAmount) : '別途'}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-3 text-center text-muted">４</td>
+              <td className="px-2 py-3 font-semibold">運送費</td>
+              <td className="px-2 py-3 text-right text-muted">１式</td>
+              <td className="px-4 py-3 text-right tabular-nums">{transportAmount > 0 ? formatYen(transportAmount) : '別途'}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-ink bg-ivory">
+              <td className="px-4 py-4"></td>
+              <td className="px-2 py-4 font-serif text-lg">合計</td>
+              <td className="px-2 py-4"></td>
+              <td className="px-4 py-4 text-right">
+                <span className="font-serif text-2xl tabular-nums" data-testid={totalTestId}>
+                  {formatYen(quote.total)}
+                </span>
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
-      <dl className="ml-auto max-w-sm space-y-1 p-6 text-sm sm:p-8">
-        <div className="flex justify-between"><dt className="text-ink-soft">小計</dt><dd className="tabular-nums">{formatYen(quote.subtotal - quote.adjustment)}</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-soft">値引き等調整額</dt><dd className="tabular-nums">{formatYen(quote.adjustment)}</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-soft">税抜請負額</dt><dd className="tabular-nums">{formatYen(quote.subtotal)}</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-soft">消費税（{Math.round(quote.tax_rate * 100)}%）</dt><dd className="tabular-nums">{formatYen(quote.tax)}</dd></div>
-        <div className="flex items-baseline justify-between border-t border-line pt-2"><dt className="font-semibold">合計（税込）</dt><dd className="font-serif text-3xl" data-testid={totalTestId}>{formatYen(quote.total)}</dd></div>
+      <dl className="ml-auto max-w-sm space-y-1 px-6 py-4 text-sm sm:px-8">
+        <div className="flex justify-between">
+          <dt className="text-ink-soft">小計</dt>
+          <dd className="tabular-nums">{formatYen(quote.subtotal - quote.adjustment)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-ink-soft">値引き等調整額</dt>
+          <dd className="tabular-nums">{formatYen(quote.adjustment)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-ink-soft">税抜請負額</dt>
+          <dd className="tabular-nums">{formatYen(quote.subtotal)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-ink-soft">消費税（{Math.round(quote.tax_rate * 100)}%）</dt>
+          <dd className="tabular-nums">{formatYen(quote.tax)}</dd>
+        </div>
       </dl>
+
+      <div className="space-y-2 border-t border-line px-6 py-4 text-xs text-ink-soft sm:px-8">
+        <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
+        <Link href="/dealers" className="inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4">
+          代理店・工務店を探す／お問い合わせ
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
 
       {withImages.length > 0 && (
         <div className="border-t border-line px-6 py-5 sm:px-8">

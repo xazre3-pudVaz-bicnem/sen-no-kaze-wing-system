@@ -109,6 +109,9 @@ export const categorySchema = z.object({
   id: z.uuid().nullable(),
   code: trimmed(40).min(1).regex(/^[a-z0-9-]+$/),
   name: trimmed(40).min(1),
+  group_code: trimmed(40).min(1).regex(/^[a-z0-9-]+$/),
+  group_name: trimmed(40).min(1),
+  group_sort: intFromForm,
   description: optional(200),
   selection_mode: z.enum(['single', 'multi']),
   is_required: boolFromForm,
@@ -135,6 +138,7 @@ export const optionSchema = z.object({
     z.string().regex(/^[a-z0-9_]+$/, 'プレビューキーは英小文字・数字・アンダースコア').nullable()
   ),
   affects_views: z.array(z.enum(VIEW_KEYS)),
+  spec_codes: z.array(z.string().regex(/^[a-z0-9-]+$/)),
   sort_order: intFromForm,
   status: statusSchema,
 });

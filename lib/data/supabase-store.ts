@@ -7,6 +7,7 @@ import type {
   ConfigurationItem,
   OptionCategory,
   PreviewImageRule,
+  PreviewHotspot,
   ProductImage,
   ProductOption,
   Profile,
@@ -30,12 +31,14 @@ import {
   type ModelInput,
   type OptionInput,
   type PreviewRuleInput,
+  type HotspotInput,
   type ProductImageInput,
   type QuoteDetail,
   type SaveConfigurationInput,
   type SessionUser,
   type UploadInput,
 } from './store';
+import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -101,7 +104,7 @@ export class SupabaseStore implements DataStore {
       db.from('preview_image_rules').select('*').eq('base_model_id', modelId),
     ]);
     for (const r of [images, categories, options, previewRules]) if (r.error) mapPgError(r.error);
-    const opts_ = pub((options.data ?? []) as ProductOption[]);
+    const opts_ = normalizeOptions(pub((options.data ?? []) as ProductOption[]));
     const ids = opts_.map((o) => o.id);
     const [deps, confs] = ids.length
       ? await Promise.all([
@@ -111,15 +114,21 @@ export class SupabaseStore implements DataStore {
       : [{ data: [], error: null }, { data: [], error: null }];
     if (deps.error) mapPgError(deps.error);
     if (confs.error) mapPgError(confs.error);
+    const ruleRows = pub((previewRules.data ?? []) as PreviewImageRule[]);
+    const ruleIds = ruleRows.map((r) => r.id);
+    // preview_hotspots は 0008 で追加。未適用の DB ではホットスポットなしとして扱う
+    const hs = ruleIds.length ? await db.from('preview_hotspots').select('*').in('rule_id', ruleIds).order('sort_order') : { data: [], error: null };
+    if (hs.error && !isMissingRelation(hs.error)) mapPgError(hs.error);
     const idSet = new Set(ids);
     return {
       model,
       images: (images.data ?? []) as ProductImage[],
-      categories: pub((categories.data ?? []) as OptionCategory[]),
+      categories: normalizeCategories(pub((categories.data ?? []) as OptionCategory[])),
       options: opts_,
       dependencies: ((deps.data ?? []) as CatalogBundle['dependencies']).filter((d) => idSet.has(d.requires_option_id)),
       conflicts: ((confs.data ?? []) as CatalogBundle['conflicts']).filter((c) => idSet.has(c.conflicts_with_option_id)),
-      previewRules: pub((previewRules.data ?? []) as PreviewImageRule[]),
+      previewRules: ruleRows,
+      hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
     };
   }
 
@@ -326,7 +335,7 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { data, error } = await db.from('option_categories').select('*').order('sort_order');
     if (error) mapPgError(error);
-    return (data ?? []) as OptionCategory[];
+    return normalizeCategories((data ?? []) as OptionCategory[]);
   }
   async upsertCategory(input: CategoryInput) {
     return this.upsert<OptionCategory>('option_categories', input);
@@ -335,7 +344,7 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { data, error } = await db.from('options').select('*').order('sort_order');
     if (error) mapPgError(error);
-    return (data ?? []) as ProductOption[];
+    return normalizeOptions((data ?? []) as ProductOption[]);
   }
   async getOption(id: string) {
     const db = await this.db();
@@ -380,6 +389,14 @@ export class SupabaseStore implements DataStore {
   async deletePreviewRule(id: string) {
     const db = await this.db();
     const { error } = await db.from('preview_image_rules').delete().eq('id', id);
+    if (error) mapPgError(error);
+  }
+  async upsertHotspot(input: HotspotInput) {
+    return this.upsert<PreviewHotspot>('preview_hotspots', input);
+  }
+  async deleteHotspot(id: string) {
+    const db = await this.db();
+    const { error } = await db.from('preview_hotspots').delete().eq('id', id);
     if (error) mapPgError(error);
   }
   async addProductImage(input: ProductImageInput) {

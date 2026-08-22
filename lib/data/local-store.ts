@@ -8,6 +8,7 @@ import type {
   Configuration,
   OptionCategory,
   PreviewImageRule,
+  PreviewHotspot,
   ProductImage,
   ProductOption,
   Profile,
@@ -33,6 +34,7 @@ import {
   type ModelInput,
   type OptionInput,
   type PreviewRuleInput,
+  type HotspotInput,
   type ProductImageInput,
   type QuoteDetail,
   type SaveConfigurationInput,
@@ -82,6 +84,7 @@ export class LocalStore implements DataStore {
         dependencies: db.dependencies.filter((d) => ids.has(d.option_id) && ids.has(d.requires_option_id)),
         conflicts: db.conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
         previewRules: db.previewRules.filter((r) => r.base_model_id === modelId && pub(r)),
+        hotspots: db.hotspots.filter((h) => db.previewRules.some((r) => r.id === h.rule_id && r.base_model_id === modelId)),
       };
     });
   }
@@ -561,6 +564,26 @@ export class LocalStore implements DataStore {
   async deletePreviewRule(id: string) {
     this.mutate((db) => {
       db.previewRules = db.previewRules.filter((r) => r.id !== id);
+      db.hotspots = db.hotspots.filter((h) => h.rule_id !== id);
+    });
+  }
+  async upsertHotspot(input: HotspotInput): Promise<PreviewHotspot> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      if (id) {
+        const h = db.hotspots.find((x) => x.id === id);
+        if (!h) throw new StoreError('NOT_FOUND', 'クリック領域が見つかりません');
+        Object.assign(h, rest);
+        return h;
+      }
+      const h: PreviewHotspot = { ...rest, id: randomUUID() };
+      db.hotspots.push(h);
+      return h;
+    });
+  }
+  async deleteHotspot(id: string) {
+    this.mutate((db) => {
+      db.hotspots = db.hotspots.filter((h) => h.id !== id);
     });
   }
   async addProductImage(input: ProductImageInput): Promise<ProductImage> {

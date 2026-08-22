@@ -11,6 +11,7 @@ export function RuleHeading({
   title,
   lead,
   tone = 'dark',
+  as: Tag = 'h2',
   className,
   children,
 }: {
@@ -18,13 +19,15 @@ export function RuleHeading({
   title: ReactNode;
   lead?: string;
   tone?: 'dark' | 'light';
+  /** ページの主見出しとして使う場合は h1 を指定する */
+  as?: 'h1' | 'h2';
   className?: string;
   children?: ReactNode;
 }) {
   return (
     <Reveal className={cn('rule-heading', className)}>
       <p className="label-en text-gold">{labelEn}</p>
-      <h2 className={cn('mt-3 text-3xl leading-tight sm:text-[2.75rem]', tone === 'dark' ? 'text-white' : 'text-ink')}>{title}</h2>
+      <Tag className={cn('mt-3 text-3xl leading-tight sm:text-[2.75rem]', tone === 'dark' ? 'text-white' : 'text-ink')}>{title}</Tag>
       {lead && (
         <p className={cn('mt-4 text-sm leading-[1.9] whitespace-pre-line sm:text-base', tone === 'dark' ? 'text-white/80' : 'text-ink-soft')}>{lead}</p>
       )}

@@ -1,11 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { login, logout, openFreshSimulator, readTotal, register, uniqueEmail } from './helpers';
+import { login, logout, near, openFreshSimulator, pickOption, readTotal, register, uniqueEmail, withExpenseAndTax } from './helpers';
 
 const ADMIN_EMAIL = 'admin@example.com'; // playwright.config の WING_LOCAL_ADMIN_EMAILS
 const UB_ID = '30000000-0000-4000-8000-000000000001'; // ユニットバス 1216
 const MODEL_ID = '10000000-0000-4000-8000-000000000001';
-const EXPENSE = 0.15;
-const near = (a: number, b: number) => Math.abs(a - b) <= 1100;
 
 test.describe('管理者フロー', () => {
   test('11-12. 管理者が価格と画像を変更でき、発行済み見積の金額は変わらない', async ({ page }) => {
@@ -13,7 +11,7 @@ test.describe('管理者フロー', () => {
     const customer = uniqueEmail('cust');
     await register(page, customer, '/simulator/wing-01');
     await openFreshSimulator(page);
-    await page.getByTestId('option-ub-1216').click();
+    await pickOption(page, 'equip-exterior-parts', ['wood-deck']);
     const totalBefore = await readTotal(page);
     await page.getByTestId('save-button').click();
     await page.getByTestId('save-confirm').click();
@@ -52,12 +50,12 @@ test.describe('管理者フロー', () => {
     await page.getByTestId('admin-submit').click();
     await expect(page.getByText('保存しました')).toBeVisible();
 
-    // 画像変更: UB あり（bath + washbasin）の水まわり画像を登録 → 不足件数が減る
+    // 画像変更: シャワー＋洗面（未登録の組み合わせ）の水まわり画像を登録 → 不足件数が減る
     await page.goto('/admin/preview-rules');
     const missingBefore = await page.getByTestId('missing-combos').first().locator('li').count();
-    await page.goto(`/admin/preview-rules/new?model=${MODEL_ID}&view=water&keys=bath,washbasin`);
+    await page.goto(`/admin/preview-rules/new?model=${MODEL_ID}&view=water&keys=shower,washbasin`);
     await page.getByTestId('preview-rule-url').fill('/images/interior/washroom.webp');
-    await page.locator('#pr-alt').fill('テスト用：ユニットバス＋洗面器の水まわり');
+    await page.locator('#pr-alt').fill('テスト用：シャワー＋洗面器の水まわり');
     await page.getByTestId('admin-submit').click();
     await expect(page.getByText('保存しました')).toBeVisible();
     await page.goto('/admin/preview-rules');
@@ -74,9 +72,9 @@ test.describe('管理者フロー', () => {
     // 顧客側: シミュレーターの新規計算には新価格が反映、見積書は旧金額のまま
     await login(page, customer, '/simulator/wing-01');
     await openFreshSimulator(page);
-    await page.getByTestId('option-ub-1216').click();
-    expect(near(await readTotal(page), totalBefore + 20_000 * (1 + EXPENSE) * 1.1)).toBe(true);
-    await page.getByTestId('option-washbasin-kb').click();
+    await pickOption(page, 'equip-exterior-parts', ['wood-deck']);
+    // ホテル仕様の標準構成にユニットバスが含まれるため、値上げ分がそのまま概算に乗る
+    expect(near(await readTotal(page), totalBefore + withExpenseAndTax(20_000))).toBe(true);
     await page.getByTestId('view-water').click();
     await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-kind', 'exact');
     await page.goto(`/mypage/quotes/${quoteId}`);

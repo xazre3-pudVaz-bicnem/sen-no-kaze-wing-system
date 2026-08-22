@@ -6,6 +6,7 @@ import type {
   ConfigurationItem,
   OptionCategory,
   PreviewImageRule,
+  PreviewHotspot,
   ProductImage,
   ProductOption,
   Profile,
@@ -75,6 +76,7 @@ export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & {
 export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
 export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
 export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | null };
+export type HotspotInput = Omit<PreviewHotspot, 'id'> & { id?: string | null };
 export type ProductImageInput = Omit<ProductImage, 'id'> & { id?: string | null };
 
 /**
@@ -135,6 +137,8 @@ export interface DataStore {
   ): Promise<void>;
   upsertPreviewRule(input: PreviewRuleInput): Promise<PreviewImageRule>;
   deletePreviewRule(id: string): Promise<void>;
+  upsertHotspot(input: HotspotInput): Promise<PreviewHotspot>;
+  deleteHotspot(id: string): Promise<void>;
   addProductImage(input: ProductImageInput): Promise<ProductImage>;
   deleteProductImage(id: string): Promise<void>;
   /** 画像をストレージへ保存し公開 URL を返す */

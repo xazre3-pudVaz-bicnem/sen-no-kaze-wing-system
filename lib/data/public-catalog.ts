@@ -7,10 +7,12 @@ import type {
   OptionConflict,
   OptionDependency,
   PreviewImageRule,
+  PreviewHotspot,
   ProductImage,
   ProductOption,
 } from '@/lib/domain/types';
 import { isLocalMode } from './store';
+import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
 export const CATALOG_TAG = 'catalog';
 
@@ -26,7 +28,8 @@ function assemble(
   options: ProductOption[],
   dependencies: OptionDependency[],
   conflicts: OptionConflict[],
-  previewRules: PreviewImageRule[]
+  previewRules: PreviewImageRule[],
+  hotspots: PreviewHotspot[]
 ): PublicCatalog {
   const bundles: Record<string, CatalogBundle> = {};
   for (const model of models) {
@@ -42,6 +45,7 @@ function assemble(
       dependencies: dependencies.filter((d) => ids.has(d.option_id) && ids.has(d.requires_option_id)),
       conflicts: conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
       previewRules: previewRules.filter((r) => r.base_model_id === model.id),
+      hotspots: hotspots.filter((h) => previewRules.some((r) => r.id === h.rule_id && r.base_model_id === model.id)),
     };
   }
   return { models, bundles };
@@ -66,7 +70,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
 
   const { createPublicClient } = await import('@/lib/supabase/public');
   const db = createPublicClient();
-  const [models, images, categories, options, dependencies, conflicts, rules] = await Promise.all([
+  const [models, images, categories, options, dependencies, conflicts, rules, hotspots] = await Promise.all([
     db.from('base_models').select('*').eq('status', 'published').order('sort_order'),
     db.from('product_images').select('*').order('sort_order'),
     db.from('option_categories').select('*').eq('status', 'published').order('sort_order'),
@@ -74,18 +78,22 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     db.from('option_dependencies').select('*'),
     db.from('option_conflicts').select('*'),
     db.from('preview_image_rules').select('*').eq('status', 'published'),
+    db.from('preview_hotspots').select('*').order('sort_order'),
   ]);
+  // preview_hotspots は 0008 で追加されるテーブル。未適用の DB ではホットスポットなしとして扱う
+  const hotspotRows = isMissingRelation(hotspots.error) ? [] : ((hotspots.data ?? []) as PreviewHotspot[]);
   const err = [models, images, categories, options, dependencies, conflicts, rules].find((r) => r.error)?.error;
   if (err) throw new Error(`public catalog: ${err.message}`);
 
   return assemble(
     (models.data ?? []) as BaseModel[],
     (images.data ?? []) as ProductImage[],
-    (categories.data ?? []) as OptionCategory[],
-    (options.data ?? []) as ProductOption[],
+    normalizeCategories((categories.data ?? []) as OptionCategory[]),
+    normalizeOptions((options.data ?? []) as ProductOption[]),
     (dependencies.data ?? []) as OptionDependency[],
     (conflicts.data ?? []) as OptionConflict[],
-    (rules.data ?? []) as PreviewImageRule[]
+    (rules.data ?? []) as PreviewImageRule[],
+    hotspotRows
   );
 }
 

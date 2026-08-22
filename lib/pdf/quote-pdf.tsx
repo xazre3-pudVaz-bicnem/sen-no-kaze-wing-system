@@ -77,27 +77,18 @@ interface PdfInput {
   productImages: Map<string, PdfImage>;
 }
 
-function Row({ no, it, expense }: { no: string; it: QuoteItem; expense?: boolean }) {
-  const onRequest = it.kind === 'installation' && it.amount === 0;
-  return (
-    <View style={[s.tr, expense ? s.expenseRow : {}]} wrap={false}>
-      <Text style={s.cNo}>{no}</Text>
-      <Text style={s.cName}>{it.name}</Text>
-      <Text style={s.cDesc}>{it.description ?? ''}</Text>
-      <Text style={s.cPrice}>{onRequest ? '別途' : yen(it.unit_price)}</Text>
-      <Text style={s.cQty}>{it.quantity}</Text>
-      <Text style={s.cAmount}>{onRequest ? '別途' : yen(it.amount)}</Text>
-    </View>
-  );
-}
 
 function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
-  const base = items.filter((i) => i.kind === 'base' || i.kind === 'base_expense');
-  const options = items.filter((i) => i.kind === 'option' || i.kind === 'option_expense');
+  const optionItems = items.filter((i) => i.kind === 'option');
+  const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
   const sitework = items.filter((i) => i.kind === 'installation');
+  const transport = sitework.find((i) => /運送費/.test(i.name));
+  const otherSitework = sitework.filter((i) => i !== transport);
+  const transportAmount = transport?.amount ?? 0;
+  const siteworkAmount = otherSitework.reduce((sum, i) => sum + i.amount, 0);
+  const baseTotal = quote.base_price + quote.base_expense;
+  const optionTotal = quote.option_subtotal + quote.option_expense;
   const withImages = items.filter((i) => i.kind === 'option' && i.image_url && productImages.get(i.id));
-  let no = 0;
-  const next = () => String(++no);
 
   return (
     <Document title={`御見積書 ${quote.quote_no}`} author={COMPANY.name} language="ja">
@@ -161,36 +152,68 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             <Text style={s.cAmount}>金額</Text>
           </View>
 
-          <View style={s.section}><Text style={s.sectionLabel}>本体（工場生産分）</Text></View>
-          {base.map((it) => (
-            <Row key={it.id} no={next()} it={it} expense={it.kind === 'base_expense'} />
-          ))}
-          <View style={s.trSub} wrap={false}>
-            <Text style={[s.cName, { flex: 1, textAlign: 'right', fontWeight: 700 }]}>【本体価格計】</Text>
-            <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(quote.base_price + quote.base_expense)}</Text>
+          {/* 1. 本体価格 */}
+          <View style={s.tr} wrap={false}>
+            <Text style={s.cNo}>1</Text>
+            <Text style={[s.cName, { fontWeight: 700 }]}>本体価格</Text>
+            <Text style={s.cDesc}>{quote.base_model_name}（工場生産分・諸費用込み）</Text>
+            <Text style={s.cPrice}></Text>
+            <Text style={s.cQty}>1式</Text>
+            <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(baseTotal)}</Text>
           </View>
 
-          <View style={s.section}><Text style={s.sectionLabel}>オプション</Text></View>
-          {options.map((it) => (
-            <Row key={it.id} no={next()} it={it} expense={it.kind === 'option_expense'} />
-          ))}
-          <View style={s.trSub} wrap={false}>
-            <Text style={[s.cName, { flex: 1, textAlign: 'right', fontWeight: 700 }]}>【オプション価格計】</Text>
-            <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(quote.option_subtotal + quote.option_expense)}</Text>
+          {/* 2. オプション価格 ＋ 2-1 明細 */}
+          <View style={s.tr} wrap={false}>
+            <Text style={s.cNo}>2</Text>
+            <Text style={[s.cName, { fontWeight: 700 }]}>オプション価格</Text>
+            <Text style={s.cDesc}>選択された設備・仕上げ（諸費用込み）</Text>
+            <Text style={s.cPrice}></Text>
+            <Text style={s.cQty}>1式</Text>
+            <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(optionTotal)}</Text>
           </View>
-
-          {sitework.length > 0 ? (
-            <>
-              <View style={s.section}><Text style={s.sectionLabel}>別途工事（設置場所確認後に代理店よりお見積り）</Text></View>
-              {sitework.map((it) => (
-                <Row key={it.id} no={next()} it={it} />
-              ))}
-              <View style={s.trSub} wrap={false}>
-                <Text style={[s.cName, { flex: 1, textAlign: 'right', fontWeight: 700 }]}>【別途工事計】</Text>
-                <Text style={[s.cAmount, { fontWeight: 700 }]}>{quote.installation_subtotal === 0 ? '別途' : yen(quote.installation_subtotal)}</Text>
-              </View>
-            </>
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>2-1 明細</Text>
+          </View>
+          {optionItems.map((it, i) => (
+            <View key={it.id} style={s.tr} wrap={false}>
+              <Text style={s.cNo}>{`2-${i + 1}`}</Text>
+              <Text style={s.cName}>{it.name}</Text>
+              <Text style={s.cDesc}>{it.description ?? ''}</Text>
+              <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
+              <Text style={s.cQty}>{it.quantity}</Text>
+              <Text style={s.cAmount}>{yen(it.amount)}</Text>
+            </View>
+          ))}
+          {optionExpense ? (
+            <View style={[s.tr, s.expenseRow]} wrap={false}>
+              <Text style={s.cNo}></Text>
+              <Text style={s.cName}>{optionExpense.name}</Text>
+              <Text style={s.cDesc}>{optionExpense.description ?? ''}</Text>
+              <Text style={s.cPrice}></Text>
+              <Text style={s.cQty}>1式</Text>
+              <Text style={s.cAmount}>{yen(optionExpense.amount)}</Text>
+            </View>
           ) : null}
+
+          {/* 3. 別途工事 */}
+          <View style={s.tr} wrap={false}>
+            <Text style={s.cNo}>3</Text>
+            <Text style={[s.cName, { fontWeight: 700 }]}>別途工事</Text>
+            <Text style={s.cDesc}>{otherSitework.map((i) => i.name).join('・') || '設置場所確認後にお見積り'}</Text>
+            <Text style={s.cPrice}></Text>
+            <Text style={s.cQty}>1式</Text>
+            <Text style={[s.cAmount, { fontWeight: 700 }]}>{siteworkAmount > 0 ? yen(siteworkAmount) : '別途'}</Text>
+          </View>
+
+          {/* 4. 運送費 */}
+          <View style={s.tr} wrap={false}>
+            <Text style={s.cNo}>4</Text>
+            <Text style={[s.cName, { fontWeight: 700 }]}>運送費</Text>
+            <Text style={s.cDesc}>設置場所までの運搬</Text>
+            <Text style={s.cPrice}></Text>
+            <Text style={s.cQty}>1式</Text>
+            <Text style={[s.cAmount, { fontWeight: 700 }]}>{transportAmount > 0 ? yen(transportAmount) : '別途'}</Text>
+          </View>
         </View>
 
         <View style={s.sums} wrap={false}>
@@ -206,6 +229,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
           {COMPANY.quoteNotes.map((n, i) => (
             <Text key={i}>・{n}</Text>
           ))}
+          <Text>・運搬、設置費など設置場所によって変動する費用は別途工事です。現地の代理店・工務店にお問合せください。</Text>
         </View>
 
         {withImages.length > 0 ? (

@@ -11,6 +11,7 @@ import type {
   OptionConflict,
   OptionDependency,
   PreviewImageRule,
+  PreviewHotspot,
   ProductImage,
   ProductOption,
   Profile,
@@ -44,6 +45,7 @@ export interface LocalDb {
   dependencies: OptionDependency[];
   conflicts: OptionConflict[];
   previewRules: PreviewImageRule[];
+  hotspots: PreviewHotspot[];
   configurations: Configuration[];
   configurationItems: ConfigurationItem[];
   snapshots: ConfigurationSnapshot[];
@@ -79,6 +81,7 @@ export function emptyDb(): LocalDb {
     dependencies: clone(seedCatalog.dependencies),
     conflicts: clone(seedCatalog.conflicts),
     previewRules: clone(seedCatalog.previewRules),
+    hotspots: clone(seedCatalog.hotspots),
     configurations: [],
     configurationItems: [],
     snapshots: [],

@@ -104,6 +104,9 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
     code: formData.get('code'),
     name: formData.get('name'),
     description: formData.get('description'),
+    group_code: formData.get('group_code'),
+    group_name: formData.get('group_name'),
+    group_sort: formData.get('group_sort') || 99,
     selection_mode: formData.get('selection_mode'),
     is_required: formData.get('is_required'),
     sort_order: formData.get('sort_order'),
@@ -145,6 +148,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     price_on_request: formData.get('price_on_request'),
     preview_key: formData.get('preview_key'),
     affects_views: formData.getAll('affects_views'),
+    spec_codes: formData.getAll('spec_codes'),
     sort_order: formData.get('sort_order'),
     status: formData.get('status'),
   });

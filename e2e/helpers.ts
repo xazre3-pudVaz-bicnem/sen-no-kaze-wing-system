@@ -71,9 +71,39 @@ export async function waitForSimulator(page: Page) {
   await expect(page.getByTestId('simulator')).toHaveAttribute('data-hydrated', 'true');
 }
 
-/** オプションカードに表示されている追加価格（"+¥580,000" → 580000、標準なら 0） */
-export async function optionPrice(page: Page, testId: string): Promise<number> {
-  const text = (await page.getByTestId(testId).textContent()) ?? '';
-  const m = text.match(/\+¥([\d,]+)/);
+/** 標準設備及び仕上げ表のタイルに出ている追加価格（"+¥570,000" → 570000、標準なら 0） */
+export async function tilePrice(page: Page, catCode: string): Promise<number> {
+  const text = (await page.getByTestId(`equip-${catCode}`).textContent()) ?? '';
+  const m = text.match(/\+[^\d]*([\d,]+)/);
   return m ? Number(m[1].replace(/,/g, '')) : 0;
+}
+
+/** 商品選択ポップアップを開く（設備表タイル／平面図ホットスポット／見積書の行のいずれからでも） */
+export async function openPicker(page: Page, testId: string) {
+  const trigger = page.getByTestId(testId);
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  await expect(page.getByTestId('option-picker')).toBeVisible();
+}
+
+/** ポップアップで商品を選び直して「変更する」で確定する */
+export async function pickOption(page: Page, openTestId: string, codes: string[]) {
+  await openPicker(page, openTestId);
+  for (const code of codes) await page.getByTestId(`pick-${code}`).click();
+  await page.getByTestId('picker-apply').click();
+  await expect(page.getByTestId('option-picker')).toBeHidden();
+}
+
+/** 見積書（2-1 明細）の行 */
+export function quoteLine(page: Page, code: string) {
+  return page.getByTestId(`quote-line-${code}`);
+}
+
+/** 諸費用 15% ＋ 消費税 10%。税抜請負額は千円未満切捨てのため ±1,100 円の誤差を許容する */
+export const EXPENSE_RATE = 0.15;
+export function withExpenseAndTax(amount: number): number {
+  return amount * (1 + EXPENSE_RATE) * 1.1;
+}
+export function near(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1100;
 }

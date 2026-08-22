@@ -10,10 +10,10 @@ describe('resolvePreview', () => {
   it('デッキなし → 標準外観、デッキあり → デッキ付き外観（完全一致）', () => {
     const none = resolvePreview(seedPreviewRules, 'exterior', []);
     expect(none.kind).toBe('exact');
-    expect(none.layers[0].url).toContain('lakeside-sunset');
+    expect(none.layers[0].url).toContain('wing-lakeside.jpg');
     const deck = resolvePreview(seedPreviewRules, 'exterior', ['deck']);
     expect(deck.kind).toBe('exact');
-    expect(deck.layers[0].url).toContain('forest-deck');
+    expect(deck.layers[0].url).toContain('wing-lakeside-deck');
   });
 
   it('登録のない組み合わせは最も近い画像＋未反映キーを返す（approximate）', () => {
@@ -52,7 +52,7 @@ describe('resolvePreview', () => {
     sel = toggleOption(ctx, sel, O.aircon).next;
     const interior1 = resolvePreview(seedPreviewRules, 'interior', selectedPreviewKeys(wingOptions, sel, 'interior'));
     expect(interior1.kind).toBe('exact');
-    expect(interior1.layers[0].url).toContain('bedroom-aircon');
+    expect(interior1.layers[0].url).toContain('wing-room-aircon');
     sel = toggleOption(ctx, sel, O.ub1216).next;
     const water = resolvePreview(seedPreviewRules, 'water', selectedPreviewKeys(wingOptions, sel, 'water'));
     expect(water.missing_keys).toContain('bath');

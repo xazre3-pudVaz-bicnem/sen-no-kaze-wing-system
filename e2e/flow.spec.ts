@@ -33,8 +33,8 @@ test.describe('顧客フロー', () => {
   test('1-2. トップ → 商品詳細 → シミュレーター開始', async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('運べる家');
-    await page.getByRole('link', { name: '商品詳細を見る' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('もうひとつの可能性');
+    await page.getByRole('link', { name: '商品詳細を見る' }).first().click();
     await expect(page).toHaveURL(/\/products\/wing-01$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
     await page.getByRole('link', { name: 'この商品で見積を作る' }).first().click();
@@ -87,18 +87,18 @@ test.describe('顧客フロー', () => {
 
     // ウッドデッキ: 登録済みの完成画像に切り替わる（外観）
     await page.getByTestId('view-exterior').click();
-    expect(await previewSrc(page)).toContain('lakeside-sunset');
+    expect(await previewSrc(page)).toContain('wing-lakeside.jpg');
     await page.getByTestId(DECK).click();
-    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /forest-deck/);
+    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /wing-lakeside-deck/);
     await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-kind', 'exact');
     await page.getByTestId(DECK).click();
-    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /lakeside-sunset/);
+    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /wing-lakeside\.jpg/);
 
-    // エアコン: 室内画像が切り替わる
+    // エアコン＋キッチン: 室内画像が切り替わる（エアコンを外すと別画像へ）
     await page.getByTestId('view-interior').click();
-    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /bedroom-aircon/);
+    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /wing-room-kitchen/);
     await page.getByTestId(AIRCON).click();
-    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-src', /bedroom-seaview/);
+    await expect(page.getByTestId('preview-stage')).not.toHaveAttribute('data-preview-src', /wing-room-kitchen/);
 
     // 依存: ガス給湯器はキッチンに必要なため外せない
     await page.getByTestId(BOILER).click();
@@ -217,7 +217,7 @@ test.describe('顧客フロー', () => {
     await openFreshSimulator(page, 'box');
     await expect(page.getByTestId('preset-hotel-single')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('option-shower-unit-1116').getByRole('radio')).toBeChecked();
-    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-kind', 'none');
+    await expect(page.getByTestId('preview-stage')).toHaveAttribute('data-preview-kind', 'exact');
     const t = await readTotal(page);
     expect(t).toBeGreaterThan(1_000_000);
     await openFreshSimulator(page, 'flat');

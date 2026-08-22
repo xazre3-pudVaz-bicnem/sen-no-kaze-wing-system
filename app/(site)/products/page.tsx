@@ -1,99 +1,43 @@
-import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
 import { getStore } from '@/lib/data/store';
-import { baseTotalOf, formatManYen } from '@/lib/domain/pricing';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
-import { Breadcrumbs, ButtonLink, Container, JsonLd, Section, SectionHeading } from '@/components/ui';
-import { SmartImage } from '@/components/ui/smart-image';
+import { Breadcrumbs, Container, JsonLd } from '@/components/ui';
+import { Reveal } from '@/components/ui/reveal';
+import { ProductChapters } from '@/components/sections/product-chapters';
 
 export const metadata = buildMetadata({
   title: '商品一覧｜折り畳み式木造コンテナ Wing のベースモデル',
-  description: 'Wing のベースモデル一覧。外観・概要・参考価格を比較し、用途に合うモデルから見積シミュレーションを始められます。',
+  description: 'Wing（片ウィング）・BOX・フラットの3つのベースモデル。外観・概要・本体価格を比較し、用途に合うモデルから見積シミュレーションを始められます。',
   path: '/products',
+  image: '/images/products/wing-lakeside-deck.jpg',
 });
 
 export default async function ProductsPage() {
   const store = await getStore();
   const models = await store.listModels();
   const bundles = await Promise.all(models.map((m) => store.getCatalogBundle(m.id)));
-  const allUseCases = [...new Set(models.flatMap((m) => m.use_cases))];
+  const chapters = models.map((m, i) => ({
+    model: m,
+    image: bundles[i]?.images.find((img) => img.kind === 'exterior') ?? bundles[i]?.images.find((img) => img.kind === 'hero') ?? null,
+  }));
 
   return (
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }])} />
-      <Section className="pb-10">
-        <Container>
-          <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '商品一覧' }]} />
-          <SectionHeading as="h1" eyebrow="Products" title="ベースモデル一覧" lead="まずベースとなるコンテナを選び、シミュレーターでオプションを加えていきます。価格は本体の参考価格（税別）です。" className="mt-6" />
-        </Container>
-      </Section>
-
-      {allUseCases.length > 0 && (
-        <Container className="pb-8">
-          <p className="mb-3 text-sm font-semibold text-ink-soft">用途から探す</p>
-          <div className="flex flex-wrap gap-2">
-            {allUseCases.map((u) => (
-              <Link key={u} href={`#usecase-${encodeURIComponent(u)}`} className="rounded-full border border-line bg-white px-4 py-2 text-sm hover:border-ink/40">
-                {u}
-              </Link>
-            ))}
-          </div>
-        </Container>
-      )}
-
-      <Container className="pb-20">
-        {models.length === 0 ? (
-          <p className="card p-10 text-center text-muted">現在公開中の商品はありません。</p>
-        ) : (
-          <div className="grid gap-8 lg:grid-cols-2">
-            {models.map((m, i) => {
-              const hero = bundles[i]?.images.find((img) => img.kind === 'exterior') ?? bundles[i]?.images[0];
-              return (
-                <article key={m.id} className="card overflow-hidden">
-                  <Link href={`/products/${m.slug}`} className="relative block aspect-[16/10]">
-                    {hero ? (
-                      <SmartImage src={hero.url} alt={hero.alt} fill sizes="(min-width: 1024px) 50vw, 100vw" className="object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center bg-sand text-muted">画像準備中</div>
-                    )}
-                  </Link>
-                  <div className="p-7">
-                    <div className="flex flex-wrap items-baseline justify-between gap-3">
-                      <h2 className="text-2xl sm:text-3xl">
-                        <Link href={`/products/${m.slug}`} className="hover:underline">{m.name}</Link>
-                      </h2>
-                      <p className="text-sm text-muted">
-                        本体価格計 <span className="font-serif text-2xl text-ink">{formatManYen(baseTotalOf(m))}〜</span>（税別）
-                      </p>
-                    </div>
-                    <p className="mt-2 text-ink-soft">{m.tagline}</p>
-                    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                      {m.specs.slice(0, 4).map((s) => (
-                        <div key={s.label}>
-                          <dt className="text-muted">{s.label}</dt>
-                          <dd>{s.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <ul className="mt-5 flex flex-wrap gap-2">
-                      {m.use_cases.map((u) => (
-                        <li key={u} id={`usecase-${u}`} className="rounded-full bg-sand px-3 py-1 text-xs text-ink-soft">{u}</li>
-                      ))}
-                    </ul>
-                    <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                      <ButtonLink href={`/products/${m.slug}`} variant="secondary">詳細を見る</ButtonLink>
-                      <ButtonLink href={`/simulator/${m.slug}`}>
-                        この商品で見積を作る
-                        <ArrowRight className="size-4" aria-hidden="true" />
-                      </ButtonLink>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+      <Container className="pt-10 sm:pt-14">
+        <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '商品一覧' }]} />
+        <Reveal className="max-w-2xl py-12 sm:py-16">
+          <p className="label-en text-forest">Products</p>
+          <h1 className="mt-4 text-4xl sm:text-5xl">ベースモデル一覧</h1>
+          <p className="mt-5 text-ink-soft sm:text-lg">まずベースとなる一棟を選び、シミュレーターで設備を加えていきます。価格は本体価格計（本体一式＋諸費用・税別）です。オプション・別途工事は含みません。</p>
+        </Reveal>
       </Container>
+      {models.length === 0 ? (
+        <Container className="pb-24">
+          <p className="py-16 text-center text-muted">現在公開中の商品はありません。</p>
+        </Container>
+      ) : (
+        <ProductChapters items={chapters} headingLevel={2} />
+      )}
     </>
   );
 }

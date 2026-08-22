@@ -15,6 +15,10 @@
   --color-brown-dark: #3f2a1c;
   --color-navy: #1e2a3a;
   --color-navy-light: #2c3c52;
+  --color-forest: #22392e;
+  --color-forest-deep: #16281f;
+  --color-ivory: #f6f1e7;
+  --color-gold: #b3975a;
   --color-success: #2f6b4f;
   --color-warn: #9a6b1f;
   --color-danger: #a83a2e;
@@ -112,6 +116,55 @@
   }
 }
 
+@layer components {
+  /* スクロール連動の控えめな出現（Reveal コンポーネント） */
+  .reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+      opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-on-scroll.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+  /* 画像のごく小さなスケール変化は要素内の img に掛け、横幅のはみ出しを防ぐ */
+  .reveal-image {
+    opacity: 0;
+    overflow: hidden;
+    transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-image img {
+    transform: scale(1.04);
+    transition: transform 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-image.is-visible {
+    opacity: 1;
+  }
+  .reveal-image.is-visible img {
+    transform: scale(1);
+  }
+  .label-en {
+    @apply text-[0.7rem] font-semibold tracking-[0.28em] uppercase;
+  }
+  .scrim-b {
+    background: linear-gradient(to top, rgb(20 18 14 / 0.72) 0%, rgb(20 18 14 / 0.35) 40%, transparent 75%);
+  }
+  .scrim-t {
+    background: linear-gradient(to bottom, rgb(20 18 14 / 0.45) 0%, transparent 40%);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes reveal {
   from {
     opacity: 0;
@@ -126,6 +179,16 @@
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     animation: none;
+  }
+  .reveal-on-scroll,
+  .reveal-image,
+  .reveal-image img {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .parallax-img {
+    transform: none !important;
   }
   html {
     scroll-behavior: auto;

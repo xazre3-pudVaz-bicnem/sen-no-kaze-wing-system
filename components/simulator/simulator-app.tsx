@@ -292,12 +292,30 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
         )}
       </div>
 
-      {/* PC: 3カラム / SP: 画像 → オプション → 金額 */}
-      <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(18rem,22rem)_1fr_minmax(18rem,21rem)] lg:items-start lg:gap-8 lg:py-8">
-        <div className="order-1 min-w-0 lg:order-2 lg:sticky lg:top-24">
+      {/* PC: 完成イメージ 62%（sticky）＋ 操作 38% / SP: 画像 → オプション → 金額 */}
+      <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:gap-10 lg:py-8">
+        <div className="min-w-0 lg:sticky lg:top-24">
           <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
+          {/* PC: 画像の直下に現在金額と導線（スクロール中も見える） */}
+          <div className="mt-4 hidden items-center justify-between gap-4 border-t border-line pt-4 lg:flex" data-testid="sticky-total">
+            <div>
+              <p className="text-xs text-muted">概算合計（税込）</p>
+              <p className="font-serif text-3xl leading-none">{formatYen(pricing.total)}</p>
+              <p className="mt-1 text-[0.7rem] text-muted">本体一式＋オプション＋諸費用。別途工事は設置場所確認後。</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={handleSaveClick} disabled={saving || readOnly}>
+                <Save className="size-4" aria-hidden="true" />
+                一時保存
+              </Button>
+              <Button size="sm" onClick={handleQuoteClick} disabled={saving}>
+                見積依頼へ
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="order-2 min-w-0 lg:order-1">
+        <div className="min-w-0 space-y-6">
           <OptionPanel
             bundle={bundle}
             selected={selected}
@@ -309,8 +327,6 @@ export function SimulatorApp({ bundle, initial, loadError, resume, user }: Props
             activePreset={activePreset}
             onApplyPreset={applyPreset}
           />
-        </div>
-        <div className="order-3 min-w-0 lg:sticky lg:top-24">
           <SummaryPanel
             model={model}
             pricing={pricing}

@@ -211,21 +211,31 @@ export const seedModels: BaseModel[] = [
 ];
 
 export const seedProductImages: ProductImage[] = [
-  { id: '11000000-0000-4000-8000-000000000001', base_model_id: MODEL_WING01_ID, kind: 'hero', url: '/images/hero/sunset-sea-4k.webp', alt: '夕陽の海を望む高台に設置されたWing', caption: '完成イメージ（CGパース）', sort_order: 1 },
-  { id: '11000000-0000-4000-8000-000000000002', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/exterior/lakeside-sunset.jpg', alt: '湖畔の夕景に置かれたWingの外観（斜め）', caption: '外観イメージ', sort_order: 1 },
-  { id: '11000000-0000-4000-8000-000000000003', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/exterior/forest-deck.jpg', alt: '林間にウッドデッキ付きで設置されたWing', caption: 'ウッドデッキ（オプション）付き外観イメージ', sort_order: 2 },
+  // ---- Wing ----
+  { id: '11000000-0000-4000-8000-000000000001', base_model_id: MODEL_WING01_ID, kind: 'hero', url: '/images/hero/wing-sunset-coast.jpg', alt: '夕陽に染まる海岸の高台に建つデッキ付きのWing', caption: '完成イメージ（CGパース）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000002', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/products/wing-lakeside.jpg', alt: '湖を望む高台に建つWing（標準・デッキなし）', caption: '外観イメージ（標準）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000003', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/products/wing-lakeside-deck.jpg', alt: '湖を望む高台に建つウッドデッキ付きのWing', caption: 'ウッドデッキ（オプション）付き外観イメージ', sort_order: 2 },
   { id: '11000000-0000-4000-8000-000000000004', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/exterior/cove-day.jpg', alt: '入り江のほとりに設置されたWing（昼）', caption: '外観イメージ（昼）', sort_order: 3 },
   { id: '11000000-0000-4000-8000-000000000005', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/exterior/cove-night.jpg', alt: '入り江のほとりに設置されたWing（夜）', caption: '外観イメージ（夜）', sort_order: 4 },
-  { id: '11000000-0000-4000-8000-000000000006', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/bedroom-seaview.webp', alt: '海を望む窓とベッドのある室内', caption: '室内イメージ（居室）', sort_order: 1 },
-  { id: '11000000-0000-4000-8000-000000000007', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/living-tv.jpg', alt: '壁掛けテレビとカウンターのある室内', caption: '室内イメージ（カウンター・壁掛けTV）', sort_order: 2 },
-  { id: '11000000-0000-4000-8000-000000000008', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/washroom.webp', alt: '洗面台のある水まわり', caption: '洗面所イメージ（洗面器オプション）', sort_order: 3 },
+  { id: '11000000-0000-4000-8000-000000000006', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/wing-room-aircon.jpg', alt: '木目の壁に囲まれたベッドとデスクのある室内（エアコン付き）', caption: '室内イメージ（居室・エアコン）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000007', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/wing-room-kitchen.jpg', alt: 'ミニキッチンを備えた木目の室内', caption: '室内イメージ（ミニキッチン）', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000008', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/unit-bath-3point.jpg', alt: '浴槽・トイレ・洗面器が一体の3点ユニットバス', caption: '3点ユニットバス', sort_order: 3 },
+  { id: '11000000-0000-4000-8000-000000000016', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/living-tv.jpg', alt: '壁掛けテレビとカウンターのある室内', caption: '室内イメージ（カウンター・壁掛けTV）', sort_order: 4 },
   { id: '11000000-0000-4000-8000-000000000009', base_model_id: MODEL_WING01_ID, kind: 'floorplan', url: '/images/floorplan/wing01-plan-full.jpg', alt: 'Wing 平面図（シャワー・トイレ・洗面・エアコン付き、デッキはオプション）', caption: '平面図（シャワー・トイレ・洗面・エアコン構成）', sort_order: 1 },
-  { id: '11000000-0000-4000-8000-000000000010', base_model_id: MODEL_WING01_ID, kind: 'transport', url: '/images/transport/unic-loading.jpg', alt: '4tユニック車に積み込まれた折り畳み状態のWing', caption: '折り畳んで4tユニックに積載', sort_order: 1 },
-  { id: '11000000-0000-4000-8000-000000000011', base_model_id: MODEL_WING01_ID, kind: 'transport', url: '/images/transport/unic-setup.jpg', alt: '海辺でクレーンにより設置されるWing', caption: '現地でクレーン設置', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000010', base_model_id: MODEL_WING01_ID, kind: 'transport', url: '/images/transport/unic-crane-lift.jpg', alt: '4tユニック車のクレーンで吊り上げられる折り畳み状態のWing', caption: '4tユニックで搬入・設置', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000011', base_model_id: MODEL_WING01_ID, kind: 'transport', url: '/images/transport/unic-loading.jpg', alt: '4tユニック車に積み込まれた折り畳み状態のWing', caption: '折り畳んで積載', sort_order: 2 },
   { id: '11000000-0000-4000-8000-000000000012', base_model_id: MODEL_WING01_ID, kind: 'transport', url: '/images/transport/unic-placed-wide.jpg', alt: '高台に据え置かれた折り畳み状態のWing', caption: '据え置き後、約30分で展開', sort_order: 3 },
   { id: '11000000-0000-4000-8000-000000000013', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/cases/iwate-yamada-funakoshi.png', alt: '岩手県山田町・船越大島の海辺に並ぶWing', caption: '岩手県山田町 船越大島', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000014', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/exterior/anamizu-cove.jpg', alt: '石川県穴水町の入り江に置かれたWing', caption: '石川県穴水町 入り江', sort_order: 2 },
   { id: '11000000-0000-4000-8000-000000000015', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/cases/island-resort.png', alt: '島のデッキに3棟並んだWing', caption: '離島リゾート計画（イメージ）', sort_order: 3 },
+  // ---- BOX ----
+  { id: '11000000-0000-4000-8000-000000000021', base_model_id: MODEL_BOX_ID, kind: 'hero', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ黒い外装と木目の BOX', caption: '完成イメージ（CGパース）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000022', base_model_id: MODEL_BOX_ID, kind: 'exterior', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ BOX の外観', caption: '外観イメージ', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000023', base_model_id: MODEL_BOX_ID, kind: 'interior', url: '/images/interior/room-white-aircon.jpg', alt: '白い壁とベッド・デスクのある室内（エアコン付き）', caption: '室内イメージ（エアコン）', sort_order: 1 },
+  // ---- フラット ----
+  { id: '11000000-0000-4000-8000-000000000031', base_model_id: MODEL_FLAT_ID, kind: 'hero', url: '/images/products/flat-office-lake.jpg', alt: '湖を背にした全面ガラスのフラットタイプ事務所', caption: '完成イメージ（CGパース）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000032', base_model_id: MODEL_FLAT_ID, kind: 'exterior', url: '/images/products/flat-office-lake.jpg', alt: 'フラットタイプの外観', caption: '外観イメージ', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000033', base_model_id: MODEL_FLAT_ID, kind: 'interior', url: '/images/interior/room-white-aircon.jpg', alt: '白い壁の室内（エアコン付き）', caption: '室内イメージ（エアコン）', sort_order: 1 },
 ];
 
 const C = {
@@ -335,7 +345,7 @@ const sitework = (oid: string, code: string, name: string, description: string |
 export const seedOptions: ProductOption[] = [
   // ---- ユニットバス（単一選択） ----
   opt({ id: O.ub1216, category_id: C.ub, code: 'ub-1216', name: 'ユニットバス 1216（浴槽付）', description: '浴槽付きのユニットバス 1216 サイズ。トイレ・洗面は別途選択。', price: 570000, selection_type: 'radio', preview_key: 'bath', affects_views: ['floorplan', 'water'], sort_order: 1 }),
-  opt({ id: O.ub3point, category_id: C.ub, code: 'ub-3point-1216', name: '3点ユニットバス 1216（浴槽・トイレ・洗面一体）', description: '浴槽・トイレ・洗面器が一体になった 3点ユニット。洗面器の追加は不要です。', price: 510000, selection_type: 'radio', preview_key: 'bath', affects_views: ['floorplan', 'water'], sort_order: 2 }),
+  opt({ id: O.ub3point, category_id: C.ub, code: 'ub-3point-1216', name: '3点ユニットバス 1216（浴槽・トイレ・洗面一体）', description: '浴槽・トイレ・洗面器が一体になった 3点ユニット。洗面器の追加は不要です。', price: 510000, selection_type: 'radio', image_url: '/images/interior/unit-bath-3point.jpg', preview_key: 'ub3', affects_views: ['floorplan', 'water'], sort_order: 2 }),
   opt({ id: O.showerUnit, category_id: C.ub, code: 'shower-unit-1116', name: 'シャワーユニット 1116', description: '浴槽なしのシャワーユニット。BOX のホテル仕様で採用。', price: 810000, selection_type: 'radio', preview_key: 'shower', affects_views: ['floorplan', 'water'], sort_order: 3 }),
   opt({ id: O.showerToiletUnit, category_id: C.ub, code: 'shower-toilet-unit-1116', name: 'シャワートイレユニット 1116', description: 'シャワーとトイレが一体になったコンパクトユニット。', price: 510000, selection_type: 'radio', preview_key: 'shower', affects_views: ['floorplan', 'water'], sort_order: 4 }),
 
@@ -347,7 +357,7 @@ export const seedOptions: ProductOption[] = [
   opt({ id: O.faucetKb, category_id: C.washbasin, code: 'faucet-kb', name: '混合水栓 KB-TP006-01-G141', description: '洗面器用の混合水栓（toolbox）。洗面器と合わせて選択します。', price: 90000, sort_order: 2 }),
 
   // ---- キッチン ----
-  opt({ id: O.miniKitchen, category_id: C.kitchen, code: 'mini-kitchen', name: 'ミニキッチン', description: 'シンク・コンロ付きのコンパクトキッチン。', price: 187500, preview_key: 'kitchen', affects_views: ['floorplan'], sort_order: 1 }),
+  opt({ id: O.miniKitchen, category_id: C.kitchen, code: 'mini-kitchen', name: 'ミニキッチン', description: 'シンク・コンロ付きのコンパクトキッチン。', price: 187500, image_url: '/images/interior/wing-room-kitchen.jpg', preview_key: 'kitchen', affects_views: ['interior', 'floorplan'], sort_order: 1 }),
 
   // ---- 内装材（モデル別・単一選択・必須） ----
   opt({ id: O.interiorStdWing, base_model_id: MODEL_WING01_ID, category_id: C.interior, code: 'interior-standard-wing', name: '標準内装セット（床フローリング・壁天井クロス）', description: '床フローリング 16.24㎡、壁クロス 41.71㎡、天井クロス 16.24㎡、ラワンべニア下地。', price: 515890, selection_type: 'radio', is_default: true, sort_order: 1 }),
@@ -373,12 +383,12 @@ export const seedOptions: ProductOption[] = [
   opt({ id: O.gasBoiler, category_id: C.boiler, code: 'gas-boiler-16', name: 'ガス給湯器 16号', description: 'ユニットバス・シャワー・キッチンの給湯に必要です。', price: 270000, sort_order: 1 }),
 
   // ---- その他 ----
-  opt({ id: O.aircon, category_id: C.other, code: 'aircon', name: 'エアコン', description: '壁掛け式ルームエアコン 1台。', price: 375000, preview_key: 'aircon', affects_views: ['interior', 'floorplan'], sort_order: 1 }),
+  opt({ id: O.aircon, category_id: C.other, code: 'aircon', name: 'エアコン', description: '壁掛け式ルームエアコン 1台。', price: 375000, image_url: '/images/interior/wing-room-aircon.jpg', preview_key: 'aircon', affects_views: ['interior', 'floorplan'], sort_order: 1 }),
   opt({ id: O.smartKey, category_id: C.other, code: 'smart-key', name: 'スマートキー', description: '玄関ドアのスマートキー。', price: 52500, sort_order: 2 }),
   opt({ id: O.insulationUpgradeWing, base_model_id: MODEL_WING01_ID, category_id: C.other, code: 'insulation-upgrade-wing', name: '高断熱仕様（スタイロフォーム 90mm）', description: '床・壁・天井の断熱材をグラスウールからスタイロフォーム 90mm に変更（ホテルUB仕様）。', price: 235278, sort_order: 3 }),
 
   // ---- 付属商品 ----
-  opt({ id: O.woodDeck, category_id: C.exteriorParts, code: 'wood-deck', name: 'ウッドデッキ', description: '正面に広がるウッドデッキ。※価格は仮置きです。', price: 450000, preview_key: 'deck', affects_views: ['exterior', 'floorplan'], sort_order: 1 }),
+  opt({ id: O.woodDeck, category_id: C.exteriorParts, code: 'wood-deck', name: 'ウッドデッキ', description: '正面に広がるウッドデッキ。※価格は仮置きです。', price: 450000, image_url: '/images/products/wing-lakeside-deck.jpg', preview_key: 'deck', affects_views: ['exterior', 'floorplan'], sort_order: 1 }),
   opt({ id: O.sunroof, category_id: C.exteriorParts, code: 'sunroof', name: 'サンルーフ', description: '設置条件により別途お見積り。', price: 0, price_on_request: true, sort_order: 2 }),
   opt({ id: O.foldingBed, category_id: C.furniture, code: 'folding-bed', name: '折り畳み式ベッド 1200×2000', description: null, price: 120000, sort_order: 1 }),
   opt({ id: O.table, category_id: C.furniture, code: 'table', name: 'テーブル', description: 'サイズ・仕様により別途お見積り。', price: 0, price_on_request: true, sort_order: 2 }),
@@ -427,12 +437,26 @@ export const seedConflicts: OptionConflict[] = [
  * 手元にある正規素材に写っている設備だけを正直に登録する。
  */
 export const seedPreviewRules: PreviewImageRule[] = [
-  { id: '60000000-0000-4000-8000-000000000001', base_model_id: MODEL_WING01_ID, view: 'exterior', kind: 'composite', preview_keys: [], url: '/images/exterior/lakeside-sunset.jpg', alt: '標準外観（デッキなし）', note: '湖畔夕景のCGパース', z_index: 0, status: 'published' },
-  { id: '60000000-0000-4000-8000-000000000002', base_model_id: MODEL_WING01_ID, view: 'exterior', kind: 'composite', preview_keys: ['deck'], url: '/images/exterior/forest-deck.jpg', alt: 'ウッドデッキ付き外観', note: '林間のCGパース', z_index: 0, status: 'published' },
-  { id: '60000000-0000-4000-8000-000000000003', base_model_id: MODEL_WING01_ID, view: 'interior', kind: 'composite', preview_keys: [], url: '/images/interior/bedroom-seaview.webp', alt: '標準内装の居室', note: null, z_index: 0, status: 'published' },
-  { id: '60000000-0000-4000-8000-000000000004', base_model_id: MODEL_WING01_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon'], url: '/images/interior/bedroom-aircon.webp', alt: 'エアコン付きの居室', note: null, z_index: 0, status: 'published' },
+  // ---- Wing 外観（同一構図でデッキあり／なし） ----
+  { id: '60000000-0000-4000-8000-000000000001', base_model_id: MODEL_WING01_ID, view: 'exterior', kind: 'composite', preview_keys: [], url: '/images/products/wing-lakeside.jpg', alt: '標準外観（デッキなし）', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000002', base_model_id: MODEL_WING01_ID, view: 'exterior', kind: 'composite', preview_keys: ['deck'], url: '/images/products/wing-lakeside-deck.jpg', alt: 'ウッドデッキ付き外観', note: null, z_index: 0, status: 'published' },
+  // ---- Wing 室内 ----
+  { id: '60000000-0000-4000-8000-000000000003', base_model_id: MODEL_WING01_ID, view: 'interior', kind: 'composite', preview_keys: [], url: '/images/interior/bedroom-seaview.webp', alt: '標準内装の居室（エアコン・キッチンなし）', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000004', base_model_id: MODEL_WING01_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon'], url: '/images/interior/wing-room-aircon.jpg', alt: 'エアコン付きの居室', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000007', base_model_id: MODEL_WING01_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon', 'kitchen'], url: '/images/interior/wing-room-kitchen.jpg', alt: 'エアコンとミニキッチン付きの居室', note: null, z_index: 0, status: 'published' },
+  // ---- Wing 水まわり ----
   { id: '60000000-0000-4000-8000-000000000005', base_model_id: MODEL_WING01_ID, view: 'water', kind: 'composite', preview_keys: ['washbasin'], url: '/images/interior/washroom.webp', alt: '洗面器のある水まわり', note: 'ユニットバス・トイレは写っていません', z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000008', base_model_id: MODEL_WING01_ID, view: 'water', kind: 'composite', preview_keys: ['ub3'], url: '/images/interior/unit-bath-3point.jpg', alt: '3点ユニットバス（浴槽・トイレ・洗面器）', note: null, z_index: 0, status: 'published' },
+  // ---- Wing 平面図 ----
   { id: '60000000-0000-4000-8000-000000000006', base_model_id: MODEL_WING01_ID, view: 'floorplan', kind: 'composite', preview_keys: ['aircon', 'shower', 'toilet', 'washbasin'], url: '/images/floorplan/wing01-plan-full.jpg', alt: 'シャワー・トイレ・洗面・エアコン構成の平面図', note: 'デッキは緑線（オプション）として図示', z_index: 0, status: 'published' },
+  // ---- BOX ----
+  { id: '60000000-0000-4000-8000-000000000021', base_model_id: MODEL_BOX_ID, view: 'exterior', kind: 'composite', preview_keys: [], url: '/images/products/box-forest-lake.jpg', alt: 'BOX 標準外観', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000022', base_model_id: MODEL_BOX_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon'], url: '/images/interior/room-white-aircon.jpg', alt: 'エアコン付きの室内', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000023', base_model_id: MODEL_BOX_ID, view: 'water', kind: 'composite', preview_keys: ['ub3'], url: '/images/interior/unit-bath-3point.jpg', alt: '3点ユニットバス', note: null, z_index: 0, status: 'published' },
+  // ---- フラット ----
+  { id: '60000000-0000-4000-8000-000000000031', base_model_id: MODEL_FLAT_ID, view: 'exterior', kind: 'composite', preview_keys: [], url: '/images/products/flat-office-lake.jpg', alt: 'フラット 標準外観', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000032', base_model_id: MODEL_FLAT_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon'], url: '/images/interior/room-white-aircon.jpg', alt: 'エアコン付きの室内', note: null, z_index: 0, status: 'published' },
+  { id: '60000000-0000-4000-8000-000000000033', base_model_id: MODEL_FLAT_ID, view: 'water', kind: 'composite', preview_keys: ['ub3'], url: '/images/interior/unit-bath-3point.jpg', alt: '3点ユニットバス', note: null, z_index: 0, status: 'published' },
 ];
 
 export const seedCatalog = {

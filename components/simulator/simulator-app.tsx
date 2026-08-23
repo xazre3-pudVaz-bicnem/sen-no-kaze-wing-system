@@ -532,11 +532,11 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
             <p className="font-serif text-2xl leading-none">{formatYen(pricing.total)}</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={handleSaveClick} disabled={saving || readOnly} aria-label="一時保存">
+            <Button variant="secondary" size="sm" onClick={handleSaveClick} disabled={saving || readOnly} aria-label="一時保存" data-testid="save-button-sp">
               <Save className="size-4" aria-hidden="true" />
               保存
             </Button>
-            <Button size="sm" onClick={handleQuoteClick} disabled={saving}>
+            <Button size="sm" onClick={handleQuoteClick} disabled={saving} data-testid="quote-button-sp">
               見積依頼
               <ArrowRight className="size-4" aria-hidden="true" />
             </Button>

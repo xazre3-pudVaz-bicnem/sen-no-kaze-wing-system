@@ -24,8 +24,9 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
   return (
     <AdminPage title={c.name} lead={`${bundle.model.name}｜${CONFIGURATION_STATUS_LABELS[c.status]}`} actions={<Link href={`/simulator/${bundle.model.slug}?c=${c.id}`} target="_blank" className="btn-secondary btn-sm">シミュレーターで開く</Link>}>
       <BackLink href="/admin/configurations" label="一覧へ戻る" />
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-6">
+      {/* grid の子は既定で min-width:auto。表（min-w 40rem）に押し広げられるので min-w-0 が要る */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-6">
           <Table>
             <thead className="bg-sand/60"><tr><Th>オプション</Th><Th>カテゴリー</Th><Th right>単価（現在）</Th></tr></thead>
             <tbody className="divide-y divide-line">
@@ -43,7 +44,7 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
             {priceChanged && <Alert tone="warn" className="mt-3">保存後にマスター価格が変更されています。次回保存時に再計算されます。発行済みの見積書には影響しません。</Alert>}
           </div>
         </div>
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <div className="card overflow-hidden">
             {c.preview_image_url && (
               <div className="relative aspect-[16/10] bg-sand"><SmartImage src={c.preview_image_url} alt="" fill sizes="20rem" className="object-cover" /></div>

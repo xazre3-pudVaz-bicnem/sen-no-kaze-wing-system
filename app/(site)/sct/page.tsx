@@ -67,7 +67,7 @@ export default function SctPage() {
     <Container className="max-w-4xl pt-10 pb-24 sm:pt-14">
       <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '特定商取引法に基づく表記' }]} />
       <div className="py-12 sm:py-16">
-        <RuleHeading labelEn="Specified Commercial Transactions" title="特定商取引法に基づく表記" tone="light" />
+        <RuleHeading as="h1" labelEn="Specified Commercial Transactions" title="特定商取引法に基づく表記" tone="light" />
       </div>
       <p className="text-ink-soft leading-[1.95]">
         私たちは、自社独自の折り畳み式木造コンテナを活用した宿泊施設の提案、製造・販売を行っています。使われていない土地の活用や、既存事業との組み合わせにより、新しい宿泊事業づくりを支援しています。

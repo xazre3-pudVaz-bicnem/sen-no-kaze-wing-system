@@ -19,7 +19,7 @@ export default function NewsIndexPage() {
       <Container className="pt-10 sm:pt-14">
         <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: 'お知らせ' }]} />
         <div className="py-12 sm:py-16">
-          <RuleHeading labelEn="NEWS" title="お知らせ" tone="light" />
+          <RuleHeading as="h1" labelEn="NEWS" title="お知らせ" tone="light" />
         </div>
         <ul className="divide-y divide-line border-y border-line pb-24">
           {news.map((n) => (

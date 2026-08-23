@@ -46,7 +46,7 @@ export default function PrivacyPage() {
     <Container className="max-w-3xl pt-10 pb-24 sm:pt-14">
       <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: 'プライバシーポリシー' }]} />
       <div className="py-12 sm:py-16">
-        <RuleHeading labelEn="Privacy Policy" title="プライバシーポリシー" tone="light" />
+        <RuleHeading as="h1" labelEn="Privacy Policy" title="プライバシーポリシー" tone="light" />
       </div>
       <p className="text-ink-soft leading-[1.95]">{COMPANY.name}は、お問い合わせ等でお預かりする情報を、以下の方針に基づき取り扱います。</p>
       <div className="mt-10 space-y-8">

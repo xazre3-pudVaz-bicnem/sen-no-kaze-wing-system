@@ -43,8 +43,9 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
       }
     >
       <BackLink href="/admin/quotes" label="一覧へ戻る" />
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-        <div className="space-y-6">
+      {/* grid の子は既定で min-width:auto。中の表（min-w-[44rem]）に押し広げられるので min-w-0 を付ける */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0 space-y-6">
           <div className="card overflow-hidden">
             <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" />
           </div>
@@ -58,7 +59,7 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
           )}
           {isAdmin && <QuoteStatusForm quote={quote} request={request} />}
         </div>
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           {isAdmin && <AssignDealerForm quote={quote} dealers={dealers} />}
           <div className="card p-4 text-sm">
             <p className="font-semibold">状態</p>

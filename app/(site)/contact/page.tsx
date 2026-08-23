@@ -19,7 +19,7 @@ export default function ContactPage() {
       <Container className="max-w-5xl pt-10 pb-24 sm:pt-14">
         <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: 'お問い合わせ' }]} />
         <div className="py-12 sm:py-16">
-          <RuleHeading labelEn={contact.labelEn} title={contact.title} lead={contact.lead} tone="light" className="max-w-2xl" />
+          <RuleHeading as="h1" labelEn={contact.labelEn} title={contact.title} lead={contact.lead} tone="light" className="max-w-2xl" />
         </div>
         <div className="grid gap-12 lg:grid-cols-[1fr_1.6fr]">
           <aside className="space-y-8 text-sm">

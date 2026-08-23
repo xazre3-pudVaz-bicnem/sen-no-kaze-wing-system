@@ -37,8 +37,10 @@ test.describe('代理店による確定見積（改訂版）', () => {
     // --- 代理店が別途工事とフリー商品を入力して第2版を発行 ---
     await signIn(page, DEALER, '/admin', '代理店 担当');
     await page.goto('/admin/quotes');
-    await expect(page.getByTestId('dealer-quote-row')).toContainText(firstNo);
-    await page.getByRole('link', { name: '別途工事を入力' }).first().click();
+    // 他のテストの見積も並ぶので、対象の見積番号の行だけを見る
+    const row = page.getByTestId('dealer-quote-row').filter({ hasText: firstNo });
+    await expect(row).toHaveCount(1);
+    await row.getByRole('link', { name: '別途工事を入力' }).click();
     await expect(page).toHaveURL(new RegExp(firstQuoteId));
 
     const form = page.getByTestId('dealer-revision-form');

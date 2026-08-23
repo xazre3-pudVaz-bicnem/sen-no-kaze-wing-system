@@ -135,3 +135,26 @@ test.describe('権限（顧客 / 代理店 / 総代理店 / 管理者）', () =>
     await logout(page);
   });
 });
+
+test.describe('操作マニュアル', () => {
+  test('本部と代理店で内容が切り替わる', async ({ page }) => {
+    await signIn(page, MASTER, '/admin', '総代理店 担当');
+    await page.goto('/admin/manual');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('総代理店');
+    await expect(page.getByRole('heading', { name: '価格・商品の登録' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'フリー商品を登録する' })).toBeHidden();
+    await logout(page);
+
+    await signIn(page, DEALER, '/admin', '代理店 担当');
+    await page.goto('/admin/manual');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('代理店・工務店');
+    await expect(page.getByRole('heading', { name: 'フリー商品を登録する' })).toBeVisible();
+    // 台帳編集の手順は代理店には出さない
+    await expect(page.getByRole('heading', { name: '価格・商品の登録' })).toBeHidden();
+    // 左メニューから開ける
+    await page.goto('/admin');
+    await page.getByRole('navigation', { name: '管理メニュー' }).getByRole('link', { name: '操作マニュアル' }).click();
+    await expect(page).toHaveURL(/\/admin\/manual$/);
+    await logout(page);
+  });
+});

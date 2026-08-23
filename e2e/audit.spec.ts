@@ -135,6 +135,7 @@ const ADMIN_PAGES = [
   '/admin/quotes',
   '/admin/contacts',
   '/admin/audit',
+  '/admin/manual',
 ];
 
 test.describe.configure({ mode: 'serial' });
@@ -181,7 +182,7 @@ test.describe('全画面の点検', () => {
     await ensureDealerFreeProduct(page);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const p of ['/admin', '/admin/notifications', '/admin/ledger', '/admin/free-products', '/admin/quotes']) {
+      for (const p of ['/admin', '/admin/notifications', '/admin/ledger', '/admin/free-products', '/admin/quotes', '/admin/manual']) {
         await inspect(page, p, width);
       }
     }

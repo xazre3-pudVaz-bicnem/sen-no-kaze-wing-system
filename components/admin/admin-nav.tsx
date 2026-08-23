@@ -20,6 +20,7 @@ const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 
   { href: '/admin/quotes', label: '見積依頼・見積書' },
   { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
   { href: '/admin/audit', label: '変更履歴', need: 'admin' },
+  { href: '/admin/manual', label: '操作マニュアル' },
 ];
 
 export function AdminNav({ role }: { role: RoleCode }) {

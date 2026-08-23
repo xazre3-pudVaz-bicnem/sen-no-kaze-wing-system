@@ -194,11 +194,6 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
     [bundle, selected]
   );
-  /** 平面図として実際に表示されているルール（ホットスポットの紐付け元） */
-  const planRule = useMemo(() => {
-    const url = previews.floorplan.layers[0]?.url;
-    return bundle.previewRules.find((r) => r.view === 'floorplan' && r.url === url) ?? null;
-  }, [bundle.previewRules, previews.floorplan]);
   const perspective = useMemo(() => {
     const l = previews.exterior.layers[0];
     return l ? { url: l.url, alt: l.alt } : null;
@@ -472,8 +467,6 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         <div className="min-w-0 space-y-4">
           <PlanBoard
             plan={previews.floorplan}
-            planRule={planRule}
-            hotspots={bundle.hotspots}
             categories={bundle.categories}
             elevations={elevations}
             perspective={perspective}

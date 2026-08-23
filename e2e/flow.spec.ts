@@ -45,7 +45,7 @@ test.describe('顧客フロー', () => {
     await expectNoConsoleErrors(page, errors);
   });
 
-  test('3-5. 3つの変更方法・選択ルール・画像と金額の変化', async ({ page }) => {
+  test('3-5. 変更方法（設備表・立面図・見積書）・選択ルール・画像と金額の変化', async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await openFreshSimulator(page);
 
@@ -53,13 +53,15 @@ test.describe('顧客フロー', () => {
     await expect(page.getByTestId('preset-hotel')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('ホテル仕様');
     await expect(page.getByTestId('plan-image')).toHaveAttribute('data-plan-src', /wing-hotel/);
+    // 平面図のクリック領域は外してある（設備の変更は設備表・立面図・見積書から）
+    await expect(page.getByTestId('plan-board').getByRole('button')).toHaveCount(0);
     await expect(page.getByTestId('elevation-正面（南）')).toBeVisible();
     await expect(page.getByTestId('equip-ub')).toContainText('ユニットバス 1216');
     await expect(page.getByTestId('quote-sheet')).toContainText('本体価格');
     const base = await readTotal(page);
 
-    // ── 変更方法②: 平面図の UB をクリック → ポップアップ
-    await openPicker(page, 'hotspot-ub');
+    // ── 変更方法①: 標準設備表の UB をクリック → ポップアップ
+    await openPicker(page, 'equip-ub');
     await expect(page.getByRole('heading', { name: '浴室（ユニットバス）を選ぶ' })).toBeVisible();
     // 洗面器（単体）を選択中なので 3点ユニットは選べず、理由が出る
     await expect(page.getByTestId('pick-ub-3point-1216')).toBeDisabled();
@@ -68,7 +70,7 @@ test.describe('顧客フロー', () => {
     await expect(page.getByTestId('option-picker')).toBeHidden();
     expect(await readTotal(page)).toBe(base);
 
-    // ── 変更方法①: 標準設備表から洗面器と混合水栓を外す（依存関係があっても両方外れる）
+    // 洗面器と混合水栓を外す（依存関係があっても両方外れる）
     await expect(quoteLine(page, 'washbasin-kb')).toBeVisible();
     await pickOption(page, 'equip-washbasin', ['washbasin-kb', 'faucet-kb']);
     await expect(quoteLine(page, 'washbasin-kb')).toBeHidden();
@@ -79,7 +81,7 @@ test.describe('顧客フロー', () => {
 
     // 3点ユニットへ切替（競合が解消されたので選べる）→ 金額が差額分だけ動く
     const ubBefore = await tilePrice(page, 'ub');
-    await pickOption(page, 'hotspot-ub', ['ub-3point-1216']);
+    await pickOption(page, 'equip-ub', ['ub-3point-1216']);
     const ubAfter = await tilePrice(page, 'ub');
     await expect(page.getByTestId('equip-ub')).toContainText('3点ユニットバス');
     expect(near(await readTotal(page), afterWashbasin + withExpenseAndTax(ubAfter - ubBefore))).toBe(true);
@@ -103,7 +105,7 @@ test.describe('顧客フロー', () => {
     await expect(quoteLine(page, 'aircon')).toBeHidden();
     await expect(page.getByTestId('preview-stage')).not.toHaveAttribute('data-preview-src', /wing-room-aircon/);
 
-    // 立面図クリック → 外壁の選択。ウッドデッキで外観画像が切り替わる
+    // ── 変更方法②: 立面図クリック → 外壁の選択。ウッドデッキで外観画像が切り替わる
     await openPicker(page, 'elevation-正面（南）');
     await expect(page.getByRole('heading', { name: '外壁を選ぶ' })).toBeVisible();
     await page.getByRole('button', { name: 'キャンセル' }).click();

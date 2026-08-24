@@ -33,6 +33,8 @@ test.describe('顧客フロー', () => {
     for (const t of ['コンセプト動画', 'Wing 開発の原点', '木造コンテナについて', '活用アイディア', '費用・比較', '導入のご相談', 'プロジェクトの参加', 'よくあるご質問', 'お知らせ']) {
       await expect(page.getByRole('heading', { name: t })).toBeVisible();
     }
+    // TOP に会員様ログインの導線がある
+    await expect(page.getByTestId('hero-login')).toContainText('会員様ログイン');
     await page.getByRole('link', { name: '商品詳細を見る' }).first().click();
     await expect(page).toHaveURL(/\/products\/wing-01$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
@@ -421,5 +423,26 @@ test.describe('ネットショップ型の商品選び', () => {
     await expect(door).toContainText('この商品では変更できません');
     await expect(door.getByRole('button').first()).toBeDisabled();
     await page.getByRole('button', { name: 'キャンセル' }).click();
+  });
+});
+
+test.describe('サッシの分類表', () => {
+  test('種類を選ぶと呼称でサイズを選べる', async ({ page }) => {
+    await openFreshSimulator(page);
+    await openPicker(page, 'equip-sash');
+    // 分類表の種類が並ぶ
+    await expect(page.getByTestId('pick-sash-hikichigai-tantai-hangaidzuke')).toContainText('単体引違 半外付');
+    await expect(page.getByTestId('pick-sash-door-katteguchi')).toContainText('勝手口ドア');
+
+    // 呼称が読み取れている種類はサイズを選べる
+    await page.getByTestId('pick-sash-hikichigai-tantai-hangaidzuke').click();
+    await expect(page.getByTestId('variant-group-size')).toBeVisible();
+    await expect(page.getByTestId('variant-07403')).toContainText('W740 × H300（窓・2枚）');
+    await page.getByTestId('variant-16518').click();
+    await expect(page.getByTestId('variant-16518')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('picker-apply').click();
+
+    // 見積書に呼称が残る
+    await expect(quoteLine(page, 'sash-hikichigai-tantai-hangaidzuke')).toContainText('16518');
   });
 });

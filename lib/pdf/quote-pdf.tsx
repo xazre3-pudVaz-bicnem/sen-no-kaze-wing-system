@@ -186,9 +186,9 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             <View key={it.id} style={s.tr} wrap={false}>
               <Text style={s.cNo}>{`2-${i + 1}`}</Text>
               <Text style={s.cName}>{it.name}</Text>
-              <Text style={s.cDesc}>{it.description ?? ''}</Text>
+              <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
               <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
-              <Text style={s.cQty}>{it.quantity}</Text>
+              <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
               <Text style={s.cAmount}>{yen(it.amount)}</Text>
             </View>
           ))}
@@ -238,9 +238,9 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
                 <View key={it.id} style={s.tr} wrap={false}>
                   <Text style={s.cNo}>{`5-${i + 1}`}</Text>
                   <Text style={s.cName}>{it.name}</Text>
-                  <Text style={s.cDesc}>{it.description ?? ''}</Text>
+                  <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
                   <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
-                  <Text style={s.cQty}>{it.quantity}</Text>
+                  <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
                   <Text style={s.cAmount}>{yen(it.amount)}</Text>
                 </View>
               ))}

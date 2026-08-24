@@ -57,10 +57,15 @@ export interface SaveConfigurationInput {
   variant_choice_ids?: string[];
 }
 
+/** 見積の 1 行。本部・総代理店は全区分、代理店は installation / free だけ */
+export type RevisionItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free';
+
 export interface DealerRevisionItem {
-  kind: 'installation' | 'free';
+  kind: RevisionItemKind;
   name: string;
   description: string | null;
+  unit: string | null;
+  remark: string | null;
   unit_price: number;
   quantity: number;
 }

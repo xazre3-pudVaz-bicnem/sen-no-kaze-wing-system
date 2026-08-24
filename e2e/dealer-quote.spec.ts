@@ -100,3 +100,60 @@ test.describe('代理店による確定見積（改訂版）', () => {
     await logout(page);
   });
 });
+
+test.describe('本部の見積編集（エクセル表）', () => {
+  test('本部は本体の行も編集でき、代理店は別途工事だけ', async ({ page }) => {
+    const customer = uniqueEmail('grid');
+    const { quoteId, total } = await requestQuoteAsCustomer(page, customer, '本体編集のテスト');
+    await logout(page);
+
+    // --- 本部：本体の単価を直して第2版を出す ---
+    await signIn(page, ADMIN, '/admin', '管理者');
+    await page.goto(`/admin/quotes/${quoteId}`);
+    const form = page.getByTestId('dealer-revision-form');
+    await expect(form).toBeVisible();
+    // 区分を選べる＝本体まで編集できる
+    await expect(page.getByTestId('add-base')).toBeVisible();
+    await expect(page.getByTestId('add-option')).toBeVisible();
+
+    // 1 行目は本体。単価を 100 万円に、単位と備考も入れる
+    const first = form.locator('tbody tr').first();
+    await expect(first.getByRole('combobox')).toHaveValue('base');
+    await first.locator('input[name="items.0.unit_price"]').fill('1000000');
+    await first.locator('input[name="items.0.unit"]').fill('式');
+    await first.locator('input[name="items.0.remark"]').fill('本部調整');
+
+    const preview = yen(await page.getByTestId('revision-total').textContent());
+    expect(preview).toBeLessThan(total);
+
+    await form.getByRole('button', { name: /第2版として発行する/ }).click();
+    await page.waitForURL(/revised=1/);
+    expect(yen(await page.getByTestId('admin-quote-total').textContent())).toBe(preview);
+    // 単位と備考が見積書に残る
+    await expect(page.getByTestId('quote-table')).toContainText('本部調整');
+    await logout(page);
+
+    // --- 代理店：本体の行は出ない ---
+    await ensureDealerFreeProduct(page);
+    await logout(page);
+    const c2 = uniqueEmail('grid-dealer');
+    const { quoteId: q2 } = await requestQuoteAsCustomer(page, c2, '代理店の範囲');
+    await logout(page);
+    await signIn(page, ADMIN, '/admin', '管理者');
+    await page.goto(`/admin/quotes/${q2}`);
+    const opt = page.getByTestId('dealer-select').locator('option', { hasText: DEALER });
+    await page.getByTestId('dealer-select').selectOption((await opt.getAttribute('value'))!);
+    await page.getByTestId('assign-dealer-form').getByRole('button', { name: '割り当てる' }).click();
+    await expect(page.getByText('担当代理店を割り当てました')).toBeVisible();
+    await logout(page);
+
+    await signIn(page, DEALER, '/admin', '代理店 担当');
+    await page.goto(`/admin/quotes/${q2}`);
+    await expect(page.getByTestId('dealer-revision-form')).toBeVisible();
+    await expect(page.getByTestId('add-base')).toBeHidden();
+    await expect(page.getByTestId('add-option')).toBeHidden();
+    // 区分は固定表示（選べない）
+    await expect(page.getByTestId('dealer-revision-form').locator('tbody tr').first().getByRole('combobox')).toHaveCount(0);
+    await logout(page);
+  });
+});

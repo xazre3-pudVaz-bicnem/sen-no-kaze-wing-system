@@ -486,6 +486,8 @@ export class LocalStore implements DataStore {
           kind: 'base',
           name: `${model.name} 本体一式`,
           description: '工場生産分（躯体・金物・断熱・屋根外壁・サッシ建具）',
+          unit: '式',
+          remark: null,
           unit_price: model.base_price,
           quantity: 1,
           amount: model.base_price,
@@ -498,6 +500,8 @@ export class LocalStore implements DataStore {
           kind: 'base_expense',
           name: '本体諸費用',
           description: `交通費、労災、安全管理費等（${ratePct}%）`,
+          unit: '式',
+          remark: null,
           unit_price: pricing.base_expense,
           quantity: 1,
           amount: pricing.base_expense,
@@ -514,6 +518,8 @@ export class LocalStore implements DataStore {
           // 選んだ仕様（壁色など）は見積書にも残す
           name: l.variants.length ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）` : l.name,
           description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
+          unit: '式',
+          remark: null,
           unit_price: l.unit_price,
           quantity: l.quantity,
           amount: l.amount,
@@ -527,6 +533,8 @@ export class LocalStore implements DataStore {
         kind: 'option_expense',
         name: 'オプション諸費用',
         description: `交通費、労災、安全管理費等（${ratePct}%）`,
+        unit: '式',
+        remark: null,
         unit_price: pricing.option_expense,
         quantity: 1,
         amount: pricing.option_expense,
@@ -628,23 +636,34 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      if (!(actor.role === 'admin' || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
-        throw new StoreError('FORBIDDEN', 'この見積の担当代理店ではありません');
+      // 本体まで触れるのは総代理店以上。代理店は担当見積の別途工事とフリー商品だけ
+      const full = hasRoleAtLeast(actor.role, 'master_dealer');
+      if (!(full || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
+        throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');
       }
       if (parent.status === 'superseded') {
         throw new StoreError('LOCKED', 'この版はすでに改訂されています。最新の版から作成してください。');
       }
       for (const it of input.items) {
-        if (it.kind !== 'installation' && it.kind !== 'free') {
-          throw new StoreError('VALIDATION', '代理店が入力できるのは別途工事とフリー商品だけです');
+        if (!full && it.kind !== 'installation' && it.kind !== 'free') {
+          throw new StoreError('FORBIDDEN', '本体・オプションを変更できるのは本部と総代理店だけです');
         }
         if (it.unit_price < 0 || it.quantity < 1) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
       }
 
       const amount = (it: DealerRevisionItem) => it.unit_price * Math.max(1, Math.floor(it.quantity));
-      const installation = input.items.reduce((sum, it) => sum + amount(it), 0);
-      const baseTotal = parent.base_price + parent.base_expense;
-      const optionTotal = parent.option_subtotal + parent.option_expense;
+      const sumOf = (...kinds: DealerRevisionItem['kind'][]) =>
+        input.items.filter((it) => kinds.includes(it.kind)).reduce((sum, it) => sum + amount(it), 0);
+      const installation = sumOf('installation', 'free');
+      // 本体・オプションの行が入力されていればそれを採用し、なければ元の版のまま
+      const hasBase = input.items.some((it) => it.kind === 'base' || it.kind === 'base_expense');
+      const hasOption = input.items.some((it) => it.kind === 'option' || it.kind === 'option_expense');
+      const basePrice = hasBase ? sumOf('base') : parent.base_price;
+      const baseExpense = hasBase ? sumOf('base_expense') : parent.base_expense;
+      const optionSubtotal = hasOption ? sumOf('option') : parent.option_subtotal;
+      const optionExpense = hasOption ? sumOf('option_expense') : parent.option_expense;
+      const baseTotal = basePrice + baseExpense;
+      const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
       const subtotal = Math.floor(subRaw / ROUNDING_UNIT) * ROUNDING_UNIT;
       const tax = Math.floor(subtotal * parent.tax_rate);
@@ -657,13 +676,19 @@ export class LocalStore implements DataStore {
         status: 'issued',
         issued_at: issued.toISOString(),
         valid_until: addDays(issued, QUOTE_VALID_DAYS).toISOString(),
+        base_price: basePrice,
+        base_expense: baseExpense,
+        option_subtotal: optionSubtotal,
+        option_expense: optionExpense,
         installation_subtotal: installation,
         adjustment: subtotal - subRaw,
         subtotal,
         tax,
         total: subtotal + tax,
-        notes: '本見積書は現地の代理店・工務店が別途工事を確認したうえで作成した確定見積です。',
-        dealer_id: parent.dealer_id ?? actor.id,
+        notes: full
+          ? '本見積書は最新の内容で作成した確定見積です。'
+          : '本見積書は現地の代理店・工務店が別途工事を確認したうえで作成した確定見積です。',
+        dealer_id: parent.dealer_id ?? (full ? null : actor.id),
         dealer_note: input.dealer_note,
         revision: parent.revision + 1,
         parent_quote_id: parent.id,
@@ -672,10 +697,18 @@ export class LocalStore implements DataStore {
       };
       db.quotes.push(next);
 
-      // 本体・オプションの明細は親からそのまま複製
-      for (const it of db.quoteItems.filter((x) => x.quote_id === parent.id && x.kind !== 'installation' && x.kind !== 'free')) {
-        db.quoteItems.push({ ...it, id: randomUUID(), quote_id: next.id });
+      // 入力がない区分は親の版から複製する（代理店が別途工事だけ直した場合など）
+      const enteredKinds = new Set(input.items.map((it) => it.kind));
+      const keepBase = !hasBase;
+      const keepOption = !hasOption;
+      for (const it of db.quoteItems.filter((x) => x.quote_id === parent.id)) {
+        const isBase = it.kind === 'base' || it.kind === 'base_expense';
+        const isOption = it.kind === 'option' || it.kind === 'option_expense';
+        if ((isBase && keepBase) || (isOption && keepOption)) {
+          db.quoteItems.push({ ...it, id: randomUUID(), quote_id: next.id });
+        }
       }
+      void enteredKinds;
       let sort = 1000;
       for (const it of input.items) {
         db.quoteItems.push({
@@ -684,6 +717,8 @@ export class LocalStore implements DataStore {
           kind: it.kind,
           name: it.name || '（名称未設定）',
           description: it.description,
+          unit: it.unit || '式',
+          remark: it.remark,
           unit_price: it.unit_price,
           quantity: Math.max(1, Math.floor(it.quantity)),
           amount: amount(it),

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
@@ -17,10 +17,12 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
   if (!detail) notFound();
   const { quote, items, request, profile, document } = detail;
   const isAdmin = actor.role === 'admin';
-  // 代理店は自分に割り当てられた見積だけ
-  if (!isAdmin && quote.dealer_id !== actor.id) notFound();
+  // 本体まで編集できるのは総代理店以上
+  const canEditBase = canEditCatalog(actor.role);
+  // 代理店は自分に割り当てられた見積だけ。総代理店以上は全件
+  if (!canEditBase && quote.dealer_id !== actor.id) notFound();
 
-  const canRevise = quote.status !== 'superseded' && (isAdmin || quote.dealer_id === actor.id);
+  const canRevise = quote.status !== 'superseded' && (canEditBase || quote.dealer_id === actor.id);
   const [profiles, categories, options] = await Promise.all([
     isAdmin ? store.listProfiles() : Promise.resolve([]),
     store.listCategories(),
@@ -53,7 +55,7 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
             金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。
             別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
           </p>
-          {canRevise && <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} />}
+          {canRevise && <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} canEditAll={canEditBase} />}
           {quote.status === 'superseded' && (
             <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>
           )}

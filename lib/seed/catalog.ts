@@ -26,6 +26,7 @@ import type {
   ProductOption,
 } from '../domain/types.ts';
 import { masterProducts, masterVariantChoices, masterVariantGroups } from './product-master.ts';
+import { SASH_HEIGHTS, SASH_SIZES_TANTAI_HANGAIDZUKE, SASH_TYPES, SASH_WIDTHS, sashLabel } from './sash-master.ts';
 
 const NOW = '2026-08-22T00:00:00.000Z';
 
@@ -674,6 +675,63 @@ export const ELEVATIONS = [
   { url: '/images/elevation/wing-side-wood.png', label: '側面（西）', alt: 'Wing 側面立面図（下見板張り）' },
 ];
 
+/* ---------------- サッシの分類表 ---------------- */
+
+/**
+ * 先方共有のサッシ分類表を、種類（商品）＋サイズ（選択項目）として登録する。
+ * 呼称まで読み取れたのは「単体引違 半外付」だけなので、他の種類はサイズ未登録。
+ * 価格は未確定のため「別途見積」。残りは管理画面の一括登録から追加する。
+ */
+const sashId = (n: number) => `31000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+const sashOptions: ProductOption[] = SASH_TYPES.map((t, i) =>
+  opt({
+    id: sashId(i + 1),
+    category_id: C.sash,
+    code: `sash-${t.code}`,
+    name: `サッシ ${t.name}`,
+    description: `${t.group}。サイズは呼称から選びます。`,
+    price: 0,
+    price_on_request: true,
+    selection_type: 'radio',
+    highlight: t.group,
+    sort_order: 200 + i,
+  })
+);
+
+const sashSizeGroup: OptionVariantGroup = {
+  id: sashId(900),
+  option_id: sashId(1),
+  code: 'size',
+  name: 'サイズ（呼称）',
+  note: '内法基準の寸法です。表にない組み合わせは選べません。',
+  sort_order: 1,
+  is_required: true,
+  status: 'published',
+};
+
+const sashSizeChoices: OptionVariantChoice[] = Object.entries(SASH_SIZES_TANTAI_HANGAIDZUKE)
+  .map(([key, code], i): OptionVariantChoice | null => {
+    const [wCode, hCode] = key.split('_');
+    const w = SASH_WIDTHS.find((x) => x.code === wCode);
+    const h = SASH_HEIGHTS.find((x) => x.code === hCode);
+    if (!w || !h) return null;
+    return {
+      id: sashId(1000 + i),
+      group_id: sashSizeGroup.id,
+      code: code.toLowerCase(),
+      name: sashLabel(w, h, code),
+      kind: (i === 0 ? 'standard' : 'option') as OptionVariantChoice['kind'],
+      extra_price: 0,
+      price_on_request: true,
+      image_url: null,
+      note: null,
+      sort_order: i + 1,
+      status: 'published' as const,
+    };
+  })
+  .filter((v): v is OptionVariantChoice => v !== null);
+
 /* ---------------- 先方の商品マスター（自動生成） ---------------- */
 
 /**
@@ -705,17 +763,18 @@ const masterOptions: ProductOption[] = masterProducts
     })
   );
 
-export const seedVariantGroups: OptionVariantGroup[] = masterVariantGroups.map((g) => ({
-  ...g,
-  note: null,
-  is_required: true,
-  status: 'published',
-}));
+export const seedVariantGroups: OptionVariantGroup[] = [
+  ...masterVariantGroups.map((g) => ({ ...g, note: null, is_required: true, status: 'published' as const })),
+  sashSizeGroup,
+];
 
-export const seedVariantChoices: OptionVariantChoice[] = masterVariantChoices.map((c) => ({ ...c, status: 'published' }));
+export const seedVariantChoices: OptionVariantChoice[] = [
+  ...masterVariantChoices.map((c) => ({ ...c, status: 'published' as const })),
+  ...sashSizeChoices,
+];
 
 // 台帳へ合流させる（既存の商品より後ろに並ぶ）
-seedOptions.push(...masterOptions);
+seedOptions.push(...masterOptions, ...sashOptions);
 
 export const seedCatalog = {
   models: seedModels,

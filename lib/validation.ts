@@ -199,16 +199,18 @@ export const assignDealerSchema = z.object({
 
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({
-  kind: z.enum(['installation', 'free']),
+  kind: z.enum(['base', 'base_expense', 'option', 'option_expense', 'installation', 'free']),
   name: trimmed(80).min(1, '項目名を入力してください'),
   description: optional(200).nullable(),
+  unit: optional(12).nullable(),
+  remark: optional(200).nullable(),
   unit_price: z.coerce.number().int().min(0, '金額は 0 円以上で入力してください').max(100_000_000),
   quantity: z.coerce.number().int().min(1).max(999),
 });
 
 export const dealerRevisionSchema = z.object({
   quote_id: z.uuid(),
-  items: z.array(dealerRevisionItemSchema).max(60),
+  items: z.array(dealerRevisionItemSchema).max(120),
   dealer_note: optional(1000).nullable(),
 });
 

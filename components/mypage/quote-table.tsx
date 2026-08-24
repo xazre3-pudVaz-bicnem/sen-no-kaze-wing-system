@@ -8,6 +8,9 @@ import { SmartImage } from '@/components/ui/smart-image';
  * 先方指定の見積明細（1.本体価格／2.オプション価格＋明細／3.別途工事／4.運送費／合計）。
  * マイページ・管理画面で共用。金額は発行時のスナップショット。
  */
+/** 数量に単位を添える（1 式 / 2 台 など） */
+const qty = (it: QuoteItem) => (it.unit ? `${it.quantity} ${it.unit}` : String(it.quantity));
+
 export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quote: Quote; items: QuoteItem[]; totalTestId?: string }) {
   const optionItems = items.filter((i) => i.kind === 'option');
   const siteworkItems = items.filter((i) => i.kind === 'installation');
@@ -17,6 +20,8 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
   const otherSitework = siteworkItems.filter((i) => i !== transport);
   const transportAmount = transport?.amount ?? 0;
   const siteworkAmount = otherSitework.reduce((s, i) => s + i.amount, 0);
+  // 本体の内訳（本部が編集した行も含む）。1 行しかない既定の状態では冗長なので出さない
+  const baseItems = items.filter((i) => i.kind === 'base' && (i.remark || items.filter((x) => x.kind === 'base').length > 1));
   const baseTotal = quote.base_price + quote.base_expense;
   const optionTotal = quote.option_subtotal + quote.option_expense;
   const withImages = optionItems.filter((i) => i.image_url);
@@ -41,6 +46,18 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
               <td className="px-2 py-3 text-right text-muted">１式</td>
               <td className="px-4 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
             </tr>
+            {/* 本体の内訳。本部が行を足したり備考を入れたときに見えるようにする */}
+            {baseItems.map((it) => (
+              <tr key={it.id}>
+                <td className="px-4 py-2"></td>
+                <td className="px-2 py-2 text-xs">
+                  {it.name}
+                  {it.remark && <span className="block text-[0.65rem] text-muted">{it.remark}</span>}
+                </td>
+                <td className="px-2 py-2 text-right text-xs text-muted">{qty(it)}</td>
+                <td className="px-4 py-2 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
+              </tr>
+            ))}
             <tr>
               <td className="px-4 py-3 text-center text-muted">２</td>
               <td className="px-2 py-3 font-semibold">オプション価格</td>
@@ -65,10 +82,11 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
                     <span>
                       {it.name}
                       {it.description && <span className="ml-2 text-xs text-muted">{it.description}</span>}
+                      {it.remark && <span className="block text-xs text-muted">{it.remark}</span>}
                     </span>
                   </span>
                 </td>
-                <td className="px-2 py-2 text-right tabular-nums text-muted">{it.quantity}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-muted">{qty(it)}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{formatYen(it.amount)}</td>
               </tr>
             ))}
@@ -112,7 +130,7 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
                   <tr key={it.id}>
                     <td className="px-4 py-2"></td>
                     <td className="px-2 py-2 text-xs">{it.name}</td>
-                    <td className="px-2 py-2 text-right text-xs text-muted">{it.quantity}</td>
+                    <td className="px-2 py-2 text-right text-xs text-muted">{qty(it)}</td>
                     <td className="px-4 py-2 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
                   </tr>
                 ))}

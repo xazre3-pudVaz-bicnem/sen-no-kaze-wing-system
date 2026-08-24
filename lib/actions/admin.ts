@@ -374,6 +374,8 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
       kind: value,
       name: formData.get(`items.${i}.name`),
       description: formData.get(`items.${i}.description`),
+      unit: formData.get(`items.${i}.unit`),
+      remark: formData.get(`items.${i}.remark`),
       unit_price: formData.get(`items.${i}.unit_price`) || 0,
       quantity: formData.get(`items.${i}.quantity`) || 1,
     });

@@ -430,6 +430,10 @@ export interface QuoteItem {
   kind: QuoteItemKind;
   name: string;
   description: string | null;
+  /** 単位（式・台・㎡ など） */
+  unit: string | null;
+  /** 備考 */
+  remark: string | null;
   unit_price: number;
   quantity: number;
   amount: number;

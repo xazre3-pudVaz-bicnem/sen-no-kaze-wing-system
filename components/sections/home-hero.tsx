@@ -1,10 +1,18 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ChevronDown } from 'lucide-react';
+import { ArrowRight, ChevronDown, UserRound } from 'lucide-react';
 import { hero } from '@/data/site-content';
+import { getSessionUser } from '@/lib/auth/session';
+import { canEditDealerItems } from '@/lib/domain/types';
 
 /** ファーストビュー：全面写真＋「− 折畳木造コンテナホテル − Wing」 */
-export function HomeHero() {
+export async function HomeHero() {
+  // 会員のログイン導線はヘッダーだけだと見つけにくいので、ファーストビューにも置く
+  const user = await getSessionUser();
+  const account = user
+    ? { href: canEditDealerItems(user.role) ? '/admin' : '/mypage', label: canEditDealerItems(user.role) ? '管理画面へ' : 'マイページへ' }
+    : { href: '/login', label: '会員様ログイン' };
+
   return (
     <section className="relative isolate min-h-[100svh] overflow-hidden bg-forest-deep text-white">
       <Image
@@ -24,12 +32,25 @@ export function HomeHero() {
             Wing
           </h1>
           <p className="reveal reveal-delay-2 mx-auto mt-6 max-w-xl text-sm leading-[2] whitespace-pre-line text-white/90 sm:text-base">{hero.lead}</p>
-          <div className="reveal reveal-delay-3 mt-8">
+          <div className="reveal reveal-delay-3 mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="#concept" className="btn-outline-gold font-serif tracking-wider">
               {hero.cta}
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
+            <Link
+              href={account.href}
+              className="inline-flex items-center gap-2 rounded-full border border-white/50 px-6 py-3 text-sm tracking-wider text-white transition-colors hover:border-gold hover:text-gold"
+              data-testid="hero-login"
+            >
+              <UserRound className="size-4" aria-hidden="true" />
+              {account.label}
+            </Link>
           </div>
+          {!user && (
+            <p className="reveal reveal-delay-3 mt-3 text-xs text-white/70">
+              見積の保存・見積書のご確認は会員登録（無料）が必要です
+            </p>
+          )}
         </div>
       </div>
 

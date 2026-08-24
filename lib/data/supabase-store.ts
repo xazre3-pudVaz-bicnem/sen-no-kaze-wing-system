@@ -370,7 +370,7 @@ export class SupabaseStore implements DataStore {
 
   async createDealerRevision(id: string, input: DealerRevisionInput) {
     const db = await this.db();
-    const { data, error } = await db.rpc('create_dealer_revision', {
+    const { data, error } = await db.rpc('create_quote_revision', {
       p_quote_id: id,
       p_items: input.items,
       p_dealer_note: input.dealer_note,

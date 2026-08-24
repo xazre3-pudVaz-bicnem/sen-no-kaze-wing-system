@@ -429,3 +429,126 @@ export async function markAllNotificationsReadAction(): Promise<void> {
   revalidatePath('/admin');
   redirect('/admin/notifications?read=1');
 }
+
+/* ---------------- 商品の一括登録 ---------------- */
+
+export interface ImportState {
+  ok: boolean;
+  error?: string;
+  /** 取り込む前の内容確認 */
+  preview?: {
+    fileName: string;
+    categories: number;
+    products: number;
+    variantGroups: number;
+    variantChoices: number;
+    images: number;
+    imagesUploaded: number;
+    warnings: string[];
+    sample: { name: string; category: string; price: string; variants: string }[];
+  };
+  /** 取り込んだ結果 */
+  applied?: {
+    createdProducts: number;
+    updatedProducts: number;
+    variantGroups: number;
+    variantChoices: number;
+    imagesLinked: number;
+    skipped: string[];
+    warnings: string[];
+  };
+}
+
+const MAX_SHEET_BYTES = 20 * 1024 * 1024;
+const MAX_ZIP_BYTES = 60 * 1024 * 1024;
+
+/**
+ * Excel（または CSV）と画像 ZIP を受け取り、商品と選択項目をまとめて登録する。
+ * 「確認する」で内容を見せ、「登録する」で実際に書き込む。
+ */
+export async function importCatalogAction(_prev: ImportState, formData: FormData): Promise<ImportState> {
+  await requireCatalogEditor();
+  const apply = formData.get('mode') === 'apply';
+
+  const sheetFile = formData.get('sheet');
+  if (!(sheetFile instanceof File) || sheetFile.size === 0) {
+    return { ok: false, error: '商品マスターのファイルを選んでください。' };
+  }
+  if (sheetFile.size > MAX_SHEET_BYTES) return { ok: false, error: 'ファイルが大きすぎます（20MB まで）。' };
+
+  const { readCsv, readXlsx, unzip } = await import('@/lib/import/archive');
+  const { buildImportPlan, summarize } = await import('@/lib/import/catalog-import');
+
+  let plan;
+  try {
+    const buf = Buffer.from(await sheetFile.arrayBuffer());
+    if (/\.csv$/i.test(sheetFile.name)) {
+      // CSV は 1 枚しかないので、シート名をファイル名から推測する
+      plan = buildImportPlan([{ name: sheetFile.name.replace(/\.csv$/i, ''), rows: readCsv(buf.toString('utf8')) }]);
+    } else {
+      plan = buildImportPlan(readXlsx(buf));
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'ファイルを読み取れませんでした。' };
+  }
+
+  // 画像 ZIP（任意）
+  const images = new Map<string, string>();
+  const zipFile = formData.get('images');
+  let uploadedCount = 0;
+  if (zipFile instanceof File && zipFile.size > 0) {
+    if (zipFile.size > MAX_ZIP_BYTES) return { ok: false, error: '画像 ZIP が大きすぎます（60MB まで）。' };
+    const store = await getStore();
+    const entries = unzip(Buffer.from(await zipFile.arrayBuffer()));
+    for (const entry of entries) {
+      const base = entry.name.split('/').pop() ?? entry.name;
+      if (!/\.(jpe?g|png|webp|avif)$/i.test(base)) continue;
+      if (!apply) {
+        // 確認のときはアップロードせず件数だけ数える
+        images.set(base, '');
+        uploadedCount++;
+        continue;
+      }
+      const ext = base.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'avif' ? 'image/avif' : 'image/jpeg';
+      try {
+        const url = await store.uploadImage({ bytes: new Uint8Array(entry.data), contentType: type, fileName: base }, 'catalog');
+        images.set(base, url);
+        uploadedCount++;
+      } catch {
+        plan.warnings.push(`画像「${base}」を保存できませんでした。`);
+      }
+    }
+  }
+
+  const s = summarize(plan);
+
+  if (!apply) {
+    const groupsOf = (code: string) => [...new Set(plan.choices.filter((c) => c.productCode === code).map((c) => c.groupName))];
+    return {
+      ok: true,
+      preview: {
+        fileName: sheetFile.name,
+        ...s,
+        imagesUploaded: uploadedCount,
+        warnings: plan.warnings,
+        sample: plan.products.slice(0, 8).map((p) => ({
+          name: p.manufacturer ? `${p.manufacturer} ${p.name}` : p.name,
+          category: p.categoryName,
+          price: p.price == null ? '別途見積' : `¥${p.price.toLocaleString('ja-JP')}`,
+          variants: groupsOf(p.code).join('／') || '—',
+        })),
+      },
+    };
+  }
+
+  try {
+    const { applyImportPlan } = await import('@/lib/import/apply');
+    const applied = await applyImportPlan(plan, images);
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, applied };
+  } catch (e) {
+    return errState(e) as ImportState;
+  }
+}

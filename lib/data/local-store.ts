@@ -13,6 +13,8 @@ import type {
   ProductImage,
   ProductOption,
   AppNotification,
+  OptionVariantChoice,
+  OptionVariantGroup,
   Profile,
   RoleCode,
   Quote,
@@ -791,6 +793,22 @@ export class LocalStore implements DataStore {
       const c: OptionCategory = { ...rest, id: randomUUID() };
       db.categories.push(c);
       return c;
+    });
+  }
+  async upsertVariantGroup(input: OptionVariantGroup) {
+    return this.mutate((db) => {
+      const i = db.variantGroups.findIndex((g) => g.id === input.id);
+      if (i >= 0) db.variantGroups[i] = { ...db.variantGroups[i], ...input };
+      else db.variantGroups.push(input);
+      return input;
+    });
+  }
+  async upsertVariantChoice(input: OptionVariantChoice) {
+    return this.mutate((db) => {
+      const i = db.variantChoices.findIndex((c) => c.id === input.id);
+      if (i >= 0) db.variantChoices[i] = { ...db.variantChoices[i], ...input };
+      else db.variantChoices.push(input);
+      return input;
     });
   }
   async listOptions() {

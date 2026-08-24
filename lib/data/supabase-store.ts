@@ -450,6 +450,12 @@ export class SupabaseStore implements DataStore {
   async upsertCategory(input: CategoryInput) {
     return this.upsert<OptionCategory>('option_categories', input);
   }
+  async upsertVariantGroup(input: OptionVariantGroup) {
+    return this.upsert<OptionVariantGroup>('option_variant_groups', input as unknown as Record<string, unknown> & { id?: string | null });
+  }
+  async upsertVariantChoice(input: OptionVariantChoice) {
+    return this.upsert<OptionVariantChoice>('option_variant_choices', input as unknown as Record<string, unknown> & { id?: string | null });
+  }
   async listOptions() {
     const db = await this.db();
     const { data, error } = await db.from('options').select('*').order('sort_order');

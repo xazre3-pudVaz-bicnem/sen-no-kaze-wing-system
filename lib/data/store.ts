@@ -12,6 +12,8 @@ import type {
   ProductOption,
   AppNotification,
   AuditLog,
+  OptionVariantChoice,
+  OptionVariantGroup,
   Profile,
   Quote,
   QuoteContact,
@@ -156,6 +158,10 @@ export interface DataStore {
 
   // ---- 監査ログ ----
   listAuditLogs(opts?: { limit?: number }): Promise<AuditLog[]>;
+
+  // ---- 商品のバリエーション ----
+  upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;
+  upsertVariantChoice(input: OptionVariantChoice): Promise<OptionVariantChoice>;
 
   // ---- 見積書PDF ----
   getQuoteDocumentFile(quoteId: string): Promise<{ bytes: Uint8Array; document: QuoteDocument } | null>;

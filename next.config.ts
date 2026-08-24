@@ -8,6 +8,10 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 const nextConfig: NextConfig = {
   // 開発時に 127.0.0.1 / LAN からアクセスしても /_next/* が 403 にならないようにする
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  experimental: {
+    // 商品の一括登録で Excel と画像 ZIP を送るため、既定の 1MB では足りない
+    serverActions: { bodySizeLimit: '80mb' },
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     // Next.js 16 は許可した quality しか最適化しない（未許可だと本番で 400）。

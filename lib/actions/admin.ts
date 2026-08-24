@@ -157,6 +157,11 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     affects_views: formData.getAll('affects_views'),
     spec_codes: formData.getAll('spec_codes'),
     owner_id: catalogEditor ? nullableId(formData.get('owner_id')) : actor.id,
+    manufacturer: formData.get('manufacturer'),
+    model_no: formData.get('model_no'),
+    size_note: formData.get('size_note'),
+    list_price: formData.get('list_price'),
+    highlight: formData.get('highlight'),
     sort_order: formData.get('sort_order'),
     status: formData.get('status'),
   });

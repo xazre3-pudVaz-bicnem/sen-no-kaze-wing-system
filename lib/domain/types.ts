@@ -181,6 +181,16 @@ export interface ProductOption {
   spec_codes: string[];
   /** フリー商品の登録者（代理店）。null = 総代理店・管理者が登録した台帳商品 */
   owner_id: string | null;
+  /** メーカー名（表示用） */
+  manufacturer: string | null;
+  /** 型番・シリーズ名 */
+  model_no: string | null;
+  /** 主なサイズ（自由記述） */
+  size_note: string | null;
+  /** メーカー参考価格（税抜）。表示のみで計算には使わない */
+  list_price: number | null;
+  /** 位置づけ（標準候補／おすすめ候補／上位候補 など） */
+  highlight: string | null;
   /** プレビュー画像切替の識別子（null = 画像に影響しない） */
   preview_key: string | null;
   affects_views: ViewKey[];
@@ -188,6 +198,41 @@ export interface ProductOption {
   status: PublishStatus;
   created_at: string;
   updated_at: string;
+}
+
+/** 商品の選択項目（ネットショップの「サイズ」「カラー」に相当）。例：壁プラン・扉色・ミラー */
+export interface OptionVariantGroup {
+  id: string;
+  option_id: string;
+  code: string;
+  name: string;
+  /** 表示の補足（適用条件など） */
+  note: string | null;
+  sort_order: number;
+  is_required: boolean;
+  status: PublishStatus;
+}
+
+export type VariantKind = 'standard' | 'option' | 'fixed';
+export const VARIANT_KIND_LABELS: Record<VariantKind, string> = {
+  standard: '標準',
+  option: '追加',
+  fixed: '固定',
+};
+
+/** 選択項目の中の選択肢。追加価格と画像を持つ */
+export interface OptionVariantChoice {
+  id: string;
+  group_id: string;
+  code: string;
+  name: string;
+  kind: VariantKind;
+  extra_price: number;
+  price_on_request: boolean;
+  image_url: string | null;
+  note: string | null;
+  sort_order: number;
+  status: PublishStatus;
 }
 
 export interface OptionDependency {
@@ -243,6 +288,8 @@ export interface CatalogBundle {
   conflicts: OptionConflict[];
   previewRules: PreviewImageRule[];
   hotspots: PreviewHotspot[];
+  variantGroups: OptionVariantGroup[];
+  variantChoices: OptionVariantChoice[];
 }
 
 export type ConfigurationStatus = 'draft' | 'quote_requested' | 'quoted' | 'closed';
@@ -283,6 +330,8 @@ export interface ConfigurationItem {
   configuration_id: string;
   option_id: string;
   quantity: number;
+  /** 選ばれたバリエーション（壁色・扉色など） */
+  variant_choice_ids: string[];
 }
 
 export interface ConfigurationSnapshot {
@@ -429,6 +478,8 @@ export interface PricingLine {
   is_installation: boolean;
   /** 代理店が登録したフリー商品（見積書では別途工事の下に別枠表示） */
   is_free_product: boolean;
+  /** 選ばれたバリエーション（「壁色：オークグレージュ」） */
+  variants: { group: string; choice: string; extra_price: number }[];
   price_on_request: boolean;
   image_url: string | null;
 }

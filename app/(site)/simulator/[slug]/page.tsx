@@ -44,6 +44,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           id: found.configuration.id,
           name: found.configuration.name,
           option_ids: found.items.map((i) => i.option_id),
+          variant_choice_ids: found.items.flatMap((i) => i.variant_choice_ids ?? []),
           status: found.configuration.status,
           finish_level: found.configuration.finish_level ?? 'full',
         };

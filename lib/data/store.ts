@@ -51,6 +51,8 @@ export interface SaveConfigurationInput {
   notes: string | null;
   /** どこまで仕上げるか（未指定は full） */
   finish_level?: FinishLevel;
+  /** 選ばれたバリエーション（選択肢 ID） */
+  variant_choice_ids?: string[];
 }
 
 export interface DealerRevisionItem {

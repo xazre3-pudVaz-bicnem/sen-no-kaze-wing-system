@@ -375,3 +375,51 @@ test.describe('公開ページ（先方サイト構成）', () => {
     await expect(page.getByTestId('contact-row').first()).toContainText('土地活用について');
   });
 });
+
+test.describe('ネットショップ型の商品選び', () => {
+  test('商品を選ぶと色や仕様を選べ、見積書にも残る', async ({ page }) => {
+    await openFreshSimulator(page);
+
+    // 浴室のポップアップに、先方マスターの商品（メーカー・サイズ・参考価格つき）が並ぶ
+    await openPicker(page, 'equip-ub');
+    const njb = page.getByTestId('pick-bath-ht-njb1216');
+    await expect(njb).toContainText('ハウステック');
+    await expect(njb).toContainText('1216');
+    await expect(njb).toContainText('メーカー参考価格');
+    await njb.click();
+
+    // 選ぶと、その商品の選択項目（壁プラン・壁色・照明…）が出る
+    const variants = page.getByTestId('variant-picker');
+    await expect(variants).toBeVisible();
+    await expect(page.getByTestId('variant-group-wall-color')).toBeVisible();
+    // 標準の選択肢が最初から選ばれている
+    await expect(page.getByTestId('variant-picker').getByRole('button', { pressed: true }).first()).toBeVisible();
+
+    // 壁色を変えて確定する
+    await page.getByTestId('variant-oak-greige').click();
+    await expect(page.getByTestId('variant-oak-greige')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('picker-apply').click();
+    await expect(page.getByTestId('option-picker')).toBeHidden();
+
+    // 見積書の明細に、選んだ仕様が出る
+    const line = quoteLine(page, 'bath-ht-njb1216');
+    await expect(line).toBeVisible();
+    await expect(line).toContainText('壁色：オークグレージュ');
+
+    // 開き直しても選択が残る
+    await openPicker(page, 'equip-ub');
+    await expect(page.getByTestId('variant-oak-greige')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'キャンセル' }).click();
+  });
+
+  test('固定の選択項目は変更できない', async ({ page }) => {
+    await openFreshSimulator(page);
+    await openPicker(page, 'equip-washbasin');
+    await page.getByTestId('pick-wash-pana-mline-w600').click();
+    // エムラインの扉色はメーカー設定がホワイトのみ
+    const door = page.getByTestId('variant-group-door-color');
+    await expect(door).toContainText('この商品では変更できません');
+    await expect(door.getByRole('button').first()).toBeDisabled();
+    await page.getByRole('button', { name: 'キャンセル' }).click();
+  });
+});

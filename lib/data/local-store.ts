@@ -92,6 +92,10 @@ export class LocalStore implements DataStore {
         conflicts: db.conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
         previewRules: db.previewRules.filter((r) => r.base_model_id === modelId && pub(r)),
         hotspots: db.hotspots.filter((h) => db.previewRules.some((r) => r.id === h.rule_id && r.base_model_id === modelId)),
+        variantGroups: db.variantGroups.filter((g) => ids.has(g.option_id) && pub(g)),
+        variantChoices: db.variantChoices.filter(
+          (c) => pub(c) && db.variantGroups.some((g) => g.id === c.group_id && ids.has(g.option_id))
+        ),
       };
     });
   }
@@ -253,7 +257,9 @@ export class LocalStore implements DataStore {
       model,
       db.options,
       db.categories,
-      items.map((i) => ({ option_id: i.option_id, quantity: i.quantity }))
+      items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
+      undefined,
+      { groups: db.variantGroups, choices: db.variantChoices }
     );
     Object.assign(cfg, {
       base_price: pricing.base_price,
@@ -329,7 +335,14 @@ export class LocalStore implements DataStore {
         };
         db.configurations.push(cfg);
       }
-      for (const id of ids) db.configurationItems.push({ id: randomUUID(), configuration_id: cfg.id, option_id: id, quantity: 1 });
+      // その商品の選択項目に属する選択肢だけを紐づける
+      const wantVariants = new Set(input.variant_choice_ids ?? []);
+      for (const id of ids) {
+        const mine = db.variantChoices
+          .filter((c) => wantVariants.has(c.id) && db.variantGroups.some((g) => g.id === c.group_id && g.option_id === id))
+          .map((c) => c.id);
+        db.configurationItems.push({ id: randomUUID(), configuration_id: cfg.id, option_id: id, quantity: 1, variant_choice_ids: mine });
+      }
       const { pricing } = this.recalc(db, cfg);
       db.snapshots.push({
         id: randomUUID(),
@@ -496,7 +509,8 @@ export class LocalStore implements DataStore {
           id: randomUUID(),
           quote_id: quote.id,
           kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
-          name: l.name,
+          // 選んだ仕様（壁色など）は見積書にも残す
+          name: l.variants.length ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）` : l.name,
           description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
           unit_price: l.unit_price,
           quantity: l.quantity,

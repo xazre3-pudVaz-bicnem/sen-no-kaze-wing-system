@@ -6,6 +6,8 @@ import type {
   OptionCategory,
   OptionConflict,
   OptionDependency,
+  OptionVariantChoice,
+  OptionVariantGroup,
   PreviewImageRule,
   PreviewHotspot,
   ProductImage,
@@ -29,7 +31,9 @@ function assemble(
   dependencies: OptionDependency[],
   conflicts: OptionConflict[],
   previewRules: PreviewImageRule[],
-  hotspots: PreviewHotspot[]
+  hotspots: PreviewHotspot[],
+  variantGroups: OptionVariantGroup[],
+  variantChoices: OptionVariantChoice[]
 ): PublicCatalog {
   const bundles: Record<string, CatalogBundle> = {};
   for (const model of models) {
@@ -46,6 +50,8 @@ function assemble(
       conflicts: conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
       previewRules: previewRules.filter((r) => r.base_model_id === model.id),
       hotspots: hotspots.filter((h) => previewRules.some((r) => r.id === h.rule_id && r.base_model_id === model.id)),
+      variantGroups: variantGroups.filter((g) => ids.has(g.option_id)),
+      variantChoices: variantChoices.filter((c) => variantGroups.some((g) => g.id === c.group_id && ids.has(g.option_id))),
     };
   }
   return { models, bundles };
@@ -70,7 +76,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
 
   const { createPublicClient } = await import('@/lib/supabase/public');
   const db = createPublicClient();
-  const [models, images, categories, options, dependencies, conflicts, rules, hotspots] = await Promise.all([
+  const [models, images, categories, options, dependencies, conflicts, rules, hotspots, vgroups, vchoices] = await Promise.all([
     db.from('base_models').select('*').eq('status', 'published').order('sort_order'),
     db.from('product_images').select('*').order('sort_order'),
     db.from('option_categories').select('*').eq('status', 'published').order('sort_order'),
@@ -79,9 +85,14 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     db.from('option_conflicts').select('*'),
     db.from('preview_image_rules').select('*').eq('status', 'published'),
     db.from('preview_hotspots').select('*').order('sort_order'),
+    db.from('option_variant_groups').select('*').eq('status', 'published').order('sort_order'),
+    db.from('option_variant_choices').select('*').eq('status', 'published').order('sort_order'),
   ]);
   // preview_hotspots は 0008 で追加されるテーブル。未適用の DB ではホットスポットなしとして扱う
   const hotspotRows = isMissingRelation(hotspots.error) ? [] : ((hotspots.data ?? []) as PreviewHotspot[]);
+  // バリエーションは 0013 で追加。未適用の DB では「選択項目なし」として扱う
+  const groupRows = isMissingRelation(vgroups.error) ? [] : ((vgroups.data ?? []) as OptionVariantGroup[]);
+  const choiceRows = isMissingRelation(vchoices.error) ? [] : ((vchoices.data ?? []) as OptionVariantChoice[]);
   const err = [models, images, categories, options, dependencies, conflicts, rules].find((r) => r.error)?.error;
   if (err) throw new Error(`public catalog: ${err.message}`);
 
@@ -93,7 +104,9 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     (dependencies.data ?? []) as OptionDependency[],
     (conflicts.data ?? []) as OptionConflict[],
     (rules.data ?? []) as PreviewImageRule[],
-    hotspotRows
+    hotspotRows,
+    groupRows,
+    choiceRows
   );
 }
 

@@ -28,8 +28,9 @@ interface Props {
 export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
   const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const byOption = new Map(options.map((o) => [o.id, o]));
-  const optionLines = pricing.lines.filter((l) => !l.is_installation && l.amount > 0);
-  const includedLines = pricing.lines.filter((l) => !l.is_installation && l.amount === 0);
+  // 「別途見積」の商品も明細として出す（0 円だからと「標準仕様に含む」へ混ぜない）
+  const optionLines = pricing.lines.filter((l) => !l.is_installation && (l.amount > 0 || l.price_on_request));
+  const includedLines = pricing.lines.filter((l) => !l.is_installation && l.amount === 0 && !l.price_on_request);
   const transport = pricing.lines.find((l) => l.code === 'sw-transport');
   const freeLines = pricing.lines.filter((l) => l.is_free_product);
   const sitework = pricing.lines.filter((l) => l.is_installation && !l.is_free_product && l.code !== 'sw-transport');
@@ -84,12 +85,19 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                       data-testid={`quote-line-${l.code}`}
                     >
                       <span className="text-xs text-muted">{cat?.name}</span>
-                      <span>{l.name}</span>
+                      <span>
+                        {l.name}
+                        {l.variants.length > 0 && (
+                          <span className="block text-[0.7rem] text-muted">
+                            {l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}
+                          </span>
+                        )}
+                      </span>
                       {!readOnly && cat && <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
                     </button>
                   </td>
                   <td className="px-2 py-2 text-right text-muted">{l.quantity}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatYen(l.amount)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{l.price_on_request ? '別途見積' : formatYen(l.amount)}</td>
                 </tr>
               );
             })}

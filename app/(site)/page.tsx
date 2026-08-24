@@ -53,7 +53,7 @@ export default async function HomePage() {
           <RuleHeading
             labelEn="LINE UP"
             title="ベースモデルと価格"
-            lead={'Wing（片ウィング）、BOX、フラットの3モデル。設備はシミュレーターで選べます。\n表示は本体価格計（本体一式＋諸費用・税別）です。'}
+            lead={'Wing、BOX、フラットの3モデル。設備はシミュレーターで選べます。\n表示は本体価格計（本体一式＋諸費用・税別）です。'}
             tone="light"
             className="max-w-2xl"
           />

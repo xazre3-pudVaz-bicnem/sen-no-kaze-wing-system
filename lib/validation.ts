@@ -59,6 +59,7 @@ export const saveConfigurationSchema = z.object({
   preview_image_url: z.string().max(500).nullable(),
   notes: optional(1000).nullable(),
   finish_level: z.enum(['shell', 'equipment', 'full']).default('full'),
+  variant_choice_ids: z.array(z.uuid()).max(300).default([]),
 });
 
 export const quoteRequestSchema = z.object({
@@ -144,6 +145,11 @@ export const optionSchema = z.object({
   sort_order: intFromForm,
   status: statusSchema,
   owner_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  manufacturer: optional(60).nullable(),
+  model_no: optional(80).nullable(),
+  size_note: optional(120).nullable(),
+  list_price: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).max(100_000_000).nullable()),
+  highlight: optional(40).nullable(),
 });
 
 export const previewRuleSchema = z.object({

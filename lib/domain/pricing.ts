@@ -1,4 +1,12 @@
-import { FREE_PRODUCT_CATEGORY_CODE, type BaseModel, type OptionCategory, type PricingResult, type ProductOption } from './types';
+import {
+  FREE_PRODUCT_CATEGORY_CODE,
+  type BaseModel,
+  type OptionCategory,
+  type OptionVariantChoice,
+  type OptionVariantGroup,
+  type PricingResult,
+  type ProductOption,
+} from './types';
 
 export const TAX_RATE = 0.1;
 /** 諸費用（交通費・労災・安全管理費等）: 本体・オプションそれぞれの小計に対する率（見積書テンプレートより 15%） */
@@ -9,6 +17,8 @@ export const ROUNDING_UNIT = 1000;
 export interface SelectionInput {
   option_id: string;
   quantity?: number;
+  /** 選ばれたバリエーション（選択肢 ID）。商品に紐づかないものは無視される */
+  variant_choice_ids?: string[];
 }
 
 /**
@@ -28,8 +38,12 @@ export function computePricing(
   options: ProductOption[],
   categories: OptionCategory[],
   selections: SelectionInput[],
-  taxRate: number = TAX_RATE
+  taxRate: number = TAX_RATE,
+  /** バリエーション（無指定なら追加価格 0 として扱う） */
+  variants: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] }
 ): PricingResult {
+  const groupById = new Map(variants.groups.map((g) => [g.id, g]));
+  const choiceById = new Map(variants.choices.map((c) => [c.id, c]));
   const expenseRate = model.expense_rate ?? DEFAULT_EXPENSE_RATE;
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
   const categoryCode = new Map(categories.map((c) => [c.id, c.code]));
@@ -44,7 +58,17 @@ export function computePricing(
     if (opt.base_model_id && opt.base_model_id !== model.id) continue;
     seen.add(opt.id);
     const quantity = Math.max(1, Math.floor(sel.quantity ?? 1));
-    const unit = opt.price_on_request ? 0 : opt.price;
+    // 選ばれたバリエーションのうち、この商品の選択項目に属するものだけを採用する
+    const picked = (sel.variant_choice_ids ?? [])
+      .map((cid) => choiceById.get(cid))
+      .filter((c): c is OptionVariantChoice => Boolean(c && groupById.get(c.group_id)?.option_id === opt.id));
+    const variantLines = picked.map((c) => ({
+      group: groupById.get(c.group_id)?.name ?? '',
+      choice: c.name,
+      extra_price: c.price_on_request ? 0 : c.extra_price,
+    }));
+    const variantExtra = variantLines.reduce((sum, v) => sum + v.extra_price, 0);
+    const unit = (opt.price_on_request ? 0 : opt.price) + variantExtra;
     const code = categoryCode.get(opt.category_id) ?? '';
     // フリー商品は代理店の自社商品のため、技術の杜の諸費用（15%）は乗せない
     const isFree = code === FREE_PRODUCT_CATEGORY_CODE;
@@ -59,6 +83,7 @@ export function computePricing(
       amount: unit * quantity,
       is_installation: opt.is_installation || isFree,
       is_free_product: isFree,
+      variants: variantLines,
       price_on_request: opt.price_on_request,
       image_url: opt.image_url,
     });

@@ -20,9 +20,12 @@ import type {
   OptionDependency,
   PreviewHotspot,
   PreviewImageRule,
+  OptionVariantChoice,
+  OptionVariantGroup,
   ProductImage,
   ProductOption,
 } from '../domain/types.ts';
+import { masterProducts, masterVariantChoices, masterVariantGroups } from './product-master.ts';
 
 const NOW = '2026-08-22T00:00:00.000Z';
 
@@ -51,7 +54,7 @@ export const seedModels: BaseModel[] = [
   {
     id: MODEL_WING01_ID,
     slug: 'wing-01',
-    name: 'Wing（片ウィング）',
+    name: 'Wing',
     tagline: '4tユニック1台で運び、30分で広がる折り畳み式木造コンテナ。',
     description:
       '折り畳み式木造コンテナ「Wing」の基本モデル。工場で内外装まで仕上げた状態で折り畳んで運搬し、現地で下ろして展開するだけで荷台の約2倍・18.72㎡（約11.5帖）の空間が完成します。伸縮する柱脚が不陸や傾斜地を吸収するため造成を最小限にでき、建築確認申請の取得にも対応。別荘・宿泊施設・事務所・店舗・住まいまで、多用途に使える「小さな宝箱」です。',
@@ -443,6 +446,11 @@ const opt = (
   affects_views: [],
   spec_codes: [],
   owner_id: null,
+  manufacturer: null,
+  model_no: null,
+  size_note: null,
+  list_price: null,
+  highlight: null,
   status: 'published',
   created_at: NOW,
   updated_at: NOW,
@@ -666,6 +674,49 @@ export const ELEVATIONS = [
   { url: '/images/elevation/wing-side-wood.png', label: '側面（西）', alt: 'Wing 側面立面図（下見板張り）' },
 ];
 
+/* ---------------- 先方の商品マスター（自動生成） ---------------- */
+
+/**
+ * Wing_product_master.xlsx から取り込んだ商品と、その選択項目（壁色・扉色・ミラー等）。
+ * Wing 表示価格が未確定のため「別途見積」で登録している。
+ * 更新は管理画面の「商品の一括登録」から。
+ */
+const CATEGORY_BY_CODE = new Map(seedCategories.map((c) => [c.code, c.id]));
+
+const masterOptions: ProductOption[] = masterProducts
+  .filter((p) => CATEGORY_BY_CODE.has(p.categoryCode))
+  .map((p) =>
+    opt({
+      id: p.id,
+      category_id: CATEGORY_BY_CODE.get(p.categoryCode) as string,
+      code: p.code,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      price_on_request: p.price_on_request,
+      image_url: p.image_url,
+      manufacturer: p.manufacturer,
+      model_no: p.model_no,
+      size_note: p.size_note,
+      list_price: p.list_price,
+      highlight: p.highlight,
+      selection_type: 'radio',
+      sort_order: p.sort_order,
+    })
+  );
+
+export const seedVariantGroups: OptionVariantGroup[] = masterVariantGroups.map((g) => ({
+  ...g,
+  note: null,
+  is_required: true,
+  status: 'published',
+}));
+
+export const seedVariantChoices: OptionVariantChoice[] = masterVariantChoices.map((c) => ({ ...c, status: 'published' }));
+
+// 台帳へ合流させる（既存の商品より後ろに並ぶ）
+seedOptions.push(...masterOptions);
+
 export const seedCatalog = {
   models: seedModels,
   images: seedProductImages,
@@ -675,4 +726,6 @@ export const seedCatalog = {
   conflicts: seedConflicts,
   previewRules: seedPreviewRules,
   hotspots: seedHotspots,
+  variantGroups: seedVariantGroups,
+  variantChoices: seedVariantChoices,
 };

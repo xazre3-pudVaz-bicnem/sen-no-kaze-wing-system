@@ -12,6 +12,8 @@ import type {
   ProductOption,
   AppNotification,
   AuditLog,
+  OptionVariantChoice,
+  OptionVariantGroup,
   Profile,
   RoleCode,
   Quote,
@@ -126,6 +128,12 @@ export class SupabaseStore implements DataStore {
     // preview_hotspots は 0008 で追加。未適用の DB ではホットスポットなしとして扱う
     const hs = ruleIds.length ? await db.from('preview_hotspots').select('*').in('rule_id', ruleIds).order('sort_order') : { data: [], error: null };
     if (hs.error && !isMissingRelation(hs.error)) mapPgError(hs.error);
+    // バリエーション（0013 未適用の DB でも落ちないようにする）
+    const vg = ids.length ? await db.from('option_variant_groups').select('*').in('option_id', ids).order('sort_order') : { data: [], error: null };
+    if (vg.error && !isMissingRelation(vg.error)) mapPgError(vg.error);
+    const gids = ((vg.data ?? []) as OptionVariantGroup[]).map((g) => g.id);
+    const vc = gids.length ? await db.from('option_variant_choices').select('*').in('group_id', gids).order('sort_order') : { data: [], error: null };
+    if (vc.error && !isMissingRelation(vc.error)) mapPgError(vc.error);
     const idSet = new Set(ids);
     return {
       model,
@@ -136,6 +144,8 @@ export class SupabaseStore implements DataStore {
       conflicts: ((confs.data ?? []) as CatalogBundle['conflicts']).filter((c) => idSet.has(c.conflicts_with_option_id)),
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
+      variantGroups: (vg.error ? [] : (vg.data ?? [])) as OptionVariantGroup[],
+      variantChoices: (vc.error ? [] : (vc.data ?? [])) as OptionVariantChoice[],
     };
   }
 
@@ -233,6 +243,7 @@ export class SupabaseStore implements DataStore {
       p_preview_image_url: input.preview_image_url,
       p_notes: input.notes,
       p_finish_level: input.finish_level ?? 'full',
+      p_variant_choice_ids: input.variant_choice_ids ?? [],
     });
     if (error) mapPgError(error);
     return data as Configuration;

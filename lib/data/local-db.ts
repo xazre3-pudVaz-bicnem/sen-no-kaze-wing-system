@@ -5,6 +5,8 @@ import path from 'node:path';
 import type {
   AppNotification,
   AuditLog,
+  OptionVariantChoice,
+  OptionVariantGroup,
   BaseModel,
   Configuration,
   ConfigurationItem,
@@ -58,6 +60,8 @@ export interface LocalDb {
   quoteSequences: Record<string, number>;
   resetTokens: { token: string; user_id: string; expires_at: string }[];
   contactMessages: ContactMessage[];
+  variantGroups: OptionVariantGroup[];
+  variantChoices: OptionVariantChoice[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
 }
@@ -86,6 +90,8 @@ export function emptyDb(): LocalDb {
     conflicts: clone(seedCatalog.conflicts),
     previewRules: clone(seedCatalog.previewRules),
     hotspots: clone(seedCatalog.hotspots),
+    variantGroups: clone(seedCatalog.variantGroups),
+    variantChoices: clone(seedCatalog.variantChoices),
     configurations: [],
     configurationItems: [],
     snapshots: [],

@@ -25,6 +25,7 @@ export interface SimulatorInitial {
   id: string;
   name: string;
   option_ids: string[];
+  variant_choice_ids: string[];
   status: ConfigurationStatus;
   finish_level: FinishLevel;
 }
@@ -41,6 +42,7 @@ interface Props {
 
 interface Draft {
   selected: string[];
+  variantIds?: string[];
   finishLevel?: FinishLevel;
   name: string;
   configId: string | null;
@@ -49,6 +51,18 @@ interface Draft {
 }
 
 const storageKey = (slug: string) => `wing:sim:${slug}`;
+
+/** 選ばれている商品ごとに、標準（または先頭）の選択肢を選ぶ */
+function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[] {
+  const ids = new Set(optionIds);
+  const out: string[] = [];
+  for (const g of bundle.variantGroups.filter((x) => ids.has(x.option_id))) {
+    const list = bundle.variantChoices.filter((c) => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
+    if (!list.length) continue;
+    out.push((list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
+  }
+  return out;
+}
 
 export function SimulatorApp({ bundle, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
@@ -89,6 +103,8 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
 
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
+  /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
+  const [variantIds, setVariantIds] = useState<string[]>(initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection));
   const [specCode, setSpecCode] = useState<string>(model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
@@ -122,6 +138,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       if (!initial && draft) {
         const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
         if (draft.finishLevel) setFinishLevel(draft.finishLevel);
+        if (draft.variantIds?.length) setVariantIds(draft.variantIds);
         if (valid.length) setSelected(valid);
         if (draft.name) setName(draft.name);
         if (draft.configId) setConfigId(draft.configId);
@@ -143,10 +160,10 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   const persistDraft = useCallback(
     (patch: Partial<Draft> = {}) => {
       if (typeof window === 'undefined') return;
-      const draft: Draft = { selected, finishLevel, name, configId, pending: null, savedAt: Date.now(), ...patch };
+      const draft: Draft = { selected, variantIds, finishLevel, name, configId, pending: null, savedAt: Date.now(), ...patch };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, finishLevel, name, configId, model.slug]
+    [selected, variantIds, finishLevel, name, configId, model.slug]
   );
 
   useEffect(() => {
@@ -170,8 +187,16 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
 
   // ---- 計算・画像解決 ----
   const pricing = useMemo(
-    () => computePricing(model, bundle.options, bundle.categories, selected.map((sid) => ({ option_id: sid }))),
-    [model, bundle, selected]
+    () =>
+      computePricing(
+        model,
+        bundle.options,
+        bundle.categories,
+        selected.map((sid) => ({ option_id: sid, variant_choice_ids: variantIds })),
+        undefined,
+        { groups: bundle.variantGroups, choices: bundle.variantChoices }
+      ),
+    [model, bundle, selected, variantIds]
   );
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
@@ -206,7 +231,9 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     if (readOnly) return;
     const p = presetSelections.find((x) => x.code === code);
     if (!p) return;
-    setSelected(pruneToScope(ctx, p.ids, finishLevel));
+    const nextSel = pruneToScope(ctx, p.ids, finishLevel);
+    setSelected(nextSel);
+    setVariantIds(defaultVariantIds(bundle, nextSel));
     setDirty(true);
     pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準構成を読み込みました`, 'success');
   };
@@ -239,7 +266,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     pushToast(`「${FINISH_LEVEL_INFO[level].name}」で見積を作ります`, 'success');
   };
 
-  const applyPicker = (categoryId: string, nextInCategory: string[]) => {
+  const applyPicker = (categoryId: string, nextInCategory: string[], nextVariants: string[] = []) => {
     const inCategory = bundle.options.filter((o) => o.category_id === categoryId).map((o) => o.id);
     let cur = selected;
     const notices: string[] = [];
@@ -280,6 +307,16 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     }
 
     setSelected(cur);
+    // このカテゴリーの商品に紐づく選択肢を入れ替える
+    const catOptionIds = new Set(inCategory);
+    const groupIds = new Set(bundle.variantGroups.filter((g) => catOptionIds.has(g.option_id)).map((g) => g.id));
+    setVariantIds((prev) => [
+      ...prev.filter((cid) => {
+        const gid = bundle.variantChoices.find((c) => c.id === cid)?.group_id;
+        return !gid || !groupIds.has(gid);
+      }),
+      ...nextVariants,
+    ]);
     setDirty(true);
     setPicker(null);
     notices.forEach((n) => pushToast(n, 'info'));
@@ -317,6 +354,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         preview_image_url: thumbnailUrl,
         notes: null,
         finish_level: finishLevel,
+        variant_choice_ids: variantIds,
       });
       if (!result.ok) {
         if (result.code === 'UNAUTHENTICATED') {
@@ -543,8 +581,11 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
           options={scopedOptions.filter((o) => o.category_id === picker)}
           selectedIds={selected}
           blocked={blocked}
+          variantGroups={bundle.variantGroups}
+          variantChoices={bundle.variantChoices}
+          selectedVariantIds={variantIds}
           onClose={() => setPicker(null)}
-          onApply={(next) => applyPicker(picker, next)}
+          onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
         />
       )}
       {dialog && (

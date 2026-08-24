@@ -6,7 +6,7 @@ import { ProductChapters } from '@/components/sections/product-chapters';
 
 export const metadata = buildMetadata({
   title: '商品一覧｜折り畳み式木造コンテナ Wing のベースモデル',
-  description: 'Wing（片ウィング）・BOX・フラットの3つのベースモデル。外観・概要・本体価格を比較し、用途に合うモデルから見積シミュレーションを始められます。',
+  description: 'Wing・BOX・フラットの3つのベースモデル。外観・概要・本体価格を比較し、用途に合うモデルから見積シミュレーションを始められます。',
   path: '/products',
   image: '/images/products/wing-lakeside-deck.jpg',
 });

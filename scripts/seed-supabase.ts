@@ -48,6 +48,8 @@ await upsert('option_dependencies', seedCatalog.dependencies as unknown as Recor
 await upsert('option_conflicts', seedCatalog.conflicts as unknown as Record<string, unknown>[]);
 await upsert('preview_image_rules', seedCatalog.previewRules as unknown as Record<string, unknown>[]);
 await upsert('preview_hotspots', seedCatalog.hotspots as unknown as Record<string, unknown>[]);
+await upsert('option_variant_groups', seedCatalog.variantGroups as unknown as Record<string, unknown>[]);
+await upsert('option_variant_choices', seedCatalog.variantChoices as unknown as Record<string, unknown>[]);
 
 /** シードに存在しない行（旧台帳の残骸）を削除する。子テーブルから順に消す */
 async function pruneTable(table: string, keepIds: string[]) {
@@ -66,6 +68,8 @@ async function pruneTable(table: string, keepIds: string[]) {
 
 if (prune) {
   const ids = <T extends { id: string }>(rows: T[]) => rows.map((r) => r.id);
+  await pruneTable('option_variant_choices', ids(seedCatalog.variantChoices));
+  await pruneTable('option_variant_groups', ids(seedCatalog.variantGroups));
   await pruneTable('preview_hotspots', ids(seedCatalog.hotspots));
   await pruneTable('option_conflicts', ids(seedCatalog.conflicts));
   await pruneTable('option_dependencies', ids(seedCatalog.dependencies));

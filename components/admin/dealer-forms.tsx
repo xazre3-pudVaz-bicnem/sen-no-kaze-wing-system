@@ -121,7 +121,13 @@ export function DealerRevisionForm({
     ]);
 
   return (
-    <form action={action} className="card space-y-5 p-6" noValidate data-testid="dealer-revision-form">
+    <form
+      id="quote-editor"
+      action={action}
+      className="card scroll-mt-6 space-y-5 p-6"
+      noValidate
+      data-testid="dealer-revision-form"
+    >
       <input type="hidden" name="quote_id" value={quote.id} />
       <div>
         <p className="font-semibold">別途工事・フリー商品の入力</p>

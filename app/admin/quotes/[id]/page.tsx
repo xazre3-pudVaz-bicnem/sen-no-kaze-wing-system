@@ -9,8 +9,15 @@ import { QuoteStatusForm } from '@/components/admin/forms';
 import { AssignDealerForm, DealerRevisionForm } from '@/components/admin/dealer-forms';
 import { QuoteTable } from '@/components/mypage/quote-table';
 
-export default async function AdminQuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminQuoteDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const actor = await requireStaff();
   const store = await getStore();
   const detail = await store.getQuote(id, actor);
@@ -55,6 +62,11 @@ export default async function AdminQuoteDetailPage({ params }: { params: Promise
             金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。
             別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
           </p>
+          {sp.from === 'mail' && canRevise && (
+            <Alert tone="info" title="メールからお越しの方へ">
+              この画面で別途工事とフリー商品を入力し、確定見積を発行できます。入力表は下にあります。
+            </Alert>
+          )}
           {canRevise && <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} canEditAll={canEditBase} />}
           {quote.status === 'superseded' && (
             <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>

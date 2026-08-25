@@ -613,9 +613,10 @@ export class LocalStore implements DataStore {
           recipient_id: dealerId,
           audience: 'dealer',
           kind: 'quote_assigned',
-          title: `見積が割り当てられました：${q.quote_no}`,
-          body: `${q.customer_name} 様の見積です。別途工事・フリー商品を入力して確定見積を発行してください。`,
-          link: `/admin/quotes/${q.id}`,
+          title: `別途工事の入力をお願いします：${q.quote_no}`,
+          body: `${q.customer_name} 様の見積です。下のリンクを開くと、そのまま別途工事とフリー商品を入力できます。`,
+          // メールから 1 回で入力表まで飛べるようにする
+          link: `/admin/quotes/${q.id}?from=mail#quote-editor`,
         });
       }
       return q;

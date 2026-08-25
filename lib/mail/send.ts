@@ -85,7 +85,9 @@ export async function flushNotifications(limit = 20): Promise<{ sent: number; sk
       result.skipped++;
       continue;
     }
-    const lines = [n.body ?? '', n.link ? `${base}${n.link}` : ''].filter(Boolean);
+    // 用件 → 操作リンク の順に置く。メールから 1 回で作業画面へ入れるようにする
+    const lines = [n.body ?? '', n.link ? `▼ こちらから開けます
+${base}${n.link}` : ''].filter(Boolean);
     try {
       await sendOne(to, `[Wing] ${n.title}`, lines.join('\n\n'));
       await admin.from('notifications').update({ email_status: 'sent' }).eq('id', n.id);

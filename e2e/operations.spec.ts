@@ -184,3 +184,43 @@ test.describe('マイページと管理画面の導線', () => {
     await logout(page);
   });
 });
+
+test.describe('メールから別途工事の入力へ', () => {
+  test('通知のリンクを開くと、ログインを経ても入力表まで飛ぶ', async ({ page }) => {
+    await ensureAccount(page, DEALER, '代理店 担当');
+    const customer = uniqueEmail('maillink');
+    const { quoteId } = await requestQuoteAsCustomer(page, customer, 'メール導線のテスト');
+    await logout(page);
+
+    // 本部が代理店を割り当てる
+    await signIn(page, ADMIN, '/admin', '管理者');
+    await page.goto(`/admin/quotes/${quoteId}`);
+    const opt = page.getByTestId('dealer-select').locator('option', { hasText: DEALER });
+    await page.getByTestId('dealer-select').selectOption((await opt.getAttribute('value'))!);
+    await page.getByTestId('assign-dealer-form').getByRole('button', { name: '割り当てる' }).click();
+    await expect(page.getByText('担当代理店を割り当てました')).toBeVisible();
+    await logout(page);
+
+    // 代理店の通知に、入力画面へのリンクが入っている
+    await signIn(page, DEALER, '/admin', '代理店 担当');
+    await page.goto('/admin/notifications');
+    const card = page.getByTestId('notification-quote_assigned').first();
+    await expect(card).toContainText('別途工事の入力をお願いします');
+    const link = card.getByRole('link', { name: '別途工事を入力' });
+    const href = await link.getAttribute('href');
+    expect(href).toContain(`/admin/quotes/${quoteId}`);
+    expect(href).toContain('#quote-editor');
+    await logout(page);
+
+    // メールのリンクを未ログインで開く → ログイン後にそのまま入力画面へ戻る
+    const res = await page.goto(href!);
+    expect(res?.url()).toContain('/login');
+    await page.locator('#email').fill(DEALER);
+    await page.locator('#password').fill(PASSWORD);
+    await page.getByRole('button', { name: 'ログイン' }).click();
+    await page.waitForURL(new RegExp(quoteId));
+    await expect(page.getByText('メールからお越しの方へ')).toBeVisible();
+    await expect(page.getByTestId('dealer-revision-form')).toBeVisible();
+    await logout(page);
+  });
+});

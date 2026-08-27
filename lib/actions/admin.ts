@@ -6,7 +6,8 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, StoreError } from '@/lib/data/store';
+import { getStore, isLocalMode, StoreError } from '@/lib/data/store';
+import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
   modelSchema,
@@ -461,24 +462,43 @@ export interface ImportState {
   };
 }
 
-const MAX_SHEET_BYTES = 20 * 1024 * 1024;
-const MAX_ZIP_BYTES = 60 * 1024 * 1024;
+const MAX_SHEET_BYTES = 3 * 1024 * 1024;
+const MAX_IMAGE_METADATA_BYTES = 512 * 1024;
+const IMAGE_NAME_RE = /\.(jpe?g|png|webp|avif)$/i;
+
+interface ImportImageMetadata { name: string; path?: string; url?: string }
+
+function parseImportImages(value: FormDataEntryValue | null): ImportImageMetadata[] {
+  if (typeof value !== 'string' || !value) return [];
+  if (Buffer.byteLength(value, 'utf8') > MAX_IMAGE_METADATA_BYTES) throw new StoreError('VALIDATION', '画像情報が大きすぎます。');
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { throw new StoreError('VALIDATION', '画像情報の形式が正しくありません。'); }
+  if (!Array.isArray(parsed) || parsed.length > 5000) throw new StoreError('VALIDATION', '画像情報の件数が正しくありません。');
+  return parsed.map((item) => {
+    if (!item || typeof item !== 'object') throw new StoreError('VALIDATION', '画像情報の形式が正しくありません。');
+    const name = String((item as { name?: unknown }).name ?? '');
+    const path = (item as { path?: unknown }).path;
+    const url = (item as { url?: unknown }).url;
+    if (!name || name.length > 255 || !IMAGE_NAME_RE.test(name)) throw new StoreError('VALIDATION', '画像ファイル名が正しくありません。');
+    return { name, path: typeof path === 'string' ? path : undefined, url: typeof url === 'string' ? url : undefined };
+  });
+}
 
 /**
  * Excel（または CSV）と画像 ZIP を受け取り、商品と選択項目をまとめて登録する。
  * 「確認する」で内容を見せ、「登録する」で実際に書き込む。
  */
 export async function importCatalogAction(_prev: ImportState, formData: FormData): Promise<ImportState> {
-  await requireCatalogEditor();
+  const actor = await requireCatalogEditor();
   const apply = formData.get('mode') === 'apply';
 
   const sheetFile = formData.get('sheet');
   if (!(sheetFile instanceof File) || sheetFile.size === 0) {
     return { ok: false, error: '商品マスターのファイルを選んでください。' };
   }
-  if (sheetFile.size > MAX_SHEET_BYTES) return { ok: false, error: 'ファイルが大きすぎます（20MB まで）。' };
+  if (sheetFile.size > MAX_SHEET_BYTES) return { ok: false, error: 'Excel / CSV が大きすぎます（3MB まで）。' };
 
-  const { readCsv, readXlsx, unzip } = await import('@/lib/import/archive');
+  const { readCsv, readXlsx } = await import('@/lib/import/archive');
   const { buildImportPlan, summarize } = await import('@/lib/import/catalog-import');
 
   let plan;
@@ -494,35 +514,31 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
     return { ok: false, error: e instanceof Error ? e.message : 'ファイルを読み取れませんでした。' };
   }
 
-  // 画像 ZIP（任意）
+  // ZIP 本体は Vercel を通さない。ブラウザが列挙／直接 upload した小さい metadata だけを検証する。
   const images = new Map<string, string>();
   const uploadedUrls: string[] = [];
-  const zipFile = formData.get('images');
-  let uploadedCount = 0;
-  if (zipFile instanceof File && zipFile.size > 0) {
-    if (zipFile.size > MAX_ZIP_BYTES) return { ok: false, error: '画像 ZIP が大きすぎます（60MB まで）。' };
-    const store = await getStore();
-    const entries = unzip(Buffer.from(await zipFile.arrayBuffer()));
-    for (const entry of entries) {
-      const base = entry.name.split('/').pop() ?? entry.name;
-      if (!/\.(jpe?g|png|webp|avif)$/i.test(base)) continue;
-      if (!apply) {
-        // 確認のときはアップロードせず件数だけ数える
-        images.set(base, '');
-        uploadedCount++;
-        continue;
+  let metadata: ImportImageMetadata[];
+  try { metadata = parseImportImages(formData.get('imageMetadata')); }
+  catch (e) { return errState(e) as ImportState; }
+  const duplicateNames = metadata.map((item) => item.name).filter((name, i, all) => all.indexOf(name) !== i);
+  if (duplicateNames.length) return { ok: false, error: `ZIP 内に同名画像があります: ${[...new Set(duplicateNames)].join('、')}` };
+  for (const item of metadata) {
+    if (!apply) { images.set(item.name, ''); continue; }
+    if (isLocalMode()) {
+      const storagePath = catalogImportPathFromImageUrl(item.url);
+      if (!item.url || !storagePath || !isCatalogImportPathForUser(storagePath, actor.id)) {
+        return { ok: false, error: 'ローカル画像の保存先が正しくありません。' };
       }
-      const ext = base.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'avif' ? 'image/avif' : 'image/jpeg';
-      try {
-        const url = await store.uploadImage({ bytes: new Uint8Array(entry.data), contentType: type, fileName: base }, 'catalog');
-        images.set(base, url);
-        uploadedUrls.push(url);
-        uploadedCount++;
-      } catch {
-        plan.warnings.push(`画像「${base}」を保存できませんでした。`);
-      }
+      images.set(item.name, item.url);
+      uploadedUrls.push(item.url);
+      continue;
     }
+    if (!item.path || !isCatalogImportPathForUser(item.path, actor.id) || item.path.includes('..')) {
+      return { ok: false, error: 'アップロード済み画像の保存先が正しくありません。' };
+    }
+    const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/product-images/${item.path.split('/').map(encodeURIComponent).join('/')}`;
+    images.set(item.name, publicUrl);
+    uploadedUrls.push(publicUrl);
   }
 
   const s = summarize(plan);
@@ -534,7 +550,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
       preview: {
         fileName: sheetFile.name,
         ...s,
-        imagesUploaded: uploadedCount,
+        imagesUploaded: metadata.length,
         warnings: plan.warnings,
         sample: plan.products.slice(0, 8).map((p) => ({
           name: p.manufacturer ? `${p.manufacturer} ${p.name}` : p.name,
@@ -549,7 +565,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
   let applied: NonNullable<ImportState['applied']>;
   try {
     const { applyImportPlan } = await import('@/lib/import/apply');
-    applied = await applyImportPlan(plan, images);
+    applied = await applyImportPlan(plan, images, { catalogImportUserId: actor.id });
   } catch (e) {
     if (uploadedUrls.length) {
       const store = await getStore();

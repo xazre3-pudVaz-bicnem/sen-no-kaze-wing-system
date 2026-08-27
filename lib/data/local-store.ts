@@ -32,6 +32,12 @@ import { hasRoleAtLeast } from '@/lib/domain/types';
 import { ROUNDING_UNIT } from '@/lib/domain/pricing';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
+import {
+  catalogImportPathsForUser,
+  catalogImportUploadPath,
+  catalogImportUrlsForUser,
+  localCatalogImportUrl,
+} from '@/lib/import/catalog-import-images';
 import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
 import {
   StoreError,
@@ -1061,6 +1067,13 @@ export class LocalStore implements DataStore {
     fs.writeFileSync(abs, file.bytes);
     return `/api/local-files/${safeFolder}/${name}`;
   }
+  async uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number) {
+    const storagePath = catalogImportUploadPath(userId, sessionId, index, file.fileName);
+    const abs = path.join(filesDir(), ...storagePath.split('/'));
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, file.bytes);
+    return localCatalogImportUrl(storagePath);
+  }
   async deleteUploadedImage(url: string) {
     const prefix = '/api/local-files/';
     if (!url.startsWith(prefix)) return;
@@ -1068,5 +1081,31 @@ export class LocalStore implements DataStore {
     const root = path.resolve(filesDir());
     const target = path.resolve(root, relative);
     if (target !== root && target.startsWith(`${root}${path.sep}`)) fs.rmSync(target, { force: true });
+  }
+  async listReferencedCatalogImportImageUrls(userId: string) {
+    return this.read((db) =>
+      catalogImportUrlsForUser(
+        [
+          ...db.options.map((option) => option.image_url),
+          ...db.variantChoices.map((choice) => choice.image_url),
+        ],
+        userId
+      )
+    );
+  }
+  async deleteUnreferencedCatalogImportImages(candidateUrls: string[], userId: string) {
+    const candidates = catalogImportPathsForUser(candidateUrls, userId);
+    if (!candidates.length) return 0;
+    const referenced = new Set(catalogImportPathsForUser(await this.listReferencedCatalogImportImageUrls(userId), userId));
+    const root = path.resolve(filesDir());
+    let deleted = 0;
+    for (const storagePath of candidates) {
+      if (referenced.has(storagePath)) continue;
+      const target = path.resolve(root, ...storagePath.split('/'));
+      if (target === root || !target.startsWith(`${root}${path.sep}`)) continue;
+      fs.rmSync(target, { force: true });
+      deleted++;
+    }
+    return deleted;
   }
 }

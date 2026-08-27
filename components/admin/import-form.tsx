@@ -1,9 +1,20 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
 import { FileSpreadsheet, Images, TriangleAlert, Upload } from 'lucide-react';
 import { importCatalogAction, type ImportState } from '@/lib/actions/admin';
 import { Alert, Button, Field } from '@/components/ui';
+import { createClient } from '@/lib/supabase/client';
+import {
+  duplicateBasenames,
+  extractZipEntry,
+  imageEntries,
+  listZipEntries,
+  MAX_IMAGE_BYTES,
+  validateImageEntries,
+  type BrowserZipEntry,
+} from '@/lib/import/browser-archive';
+import { catalogImportUploadPath } from '@/lib/import/catalog-import-images';
 
 const initial: ImportState = { ok: false };
 
@@ -11,20 +22,110 @@ const initial: ImportState = { ok: false };
  * 商品マスター（Excel / CSV）と画像 ZIP をアップロードして一括登録する。
  * いきなり書き込まず、まず内容を見せてから「登録する」で反映する。
  */
-export function ImportForm() {
-  const [state, action, pending] = useActionState(importCatalogAction, initial);
+export function ImportForm({ localMode = false }: { localMode?: boolean }) {
+  const [state, setState] = useState<ImportState>(initial);
+  const [pending, setPending] = useState(false);
+  const [progress, setProgress] = useState('');
   // React 19 はフォーム送信後に入力をリセットするので、選んだファイルは自分で持っておく。
   // そうしないと「確認する」のあとの「登録する」でファイルが消える。
   const [sheet, setSheet] = useState<File | null>(null);
   const [zip, setZip] = useState<File | null>(null);
 
-  const submit = (mode: 'preview' | 'apply') => {
+  const readArchive = async (): Promise<{ buffer: ArrayBuffer; entries: BrowserZipEntry[] } | null> => {
+    if (!zip) return null;
+    setProgress('画像を確認中…');
+    const buffer = await zip.arrayBuffer();
+    const entries = imageEntries(listZipEntries(buffer));
+    validateImageEntries(entries);
+    const duplicates = duplicateBasenames(entries);
+    if (duplicates.length) throw new Error(`ZIP 内に同名画像があります: ${duplicates.join('、')}`);
+    return { buffer, entries };
+  };
+
+  const cleanup = async (uploaded: string[]) => {
+    if (!uploaded.length) return;
+    if (localMode) {
+      const response = await fetch('/api/admin/catalog-import/images', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: uploaded }),
+      });
+      const { failed = uploaded.length } = response.ok ? await response.json() as { failed?: number } : {};
+      if (failed) throw new Error(`未使用画像 ${failed} 件を削除できませんでした。`);
+      return;
+    }
+    const { error } = await createClient().storage.from('product-images').remove(uploaded);
+    if (error) throw new Error(`未使用画像を削除できませんでした: ${error.message}`);
+  };
+
+  const submit = async (mode: 'preview' | 'apply') => {
     if (!sheet) return;
-    const fd = new FormData();
-    fd.set('mode', mode);
-    fd.set('sheet', sheet);
-    if (zip) fd.set('images', zip);
-    action(fd);
+    setPending(true);
+    setState((current) => ({ ...current, error: undefined, applied: undefined }));
+    const uploaded: string[] = [];
+    try {
+      const archive = await readArchive();
+      const metadata: { name: string; path?: string; url?: string }[] = [];
+      if (archive && mode === 'apply') {
+        setProgress('画像を展開中…');
+        const supabase = localMode ? null : createClient();
+        const user = localMode ? null : (await supabase!.auth.getUser()).data.user;
+        if (!localMode && !user) throw new Error('ログイン状態を確認できませんでした。');
+        const sessionId = crypto.randomUUID();
+        for (let i = 0; i < archive.entries.length; i++) {
+          const entry = archive.entries[i];
+          setProgress(`画像アップロード中 ${i + 1} / ${archive.entries.length}`);
+          const bytes = await extractZipEntry(archive.buffer, entry);
+          if (bytes.byteLength !== entry.size || bytes.byteLength > MAX_IMAGE_BYTES) throw new Error(`画像「${entry.name}」の展開サイズが不正です。`);
+          const base = entry.name.split('/').pop() ?? entry.name;
+          const ext = base.split('.').pop()?.toLowerCase() ?? 'jpg';
+          const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'avif' ? 'image/avif' : 'image/jpeg';
+          if (localMode) {
+            const formData = new FormData();
+            const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+            formData.set('file', new File([body], base, { type: contentType }));
+            formData.set('sessionId', sessionId);
+            formData.set('index', String(i));
+            const response = await fetch('/api/admin/catalog-import/images', { method: 'POST', body: formData });
+            const result = await response.json() as { url?: string; error?: string };
+            if (!response.ok || !result.url) throw new Error(result.error ?? `画像「${base}」を保存できませんでした。`);
+            uploaded.push(result.url);
+            metadata.push({ name: base, url: result.url });
+          } else {
+            const path = catalogImportUploadPath(user!.id, sessionId, i, base);
+            const { error } = await supabase!.storage.from('product-images').upload(path, bytes, { contentType, upsert: false });
+            if (error) throw new Error(`画像「${base}」を保存できませんでした: ${error.message}`);
+            uploaded.push(path);
+            metadata.push({ name: base, path });
+          }
+        }
+      } else if (archive) {
+        metadata.push(...archive.entries.map((entry) => ({ name: entry.name.split('/').pop() ?? entry.name })));
+      }
+      setProgress(mode === 'apply' ? '商品登録中…' : 'Excel を解析中…');
+      const fd = new FormData();
+      fd.set('mode', mode);
+      fd.set('sheet', sheet);
+      fd.set('imageMetadata', JSON.stringify(metadata));
+      const next = await importCatalogAction(initial, fd);
+      if (!next.ok && uploaded.length) {
+        try { await cleanup(uploaded); }
+        catch (cleanupError) {
+          next.error = `${next.error ?? '一括登録に失敗しました。'} ${cleanupError instanceof Error ? cleanupError.message : '未使用画像を削除できませんでした。'}`;
+        }
+        uploaded.length = 0;
+      }
+      setState(next);
+      setProgress(next.ok && mode === 'apply' ? '完了' : '');
+    } catch (error) {
+      let message = error instanceof Error ? error.message : '一括登録に失敗しました。';
+      try { await cleanup(uploaded); }
+      catch (cleanupError) { message += ` ${cleanupError instanceof Error ? cleanupError.message : '未使用画像を削除できませんでした。'}`; }
+      setState({ ok: false, error: message });
+      setProgress('');
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -37,7 +138,7 @@ export function ImportForm() {
               name="sheet"
               type="file"
               accept=".xlsx,.csv"
-              onChange={(e) => setSheet(e.target.files?.[0] ?? null)}
+              onChange={(e) => { setSheet(e.target.files?.[0] ?? null); setState(initial); setProgress(''); }}
               className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sand file:px-3 file:py-2 file:text-sm"
               data-testid="import-sheet"
             />
@@ -55,7 +156,7 @@ export function ImportForm() {
               name="images"
               type="file"
               accept=".zip"
-              onChange={(e) => setZip(e.target.files?.[0] ?? null)}
+              onChange={(e) => { setZip(e.target.files?.[0] ?? null); setState(initial); setProgress(''); }}
               className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-sand file:px-3 file:py-2 file:text-sm"
               data-testid="import-images"
             />
@@ -75,10 +176,11 @@ export function ImportForm() {
           </Button>
           {state.preview && (
             <Button type="button" onClick={() => submit('apply')} disabled={pending} data-testid="import-apply">
-              この内容で登録する
+              {pending ? progress || '処理中…' : 'この内容で登録する'}
             </Button>
           )}
         </div>
+        {progress && <p className="text-sm font-semibold text-forest" role="status" aria-live="polite">{progress}</p>}
         <p className="text-xs text-muted">
           同じ商品ID のものは上書きされます。何度取り込んでも商品が増えることはありません。
           マスターから消えた商品は自動では削除しません（保存済みのお見積りが参照している場合があるため）。
@@ -153,6 +255,19 @@ export function ImportForm() {
                 {state.applied.skipped.slice(0, 10).map((s, i) => (
                   <li key={i}>{s}</li>
                 ))}
+              </ul>
+            </Alert>
+          )}
+          {state.applied.warnings.length > 0 && (
+            <Alert tone="warn" title={`確認してほしい点：${state.applied.warnings.length} 件`}>
+              <ul className="mt-1 space-y-1 text-xs">
+                {state.applied.warnings.slice(0, 12).map((w, i) => (
+                  <li key={i} className="flex gap-1.5">
+                    <TriangleAlert className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+                    {w}
+                  </li>
+                ))}
+                {state.applied.warnings.length > 12 && <li>ほか {state.applied.warnings.length - 12} 件</li>}
               </ul>
             </Alert>
           )}

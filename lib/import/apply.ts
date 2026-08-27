@@ -53,10 +53,14 @@ export interface ApplyResult {
   warnings: string[];
 }
 
+interface ApplyOptions {
+  catalogImportUserId?: string;
+}
+
 /**
  * @param images アップロードされた画像。ファイル名 → 保存後の URL
  */
-export async function applyImportPlan(plan: ImportPlan, images: Map<string, string>): Promise<ApplyResult> {
+export async function applyImportPlan(plan: ImportPlan, images: Map<string, string>, options: ApplyOptions = {}): Promise<ApplyResult> {
   const store = await getStore();
   const result: ApplyResult = {
     createdProducts: 0,
@@ -67,6 +71,15 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     skipped: [],
     warnings: [...plan.warnings],
   };
+  let previousCatalogImportImageUrls: string[] = [];
+  if (options.catalogImportUserId) {
+    try {
+      previousCatalogImportImageUrls = await store.listReferencedCatalogImportImageUrls(options.catalogImportUserId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '不明なエラー';
+      result.warnings.push(`旧Import画像の参照確認に失敗したため、成功後の旧画像cleanupをスキップします: ${detail}`);
+    }
+  }
 
   const categories = await store.listCategories();
   const byCode = new Map(categories.map((c) => [c.code, c]));
@@ -207,6 +220,15 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       'INTERNAL',
       `商品台帳の一括登録に失敗しました（商品・選択項目・選択肢は反映されませんでした）: ${detail}`
     );
+  }
+
+  if (options.catalogImportUserId && previousCatalogImportImageUrls.length) {
+    try {
+      await store.deleteUnreferencedCatalogImportImages(previousCatalogImportImageUrls, options.catalogImportUserId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '不明なエラー';
+      result.warnings.push(`旧Import画像のcleanupに失敗しました: ${detail}`);
+    }
   }
 
   return result;

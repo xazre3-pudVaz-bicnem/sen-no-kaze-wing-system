@@ -106,6 +106,13 @@ export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | nu
 export type HotspotInput = Omit<PreviewHotspot, 'id'> & { id?: string | null };
 export type ProductImageInput = Omit<ProductImage, 'id'> & { id?: string | null };
 
+/** 商品台帳 Import を 1 transaction で反映するための書き込み単位。 */
+export interface CatalogImportBatch {
+  options: (OptionInput & { import_operation: 'INSERT' | 'UPDATE' })[];
+  variantGroups: OptionVariantGroup[];
+  variantChoices: OptionVariantChoice[];
+}
+
 /**
  * データアクセス層のインターフェース。
  * - SupabaseStore: 本番（RLS ＋ security definer RPC）
@@ -167,6 +174,8 @@ export interface DataStore {
   // ---- 商品のバリエーション ----
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;
   upsertVariantChoice(input: OptionVariantChoice): Promise<OptionVariantChoice>;
+  /** 商品・選択項目・選択肢を全件成功時だけ反映する。 */
+  applyCatalogImport(batch: CatalogImportBatch): Promise<void>;
 
   // ---- 見積書PDF ----
   getQuoteDocumentFile(quoteId: string): Promise<{ bytes: Uint8Array; document: QuoteDocument } | null>;
@@ -193,6 +202,8 @@ export interface DataStore {
   deleteProductImage(id: string): Promise<void>;
   /** 画像をストレージへ保存し公開 URL を返す */
   uploadImage(file: UploadInput, folder: string): Promise<string>;
+  /** このリクエストで保存した画像を、後続処理失敗時に取り消す。 */
+  deleteUploadedImage(url: string): Promise<void>;
 
   // ---- お問い合わせ ----
   createContactMessage(input: ContactInput): Promise<ContactMessage>;

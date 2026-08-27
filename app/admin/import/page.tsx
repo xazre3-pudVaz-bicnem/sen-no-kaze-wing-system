@@ -1,6 +1,7 @@
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { AdminPage } from '@/components/admin/ui';
 import { ImportForm } from '@/components/admin/import-form';
+import { isLocalMode } from '@/lib/data/store';
 
 /** Excel と画像 ZIP から商品をまとめて登録する。総代理店以上 */
 export default async function AdminImportPage() {
@@ -11,7 +12,7 @@ export default async function AdminImportPage() {
       title="商品の一括登録"
       lead="Excel の商品マスターと画像をまとめてアップロードして、商品と選択項目（色・仕様）を一度に登録します。"
     >
-      <ImportForm />
+      <ImportForm localMode={isLocalMode()} />
 
       <section className="card space-y-3 p-6 text-sm">
         <h2 className="font-semibold">Excel の作り方</h2>

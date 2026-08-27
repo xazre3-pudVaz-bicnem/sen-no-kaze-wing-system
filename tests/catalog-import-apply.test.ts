@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogImportBatch, DataStore } from '@/lib/data/store';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { seedCategories, seedOptions } from '@/lib/seed/catalog';
-import { readXlsx } from '@/lib/import/archive';
-import { buildImportPlan, type ImportPlan } from '@/lib/import/catalog-import';
+import type { ImportPlan } from '@/lib/import/catalog-import';
 
 const state = vi.hoisted(() => ({ store: null as DataStore | null }));
 vi.mock('@/lib/data/store', async (importOriginal) => {
@@ -18,9 +17,41 @@ import { applyImportPlan } from '@/lib/import/apply';
 import { LocalStore } from '@/lib/data/local-store';
 import { loadDb } from '@/lib/data/local-db';
 
-const MASTER = path.join(process.cwd(), 'public', 'Wing_product_master_v1_25_legacy_4sheet_test_import.xlsx');
-const fullPlan = buildImportPlan(readXlsx(fs.readFileSync(MASTER)));
 const clone = <T>(value: T): T => structuredClone(value);
+
+/** 実商品Excelをリポジトリへ置かず、48商品・64グループ・119選択肢を再現する。 */
+function largeSyntheticPlan(): ImportPlan {
+  const existing = seedOptions.slice(0, 7).map((option) => option.code);
+  const codes = [...existing, ...Array.from({ length: 41 }, (_, i) => `synthetic-product-${i + 1}`)];
+  const products: ImportPlan['products'] = codes.map((code, i) => ({
+    code,
+    categoryName: 'トイレ',
+    name: `合成商品 ${i + 1}`,
+    manufacturer: null,
+    modelNo: null,
+    sizeNote: null,
+    listPrice: null,
+    price: i * 1000,
+    description: null,
+    highlight: null,
+    imageFile: null,
+    sortOrder: i + 1,
+  }));
+  const groups = Array.from({ length: 64 }, (_, i) => ({ productCode: codes[i % codes.length], groupName: `選択項目 ${i + 1}` }));
+  const choices: ImportPlan['choices'] = Array.from({ length: 119 }, (_, i) => ({
+    ...groups[i % groups.length],
+    choiceName: `選択肢 ${i + 1}`,
+    kind: 'option' as const,
+    extraPrice: i * 100,
+    priceOnRequest: false,
+    imageFile: null,
+    note: null,
+    sortOrder: i + 1,
+  }));
+  return { categories: [], products, choices, images: [], warnings: [] };
+}
+
+const fullPlan = largeSyntheticPlan();
 
 class AtomicCatalogStore {
   categories: OptionCategory[];

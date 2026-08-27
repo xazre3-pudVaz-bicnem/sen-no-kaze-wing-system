@@ -9,8 +9,8 @@ const nextConfig: NextConfig = {
   // 開発時に 127.0.0.1 / LAN からアクセスしても /_next/* が 403 にならないようにする
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
   experimental: {
-    // 商品の一括登録で Excel と画像 ZIP を送るため、既定の 1MB では足りない
-    serverActions: { bodySizeLimit: '80mb' },
+    // Excel だけを Server Action へ送る。画像 ZIP はブラウザから Storage へ直接送る。
+    serverActions: { bodySizeLimit: '4mb' },
   },
   images: {
     formats: ['image/avif', 'image/webp'],

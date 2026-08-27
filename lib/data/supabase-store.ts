@@ -29,6 +29,11 @@ import type {
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  catalogImportPathsForUser,
+  catalogImportUploadPath,
+  catalogImportUrlsForUser,
+} from '@/lib/import/catalog-import-images';
+import {
   StoreError,
   type ContactInput,
   type CategoryInput,
@@ -583,6 +588,13 @@ export class SupabaseStore implements DataStore {
     if (up.error) throw new StoreError('INTERNAL', up.error.message);
     return admin.storage.from('product-images').getPublicUrl(storagePath).data.publicUrl;
   }
+  async uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number) {
+    const admin = createAdminClient();
+    const storagePath = catalogImportUploadPath(userId, sessionId, index, file.fileName);
+    const up = await admin.storage.from('product-images').upload(storagePath, file.bytes, { contentType: file.contentType, upsert: false });
+    if (up.error) throw new StoreError('INTERNAL', up.error.message);
+    return admin.storage.from('product-images').getPublicUrl(storagePath).data.publicUrl;
+  }
   async deleteUploadedImage(url: string) {
     const marker = '/storage/v1/object/public/product-images/';
     const at = url.indexOf(marker);
@@ -592,5 +604,32 @@ export class SupabaseStore implements DataStore {
     const admin = createAdminClient();
     const { error } = await admin.storage.from('product-images').remove([storagePath]);
     if (error) throw new StoreError('INTERNAL', error.message);
+  }
+  async listReferencedCatalogImportImageUrls(userId: string) {
+    const db = await this.db();
+    const [options, choices] = await Promise.all([
+      db.from('options').select('image_url').not('image_url', 'is', null),
+      db.from('option_variant_choices').select('image_url').not('image_url', 'is', null),
+    ]);
+    if (options.error) mapPgError(options.error);
+    if (choices.error) mapPgError(choices.error);
+    return catalogImportUrlsForUser(
+      [
+        ...((options.data ?? []) as { image_url: string | null }[]).map((row) => row.image_url),
+        ...((choices.data ?? []) as { image_url: string | null }[]).map((row) => row.image_url),
+      ],
+      userId
+    );
+  }
+  async deleteUnreferencedCatalogImportImages(candidateUrls: string[], userId: string) {
+    const candidates = catalogImportPathsForUser(candidateUrls, userId);
+    if (!candidates.length) return 0;
+    const referenced = new Set(catalogImportPathsForUser(await this.listReferencedCatalogImportImageUrls(userId), userId));
+    const removePaths = candidates.filter((storagePath) => !referenced.has(storagePath));
+    if (!removePaths.length) return 0;
+    const admin = createAdminClient();
+    const { error } = await admin.storage.from('product-images').remove(removePaths);
+    if (error) throw new StoreError('INTERNAL', error.message);
+    return removePaths.length;
   }
 }

@@ -202,8 +202,14 @@ export interface DataStore {
   deleteProductImage(id: string): Promise<void>;
   /** 画像をストレージへ保存し公開 URL を返す */
   uploadImage(file: UploadInput, folder: string): Promise<string>;
+  /** 商品マスター Import 用画像を、実行ユーザーと session 単位の隔離パスへ保存する */
+  uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number): Promise<string>;
   /** このリクエストで保存した画像を、後続処理失敗時に取り消す。 */
   deleteUploadedImage(url: string): Promise<void>;
+  /** options / option_variant_choices が現在参照している、このユーザーの catalog-import 画像 URL */
+  listReferencedCatalogImportImageUrls(userId: string): Promise<string[]>;
+  /** 候補 URL のうち、削除直前の再確認でも未参照の catalog-import 画像だけを削除する */
+  deleteUnreferencedCatalogImportImages(candidateUrls: string[], userId: string): Promise<number>;
 
   // ---- お問い合わせ ----
   createContactMessage(input: ContactInput): Promise<ContactMessage>;

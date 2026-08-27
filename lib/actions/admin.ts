@@ -7,6 +7,7 @@ import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS } from '@/lib/d
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError } from '@/lib/data/store';
+import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
   modelSchema,
@@ -524,16 +525,15 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
   for (const item of metadata) {
     if (!apply) { images.set(item.name, ''); continue; }
     if (isLocalMode()) {
-      if (!item.url || !/^\/api\/local-files\/catalog-import\/[A-Za-z0-9._-]+$/.test(item.url)) {
+      const storagePath = catalogImportPathFromImageUrl(item.url);
+      if (!item.url || !storagePath || !isCatalogImportPathForUser(storagePath, actor.id)) {
         return { ok: false, error: 'ローカル画像の保存先が正しくありません。' };
       }
       images.set(item.name, item.url);
       uploadedUrls.push(item.url);
       continue;
     }
-    const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-    const expectedPath = new RegExp(`^catalog-import/${actor.id}/${uuid}/[A-Za-z0-9._-]+$`, 'i');
-    if (!item.path || !expectedPath.test(item.path) || item.path.includes('..')) {
+    if (!item.path || !isCatalogImportPathForUser(item.path, actor.id) || item.path.includes('..')) {
       return { ok: false, error: 'アップロード済み画像の保存先が正しくありません。' };
     }
     const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/product-images/${item.path.split('/').map(encodeURIComponent).join('/')}`;
@@ -565,7 +565,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
   let applied: NonNullable<ImportState['applied']>;
   try {
     const { applyImportPlan } = await import('@/lib/import/apply');
-    applied = await applyImportPlan(plan, images);
+    applied = await applyImportPlan(plan, images, { catalogImportUserId: actor.id });
   } catch (e) {
     if (uploadedUrls.length) {
       const store = await getStore();

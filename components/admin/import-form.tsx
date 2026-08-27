@@ -14,6 +14,7 @@ import {
   validateImageEntries,
   type BrowserZipEntry,
 } from '@/lib/import/browser-archive';
+import { catalogImportUploadPath } from '@/lib/import/catalog-import-images';
 
 const initial: ImportState = { ok: false };
 
@@ -83,13 +84,15 @@ export function ImportForm({ localMode = false }: { localMode?: boolean }) {
             const formData = new FormData();
             const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
             formData.set('file', new File([body], base, { type: contentType }));
+            formData.set('sessionId', sessionId);
+            formData.set('index', String(i));
             const response = await fetch('/api/admin/catalog-import/images', { method: 'POST', body: formData });
             const result = await response.json() as { url?: string; error?: string };
             if (!response.ok || !result.url) throw new Error(result.error ?? `画像「${base}」を保存できませんでした。`);
             uploaded.push(result.url);
             metadata.push({ name: base, url: result.url });
           } else {
-            const path = `catalog-import/${user!.id}/${sessionId}/${String(i).padStart(4, '0')}-${base.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+            const path = catalogImportUploadPath(user!.id, sessionId, i, base);
             const { error } = await supabase!.storage.from('product-images').upload(path, bytes, { contentType, upsert: false });
             if (error) throw new Error(`画像「${base}」を保存できませんでした: ${error.message}`);
             uploaded.push(path);
@@ -252,6 +255,19 @@ export function ImportForm({ localMode = false }: { localMode?: boolean }) {
                 {state.applied.skipped.slice(0, 10).map((s, i) => (
                   <li key={i}>{s}</li>
                 ))}
+              </ul>
+            </Alert>
+          )}
+          {state.applied.warnings.length > 0 && (
+            <Alert tone="warn" title={`確認してほしい点：${state.applied.warnings.length} 件`}>
+              <ul className="mt-1 space-y-1 text-xs">
+                {state.applied.warnings.slice(0, 12).map((w, i) => (
+                  <li key={i} className="flex gap-1.5">
+                    <TriangleAlert className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+                    {w}
+                  </li>
+                ))}
+                {state.applied.warnings.length > 12 && <li>ほか {state.applied.warnings.length - 12} 件</li>}
               </ul>
             </Alert>
           )}

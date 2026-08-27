@@ -6,6 +6,7 @@ import type { CatalogImportBatch, DataStore } from '@/lib/data/store';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { seedCategories, seedOptions } from '@/lib/seed/catalog';
 import type { ImportPlan } from '@/lib/import/catalog-import';
+import { catalogImportPathFromImageUrl, catalogImportPathsForUser, catalogImportUrlsForUser } from '@/lib/import/catalog-import-images';
 
 const state = vi.hoisted(() => ({ store: null as DataStore | null }));
 vi.mock('@/lib/data/store', async (importOriginal) => {
@@ -15,9 +16,16 @@ vi.mock('@/lib/data/store', async (importOriginal) => {
 
 import { applyImportPlan } from '@/lib/import/apply';
 import { LocalStore } from '@/lib/data/local-store';
-import { loadDb } from '@/lib/data/local-db';
+import { filesDir, loadDb } from '@/lib/data/local-db';
 
 const clone = <T>(value: T): T => structuredClone(value);
+const IMPORT_USER_ID = 'import-admin';
+const OLD_SESSION_ID = '11111111-1111-4111-8111-111111111111';
+const NEW_SESSION_ID = '22222222-2222-4222-8222-222222222222';
+
+function catalogImportUrl(userId: string, sessionId: string, index: number, fileName: string) {
+  return `https://example.supabase.co/storage/v1/object/public/product-images/catalog-import/${userId}/${sessionId}/${String(index).padStart(4, '0')}-${fileName}`;
+}
 
 /** 実商品Excelをリポジトリへ置かず、48商品・64グループ・119選択肢を再現する。 */
 function largeSyntheticPlan(): ImportPlan {
@@ -53,11 +61,36 @@ function largeSyntheticPlan(): ImportPlan {
 
 const fullPlan = largeSyntheticPlan();
 
+function largeSyntheticPlanWithImages(): ImportPlan {
+  const plan = clone(fullPlan);
+  plan.products = plan.products.map((product, i) => ({ ...product, imageFile: `product-${i + 1}.jpg` }));
+  plan.choices = plan.choices.map((choice, i) => ({ ...choice, imageFile: `choice-${i + 1}.jpg` }));
+  plan.images = [
+    ...plan.products.map((product) => ({ file: product.imageFile!, productCode: product.code, purpose: 'product' })),
+    ...plan.choices.map((choice) => ({ file: choice.imageFile!, productCode: choice.productCode, purpose: 'choice' })),
+  ];
+  return plan;
+}
+
+function imageMapFor(plan: ImportPlan, userId: string, sessionId: string) {
+  const images = new Map<string, string>();
+  let index = 0;
+  for (const product of plan.products) {
+    if (product.imageFile) images.set(product.imageFile, catalogImportUrl(userId, sessionId, index++, product.imageFile));
+  }
+  for (const choice of plan.choices) {
+    if (choice.imageFile) images.set(choice.imageFile, catalogImportUrl(userId, sessionId, index++, choice.imageFile));
+  }
+  return images;
+}
+
 class AtomicCatalogStore {
   categories: OptionCategory[];
   options: ProductOption[];
   groups: OptionVariantGroup[] = [];
   choices: OptionVariantChoice[] = [];
+  deletedCatalogPaths: string[] = [];
+  failCatalogCleanup = false;
   fail = false;
   calls = 0;
 
@@ -68,6 +101,22 @@ class AtomicCatalogStore {
 
   async listCategories() { return clone(this.categories); }
   async listOptions() { return clone(this.options); }
+  async listReferencedCatalogImportImageUrls(userId: string) {
+    return catalogImportUrlsForUser(
+      [
+        ...this.options.map((option) => option.image_url),
+        ...this.choices.map((choice) => choice.image_url),
+      ],
+      userId
+    );
+  }
+  async deleteUnreferencedCatalogImportImages(candidateUrls: string[], userId: string) {
+    if (this.failCatalogCleanup) throw new Error('cleanup failed');
+    const referenced = new Set(catalogImportPathsForUser(await this.listReferencedCatalogImportImageUrls(userId), userId));
+    const removePaths = catalogImportPathsForUser(candidateUrls, userId).filter((storagePath) => !referenced.has(storagePath));
+    this.deletedCatalogPaths.push(...removePaths);
+    return removePaths.length;
+  }
   async applyCatalogImport(batch: CatalogImportBatch) {
     this.calls++;
     const next = {
@@ -212,6 +261,67 @@ describe('商品マスターの原子的な一括登録', () => {
     expect(store.groups).toHaveLength(64);
     expect(store.choices).toHaveLength(119);
   });
+
+  it('48商品・64選択項目・119選択肢の再Importで旧session画像だけを削除し、現参照画像は残す', async () => {
+    const plan = largeSyntheticPlanWithImages();
+    const existingCodes = new Set(plan.products.map((p) => p.code.toLowerCase()));
+    const existing = seedOptions.filter((o) => existingCodes.has(o.code));
+    const store = useStore(new AtomicCatalogStore(existing));
+
+    const first = await applyImportPlan(clone(plan), imageMapFor(plan, IMPORT_USER_ID, OLD_SESSION_ID), {
+      catalogImportUserId: IMPORT_USER_ID,
+    });
+    expect(first).toMatchObject({
+      createdProducts: 41,
+      updatedProducts: 7,
+      variantGroups: 64,
+      variantChoices: 119,
+      imagesLinked: 167,
+    });
+    expect(store.options.filter((o) => plan.products.some((p) => p.code.toLowerCase() === o.code))).toHaveLength(48);
+    expect(store.groups).toHaveLength(64);
+    expect(store.choices).toHaveLength(119);
+    expect(store.deletedCatalogPaths).toHaveLength(0);
+
+    const second = await applyImportPlan(clone(plan), imageMapFor(plan, IMPORT_USER_ID, NEW_SESSION_ID), {
+      catalogImportUserId: IMPORT_USER_ID,
+    });
+
+    expect(second).toMatchObject({
+      createdProducts: 0,
+      updatedProducts: 48,
+      variantGroups: 64,
+      variantChoices: 119,
+      imagesLinked: 167,
+    });
+    expect(store.options.filter((o) => plan.products.some((p) => p.code.toLowerCase() === o.code))).toHaveLength(48);
+    expect(store.groups).toHaveLength(64);
+    expect(store.choices).toHaveLength(119);
+    expect(store.deletedCatalogPaths).toHaveLength(167);
+    expect(store.deletedCatalogPaths.every((storagePath) => storagePath.includes(`/${OLD_SESSION_ID}/`))).toBe(true);
+    expect(store.deletedCatalogPaths.some((storagePath) => storagePath.includes(`/${NEW_SESSION_ID}/`))).toBe(false);
+    expect(await store.listReferencedCatalogImportImageUrls(IMPORT_USER_ID)).toHaveLength(167);
+    expect((await store.listReferencedCatalogImportImageUrls(IMPORT_USER_ID)).every((url) => url.includes(`/${NEW_SESSION_ID}/`))).toBe(true);
+  });
+
+  it('成功後cleanup失敗はImport成功を取り消さず警告にする', async () => {
+    const plan = largeSyntheticPlanWithImages();
+    const existingCodes = new Set(plan.products.map((p) => p.code.toLowerCase()));
+    const existing = seedOptions.filter((o) => existingCodes.has(o.code));
+    const store = useStore(new AtomicCatalogStore(existing));
+    await applyImportPlan(clone(plan), imageMapFor(plan, IMPORT_USER_ID, OLD_SESSION_ID), {
+      catalogImportUserId: IMPORT_USER_ID,
+    });
+
+    store.failCatalogCleanup = true;
+    const result = await applyImportPlan(clone(plan), imageMapFor(plan, IMPORT_USER_ID, NEW_SESSION_ID), {
+      catalogImportUserId: IMPORT_USER_ID,
+    });
+
+    expect(result.updatedProducts).toBe(48);
+    expect(result.warnings).toContain('旧Import画像のcleanupに失敗しました: cleanup failed');
+    expect(store.options.filter((o) => plan.products.some((p) => p.code.toLowerCase() === o.code))).toHaveLength(48);
+  });
 });
 
 describe('LocalStore の一括登録 transaction', () => {
@@ -276,5 +386,66 @@ describe('LocalStore の一括登録 transaction', () => {
       variantChoices: [],
     })).rejects.toThrow('商品が見つかりません');
     expect(fs.readFileSync(path.join(dir, 'db.json'), 'utf8')).toBe(before);
+  });
+
+  it('旧catalog-import画像だけを消し、現在参照中と他ユーザーsessionの画像を残す', async () => {
+    const store = new LocalStore();
+    const category = (await store.listCategories()).find((c) => c.code === 'toilet')!;
+    const oldUrl = await store.uploadCatalogImportImage(
+      { bytes: new Uint8Array([1]), contentType: 'image/jpeg', fileName: 'old.jpg' },
+      IMPORT_USER_ID,
+      OLD_SESSION_ID,
+      0
+    );
+    const currentUrl = await store.uploadCatalogImportImage(
+      { bytes: new Uint8Array([2]), contentType: 'image/jpeg', fileName: 'current.jpg' },
+      IMPORT_USER_ID,
+      NEW_SESSION_ID,
+      0
+    );
+    const otherUserUrl = await store.uploadCatalogImportImage(
+      { bytes: new Uint8Array([3]), contentType: 'image/jpeg', fileName: 'other.jpg' },
+      'other-user',
+      OLD_SESSION_ID,
+      0
+    );
+    const abs = (url: string) => path.join(filesDir(), ...(catalogImportPathFromImageUrl(url) ?? '').split('/'));
+
+    await store.applyCatalogImport({
+      options: [{
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        base_model_id: null,
+        category_id: category.id,
+        code: 'local-cleanup-test',
+        name: 'ローカルcleanup確認',
+        description: null,
+        price: 0,
+        image_url: currentUrl,
+        selection_type: 'checkbox',
+        is_required: false,
+        is_default: false,
+        is_installation: false,
+        price_on_request: false,
+        spec_codes: [],
+        owner_id: null,
+        manufacturer: null,
+        model_no: null,
+        size_note: null,
+        list_price: null,
+        highlight: null,
+        preview_key: null,
+        affects_views: [],
+        sort_order: 1,
+        status: 'published',
+        import_operation: 'INSERT',
+      }],
+      variantGroups: [],
+      variantChoices: [],
+    });
+
+    await expect(store.deleteUnreferencedCatalogImportImages([oldUrl, currentUrl, otherUserUrl], IMPORT_USER_ID)).resolves.toBe(1);
+    expect(fs.existsSync(abs(oldUrl))).toBe(false);
+    expect(fs.existsSync(abs(currentUrl))).toBe(true);
+    expect(fs.existsSync(abs(otherUserUrl))).toBe(true);
   });
 });

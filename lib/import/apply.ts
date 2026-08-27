@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { getStore } from '@/lib/data/store';
-import type { OptionCategory, ProductOption } from '@/lib/domain/types';
+import { getStore, StoreError, type CatalogImportBatch } from '@/lib/data/store';
+import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { slugify, type ImportPlan } from './catalog-import';
 
 /**
@@ -81,19 +81,28 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
 
   const imageUrl = (file: string | null): string | null => (file ? (images.get(file) ?? null) : null);
 
+  // 書き込み開始前にカテゴリー不足を全件検出する。途中まで登録してから skip しない。
+  const missingCategories = [...new Set(plan.products.map((p) => p.categoryName).filter((name) => !resolveCategory(name)))];
+  if (missingCategories.length) {
+    throw new StoreError(
+      'VALIDATION',
+      `${missingCategories.map((name) => `カテゴリー「${name}」`).join('、')}が商品台帳に存在しません。先にカテゴリーを登録してください。`
+    );
+  }
+
+  const batch: CatalogImportBatch = { options: [], variantGroups: [], variantChoices: [] };
+
   for (const p of plan.products) {
     const category = resolveCategory(p.categoryName);
-    if (!category) {
-      result.skipped.push(`${p.name}（カテゴリー「${p.categoryName}」が台帳にありません）`);
-      continue;
-    }
+    // 上で全件検証済み。型上の undefined だけを防ぐ。
+    if (!category) throw new StoreError('VALIDATION', `商品「${p.code}」のカテゴリーを解決できませんでした`);
     const code = slugify(p.code, p.code);
     const existing = optionByCode.get(code);
     const url = imageUrl(p.imageFile);
     if (p.imageFile && !url) result.warnings.push(`画像「${p.imageFile}」が見つかりませんでした（${p.name}）。`);
     if (url) result.imagesLinked++;
 
-    const saved = await store.upsertOption({
+    const saved = {
       id: existing?.id ?? stableId('option', p.code),
       base_model_id: existing?.base_model_id ?? null,
       category_id: category.id,
@@ -118,11 +127,13 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       affects_views: existing?.affects_views ?? [],
       sort_order: 100 + p.sortOrder,
       status: 'published',
-    } as Omit<ProductOption, 'created_at' | 'updated_at'>);
+    } as Omit<ProductOption, 'created_at' | 'updated_at'>;
+
+    batch.options.push({ ...saved, import_operation: existing ? 'UPDATE' : 'INSERT' });
 
     if (existing) result.updatedProducts++;
     else result.createdProducts++;
-    optionByCode.set(code, saved);
+    optionByCode.set(code, { ...saved, created_at: existing?.created_at ?? '', updated_at: existing?.updated_at ?? '' });
   }
 
   /* ---------- 選択項目と選択肢 ---------- */
@@ -152,7 +163,7 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       const seq = (groupSeq.get(option.id) ?? 0) + 1;
       groupSeq.set(option.id, seq);
       groupId = stableId('vgroup', key);
-      await store.upsertVariantGroup({
+      const group: OptionVariantGroup = {
         id: groupId,
         option_id: option.id,
         code: uniqueCode(groupCodeUsed, option.id, slugify(c.groupName, `g${seq}`)),
@@ -161,7 +172,8 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
         sort_order: seq,
         is_required: true,
         status: 'published',
-      });
+      };
+      batch.variantGroups.push(group);
       groupIdByKey.set(key, groupId);
       result.variantGroups++;
     }
@@ -170,7 +182,7 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     if (c.imageFile && !url) result.warnings.push(`画像「${c.imageFile}」が見つかりませんでした（${c.choiceName}）。`);
     if (url) result.imagesLinked++;
 
-    await store.upsertVariantChoice({
+    const choice: OptionVariantChoice = {
       id: stableId('vchoice', `${key}::${c.choiceName}`),
       group_id: groupId,
       code: uniqueCode(choiceCodeUsed, groupId, slugify(c.choiceName, `c${result.variantChoices + 1}`)),
@@ -182,8 +194,19 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       note: c.note,
       sort_order: c.sortOrder || result.variantChoices + 1,
       status: 'published',
-    });
+    };
+    batch.variantChoices.push(choice);
     result.variantChoices++;
+  }
+
+  try {
+    await store.applyCatalogImport(batch);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : '不明なエラー';
+    throw new StoreError(
+      'INTERNAL',
+      `商品台帳の一括登録に失敗しました（商品・選択項目・選択肢は反映されませんでした）: ${detail}`
+    );
   }
 
   return result;

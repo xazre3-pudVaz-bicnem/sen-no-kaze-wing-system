@@ -43,6 +43,7 @@ import {
   type SessionUser,
   type UploadInput,
   type DealerRevisionInput,
+  type CatalogImportBatch,
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -433,7 +434,8 @@ export class SupabaseStore implements DataStore {
   private async upsert<T>(table: string, input: { id?: string | null } & Record<string, unknown>): Promise<T> {
     const db = await this.db();
     const { id, ...rest } = input;
-    const q = id ? db.from(table).update(rest).eq('id', id) : db.from(table).insert(rest);
+    // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する。
+    const q = id ? db.from(table).upsert({ id, ...rest }, { onConflict: 'id' }) : db.from(table).insert(rest);
     const { data, error } = await q.select('*').single();
     if (error) mapPgError(error);
     return data as T;
@@ -455,6 +457,15 @@ export class SupabaseStore implements DataStore {
   }
   async upsertVariantChoice(input: OptionVariantChoice) {
     return this.upsert<OptionVariantChoice>('option_variant_choices', input as unknown as Record<string, unknown> & { id?: string | null });
+  }
+  async applyCatalogImport(batch: CatalogImportBatch): Promise<void> {
+    const db = await this.db();
+    const { error } = await db.rpc('apply_catalog_import', {
+      p_options: batch.options,
+      p_variant_groups: batch.variantGroups,
+      p_variant_choices: batch.variantChoices,
+    });
+    if (error) mapPgError(error);
   }
   async listOptions() {
     const db = await this.db();
@@ -571,5 +582,15 @@ export class SupabaseStore implements DataStore {
     const up = await admin.storage.from('product-images').upload(storagePath, file.bytes, { contentType: file.contentType, upsert: false });
     if (up.error) throw new StoreError('INTERNAL', up.error.message);
     return admin.storage.from('product-images').getPublicUrl(storagePath).data.publicUrl;
+  }
+  async deleteUploadedImage(url: string) {
+    const marker = '/storage/v1/object/public/product-images/';
+    const at = url.indexOf(marker);
+    if (at < 0) return;
+    const storagePath = decodeURIComponent(url.slice(at + marker.length));
+    if (!storagePath) return;
+    const admin = createAdminClient();
+    const { error } = await admin.storage.from('product-images').remove([storagePath]);
+    if (error) throw new StoreError('INTERNAL', error.message);
   }
 }

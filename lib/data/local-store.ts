@@ -37,6 +37,7 @@ import {
   StoreError,
   type ContactInput,
   type CategoryInput,
+  type CatalogImportBatch,
   type DataStore,
   type ModelInput,
   type OptionInput,
@@ -847,6 +848,43 @@ export class LocalStore implements DataStore {
       return input;
     });
   }
+  async applyCatalogImport(batch: CatalogImportBatch): Promise<void> {
+    this.mutate((db) => {
+      for (const input of batch.options) {
+        const existing = db.options.find((o) => o.code === input.code);
+        const { import_operation: _operation, ...optionInput } = input;
+        if (existing) {
+          const { id: _id, ...patch } = optionInput;
+          Object.assign(existing, patch, { updated_at: nowIso() });
+        } else {
+          if (!optionInput.id) throw new StoreError('VALIDATION', `商品「${optionInput.code}」の ID がありません`);
+          db.options.push({ ...optionInput, id: optionInput.id, created_at: nowIso(), updated_at: nowIso() });
+        }
+      }
+      for (const input of batch.variantGroups) {
+        if (!db.options.some((o) => o.id === input.option_id)) {
+          throw new StoreError('VALIDATION', `選択項目「${input.code}」の商品が見つかりません`);
+        }
+        if (db.variantGroups.some((g) => g.option_id === input.option_id && g.code === input.code && g.id !== input.id)) {
+          throw new StoreError('VALIDATION', `選択項目コード「${input.code}」は既に使われています`);
+        }
+        const i = db.variantGroups.findIndex((g) => g.id === input.id);
+        if (i >= 0) db.variantGroups[i] = { ...db.variantGroups[i], ...input };
+        else db.variantGroups.push(input);
+      }
+      for (const input of batch.variantChoices) {
+        if (!db.variantGroups.some((g) => g.id === input.group_id)) {
+          throw new StoreError('VALIDATION', `選択肢「${input.code}」の選択項目が見つかりません`);
+        }
+        if (db.variantChoices.some((c) => c.group_id === input.group_id && c.code === input.code && c.id !== input.id)) {
+          throw new StoreError('VALIDATION', `選択肢コード「${input.code}」は既に使われています`);
+        }
+        const i = db.variantChoices.findIndex((c) => c.id === input.id);
+        if (i >= 0) db.variantChoices[i] = { ...db.variantChoices[i], ...input };
+        else db.variantChoices.push(input);
+      }
+    });
+  }
   async listOptions() {
     return this.read((db) => [...db.options].sort((a, b) => a.sort_order - b.sort_order));
   }
@@ -861,7 +899,12 @@ export class LocalStore implements DataStore {
       }
       if (id) {
         const o = db.options.find((x) => x.id === id);
-        if (!o) throw new StoreError('NOT_FOUND', 'オプションが見つかりません');
+        if (!o) {
+          const created: ProductOption = { ...rest, id, created_at: nowIso(), updated_at: nowIso() };
+          db.options.push(created);
+          this.pushAudit(db, null, { action: 'create', entity: 'option', entity_id: created.id, summary: `商品を追加：${created.name}` });
+          return created;
+        }
         const before = { price: o.price, status: o.status };
         Object.assign(o, rest, { updated_at: nowIso() });
         if (before.price !== o.price) {
@@ -1017,5 +1060,13 @@ export class LocalStore implements DataStore {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, file.bytes);
     return `/api/local-files/${safeFolder}/${name}`;
+  }
+  async deleteUploadedImage(url: string) {
+    const prefix = '/api/local-files/';
+    if (!url.startsWith(prefix)) return;
+    const relative = url.slice(prefix.length);
+    const root = path.resolve(filesDir());
+    const target = path.resolve(root, relative);
+    if (target !== root && target.startsWith(`${root}${path.sep}`)) fs.rmSync(target, { force: true });
   }
 }

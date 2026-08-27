@@ -496,6 +496,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
 
   // 画像 ZIP（任意）
   const images = new Map<string, string>();
+  const uploadedUrls: string[] = [];
   const zipFile = formData.get('images');
   let uploadedCount = 0;
   if (zipFile instanceof File && zipFile.size > 0) {
@@ -516,6 +517,7 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
       try {
         const url = await store.uploadImage({ bytes: new Uint8Array(entry.data), contentType: type, fileName: base }, 'catalog');
         images.set(base, url);
+        uploadedUrls.push(url);
         uploadedCount++;
       } catch {
         plan.warnings.push(`画像「${base}」を保存できませんでした。`);
@@ -544,13 +546,22 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
     };
   }
 
+  let applied: NonNullable<ImportState['applied']>;
   try {
     const { applyImportPlan } = await import('@/lib/import/apply');
-    const applied = await applyImportPlan(plan, images);
-    revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
-    return { ok: true, applied };
+    applied = await applyImportPlan(plan, images);
   } catch (e) {
+    if (uploadedUrls.length) {
+      const store = await getStore();
+      const cleanup = await Promise.allSettled(uploadedUrls.map((url) => store.deleteUploadedImage(url)));
+      const failed = cleanup.filter((r) => r.status === 'rejected').length;
+      const state = errState(e) as ImportState;
+      if (failed) state.error = `${state.error ?? '一括登録に失敗しました。'}（未使用画像 ${failed} 件を削除できませんでした）`;
+      return state;
+    }
     return errState(e) as ImportState;
   }
+  revalidatePath('/', 'layout');
+  updateTag(CATALOG_TAG);
+  return { ok: true, applied };
 }

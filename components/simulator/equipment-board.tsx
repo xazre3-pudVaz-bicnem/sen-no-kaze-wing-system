@@ -16,7 +16,8 @@ interface Props {
 
 /**
  * 先方モックアップの「標準設備及び仕上げ表」。
- * カテゴリーごとに現在選ばれている商品名・価格を表示し、画像は表示順が最初の画像あり商品を代表画像として使う。
+ * カテゴリーごとに現在選ばれている商品名・価格を表示し、商品が選択されている場合だけ
+ * 表示順が最初の画像あり商品を代表画像として使う。
  * クリックで選択ポップアップを開く（変更方法①）。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
@@ -38,7 +39,7 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
             .sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code));
           const chosen = categoryOptions.filter((o) => selectedSet.has(o.id));
           const main = chosen[0] ?? null;
-          const representative = categoryOptions.find((o) => Boolean(o.image_url)) ?? null;
+          const representative = main ? categoryOptions.find((o) => Boolean(o.image_url)) ?? null : null;
           const extraCount = chosen.length - 1;
           return (
             <li key={cat.id} className="bg-white">

@@ -148,7 +148,7 @@ export interface DataStore {
   saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration>;
   duplicateConfiguration(id: string, actor: SessionUser): Promise<Configuration>;
   deleteConfiguration(id: string, actor: SessionUser): Promise<void>;
-  listAllConfigurations(): Promise<(Configuration & { user_email: string; user_name: string })[]>;
+  listAllConfigurations(): Promise<(Configuration & { user_email: string; user_name: string; user_address: string | null })[]>;
 
   // ---- 見積 ----
   createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null): Promise<Quote>;

@@ -473,7 +473,7 @@ export class LocalStore implements DataStore {
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .map((c) => {
           const p = db.profiles.find((x) => x.id === c.user_id);
-          return { ...c, user_email: p?.email ?? '', user_name: p?.full_name ?? '' };
+          return { ...c, user_email: p?.email ?? '', user_name: p?.full_name ?? '', user_address: p?.address ?? null };
         })
     );
   }

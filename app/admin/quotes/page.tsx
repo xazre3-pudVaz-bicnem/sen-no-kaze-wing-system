@@ -6,9 +6,12 @@ import { canEditCatalog, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS } from
 import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
+import { matchesRegion, parseAddress, readRegionFilter } from '@/lib/domain/address';
+import { RegionFilter } from '@/components/admin/region-filter';
 
-export default async function AdminQuotesPage() {
+export default async function AdminQuotesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
+  const sp = await searchParams;
   const store = await getStore();
 
   // 代理店は自分に割り当てられた見積だけを見る。総代理店は本部と同じく全件（本体明細を編集するため）
@@ -72,6 +75,20 @@ export default async function AdminQuotesPage() {
 
   const [requests, quotes] = await Promise.all([store.listQuoteRequests(), store.listAllQuotes()]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
+
+  // 地域で抽出（設置予定地を優先し、無ければ顧客住所で判定）
+  const filter = readRegionFilter(sp);
+  const addrOf = (r: (typeof requests)[number]) => r.contact.site_address || r.contact.address || '';
+  const cityPool = filter.pref
+    ? [...new Set(
+        requests
+          .map((r) => parseAddress(addrOf(r)))
+          .filter((a) => a.prefecture === filter.pref && a.city)
+          .map((a) => a.city as string)
+      )].sort()
+    : [];
+  const shown = requests.filter((r) => matchesRegion(addrOf(r), filter));
+
   return (
     <AdminPage
       title="見積依頼・見積書"
@@ -82,6 +99,7 @@ export default async function AdminQuotesPage() {
         </Link>
       }
     >
+      <RegionFilter value={filter} cities={cityPool} total={requests.length} matched={shown.length} />
       <Table minWidth="60rem">
         <thead className="bg-sand/60">
           <tr>
@@ -97,7 +115,7 @@ export default async function AdminQuotesPage() {
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
-          {requests.map((r) => {
+          {shown.map((r) => {
             const q = r.quote_id ? quoteById.get(r.quote_id) : undefined;
             return (
               <tr key={r.id} data-testid="admin-quote-row">

@@ -333,11 +333,11 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { data, error } = await db
       .from('configurations')
-      .select('*, profiles!configurations_user_id_fkey(email, full_name)')
+      .select('*, profiles!configurations_user_id_fkey(email, full_name, address)')
       .order('updated_at', { ascending: false });
     if (error) mapPgError(error);
-    return ((data ?? []) as (Configuration & { profiles: { email: string; full_name: string } | null })[]).map(
-      ({ profiles, ...c }) => ({ ...c, user_email: profiles?.email ?? '', user_name: profiles?.full_name ?? '' })
+    return ((data ?? []) as (Configuration & { profiles: { email: string; full_name: string; address: string | null } | null })[]).map(
+      ({ profiles, ...c }) => ({ ...c, user_email: profiles?.email ?? '', user_name: profiles?.full_name ?? '', user_address: profiles?.address ?? null })
     );
   }
 

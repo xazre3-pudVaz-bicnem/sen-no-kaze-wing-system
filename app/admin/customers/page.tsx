@@ -4,11 +4,26 @@ import { ROLE_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { UserRoleForm } from '@/components/admin/dealer-forms';
+import { matchesRegion, parseAddress, readRegionFilter } from '@/lib/domain/address';
+import { RegionFilter } from '@/components/admin/region-filter';
 
-export default async function AdminCustomersPage() {
+export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const admin = await requireAdmin();
+  const sp = await searchParams;
   const store = await getStore();
   const [profiles, configurations] = await Promise.all([store.listProfiles(), store.listAllConfigurations()]);
+
+  // 地域で抽出（登録住所で判定）
+  const filter = readRegionFilter(sp);
+  const cityPool = filter.pref
+    ? [...new Set(
+        profiles
+          .map((p) => parseAddress(p.address))
+          .filter((a) => a.prefecture === filter.pref && a.city)
+          .map((a) => a.city as string)
+      )].sort()
+    : [];
+  const shown = profiles.filter((p) => matchesRegion(p.address, filter));
   const countByUser = new Map<string, number>();
   for (const c of configurations) countByUser.set(c.user_id, (countByUser.get(c.user_id) ?? 0) + 1);
   const byRole = (role: string) => profiles.filter((p) => p.role_code === role).length;
@@ -34,6 +49,7 @@ export default async function AdminCustomersPage() {
         <p className="mt-2 text-muted">変更は即時に反映されます（対象の方は再読み込みが必要な場合があります）。自分自身の権限は変更できません。</p>
       </div>
 
+      <RegionFilter value={filter} cities={cityPool} total={profiles.length} matched={shown.length} />
       <Table minWidth="60rem">
         <thead className="bg-sand/60">
           <tr>
@@ -47,7 +63,7 @@ export default async function AdminCustomersPage() {
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
-          {profiles.map((p) => (
+          {shown.map((p) => (
             <tr key={p.id} data-testid={`user-row-${p.email}`}>
               <Td className="font-semibold">
                 {p.full_name}

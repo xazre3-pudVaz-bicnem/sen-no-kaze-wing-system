@@ -21,6 +21,7 @@ import {
   dealerRevisionSchema,
   manualQuoteSchema,
   baseBreakdownSchema,
+  optionPricesSchema,
   userRoleSchema,
 } from '@/lib/validation';
 import { pruneToScope } from '@/lib/domain/rules';
@@ -687,6 +688,29 @@ export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: F
     updateTag(CATALOG_TAG);
     const total = saved.reduce((sum, b) => sum + b.amount, 0);
     return { ok: true, message: `保存しました（${saved.length}行・本体一式 ¥${total.toLocaleString('ja-JP')}）` };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+
+/** 本体内訳マスターの一括管理表：オプション価格の一括保存（総代理店以上） */
+export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireCatalogEditor();
+  const rows: { id: string; price: FormDataEntryValue }[] = [];
+  for (const [key, value] of formData.entries()) {
+    const m = key.match(/^prices\.([0-9a-f-]{36})$/);
+    if (m) rows.push({ id: m[1], price: value });
+  }
+  const parsed = optionPricesSchema.safeParse({ items: rows });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  try {
+    const store = await getStore();
+    await store.updateOptionPrices(parsed.data.items);
+    revalidatePath('/admin/base-breakdown');
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: `価格を保存しました（${parsed.data.items.length} 件）。新しい見積から反映されます` };
   } catch (e) {
     return errState(e);
   }

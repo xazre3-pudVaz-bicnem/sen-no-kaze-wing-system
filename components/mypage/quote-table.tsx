@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Fragment } from 'react';
 import { ArrowRight, ImageOff } from 'lucide-react';
-import { formatYen } from '@/lib/domain/pricing';
+import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type Quote, type QuoteItem } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 
@@ -17,7 +17,7 @@ import { SmartImage } from '@/components/ui/smart-image';
 const td = {
   name: 'px-3 py-1.5',
   qty: 'w-16 px-2 py-1.5 text-right tabular-nums',
-  unit: 'w-14 px-2 py-1.5 text-muted',
+  unit: 'w-16 px-2 py-1.5 whitespace-nowrap text-muted',
   price: 'w-24 px-2 py-1.5 text-right tabular-nums',
   amount: 'w-28 px-3 py-1.5 text-right tabular-nums',
   remark: 'w-36 px-3 py-1.5 text-[0.7rem] text-muted',
@@ -59,7 +59,7 @@ function ItemRow({ it, showImage = false }: { it: QuoteItem; showImage?: boolean
           </span>
         </span>
       </td>
-      <td className={td.qty}>{it.quantity}</td>
+      <td className={td.qty}>{formatQty(it.quantity)}</td>
       <td className={td.unit}>{it.unit ?? '式'}</td>
       <td className={td.price}>{it.unit_price > 0 ? formatYen(it.unit_price) : ''}</td>
       <td className={td.amount}>{it.amount > 0 ? formatYen(it.amount) : it.unit_price > 0 ? formatYen(it.amount) : '−'}</td>
@@ -101,7 +101,7 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
             <tr>
               <th className="px-3 py-2 font-semibold">項目</th>
               <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
-              <th className="w-14 px-2 py-2 font-semibold">単位</th>
+              <th className="w-16 px-2 py-2 font-semibold whitespace-nowrap">単位</th>
               <th className="w-24 px-2 py-2 text-right font-semibold">単価</th>
               <th className="w-28 px-3 py-2 text-right font-semibold">金額</th>
               <th className="w-36 px-3 py-2 font-semibold">備考</th>
@@ -118,13 +118,23 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
                     {sec.items.map((it) => (
                       <tr key={it.id} className="bg-white text-xs">
                         <td className={td.name}>{it.name}</td>
-                        <td className={td.qty}>{it.quantity}</td>
+                        <td className={td.qty}>{formatQty(it.quantity)}</td>
                         <td className={td.unit}>{it.unit ?? ''}</td>
                         <td className={td.price}>{formatYen(it.unit_price)}</td>
                         <td className={td.amount}>{formatYen(it.amount)}</td>
                         <td className={td.remark}>{it.remark ?? ''}</td>
                       </tr>
                     ))}
+                    {/* 工事区分ごとの小計（先方修正案） */}
+                    {sec.section && (
+                      <tr className="bg-white text-[0.7rem] text-ink-soft">
+                        <td colSpan={4} className="px-3 py-1 text-right font-semibold">{sec.section}　計</td>
+                        <td className="px-3 py-1 text-right font-semibold tabular-nums">
+                          {formatYen(sec.items.reduce((sum, x) => sum + x.amount, 0))}
+                        </td>
+                        <td></td>
+                      </tr>
+                    )}
                   </Fragment>
                 ))
               : baseItems.map((it) => <ItemRow key={it.id} it={it} />)}

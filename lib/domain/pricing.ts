@@ -129,6 +129,11 @@ export function computePricing(
   };
 }
 
+/** 数量の表示（小数第1位まで。整数はそのまま）。先方指定「数量は小数点1」 */
+export function formatQty(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function formatYen(value: number): string {
   const sign = value < 0 ? '-' : '';
   return `${sign}¥${Math.abs(value).toLocaleString('ja-JP')}`;

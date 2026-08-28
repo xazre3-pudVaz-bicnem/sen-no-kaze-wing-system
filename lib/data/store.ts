@@ -176,6 +176,9 @@ export interface DataStore {
   // ---- 監査ログ ----
   listAuditLogs(opts?: { limit?: number }): Promise<AuditLog[]>;
 
+  /** 商品価格の一括更新（総代理店以上）。本体内訳マスターの一括管理表から使う */
+  updateOptionPrices(items: { id: string; price: number }[]): Promise<void>;
+
   // ---- 本体内訳マスター ----
   /** モデル・仕様ごとの本体内訳（分類表見積書）。modelId 省略で全件 */
   listBaseBreakdownItems(modelId?: string): Promise<BaseBreakdownItem[]>;

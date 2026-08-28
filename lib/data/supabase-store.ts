@@ -160,6 +160,15 @@ export class SupabaseStore implements DataStore {
     };
   }
 
+  /** 商品価格の一括更新（監査ログは DB トリガーが記録する） */
+  async updateOptionPrices(items: { id: string; price: number }[]) {
+    const db = await this.db();
+    for (const it of items) {
+      const { error } = await db.from('options').update({ price: it.price }).eq('id', it.id);
+      if (error) mapPgError(error);
+    }
+  }
+
   // ---------- 本体内訳マスター ----------
   async listBaseBreakdownItems(modelId?: string) {
     const db = await this.db();

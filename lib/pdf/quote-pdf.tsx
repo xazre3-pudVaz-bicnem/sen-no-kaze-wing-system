@@ -23,6 +23,8 @@ function registerFonts() {
 }
 
 const yen = (v: number) => `${v < 0 ? '-' : ''}¥${Math.abs(v).toLocaleString('ja-JP')}`;
+/** 数量は小数第1位まで（8.5・17.6。整数はそのまま） */
+const fmtQty = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(1));
 
 const s = StyleSheet.create({
   page: { fontFamily: 'NotoSansJP', fontSize: 9, paddingTop: 34, paddingBottom: 46, paddingHorizontal: 38, color: '#1d1a16', lineHeight: 1.45 },
@@ -102,7 +104,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
       <Text style={s.cName}>{it.name}</Text>
       <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
       <Text style={s.cPrice}>{it.unit_price > 0 ? yen(it.unit_price) : ''}</Text>
-      <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
+      <Text style={s.cQty}>{it.unit ? `${fmtQty(it.quantity)} ${it.unit}` : fmtQty(it.quantity)}</Text>
       <Text style={s.cAmount}>{opts.dash && it.amount === 0 ? '−' : yen(it.amount)}</Text>
     </View>
   );

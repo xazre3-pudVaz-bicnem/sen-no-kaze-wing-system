@@ -248,6 +248,14 @@ export const baseBreakdownSchema = z.object({
   items: z.array(baseBreakdownRowSchema).max(300),
 });
 
+/** 本体内訳マスターの一括管理表：商品価格の一括更新 */
+export const optionPricesSchema = z.object({
+  items: z
+    .array(z.object({ id: z.uuid(), price: z.coerce.number().int().min(0).max(100_000_000) }))
+    .min(1, '変更する価格がありません')
+    .max(200),
+});
+
 /** 管理者がユーザーの権限を変更する */
 export const userRoleSchema = z.object({
   user_id: z.uuid(),

@@ -113,6 +113,25 @@ export class LocalStore implements DataStore {
     });
   }
 
+  /** 商品価格の一括更新。価格変更は監査ログに残す */
+  async updateOptionPrices(items: { id: string; price: number }[]) {
+    this.mutate((db) => {
+      for (const it of items) {
+        const o = db.options.find((x) => x.id === it.id);
+        if (!o || o.price === it.price) continue;
+        const before = o.price;
+        o.price = it.price;
+        o.updated_at = nowIso();
+        this.pushAudit(db, null, {
+          action: 'price',
+          entity: 'option',
+          entity_id: o.id,
+          summary: `価格を変更：${o.name}（${before} → ${o.price} 円）`,
+        });
+      }
+    });
+  }
+
   // ---------- 本体内訳マスター ----------
   async listBaseBreakdownItems(modelId?: string) {
     return this.read((db) =>

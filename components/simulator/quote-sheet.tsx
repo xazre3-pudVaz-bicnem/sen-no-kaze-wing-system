@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Fragment } from 'react';
 import { ArrowRight, Pencil } from 'lucide-react';
-import { formatYen } from '@/lib/domain/pricing';
+import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type BaseBreakdownItem, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +24,7 @@ interface Props {
 const td = {
   name: 'px-3 py-1.5',
   qty: 'w-16 px-2 py-1.5 text-right tabular-nums',
-  unit: 'w-14 px-2 py-1.5 text-muted',
+  unit: 'w-16 px-2 py-1.5 whitespace-nowrap text-muted',
   price: 'w-24 px-2 py-1.5 text-right tabular-nums',
   amount: 'w-28 px-3 py-1.5 text-right tabular-nums',
   remark: 'w-32 px-3 py-1.5 text-[0.7rem] text-muted',
@@ -93,7 +93,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, baseBrea
             <tr>
               <th className="px-3 py-2 font-semibold">項目</th>
               <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
-              <th className="w-14 px-2 py-2 font-semibold">単位</th>
+              <th className="w-16 px-2 py-2 font-semibold whitespace-nowrap">単位</th>
               <th className="w-24 px-2 py-2 text-right font-semibold">単価</th>
               <th className="w-28 px-3 py-2 text-right font-semibold">金額</th>
               <th className="w-32 px-3 py-2 font-semibold">備考</th>
@@ -109,13 +109,21 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, baseBrea
                 {sec.items.map((b) => (
                   <tr key={b.id} className="bg-white text-xs">
                     <td className={td.name}>{b.name}</td>
-                    <td className={td.qty}>{b.quantity}</td>
+                    <td className={td.qty}>{formatQty(b.quantity)}</td>
                     <td className={td.unit}>{b.unit ?? ''}</td>
                     <td className={td.price}>{formatYen(b.unit_price)}</td>
                     <td className={td.amount}>{formatYen(b.amount)}</td>
                     <td className={td.remark}>{b.remark ?? ''}</td>
                   </tr>
                 ))}
+                {/* 工事区分ごとの小計（先方修正案） */}
+                <tr className="bg-white text-[0.7rem] text-ink-soft">
+                  <td colSpan={4} className="px-3 py-1 text-right font-semibold">{sec.section}　計</td>
+                  <td className="px-3 py-1 text-right font-semibold tabular-nums">
+                    {formatYen(sec.items.reduce((sum, x) => sum + x.amount, 0))}
+                  </td>
+                  <td></td>
+                </tr>
               </Fragment>
             ))}
             {sections.length === 0 && (
@@ -166,7 +174,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, baseBrea
                       {!readOnly && cat && <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
                     </button>
                   </td>
-                  <td className={td.qty}>{l.quantity}</td>
+                  <td className={td.qty}>{formatQty(l.quantity)}</td>
                   <td className={td.unit}>式</td>
                   <td className={td.price}>{l.price_on_request ? '別途見積' : formatYen(l.unit_price)}</td>
                   <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>

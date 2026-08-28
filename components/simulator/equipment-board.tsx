@@ -17,7 +17,7 @@ interface Props {
 /**
  * 先方モックアップの「標準設備及び仕上げ表」。
  * カテゴリーごとに現在選ばれている商品名・価格を表示し、商品が選択されている場合だけ
- * 表示順が最初の画像あり商品を代表画像として使う。
+ * 表示順が最初の画像あり商品を代表画像として使う。未選択時は画像枠自体を表示しない。
  * クリックで選択ポップアップを開く（変更方法①）。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
@@ -54,15 +54,17 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
                   <span className="text-xs font-semibold text-muted">{cat.name}</span>
                   {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
                 </span>
-                <span className="relative block aspect-[4/3] w-full overflow-hidden rounded bg-sand">
-                  {representative?.image_url ? (
-                    <SmartImage src={representative.image_url} alt={`${cat.name}の代表画像`} fill sizes="(min-width: 640px) 14rem, 45vw" className="object-cover" />
-                  ) : (
-                    <span className="flex h-full items-center justify-center text-muted">
-                      <ImageOff className="size-5" aria-hidden="true" />
-                    </span>
-                  )}
-                </span>
+                {main && (
+                  <span className="relative block aspect-[4/3] w-full overflow-hidden rounded bg-sand">
+                    {representative?.image_url ? (
+                      <SmartImage src={representative.image_url} alt={`${cat.name}の代表画像`} fill sizes="(min-width: 640px) 14rem, 45vw" className="object-cover" />
+                    ) : (
+                      <span className="flex h-full items-center justify-center text-muted">
+                        <ImageOff className="size-5" aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+                )}
                 <span className="min-w-0 flex-1">
                   <span className={cn('block text-sm leading-snug font-semibold', !main && 'text-muted')}>{main ? main.name : '選択なし'}</span>
                   {extraCount > 0 && <span className="block text-[0.7rem] text-muted">ほか {extraCount} 点</span>}

@@ -69,7 +69,7 @@ export default async function AdminQuoteDetailPage({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
           <div className="card overflow-hidden">
-            <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" />
+            <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />
           </div>
           <p className="text-xs text-muted">
             金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。

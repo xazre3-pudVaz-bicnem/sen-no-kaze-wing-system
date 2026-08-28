@@ -259,6 +259,12 @@ export const seedProductImages: ProductImage[] = [
   { id: '11000000-0000-4000-8000-000000000013', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/cases/iwate-yamada-funakoshi.png', alt: '岩手県山田町・船越大島の海辺に並ぶWing', caption: '岩手県山田町 船越大島', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000014', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/exterior/anamizu-cove.jpg', alt: '石川県穴水町の入り江に置かれたWing', caption: '石川県穴水町 入り江', sort_order: 2 },
   { id: '11000000-0000-4000-8000-000000000015', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/cases/island-resort.png', alt: '島のデッキに3棟並んだWing', caption: '離島リゾート計画（イメージ）', sort_order: 3 },
+  // ---- 20260818 コンテナ説明用パンフレットより（先方提供 CG） ----
+  { id: '11000000-0000-4000-8000-000000000041', base_model_id: MODEL_WING01_ID, kind: 'exterior', url: '/images/products/wing-rockshore-triple.jpg', alt: '雪山を望む海岸の岩場に3棟並ぶWing', caption: '海辺のリゾート（CGパース）', sort_order: 6 },
+  { id: '11000000-0000-4000-8000-000000000042', base_model_id: MODEL_WING01_ID, kind: 'case', url: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる夜の湖畔に灯るWing', caption: '湖畔の夜（CGパース）', sort_order: 4 },
+  { id: '11000000-0000-4000-8000-000000000043', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面室（木の内装と白い洗面ボウル）', caption: '洗面室イメージ（CGパース）', sort_order: 5 },
+  { id: '11000000-0000-4000-8000-000000000044', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/bedroom-garden.jpg', alt: '庭の緑が見えるベッドルーム（エアコン・アクセントパネル）', caption: 'ベッドルームイメージ（CGパース）', sort_order: 6 },
+  { id: '11000000-0000-4000-8000-000000000045', base_model_id: MODEL_WING01_ID, kind: 'floorplan', url: '/images/plan/wing-isometric.jpg', alt: 'Wing の 3D アイソメ間取りパース（デッキ・ベッド・水まわり）', caption: '間取り 3D パース', sort_order: 3 },
   // ---- BOX ----
   { id: '11000000-0000-4000-8000-000000000021', base_model_id: MODEL_BOX_ID, kind: 'hero', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ黒い外装と木目の BOX', caption: '完成イメージ（CGパース）', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000022', base_model_id: MODEL_BOX_ID, kind: 'exterior', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ BOX の外観', caption: '外観イメージ', sort_order: 1 },
@@ -771,7 +777,18 @@ const masterOptions: ProductOption[] = masterProducts
   );
 
 export const seedVariantGroups: OptionVariantGroup[] = [
-  ...masterVariantGroups.map((g) => ({ ...g, note: null, is_required: true, status: 'published' as const })),
+  ...masterVariantGroups.map((g) => ({
+    ...g,
+    note: null,
+    is_required: true,
+    status: 'published' as const,
+    // 壁色は、同じ商品の壁プランでアクセント1面／2面を選んだときだけ表示する（先方指示 2026-08-29）
+    depends_on_group_code:
+      g.code === 'wall-color' && masterVariantGroups.some((x) => x.option_id === g.option_id && x.code === 'wall-plan')
+        ? 'wall-plan'
+        : null,
+    depends_on_choice_codes: g.code === 'wall-color' ? ['accent', 'accent-2'] : [],
+  })),
   sashSizeGroup,
 ];
 

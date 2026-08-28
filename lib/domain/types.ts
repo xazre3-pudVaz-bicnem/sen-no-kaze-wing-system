@@ -230,6 +230,13 @@ export interface OptionVariantGroup {
   name: string;
   /** 表示の補足（適用条件など） */
   note: string | null;
+  /**
+   * 表示条件：同じ商品の別の選択項目コード。指定時、その項目で
+   * depends_on_choice_codes のどれかが選ばれているときだけこの項目を表示する。
+   * 例）壁色は、壁プランでアクセント1面／2面を選んだときだけ表示（先方指示 2026-08-29）
+   */
+  depends_on_group_code?: string | null;
+  depends_on_choice_codes?: string[];
   sort_order: number;
   is_required: boolean;
   status: PublishStatus;

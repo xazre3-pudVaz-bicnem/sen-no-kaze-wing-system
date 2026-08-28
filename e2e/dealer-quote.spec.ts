@@ -76,6 +76,9 @@ test.describe('代理店による確定見積（改訂版）', () => {
     await expect(page.getByTestId('quote-revision')).toContainText('第2版・確定見積');
     await expect(page.getByTestId('dealer-note')).toContainText('小型クレーン');
     await expect(page.getByTestId('quote-free-products')).toContainText('フリー商品');
+    // エンドユーザーには本体の明細は出ない（計のみ）
+    await expect(page.getByTestId('quote-table')).not.toContainText('金物関係費用');
+    await expect(page.getByTestId('quote-table')).toContainText('本体一式');
     expect(yen(await page.getByTestId('quote-total').textContent())).toBe(preview);
     // 第1版も履歴として残っており、金額は当時のまま
     await page.goto(`/mypage/quotes/${firstQuoteId}`);
@@ -129,8 +132,9 @@ test.describe('本部の見積編集（エクセル表）', () => {
     await form.getByRole('button', { name: /第2版として発行する/ }).click();
     await page.waitForURL(/revised=1/);
     expect(yen(await page.getByTestId('admin-quote-total').textContent())).toBe(preview);
-    // 単位と備考が見積書に残る
+    // 単位と備考が見積書に残る。管理画面では本体の明細（サッシ等）が見える
     await expect(page.getByTestId('quote-table')).toContainText('本部調整');
+    await expect(page.getByTestId('quote-table')).toContainText('サッシ木製建具工事');
     await logout(page);
 
     // --- 代理店：本体の行は出ない ---

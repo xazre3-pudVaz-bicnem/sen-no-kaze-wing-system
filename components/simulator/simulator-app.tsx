@@ -8,7 +8,7 @@ import { saveConfigurationAction } from '@/lib/actions/configurations';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
-import { baseBreakdownFor, baseBreakdownTotal } from '@/lib/domain/preset';
+import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Breadcrumbs, Button } from '@/components/ui';
@@ -56,16 +56,9 @@ interface Draft {
 
 const storageKey = (slug: string) => `wing:sim:${slug}`;
 
-/** 選ばれている商品ごとに、標準（または先頭）の選択肢を選ぶ */
+/** 選ばれている商品ごとに、標準の選択肢を選ぶ（表示条件つきの項目は条件を満たすときだけ） */
 function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[] {
-  const ids = new Set(optionIds);
-  const out: string[] = [];
-  for (const g of bundle.variantGroups.filter((x) => ids.has(x.option_id))) {
-    const list = bundle.variantChoices.filter((c) => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
-    if (!list.length) continue;
-    out.push((list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
-  }
-  return out;
+  return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
 }
 
 export function SimulatorApp({ bundle, elevations, initial, loadError, resume, user }: Props) {
@@ -108,7 +101,14 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
-  const [variantIds, setVariantIds] = useState<string[]>(initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection));
+  const [variantIds, setVariantIds] = useState<string[]>(() =>
+    // 保存済みの選択肢も表示条件で洗う（例：全面ホワイトなのに壁色が残っている旧データ）
+    pruneHiddenVariantChoices(
+      bundle.variantGroups,
+      bundle.variantChoices,
+      initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
+    )
+  );
   const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
@@ -198,7 +198,6 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   // ---- 計算・画像解決 ----
   /** 本体内訳マスター（仕様別）の合計。登録があれば本体一式をこれで上書きする */
   const baseOverride = useMemo(() => baseBreakdownTotal(bundle, specCode), [bundle, specCode]);
-  const baseBreakdown = useMemo(() => baseBreakdownFor(bundle, specCode), [bundle, specCode]);
   const pricing = useMemo(
     () =>
       computePricing(
@@ -601,7 +600,6 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
           specName={specName}
           finishLevel={finishLevel}
           pricing={pricing}
-          baseBreakdown={baseBreakdown}
           categories={bundle.categories}
           options={bundle.options}
           readOnly={readOnly}

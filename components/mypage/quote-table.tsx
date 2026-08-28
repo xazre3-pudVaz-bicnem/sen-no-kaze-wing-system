@@ -33,9 +33,10 @@ function SectionRow({ label, tone = 'sand', testId }: { label: string; tone?: 's
   );
 }
 
+/** 小計行。明細と区別できるよう色を変える（先方指示） */
 function SubtotalRow({ label, amount }: { label: string; amount: string }) {
   return (
-    <tr className="border-y border-line bg-ivory font-semibold">
+    <tr className="border-y border-brown/40 bg-brown/10 font-semibold">
       <td colSpan={4} className="px-3 py-2 text-sm">{label}</td>
       <td className="px-3 py-2 text-right text-sm tabular-nums">{amount}</td>
       <td></td>
@@ -68,10 +69,24 @@ function ItemRow({ it, showImage = false }: { it: QuoteItem; showImage?: boolean
   );
 }
 
-export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quote: Quote; items: QuoteItem[]; totalTestId?: string }) {
+export function QuoteTable({
+  quote,
+  items,
+  totalTestId = 'quote-total',
+  showBaseDetail = false,
+}: {
+  quote: Quote;
+  items: QuoteItem[];
+  totalTestId?: string;
+  /** 本体の明細行を出すか。管理画面（本部・総代理店・代理店）のみ true。エンドユーザーは計のみ */
+  showBaseDetail?: boolean;
+}) {
   const baseItems = items.filter((i) => i.kind === 'base');
   const baseExpense = items.find((i) => i.kind === 'base_expense') ?? null;
-  const optionItems = items.filter((i) => i.kind === 'option');
+  // 防火仕様は本体側に表示する（先方指示）
+  const allOptionItems = items.filter((i) => i.kind === 'option');
+  const fireItems = allOptionItems.filter((i) => i.name.includes('防火'));
+  const optionItems = allOptionItems.filter((i) => !i.name.includes('防火'));
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
   const siteworkItems = items.filter((i) => i.kind === 'installation');
   const freeItems = items.filter((i) => i.kind === 'free');
@@ -91,7 +106,7 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
     if (last && last.section === section) last.items.push(it);
     else baseSections.push({ section, items: [it] });
   }
-  const showSections = baseItems.length > 1;
+
 
   return (
     <div data-testid="quote-table">
@@ -108,10 +123,13 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
             </tr>
           </thead>
 
-          {/* ---- 本体価格（内訳を全行展開） ---- */}
+          {/* ---- 本体価格（明細は管理画面のみ。エンドユーザーは計のみ） ---- */}
           <tbody className="divide-y divide-line/60">
             <SectionRow label="本体価格" tone="ivory" />
-            {showSections
+            {fireItems.map((it) => (
+              <ItemRow key={it.id} it={it} />
+            ))}
+            {showBaseDetail && baseItems.length > 1
               ? baseSections.map((sec) => (
                   <Fragment key={sec.section || sec.items[0].id}>
                     {sec.section && <SectionRow label={sec.section} />}
@@ -137,8 +155,22 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
                     )}
                   </Fragment>
                 ))
-              : baseItems.map((it) => <ItemRow key={it.id} it={it} />)}
-            {baseExpense && <ItemRow it={baseExpense} />}
+              : showBaseDetail ? (
+                  baseItems.map((it) => <ItemRow key={it.id} it={it} />)
+                ) : (
+                  <tr className="bg-white text-xs">
+                    <td className={td.name}>
+                      {quote.base_model_name} 本体一式
+                      <span className="ml-2 text-[0.65rem] text-muted">（工場生産分・諸費用込み。明細は担当代理店・本部が管理します）</span>
+                    </td>
+                    <td className={td.qty}>1</td>
+                    <td className={td.unit}>式</td>
+                    <td className={td.price}></td>
+                    <td className={td.amount}>{formatYen(baseTotal)}</td>
+                    <td className={td.remark}></td>
+                  </tr>
+                )}
+            {showBaseDetail && baseExpense && <ItemRow it={baseExpense} />}
             <SubtotalRow label="【本体価格計】" amount={formatYen(baseTotal)} />
           </tbody>
 

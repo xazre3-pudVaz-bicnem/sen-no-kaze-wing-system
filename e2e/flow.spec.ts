@@ -205,9 +205,10 @@ test.describe('顧客フロー', () => {
     await picker.getByTestId('fireproof-fire-proof').click();
     await expect(picker.getByTestId('fireproof-fire-proof')).toHaveAttribute('aria-pressed', 'true');
     await expect(picker).toContainText('本部が本体明細を確認');
-    // 見積書には「別途見積」の行として入る（金額セルは行側にある）
+    // 見積書ではオプション欄ではなく本体欄に「別途見積」の行として入る（先方指示）
     await expect(quoteLine(page, 'fire-proof')).toContainText('防火仕様（防火構造）');
     await expect(page.locator('tr', { has: quoteLine(page, 'fire-proof') })).toContainText('別途見積');
+    await expect(page.getByTestId('base-breakdown')).toContainText('防火仕様（防火構造）');
   });
 
   test('代理店紹介ページから問い合わせできる', async ({ page }) => {
@@ -395,14 +396,18 @@ test.describe('ネットショップ型の商品選び', () => {
     await expect(njb).toContainText('メーカー参考価格');
     await njb.click();
 
-    // 選ぶと、その商品の選択項目（壁プラン・壁色・照明…）が出る
+    // 選ぶと、その商品の選択項目（壁プラン・照明…）が出る
     const variants = page.getByTestId('variant-picker');
     await expect(variants).toBeVisible();
-    await expect(page.getByTestId('variant-group-wall-color')).toBeVisible();
+    await expect(page.getByTestId('variant-group-wall-plan')).toBeVisible();
     // 標準の選択肢が最初から選ばれている
     await expect(page.getByTestId('variant-picker').getByRole('button', { pressed: true }).first()).toBeVisible();
+    // 壁プランが標準（全面ホワイト）のあいだ、壁色は表示されない（先方指示 2026-08-29）
+    await expect(page.getByTestId('variant-group-wall-color')).toBeHidden();
 
-    // 壁色を変えて確定する
+    // アクセントを選ぶと壁色が現れる → 壁色を変えて確定する
+    await page.getByTestId('variant-accent').click();
+    await expect(page.getByTestId('variant-group-wall-color')).toBeVisible();
     await page.getByTestId('variant-oak-greige').click();
     await expect(page.getByTestId('variant-oak-greige')).toHaveAttribute('aria-pressed', 'true');
     await page.getByTestId('picker-apply').click();
@@ -464,9 +469,11 @@ test.describe('サッシの扱い（2026-08-28 打合せ）', () => {
     await expect(page.getByTestId('equip-sash')).toBeHidden();
     await page.getByTestId('finish-level-shell').click();
     await expect(page.getByTestId('equip-sash')).toBeHidden();
-    // 本体の内訳（分類表見積書）は御見積書に常時展開され、サッシ工事の行と台数が出る
+    // 本体の明細はエンドユーザーには出さない（計のみ）。サッシ等の明細は本部・代理店の管理画面で見る
     const breakdown = page.getByTestId('base-breakdown');
-    await expect(breakdown).toContainText('サッシ木製建具工事');
-    await expect(breakdown).toContainText('・サッシ 玄関ドア');
+    await expect(breakdown).toContainText('本体一式');
+    await expect(breakdown).toContainText('【本体価格計】');
+    await expect(breakdown).not.toContainText('金物関係費用');
+    await expect(breakdown).not.toContainText('サッシ木製建具工事');
   });
 });

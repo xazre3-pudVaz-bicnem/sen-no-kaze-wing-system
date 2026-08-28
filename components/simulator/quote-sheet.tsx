@@ -1,10 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { Fragment } from 'react';
 import { ArrowRight, Pencil } from 'lucide-react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
-import { FINISH_LEVEL_INFO, type BaseBreakdownItem, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -12,8 +11,6 @@ interface Props {
   specName: string;
   finishLevel: FinishLevel;
   pricing: PricingResult;
-  /** 本体の内訳（分類表見積書・仕様別）。本体の明細行として展開表示する */
-  baseBreakdown?: BaseBreakdownItem[];
   categories: OptionCategory[];
   options: ProductOption[];
   readOnly: boolean;
@@ -41,10 +38,10 @@ function SectionRow({ label, tone = 'sand' }: { label: string; tone?: 'sand' | '
   );
 }
 
-/** 【本体価格計】のような小計行 */
+/** 【本体価格計】のような小計行。明細と区別できるよう色を変える（先方指示） */
 function SubtotalRow({ label, amount, testId }: { label: string; amount: string; testId?: string }) {
   return (
-    <tr className="border-y border-line bg-ivory font-semibold">
+    <tr className="border-y border-brown/40 bg-brown/10 font-semibold">
       <td colSpan={4} className="px-3 py-2 text-sm">{label}</td>
       <td className="px-3 py-2 text-right text-sm tabular-nums" data-testid={testId}>{amount}</td>
       <td></td>
@@ -59,22 +56,18 @@ function SubtotalRow({ label, amount, testId }: { label: string; amount: string;
  *   別途工事（9項目）→【別途工事計】／フリー商品
  *   小計 → 値引き等調整額 → 税抜請負額 → 消費税 → 合計
  */
-export function QuoteSheet({ modelName, specName, finishLevel, pricing, baseBreakdown = [], categories, options, readOnly, onPickCategory }: Props) {
+export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
   const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const byOption = new Map(options.map((o) => [o.id, o]));
-  const optionLines = pricing.lines.filter((l) => !l.is_installation);
+  // 防火仕様は本体側に表示する（先方指示。オプション欄には出さない）
+  const fireproofCatId = categories.find((c) => c.code === 'fireproof')?.id ?? null;
+  const isFire = (l: PricingResult['lines'][number]) => byOption.get(l.option_id)?.category_id === fireproofCatId;
+  const optionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l));
+  const fireLines = pricing.lines.filter((l) => !l.is_installation && isFire(l));
   const freeLines = pricing.lines.filter((l) => l.is_free_product);
   const sitework = pricing.lines.filter((l) => l.is_installation && !l.is_free_product);
   const siteworkTotal = sitework.reduce((s, l) => s + l.amount, 0);
   const freeTotal = pricing.free_subtotal;
-
-  /** 本体内訳を工事区分ごとにまとめる（登録順） */
-  const sections: { section: string; items: BaseBreakdownItem[] }[] = [];
-  for (const b of baseBreakdown) {
-    const last = sections[sections.length - 1];
-    if (last && last.section === b.section) last.items.push(b);
-    else sections.push({ section: b.section, items: [b] });
-  }
 
   return (
     <section aria-labelledby="quote-sheet-heading" className="card overflow-hidden" data-testid="quote-sheet">
@@ -100,49 +93,47 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, baseBrea
             </tr>
           </thead>
 
-          {/* ---- 本体（分類表見積書の内訳を全行展開） ---- */}
+          {/* ---- 本体（エンドユーザーには計のみ。明細は本部・総代理店・代理店の管理画面で見る） ---- */}
           <tbody className="divide-y divide-line/60" data-testid="base-breakdown">
             <SectionRow label="本体" tone="ivory" />
-            {sections.map((sec) => (
-              <Fragment key={sec.section}>
-                <SectionRow label={sec.section} />
-                {sec.items.map((b) => (
-                  <tr key={b.id} className="bg-white text-xs">
-                    <td className={td.name}>{b.name}</td>
-                    <td className={td.qty}>{formatQty(b.quantity)}</td>
-                    <td className={td.unit}>{b.unit ?? ''}</td>
-                    <td className={td.price}>{formatYen(b.unit_price)}</td>
-                    <td className={td.amount}>{formatYen(b.amount)}</td>
-                    <td className={td.remark}>{b.remark ?? ''}</td>
-                  </tr>
-                ))}
-                {/* 工事区分ごとの小計（先方修正案） */}
-                <tr className="bg-white text-[0.7rem] text-ink-soft">
-                  <td colSpan={4} className="px-3 py-1 text-right font-semibold">{sec.section}　計</td>
-                  <td className="px-3 py-1 text-right font-semibold tabular-nums">
-                    {formatYen(sec.items.reduce((sum, x) => sum + x.amount, 0))}
+            {/* 防火仕様はオプションではなく本体側の項目（先方指示） */}
+            {fireLines.map((l) => {
+              const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
+              return (
+                <tr key={l.option_id} className="bg-white">
+                  <td className={td.name}>
+                    <button
+                      type="button"
+                      disabled={readOnly || !cat}
+                      onClick={() => cat && onPickCategory(cat.id)}
+                      className="group inline-flex items-center gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
+                      data-testid={`quote-line-${l.code}`}
+                    >
+                      <span className="text-xs text-muted">{cat?.name}</span>
+                      <span>{l.name}</span>
+                      {!readOnly && cat && <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
+                    </button>
                   </td>
-                  <td></td>
+                  <td className={td.qty}>{formatQty(l.quantity)}</td>
+                  <td className={td.unit}>式</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
+                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
+                  <td className={td.remark}></td>
                 </tr>
-              </Fragment>
-            ))}
-            {sections.length === 0 && (
-              <tr className="bg-white">
-                <td className={td.name}>{modelName} 本体一式</td>
-                <td className={td.qty}>1</td>
-                <td className={td.unit}>式</td>
-                <td className={td.price}>{formatYen(pricing.base_price)}</td>
-                <td className={td.amount}>{formatYen(pricing.base_price)}</td>
-                <td className={td.remark}>工場生産分</td>
-              </tr>
-            )}
-            <tr className="bg-white text-xs text-ink-soft">
-              <td className={td.name}>本体諸費用（交通費、労災、安全管理費等）</td>
+              );
+            })}
+            <tr className="bg-white">
+              <td className={td.name}>
+                {modelName} 本体一式
+                <span className="block text-[0.7rem] text-muted">
+                  躯体・金物・断熱・屋根外壁・サッシ建具（工場生産分・諸費用込み）。明細は担当代理店・本部が管理します
+                </span>
+              </td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>
               <td className={td.price}></td>
-              <td className={td.amount}>{formatYen(pricing.base_expense)}</td>
-              <td className={td.remark}>{Math.round(pricing.expense_rate * 100)}%</td>
+              <td className={td.amount}>{formatYen(pricing.base_total)}</td>
+              <td className={td.remark}></td>
             </tr>
             <SubtotalRow label="【本体価格計】" amount={formatYen(pricing.base_total)} />
           </tbody>

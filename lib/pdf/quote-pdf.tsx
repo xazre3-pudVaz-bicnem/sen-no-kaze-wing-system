@@ -52,7 +52,7 @@ const s = StyleSheet.create({
   tr: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#cfc6b8', paddingVertical: 3, paddingHorizontal: 4 },
   th: { fontWeight: 700, backgroundColor: '#e8dfd2' },
   trSub: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#1d1a16', backgroundColor: '#faf6f0' },
-  subtotalRow: { backgroundColor: '#f3ede4', borderBottomWidth: 1, borderBottomColor: '#1d1a16' },
+  subtotalRow: { backgroundColor: '#eadcc3', borderBottomWidth: 1, borderBottomColor: '#1d1a16' },
   cNo: { width: 22, textAlign: 'center' },
   cName: { flex: 1.5 },
   cDesc: { flex: 1.1, color: '#4b453d', fontSize: 8 },
@@ -85,10 +85,11 @@ interface PdfInput {
 
 
 function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
-  const optionItems = items.filter((i) => i.kind === 'option');
+  // 防火仕様は本体側に表示する（先方指示）
+  const allOptionItems = items.filter((i) => i.kind === 'option');
+  const fireItems = allOptionItems.filter((i) => i.name.includes('防火'));
+  const optionItems = allOptionItems.filter((i) => !i.name.includes('防火'));
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
-  const baseItems = items.filter((i) => i.kind === 'base');
-  const baseExpense = items.find((i) => i.kind === 'base_expense') ?? null;
   const sitework = items.filter((i) => i.kind === 'installation');
   const freeItems = items.filter((i) => i.kind === 'free');
   const revisionLabel = quote.revision > 1 ? `（第${quote.revision}版・確定見積）` : '（概算）';
@@ -184,12 +185,19 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             <Text style={s.cAmount}>金額</Text>
           </View>
 
-          {/* 1. 本体（分類表見積書の内訳を全行展開） */}
+          {/* 1. 本体：エンドユーザーに渡る書類なので計のみ（明細は本部・総代理店・代理店の管理画面で見る） */}
           <View style={s.section}>
             <Text style={s.sectionLabel}>1　本体価格（{quote.base_model_name}・工場生産分）</Text>
           </View>
-          {baseItems.map((it) => row(it))}
-          {baseExpense ? row(baseExpense) : null}
+          {fireItems.map((it) => row(it, { dash: true }))}
+          <View style={s.tr} wrap={false}>
+            <Text style={s.cNo}></Text>
+            <Text style={s.cName}>{quote.base_model_name} 本体一式</Text>
+            <Text style={s.cDesc}>躯体・金物・断熱・屋根外壁・サッシ建具（工場生産分・諸費用込み）</Text>
+            <Text style={s.cPrice}></Text>
+            <Text style={s.cQty}>1 式</Text>
+            <Text style={s.cAmount}>{yen(baseTotal)}</Text>
+          </View>
           {subtotalRow('【本体価格計】', yen(baseTotal))}
 
           {/* 2. オプション */}

@@ -431,6 +431,32 @@ test.describe('ネットショップ型の商品選び', () => {
   });
 });
 
+test.describe('商品選択ポップアップ', () => {
+  test('選ぶと選択中の商品だけの表示に切り替わり、下で色・仕様を選べる', async ({ page }) => {
+    await openFreshSimulator(page);
+
+    // 1つ選択（外壁）：選択済みで開くと選択中表示 → 一覧に戻して選び替えると再びたたまれる
+    await page.getByTestId('equip-exterior-wall').click();
+    await expect(page.getByTestId('option-picker')).toBeVisible();
+    await expect(page.getByTestId('picker-selected')).toContainText('ガルノート');
+    await page.getByTestId('picker-expand').click();
+    await page.getByTestId('pick-exterior-wood').click();
+    await expect(page.getByTestId('picker-selected')).toContainText('木板下見板張り');
+    await expect(page.getByTestId('pick-exterior-galnote')).toBeHidden();
+    await page.getByTestId('picker-apply').click();
+    await expect(page.getByTestId('equip-exterior-wall')).toContainText('木板下見板張り');
+
+    // 複数選択（外構部品）：未選択で開くと一覧 → 選ぶと選択中表示にたたまれ、「外す」で一覧に戻る
+    await page.getByTestId('equip-exterior-parts').click();
+    await expect(page.getByTestId('pick-wood-deck')).toBeVisible();
+    await page.getByTestId('pick-wood-deck').click();
+    await expect(page.getByTestId('picker-selected')).toContainText('ウッドデッキ');
+    await page.getByTestId('picker-remove-wood-deck').click();
+    await expect(page.getByTestId('pick-wood-deck')).toBeVisible();
+    await page.getByRole('button', { name: 'キャンセル' }).click();
+  });
+});
+
 test.describe('サッシの扱い（2026-08-28 打合せ）', () => {
   test('サッシはお客様に選ばせず、本体の内訳に含めて表示する', async ({ page }) => {
     await openFreshSimulator(page);

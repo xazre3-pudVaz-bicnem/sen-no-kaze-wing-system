@@ -56,8 +56,8 @@ export function OptionPickerDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const [picked, setPicked] = useState<string[]>(options.filter((o) => selectedIds.includes(o.id)).map((o) => o.id));
   const single = category.selection_mode === 'single';
-  /** 商品一覧を出すか（single で選択済みなら、選択中の商品＋色選びだけを出す） */
-  const [browsing, setBrowsing] = useState(() => !(single && picked.length > 0));
+  /** 商品一覧を出すか。選択済みの商品があるときは「選択中の商品＋色選び」だけを出す（1つ選択・複数選択とも） */
+  const [browsing, setBrowsing] = useState(() => picked.length === 0);
 
   /** 選ばれている商品の選択項目だけを出す。既定は「標準」の選択肢 */
   const activeGroups = variantGroups.filter((g) => picked.includes(g.option_id)).sort((a, b) => a.sort_order - b.sort_order);
@@ -89,8 +89,8 @@ export function OptionPickerDialog({
       });
       return [...keep, ...defaultVariants(groups, variantChoices, cur)];
     });
-    // 1 つ選ぶカテゴリーは、選んだら一覧をたたんで色・仕様選びへ（スクロールを 1 本にする）
-    if (single && !wasPicked) setBrowsing(false);
+    // 選んだら一覧をたたんで「選択中の商品＋色・仕様選び」へ（スクロールを 1 本にする）
+    if (!wasPicked) setBrowsing(false);
   };
 
   useEffect(() => {
@@ -125,7 +125,7 @@ export function OptionPickerDialog({
 
       {/* 本文はスクロール 1 本。商品一覧 → 色・仕様の順にそのまま下へ流れる */}
       <div className="max-h-[72vh] overflow-y-auto px-5 py-4">
-        {!browsing && single ? (
+        {!browsing && pickedOptions.length > 0 ? (
           /* 選択済み：選択中の商品だけをコンパクトに出す */
           <div className="space-y-1">
             {pickedOptions.map((o) => (
@@ -148,17 +148,25 @@ export function OptionPickerDialog({
                   <span className="mt-0.5 block truncate text-sm font-semibold">{o.name}</span>
                   <span className="block text-xs text-ink-soft">{priceLabel(o)}</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setBrowsing(true)}
-                  className="btn-secondary btn-sm shrink-0"
-                  data-testid="picker-expand"
-                >
-                  <ChevronLeft className="size-4" aria-hidden="true" />
-                  他の商品から選ぶ
-                </button>
+                {!single && (
+                  <button
+                    type="button"
+                    onClick={() => toggle(o.id)}
+                    className="btn-ghost btn-sm shrink-0 text-warn"
+                    aria-label={`${o.name} を外す`}
+                    data-testid={`picker-remove-${o.code}`}
+                  >
+                    外す
+                  </button>
+                )}
               </div>
             ))}
+            <div>
+              <button type="button" onClick={() => setBrowsing(true)} className="btn-secondary btn-sm" data-testid="picker-expand">
+                <ChevronLeft className="size-4" aria-hidden="true" />
+                {single ? '他の商品から選ぶ' : '商品を追加・変更する'}
+              </button>
+            </div>
             {pickedOptions.length === 0 && (
               <button type="button" onClick={() => setBrowsing(true)} className="btn-secondary btn-sm" data-testid="picker-expand">
                 商品を選ぶ

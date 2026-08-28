@@ -92,7 +92,12 @@ export async function openPicker(page: Page, testId: string) {
 /** ポップアップで商品を選び直して「変更する」で確定する */
 export async function pickOption(page: Page, openTestId: string, codes: string[]) {
   await openPicker(page, openTestId);
-  for (const code of codes) await page.getByTestId(`pick-${code}`).click();
+  for (const code of codes) {
+    // 商品を選ぶと「選択中の商品だけ」の表示に切り替わるため、続けて操作する前に一覧へ戻す
+    const expand = page.getByTestId('picker-expand');
+    if (await expand.isVisible().catch(() => false)) await expand.click();
+    await page.getByTestId(`pick-${code}`).click();
+  }
   await page.getByTestId('picker-apply').click();
   await expect(page.getByTestId('option-picker')).toBeHidden();
 }

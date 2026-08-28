@@ -789,7 +789,8 @@ export const seedVariantGroups: OptionVariantGroup[] = [
         : null,
     depends_on_choice_codes: g.code === 'wall-color' ? ['accent', 'accent-2'] : [],
   })),
-  sashSizeGroup,
+  // 一括 upsert は全行同じ列構成で送られるため、依存フィールドを明示しておく
+  { ...sashSizeGroup, depends_on_group_code: null, depends_on_choice_codes: [] },
 ];
 
 export const seedVariantChoices: OptionVariantChoice[] = [

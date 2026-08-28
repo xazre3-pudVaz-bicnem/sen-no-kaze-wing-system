@@ -16,7 +16,8 @@ interface Props {
 
 /**
  * 先方モックアップの「標準設備及び仕上げ表」。
- * カテゴリーごとに現在選ばれている商品を画像付きで並べ、クリックで選択ポップアップを開く（変更方法①）。
+ * カテゴリーごとに現在選ばれている商品名・価格を表示し、画像は表示順が最初の画像あり商品を代表画像として使う。
+ * クリックで選択ポップアップを開く（変更方法①）。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);
@@ -32,8 +33,12 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
       </div>
       <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3" data-testid="equipment-board">
         {shown.map((cat) => {
-          const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
+          const categoryOptions = options
+            .filter((o) => o.category_id === cat.id)
+            .sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code));
+          const chosen = categoryOptions.filter((o) => selectedSet.has(o.id));
           const main = chosen[0] ?? null;
+          const representative = categoryOptions.find((o) => Boolean(o.image_url)) ?? null;
           const extraCount = chosen.length - 1;
           return (
             <li key={cat.id} className="bg-white">
@@ -49,8 +54,8 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
                   {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
                 </span>
                 <span className="relative block aspect-[4/3] w-full overflow-hidden rounded bg-sand">
-                  {main?.image_url ? (
-                    <SmartImage src={main.image_url} alt={main.name} fill sizes="(min-width: 640px) 14rem, 45vw" className="object-cover" />
+                  {representative?.image_url ? (
+                    <SmartImage src={representative.image_url} alt={`${cat.name}の代表画像`} fill sizes="(min-width: 640px) 14rem, 45vw" className="object-cover" />
                   ) : (
                     <span className="flex h-full items-center justify-center text-muted">
                       <ImageOff className="size-5" aria-hidden="true" />

@@ -33,7 +33,7 @@ export function PlanBoard({ plan, categories, elevations, perspective, readOnly,
   const wallCat = categories.find((c) => c.code === 'exterior-wall');
 
   return (
-    <div className="space-y-4">
+    <div className="-mt-5 space-y-4">
       {/* 平面図 */}
       <figure className="card overflow-hidden" data-testid="plan-board">
         <figcaption className="border-b border-line px-4 py-2.5 text-sm font-semibold">平面図</figcaption>

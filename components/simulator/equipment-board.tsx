@@ -32,7 +32,7 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
         </h2>
         <span className="text-xs text-muted">項目をクリックして変更</span>
       </div>
-      <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3" data-testid="equipment-board">
+      <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-4" data-testid="equipment-board">
         {shown.map((cat) => {
           const categoryOptions = options
             .filter((o) => o.category_id === cat.id)
@@ -57,7 +57,7 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
                 {main && (
                   <span className="relative block aspect-[4/3] w-full overflow-hidden rounded bg-sand">
                     {representative?.image_url ? (
-                      <SmartImage src={representative.image_url} alt={`${cat.name}の代表画像`} fill sizes="(min-width: 640px) 14rem, 45vw" className="object-cover" />
+                      <SmartImage src={representative.image_url} alt={`${cat.name}の代表画像`} fill sizes="(min-width: 640px) 11rem, 45vw" className="object-cover" />
                     ) : (
                       <span className="flex h-full items-center justify-center text-muted">
                         <ImageOff className="size-5" aria-hidden="true" />

@@ -44,8 +44,20 @@ await upsert('base_models', strip(seedCatalog.models));
 await upsert('product_images', seedCatalog.images as unknown as Record<string, unknown>[]);
 await upsert('option_categories', seedCatalog.categories as unknown as Record<string, unknown>[]);
 await upsert('options', strip(seedCatalog.options));
-await upsert('option_dependencies', seedCatalog.dependencies as unknown as Record<string, unknown>[]);
-await upsert('option_conflicts', seedCatalog.conflicts as unknown as Record<string, unknown>[]);
+
+/**
+ * 依存・競合は (option_id, 相手) に一意制約がある。
+ * 一括登録 RPC などで別 ID の同内容行が既にあると id 基準の upsert が重複エラーになるため、
+ * 自然キーで upsert する（id は送らない）。
+ */
+async function upsertByPair(table: string, rows: Record<string, unknown>[], conflictCols: string) {
+  const noId = rows.map(({ id: _id, ...rest }) => rest);
+  const { error } = await db.from(table).upsert(noId, { onConflict: conflictCols });
+  if (error) throw new Error(`${table}: ${error.message}`);
+  console.log(`${table}: ${noId.length} rows`);
+}
+await upsertByPair('option_dependencies', seedCatalog.dependencies as unknown as Record<string, unknown>[], 'option_id,requires_option_id');
+await upsertByPair('option_conflicts', seedCatalog.conflicts as unknown as Record<string, unknown>[], 'option_id,conflicts_with_option_id');
 await upsert('preview_image_rules', seedCatalog.previewRules as unknown as Record<string, unknown>[]);
 await upsert('preview_hotspots', seedCatalog.hotspots as unknown as Record<string, unknown>[]);
 await upsert('option_variant_groups', seedCatalog.variantGroups as unknown as Record<string, unknown>[]);

@@ -273,9 +273,9 @@ test.describe('顧客フロー', () => {
     const quoteTotal = (await page.getByTestId('quote-total').textContent())!;
     expect(Number(quoteTotal.replace(/[^0-9]/g, ''))).toBe(totalBefore);
     await expect(page.getByText(/顧客番号/)).toBeVisible();
-    // 先方指定の 4 区分と別途工事の注記
+    // 表示例（エクセル形式）：区分見出し・小計行・別途工事の注記
     const quoteTable = page.getByTestId('quote-table');
-    for (const label of ['本体価格', 'オプション価格', '別途工事', '運送費']) {
+    for (const label of ['本体価格', '【本体価格計】', 'オプション価格', '【オプション価格計】', '別途工事', '【別途工事計】', '運送費']) {
       await expect(quoteTable).toContainText(label);
     }
     await expect(quoteTable).toContainText('現地の代理店、工務店にお問合せ下さい');
@@ -438,9 +438,8 @@ test.describe('サッシの扱い（2026-08-28 打合せ）', () => {
     await expect(page.getByTestId('equip-sash')).toBeHidden();
     await page.getByTestId('finish-level-shell').click();
     await expect(page.getByTestId('equip-sash')).toBeHidden();
-    // 本体の内訳（分類表見積書）にはサッシ工事の行と台数が出る
+    // 本体の内訳（分類表見積書）は御見積書に常時展開され、サッシ工事の行と台数が出る
     const breakdown = page.getByTestId('base-breakdown');
-    await breakdown.locator('summary').click();
     await expect(breakdown).toContainText('サッシ木製建具工事');
     await expect(breakdown).toContainText('・サッシ 玄関ドア');
   });

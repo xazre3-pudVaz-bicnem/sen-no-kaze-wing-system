@@ -50,6 +50,7 @@ const s = StyleSheet.create({
   tr: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#cfc6b8', paddingVertical: 3, paddingHorizontal: 4 },
   th: { fontWeight: 700, backgroundColor: '#e8dfd2' },
   trSub: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#1d1a16', backgroundColor: '#faf6f0' },
+  subtotalRow: { backgroundColor: '#f3ede4', borderBottomWidth: 1, borderBottomColor: '#1d1a16' },
   cNo: { width: 22, textAlign: 'center' },
   cName: { flex: 1.5 },
   cDesc: { flex: 1.1, color: '#4b453d', fontSize: 8 },
@@ -86,19 +87,36 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
   const baseItems = items.filter((i) => i.kind === 'base');
   const baseExpense = items.find((i) => i.kind === 'base_expense') ?? null;
-  // 本体の内訳（分類表見積書）を持つ見積かどうか。1 行だけの旧形式では出さない
-  const showBaseDetail = baseItems.length > 1;
   const sitework = items.filter((i) => i.kind === 'installation');
   const freeItems = items.filter((i) => i.kind === 'free');
   const revisionLabel = quote.revision > 1 ? `（第${quote.revision}版・確定見積）` : '（概算）';
   const freeAmount = freeItems.reduce((sum, i) => sum + i.amount, 0);
-  const transport = sitework.find((i) => /運送費/.test(i.name));
-  const otherSitework = sitework.filter((i) => i !== transport);
-  const transportAmount = transport?.amount ?? 0;
-  const siteworkAmount = otherSitework.reduce((sum, i) => sum + i.amount, 0);
+  const siteworkAmount = sitework.reduce((sum, i) => sum + i.amount, 0);
   const baseTotal = quote.base_price + quote.base_expense;
   const optionTotal = quote.option_subtotal + quote.option_expense;
   const withImages = items.filter((i) => i.image_url && productImages.get(i.id));
+  /** 明細 1 行（項目・摘要／備考・単価・数量・金額）。金額 0 の別途工事は「−」 */
+  const row = (it: QuoteItem, opts: { dash?: boolean } = {}) => (
+    <View key={it.id} style={s.tr} wrap={false}>
+      <Text style={s.cNo}></Text>
+      <Text style={s.cName}>{it.name}</Text>
+      <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
+      <Text style={s.cPrice}>{it.unit_price > 0 ? yen(it.unit_price) : ''}</Text>
+      <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
+      <Text style={s.cAmount}>{opts.dash && it.amount === 0 ? '−' : yen(it.amount)}</Text>
+    </View>
+  );
+  /** 【◯◯計】の小計行 */
+  const subtotalRow = (label: string, amount: string) => (
+    <View style={[s.tr, s.subtotalRow]} wrap={false}>
+      <Text style={s.cNo}></Text>
+      <Text style={[s.cName, { fontWeight: 700 }]}>{label}</Text>
+      <Text style={s.cDesc}></Text>
+      <Text style={s.cPrice}></Text>
+      <Text style={s.cQty}></Text>
+      <Text style={[s.cAmount, { fontWeight: 700 }]}>{amount}</Text>
+    </View>
+  );
 
   return (
     <Document title={`御見積書 ${quote.quote_no}`} author={COMPANY.name} language="ja">
@@ -158,125 +176,43 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
           <View style={[s.tr, s.th]}>
             <Text style={s.cNo}>No</Text>
             <Text style={s.cName}>項目</Text>
-            <Text style={s.cDesc}>摘要</Text>
+            <Text style={s.cDesc}>摘要・備考</Text>
             <Text style={s.cPrice}>単価</Text>
             <Text style={s.cQty}>数量</Text>
             <Text style={s.cAmount}>金額</Text>
           </View>
 
-          {/* 1. 本体価格 */}
-          <View style={s.tr} wrap={false}>
-            <Text style={s.cNo}>1</Text>
-            <Text style={[s.cName, { fontWeight: 700 }]}>本体価格</Text>
-            <Text style={s.cDesc}>{quote.base_model_name}（工場生産分・諸費用込み）</Text>
-            <Text style={s.cPrice}></Text>
-            <Text style={s.cQty}>1式</Text>
-            <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(baseTotal)}</Text>
-          </View>
-
-          {/* 1-1 本体の内訳（分類表見積書の売価。工事区分は摘要に入っている） */}
-          {showBaseDetail ? (
-            <>
-              <View style={s.section}>
-                <Text style={s.sectionLabel}>1-1 本体の内訳</Text>
-              </View>
-              {baseItems.map((it) => (
-                <View key={it.id} style={s.tr} wrap={false}>
-                  <Text style={s.cNo}></Text>
-                  <Text style={s.cName}>{it.name}</Text>
-                  <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
-                  <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
-                  <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
-                  <Text style={s.cAmount}>{yen(it.amount)}</Text>
-                </View>
-              ))}
-              {baseExpense ? (
-                <View style={[s.tr, s.expenseRow]} wrap={false}>
-                  <Text style={s.cNo}></Text>
-                  <Text style={s.cName}>{baseExpense.name}</Text>
-                  <Text style={s.cDesc}>{baseExpense.description ?? ''}</Text>
-                  <Text style={s.cPrice}></Text>
-                  <Text style={s.cQty}>1式</Text>
-                  <Text style={s.cAmount}>{yen(baseExpense.amount)}</Text>
-                </View>
-              ) : null}
-            </>
-          ) : null}
-
-          {/* 2. オプション価格 ＋ 2-1 明細 */}
-          <View style={s.tr} wrap={false}>
-            <Text style={s.cNo}>2</Text>
-            <Text style={[s.cName, { fontWeight: 700 }]}>オプション価格</Text>
-            <Text style={s.cDesc}>選択された設備・仕上げ（諸費用込み）</Text>
-            <Text style={s.cPrice}></Text>
-            <Text style={s.cQty}>1式</Text>
-            <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(optionTotal)}</Text>
-          </View>
+          {/* 1. 本体（分類表見積書の内訳を全行展開） */}
           <View style={s.section}>
-            <Text style={s.sectionLabel}>2-1 明細</Text>
+            <Text style={s.sectionLabel}>1　本体価格（{quote.base_model_name}・工場生産分）</Text>
           </View>
-          {optionItems.map((it, i) => (
-            <View key={it.id} style={s.tr} wrap={false}>
-              <Text style={s.cNo}>{`2-${i + 1}`}</Text>
-              <Text style={s.cName}>{it.name}</Text>
-              <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
-              <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
-              <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
-              <Text style={s.cAmount}>{yen(it.amount)}</Text>
-            </View>
-          ))}
-          {optionExpense ? (
-            <View style={[s.tr, s.expenseRow]} wrap={false}>
-              <Text style={s.cNo}></Text>
-              <Text style={s.cName}>{optionExpense.name}</Text>
-              <Text style={s.cDesc}>{optionExpense.description ?? ''}</Text>
-              <Text style={s.cPrice}></Text>
-              <Text style={s.cQty}>1式</Text>
-              <Text style={s.cAmount}>{yen(optionExpense.amount)}</Text>
-            </View>
-          ) : null}
+          {baseItems.map((it) => row(it))}
+          {baseExpense ? row(baseExpense) : null}
+          {subtotalRow('【本体価格計】', yen(baseTotal))}
 
-          {/* 3. 別途工事 */}
-          <View style={s.tr} wrap={false}>
-            <Text style={s.cNo}>3</Text>
-            <Text style={[s.cName, { fontWeight: 700 }]}>別途工事</Text>
-            <Text style={s.cDesc}>{otherSitework.map((i) => i.name).join('・') || '設置場所確認後にお見積り'}</Text>
-            <Text style={s.cPrice}></Text>
-            <Text style={s.cQty}>1式</Text>
-            <Text style={[s.cAmount, { fontWeight: 700 }]}>{siteworkAmount > 0 ? yen(siteworkAmount) : '別途'}</Text>
+          {/* 2. オプション */}
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>2　オプション価格（選択された設備・仕上げ）</Text>
           </View>
+          {optionItems.map((it) => row(it))}
+          {optionExpense ? row(optionExpense) : null}
+          {subtotalRow('【オプション価格計】', yen(optionTotal))}
 
-          {/* 4. 運送費 */}
-          <View style={s.tr} wrap={false}>
-            <Text style={s.cNo}>4</Text>
-            <Text style={[s.cName, { fontWeight: 700 }]}>運送費</Text>
-            <Text style={s.cDesc}>設置場所までの運搬</Text>
-            <Text style={s.cPrice}></Text>
-            <Text style={s.cQty}>1式</Text>
-            <Text style={[s.cAmount, { fontWeight: 700 }]}>{transportAmount > 0 ? yen(transportAmount) : '別途'}</Text>
+          {/* 3. 別途工事（運送費を含む） */}
+          <View style={s.section}>
+            <Text style={s.sectionLabel}>3　別途工事（設置場所の確認後に確定します）</Text>
           </View>
+          {sitework.map((it) => row(it, { dash: true }))}
+          {subtotalRow('【別途工事計】', siteworkAmount > 0 ? yen(siteworkAmount) : '別途')}
 
-          {/* 5. フリー商品（代理店・工務店の取扱商品） */}
+          {/* 4. フリー商品（代理店・工務店の取扱商品） */}
           {freeItems.length > 0 ? (
             <>
-              <View style={s.tr} wrap={false}>
-                <Text style={s.cNo}>5</Text>
-                <Text style={[s.cName, { fontWeight: 700 }]}>フリー商品</Text>
-                <Text style={s.cDesc}>代理店・工務店の取扱商品（諸費用なし）</Text>
-                <Text style={s.cPrice}></Text>
-                <Text style={s.cQty}>1式</Text>
-                <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(freeAmount)}</Text>
+              <View style={s.section}>
+                <Text style={s.sectionLabel}>4　フリー商品（代理店・工務店の取扱商品／諸費用なし）</Text>
               </View>
-              {freeItems.map((it, i) => (
-                <View key={it.id} style={s.tr} wrap={false}>
-                  <Text style={s.cNo}>{`5-${i + 1}`}</Text>
-                  <Text style={s.cName}>{it.name}</Text>
-                  <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
-                  <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
-                  <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
-                  <Text style={s.cAmount}>{yen(it.amount)}</Text>
-                </View>
-              ))}
+              {freeItems.map((it) => row(it))}
+              {subtotalRow('【フリー商品計】', yen(freeAmount))}
             </>
           ) : null}
         </View>

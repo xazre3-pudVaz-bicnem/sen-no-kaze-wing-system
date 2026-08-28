@@ -8,6 +8,7 @@ import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } 
 import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
+import { CatalogPickerDialog, type CatalogPickerItem } from './catalog-picker';
 
 const initial = { ok: false } as const;
 
@@ -46,6 +47,8 @@ interface Row {
   remark: string;
   unit_price: number;
   quantity: number;
+  /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧用） */
+  image_url: string | null;
 }
 
 const KIND_LABELS: Record<RevisionItemKind, string> = {
@@ -67,11 +70,14 @@ export function DealerRevisionForm({
   quote,
   items,
   freeProducts,
+  catalog = [],
   canEditAll,
 }: {
   quote: Quote;
   items: QuoteItem[];
   freeProducts: { code: string; name: string; price: number }[];
+  /** 商品台帳（公開中の商品）。行の追加時に呼び出して選べる */
+  catalog?: CatalogPickerItem[];
   /** 本部・総代理店は本体・オプションの行も編集できる */
   canEditAll: boolean;
 }) {
@@ -91,11 +97,12 @@ export function DealerRevisionForm({
         remark: i.remark ?? '',
         unit_price: i.unit_price,
         quantity: i.quantity,
+        image_url: i.image_url ?? null,
       }))
   );
 
-  const sumOf = (...kinds: RevisionItemKind[]) =>
-    rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + r.unit_price * Math.max(1, r.quantity), 0);
+  const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
+  const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
   // 本体・オプションを編集できないときは、元の版の金額をそのまま使う
   const baseTotal = canEditAll ? sumOf('base', 'base_expense') : quote.base_price + quote.base_expense;
   const optionTotal = canEditAll ? sumOf('option', 'option_expense') : quote.option_subtotal + quote.option_expense;
@@ -105,20 +112,22 @@ export function DealerRevisionForm({
   const tax = Math.floor(subtotal * quote.tax_rate);
 
   const update = (key: string, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  const addRow = (kind: Row['kind'], preset?: { name: string; price: number }) =>
+  const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) =>
     setRows((cur) => [
       ...cur,
       {
-        key: `new-${cur.length}-${kind}-${preset?.name ?? ''}`,
+        key: `new-${cur.length}-${Date.now()}-${kind}`,
         kind,
         name: preset?.name ?? '',
-        description: '',
-        unit: '式',
+        description: preset?.description ?? '',
+        unit: preset?.unit ?? '式',
         remark: '',
         unit_price: preset?.price ?? 0,
         quantity: 1,
+        image_url: preset?.image_url ?? null,
       },
     ]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
     <form
@@ -159,6 +168,7 @@ export function DealerRevisionForm({
               <tr key={r.key} data-testid={`revision-row-${i}`}>
                 <td className="px-3 py-2">
                   <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
+                  <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
                   {canEditAll ? (
                     <Select
                       value={r.kind}
@@ -197,7 +207,8 @@ export function DealerRevisionForm({
                   <Input
                     name={`items.${i}.quantity`}
                     type="number"
-                    min={1}
+                    min={0.01}
+                    step="any"
                     value={r.quantity}
                     onChange={(e) => update(r.key, { quantity: Number(e.target.value) })}
                     aria-label={`${i + 1} 行目の数量`}
@@ -225,7 +236,7 @@ export function DealerRevisionForm({
                     className="text-right"
                   />
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatYen(r.unit_price * Math.max(1, r.quantity))}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatYen(amountOf(r))}</td>
                 <td className="px-3 py-2">
                   <Input
                     name={`items.${i}.remark`}
@@ -259,6 +270,12 @@ export function DealerRevisionForm({
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {catalog.length > 0 && (
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+            <Plus className="size-4" aria-hidden="true" />
+            商品台帳から追加
+          </Button>
+        )}
         <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation">
           <Plus className="size-4" aria-hidden="true" />
           別途工事を追加
@@ -323,6 +340,24 @@ export function DealerRevisionForm({
       </dl>
 
       <SubmitButton pending={pending} label={`第${quote.revision + 1}版として発行する`} />
+
+      {pickerOpen && (
+        <CatalogPickerDialog
+          catalog={catalog}
+          kinds={canEditAll ? FULL_KINDS : (['installation', 'free'] as RevisionItemKind[])}
+          kindLabels={KIND_LABELS}
+          onPick={(item, kind) =>
+            addRow(kind, {
+              name: item.name,
+              price: item.price_on_request ? 0 : item.price,
+              description: item.category,
+              unit: item.unit ?? '式',
+              image_url: item.image_url,
+            })
+          }
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </form>
   );
 }

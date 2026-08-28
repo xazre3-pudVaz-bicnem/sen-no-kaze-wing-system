@@ -148,6 +148,7 @@ export function CategoryForm({ category }: { category: OptionCategory | null }) 
           </Select>
         </Field>
         <div className="flex items-end pb-3"><Checkbox name="is_required" defaultChecked={category?.is_required} label="必ず1つ選ぶ（必須）" /></div>
+        <div className="flex items-end pb-3"><Checkbox name="customer_visible" defaultChecked={category?.customer_visible ?? true} label="お客様のシミュレーターに表示（サッシ等の台帳専用はオフ）" /></div>
       </div>
       <Field label="説明" htmlFor={`cat-desc-${p}`} errors={e.description}><Input id={`cat-desc-${p}`} name="description" defaultValue={category?.description ?? ''} /></Field>
       <SubmitButton pending={pending} />

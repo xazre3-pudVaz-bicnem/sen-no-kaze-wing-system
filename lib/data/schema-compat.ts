@@ -27,7 +27,9 @@ export function normalizeOptions(rows: ProductOption[]): ProductOption[] {
 
 export function normalizeCategories(rows: OptionCategory[]): OptionCategory[] {
   return rows.map((c) => {
-    const next = c.group_code ? c : { ...c, group_code: 'other', group_name: 'その他', group_sort: c.group_sort ?? 99 };
-    return next.finish_level ? next : { ...next, finish_level: 'full' as const };
+    let next = c.group_code ? c : { ...c, group_code: 'other', group_name: 'その他', group_sort: c.group_sort ?? 99 };
+    next = next.finish_level ? next : { ...next, finish_level: 'full' as const };
+    // 0016 未適用の DB では customer_visible が無い → すべて表示扱い
+    return typeof next.customer_visible === 'boolean' ? next : { ...next, customer_visible: true };
   });
 }

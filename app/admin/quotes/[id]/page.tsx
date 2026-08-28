@@ -40,6 +40,19 @@ export default async function AdminQuoteDetailPage({
   const freeProducts = options
     .filter((o) => o.category_id === freeCategory?.id && o.status === 'published' && (isAdmin || o.owner_id === actor.id))
     .map((o) => ({ code: o.code, name: o.name, price: o.price }));
+  // 見積の行を商品台帳から選んで追加できるようにする（公開中の商品すべて）
+  const catalogByCat = new Map(categories.map((c) => [c.id, c.name]));
+  const catalog = options
+    .filter((o) => o.status === 'published')
+    .map((o) => ({
+      code: o.code,
+      name: o.name,
+      category: catalogByCat.get(o.category_id) ?? 'その他',
+      price: o.price,
+      price_on_request: o.price_on_request,
+      image_url: o.image_url,
+      manufacturer: o.manufacturer,
+    }));
   return (
     <AdminPage
       title={`見積書 ${quote.quote_no}`}
@@ -62,12 +75,19 @@ export default async function AdminQuoteDetailPage({
             金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。
             別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
           </p>
+          {sp.created && (
+            <Alert tone="success" title="見積を作成しました">
+              下の入力表（エクセル表）で本体・オプション・別途工事の行を確認し、必要に応じて編集して発行してください。
+            </Alert>
+          )}
           {sp.from === 'mail' && canRevise && (
             <Alert tone="info" title="メールからお越しの方へ">
               この画面で別途工事とフリー商品を入力し、確定見積を発行できます。入力表は下にあります。
             </Alert>
           )}
-          {canRevise && <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} canEditAll={canEditBase} />}
+          {canRevise && (
+            <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} catalog={catalog} canEditAll={canEditBase} />
+          )}
           {quote.status === 'superseded' && (
             <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>
           )}

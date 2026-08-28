@@ -40,7 +40,9 @@ export function computePricing(
   selections: SelectionInput[],
   taxRate: number = TAX_RATE,
   /** バリエーション（無指定なら追加価格 0 として扱う） */
-  variants: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] }
+  variants: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] },
+  /** 本体一式の上書き（本体内訳マスターの合計）。null / 未指定なら model.base_price */
+  baseOverride: number | null = null
 ): PricingResult {
   const groupById = new Map(variants.groups.map((g) => [g.id, g]));
   const choiceById = new Map(variants.choices.map((c) => [c.id, c]));
@@ -89,7 +91,7 @@ export function computePricing(
     });
   }
 
-  const base_price = model.base_price;
+  const base_price = baseOverride ?? model.base_price;
   const base_expense = Math.floor(base_price * expenseRate);
   const base_total = base_price + base_expense;
 

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight, Pencil } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
-import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, type BaseBreakdownItem, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -11,10 +11,33 @@ interface Props {
   specName: string;
   finishLevel: FinishLevel;
   pricing: PricingResult;
+  /** 本体の内訳（分類表見積書・仕様別）。登録があれば本体価格の下に開ける形で出す */
+  baseBreakdown?: BaseBreakdownItem[];
   categories: OptionCategory[];
   options: ProductOption[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
+}
+
+/** 本体内訳の 1 工事区分ぶんの行（工事区分見出し＋明細） */
+function FragmentRows({ section, items }: { section: string; items: BaseBreakdownItem[] }) {
+  return (
+    <>
+      <tr className="border-t border-line/70 bg-sand/30">
+        <td colSpan={4} className="px-2 py-1 font-semibold text-ink-soft">{section}</td>
+      </tr>
+      {items.map((b) => (
+        <tr key={b.id}>
+          <td className="px-2 py-0.5">{b.name}</td>
+          <td className="w-24 px-2 py-0.5 text-right text-muted">
+            {b.quantity} {b.unit ?? ''}
+          </td>
+          <td className="w-24 px-2 py-0.5 text-right tabular-nums">{formatYen(b.amount)}</td>
+          <td className="w-32 px-2 py-0.5 text-[0.65rem] text-muted">{b.remark ?? ''}</td>
+        </tr>
+      ))}
+    </>
+  );
 }
 
 /**
@@ -25,7 +48,7 @@ interface Props {
  *   4. 運送費        1式
  *   合計
  */
-export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
+export function QuoteSheet({ modelName, specName, finishLevel, pricing, baseBreakdown = [], categories, options, readOnly, onPickCategory }: Props) {
   const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const byOption = new Map(options.map((o) => [o.id, o]));
   // 「別途見積」の商品も明細として出す（0 円だからと「標準仕様に含む」へ混ぜない）
@@ -37,10 +60,13 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
   const siteworkTotal = sitework.reduce((s, l) => s + l.amount, 0);
   const transportTotal = transport?.amount ?? 0;
 
-  const rows: { no: string; label: string; qty: string; amount: string; strong?: boolean }[] = [
-    { no: '１', label: '本体価格', qty: '１式', amount: formatYen(pricing.base_total), strong: true },
-    { no: '２', label: 'オプション価格', qty: '１式', amount: formatYen(pricing.option_total), strong: true },
-  ];
+  /** 内訳を工事区分ごとにまとめる（表示順は登録順） */
+  const sections: { section: string; items: BaseBreakdownItem[] }[] = [];
+  for (const b of baseBreakdown) {
+    const last = sections[sections.length - 1];
+    if (last && last.section === b.section) last.items.push(b);
+    else sections.push({ section: b.section, items: [b] });
+  }
 
   return (
     <section aria-labelledby="quote-sheet-heading" className="card overflow-hidden" data-testid="quote-sheet">
@@ -56,14 +82,39 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
       <div className="overflow-x-auto">
         <table className="w-full min-w-[34rem] text-sm">
           <tbody className="divide-y divide-line">
-            {rows.map((r) => (
-              <tr key={r.no} className="bg-white">
-                <td className="w-10 px-4 py-3 text-center text-muted">{r.no}</td>
-                <td className="px-2 py-3 font-semibold">{r.label}</td>
-                <td className="w-16 px-2 py-3 text-right text-muted">{r.qty}</td>
-                <td className="w-32 px-4 py-3 text-right tabular-nums">{r.amount}</td>
+            <tr className="bg-white">
+              <td className="w-10 px-4 py-3 text-center text-muted">１</td>
+              <td className="px-2 py-3 font-semibold">本体価格</td>
+              <td className="w-16 px-2 py-3 text-right text-muted">１式</td>
+              <td className="w-32 px-4 py-3 text-right tabular-nums">{formatYen(pricing.base_total)}</td>
+            </tr>
+            {/* 本体の内訳（分類表見積書）。クリックで開閉できる */}
+            {sections.length > 0 && (
+              <tr className="bg-white">
+                <td colSpan={4} className="px-4 pb-3">
+                  <details className="rounded-lg border border-line bg-ivory/60" data-testid="base-breakdown">
+                    <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-ink-soft">
+                      本体の内訳を見る（{baseBreakdown.length}項目・本体一式 {formatYen(pricing.base_price)}＋諸費用）
+                    </summary>
+                    <div className="overflow-x-auto px-3 pb-3">
+                      <table className="w-full min-w-[30rem] text-xs">
+                        <tbody>
+                          {sections.map((sec) => (
+                            <FragmentRows key={sec.section} section={sec.section} items={sec.items} />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </td>
               </tr>
-            ))}
+            )}
+            <tr className="bg-white">
+              <td className="w-10 px-4 py-3 text-center text-muted">２</td>
+              <td className="px-2 py-3 font-semibold">オプション価格</td>
+              <td className="w-16 px-2 py-3 text-right text-muted">１式</td>
+              <td className="w-32 px-4 py-3 text-right tabular-nums">{formatYen(pricing.option_total)}</td>
+            </tr>
 
             {/* 2-1 明細（クリックで変更） */}
             <tr>

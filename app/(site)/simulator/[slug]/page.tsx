@@ -47,6 +47,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           variant_choice_ids: found.items.flatMap((i) => i.variant_choice_ids ?? []),
           status: found.configuration.status,
           finish_level: found.configuration.finish_level ?? 'full',
+          spec_code: found.configuration.spec_code ?? null,
         };
     }
   }

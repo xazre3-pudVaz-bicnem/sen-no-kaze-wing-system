@@ -27,6 +27,7 @@ import type {
 } from '../domain/types.ts';
 import { masterProducts, masterVariantChoices, masterVariantGroups } from './product-master.ts';
 import { SASH_HEIGHTS, SASH_SIZES_TANTAI_HANGAIDZUKE, SASH_TYPES, SASH_WIDTHS, sashLabel } from './sash-master.ts';
+import { BASE_BREAKDOWN_ITEMS, baseBreakdownLinesTotal } from './base-breakdown.ts';
 
 const NOW = '2026-08-22T00:00:00.000Z';
 
@@ -49,7 +50,8 @@ const SITEWORK_CODES = [
   'sw-site-expense',
 ];
 
-const COMMON_BASE = ['fire-standard', 'floor-light-beige', 'wall-ceiling-cross', 'exterior-galnote', 'sash-standard', 'door-standard'];
+// サッシは本体（分類表見積書の６．サッシ木製建具工事）に含めるため、お客様の標準構成には入れない
+const COMMON_BASE = ['fire-standard', 'floor-light-beige', 'wall-ceiling-cross', 'exterior-galnote', 'door-standard'];
 
 export const seedModels: BaseModel[] = [
   {
@@ -59,7 +61,8 @@ export const seedModels: BaseModel[] = [
     tagline: '4tユニック1台で運び、30分で広がる折り畳み式木造コンテナ。',
     description:
       '折り畳み式木造コンテナ「Wing」の基本モデル。工場で内外装まで仕上げた状態で折り畳んで運搬し、現地で下ろして展開するだけで荷台の約2倍・18.72㎡（約11.5帖）の空間が完成します。伸縮する柱脚が不陸や傾斜地を吸収するため造成を最小限にでき、建築確認申請の取得にも対応。別荘・宿泊施設・事務所・店舗・住まいまで、多用途に使える「小さな宝箱」です。',
-    base_price: 2156364,
+    // 本体一式 ＝ 分類表見積書（20260827）ホテルUB シートの明細合計（売価）
+    base_price: baseBreakdownLinesTotal('wing-01', 'hotel') ?? 2156364,
     expense_rate: 0.15,
     presets: [
       {
@@ -156,7 +159,7 @@ export const seedModels: BaseModel[] = [
     tagline: 'コンパクトな箱型ユニット。ホテル・単身者向けの1室に。',
     description:
       '折り畳み機構を持たない箱型の木造ユニット。Wing と同じ工場生産・同じ外装仕様で、宿泊施設の客室や単身者向けの住まいに向いたコンパクトサイズです。シャワーユニットを組み込んだホテル仕様を基本プランとしています。',
-    base_price: 1600610,
+    base_price: baseBreakdownLinesTotal('box', 'hotel') ?? 1600610,
     expense_rate: 0.15,
     presets: [
       {
@@ -205,7 +208,7 @@ export const seedModels: BaseModel[] = [
     tagline: '事務所・店舗向けのフラットタイプ。',
     description:
       '事務所・店舗用途を想定したフラットタイプの木造ユニット。水まわり設備を持たない素直な一室空間を基本構成とし、必要に応じてトイレやミニキッチンを追加できます。',
-    base_price: 1480705,
+    base_price: baseBreakdownLinesTotal('flat', 'office') ?? 1480705,
     expense_rate: 0.15,
     presets: [
       {
@@ -313,34 +316,37 @@ const cat = (
   selection_mode: 'single',
   finish_level: 'full',
   is_required: false,
+  customer_visible: true,
   sort_order: sort,
   status: 'published',
   ...opts,
 });
 
+// 並び順は先方の本体分類表（防火・非防火 → 屋根・外壁 → 内装 → 玄関ドア → サッシ → 設備 → …）に合わせる
 const G = {
-  finish: ['finish', '内外装仕上げ', 1] as [string, string, number],
-  sash: ['sash', 'サッシ', 2] as [string, string, number],
+  fireproof: ['fireproof', '防火仕様', 1] as [string, string, number],
+  finish: ['finish', '内外装仕上げ', 2] as [string, string, number],
   door: ['interior-door', '内部建具', 3] as [string, string, number],
-  equipment: ['equipment', '設備機器', 4] as [string, string, number],
-  lighting: ['lighting', '照明器具', 5] as [string, string, number],
-  furniture: ['furniture', '家具', 6] as [string, string, number],
-  other: ['other', 'その他', 7] as [string, string, number],
-  fireproof: ['fireproof', '防火仕様', 8] as [string, string, number],
+  sash: ['sash', 'サッシ', 4] as [string, string, number],
+  equipment: ['equipment', '設備機器', 5] as [string, string, number],
+  lighting: ['lighting', '照明器具', 6] as [string, string, number],
+  furniture: ['furniture', '家具', 7] as [string, string, number],
+  other: ['other', 'その他', 8] as [string, string, number],
   sitework: ['sitework', '別途工事', 9] as [string, string, number],
   free: ['free-product', 'フリー商品', 10] as [string, string, number],
 };
 
 export const seedCategories: OptionCategory[] = [
-  cat(C.floor, 'floor', '床材', G.finish, 1, { is_required: true, description: '床の仕上げ材（カラーを選択）' }),
-  cat(C.wallCeiling, 'wall-ceiling', '壁・天井', G.finish, 2, { is_required: true, description: '壁・天井の仕上げ' }),
-  cat(C.exteriorWall, 'exterior-wall', '外壁', G.finish, 3, { finish_level: 'shell', is_required: true, description: '外壁の仕上げ材' }),
-  cat(C.sash, 'sash', 'サッシ', G.sash, 1, { finish_level: 'shell', is_required: true }),
+  cat(C.exteriorWall, 'exterior-wall', '屋根・外壁', G.finish, 1, { finish_level: 'shell', is_required: true, description: '外壁の仕上げ材' }),
+  cat(C.floor, 'floor', '床材', G.finish, 2, { is_required: true, description: '床の仕上げ材（カラーを選択）' }),
+  cat(C.wallCeiling, 'wall-ceiling', '壁・天井', G.finish, 3, { is_required: true, description: '壁・天井の仕上げ' }),
+  // サッシはエンドユーザーに選ばせない（本体の内訳に含める）。台帳・代理店の見積編集では使う
+  cat(C.sash, 'sash', 'サッシ', G.sash, 1, { finish_level: 'shell', customer_visible: false, description: '本体に含まれるため、お客様の画面には表示しません' }),
   cat(C.interiorDoor, 'interior-door', '内部建具', G.door, 1, { is_required: true }),
   cat(C.ub, 'ub', '浴室（ユニットバス）', G.equipment, 1, { finish_level: 'equipment', description: '浴室ユニット。いずれか1つ' }),
-  cat(C.toilet, 'toilet', 'トイレ', G.equipment, 2, { finish_level: 'equipment', selection_mode: 'multi' }),
+  cat(C.kitchen, 'kitchen', 'キッチン', G.equipment, 2, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.washbasin, 'washbasin', '洗面', G.equipment, 3, { finish_level: 'equipment', selection_mode: 'multi' }),
-  cat(C.kitchen, 'kitchen', 'キッチン', G.equipment, 4, { finish_level: 'equipment', selection_mode: 'multi' }),
+  cat(C.toilet, 'toilet', 'トイレ', G.equipment, 4, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.boiler, 'boiler', '給湯', G.equipment, 5, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.aircon, 'aircon', '空調', G.equipment, 6, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.lighting, 'lighting', '照明器具', G.lighting, 1, { finish_level: 'equipment', selection_mode: 'multi' }),
@@ -352,6 +358,7 @@ export const seedCategories: OptionCategory[] = [
   cat(C.officeSupplies, 'office-supplies', '事務所用品', G.other, 4, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.fireproof, 'fireproof', '防火仕様', G.fireproof, 1, { finish_level: 'shell', is_required: true, description: '建築する場所によって異なります。詳しくは近くの代理店にご相談ください' }),
   cat(C.insulation, 'insulation', '断熱仕様', G.finish, 4, { finish_level: 'shell', selection_mode: 'multi', description: '本体の断熱性能。あとから変更できないため本体注文時に選びます' }),
+  // 防火仕様カテゴリーは注文範囲の選択に隣接して表示する（並び順は G.fireproof=1）
   cat(C.freeProduct, 'free-product', 'フリー商品', G.free, 1, {
     finish_level: 'equipment',
     selection_mode: 'multi',
@@ -776,6 +783,15 @@ export const seedVariantChoices: OptionVariantChoice[] = [
 // 台帳へ合流させる（既存の商品より後ろに並ぶ）
 seedOptions.push(...masterOptions, ...sashOptions);
 
+/* ---------------- 本体内訳マスター（分類表見積書 20260827・売価のみ） ---------------- */
+
+const SLUG_TO_MODEL: Record<string, string> = { 'wing-01': MODEL_WING01_ID, box: MODEL_BOX_ID, flat: MODEL_FLAT_ID };
+
+export const seedBaseBreakdownItems = BASE_BREAKDOWN_ITEMS.map(({ model_slug, ...b }) => ({
+  ...b,
+  base_model_id: SLUG_TO_MODEL[model_slug],
+}));
+
 export const seedCatalog = {
   models: seedModels,
   images: seedProductImages,
@@ -787,4 +803,5 @@ export const seedCatalog = {
   hotspots: seedHotspots,
   variantGroups: seedVariantGroups,
   variantChoices: seedVariantChoices,
+  baseBreakdownItems: seedBaseBreakdownItems,
 };

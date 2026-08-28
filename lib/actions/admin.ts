@@ -19,8 +19,12 @@ import {
   type FieldErrors,
   assignDealerSchema,
   dealerRevisionSchema,
+  manualQuoteSchema,
+  baseBreakdownSchema,
   userRoleSchema,
 } from '@/lib/validation';
+import { pruneToScope } from '@/lib/domain/rules';
+import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
 
 export interface AdminFormState {
   ok: boolean;
@@ -379,6 +383,7 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
       remark: formData.get(`items.${i}.remark`),
       unit_price: formData.get(`items.${i}.unit_price`) || 0,
       quantity: formData.get(`items.${i}.quantity`) || 1,
+      image_url: formData.get(`items.${i}.image_url`) ?? '',
     });
   }
   const parsed = dealerRevisionSchema.safeParse({
@@ -580,4 +585,109 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
   revalidatePath('/', 'layout');
   updateTag(CATALOG_TAG);
   return { ok: true, applied };
+}
+
+
+/* ---------------- スタッフの新規見積作成 ---------------- */
+
+/**
+ * スタッフ（代理店以上）が管理画面から直接見積を作る。
+ * 選んだ仕様の標準構成で保存 → 第1版（概算見積）を発行し、編集画面へ移動する。
+ * 代理店・総代理店が作った見積は自動的に自分が担当になる（DB 側でも同じ判定）。
+ */
+export async function createManualQuoteAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const parsed = manualQuoteSchema.safeParse({
+    customer_name: formData.get('customer_name'),
+    customer_company: formData.get('customer_company'),
+    base_model_id: formData.get('base_model_id'),
+    spec_code: formData.get('spec_code'),
+    finish_level: formData.get('finish_level'),
+    memo: formData.get('memo'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  let quoteId: string | null = null;
+  try {
+    const store = await getStore();
+    const bundle = await store.getCatalogBundle(parsed.data.base_model_id);
+    if (!bundle) return { ok: false, error: 'モデルが見つかりません。' };
+    const preset = bundle.model.presets?.find((x) => x.code === parsed.data.spec_code) ?? bundle.model.presets?.[0];
+    if (!preset) return { ok: false, error: 'このモデルには仕様（プラン）が登録されていません。' };
+    const ctx = {
+      options: bundle.options,
+      categories: bundle.categories,
+      dependencies: bundle.dependencies,
+      conflicts: bundle.conflicts,
+    };
+    const optionIds = pruneToScope(ctx, buildPresetSelection(ctx, preset), parsed.data.finish_level);
+    const cfg = await store.saveConfiguration(actor, {
+      id: null,
+      base_model_id: bundle.model.id,
+      name: `${parsed.data.customer_name} 様向け（${preset.name}）`,
+      option_ids: optionIds,
+      preview_image_url: null,
+      notes: parsed.data.memo,
+      finish_level: parsed.data.finish_level,
+      spec_code: preset.code,
+      variant_choice_ids: defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds),
+    });
+    const quote = await store.createQuoteFromConfiguration(
+      actor,
+      cfg.id,
+      {
+        full_name: parsed.data.customer_name,
+        company_name: parsed.data.customer_company,
+        email: actor.email,
+        phone: '',
+        address: '',
+        site_address: null,
+      },
+      parsed.data.memo
+    );
+    quoteId = quote.id;
+    await flushNotificationsSafely();
+    revalidatePath('/admin/quotes');
+    revalidatePath('/mypage');
+  } catch (e) {
+    return errState(e);
+  }
+  redirect(`/admin/quotes/${quoteId}?created=1`);
+}
+
+/* ---------------- 本体内訳マスター ---------------- */
+
+/** 本体内訳マスター（分類表見積書）を丸ごと保存する（総代理店以上） */
+export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireCatalogEditor();
+  const rows: unknown[] = [];
+  for (const [key] of formData.entries()) {
+    const m = key.match(/^items\.(\d+)\.name$/);
+    if (!m) continue;
+    const i = m[1];
+    rows.push({
+      section: formData.get(`items.${i}.section`),
+      name: formData.get(`items.${i}.name`),
+      quantity: formData.get(`items.${i}.quantity`) || 1,
+      unit: formData.get(`items.${i}.unit`),
+      unit_price: formData.get(`items.${i}.unit_price`) || 0,
+      remark: formData.get(`items.${i}.remark`),
+    });
+  }
+  const parsed = baseBreakdownSchema.safeParse({
+    base_model_id: formData.get('base_model_id'),
+    spec_code: formData.get('spec_code'),
+    items: rows,
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  try {
+    const store = await getStore();
+    const saved = await store.saveBaseBreakdownItems(parsed.data.base_model_id, parsed.data.spec_code, parsed.data.items);
+    revalidatePath('/admin/base-breakdown');
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    const total = saved.reduce((sum, b) => sum + b.amount, 0);
+    return { ok: true, message: `保存しました（${saved.length}行・本体一式 ¥${total.toLocaleString('ja-JP')}）` };
+  } catch (e) {
+    return errState(e);
+  }
 }

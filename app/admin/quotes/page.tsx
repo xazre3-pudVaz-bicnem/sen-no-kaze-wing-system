@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { canEditCatalog, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
@@ -11,14 +11,19 @@ export default async function AdminQuotesPage() {
   const actor = await requireStaff();
   const store = await getStore();
 
-  // 代理店は自分に割り当てられた見積だけを見る
-  if (actor.role !== 'admin') {
+  // 代理店は自分に割り当てられた見積だけを見る。総代理店は本部と同じく全件（本体明細を編集するため）
+  if (!canEditCatalog(actor.role)) {
     const mine = await store.listDealerQuotes(actor.id);
     const latest = mine.filter((q) => q.status !== 'superseded');
     return (
       <AdminPage
         title="担当の見積"
         lead={`割り当てられた見積 ${latest.length} 件。別途工事・フリー商品を入力して確定見積を発行できます。`}
+        actions={
+          <Link href="/admin/quotes/new" className="btn-primary btn-sm" data-testid="new-quote-link">
+            新規見積を作成
+          </Link>
+        }
       >
         <Table minWidth="48rem">
           <thead className="bg-sand/60">
@@ -68,7 +73,15 @@ export default async function AdminQuotesPage() {
   const [requests, quotes] = await Promise.all([store.listQuoteRequests(), store.listAllQuotes()]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
   return (
-    <AdminPage title="見積依頼・見積書" lead={`見積依頼 ${requests.length} 件`}>
+    <AdminPage
+      title="見積依頼・見積書"
+      lead={`見積依頼 ${requests.length} 件`}
+      actions={
+        <Link href="/admin/quotes/new" className="btn-primary btn-sm" data-testid="new-quote-link">
+          新規見積を作成
+        </Link>
+      }
+    >
       <Table minWidth="60rem">
         <thead className="bg-sand/60">
           <tr>

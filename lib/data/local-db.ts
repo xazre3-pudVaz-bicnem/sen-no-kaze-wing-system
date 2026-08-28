@@ -5,6 +5,7 @@ import path from 'node:path';
 import type {
   AppNotification,
   AuditLog,
+  BaseBreakdownItem,
   OptionVariantChoice,
   OptionVariantGroup,
   BaseModel,
@@ -62,6 +63,7 @@ export interface LocalDb {
   contactMessages: ContactMessage[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
+  baseBreakdownItems: BaseBreakdownItem[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
 }
@@ -92,6 +94,7 @@ export function emptyDb(): LocalDb {
     hotspots: clone(seedCatalog.hotspots),
     variantGroups: clone(seedCatalog.variantGroups),
     variantChoices: clone(seedCatalog.variantChoices),
+    baseBreakdownItems: clone(seedCatalog.baseBreakdownItems),
     configurations: [],
     configurationItems: [],
     snapshots: [],

@@ -59,7 +59,7 @@ export function VariantPicker({ groups, choices, selected, onChange }: Props) {
                       className={cn(
                         'w-full rounded-lg border text-left transition disabled:cursor-not-allowed disabled:opacity-70',
                         withImage ? 'overflow-hidden' : 'px-3 py-1.5 text-sm',
-                        on ? 'border-brown ring-1 ring-brown/40' : 'border-line hover:border-ink/40'
+                        on ? 'border-brown bg-ivory/70 ring-2 ring-brown/60' : 'border-line hover:border-ink/40'
                       )}
                     >
                       {withImage && (

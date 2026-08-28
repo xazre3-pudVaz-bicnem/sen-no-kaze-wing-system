@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, ImageOff, X } from 'lucide-react';
+import { Check, ChevronLeft, ImageOff, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -38,7 +38,9 @@ interface Props {
 
 /**
  * 見積項目をクリックしたときに開く商品選択ポップアップ。
- * カテゴリー内の商品を画像付きで並べ、「選択」→「変更」で確定する。
+ * スクロールは全体で 1 本（商品一覧と色・仕様の選択が同じ流れで並ぶ）。
+ * 1 つ選ぶカテゴリーでは、選んだら選択中の商品だけを出し、そのまま下で色・仕様を選べる。
+ * 「他の商品から選ぶ」でいつでも一覧に戻れる。
  */
 export function OptionPickerDialog({
   category,
@@ -54,6 +56,8 @@ export function OptionPickerDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const [picked, setPicked] = useState<string[]>(options.filter((o) => selectedIds.includes(o.id)).map((o) => o.id));
   const single = category.selection_mode === 'single';
+  /** 商品一覧を出すか（single で選択済みなら、選択中の商品＋色選びだけを出す） */
+  const [browsing, setBrowsing] = useState(() => !(single && picked.length > 0));
 
   /** 選ばれている商品の選択項目だけを出す。既定は「標準」の選択肢 */
   const activeGroups = variantGroups.filter((g) => picked.includes(g.option_id)).sort((a, b) => a.sort_order - b.sort_order);
@@ -66,7 +70,15 @@ export function OptionPickerDialog({
     });
   };
 
+  const toggle = (id: string) => {
+    setPicked((cur) => {
+      if (single) return cur.includes(id) && !category.is_required ? [] : [id];
+      return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    });
+  };
+
   const chooseProduct = (id: string) => {
+    const wasPicked = picked.includes(id);
     toggle(id);
     // 商品を替えたら、その商品の標準の選択肢に入れ替える
     const groups = variantGroups.filter((g) => g.option_id === id);
@@ -77,6 +89,8 @@ export function OptionPickerDialog({
       });
       return [...keep, ...defaultVariants(groups, variantChoices, cur)];
     });
+    // 1 つ選ぶカテゴリーは、選んだら一覧をたたんで色・仕様選びへ（スクロールを 1 本にする）
+    if (single && !wasPicked) setBrowsing(false);
   };
 
   useEffect(() => {
@@ -84,12 +98,9 @@ export function OptionPickerDialog({
     if (d && !d.open) d.showModal();
   }, []);
 
-  const toggle = (id: string) => {
-    setPicked((cur) => {
-      if (single) return cur.includes(id) && !category.is_required ? [] : [id];
-      return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-    });
-  };
+  const pickedOptions = options.filter((o) => picked.includes(o.id));
+  const priceLabel = (o: ProductOption) =>
+    o.price_on_request ? '別途見積' : o.price === 0 ? '追加費用なし' : `+${formatYen(o.price)}`;
 
   return (
     <dialog
@@ -112,65 +123,109 @@ export function OptionPickerDialog({
         </button>
       </div>
 
-      <ul className="grid max-h-[60vh] gap-3 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-3">
-        {options.map((o) => {
-          const checked = picked.includes(o.id);
-          const reason = !checked ? blocked.get(o.id) : null;
-          return (
-            <li key={o.id}>
-              <button
-                type="button"
-                onClick={() => !reason && chooseProduct(o.id)}
-                aria-pressed={checked}
-                disabled={Boolean(reason)}
-                className={cn(
-                  'flex h-full w-full flex-col overflow-hidden rounded-xl border text-left transition',
-                  checked ? 'border-brown shadow-soft' : 'border-line hover:border-ink/40',
-                  reason && 'cursor-not-allowed opacity-60'
-                )}
-                data-testid={`pick-${o.code}`}
-              >
-                <span className="relative block aspect-[4/3] bg-sand">
+      {/* 本文はスクロール 1 本。商品一覧 → 色・仕様の順にそのまま下へ流れる */}
+      <div className="max-h-[72vh] overflow-y-auto px-5 py-4">
+        {!browsing && single ? (
+          /* 選択済み：選択中の商品だけをコンパクトに出す */
+          <div className="space-y-1">
+            {pickedOptions.map((o) => (
+              <div key={o.id} className="flex items-center gap-3 rounded-xl border border-brown/60 bg-ivory/60 p-3" data-testid="picker-selected">
+                <span className="relative block size-16 shrink-0 overflow-hidden rounded-lg bg-sand">
                   {o.image_url ? (
-                    <SmartImage src={o.image_url} alt={o.name} fill sizes="(min-width: 1024px) 18rem, 50vw" className="object-cover" />
+                    <SmartImage src={o.image_url} alt={o.name} fill sizes="64px" className="object-cover" />
                   ) : (
-                    <span className="flex h-full flex-col items-center justify-center gap-1 text-xs text-muted">
-                      <ImageOff className="size-6" aria-hidden="true" />
-                      商品画像 準備中
-                    </span>
+                    <span className="flex h-full items-center justify-center text-muted"><ImageOff className="size-5" aria-hidden="true" /></span>
                   )}
-                  {checked && (
-                    <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-brown px-2 py-0.5 text-xs font-semibold text-white">
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 text-[0.65rem]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 font-semibold text-white">
                       <Check className="size-3" aria-hidden="true" />
                       選択中
                     </span>
-                  )}
+                    {o.manufacturer && <span className="text-muted">{o.manufacturer}</span>}
+                  </span>
+                  <span className="mt-0.5 block truncate text-sm font-semibold">{o.name}</span>
+                  <span className="block text-xs text-ink-soft">{priceLabel(o)}</span>
                 </span>
-                <span className="flex flex-1 flex-col p-3">
-                  {(o.manufacturer || o.highlight) && (
-                    <span className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[0.65rem]">
-                      {o.manufacturer && <span className="text-muted">{o.manufacturer}</span>}
-                      {o.highlight && <span className="rounded-full bg-sand px-1.5 py-0.5 text-forest">{o.highlight}</span>}
-                    </span>
-                  )}
-                  <span className="font-semibold">{o.name}</span>
-                  {o.size_note && <span className="mt-0.5 text-[0.7rem] text-muted">{o.size_note}</span>}
-                  {o.description && <span className="mt-0.5 text-xs text-ink-soft">{o.description}</span>}
-                  <span className="mt-auto pt-2 text-sm">{o.price_on_request ? '別途見積' : o.price === 0 ? '追加費用なし' : `+${formatYen(o.price)}`}</span>
-                  {o.list_price ? <span className="text-[0.65rem] text-muted">メーカー参考価格 {formatYen(o.list_price)}</span> : null}
-                  {reason && <span className="mt-1 text-xs text-warn">{reason}</span>}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setBrowsing(true)}
+                  className="btn-secondary btn-sm shrink-0"
+                  data-testid="picker-expand"
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                  他の商品から選ぶ
+                </button>
+              </div>
+            ))}
+            {pickedOptions.length === 0 && (
+              <button type="button" onClick={() => setBrowsing(true)} className="btn-secondary btn-sm" data-testid="picker-expand">
+                商品を選ぶ
               </button>
-            </li>
-          );
-        })}
-      </ul>
+            )}
+          </div>
+        ) : (
+          /* 一覧：カードは小さめ（4 列）でスクロール量を抑える */
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {options.map((o) => {
+              const checked = picked.includes(o.id);
+              const reason = !checked ? blocked.get(o.id) : null;
+              return (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    onClick={() => !reason && chooseProduct(o.id)}
+                    aria-pressed={checked}
+                    disabled={Boolean(reason)}
+                    className={cn(
+                      'flex h-full w-full flex-col overflow-hidden rounded-lg border text-left transition',
+                      checked ? 'border-brown bg-ivory/70 ring-2 ring-brown/50 shadow-soft' : 'border-line hover:border-ink/40',
+                      reason && 'cursor-not-allowed opacity-60'
+                    )}
+                    data-testid={`pick-${o.code}`}
+                  >
+                    <span className="relative block aspect-[4/3] bg-sand">
+                      {o.image_url ? (
+                        <SmartImage src={o.image_url} alt={o.name} fill sizes="(min-width: 1024px) 13rem, 45vw" className="object-cover" />
+                      ) : (
+                        <span className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
+                          <ImageOff className="size-5" aria-hidden="true" />
+                          商品画像 準備中
+                        </span>
+                      )}
+                      {checked && (
+                        <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 text-[0.65rem] font-semibold text-white">
+                          <Check className="size-3" aria-hidden="true" />
+                          選択中
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex flex-1 flex-col p-2">
+                      {(o.manufacturer || o.highlight) && (
+                        <span className="mb-0.5 flex flex-wrap items-center gap-1 text-[0.6rem]">
+                          {o.manufacturer && <span className="text-muted">{o.manufacturer}</span>}
+                          {o.highlight && <span className="rounded-full bg-sand px-1.5 py-0.5 text-forest">{o.highlight}</span>}
+                        </span>
+                      )}
+                      <span className="text-xs leading-snug font-semibold">{o.name}</span>
+                      {o.size_note && <span className="mt-0.5 text-[0.65rem] text-muted">{o.size_note}</span>}
+                      <span className="mt-auto pt-1.5 text-xs">{priceLabel(o)}</span>
+                      {o.list_price ? <span className="text-[0.6rem] text-muted">メーカー参考価格 {formatYen(o.list_price)}</span> : null}
+                      {reason && <span className="mt-1 text-[0.65rem] text-warn">{reason}</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-      {activeGroups.length > 0 && (
-        <div className="max-h-[40vh] overflow-y-auto px-6 pb-4">
+        {/* 色・仕様（サイズ）の選択。同じスクロールの中でそのまま下に続く */}
+        {activeGroups.length > 0 && (
           <VariantPicker groups={activeGroups} choices={variantChoices} selected={variants} onChange={chooseVariant} />
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex flex-col-reverse gap-2 border-t border-line px-6 py-4 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" onClick={onClose}>

@@ -9,12 +9,21 @@ const box = seedModels.find((m) => m.id === MODEL_BOX_ID)!;
 const codes = (...list: string[]) => list.map((code) => ({ option_id: seedOptions.find((o) => o.code === code)!.id }));
 
 describe('computePricing（見積書テンプレートの計算構造）', () => {
-  it('本体価格計 ＝ 本体一式 ＋ 諸費用15%（片ウィング【単身者用】 2,479,818）', () => {
-    expect(baseTotalOf(wing)).toBe(2_479_818);
+  it('本体価格計 ＝ 本体一式 ＋ 諸費用15%（分類表見積書 ホテルUB 2,566,001）', () => {
+    // 本体一式は 20260827分類表見積書（売価）ホテルUB シートの明細合計
+    expect(wing.base_price).toBe(2_231_306);
+    expect(baseTotalOf(wing)).toBe(2_566_001);
     const r = computePricing(wing, seedOptions, seedCategories, []);
-    expect(r.base_price).toBe(2_156_364);
-    expect(r.base_expense).toBe(323_454);
-    expect(r.base_total).toBe(2_479_818);
+    expect(r.base_price).toBe(2_231_306);
+    expect(r.base_expense).toBe(334_695);
+    expect(r.base_total).toBe(2_566_001);
+  });
+
+  it('本体内訳マスターの合計で本体一式を上書きできる（仕様別の本体価格）', () => {
+    const r = computePricing(wing, seedOptions, seedCategories, [], undefined, undefined, 1_000_000);
+    expect(r.base_price).toBe(1_000_000);
+    expect(r.base_expense).toBe(150_000);
+    expect(r.base_total).toBe(1_150_000);
   });
 
   it('片ウィング【ホテルUB】のオプション構成でオプション価格計を再現する（諸費用15%）', () => {
@@ -33,12 +42,12 @@ describe('computePricing（見積書テンプレートの計算構造）', () =>
 
   it('値引き等調整額で千円未満を切り捨て、消費税10%を加算する', () => {
     const r = computePricing(wing, seedOptions, seedCategories, codes('interior-standard-wing', 'carpentry-full-wing'));
-    // 本体計 2,479,818 + オプション (515,890+312,500)=828,390 ×1.15 = 952,648 → raw 3,432,466
-    expect(r.subtotal_raw).toBe(3_432_466);
-    expect(r.adjustment).toBe(-466);
-    expect(r.subtotal).toBe(3_432_000);
-    expect(r.tax).toBe(343_200);
-    expect(r.total).toBe(3_775_200);
+    // 本体計 2,566,001 + オプション (515,890+312,500)=828,390 → 諸費用 124,258 → 計 952,648 → raw 3,518,649
+    expect(r.subtotal_raw).toBe(3_518_649);
+    expect(r.adjustment).toBe(-649);
+    expect(r.subtotal).toBe(3_518_000);
+    expect(r.tax).toBe(351_800);
+    expect(r.total).toBe(3_869_800);
   });
 
   it('ユニットバスを外すと金額が元に戻る（諸費用込みの差額）', () => {

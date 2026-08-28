@@ -1,6 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
+  BaseBreakdownItem,
   BaseModel,
   CatalogBundle,
   Configuration,
@@ -140,6 +141,9 @@ export class SupabaseStore implements DataStore {
     const gids = ((vg.data ?? []) as OptionVariantGroup[]).map((g) => g.id);
     const vc = gids.length ? await db.from('option_variant_choices').select('*').in('group_id', gids).order('sort_order') : { data: [], error: null };
     if (vc.error && !isMissingRelation(vc.error)) mapPgError(vc.error);
+    // 本体内訳マスター（0016 未適用の DB では「内訳なし」として扱う）
+    const bb = await db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).order('sort_order');
+    if (bb.error && !isMissingRelation(bb.error)) mapPgError(bb.error);
     const idSet = new Set(ids);
     return {
       model,
@@ -152,7 +156,47 @@ export class SupabaseStore implements DataStore {
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
       variantGroups: (vg.error ? [] : (vg.data ?? [])) as OptionVariantGroup[],
       variantChoices: (vc.error ? [] : (vc.data ?? [])) as OptionVariantChoice[],
+      baseBreakdowns: (bb.error ? [] : (bb.data ?? [])) as BaseBreakdownItem[],
     };
+  }
+
+  // ---------- 本体内訳マスター ----------
+  async listBaseBreakdownItems(modelId?: string) {
+    const db = await this.db();
+    let q = db.from('base_breakdown_items').select('*').order('spec_code').order('sort_order');
+    if (modelId) q = q.eq('base_model_id', modelId);
+    const { data, error } = await q;
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as BaseBreakdownItem[];
+  }
+  async saveBaseBreakdownItems(
+    modelId: string,
+    specCode: string,
+    items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
+  ) {
+    const db = await this.db();
+    // (モデル, 仕様) 単位で丸ごと入れ替える。RLS（can_edit_catalog）が権限を守る
+    const del = await db.from('base_breakdown_items').delete().eq('base_model_id', modelId).eq('spec_code', specCode);
+    if (del.error) mapPgError(del.error);
+    if (!items.length) return [];
+    const rows = items.map((it, i) => ({
+      base_model_id: modelId,
+      spec_code: specCode,
+      section: it.section,
+      name: it.name,
+      quantity: it.quantity,
+      unit: it.unit,
+      unit_price: it.unit_price,
+      amount: Math.round(it.unit_price * it.quantity),
+      remark: it.remark,
+      sort_order: i + 1,
+    }));
+    const ins = await db.from('base_breakdown_items').insert(rows).select('*');
+    if (ins.error) mapPgError(ins.error);
+    return (ins.data ?? []) as BaseBreakdownItem[];
   }
 
   async respondToQuote(id: string, status: 'accepted' | 'declined') {
@@ -250,6 +294,7 @@ export class SupabaseStore implements DataStore {
       p_notes: input.notes,
       p_finish_level: input.finish_level ?? 'full',
       p_variant_choice_ids: input.variant_choice_ids ?? [],
+      p_spec_code: input.spec_code ?? null,
     });
     if (error) mapPgError(error);
     return data as Configuration;

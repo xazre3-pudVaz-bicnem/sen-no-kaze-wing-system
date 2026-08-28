@@ -116,10 +116,10 @@ test.describe('本部の見積編集（エクセル表）', () => {
     await expect(page.getByTestId('add-base')).toBeVisible();
     await expect(page.getByTestId('add-option')).toBeVisible();
 
-    // 1 行目は本体。単価を 100 万円に、単位と備考も入れる
+    // 1 行目は本体の内訳の先頭行（分類表見積書）。単価を 0 円にして、単位と備考も入れる
     const first = form.locator('tbody tr').first();
     await expect(first.getByRole('combobox')).toHaveValue('base');
-    await first.locator('input[name="items.0.unit_price"]').fill('1000000');
+    await first.locator('input[name="items.0.unit_price"]').fill('0');
     await first.locator('input[name="items.0.unit"]').fill('式');
     await first.locator('input[name="items.0.remark"]').fill('本部調整');
 

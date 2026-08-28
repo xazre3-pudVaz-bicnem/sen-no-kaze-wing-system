@@ -84,6 +84,10 @@ interface PdfInput {
 function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const optionItems = items.filter((i) => i.kind === 'option');
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
+  const baseItems = items.filter((i) => i.kind === 'base');
+  const baseExpense = items.find((i) => i.kind === 'base_expense') ?? null;
+  // 本体の内訳（分類表見積書）を持つ見積かどうか。1 行だけの旧形式では出さない
+  const showBaseDetail = baseItems.length > 1;
   const sitework = items.filter((i) => i.kind === 'installation');
   const freeItems = items.filter((i) => i.kind === 'free');
   const revisionLabel = quote.revision > 1 ? `（第${quote.revision}版・確定見積）` : '（概算）';
@@ -94,7 +98,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const siteworkAmount = otherSitework.reduce((sum, i) => sum + i.amount, 0);
   const baseTotal = quote.base_price + quote.base_expense;
   const optionTotal = quote.option_subtotal + quote.option_expense;
-  const withImages = items.filter((i) => i.kind === 'option' && i.image_url && productImages.get(i.id));
+  const withImages = items.filter((i) => i.image_url && productImages.get(i.id));
 
   return (
     <Document title={`御見積書 ${quote.quote_no}`} author={COMPANY.name} language="ja">
@@ -169,6 +173,35 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
             <Text style={s.cQty}>1式</Text>
             <Text style={[s.cAmount, { fontWeight: 700 }]}>{yen(baseTotal)}</Text>
           </View>
+
+          {/* 1-1 本体の内訳（分類表見積書の売価。工事区分は摘要に入っている） */}
+          {showBaseDetail ? (
+            <>
+              <View style={s.section}>
+                <Text style={s.sectionLabel}>1-1 本体の内訳</Text>
+              </View>
+              {baseItems.map((it) => (
+                <View key={it.id} style={s.tr} wrap={false}>
+                  <Text style={s.cNo}></Text>
+                  <Text style={s.cName}>{it.name}</Text>
+                  <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
+                  <Text style={s.cPrice}>{yen(it.unit_price)}</Text>
+                  <Text style={s.cQty}>{it.unit ? `${it.quantity} ${it.unit}` : it.quantity}</Text>
+                  <Text style={s.cAmount}>{yen(it.amount)}</Text>
+                </View>
+              ))}
+              {baseExpense ? (
+                <View style={[s.tr, s.expenseRow]} wrap={false}>
+                  <Text style={s.cNo}></Text>
+                  <Text style={s.cName}>{baseExpense.name}</Text>
+                  <Text style={s.cDesc}>{baseExpense.description ?? ''}</Text>
+                  <Text style={s.cPrice}></Text>
+                  <Text style={s.cQty}>1式</Text>
+                  <Text style={s.cAmount}>{yen(baseExpense.amount)}</Text>
+                </View>
+              ) : null}
+            </>
+          ) : null}
 
           {/* 2. オプション価格 ＋ 2-1 明細 */}
           <View style={s.tr} wrap={false}>
@@ -318,7 +351,7 @@ export async function renderQuotePdf(quote: Quote, items: QuoteItem[]): Promise<
   const image = await loadImage(quote.preview_image_url);
   const productImages = new Map<string, PdfImage>();
   for (const it of items) {
-    if (it.kind === 'option' && it.image_url) productImages.set(it.id, await loadImage(it.image_url, 600));
+    if (it.image_url) productImages.set(it.id, await loadImage(it.image_url, 600));
   }
   const buffer = await renderToBuffer(<QuoteDocument quote={quote} items={items} image={image} productImages={productImages} />);
   return new Uint8Array(buffer);

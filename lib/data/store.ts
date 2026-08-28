@@ -1,6 +1,7 @@
 import 'server-only';
 import type {
   FinishLevel,
+  BaseBreakdownItem,
   BaseModel,
   CatalogBundle,
   Configuration,
@@ -53,6 +54,8 @@ export interface SaveConfigurationInput {
   notes: string | null;
   /** どこまで仕上げるか（未指定は full） */
   finish_level?: FinishLevel;
+  /** 仕様（hotel / residence / office）。本体内訳の解決に使う */
+  spec_code?: string | null;
   /** 選ばれたバリエーション（選択肢 ID） */
   variant_choice_ids?: string[];
 }
@@ -68,6 +71,8 @@ export interface DealerRevisionItem {
   remark: string | null;
   unit_price: number;
   quantity: number;
+  /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧に使う） */
+  image_url?: string | null;
 }
 
 export interface DealerRevisionInput {
@@ -170,6 +175,16 @@ export interface DataStore {
 
   // ---- 監査ログ ----
   listAuditLogs(opts?: { limit?: number }): Promise<AuditLog[]>;
+
+  // ---- 本体内訳マスター ----
+  /** モデル・仕様ごとの本体内訳（分類表見積書）。modelId 省略で全件 */
+  listBaseBreakdownItems(modelId?: string): Promise<BaseBreakdownItem[]>;
+  /** (モデル, 仕様) の本体内訳を丸ごと入れ替える（総代理店以上） */
+  saveBaseBreakdownItems(
+    modelId: string,
+    specCode: string,
+    items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
+  ): Promise<BaseBreakdownItem[]>;
 
   // ---- 商品のバリエーション ----
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;

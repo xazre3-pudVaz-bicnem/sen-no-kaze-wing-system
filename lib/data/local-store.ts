@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
+  BaseBreakdownItem,
   BaseModel,
   CatalogBundle,
   Configuration,
@@ -105,7 +106,49 @@ export class LocalStore implements DataStore {
         variantChoices: db.variantChoices.filter(
           (c) => pub(c) && db.variantGroups.some((g) => g.id === c.group_id && ids.has(g.option_id))
         ),
+        baseBreakdowns: db.baseBreakdownItems
+          .filter((b) => b.base_model_id === modelId)
+          .sort((a, b) => a.sort_order - b.sort_order),
       };
+    });
+  }
+
+  // ---------- 本体内訳マスター ----------
+  async listBaseBreakdownItems(modelId?: string) {
+    return this.read((db) =>
+      db.baseBreakdownItems
+        .filter((b) => !modelId || b.base_model_id === modelId)
+        .sort((a, b) => a.spec_code.localeCompare(b.spec_code) || a.sort_order - b.sort_order)
+    );
+  }
+  async saveBaseBreakdownItems(
+    modelId: string,
+    specCode: string,
+    items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
+  ) {
+    return this.mutate((db) => {
+      db.baseBreakdownItems = db.baseBreakdownItems.filter((b) => !(b.base_model_id === modelId && b.spec_code === specCode));
+      const rows: BaseBreakdownItem[] = items.map((it, i) => ({
+        id: randomUUID(),
+        base_model_id: modelId,
+        spec_code: specCode,
+        section: it.section,
+        name: it.name,
+        quantity: it.quantity,
+        unit: it.unit,
+        unit_price: it.unit_price,
+        amount: Math.round(it.unit_price * it.quantity),
+        remark: it.remark,
+        sort_order: i + 1,
+      }));
+      db.baseBreakdownItems.push(...rows);
+      this.pushAudit(db, null, {
+        action: 'update',
+        entity: 'base_breakdown',
+        entity_id: modelId,
+        summary: `本体内訳を更新（${specCode}・${rows.length}行）`,
+      });
+      return rows;
     });
   }
 
@@ -262,13 +305,19 @@ export class LocalStore implements DataStore {
     const model = db.models.find((m) => m.id === cfg.base_model_id);
     if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');
     const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
+    // 本体内訳マスター（仕様別）が登録されていれば、その合計を本体一式とする
+    const breakdown = db.baseBreakdownItems.filter(
+      (b) => b.base_model_id === cfg.base_model_id && b.spec_code === (cfg.spec_code ?? '')
+    );
+    const baseOverride = breakdown.length ? breakdown.reduce((sum, b) => sum + b.amount, 0) : null;
     const pricing = computePricing(
       model,
       db.options,
       db.categories,
       items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
       undefined,
-      { groups: db.variantGroups, choices: db.variantChoices }
+      { groups: db.variantGroups, choices: db.variantChoices },
+      baseOverride
     );
     Object.assign(cfg, {
       base_price: pricing.base_price,
@@ -316,6 +365,7 @@ export class LocalStore implements DataStore {
         cfg = found;
         cfg.name = input.name || cfg.name;
         cfg.finish_level = level;
+        cfg.spec_code = input.spec_code ?? cfg.spec_code ?? null;
         cfg.preview_image_url = input.preview_image_url;
         cfg.notes = input.notes;
         db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== cfg.id);
@@ -327,6 +377,7 @@ export class LocalStore implements DataStore {
           name: input.name || '無題の仕様',
           status: 'draft',
           finish_level: level,
+          spec_code: input.spec_code ?? null,
           base_price: 0,
           base_expense: 0,
           option_subtotal: 0,
@@ -468,7 +519,8 @@ export class LocalStore implements DataStore {
         tax_rate: pricing.tax_rate,
         tax: pricing.tax,
         total: pricing.total,
-        dealer_id: null,
+        // 代理店・総代理店が自分で作成した見積は、自分が担当になる
+        dealer_id: actor.role === 'dealer' || actor.role === 'master_dealer' ? actor.id : null,
         preview_image_url: cfg.preview_image_url,
         notes: COMPANY.quoteNotes[0],
         created_at: nowIso(),
@@ -486,8 +538,29 @@ export class LocalStore implements DataStore {
         link: `/admin/quotes/${quote.id}`,
       });
       const ratePct = Math.round(pricing.expense_rate * 100);
-      db.quoteItems.push(
-        {
+      // 本体：内訳マスター（分類表見積書）があれば行に展開、なければ従来どおり一式 1 行
+      const breakdown = db.baseBreakdownItems
+        .filter((b) => b.base_model_id === model.id && b.spec_code === (cfg.spec_code ?? ''))
+        .sort((a, b) => a.sort_order - b.sort_order);
+      if (breakdown.length) {
+        breakdown.forEach((b, i) =>
+          db.quoteItems.push({
+            id: randomUUID(),
+            quote_id: quote.id,
+            kind: 'base',
+            name: b.name,
+            description: b.section,
+            unit: b.unit,
+            remark: b.remark,
+            unit_price: b.unit_price,
+            quantity: b.quantity,
+            amount: b.amount,
+            image_url: null,
+            sort_order: i,
+          })
+        );
+      } else {
+        db.quoteItems.push({
           id: randomUUID(),
           quote_id: quote.id,
           kind: 'base',
@@ -495,27 +568,27 @@ export class LocalStore implements DataStore {
           description: '工場生産分（躯体・金物・断熱・屋根外壁・サッシ建具）',
           unit: '式',
           remark: null,
-          unit_price: model.base_price,
+          unit_price: pricing.base_price,
           quantity: 1,
-          amount: model.base_price,
+          amount: pricing.base_price,
           image_url: null,
           sort_order: 0,
-        },
-        {
-          id: randomUUID(),
-          quote_id: quote.id,
-          kind: 'base_expense',
-          name: '本体諸費用',
-          description: `交通費、労災、安全管理費等（${ratePct}%）`,
-          unit: '式',
-          remark: null,
-          unit_price: pricing.base_expense,
-          quantity: 1,
-          amount: pricing.base_expense,
-          image_url: null,
-          sort_order: 1,
-        }
-      );
+        });
+      }
+      db.quoteItems.push({
+        id: randomUUID(),
+        quote_id: quote.id,
+        kind: 'base_expense',
+        name: '本体諸費用',
+        description: `交通費、労災、安全管理費等（${ratePct}%）`,
+        unit: '式',
+        remark: null,
+        unit_price: pricing.base_expense,
+        quantity: 1,
+        amount: pricing.base_expense,
+        image_url: null,
+        sort_order: 900,
+      });
       const ordered = [...pricing.lines].sort((a, b) => Number(a.is_installation) - Number(b.is_installation));
       ordered.forEach((l, i) =>
         db.quoteItems.push({
@@ -531,7 +604,7 @@ export class LocalStore implements DataStore {
           quantity: l.quantity,
           amount: l.amount,
           image_url: l.image_url,
-          sort_order: 10 + i,
+          sort_order: 1000 + i,
         })
       );
       db.quoteItems.push({
@@ -571,8 +644,10 @@ export class LocalStore implements DataStore {
   async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
     return this.read((db) => {
       const quote = db.quotes.find((q) => q.id === id);
-      // 顧客本人・管理者に加え、担当代理店も閲覧できる（別途工事を入力するため）
-      const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;
+      // 顧客本人・管理者に加え、担当代理店も閲覧できる（別途工事を入力するため）。
+      // 総代理店は本体明細を編集するため全件を見られる
+      const dealerAccess =
+        hasRoleAtLeast(actor.role, 'master_dealer') || (hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id);
       if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return null;
       return {
         quote,
@@ -656,10 +731,11 @@ export class LocalStore implements DataStore {
         if (!full && it.kind !== 'installation' && it.kind !== 'free') {
           throw new StoreError('FORBIDDEN', '本体・オプションを変更できるのは本部と総代理店だけです');
         }
-        if (it.unit_price < 0 || it.quantity < 1) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
+        if (it.unit_price < 0 || it.quantity <= 0) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
       }
 
-      const amount = (it: DealerRevisionItem) => it.unit_price * Math.max(1, Math.floor(it.quantity));
+      // 本体内訳は 17.6㎡ のような小数の数量を持つ
+      const amount = (it: DealerRevisionItem) => Math.round(it.unit_price * Math.max(0.01, it.quantity));
       const sumOf = (...kinds: DealerRevisionItem['kind'][]) =>
         input.items.filter((it) => kinds.includes(it.kind)).reduce((sum, it) => sum + amount(it), 0);
       const installation = sumOf('installation', 'free');
@@ -728,9 +804,9 @@ export class LocalStore implements DataStore {
           unit: it.unit || '式',
           remark: it.remark,
           unit_price: it.unit_price,
-          quantity: Math.max(1, Math.floor(it.quantity)),
+          quantity: Math.max(0.01, it.quantity),
           amount: amount(it),
-          image_url: null,
+          image_url: it.image_url ?? null,
           sort_order: ++sort,
         });
       }

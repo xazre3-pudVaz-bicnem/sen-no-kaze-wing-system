@@ -8,6 +8,7 @@ import { saveConfigurationAction } from '@/lib/actions/configurations';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
+import { baseBreakdownFor, baseBreakdownTotal } from '@/lib/domain/preset';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Breadcrumbs, Button } from '@/components/ui';
@@ -28,6 +29,8 @@ export interface SimulatorInitial {
   variant_choice_ids: string[];
   status: ConfigurationStatus;
   finish_level: FinishLevel;
+  /** 仕様（hotel / residence / office）。本体内訳の解決に使う */
+  spec_code: string | null;
 }
 
 interface Props {
@@ -44,6 +47,7 @@ interface Draft {
   selected: string[];
   variantIds?: string[];
   finishLevel?: FinishLevel;
+  spec?: string;
   name: string;
   configId: string | null;
   pending: 'save' | 'quote' | null;
@@ -105,7 +109,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
   const [variantIds, setVariantIds] = useState<string[]>(initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection));
-  const [specCode, setSpecCode] = useState<string>(model.presets?.[0]?.code ?? 'hotel');
+  const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
@@ -138,6 +142,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       if (!initial && draft) {
         const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
         if (draft.finishLevel) setFinishLevel(draft.finishLevel);
+        if (draft.spec) setSpecCode(draft.spec);
         if (draft.variantIds?.length) setVariantIds(draft.variantIds);
         if (valid.length) setSelected(valid);
         if (draft.name) setName(draft.name);
@@ -160,10 +165,10 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   const persistDraft = useCallback(
     (patch: Partial<Draft> = {}) => {
       if (typeof window === 'undefined') return;
-      const draft: Draft = { selected, variantIds, finishLevel, name, configId, pending: null, savedAt: Date.now(), ...patch };
+      const draft: Draft = { selected, variantIds, finishLevel, spec: specCode, name, configId, pending: null, savedAt: Date.now(), ...patch };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, finishLevel, name, configId, model.slug]
+    [selected, variantIds, finishLevel, specCode, name, configId, model.slug]
   );
 
   useEffect(() => {
@@ -176,16 +181,24 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     [bundle.options, specCode]
   );
   /** 注文範囲に入っているカテゴリー（本体のみ → サッシ・外壁・断熱・防火・別途工事だけ） */
-  const scopedCategories = useMemo(() => categoriesInScope(bundle.categories, finishLevel), [bundle.categories, finishLevel]);
+  // customer_visible=false のカテゴリー（サッシ等）は本体に含めるためお客様には出さない
+  const scopedCategories = useMemo(
+    () => categoriesInScope(bundle.categories, finishLevel).filter((c) => c.customer_visible !== false),
+    [bundle.categories, finishLevel]
+  );
   const scopedCategoryIds = useMemo(() => new Set(scopedCategories.map((c) => c.id)), [scopedCategories]);
+  // 防火仕様は注文範囲の下の別枠で選ぶため、設備一覧には出さない
   const specCategories = useMemo(
-    () => scopedCategories.filter((c) => specOptions.some((o) => o.category_id === c.id)),
+    () => scopedCategories.filter((c) => c.code !== 'fireproof' && specOptions.some((o) => o.category_id === c.id)),
     [scopedCategories, specOptions]
   );
   /** 注文範囲を外れたカテゴリーの商品はポップアップにも出さない */
   const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);
 
   // ---- 計算・画像解決 ----
+  /** 本体内訳マスター（仕様別）の合計。登録があれば本体一式をこれで上書きする */
+  const baseOverride = useMemo(() => baseBreakdownTotal(bundle, specCode), [bundle, specCode]);
+  const baseBreakdown = useMemo(() => baseBreakdownFor(bundle, specCode), [bundle, specCode]);
   const pricing = useMemo(
     () =>
       computePricing(
@@ -194,9 +207,10 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         bundle.categories,
         selected.map((sid) => ({ option_id: sid, variant_choice_ids: variantIds })),
         undefined,
-        { groups: bundle.variantGroups, choices: bundle.variantChoices }
+        { groups: bundle.variantGroups, choices: bundle.variantChoices },
+        baseOverride
       ),
-    [model, bundle, selected, variantIds]
+    [model, bundle, selected, variantIds, baseOverride]
   );
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
@@ -205,7 +219,15 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
     const out: Partial<Record<FinishLevel, number>> = {};
     for (const lv of FINISH_LEVELS) {
       const ids = pruneToScope(ctx, lv === finishLevel ? selected : base, lv);
-      out[lv] = computePricing(model, bundle.options, bundle.categories, ids.map((sid) => ({ option_id: sid }))).total;
+      out[lv] = computePricing(
+        model,
+        bundle.options,
+        bundle.categories,
+        ids.map((sid) => ({ option_id: sid })),
+        undefined,
+        undefined,
+        baseBreakdownTotal(bundle, specCode)
+      ).total;
     }
     return out;
   }, [ctx, model, bundle, presetSelections, specCode, defaults, selected, finishLevel]);
@@ -355,6 +377,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         notes: null,
         finish_level: finishLevel,
         variant_choice_ids: variantIds,
+        spec_code: specCode,
       });
       if (!result.ok) {
         if (result.code === 'UNAUTHENTICATED') {
@@ -393,7 +416,10 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
   };
 
   const fireproofCat = bundle.categories.find((c) => c.code === 'fireproof');
-  const fireproofChosen = bundle.options.find((o) => o.category_id === fireproofCat?.id && selected.includes(o.id));
+  const fireproofOptions = bundle.options
+    .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));
 
   return (
     <div className="bg-paper">
@@ -417,17 +443,6 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            {fireproofCat && (
-              <button
-                type="button"
-                onClick={() => openPicker(fireproofCat.id)}
-                disabled={readOnly}
-                className="rounded-full border border-line bg-white px-4 py-2 text-sm hover:border-ink/40 disabled:opacity-60"
-                data-testid="fireproof-button"
-              >
-                {fireproofChosen?.name ?? '防火仕様を選ぶ'}
-              </button>
-            )}
             {user ? (
               <span className="text-ink-soft">
                 {user.name} さん｜
@@ -500,6 +515,45 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
       </div>
 
+      {/* 防火／非防火（先方の本体分類表の最上位項目。標準＝非防火） */}
+      {fireproofCat && (
+        <div className="container-x mt-4">
+          <div
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-white px-4 py-3"
+            data-testid="fireproof-picker"
+          >
+            <span className="text-sm font-semibold">防火仕様</span>
+            <span className="text-xs text-muted">建築する場所によって異なります（標準＝非防火）</span>
+            <div className="flex flex-wrap gap-2 sm:ml-auto">
+              {fireproofOptions.map((o) => {
+                const active = selected.includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    disabled={readOnly}
+                    aria-pressed={active}
+                    onClick={() => !active && applyPicker(fireproofCat.id, [o.id])}
+                    className={cn(
+                      'rounded-full border px-4 py-1.5 text-sm font-medium transition disabled:opacity-50',
+                      active ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                    )}
+                    data-testid={`fireproof-${o.code}`}
+                  >
+                    {o.name}
+                  </button>
+                );
+              })}
+            </div>
+            {fireproofChosen?.price_on_request && (
+              <p className="w-full text-xs text-warn">
+                防火仕様の金額は場所の条件により異なるため、見積書には「防火仕様（別途見積）」と明記され、本部が本体明細を確認のうえ確定します。
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 図面（左）＋ 標準設備及び仕上げ表（右） */}
       <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(0,52fr)_minmax(0,48fr)] lg:items-start lg:gap-8">
         <div className="min-w-0 space-y-4">
@@ -547,6 +601,7 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
           specName={specName}
           finishLevel={finishLevel}
           pricing={pricing}
+          baseBreakdown={baseBreakdown}
           categories={bundle.categories}
           options={bundle.options}
           readOnly={readOnly}

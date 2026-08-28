@@ -139,10 +139,12 @@ test.describe('顧客フロー', () => {
     await expect(page.getByTestId('equip-floor')).toBeVisible();
     const fullTotal = await readTotal(page);
 
-    // 本体のみ: 内装・造作・設備が消え、サッシ・外壁・断熱・防火だけが残る
+    // 本体のみ: 内装・造作・設備が消え、外壁・断熱だけが残る
+    // （サッシは本体の内訳に含めるため、防火は注文範囲の下の別枠のため、どちらもタイルに出ない）
     await page.getByTestId('finish-level-shell').click();
     await expect(page.getByTestId('finish-level-shell')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('equip-sash')).toBeVisible();
+    await expect(page.getByTestId('equip-sash')).toBeHidden();
+    await expect(page.getByTestId('equip-insulation')).toBeVisible();
     await expect(page.getByTestId('equip-exterior-wall')).toBeVisible();
     await expect(page.getByTestId('equip-ub')).toBeHidden();
     await expect(page.getByTestId('equip-floor')).toBeHidden();
@@ -195,14 +197,17 @@ test.describe('顧客フロー', () => {
     await expect(page.getByTestId('quote-scope')).toContainText('本体のみ');
     expect(Number((await page.getByTestId('quote-total').textContent())!.replace(/[^0-9]/g, ''))).toBe(total);
   });
-  test('防火仕様は代理店相談として別途見積で表示される', async ({ page }) => {
+  test('防火仕様は注文範囲の下の別枠で選べ、別途見積として見積書に載る', async ({ page }) => {
     await openFreshSimulator(page);
-    await expect(page.getByTestId('fireproof-button')).toContainText('非防火仕様');
-    await openPicker(page, 'fireproof-button');
-    await expect(page.getByTestId('pick-fire-proof')).toContainText('別途見積');
-    await page.getByTestId('pick-fire-proof').click();
-    await page.getByTestId('picker-apply').click();
-    await expect(page.getByTestId('fireproof-button')).toContainText('防火仕様（防火構造）');
+    const picker = page.getByTestId('fireproof-picker');
+    // 標準＝非防火
+    await expect(picker.getByTestId('fireproof-fire-standard')).toHaveAttribute('aria-pressed', 'true');
+    await picker.getByTestId('fireproof-fire-proof').click();
+    await expect(picker.getByTestId('fireproof-fire-proof')).toHaveAttribute('aria-pressed', 'true');
+    await expect(picker).toContainText('本部が本体明細を確認');
+    // 見積書には「別途見積」の行として入る（金額セルは行側にある）
+    await expect(quoteLine(page, 'fire-proof')).toContainText('防火仕様（防火構造）');
+    await expect(page.locator('tr', { has: quoteLine(page, 'fire-proof') })).toContainText('別途見積');
   });
 
   test('代理店紹介ページから問い合わせできる', async ({ page }) => {
@@ -426,23 +431,17 @@ test.describe('ネットショップ型の商品選び', () => {
   });
 });
 
-test.describe('サッシの分類表', () => {
-  test('種類を選ぶと呼称でサイズを選べる', async ({ page }) => {
+test.describe('サッシの扱い（2026-08-28 打合せ）', () => {
+  test('サッシはお客様に選ばせず、本体の内訳に含めて表示する', async ({ page }) => {
     await openFreshSimulator(page);
-    await openPicker(page, 'equip-sash');
-    // 分類表の種類が並ぶ
-    await expect(page.getByTestId('pick-sash-hikichigai-tantai-hangaidzuke')).toContainText('単体引違 半外付');
-    await expect(page.getByTestId('pick-sash-door-katteguchi')).toContainText('勝手口ドア');
-
-    // 呼称が読み取れている種類はサイズを選べる
-    await page.getByTestId('pick-sash-hikichigai-tantai-hangaidzuke').click();
-    await expect(page.getByTestId('variant-group-size')).toBeVisible();
-    await expect(page.getByTestId('variant-07403')).toContainText('W740 × H300（窓・2枚）');
-    await page.getByTestId('variant-16518').click();
-    await expect(page.getByTestId('variant-16518')).toHaveAttribute('aria-pressed', 'true');
-    await page.getByTestId('picker-apply').click();
-
-    // 見積書に呼称が残る
-    await expect(quoteLine(page, 'sash-hikichigai-tantai-hangaidzuke')).toContainText('16518');
+    // 設備一覧に出ない（フル装備でも本体のみでも）
+    await expect(page.getByTestId('equip-sash')).toBeHidden();
+    await page.getByTestId('finish-level-shell').click();
+    await expect(page.getByTestId('equip-sash')).toBeHidden();
+    // 本体の内訳（分類表見積書）にはサッシ工事の行と台数が出る
+    const breakdown = page.getByTestId('base-breakdown');
+    await breakdown.locator('summary').click();
+    await expect(breakdown).toContainText('サッシ木製建具工事');
+    await expect(breakdown).toContainText('・サッシ 玄関ドア');
   });
 });

@@ -84,6 +84,9 @@ export async function openPicker(page: Page, testId: string) {
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   await expect(page.getByTestId('option-picker')).toBeVisible();
+  // 1つ選ぶカテゴリーで選択済みのときは選択中の商品だけが出るので、一覧に展開してから操作する
+  const expand = page.getByTestId('picker-expand');
+  if (await expand.isVisible().catch(() => false)) await expand.click();
 }
 
 /** ポップアップで商品を選び直して「変更する」で確定する */

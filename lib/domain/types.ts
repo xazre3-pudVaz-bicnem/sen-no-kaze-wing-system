@@ -157,8 +157,30 @@ export interface OptionCategory {
   finish_level: FinishLevel;
   /** single のとき: 必ず 1 つ選ぶ（標準が is_default）。注文範囲に入っているときだけ効く */
   is_required: boolean;
+  /** false ならシミュレーターに出さない（台帳・代理店の見積編集では使える）。サッシは本体に含めるため非表示 */
+  customer_visible: boolean;
   sort_order: number;
   status: PublishStatus;
+}
+
+/**
+ * 本体内訳マスター（分類表見積書の右側＝お客様見積書）。
+ * 仕様（hotel / residence / office）ごとに本体工事の明細を持ち、
+ * 見積作成時に kind='base' の行として展開される。金額は売価のみ（原価は持たない）。
+ */
+export interface BaseBreakdownItem {
+  id: string;
+  base_model_id: string;
+  spec_code: string;
+  /** 工事区分（１．金物関係費用 など） */
+  section: string;
+  name: string;
+  quantity: number;
+  unit: string | null;
+  unit_price: number;
+  amount: number;
+  remark: string | null;
+  sort_order: number;
 }
 
 export interface ProductOption {
@@ -290,6 +312,8 @@ export interface CatalogBundle {
   hotspots: PreviewHotspot[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
+  /** 本体内訳マスター（全仕様分。spec_code で絞って使う） */
+  baseBreakdowns: BaseBreakdownItem[];
 }
 
 export type ConfigurationStatus = 'draft' | 'quote_requested' | 'quoted' | 'closed';
@@ -308,6 +332,8 @@ export interface Configuration {
   status: ConfigurationStatus;
   /** どこまで仕上げるか */
   finish_level: FinishLevel;
+  /** 仕様（hotel / residence / office）。本体内訳の解決に使う。null は旧データ */
+  spec_code: string | null;
   base_price: number;
   base_expense: number;
   option_subtotal: number;

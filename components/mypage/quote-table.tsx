@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Fragment } from 'react';
 import { ArrowRight, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type Quote, type QuoteItem } from '@/lib/domain/types';
@@ -24,7 +25,8 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
   const baseItems = items.filter((i) => i.kind === 'base' && (i.remark || items.filter((x) => x.kind === 'base').length > 1));
   const baseTotal = quote.base_price + quote.base_expense;
   const optionTotal = quote.option_subtotal + quote.option_expense;
-  const withImages = optionItems.filter((i) => i.image_url);
+  // 画像一覧はオプションに限らず、画像を持つ明細すべて（フリー商品・別途工事も）
+  const withImages = items.filter((i) => i.image_url);
   const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
 
   return (
@@ -46,18 +48,38 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
               <td className="px-2 py-3 text-right text-muted">１式</td>
               <td className="px-4 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
             </tr>
-            {/* 本体の内訳。本部が行を足したり備考を入れたときに見えるようにする */}
-            {baseItems.map((it) => (
-              <tr key={it.id}>
-                <td className="px-4 py-2"></td>
-                <td className="px-2 py-2 text-xs">
-                  {it.name}
-                  {it.remark && <span className="block text-[0.65rem] text-muted">{it.remark}</span>}
-                </td>
-                <td className="px-2 py-2 text-right text-xs text-muted">{qty(it)}</td>
-                <td className="px-4 py-2 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
-              </tr>
+            {/* 本体の内訳（分類表見積書）。工事区分（description）ごとに見出しを挟む */}
+            {baseItems.map((it, i) => (
+              <Fragment key={it.id}>
+                {it.description && it.description !== baseItems[i - 1]?.description && (
+                  <tr className="bg-sand/20">
+                    <td className="px-4 py-1"></td>
+                    <td colSpan={3} className="px-2 py-1 text-[0.7rem] font-semibold text-ink-soft">
+                      {it.description}
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="px-4 py-1.5"></td>
+                  <td className="px-2 py-1.5 text-xs">
+                    {it.name}
+                    {it.remark && <span className="ml-2 text-[0.65rem] text-muted">{it.remark}</span>}
+                  </td>
+                  <td className="px-2 py-1.5 text-right text-xs text-muted">{qty(it)}</td>
+                  <td className="px-4 py-1.5 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
+                </tr>
+              </Fragment>
             ))}
+            {items
+              .filter((i) => i.kind === 'base_expense' && baseItems.length > 0)
+              .map((it) => (
+                <tr key={it.id} className="text-ink-soft">
+                  <td className="px-4 py-1.5"></td>
+                  <td className="px-2 py-1.5 text-xs">{it.name}</td>
+                  <td className="px-2 py-1.5"></td>
+                  <td className="px-4 py-1.5 text-right text-xs tabular-nums">{formatYen(it.amount)}</td>
+                </tr>
+              ))}
             <tr>
               <td className="px-4 py-3 text-center text-muted">２</td>
               <td className="px-2 py-3 font-semibold">オプション価格</td>
@@ -190,7 +212,7 @@ export function QuoteTable({ quote, items, totalTestId = 'quote-total' }: { quot
 
       {withImages.length > 0 && (
         <div className="border-t border-line px-6 py-5 sm:px-8">
-          <p className="text-xs font-semibold text-muted">選択した商品</p>
+          <p className="text-xs font-semibold text-muted">選択いただいた商品（画像一覧）</p>
           <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
             {withImages.map((it) => (
               <li key={it.id}>

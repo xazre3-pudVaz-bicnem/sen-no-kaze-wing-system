@@ -88,9 +88,11 @@ export function readXlsx(buf: Buffer): Sheet[] {
   const wb = files.get('xl/workbook.xml')?.toString('utf8');
   if (!wb) throw new Error('Excel ファイルとして読めませんでした（xl/workbook.xml がありません）');
 
-  const shared = [...(files.get('xl/sharedStrings.xml')?.toString('utf8') ?? '').matchAll(/<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) =>
-    decodeXml([...m[1].matchAll(/<(?:\w+:)?t[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map((x) => x[1]).join(''))
-  );
+  const shared = [...(files.get('xl/sharedStrings.xml')?.toString('utf8') ?? '').matchAll(/<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) => {
+    // ふりがな（rPh）は本文ではないので除く。残すと「番号バンゴウ」のように連結されてしまう
+    const body = m[1].replace(/<(?:\w+:)?rPh[\s\S]*?<\/(?:\w+:)?rPh>/g, '');
+    return decodeXml([...body.matchAll(/<(?:\w+:)?t[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map((x) => x[1]).join(''));
+  });
 
   const names = [...wb.matchAll(/<(?:\w+:)?sheet\s[^>]*name="([^"]*)"/g)].map((m) => decodeXml(m[1]));
   const sheets: Sheet[] = [];

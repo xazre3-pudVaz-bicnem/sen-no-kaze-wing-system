@@ -9,7 +9,7 @@ export function Footer() {
     <footer className="border-t border-forest-line bg-forest-deep text-white">
       <div className="container-x grid gap-12 py-16 lg:grid-cols-[1.1fr_1fr]">
         <div>
-          <Image src="/images/brand/sennokaze-logo.png" alt={`${PROJECT_NAME} ロゴ`} width={140} height={88} className="h-16 w-auto" />
+          <Image src="/images/brand/sennokaze-logo-white.png" alt={`${PROJECT_NAME} ロゴ`} width={140} height={93} className="h-16 w-auto" />
           <dl className="mt-8 space-y-5 text-sm">
             {COMPANY.offices.map((o) => (
               <div key={o.name}>

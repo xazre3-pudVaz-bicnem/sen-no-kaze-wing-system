@@ -16,7 +16,6 @@ interface Props {
   plan: PreviewResolution;
   categories: OptionCategory[];
   elevations: Elevation[];
-  perspective: { url: string; alt: string } | null;
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
 }
@@ -28,7 +27,7 @@ interface Props {
  * データとテーブルは残してあるので、戻すときはこのファイルに重ね直せばよい。
  * 設備の変更は「標準設備及び仕上げ表」と「御見積書の明細」から行う。
  */
-export function PlanBoard({ plan, categories, elevations, perspective, readOnly, onPickCategory }: Props) {
+export function PlanBoard({ plan, categories, elevations, readOnly, onPickCategory }: Props) {
   const planImage = plan.layers[0];
   const wallCat = categories.find((c) => c.code === 'exterior-wall');
 
@@ -82,15 +81,6 @@ export function PlanBoard({ plan, categories, elevations, perspective, readOnly,
         </figure>
       )}
 
-      {/* 外観パース */}
-      {perspective && (
-        <figure className="card overflow-hidden">
-          <figcaption className="border-b border-line px-4 py-2.5 text-sm font-semibold">外観パース</figcaption>
-          <div className="relative aspect-[16/9] bg-sand">
-            <SmartImage src={perspective.url} alt={perspective.alt} fill sizes="(min-width: 1024px) 45vw, 100vw" className="object-cover" />
-          </div>
-        </figure>
-      )}
     </div>
   );
 }

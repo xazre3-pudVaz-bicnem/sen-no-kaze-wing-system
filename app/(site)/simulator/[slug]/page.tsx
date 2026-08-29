@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { getPublicBundleBySlug } from '@/lib/data/public-catalog';
+import { getPublicBundleBySlug, getPublicModels } from '@/lib/data/public-catalog';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
@@ -28,6 +28,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   const bundle = await getPublicBundleBySlug(slug);
   if (!bundle) notFound();
   const model = bundle.model;
+  const allModels = await getPublicModels();
   const user = await getSessionUser();
 
   let initial: SimulatorInitial | null = null;
@@ -57,6 +58,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }, { name: '見積シミュレーター', path: `/simulator/${model.slug}` }])} />
       <SimulatorApp
         bundle={bundle}
+        models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
         elevations={model.id === MODEL_WING01_ID ? ELEVATIONS : []}
         initial={initial}
         loadError={loadError}

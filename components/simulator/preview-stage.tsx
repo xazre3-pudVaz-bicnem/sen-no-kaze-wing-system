@@ -1,10 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { ImageOff, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ImageOff, Info } from 'lucide-react';
 import type { PreviewResolution } from '@/lib/domain/preview';
 import { previewKeyLabels } from '@/lib/domain/preview';
-import { VIEW_KEYS, VIEW_LABELS, type ProductOption, type ViewKey } from '@/lib/domain/types';
+import { VIEW_LABELS, type ProductOption, type ViewKey } from '@/lib/domain/types';
+
+/** 完成イメージのタブ（先方指示：外観・室内・その他。平面図は上の図面欄にあるため出さない） */
+const TABS: { key: ViewKey; label: string }[] = [
+  { key: 'exterior', label: '外観' },
+  { key: 'interior', label: '室内' },
+  { key: 'water', label: 'その他' },
+];
+const TAB_LABEL = new Map(TABS.map((t) => [t.key, t.label]));
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +57,7 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
         {current.layers.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted">
             <ImageOff className="size-8" aria-hidden="true" />
-            <p className="text-sm">この組み合わせの{VIEW_LABELS[view]}画像は準備中です</p>
+            <p className="text-sm">この組み合わせの{TAB_LABEL.get(view) ?? VIEW_LABELS[view]}画像は準備中です</p>
           </div>
         )}
         {frames.map((f, fi) => {
@@ -74,20 +82,45 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
         <span className="absolute top-4 left-4 z-10 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">
           {current.approximate ? '画像は完成イメージです（参考）' : '完成イメージ'}
         </span>
+        {/* 横スクロール（先方指示：ボタン選択とスクロールの両方で切り替えられるように） */}
+        <button
+          type="button"
+          onClick={() => {
+            const i = TABS.findIndex((t) => t.key === view);
+            onViewChange(TABS[(i - 1 + TABS.length) % TABS.length].key);
+          }}
+          aria-label="前の完成イメージへ"
+          data-testid="preview-prev"
+          className="absolute top-1/2 left-2 z-10 -translate-y-1/2 rounded-full bg-white/85 p-2 text-ink shadow-soft transition hover:bg-white"
+        >
+          <ChevronLeft className="size-5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const i = TABS.findIndex((t) => t.key === view);
+            onViewChange(TABS[(i + 1) % TABS.length].key);
+          }}
+          aria-label="次の完成イメージへ"
+          data-testid="preview-next"
+          className="absolute top-1/2 right-2 z-10 -translate-y-1/2 rounded-full bg-white/85 p-2 text-ink shadow-soft transition hover:bg-white"
+        >
+          <ChevronRight className="size-5" aria-hidden="true" />
+        </button>
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
         <div role="tablist" aria-label="表示切替" className="flex gap-1">
-          {VIEW_KEYS.map((v) => (
+          {TABS.map((t) => (
             <button
-              key={v}
+              key={t.key}
               role="tab"
-              aria-selected={view === v}
-              onClick={() => onViewChange(v)}
-              className={cn('min-h-10 rounded-full px-4 text-sm font-medium transition-colors', view === v ? 'bg-ink text-white' : 'text-ink-soft hover:bg-sand')}
-              data-testid={`view-${v}`}
+              aria-selected={view === t.key}
+              onClick={() => onViewChange(t.key)}
+              className={cn('min-h-10 rounded-full px-4 text-sm font-medium transition-colors', view === t.key ? 'bg-ink text-white' : 'text-ink-soft hover:bg-sand')}
+              data-testid={`view-${t.key}`}
             >
-              {VIEW_LABELS[v]}
+              {t.label}
             </button>
           ))}
         </div>

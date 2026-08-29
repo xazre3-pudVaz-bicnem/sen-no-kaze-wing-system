@@ -343,7 +343,7 @@ const G = {
 };
 
 export const seedCategories: OptionCategory[] = [
-  cat(C.exteriorWall, 'exterior-wall', '屋根・外壁', G.finish, 1, { finish_level: 'shell', is_required: true, description: '外壁の仕上げ材' }),
+  cat(C.exteriorWall, 'exterior-wall', '外壁', G.finish, 1, { finish_level: 'shell', is_required: true, description: '外壁の仕上げ材（屋根はガルバリウム鋼板で本体に含まれます）' }),
   cat(C.floor, 'floor', '床材', G.finish, 2, { is_required: true, description: '床の仕上げ材（カラーを選択）' }),
   cat(C.wallCeiling, 'wall-ceiling', '壁・天井', G.finish, 3, { is_required: true, description: '壁・天井の仕上げ' }),
   // サッシはエンドユーザーに選ばせない（本体の内訳に含める）。台帳・代理店の見積編集では使う

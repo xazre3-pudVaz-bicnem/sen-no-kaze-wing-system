@@ -35,6 +35,8 @@ export interface SimulatorInitial {
 
 interface Props {
   bundle: CatalogBundle;
+  /** 本体切り替え用（タイトル横のセレクト。先方指示「ここで本体を変える」） */
+  models: { slug: string; name: string }[];
   /** 立面図（モデル共通の図面。現状は Wing のみ） */
   elevations: { url: string; label: string; alt: string }[];
   initial: SimulatorInitial | null;
@@ -61,7 +63,7 @@ function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[]
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
 }
 
-export function SimulatorApp({ bundle, elevations, initial, loadError, resume, user }: Props) {
+export function SimulatorApp({ bundle, models, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
   const { model } = bundle;
   const ctx = useMemo<RuleContext>(
@@ -240,10 +242,6 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
     [bundle, selected]
   );
-  const perspective = useMemo(() => {
-    const l = previews.exterior.layers[0];
-    return l ? { url: l.url, alt: l.alt } : null;
-  }, [previews.exterior]);
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 
   // ---- 操作 ----
@@ -432,16 +430,37 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
           ]}
         />
 
-        {/* 商品名 ＋ 仕様タブ ＋ 防火仕様（先方モックアップの上部） */}
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+        {/* 商品名 ＋ 本体切替 ＋ 仕様タブ（先方モックアップの上部） */}
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
           <div>
             <p className="label-en text-forest">Simulator</p>
-            <h1 className="mt-1 text-2xl sm:text-4xl">
-              {model.name}
-              {specName && <span className="text-xl sm:text-3xl">（{specName}）</span>}
-            </h1>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-2xl sm:text-4xl">
+                {model.name}
+                {specName && <span className="text-xl sm:text-3xl">（{specName}）</span>}
+              </h1>
+              {models.length > 1 && (
+                <label className="text-xs text-muted">
+                  本体を変える
+                  <select
+                    value={model.slug}
+                    onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                    className="ml-1.5 rounded-lg border border-line bg-white px-2 py-1 text-sm text-ink"
+                    aria-label="本体（モデル）を切り替える"
+                    data-testid="model-switcher"
+                  >
+                    {models.map((m) => (
+                      <option key={m.slug} value={m.slug}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          {/* ログイン案内は右上へ（先方指示） */}
+          <div className="order-first ml-auto w-full text-right text-xs sm:order-none sm:w-auto sm:text-sm">
             {user ? (
               <span className="text-ink-soft">
                 {user.name} さん｜
@@ -461,10 +480,9 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
           </div>
         </div>
 
-        {/* 仕様の切り替え */}
+        {/* 仕様の切り替え（「仕様」ラベルは出さない：先方指示） */}
         {(model.presets?.length ?? 0) > 0 && (
-          <div className="mt-5 flex flex-wrap items-center gap-2 border-y border-line py-3">
-            <span className="mr-1 text-xs font-semibold text-muted">仕様</span>
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-y border-line py-2.5">
             {model.presets.map((p) => (
               <button
                 key={p.code}
@@ -554,13 +572,12 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
       )}
 
       {/* 図面（左）＋ 標準設備及び仕上げ表（右） */}
-      <div className="container-x grid gap-6 py-6 lg:grid-cols-[minmax(0,52fr)_minmax(0,48fr)] lg:items-start lg:gap-8">
+      <div className="container-x grid gap-5 pt-6 pb-2 lg:grid-cols-[minmax(0,52fr)_minmax(0,48fr)] lg:items-start lg:gap-8">
         <div className="min-w-0 space-y-4">
           <PlanBoard
             plan={previews.floorplan}
             categories={bundle.categories}
             elevations={elevations}
-            perspective={perspective}
             readOnly={readOnly}
             onPickCategory={openPicker}
           />
@@ -593,8 +610,8 @@ export function SimulatorApp({ bundle, elevations, initial, loadError, resume, u
         </div>
       </div>
 
-      {/* 御見積書 */}
-      <div className="container-x pb-10">
+      {/* 御見積書（完成イメージとの行間は詰める：先方指示） */}
+      <div className="container-x pt-2 pb-10">
         <QuoteSheet
           modelName={model.name}
           specName={specName}

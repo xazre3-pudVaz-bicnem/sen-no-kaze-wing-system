@@ -265,6 +265,11 @@ export const seedProductImages: ProductImage[] = [
   { id: '11000000-0000-4000-8000-000000000043', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面室（木の内装と白い洗面ボウル）', caption: '洗面室イメージ（CGパース）', sort_order: 5 },
   { id: '11000000-0000-4000-8000-000000000044', base_model_id: MODEL_WING01_ID, kind: 'interior', url: '/images/interior/bedroom-garden.jpg', alt: '庭の緑が見えるベッドルーム（エアコン・アクセントパネル）', caption: 'ベッドルームイメージ（CGパース）', sort_order: 6 },
   { id: '11000000-0000-4000-8000-000000000045', base_model_id: MODEL_WING01_ID, kind: 'floorplan', url: '/images/plan/wing-isometric.jpg', alt: 'Wing の 3D アイソメ間取りパース（デッキ・ベッド・水まわり）', caption: '間取り 3D パース', sort_order: 3 },
+  // ---- 立面図（4面）。caption が面のラベルとしてシミュレーターに出る ----
+  { id: '11000000-0000-4000-8000-000000000051', base_model_id: MODEL_WING01_ID, kind: 'elevation', url: '/images/elevation/wing-front.png', alt: 'Wing 正面立面図（大開口サッシ・下見板張り）', caption: '正面（南）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000052', base_model_id: MODEL_WING01_ID, kind: 'elevation', url: '/images/elevation/wing-entrance.png', alt: 'Wing 玄関側立面図（ガルバリウム縦張り・玄関ドア）', caption: '玄関側（東）', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000053', base_model_id: MODEL_WING01_ID, kind: 'elevation', url: '/images/elevation/wing-back.png', alt: 'Wing 背面立面図（ガルバリウム縦張り・小窓）', caption: '背面（北）', sort_order: 3 },
+  { id: '11000000-0000-4000-8000-000000000054', base_model_id: MODEL_WING01_ID, kind: 'elevation', url: '/images/elevation/wing-side-wood.png', alt: 'Wing 側面立面図（下見板張り）', caption: '側面（西）', sort_order: 4 },
   // ---- BOX ----
   { id: '11000000-0000-4000-8000-000000000021', base_model_id: MODEL_BOX_ID, kind: 'hero', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ黒い外装と木目の BOX', caption: '完成イメージ（CGパース）', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000022', base_model_id: MODEL_BOX_ID, kind: 'exterior', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ BOX の外観', caption: '外観イメージ', sort_order: 1 },

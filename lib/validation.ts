@@ -172,7 +172,7 @@ export const previewRuleSchema = z.object({
 
 export const productImageSchema = z.object({
   base_model_id: z.uuid(),
-  kind: z.enum(['hero', 'exterior', 'interior', 'floorplan', 'transport', 'case']),
+  kind: z.enum(['hero', 'exterior', 'interior', 'floorplan', 'elevation', 'transport', 'case']),
   url: trimmed(500).min(1, '画像をアップロードするか URL を入力してください'),
   alt: trimmed(200),
   caption: optional(200),

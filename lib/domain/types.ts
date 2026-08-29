@@ -121,10 +121,11 @@ export interface BaseModel {
   updated_at: string;
 }
 
-export type ProductImageKind = 'hero' | 'exterior' | 'interior' | 'floorplan' | 'transport' | 'case';
+export type ProductImageKind = 'hero' | 'exterior' | 'interior' | 'floorplan' | 'elevation' | 'transport' | 'case';
 export const IMAGE_KIND_LABELS: Record<ProductImageKind, string> = {
   hero: 'メイン',
   exterior: '外観',
+  elevation: '立面図',
   interior: '室内',
   floorplan: '平面図',
   transport: '輸送・設置',

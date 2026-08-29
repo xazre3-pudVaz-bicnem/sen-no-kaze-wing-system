@@ -307,8 +307,10 @@ export async function deleteProductImageAction(formData: FormData): Promise<void
   const store = await getStore();
   await store.deleteProductImage(String(formData.get('id') ?? ''));
   revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
-  redirect(`/admin/models/${String(formData.get('base_model_id') ?? '')}?image_deleted=1`);
+  updateTag(CATALOG_TAG);
+  // 商品台帳など、開いていた画面へ戻れるようにする
+  const back = String(formData.get('redirect_to') ?? '').trim() || `/admin/models/${String(formData.get('base_model_id') ?? '')}`;
+  redirect(`${back}${back.includes('?') ? '&' : '?'}image_deleted=1`);
 }
 
 export async function updateContactStatusAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {

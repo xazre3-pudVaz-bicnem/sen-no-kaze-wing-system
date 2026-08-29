@@ -31,6 +31,12 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   const allModels = await getPublicModels();
   const user = await getSessionUser();
 
+  // 立面図は商品台帳で登録した画像（kind=elevation）。未登録の Wing だけ従来の固定データで補う
+  const registered = bundle.images
+    .filter((i) => i.kind === 'elevation')
+    .map((i) => ({ url: i.url, label: i.caption ?? i.alt ?? '立面図', alt: i.alt }));
+  const elevations = registered.length > 0 ? registered : model.id === MODEL_WING01_ID ? ELEVATIONS : [];
+
   let initial: SimulatorInitial | null = null;
   let loadError: string | null = null;
   if (c) {
@@ -59,7 +65,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <SimulatorApp
         bundle={bundle}
         models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
-        elevations={model.id === MODEL_WING01_ID ? ELEVATIONS : []}
+        elevations={elevations}
         initial={initial}
         loadError={loadError}
         resume={resume === '1'}

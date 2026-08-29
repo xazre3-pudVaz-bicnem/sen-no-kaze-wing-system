@@ -31,7 +31,8 @@ export function UseCaseSlider() {
 
       <ul
         ref={track}
-        className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto px-5 pb-4 sm:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        // 見出し（container-x：最大80rem中央）と先頭カードの左端を揃える。広い画面では (100vw-80rem)/2 が余白になる
+        className="mt-12 flex snap-x snap-mandatory gap-5 overflow-x-auto pb-4 px-[max(1.25rem,calc((100vw-80rem)/2+1.25rem))] scroll-px-[max(1.25rem,calc((100vw-80rem)/2+1.25rem))] sm:px-[max(2rem,calc((100vw-80rem)/2+2rem))] sm:scroll-px-[max(2rem,calc((100vw-80rem)/2+2rem))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         aria-label="活用アイディアの一覧"
       >
         {idea.cases.map((c) => (

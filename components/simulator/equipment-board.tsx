@@ -80,7 +80,7 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
       {baseCats.length > 0 && (
         <>
           <p className="bg-sand/50 px-4 py-1 text-[0.65rem] font-semibold text-ink-soft">本体（工場生産分に含む）</p>
-          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3" data-testid="equipment-board">
+          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board">
             {baseCats.map(tile)}
           </ul>
         </>
@@ -88,7 +88,7 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
       {optionCats.length > 0 && (
         <>
           <p className="border-t border-line bg-sand/50 px-4 py-1 text-[0.65rem] font-semibold text-ink-soft">オプション</p>
-          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3" data-testid="equipment-board-options">
+          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-options">
             {optionCats.map(tile)}
           </ul>
         </>

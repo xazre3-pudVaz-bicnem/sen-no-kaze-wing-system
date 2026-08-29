@@ -13,7 +13,7 @@ import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type Cata
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Breadcrumbs, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
-import { PlanBoard } from './plan-board';
+import { ElevationStrip, PlanBoard } from './plan-board';
 import { EquipmentBoard } from './equipment-board';
 import { QuoteSheet } from './quote-sheet';
 import { PreviewStage } from './preview-stage';
@@ -571,23 +571,19 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         </div>
       )}
 
-      {/* 図面（左）＋ 標準設備及び仕上げ表（右） */}
-      <div className="container-x grid gap-5 pt-6 pb-2 lg:grid-cols-[minmax(0,52fr)_minmax(0,48fr)] lg:items-start lg:gap-8">
-        <div className="min-w-0 space-y-4">
-          <PlanBoard
-            plan={previews.floorplan}
-            categories={bundle.categories}
-            elevations={elevations}
-            readOnly={readOnly}
-            onPickCategory={openPicker}
-          />
+      {/* 先方モック（2026-08-29）：平面図｜完成イメージ → 立面図（横帯）→ 標準設備及び仕上げ表。
+          スマホでは完成イメージが下の方（平面図 → 立面図 → 設備表 → 完成イメージ）に並ぶ */}
+      <div className="container-x grid gap-5 pt-6 pb-2 lg:grid-cols-2 lg:items-start lg:gap-6">
+        <div className="order-1 min-w-0">
+          <PlanBoard plan={previews.floorplan} readOnly={readOnly} />
         </div>
 
-        <div className="min-w-0 space-y-4 lg:sticky lg:top-24">
-          <EquipmentBoard categories={specCategories} options={scopedOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
+        <div className="order-2 min-w-0 lg:order-3 lg:col-span-2">
+          <ElevationStrip elevations={elevations} categories={bundle.categories} readOnly={readOnly} onPickCategory={openPicker} />
+        </div>
 
-          {/* 完成イメージ（外観・室内・水まわり） */}
-          <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
+        <div className="order-3 min-w-0 space-y-4 lg:order-4 lg:col-span-2">
+          <EquipmentBoard categories={specCategories} options={scopedOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
 
           {issues.length > 0 && (
             <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">
@@ -596,13 +592,18 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
               ))}
             </ul>
           )}
+        </div>
 
-          <div className="hidden gap-2 lg:flex">
-            <Button variant="secondary" onClick={handleSaveClick} disabled={saving || readOnly} className="flex-1" data-testid="save-button">
+        <div className="order-4 min-w-0 space-y-4 lg:order-2">
+          {/* 完成イメージ（外観・室内・その他） */}
+          <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
+
+          <div className="hidden justify-end gap-2 lg:flex">
+            <Button variant="secondary" onClick={handleSaveClick} disabled={saving || readOnly} data-testid="save-button">
               <Save className="size-4" aria-hidden="true" />
               一時保存
             </Button>
-            <Button onClick={handleQuoteClick} disabled={saving} className="flex-1" data-testid="quote-button">
+            <Button onClick={handleQuoteClick} disabled={saving} data-testid="quote-button">
               見積を依頼する
               <ArrowRight className="size-4" aria-hidden="true" />
             </Button>

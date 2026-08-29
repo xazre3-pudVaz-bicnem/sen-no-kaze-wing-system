@@ -14,10 +14,7 @@ interface Elevation {
 interface Props {
   /** 表示中の平面図（resolvePreview の結果） */
   plan: PreviewResolution;
-  categories: OptionCategory[];
-  elevations: Elevation[];
   readOnly: boolean;
-  onPickCategory: (categoryId: string) => void;
 }
 
 /**
@@ -27,12 +24,12 @@ interface Props {
  * データとテーブルは残してあるので、戻すときはこのファイルに重ね直せばよい。
  * 設備の変更は「標準設備及び仕上げ表」と「御見積書の明細」から行う。
  */
-export function PlanBoard({ plan, categories, elevations, readOnly, onPickCategory }: Props) {
+export function PlanBoard({ plan, readOnly }: Props) {
+  void readOnly;
   const planImage = plan.layers[0];
-  const wallCat = categories.find((c) => c.code === 'exterior-wall');
 
   return (
-    <div className="-mt-5 space-y-4">
+    <div className="space-y-4">
       {/* 平面図 */}
       <figure className="card overflow-hidden" data-testid="plan-board">
         <figcaption className="border-b border-line px-4 py-2.5 text-sm font-semibold">平面図</figcaption>
@@ -53,34 +50,51 @@ export function PlanBoard({ plan, categories, elevations, readOnly, onPickCatego
         )}
       </figure>
 
-      {/* 立面図（4面） */}
-      {elevations.length > 0 && (
-        <figure className="card overflow-hidden">
-          <figcaption className="border-b border-line px-4 py-2.5 text-sm font-semibold">
-            立面図（4面）
-            <span className="ml-2 text-xs font-normal text-muted">クリックすると外壁を選べます</span>
-          </figcaption>
-          <ul className="grid grid-cols-2 gap-3 bg-white p-3">
-            {elevations.map((e) => (
-              <li key={e.url}>
-                <button
-                  type="button"
-                  disabled={readOnly || !wallCat}
-                  onClick={() => wallCat && onPickCategory(wallCat.id)}
-                  className="group block w-full text-left"
-                  data-testid={`elevation-${e.label}`}
-                >
-                  <span className="relative block aspect-[2/1] overflow-hidden rounded border border-line bg-white transition-colors group-hover:border-brown">
-                    <SmartImage src={e.url} alt={e.alt} fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain p-1.5" />
-                  </span>
-                  <span className="mt-1 block text-[0.7rem] text-muted">{e.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </figure>
-      )}
-
     </div>
+  );
+}
+
+/**
+ * 立面図の横帯（4面）。先方モック（2026-08-29）で平面図・完成イメージの下に横一列で並べる。
+ * クリックで外壁の選択ポップアップが開くのは従来どおり。
+ */
+export function ElevationStrip({
+  elevations,
+  categories,
+  readOnly,
+  onPickCategory,
+}: {
+  elevations: Elevation[];
+  categories: OptionCategory[];
+  readOnly: boolean;
+  onPickCategory: (categoryId: string) => void;
+}) {
+  const wallCat = categories.find((c) => c.code === 'exterior-wall');
+  if (elevations.length === 0) return null;
+  return (
+    <figure className="card overflow-hidden">
+      <figcaption className="border-b border-line px-4 py-2 text-sm font-semibold">
+        立面図（4面）
+        <span className="ml-2 text-xs font-normal text-muted">クリックすると外壁を選べます</span>
+      </figcaption>
+      <ul className="grid grid-cols-2 gap-3 bg-white p-3 sm:grid-cols-4">
+        {elevations.map((e) => (
+          <li key={e.url}>
+            <button
+              type="button"
+              disabled={readOnly || !wallCat}
+              onClick={() => wallCat && onPickCategory(wallCat.id)}
+              className="group block w-full text-left"
+              data-testid={`elevation-${e.label}`}
+            >
+              <span className="relative block aspect-[2/1] overflow-hidden rounded border border-line bg-white transition-colors group-hover:border-brown">
+                <SmartImage src={e.url} alt={e.alt} fill sizes="(min-width: 640px) 22vw, 45vw" className="object-contain p-1.5" />
+              </span>
+              <span className="mt-1 block text-[0.7rem] text-muted">{e.label}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </figure>
   );
 }

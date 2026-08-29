@@ -274,10 +274,27 @@ export const seedProductImages: ProductImage[] = [
   { id: '11000000-0000-4000-8000-000000000021', base_model_id: MODEL_BOX_ID, kind: 'hero', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ黒い外装と木目の BOX', caption: '完成イメージ（CGパース）', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000022', base_model_id: MODEL_BOX_ID, kind: 'exterior', url: '/images/products/box-forest-lake.jpg', alt: '湖畔の木立に建つ BOX の外観', caption: '外観イメージ', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000023', base_model_id: MODEL_BOX_ID, kind: 'interior', url: '/images/interior/room-white-aircon.jpg', alt: '白い壁とベッド・デスクのある室内（エアコン付き）', caption: '室内イメージ（エアコン）', sort_order: 1 },
+  // ---- 2026-08-29 先方提供（BOX の外観・設置例・平面図・立面図） ----
+  { id: '11000000-0000-4000-8000-000000000061', base_model_id: MODEL_BOX_ID, kind: 'exterior', url: '/images/products/box-white.jpg', alt: '白いガルバリウム外壁のコンテナBOX（掃き出し窓と玄関ドア）', caption: 'コンテナBOX 外観', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000062', base_model_id: MODEL_BOX_ID, kind: 'exterior', url: '/images/products/box-lakeside-deck.jpg', alt: '湖畔のデッキに設置された白いコンテナBOX', caption: '設置イメージ（湖畔デッキ）', sort_order: 3 },
+  { id: '11000000-0000-4000-8000-000000000063', base_model_id: MODEL_BOX_ID, kind: 'case', url: '/images/cases/box-garage-top.jpg', alt: '住宅のガレージ上に設置された黒いコンテナBOX', caption: '設置例（住宅ガレージ上）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000064', base_model_id: MODEL_BOX_ID, kind: 'case', url: '/images/cases/box-stacked.jpg', alt: '2段に重ねて設置したコンテナBOX（外階段・バルコニー付き）', caption: 'BOX 重ね設置例', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000065', base_model_id: MODEL_BOX_ID, kind: 'floorplan', url: '/images/plan/box-hotel-single.jpg', alt: 'コンテナBOX シングルホテルの平面図（シャワートイレ・4.8帖）', caption: '平面図（シングルホテル）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000066', base_model_id: MODEL_BOX_ID, kind: 'floorplan', url: '/images/plan/box-hotel-double.jpg', alt: 'コンテナBOX ホテルダブルの平面図（3点UB・キッチン）', caption: '平面図（ホテルダブル）', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000067', base_model_id: MODEL_BOX_ID, kind: 'floorplan', url: '/images/plan/box-oneroom.jpg', alt: 'コンテナBOX ワンルーム住居タイプの平面図（3点UB・キッチン・4.8帖）', caption: '平面図（ワンルーム住居）', sort_order: 3 },
+  { id: '11000000-0000-4000-8000-000000000068', base_model_id: MODEL_BOX_ID, kind: 'floorplan', url: '/images/plan/box-office.jpg', alt: 'コンテナBOX 事務所及び物置の平面図', caption: '平面図（事務所・物置）', sort_order: 4 },
+  { id: '11000000-0000-4000-8000-000000000069', base_model_id: MODEL_BOX_ID, kind: 'elevation', url: '/images/elevation/box-south.jpg', alt: 'コンテナBOX 南立面図（掃き出し窓）', caption: '南（掃き出し窓）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000070', base_model_id: MODEL_BOX_ID, kind: 'elevation', url: '/images/elevation/box-east.jpg', alt: 'コンテナBOX 東立面図（玄関ドア）', caption: '東（玄関側）', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000071', base_model_id: MODEL_BOX_ID, kind: 'elevation', url: '/images/elevation/box-north.jpg', alt: 'コンテナBOX 北側立面図', caption: '北', sort_order: 3 },
+  { id: '11000000-0000-4000-8000-000000000072', base_model_id: MODEL_BOX_ID, kind: 'elevation', url: '/images/elevation/box-west.jpg', alt: 'コンテナBOX 西側立面図（縦すべり窓）', caption: '西', sort_order: 4 },
   // ---- フラット ----
   { id: '11000000-0000-4000-8000-000000000031', base_model_id: MODEL_FLAT_ID, kind: 'hero', url: '/images/products/flat-office-lake.jpg', alt: '湖を背にした全面ガラスのフラットタイプ事務所', caption: '完成イメージ（CGパース）', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000032', base_model_id: MODEL_FLAT_ID, kind: 'exterior', url: '/images/products/flat-office-lake.jpg', alt: 'フラットタイプの外観', caption: '外観イメージ', sort_order: 1 },
   { id: '11000000-0000-4000-8000-000000000033', base_model_id: MODEL_FLAT_ID, kind: 'interior', url: '/images/interior/room-white-aircon.jpg', alt: '白い壁の室内（エアコン付き）', caption: '室内イメージ（エアコン）', sort_order: 1 },
+  // ---- 2026-08-29 先方提供（フラットのパース・設置例・平面図） ----
+  { id: '11000000-0000-4000-8000-000000000075', base_model_id: MODEL_FLAT_ID, kind: 'exterior', url: '/images/products/flat-black.png', alt: '黒いガルバリウム外壁のフラット（水平折畳み式）', caption: 'フラット 外観パース', sort_order: 2 },
+  { id: '11000000-0000-4000-8000-000000000076', base_model_id: MODEL_FLAT_ID, kind: 'case', url: '/images/cases/flat-entrance.jpg', alt: '住宅の玄関先に設置された黒いフラット（物置タイプ）', caption: '設置例（住宅の玄関先）', sort_order: 1 },
+  { id: '11000000-0000-4000-8000-000000000077', base_model_id: MODEL_FLAT_ID, kind: 'floorplan', url: '/images/plan/flat-basic.jpg', alt: 'フラットの平面図（6.8帖・物置は仕上げ無し／居室タイプは仕上げあり）', caption: '平面図（6.8帖）', sort_order: 1 },
 ];
 
 /* ---------------- カテゴリー（分類フォルダ › カテゴリー） ---------------- */
@@ -657,6 +674,13 @@ export const seedPreviewRules: PreviewImageRule[] = [
   { id: rid(21), base_model_id: MODEL_BOX_ID, view: 'exterior', kind: 'composite', preview_keys: ['exterior_galva'], url: '/images/products/box-forest-lake.jpg', alt: 'BOX 標準外観（ガルバリウム外壁）', note: null, z_index: 0, status: 'published' },
   { id: rid(22), base_model_id: MODEL_BOX_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon'], url: '/images/interior/room-white-aircon.jpg', alt: 'エアコン付きの室内', note: null, z_index: 0, status: 'published' },
   { id: rid(23), base_model_id: MODEL_BOX_ID, view: 'water', kind: 'composite', preview_keys: ['shower'], url: '/images/interior/unit-bath-3point.jpg', alt: 'シャワーユニット', note: '画像は3点ユニットバスです', z_index: 0, status: 'published' },
+  // BOX の平面図（仕様の選択に応じて切替。2026-08-29 先方提供）
+  { id: rid(41), base_model_id: MODEL_BOX_ID, view: 'floorplan', kind: 'composite', preview_keys: ['shower'], url: '/images/plan/box-hotel-single.jpg', alt: 'コンテナBOX シングルホテルの平面図', note: null, z_index: 0, status: 'published' },
+  { id: rid(42), base_model_id: MODEL_BOX_ID, view: 'floorplan', kind: 'composite', preview_keys: ['kitchen', 'shower'], url: '/images/plan/box-oneroom.jpg', alt: 'コンテナBOX ワンルーム住居タイプの平面図', note: null, z_index: 0, status: 'published' },
+  { id: rid(43), base_model_id: MODEL_BOX_ID, view: 'floorplan', kind: 'composite', preview_keys: ['ub3'], url: '/images/plan/box-hotel-double.jpg', alt: 'コンテナBOX ホテルダブルの平面図', note: null, z_index: 0, status: 'published' },
+  { id: rid(44), base_model_id: MODEL_BOX_ID, view: 'floorplan', kind: 'composite', preview_keys: [], url: '/images/plan/box-office.jpg', alt: 'コンテナBOX 事務所及び物置の平面図', note: '設備を選ぶと該当の平面図に切り替わります', z_index: 0, status: 'published' },
+  // フラットの平面図
+  { id: rid(45), base_model_id: MODEL_FLAT_ID, view: 'floorplan', kind: 'composite', preview_keys: [], url: '/images/plan/flat-basic.jpg', alt: 'フラットの平面図（6.8帖）', note: null, z_index: 0, status: 'published' },
   { id: rid(31), base_model_id: MODEL_FLAT_ID, view: 'exterior', kind: 'composite', preview_keys: ['exterior_galva'], url: '/images/products/flat-office-lake.jpg', alt: 'フラット 標準外観（ガルバリウム外壁）', note: null, z_index: 0, status: 'published' },
   { id: rid(32), base_model_id: MODEL_FLAT_ID, view: 'interior', kind: 'composite', preview_keys: ['aircon'], url: '/images/interior/room-white-aircon.jpg', alt: 'エアコン付きの室内', note: null, z_index: 0, status: 'published' },
 ];

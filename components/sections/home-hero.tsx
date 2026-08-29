@@ -5,7 +5,7 @@ import { hero } from '@/data/site-content';
 import { getSessionUser } from '@/lib/auth/session';
 import { canEditDealerItems } from '@/lib/domain/types';
 
-/** ファーストビュー：全面写真＋「− 折畳木造コンテナホテル − Wing」 */
+/** ファーストビュー：全面写真＋「− 折畳木造コンテナ − Wing」 */
 export async function HomeHero() {
   // 会員のログイン導線はヘッダーだけだと見つけにくいので、ファーストビューにも置く
   const user = await getSessionUser();
@@ -15,13 +15,14 @@ export async function HomeHero() {
 
   return (
     <section className="relative isolate min-h-[100svh] overflow-hidden bg-forest-deep text-white">
+      {/* 先方指示（2026-08-29）で差し替え。パンフレット提供の海岸 CG */}
       <Image
-        src="/images/hero/wing-sunset-coast.jpg"
-        alt="夕陽に染まる海岸の高台に建つ、折り畳み式木造コンテナ Wing"
+        src="/images/products/wing-rockshore-triple.jpg"
+        alt="雪山を望む海岸の岩場に並ぶ、折り畳み式木造コンテナ Wing"
         fill
         priority
         sizes="100vw"
-        className="object-cover object-[68%_center] sm:object-[62%_center]"
+        className="object-cover object-[60%_center]"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-forest-deep/55 via-transparent to-forest-deep/75" aria-hidden="true" />
 

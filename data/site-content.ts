@@ -24,7 +24,7 @@ export const LP_NAV: NavItem[] = [
 /* ---------------- Hero ---------------- */
 
 export const hero = {
-  eyebrow: '− 折畳木造コンテナホテル −',
+  eyebrow: '− 折畳木造コンテナ −',
   title: 'Wing',
   notice: {
     title: '能登の拠点を開設します。',

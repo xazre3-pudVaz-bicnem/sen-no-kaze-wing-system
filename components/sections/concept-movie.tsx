@@ -1,12 +1,10 @@
-import Image from 'next/image';
-import { PlayCircle } from 'lucide-react';
 import { concept } from '@/data/site-content';
 import { RuleHeading } from '@/components/ui/section-heading';
 import { Reveal } from '@/components/ui/reveal';
 
 /**
- * コンセプト動画。NEXT_PUBLIC_CONCEPT_MOVIE_URL（YouTube / Vimeo の埋め込み URL）を
- * 設定すると動画を埋め込み、未設定のときはキービジュアルと「準備中」を表示する。
+ * コンセプト動画。先方提供の動画（public/videos/wing-concept.mp4・2026-08-29 受領）を再生する。
+ * NEXT_PUBLIC_CONCEPT_MOVIE_URL（YouTube / Vimeo の埋め込み URL）を設定するとそちらを優先する。
  */
 export function ConceptMovieSection() {
   const movie = process.env.NEXT_PUBLIC_CONCEPT_MOVIE_URL?.trim();
@@ -26,13 +24,17 @@ export function ConceptMovieSection() {
                 className="absolute inset-0 size-full"
               />
             ) : (
-              <>
-                <Image src="/images/exterior/cove-night.jpg" alt="夜の入り江に設置された Wing" fill sizes="(min-width: 1024px) 80vw, 100vw" className="object-cover opacity-70" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
-                  <PlayCircle className="size-16 text-gold" aria-hidden="true" />
-                  <p className="text-sm tracking-wider">コンセプト動画は公開準備中です</p>
-                </div>
-              </>
+              <video
+                controls
+                playsInline
+                preload="metadata"
+                poster="/images/exterior/wing-night-fireworks.jpg"
+                className="absolute inset-0 size-full object-cover"
+                aria-label="折り畳み式木造コンテナ Wing コンセプト動画"
+              >
+                <source src="/videos/wing-concept.mp4" type="video/mp4" />
+                お使いのブラウザでは動画を再生できません。
+              </video>
             )}
           </div>
         </Reveal>

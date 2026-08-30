@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { ImageOff } from 'lucide-react';
 import type { PreviewResolution } from '@/lib/domain/preview';
 import type { OptionCategory, OptionVariantChoice, ProductOption } from '@/lib/domain/types';
@@ -10,6 +11,7 @@ import {
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
 import { SmartImage } from '@/components/ui/smart-image';
+import { publishExteriorFaceDisplays } from './exterior-face-display-store';
 
 interface Elevation {
   url: string;
@@ -75,6 +77,25 @@ export function ElevationStrip({
 }) {
   const wallCat = categories.find((c) => c.code === 'exterior-wall');
   const wallOptions = options.filter((o) => o.category_id === wallCat?.id);
+
+  useEffect(() => {
+    publishExteriorFaceDisplays(
+      exteriorFaces.map((face) => {
+        const option = wallOptions.find((o) => o.id === face.option_id);
+        const variantNames = face.variant_choice_ids
+          .map((id) => variantChoices.find((choice) => choice.id === id)?.name)
+          .filter((name): name is string => Boolean(name));
+        return {
+          face_code: face.face_code,
+          option_id: face.option_id,
+          option_name: option?.name ?? '選択なし',
+          variant_names: variantNames,
+          image_url: option?.image_url ?? null,
+        };
+      })
+    );
+  }, [exteriorFaces, variantChoices, wallOptions]);
+
   if (elevations.length === 0) return null;
 
   const summary = (face: ExteriorFaceCode) => {

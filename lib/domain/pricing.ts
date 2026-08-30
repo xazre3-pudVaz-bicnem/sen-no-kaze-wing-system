@@ -7,6 +7,7 @@ import {
   type PricingResult,
   type ProductOption,
 } from './types';
+import type { ExteriorFaceSelection } from './exterior-wall';
 
 export const TAX_RATE = 0.1;
 /** 諸費用（交通費・労災・安全管理費等）: 本体・オプションそれぞれの小計に対する率（見積書テンプレートより 15%） */
@@ -21,6 +22,13 @@ export interface SelectionInput {
   variant_choice_ids?: string[];
 }
 
+const EXTERIOR_FACE_ORDER = [
+  { code: 'front', label: '正面' },
+  { code: 'right', label: '右側面' },
+  { code: 'back', label: '背面' },
+  { code: 'left', label: '左側面' },
+] as const;
+
 /**
  * 見積書テンプレート（20260821見積書テンプレート.xlsx）の計算構造を再現する。
  *
@@ -32,6 +40,7 @@ export interface SelectionInput {
  *   消費税 10%                                        → 合計（税込）
  *
  * ブラウザ表示とサーバー再計算で同じ関数を使う。未公開・他モデルのオプションは無視する。
+ * exteriorFaces が4面そろっている場合、従来の外壁1件は除外し、4面を各1面として個別加算する。
  */
 export function computePricing(
   model: Pick<BaseModel, 'id' | 'base_price'> & { expense_rate?: number | null },
@@ -42,7 +51,9 @@ export function computePricing(
   /** バリエーション（無指定なら追加価格 0 として扱う） */
   variants: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] },
   /** 本体一式の上書き（本体内訳マスターの合計）。null / 未指定なら model.base_price */
-  baseOverride: number | null = null
+  baseOverride: number | null = null,
+  /** 外壁4面の割当。4面そろっている場合は通常の外壁1件よりこちらを優先する */
+  exteriorFaces: ExteriorFaceSelection[] = []
 ): PricingResult {
   const groupById = new Map(variants.groups.map((g) => [g.id, g]));
   const choiceById = new Map(variants.choices.map((c) => [c.id, c]));
@@ -53,11 +64,33 @@ export function computePricing(
   const lines: PricingResult['lines'] = [];
   const seen = new Set<string>();
 
+  const exteriorCategory = categories.find((c) => c.code === 'exterior-wall');
+  const exteriorByFace = new Map(exteriorFaces.map((face) => [face.face_code, face]));
+  const hasFourExteriorFaces = Boolean(
+    exteriorCategory &&
+      exteriorFaces.length === EXTERIOR_FACE_ORDER.length &&
+      exteriorByFace.size === EXTERIOR_FACE_ORDER.length &&
+      EXTERIOR_FACE_ORDER.every(({ code }) => {
+        const face = exteriorByFace.get(code);
+        const opt = face ? byId.get(face.option_id) : null;
+        return Boolean(
+          face &&
+            opt &&
+            opt.category_id === exteriorCategory.id &&
+            opt.status === 'published' &&
+            (!opt.base_model_id || opt.base_model_id === model.id)
+        );
+      })
+  );
+
   for (const sel of selections) {
     const opt = byId.get(sel.option_id);
     if (!opt || seen.has(opt.id)) continue;
     if (opt.status !== 'published') continue;
     if (opt.base_model_id && opt.base_model_id !== model.id) continue;
+    const code = categoryCode.get(opt.category_id) ?? '';
+    // 4面指定がある場合は、正面だけ同期されている従来の外壁1件を二重計上しない。
+    if (hasFourExteriorFaces && code === 'exterior-wall') continue;
     seen.add(opt.id);
     const quantity = Math.max(1, Math.floor(sel.quantity ?? 1));
     // 選ばれたバリエーションのうち、この商品の選択項目に属するものだけを採用する
@@ -71,7 +104,6 @@ export function computePricing(
     }));
     const variantExtra = variantLines.reduce((sum, v) => sum + v.extra_price, 0);
     const unit = (opt.price_on_request ? 0 : opt.price) + variantExtra;
-    const code = categoryCode.get(opt.category_id) ?? '';
     // フリー商品は代理店の自社商品のため、技術の杜の諸費用（15%）は乗せない
     const isFree = code === FREE_PRODUCT_CATEGORY_CODE;
     lines.push({
@@ -89,6 +121,39 @@ export function computePricing(
       price_on_request: opt.price_on_request,
       image_url: opt.image_url,
     });
+  }
+
+  if (hasFourExteriorFaces && exteriorCategory) {
+    for (const faceInfo of EXTERIOR_FACE_ORDER) {
+      const face = exteriorByFace.get(faceInfo.code)!;
+      const opt = byId.get(face.option_id)!;
+      const picked = (face.variant_choice_ids ?? [])
+        .map((cid) => choiceById.get(cid))
+        .filter((c): c is OptionVariantChoice => Boolean(c && groupById.get(c.group_id)?.option_id === opt.id));
+      const variantLines = picked.map((c) => ({
+        group: groupById.get(c.group_id)?.name ?? '',
+        choice: c.name,
+        extra_price: c.price_on_request ? 0 : c.extra_price,
+      }));
+      const variantExtra = variantLines.reduce((sum, v) => sum + v.extra_price, 0);
+      const priceOnRequest = opt.price_on_request || picked.some((choice) => choice.price_on_request);
+      const unit = (opt.price_on_request ? 0 : opt.price) + variantExtra;
+      lines.push({
+        option_id: opt.id,
+        code: `${opt.code}__face_${faceInfo.code}`,
+        name: `外壁仕様（${faceInfo.label}）：${opt.name}`,
+        category_name: exteriorCategory.name,
+        category_code: exteriorCategory.code,
+        unit_price: unit,
+        quantity: 1,
+        amount: unit,
+        is_installation: false,
+        is_free_product: false,
+        variants: variantLines,
+        price_on_request: priceOnRequest,
+        image_url: opt.image_url,
+      });
+    }
   }
 
   const base_price = baseOverride ?? model.base_price;

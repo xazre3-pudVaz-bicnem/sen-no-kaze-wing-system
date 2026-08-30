@@ -11,7 +11,7 @@ import {
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
 import { SmartImage } from '@/components/ui/smart-image';
-import { publishExteriorFaceDisplays } from './exterior-face-display-store';
+import { publishExteriorFaceDisplays, publishExteriorFacePicker } from './exterior-face-display-store';
 
 interface Elevation {
   url: string;
@@ -95,6 +95,11 @@ export function ElevationStrip({
       })
     );
   }, [exteriorFaces, variantChoices, wallOptions]);
+
+  useEffect(() => {
+    publishExteriorFacePicker(onPickExteriorFace);
+    return () => publishExteriorFacePicker(null);
+  }, [onPickExteriorFace]);
 
   if (elevations.length === 0) return null;
 

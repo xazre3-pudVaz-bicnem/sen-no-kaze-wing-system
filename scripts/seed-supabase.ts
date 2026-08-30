@@ -1,10 +1,12 @@
 /**
  * 初期データを Supabase へ投入する（service role）。
- *   node scripts/seed-supabase.ts
- * 何度実行しても同じ ID に upsert されるため安全。
- * 既存の管理画面での変更を上書きしたくない場合は --skip-existing を付ける。
- * 商品台帳を作り直したあと、旧データの残骸を消したい場合は --prune を付ける。
- *   （保存済みプランから参照されている商品は外部キーで守られ、削除されずエラーになる）
+ *   node scripts/seed-supabase.ts            … 既存行は触らず、シードにあって DB に無い行だけ追加（既定・安全）
+ *   node scripts/seed-supabase.ts --force    … 既存行もシードの値で上書き（管理画面の登録を消す。初期構築時のみ）
+ *   node scripts/seed-supabase.ts --prune    … シードに無い行を削除（--force と同様に初期構築時のみ）
+ *
+ * 2026-08-30 の事故を受けて既定を「追加のみ」にした：
+ *   上書き upsert を本番で再実行したため、管理画面から登録された商品画像（options.image_url）や
+ *   本体内訳マスターの編集がシードの初期値に戻ってしまった。運用開始後の本番では --force を使わないこと。
  */
 import { createClient } from '@supabase/supabase-js';
 import { loadEnv, requireEnv } from './env.ts';
@@ -13,8 +15,13 @@ import { seedCatalog } from '../lib/seed/catalog.ts';
 loadEnv();
 const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
 const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-const skipExisting = process.argv.includes('--skip-existing');
+// 既定は「追加のみ」。--force のときだけ既存行を上書きする（旧 --skip-existing は既定動作になった）
+const force = process.argv.includes('--force');
+const skipExisting = !force;
 const prune = process.argv.includes('--prune');
+if (force || prune) {
+  console.warn('⚠ --force / --prune は管理画面の登録内容を上書き・削除します。運用中の本番では実行しないでください。');
+}
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 async function upsert(table: string, rows: Record<string, unknown>[]) {

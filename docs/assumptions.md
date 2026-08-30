@@ -269,3 +269,9 @@
 
 `assets/source-docs/20260818コンテナ説明用パンフレット.docx`（先方提供）から CG 5 点を
 `public/images/` に取り込み、Wing のギャラリーに登録（海岸3棟・夜景花火・洗面・ベッドルーム・3Dアイソメ間取り）。
+
+## シード再実行の事故と対策（2026-08-30）
+
+- 8/28〜29 に本番へ `seed:supabase`（上書き upsert）を再実行し、管理画面から登録された `options.image_url` を初期値に戻してしまった。
+- 復旧：Storage に残っていたファイル名とシードのプレースホルダー名を突き合わせて 30 件を再リンク（`scripts/restore-catalog-images.ts`）。
+- 対策：`seed:supabase` の既定を追加のみに変更（上書きは `--force`）。未使用ファイルの一覧は `scripts/list-orphan-images.ts`。

@@ -22,18 +22,12 @@ interface Props {
   onPickCategory: (categoryId: string) => void;
 }
 
-const INSULATION_PARTS = [
-  { code: 'floor', label: '床断熱' },
-  { code: 'wall', label: '壁断熱' },
-  { code: 'ceiling', label: '天井断熱' },
-] as const;
-
 /**
  * 「標準設備及び仕上げ表」。
  * エクセル（分類表）と同じく「ここまでが本体／下がオプション」の区分けを見せる。
  * 各項目はPC・スマホとも画像50%／文字50%で表示し、説明はカーソルで表示する。
- * 外壁は4面個別指定、断熱は床・壁・天井の3カードで表示する。
- * 現在の断熱商品は3部位一括仕様のため、どの断熱カードから変更しても同じ断熱仕様を変更する。
+ * 外壁は4面個別指定のため、正面・右側面・背面・左側面を独立カードとして表示する。
+ * 断熱は商品マスター上で床・壁・天井を独立カテゴリーとして扱う。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);
@@ -164,61 +158,8 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
       );
     });
 
-  const insulationTiles = (cat: OptionCategory) => {
-    const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
-    const main = chosen[0] ?? null;
-    const specification = main?.name ?? 'グラスウール 90mm（標準）';
-    const priceLabel = main
-      ? main.price_on_request
-        ? '3部位一括・別途見積'
-        : main.price === 0
-          ? '3部位共通・標準'
-          : `3部位一括 +${formatYen(main.price)}`
-      : '3部位共通・標準';
-
-    return INSULATION_PARTS.map((part) => (
-      <li key={`${cat.id}-${part.code}`} className="bg-white">
-        <button
-          type="button"
-          disabled={readOnly}
-          onClick={() => onPickCategory(cat.id)}
-          title={`${part.label}を変更（現在は床・壁・天井を一括変更）`}
-          className="group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
-          data-testid={`equip-insulation-${part.code}`}
-        >
-          <span className="block min-h-24 w-full p-1.5 sm:p-2">
-            <span className="relative block h-full min-h-20 w-full overflow-hidden rounded bg-sand">
-              {main?.image_url ? (
-                <SmartImage
-                  src={main.image_url}
-                  alt={`${part.label} ${specification}`}
-                  fill
-                  sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
-                  className="object-cover"
-                />
-              ) : (
-                <span className="flex h-full min-h-20 items-center justify-center text-muted">
-                  <ImageOff className="size-5" aria-hidden="true" />
-                </span>
-              )}
-            </span>
-          </span>
-          <span className="flex min-w-0 flex-col justify-center p-2">
-            <span className="flex items-center justify-between gap-1">
-              <span className="truncate text-[0.65rem] font-semibold text-muted">{part.label}</span>
-              {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
-            </span>
-            <span className="block text-xs leading-snug font-semibold">{specification}</span>
-            <span className="mt-0.5 block text-[0.65rem] text-ink-soft">{priceLabel}</span>
-          </span>
-        </button>
-      </li>
-    ));
-  };
-
   const tile = (cat: OptionCategory) => {
     if (cat.code === 'exterior-wall' && hasExteriorFaces) return exteriorTiles(cat);
-    if (cat.code === 'insulation') return insulationTiles(cat);
     return normalTile(cat);
   };
 

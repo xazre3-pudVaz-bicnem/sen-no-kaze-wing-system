@@ -254,9 +254,10 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         selected.map((sid) => ({ option_id: sid, variant_choice_ids: variantIds })),
         undefined,
         { groups: bundle.variantGroups, choices: bundle.variantChoices },
-        baseOverride
+        baseOverride,
+        exteriorFaces
       ),
-    [model, bundle, selected, variantIds, baseOverride]
+    [model, bundle, selected, variantIds, baseOverride, exteriorFaces]
   );
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
@@ -272,11 +273,12 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         ids.map((sid) => ({ option_id: sid })),
         undefined,
         undefined,
-        baseBreakdownTotal(bundle, specCode)
+        baseBreakdownTotal(bundle, specCode),
+        lv === finishLevel ? exteriorFaces : []
       ).total;
     }
     return out;
-  }, [ctx, model, bundle, presetSelections, specCode, defaults, selected, finishLevel]);
+  }, [ctx, model, bundle, presetSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
 
   const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);

@@ -11,6 +11,10 @@ import { cn } from '@/lib/utils';
 
 type DisplayTabKey = ViewKey | 'case';
 
+type SequenceItem =
+  | { kind: 'view'; key: ViewKey }
+  | { kind: 'case'; index: number };
+
 interface DisplayTab {
   key: DisplayTabKey;
   label: string;
@@ -46,8 +50,8 @@ interface Frame {
 }
 
 /**
- * 完成イメージ。外観・室内・その他は仕様に応じたプレビュー、施工事例は
- * ベースコンテナに登録された kind=case の画像を横スクロールで表示する。
+ * 完成イメージ。外観・室内・施工事例・その他を1本の順番として扱い、
+ * PCの左右ボタンとスマホの横スワイプで同じ順番に移動する。
  */
 export function PreviewStage({ previews, view, onViewChange, options, modelName }: Props) {
   const params = useParams();
@@ -60,7 +64,7 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
   const [caseImages, setCaseImages] = useState<CaseImage[]>([]);
   const [showCase, setShowCase] = useState(false);
   const [caseIndex, setCaseIndex] = useState(0);
-  const caseTrack = useRef<HTMLDivElement>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -70,10 +74,8 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
       .then((data: { images?: CaseImage[] }) => {
         const images = Array.isArray(data.images) ? data.images : [];
         setCaseImages(images);
-        if (images.length === 0) {
-          setShowCase(false);
-          setCaseIndex(0);
-        }
+        setCaseIndex(0);
+        if (images.length === 0) setShowCase(false);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -104,25 +106,41 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
     if (key === 'case') {
       setCaseIndex(0);
       setShowCase(true);
-      requestAnimationFrame(() => caseTrack.current?.scrollTo({ left: 0, behavior: 'auto' }));
       return;
     }
     setShowCase(false);
     onViewChange(key);
   };
 
-  const scrollCaseTo = (nextIndex: number) => {
-    if (caseImages.length === 0) return;
-    const normalized = (nextIndex + caseImages.length) % caseImages.length;
-    setCaseIndex(normalized);
-    const el = caseTrack.current;
-    if (el) el.scrollTo({ left: el.clientWidth * normalized, behavior: 'smooth' });
+  const sequence: SequenceItem[] = [
+    { kind: 'view', key: 'exterior' },
+    { kind: 'view', key: 'interior' },
+    ...caseImages.map((_, index) => ({ kind: 'case' as const, index })),
+    { kind: 'view', key: 'water' },
+  ];
+
+  const activeSequenceIndex = showCase
+    ? Math.min(2 + caseIndex, sequence.length - 1)
+    : view === 'interior'
+      ? 1
+      : view === 'water'
+        ? sequence.length - 1
+        : 0;
+
+  const selectSequenceItem = (item: SequenceItem) => {
+    if (item.kind === 'case') {
+      setCaseIndex(item.index);
+      setShowCase(true);
+      return;
+    }
+    setShowCase(false);
+    onViewChange(item.key);
   };
 
-  const selectAdjacentTab = (direction: 1 | -1) => {
-    const i = tabs.findIndex((t) => t.key === activeTab);
-    const next = tabs[(i + direction + tabs.length) % tabs.length];
-    selectTab(next.key);
+  const moveSequence = (direction: 1 | -1) => {
+    if (sequence.length === 0) return;
+    const nextIndex = (activeSequenceIndex + direction + sequence.length) % sequence.length;
+    selectSequenceItem(sequence[nextIndex]);
   };
 
   const currentCase = caseImages[caseIndex] ?? null;
@@ -130,44 +148,47 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
   return (
     <section aria-label="完成イメージ" className="overflow-hidden bg-white lg:rounded-none">
       <div
-        className="relative aspect-[3/2] bg-sand"
+        className="relative aspect-[3/2] touch-pan-y bg-sand"
         data-testid="preview-stage"
         data-preview-kind={showCase ? 'case' : current.kind}
         data-preview-src={showCase ? currentCase?.url ?? '' : current.layers[0]?.url ?? ''}
+        onTouchStart={(event) => {
+          const touch = event.touches[0];
+          if (touch) touchStart.current = { x: touch.clientX, y: touch.clientY };
+        }}
+        onTouchEnd={(event) => {
+          const start = touchStart.current;
+          touchStart.current = null;
+          const touch = event.changedTouches[0];
+          if (!start || !touch) return;
+          const dx = touch.clientX - start.x;
+          const dy = touch.clientY - start.y;
+          if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+          moveSequence(dx < 0 ? 1 : -1);
+        }}
+        onTouchCancel={() => {
+          touchStart.current = null;
+        }}
       >
-        {showCase ? (
-          <div
-            ref={caseTrack}
-            className="absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            aria-label={`${modelName}の施工事例画像`}
-            onScroll={(event) => {
-              const el = event.currentTarget;
-              if (el.clientWidth === 0) return;
-              const next = Math.round(el.scrollLeft / el.clientWidth);
-              if (next >= 0 && next < caseImages.length && next !== caseIndex) setCaseIndex(next);
-            }}
-          >
-            {caseImages.map((image, index) => (
-              <figure key={image.id} className="relative h-full w-full shrink-0 snap-center bg-sand">
-                <SmartImage
-                  src={image.url}
-                  alt={image.alt || `${modelName} 施工事例 ${index + 1}`}
-                  fill
-                  priority={index === 0}
-                  sizes="(min-width: 1024px) 62vw, 100vw"
-                  className="object-cover"
-                />
-                {image.caption && (
-                  <>
-                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/65 to-transparent" aria-hidden="true" />
-                    <figcaption className="absolute right-4 bottom-4 left-4 text-sm font-medium text-white drop-shadow">
-                      {image.caption}
-                    </figcaption>
-                  </>
-                )}
-              </figure>
-            ))}
-          </div>
+        {showCase && currentCase ? (
+          <figure className="absolute inset-0 bg-sand" aria-label={`${modelName}の施工事例画像`}>
+            <SmartImage
+              src={currentCase.url}
+              alt={currentCase.alt || `${modelName} 施工事例 ${caseIndex + 1}`}
+              fill
+              priority={caseIndex === 0}
+              sizes="(min-width: 1024px) 62vw, 100vw"
+              className="object-cover"
+            />
+            {currentCase.caption && (
+              <>
+                <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/65 to-transparent" aria-hidden="true" />
+                <figcaption className="absolute right-4 bottom-4 left-4 text-sm font-medium text-white drop-shadow">
+                  {currentCase.caption}
+                </figcaption>
+              </>
+            )}
+          </figure>
         ) : (
           <>
             {current.layers.length === 0 && (
@@ -206,28 +227,24 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
               : '完成イメージ'}
         </span>
 
-        {(!showCase || caseImages.length > 1) && (
-          <>
-            <button
-              type="button"
-              onClick={() => (showCase ? scrollCaseTo(caseIndex - 1) : selectAdjacentTab(-1))}
-              aria-label={showCase ? '前の施工事例へ' : '前の完成イメージへ'}
-              data-testid="preview-prev"
-              className="absolute top-1/2 left-2 z-10 -translate-y-1/2 rounded-full bg-white/85 p-2 text-ink shadow-soft transition hover:bg-white"
-            >
-              <ChevronLeft className="size-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => (showCase ? scrollCaseTo(caseIndex + 1) : selectAdjacentTab(1))}
-              aria-label={showCase ? '次の施工事例へ' : '次の完成イメージへ'}
-              data-testid="preview-next"
-              className="absolute top-1/2 right-2 z-10 -translate-y-1/2 rounded-full bg-white/85 p-2 text-ink shadow-soft transition hover:bg-white"
-            >
-              <ChevronRight className="size-5" aria-hidden="true" />
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={() => moveSequence(-1)}
+          aria-label="前の画像へ"
+          data-testid="preview-prev"
+          className="absolute top-1/2 left-2 z-10 -translate-y-1/2 rounded-full bg-white/85 p-2 text-ink shadow-soft transition hover:bg-white"
+        >
+          <ChevronLeft className="size-5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => moveSequence(1)}
+          aria-label="次の画像へ"
+          data-testid="preview-next"
+          className="absolute top-1/2 right-2 z-10 -translate-y-1/2 rounded-full bg-white/85 p-2 text-ink shadow-soft transition hover:bg-white"
+        >
+          <ChevronRight className="size-5" aria-hidden="true" />
+        </button>
       </div>
 
       <div className="border-t border-line px-3 py-2">

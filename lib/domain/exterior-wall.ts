@@ -15,30 +15,6 @@ export const EXTERIOR_FACES: { code: ExteriorFaceCode; label: string }[] = [
   { code: 'left', label: '左側面' },
 ];
 
-let runtimeExteriorFaces: ExteriorFaceSelection[] = [];
-
-/**
- * シミュレーターのブラウザ内価格計算へ、現在の4面選択を共有する。
- * サーバーでは共有状態を使わず、Supabase / LocalStore 側の保存済み exterior_faces を正とする。
- */
-export function publishRuntimeExteriorFaces(faces: ExteriorFaceSelection[]) {
-  if (typeof window === 'undefined') return;
-  runtimeExteriorFaces = faces.map((face) => ({
-    face_code: face.face_code,
-    option_id: face.option_id,
-    variant_choice_ids: [...face.variant_choice_ids],
-  }));
-}
-
-export function getRuntimeExteriorFaces(): ExteriorFaceSelection[] {
-  if (typeof window === 'undefined') return [];
-  return runtimeExteriorFaces.map((face) => ({
-    face_code: face.face_code,
-    option_id: face.option_id,
-    variant_choice_ids: [...face.variant_choice_ids],
-  }));
-}
-
 export function exteriorFaceForElevation(label: string, index: number): ExteriorFaceCode {
   if (/正面|南/.test(label)) return 'front';
   if (/右|東/.test(label)) return 'right';
@@ -75,14 +51,9 @@ export function makeDefaultExteriorFaces(
   selectedVariantIds: string[]
 ): ExteriorFaceSelection[] {
   const option = options.find((o) => selectedOptionIds.includes(o.id)) ?? options[0];
-  if (!option) {
-    publishRuntimeExteriorFaces([]);
-    return [];
-  }
+  if (!option) return [];
   const variants = defaultVariantIdsForExteriorOption(option.id, groups, choices, selectedVariantIds);
-  const result = EXTERIOR_FACES.map((face) => ({ face_code: face.code, option_id: option.id, variant_choice_ids: [...variants] }));
-  publishRuntimeExteriorFaces(result);
-  return result;
+  return EXTERIOR_FACES.map((face) => ({ face_code: face.code, option_id: option.id, variant_choice_ids: [...variants] }));
 }
 
 export function normalizeExteriorFaces(
@@ -108,11 +79,7 @@ export function normalizeExteriorFaces(
       variant_choice_ids: defaultVariantIdsForExteriorOption(row.option_id, groups, choices, validChoices),
     });
   }
-  if (byFace.size === EXTERIOR_FACES.length) {
-    const result = EXTERIOR_FACES.map((f) => byFace.get(f.code)!);
-    publishRuntimeExteriorFaces(result);
-    return result;
-  }
+  if (byFace.size === EXTERIOR_FACES.length) return EXTERIOR_FACES.map((f) => byFace.get(f.code)!);
   return makeDefaultExteriorFaces(options, groups, choices, selectedOptionIds, selectedVariantIds);
 }
 

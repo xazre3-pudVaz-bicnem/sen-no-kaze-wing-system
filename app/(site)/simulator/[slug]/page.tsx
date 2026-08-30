@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicModels } from '@/lib/data/public-catalog';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
@@ -46,16 +47,19 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       const store = await getStore();
       const found = await store.getConfiguration(c, user);
       if (!found) loadError = '保存した仕様が見つからないか、閲覧権限がありません。';
-      else
+      else {
+        const exteriorFaces = await getExteriorFaces(found.configuration.id);
         initial = {
           id: found.configuration.id,
           name: found.configuration.name,
           option_ids: found.items.map((i) => i.option_id),
           variant_choice_ids: found.items.flatMap((i) => i.variant_choice_ids ?? []),
+          exterior_faces: exteriorFaces,
           status: found.configuration.status,
           finish_level: found.configuration.finish_level ?? 'full',
           spec_code: found.configuration.spec_code ?? null,
         };
+      }
     }
   }
 

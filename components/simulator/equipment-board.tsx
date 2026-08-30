@@ -16,8 +16,8 @@ interface Props {
 
 /**
  * 「標準設備及び仕上げ表」。
- * 先方指示（2026-08-29）：全体的に最小の高さに。エクセル（分類表）と同じく
- * 「ここまでが本体／下がオプション」の区分けを見せる。説明はカーソルで表示。
+ * エクセル（分類表）と同じく「ここまでが本体／下がオプション」の区分けを見せる。
+ * 各項目はPC・スマホとも画像50%／文字50%で表示し、説明はカーソルで表示する。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);
@@ -37,19 +37,25 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
           disabled={readOnly}
           onClick={() => onPickCategory(cat.id)}
           title={main?.description ?? cat.description ?? undefined}
-          className="group flex h-full w-full items-center gap-2 p-2 text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
+          className="group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
           data-testid={`equip-${cat.code}`}
         >
-          <span className="relative block size-12 shrink-0 overflow-hidden rounded bg-sand">
+          <span className="relative block min-h-24 w-full overflow-hidden bg-sand">
             {main?.image_url ? (
-              <SmartImage src={main.image_url} alt={main.name} fill sizes="48px" className="object-cover" />
+              <SmartImage
+                src={main.image_url}
+                alt={main.name}
+                fill
+                sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
+                className="object-cover"
+              />
             ) : (
-              <span className="flex h-full items-center justify-center text-muted">
-                <ImageOff className="size-4" aria-hidden="true" />
+              <span className="flex h-full min-h-24 items-center justify-center text-muted">
+                <ImageOff className="size-5" aria-hidden="true" />
               </span>
             )}
           </span>
-          <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 flex-col justify-center p-2">
             <span className="flex items-center justify-between gap-1">
               <span className="truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
               {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}

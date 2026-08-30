@@ -27,6 +27,7 @@ interface Props {
  * エクセル（分類表）と同じく「ここまでが本体／下がオプション」の区分けを見せる。
  * 各項目はPC・スマホとも画像50%／文字50%で表示し、説明はカーソルで表示する。
  * 外壁は4面個別指定のため、正面・右側面・背面・左側面を独立カードとして表示する。
+ * 断熱は商品マスター上で床・壁・天井を独立カテゴリーとして扱う。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);

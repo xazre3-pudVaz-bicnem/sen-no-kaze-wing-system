@@ -1,5 +1,6 @@
 'use server';
 
+import '@/lib/seed/independent-insulation';
 import { z } from 'zod';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';

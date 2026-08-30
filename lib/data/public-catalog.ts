@@ -1,4 +1,5 @@
 import 'server-only';
+import '@/lib/seed/independent-insulation';
 import { unstable_cache } from 'next/cache';
 import type {
   BaseBreakdownItem,

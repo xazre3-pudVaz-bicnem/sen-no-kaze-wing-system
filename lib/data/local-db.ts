@@ -186,10 +186,15 @@ function ensureExteriorFaceQuoteSnapshots(db: LocalDb) {
         .filter((row): row is NonNullable<typeof row> => row !== null)
         .sort((a, b) => a.group.sort_order - b.group.sort_order || a.choice.sort_order - b.choice.sort_order);
       const variantLabel = variants.map(({ group, choice }) => `${group.name}：${choice.name}`).join('／');
+      const variantExtra = variants.reduce((sum, { choice }) => sum + (choice.price_on_request ? 0 : choice.extra_price), 0);
+      const priceOnRequest = option.price_on_request || variants.some(({ choice }) => choice.price_on_request);
+      const unitPrice = (option.price_on_request ? 0 : option.price) + variantExtra;
       return {
         face,
         option,
         variantLabel,
+        priceOnRequest,
+        unitPrice,
         sortOrder: 11 + index,
       };
     });
@@ -213,11 +218,11 @@ function ensureExteriorFaceQuoteSnapshots(db: LocalDb) {
         name: `外壁仕様（${row.face.label}）`,
         description: row.variantLabel ? `${row.option.name} ／ ${row.variantLabel}` : row.option.name,
         unit: '面',
-        remark: '本体価格に含む・見積発行時点の面別外壁仕様',
-        unit_price: 0,
+        remark: row.priceOnRequest ? '別途見積・見積発行時点の面別外壁仕様' : '見積発行時点の面別外壁仕様',
+        unit_price: row.unitPrice,
         quantity: 1,
-        amount: 0,
-        image_url: null,
+        amount: row.priceOnRequest ? 0 : row.unitPrice,
+        image_url: row.option.image_url,
         sort_order: row.sortOrder,
       });
     }

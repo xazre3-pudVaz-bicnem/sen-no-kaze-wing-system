@@ -100,7 +100,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
             {fireLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               return (
-                <tr key={l.option_id} className="bg-white">
+                <tr key={l.code} className="bg-white">
                   <td className={td.name}>
                     <button
                       type="button"
@@ -143,8 +143,9 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
             <SectionRow label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`} tone="ivory" />
             {optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
+              const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
-                <tr key={l.option_id} className="bg-white">
+                <tr key={l.code} className="bg-white">
                   <td className={td.name}>
                     <button
                       type="button"
@@ -166,10 +167,10 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                     </button>
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
-                  <td className={td.unit}>式</td>
-                  <td className={td.price}>{l.price_on_request ? '別途見積' : formatYen(l.unit_price)}</td>
+                  <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
                   <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
-                  <td className={td.remark}></td>
+                  <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
                 </tr>
               );
             })}
@@ -188,7 +189,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
           <tbody className="divide-y divide-line/60">
             <SectionRow label="別途工事（設置場所の確認後、代理店がお見積りします）" tone="ivory" />
             {sitework.map((l) => (
-              <tr key={l.option_id} className="bg-white text-xs">
+              <tr key={l.code} className="bg-white text-xs">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{l.quantity}</td>
                 <td className={td.unit}>式</td>
@@ -209,7 +210,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 </td>
               </tr>
               {freeLines.map((l) => (
-                <tr key={l.option_id} className="bg-white text-xs">
+                <tr key={l.code} className="bg-white text-xs">
                   <td className={td.name} data-testid={`quote-line-${l.code}`}>{l.name}</td>
                   <td className={td.qty}>{l.quantity}</td>
                   <td className={td.unit}>式</td>

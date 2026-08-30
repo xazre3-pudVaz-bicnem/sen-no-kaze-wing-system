@@ -40,20 +40,22 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
           className="group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
           data-testid={`equip-${cat.code}`}
         >
-          <span className="relative block min-h-24 w-full overflow-hidden bg-sand">
-            {main?.image_url ? (
-              <SmartImage
-                src={main.image_url}
-                alt={main.name}
-                fill
-                sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
-                className="object-cover"
-              />
-            ) : (
-              <span className="flex h-full min-h-24 items-center justify-center text-muted">
-                <ImageOff className="size-5" aria-hidden="true" />
-              </span>
-            )}
+          <span className="block min-h-24 w-full p-1.5 sm:p-2">
+            <span className="relative block h-full min-h-20 w-full overflow-hidden rounded bg-sand">
+              {main?.image_url ? (
+                <SmartImage
+                  src={main.image_url}
+                  alt={main.name}
+                  fill
+                  sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
+                  className="object-cover"
+                />
+              ) : (
+                <span className="flex h-full min-h-20 items-center justify-center text-muted">
+                  <ImageOff className="size-5" aria-hidden="true" />
+                </span>
+              )}
+            </span>
           </span>
           <span className="flex min-w-0 flex-col justify-center p-2">
             <span className="flex items-center justify-between gap-1">

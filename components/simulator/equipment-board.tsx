@@ -22,12 +22,43 @@ interface Props {
   onPickCategory: (categoryId: string) => void;
 }
 
+const INSULATION_ORDER = ['insulation-floor', 'insulation-wall', 'insulation-ceiling'] as const;
+
+const OPTION_CATEGORY_ORDER = [
+  'floor',
+  'wall-ceiling',
+  'interior-door',
+  'carpentry',
+  'ub',
+  'toilet',
+  'washbasin',
+  'kitchen',
+  'boiler',
+  'aircon',
+  'lighting',
+  'smartlock',
+  'furniture',
+  'appliances',
+  'exterior-parts',
+  'office-supplies',
+  'free-product',
+] as const;
+
+function sortCategoriesForDisplay(categories: OptionCategory[], preferredCodes: readonly string[]): OptionCategory[] {
+  const rank = new Map(preferredCodes.map((code, index) => [code, index]));
+  return [...categories].sort((a, b) => {
+    const aRank = rank.get(a.code) ?? Number.MAX_SAFE_INTEGER;
+    const bRank = rank.get(b.code) ?? Number.MAX_SAFE_INTEGER;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.group_sort - b.group_sort || a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ja');
+  });
+}
+
 /**
  * 「標準設備及び仕上げ表」。
- * エクセル（分類表）と同じく「ここまでが本体／下がオプション」の区分けを見せる。
- * 各項目はPC・スマホとも画像50%／文字50%で表示し、説明はカーソルで表示する。
- * 外壁は4面個別指定のため、正面・右側面・背面・左側面を独立カードとして表示する。
- * 断熱は商品マスター上で床・壁・天井を独立カテゴリーとして扱う。
+ * 本体仕様は「外壁4面 → 断熱3部位 → その他本体仕様」の行構成で表示する。
+ * サッシは将来、平面図ごとの設置位置に応じた可変枚数の行として追加する。
+ * オプションは本体仕様から明確に区切り、お客様が仕様を決める順に並べる。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);
@@ -37,9 +68,20 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
     getExteriorFaceDisplaysServerSnapshot
   );
   const shown = categories.filter((c) => c.code !== 'sitework' && options.some((o) => o.category_id === c.id));
-  // 分類表の区分：本体（工場生産分に含む）とオプション
   const baseCats = shown.filter((c) => c.finish_level === 'shell');
-  const optionCats = shown.filter((c) => c.finish_level !== 'shell');
+  const optionCats = sortCategoriesForDisplay(
+    shown.filter((c) => c.finish_level !== 'shell'),
+    OPTION_CATEGORY_ORDER
+  );
+
+  const exteriorCat = baseCats.find((c) => c.code === 'exterior-wall') ?? null;
+  const insulationCats = sortCategoriesForDisplay(
+    baseCats.filter((c) => INSULATION_ORDER.includes(c.code as (typeof INSULATION_ORDER)[number])),
+    INSULATION_ORDER
+  );
+  const otherBaseCats = baseCats.filter(
+    (c) => c.code !== 'exterior-wall' && !INSULATION_ORDER.includes(c.code as (typeof INSULATION_ORDER)[number])
+  );
 
   const exteriorRows = EXTERIOR_FACES.map((face) => ({
     ...face,
@@ -158,7 +200,7 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
       );
     });
 
-  const tile = (cat: OptionCategory) => {
+  const baseTile = (cat: OptionCategory) => {
     if (cat.code === 'exterior-wall' && hasExteriorFaces) return exteriorTiles(cat);
     return normalTile(cat);
   };
@@ -171,19 +213,38 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
         </h2>
         <span className="text-[0.7rem] text-muted">項目をクリックして変更</span>
       </div>
-      {baseCats.length > 0 && (
-        <>
-          <p className="bg-sand/50 px-4 py-1 text-[0.65rem] font-semibold text-ink-soft">本体（工場生産分に含む）</p>
-          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board">
-            {baseCats.map(tile)}
-          </ul>
-        </>
+
+      {(exteriorCat || insulationCats.length > 0 || otherBaseCats.length > 0) && (
+        <div data-testid="equipment-board">
+          {exteriorCat && (
+            <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4">
+              {baseTile(exteriorCat)}
+            </ul>
+          )}
+
+          {insulationCats.length > 0 && (
+            <ul className="mt-px grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-insulation">
+              {insulationCats.map(normalTile)}
+            </ul>
+          )}
+
+          {otherBaseCats.length > 0 && (
+            <ul className="mt-px grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-other-base">
+              {otherBaseCats.map(normalTile)}
+            </ul>
+          )}
+        </div>
       )}
+
       {optionCats.length > 0 && (
         <>
-          <p className="border-t border-line bg-sand/50 px-4 py-1 text-[0.65rem] font-semibold text-ink-soft">オプション</p>
+          <div className="flex items-center gap-3 bg-white px-4 py-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-line" />
+            <span className="text-xs font-semibold tracking-wide text-ink-soft">オプション</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
           <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-options">
-            {optionCats.map(tile)}
+            {optionCats.map(normalTile)}
           </ul>
         </>
       )}

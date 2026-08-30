@@ -3,10 +3,11 @@ import { notFound } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
-import { getPublicBundleBySlug, getPublicModels } from '@/lib/data/public-catalog';
+import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
+import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-context';
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
 
 type Params = Promise<{ slug: string }>;
@@ -24,19 +25,33 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function SimulatorPage({ params, searchParams }: { params: Params; searchParams: Search }) {
-  const { slug } = await params;
-  const { c, resume } = await searchParams;
-  const bundle = await getPublicBundleBySlug(slug);
+  const [{ slug }, { c, resume }] = await Promise.all([params, searchParams]);
+
+  // 公開カタログと認証確認は互いに依存しないため並列取得する。
+  // カタログは1回だけ取得し、bundle とモデル一覧を同じ結果から組み立てる。
+  const [catalog, user] = await Promise.all([getPublicCatalog(), getSessionUser()]);
+  const catalogModel = catalog.models.find((m) => m.slug === slug);
+  const bundle = catalogModel ? (catalog.bundles[catalogModel.id] ?? null) : null;
   if (!bundle) notFound();
   const model = bundle.model;
-  const allModels = await getPublicModels();
-  const user = await getSessionUser();
+  const allModels = catalog.models;
 
   // 立面図は商品台帳で登録した画像（kind=elevation）。未登録の Wing だけ従来の固定データで補う
   const registered = bundle.images
     .filter((i) => i.kind === 'elevation')
     .map((i) => ({ url: i.url, label: i.caption ?? i.alt ?? '立面図', alt: i.alt }));
   const elevations = registered.length > 0 ? registered : model.id === MODEL_WING01_ID ? ELEVATIONS : [];
+
+  // 施工事例も同じ bundle.images から渡す。クライアント側で同じカタログを再取得しない。
+  const caseImages = bundle.images
+    .filter((image) => image.kind === 'case')
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((image) => ({
+      id: image.id,
+      url: image.url,
+      alt: image.alt,
+      caption: image.caption,
+    }));
 
   let initial: SimulatorInitial | null = null;
   let loadError: string | null = null;
@@ -66,15 +81,17 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   return (
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }, { name: '見積シミュレーター', path: `/simulator/${model.slug}` }])} />
-      <SimulatorApp
-        bundle={bundle}
-        models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
-        elevations={elevations}
-        initial={initial}
-        loadError={loadError}
-        resume={resume === '1'}
-        user={user ? { id: user.id, name: user.full_name || user.email } : null}
-      />
+      <SimulatorCaseImagesProvider images={caseImages}>
+        <SimulatorApp
+          bundle={bundle}
+          models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
+          elevations={elevations}
+          initial={initial}
+          loadError={loadError}
+          resume={resume === '1'}
+          user={user ? { id: user.id, name: user.full_name || user.email } : null}
+        />
+      </SimulatorCaseImagesProvider>
     </>
   );
 }

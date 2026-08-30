@@ -47,7 +47,10 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
     }));
     const hasExteriorFaces =
       cat.code === 'exterior-wall' &&
-      faceRows.every((row) => row.display && options.some((option) => option.id === row.display.option_id));
+      faceRows.every((row) => {
+        const display = row.display;
+        return Boolean(display && options.some((option) => option.id === display.option_id));
+      });
     const frontDisplay = faceRows.find((row) => row.code === 'front')?.display ?? null;
     const main = hasExteriorFaces
       ? options.find((option) => option.id === frontDisplay?.option_id) ?? null

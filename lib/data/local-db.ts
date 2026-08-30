@@ -27,6 +27,7 @@ import type {
   QuoteItem,
   QuoteRequest,
 } from '@/lib/domain/types';
+import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
 
 /**
@@ -111,6 +112,65 @@ export function emptyDb(): LocalDb {
   };
 }
 
+const INDEPENDENT_INSULATION_CATEGORY_CODES = new Set(['insulation-floor', 'insulation-wall', 'insulation-ceiling']);
+
+function insulationBucket(code: string): 'floor' | 'wall' | 'ceiling' | null {
+  if (code.startsWith('insulation-floor-')) return 'floor';
+  if (code.startsWith('insulation-wall-')) return 'wall';
+  if (code.startsWith('insulation-ceiling-')) return 'ceiling';
+  return null;
+}
+
+/**
+ * 既存のローカル JSON は作成時点の categories/options を保持するため、
+ * 後から追加した断熱3カテゴリーだけは不足分をシードから補う。
+ * 既存の商品・価格・選択内容は上書きしない。
+ */
+function reconcileIndependentInsulation(db: LocalDb): boolean {
+  const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+  let changed = false;
+
+  for (const category of seedCatalog.categories.filter((row) => INDEPENDENT_INSULATION_CATEGORY_CODES.has(row.code))) {
+    if (db.categories.some((row) => row.id === category.id || row.code === category.code)) continue;
+    db.categories.push(clone(category));
+    changed = true;
+  }
+
+  for (const option of seedCatalog.options.filter((row) => insulationBucket(row.code) !== null)) {
+    if (db.options.some((row) => row.id === option.id || row.code === option.code)) continue;
+    db.options.push(clone(option));
+    changed = true;
+  }
+
+  const oldCategory = db.categories.find((row) => row.code === 'insulation');
+  if (oldCategory && oldCategory.customer_visible !== false) {
+    oldCategory.customer_visible = false;
+    changed = true;
+  }
+
+  const seedWing = seedCatalog.models.find((model) => model.slug === 'wing-01');
+  const localWing = seedWing ? db.models.find((model) => model.id === seedWing.id || model.slug === seedWing.slug) : null;
+  if (seedWing && localWing) {
+    for (const localPreset of localWing.presets ?? []) {
+      const seedPreset = seedWing.presets?.find((preset) => preset.code === localPreset.code);
+      if (!seedPreset) continue;
+      const next = [...localPreset.option_codes];
+      for (const code of seedPreset.option_codes) {
+        const bucket = insulationBucket(code);
+        if (!bucket) continue;
+        const alreadyHasBucket = next.some((existingCode) => insulationBucket(existingCode) === bucket);
+        if (!alreadyHasBucket) next.push(code);
+      }
+      if (next.length !== localPreset.option_codes.length) {
+        localPreset.option_codes = next;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
 declare global {
   var __wingLocalReset: boolean | undefined;
 }
@@ -131,7 +191,9 @@ export function loadDb(): LocalDb {
   }
   const raw = fs.readFileSync(p, 'utf8');
   const parsed = JSON.parse(raw) as Partial<LocalDb>;
-  return { ...emptyDb(), ...parsed };
+  const db = { ...emptyDb(), ...parsed } as LocalDb;
+  if (reconcileIndependentInsulation(db)) saveDb(db);
+  return db;
 }
 
 type StoredExteriorFace = {

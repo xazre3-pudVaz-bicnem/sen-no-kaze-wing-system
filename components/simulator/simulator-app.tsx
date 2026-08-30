@@ -4,11 +4,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ArrowRight, Save } from 'lucide-react';
-import { saveConfigurationAction } from '@/lib/actions/configurations';
+import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-configurations';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
 import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
+import {
+  makeDefaultExteriorFaces,
+  normalizeExteriorFaces,
+  type ExteriorFaceCode,
+  type ExteriorFaceSelection,
+} from '@/lib/domain/exterior-wall';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Breadcrumbs, Button } from '@/components/ui';
@@ -18,6 +24,7 @@ import { EquipmentBoard } from './equipment-board';
 import { QuoteSheet } from './quote-sheet';
 import { PreviewStage } from './preview-stage';
 import { OptionPickerDialog } from './option-picker-dialog';
+import { ExteriorWallFacesDialog } from './exterior-wall-faces-dialog';
 import { SaveDialog } from './save-dialog';
 import { Toasts, type Toast } from './toasts';
 import { cn } from '@/lib/utils';
@@ -27,6 +34,7 @@ export interface SimulatorInitial {
   name: string;
   option_ids: string[];
   variant_choice_ids: string[];
+  exterior_faces: ExteriorFaceSelection[];
   status: ConfigurationStatus;
   finish_level: FinishLevel;
   /** 仕様（hotel / residence / office）。本体内訳の解決に使う */
@@ -48,6 +56,7 @@ interface Props {
 interface Draft {
   selected: string[];
   variantIds?: string[];
+  exteriorFaces?: ExteriorFaceSelection[];
   finishLevel?: FinishLevel;
   spec?: string;
   name: string;
@@ -99,20 +108,33 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
   const initialLevel: FinishLevel = initial?.finish_level ?? 'full';
   const initialSelection = pruneToScope(ctx, initial?.option_ids ?? presetSelections[0]?.ids ?? defaults, initialLevel);
+  const initialVariants = pruneHiddenVariantChoices(
+    bundle.variantGroups,
+    bundle.variantChoices,
+    initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
+  );
+  const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
+  const exteriorWallOptions = bundle.options
+    .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
-  const [variantIds, setVariantIds] = useState<string[]>(() =>
-    // 保存済みの選択肢も表示条件で洗う（例：全面ホワイトなのに壁色が残っている旧データ）
-    pruneHiddenVariantChoices(
+  const [variantIds, setVariantIds] = useState<string[]>(initialVariants);
+  const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() =>
+    normalizeExteriorFaces(
+      initial?.exterior_faces,
+      exteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
-      initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
+      initialSelection,
+      initialVariants
     )
   );
   const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
+  const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
   const [status, setStatus] = useState<ConfigurationStatus>(initial?.status ?? 'draft');
@@ -146,6 +168,18 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         if (draft.finishLevel) setFinishLevel(draft.finishLevel);
         if (draft.spec) setSpecCode(draft.spec);
         if (draft.variantIds?.length) setVariantIds(draft.variantIds);
+        if (draft.exteriorFaces?.length) {
+          setExteriorFaces(
+            normalizeExteriorFaces(
+              draft.exteriorFaces,
+              exteriorWallOptions,
+              bundle.variantGroups,
+              bundle.variantChoices,
+              valid,
+              draft.variantIds ?? []
+            )
+          );
+        }
         if (valid.length) setSelected(valid);
         if (draft.name) setName(draft.name);
         if (draft.configId) setConfigId(draft.configId);
@@ -167,10 +201,21 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const persistDraft = useCallback(
     (patch: Partial<Draft> = {}) => {
       if (typeof window === 'undefined') return;
-      const draft: Draft = { selected, variantIds, finishLevel, spec: specCode, name, configId, pending: null, savedAt: Date.now(), ...patch };
+      const draft: Draft = {
+        selected,
+        variantIds,
+        exteriorFaces,
+        finishLevel,
+        spec: specCode,
+        name,
+        configId,
+        pending: null,
+        savedAt: Date.now(),
+        ...patch,
+      };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, finishLevel, specCode, name, configId, model.slug]
+    [selected, variantIds, exteriorFaces, finishLevel, specCode, name, configId, model.slug]
   );
 
   useEffect(() => {
@@ -244,6 +289,12 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   );
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 
+  const resetExteriorFaces = (optionIds: string[], nextVariantIds: string[]) => {
+    setExteriorFaces(
+      makeDefaultExteriorFaces(exteriorWallOptions, bundle.variantGroups, bundle.variantChoices, optionIds, nextVariantIds)
+    );
+  };
+
   // ---- 操作 ----
   const applyPreset = (code: string) => {
     setSpecCode(code);
@@ -251,8 +302,10 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     const p = presetSelections.find((x) => x.code === code);
     if (!p) return;
     const nextSel = pruneToScope(ctx, p.ids, finishLevel);
+    const nextVariants = defaultVariantIds(bundle, nextSel);
     setSelected(nextSel);
-    setVariantIds(defaultVariantIds(bundle, nextSel));
+    setVariantIds(nextVariants);
+    resetExteriorFaces(nextSel, nextVariants);
     setDirty(true);
     pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準構成を読み込みました`, 'success');
   };
@@ -341,9 +394,41 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     notices.forEach((n) => pushToast(n, 'info'));
   };
 
+  const applyExteriorFaces = (nextFaces: ExteriorFaceSelection[]) => {
+    const front = nextFaces.find((f) => f.face_code === 'front') ?? nextFaces[0];
+    setExteriorFaces(nextFaces);
+    if (front && exteriorWallCat) {
+      const wallIds = new Set(exteriorWallOptions.map((o) => o.id));
+      setSelected((prev) => [...prev.filter((id) => !wallIds.has(id)), front.option_id]);
+      const wallGroupIds = new Set(bundle.variantGroups.filter((g) => wallIds.has(g.option_id)).map((g) => g.id));
+      setVariantIds((prev) => [
+        ...prev.filter((cid) => {
+          const gid = bundle.variantChoices.find((c) => c.id === cid)?.group_id;
+          return !gid || !wallGroupIds.has(gid);
+        }),
+        ...front.variant_choice_ids,
+      ]);
+    }
+    setDirty(true);
+    setExteriorFacePicker(null);
+    pushToast('外壁を4面ごとに変更しました', 'success');
+  };
+
+  const openExteriorFace = (face: ExteriorFaceCode) => {
+    if (readOnly) {
+      pushToast('見積依頼済みの仕様は編集できません。マイページから複製してください。', 'warn');
+      return;
+    }
+    setExteriorFacePicker(face);
+  };
+
   const openPicker = (categoryId: string) => {
     if (readOnly) {
       pushToast('見積依頼済みの仕様は編集できません。マイページから複製してください。', 'warn');
+      return;
+    }
+    if (categoryId === exteriorWallCat?.id) {
+      setExteriorFacePicker('front');
       return;
     }
     setPicker(categoryId);
@@ -351,7 +436,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
   const reset = () => {
     const p = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
-    setSelected(pruneToScope(ctx, p?.ids ?? defaults, finishLevel));
+    const nextSel = pruneToScope(ctx, p?.ids ?? defaults, finishLevel);
+    const nextVariants = defaultVariantIds(bundle, nextSel);
+    setSelected(nextSel);
+    setVariantIds(nextVariants);
+    resetExteriorFaces(nextSel, nextVariants);
     setDirty(true);
     pushToast('標準構成に戻しました', 'info');
   };
@@ -365,7 +454,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const doSave = (saveName: string, then: 'stay' | 'quote') => {
     setSaveError(null);
     startSaving(async () => {
-      const result = await saveConfigurationAction({
+      const result = await saveConfigurationWithExteriorAction({
         id: configId,
         base_model_id: model.id,
         name: saveName,
@@ -374,6 +463,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         notes: null,
         finish_level: finishLevel,
         variant_choice_ids: variantIds,
+        exterior_faces: exteriorFaces,
         spec_code: specCode,
       });
       if (!result.ok) {
@@ -579,7 +669,15 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         </div>
 
         <div className="order-2 min-w-0 lg:order-3 lg:col-span-2">
-          <ElevationStrip elevations={elevations} categories={bundle.categories} readOnly={readOnly} onPickCategory={openPicker} />
+          <ElevationStrip
+            elevations={elevations}
+            categories={bundle.categories}
+            options={bundle.options}
+            variantChoices={bundle.variantChoices}
+            exteriorFaces={exteriorFaces}
+            readOnly={readOnly}
+            onPickExteriorFace={openExteriorFace}
+          />
         </div>
 
         <div className="order-3 min-w-0 space-y-4 lg:order-4 lg:col-span-2">
@@ -657,6 +755,19 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
           selectedVariantIds={variantIds}
           onClose={() => setPicker(null)}
           onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
+        />
+      )}
+      {exteriorFacePicker && exteriorWallCat && (
+        <ExteriorWallFacesDialog
+          options={exteriorWallOptions}
+          variantGroups={bundle.variantGroups}
+          variantChoices={bundle.variantChoices}
+          selectedOptionIds={selected}
+          selectedVariantIds={variantIds}
+          current={exteriorFaces}
+          initialFace={exteriorFacePicker}
+          onClose={() => setExteriorFacePicker(null)}
+          onApply={applyExteriorFaces}
         />
       )}
       {dialog && (

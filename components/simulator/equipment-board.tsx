@@ -3,13 +3,14 @@
 import { useSyncExternalStore } from 'react';
 import { ImageOff, Pencil } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
-import { EXTERIOR_FACES, type ExteriorFaceCode } from '@/lib/domain/exterior-wall';
+import { EXTERIOR_FACES } from '@/lib/domain/exterior-wall';
 import type { OptionCategory, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 import {
   getExteriorFaceDisplaysServerSnapshot,
   getExteriorFaceDisplaysSnapshot,
+  requestExteriorFacePicker,
   subscribeExteriorFaceDisplays,
 } from './exterior-face-display-store';
 
@@ -19,7 +20,6 @@ interface Props {
   selected: string[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
-  onPickExteriorFace: (face: ExteriorFaceCode) => void;
 }
 
 /**
@@ -28,14 +28,7 @@ interface Props {
  * 各項目はPC・スマホとも画像50%／文字50%で表示し、説明はカーソルで表示する。
  * 外壁は4面個別指定のため、正面・右側面・背面・左側面を独立カードとして表示する。
  */
-export function EquipmentBoard({
-  categories,
-  options,
-  selected,
-  readOnly,
-  onPickCategory,
-  onPickExteriorFace,
-}: Props) {
+export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);
   const exteriorDisplays = useSyncExternalStore(
     subscribeExteriorFaceDisplays,
@@ -116,7 +109,9 @@ export function EquipmentBoard({
           <button
             type="button"
             disabled={readOnly}
-            onClick={() => onPickExteriorFace(row.code)}
+            onClick={() => {
+              if (!requestExteriorFacePicker(row.code)) onPickCategory(cat.id);
+            }}
             title={`${row.label}の外壁を変更`}
             className="group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
             data-testid={row.code === 'front' ? `equip-${cat.code}` : `equip-${cat.code}-${row.code}`}

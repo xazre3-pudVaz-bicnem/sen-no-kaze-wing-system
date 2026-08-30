@@ -105,8 +105,8 @@ begin
       1,
       '面',
       0,
-      o.image_url,
-      '見積発行時点の面別外壁仕様',
+      null::text,
+      '本体価格に含む・見積発行時点の面別外壁仕様',
       10 + case f.face_code when 'front' then 1 when 'right' then 2 when 'back' then 3 when 'left' then 4 else 9 end
     from (
       select

@@ -4,7 +4,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Menu, X, UserRound } from 'lucide-react';
+import { signOutAction } from '@/lib/actions/auth';
 import { PROJECT_NAME } from '@/lib/site';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +27,7 @@ export function HeaderShell({ items, user }: Props) {
   const overlay = pathname === '/';
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [simulatorAccountTarget, setSimulatorAccountTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!overlay) return;
@@ -40,6 +43,24 @@ export function HeaderShell({ items, user }: Props) {
       document.body.style.overflow = '';
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!user || !pathname.startsWith('/simulator/')) {
+      setSimulatorAccountTarget(null);
+      return;
+    }
+
+    const findTarget = () => {
+      const mypageLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href="/mypage"]')).find(
+        (node) => !node.closest('header') && !node.closest('#mobile-menu')
+      );
+      setSimulatorAccountTarget(mypageLink?.parentElement?.parentElement ?? null);
+    };
+
+    findTarget();
+    const frame = window.requestAnimationFrame(findTarget);
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname, user]);
 
   const solid = !overlay || scrolled || open;
   // isAdmin は「管理画面に入れる権限（代理店以上）」の意味
@@ -99,6 +120,17 @@ export function HeaderShell({ items, user }: Props) {
           </button>
         </div>
       </header>
+
+      {user && simulatorAccountTarget &&
+        createPortal(
+          <form action={signOutAction} className="inline text-ink-soft">
+            <span aria-hidden="true">｜</span>
+            <button type="submit" className="underline underline-offset-4 hover:text-ink">
+              ログアウト
+            </button>
+          </form>,
+          simulatorAccountTarget
+        )}
 
       <div
         id="mobile-menu"

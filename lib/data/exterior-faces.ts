@@ -1,6 +1,7 @@
 import 'server-only';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
+import type { LocalDb } from './local-db';
 import { isLocalMode } from './store';
 
 /** 保存済み仕様から外壁4面の割当を取得する。 */
@@ -27,11 +28,7 @@ export async function getExteriorFaces(configurationId: string): Promise<Exterio
 }
 
 /** ローカル検証モードでも、外壁4面保存後の金額を本番DBと同じ式で更新する。 */
-function recalculateLocalAfterExteriorFaces(
-  db: Awaited<ReturnType<typeof import('./local-db')>> extends never ? never : import('./local-db').LocalDb,
-  configurationId: string,
-  faces: ExteriorFaceSelection[]
-) {
+function recalculateLocalAfterExteriorFaces(db: LocalDb, configurationId: string, faces: ExteriorFaceSelection[]) {
   const cfg = db.configurations.find((c) => c.id === configurationId);
   if (!cfg) throw new Error('保存データが見つかりません');
   const model = db.models.find((m) => m.id === cfg.base_model_id);

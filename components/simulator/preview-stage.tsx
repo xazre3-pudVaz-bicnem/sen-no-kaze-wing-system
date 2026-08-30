@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, Info } from 'lucide-react';
 import type { PreviewResolution } from '@/lib/domain/preview';
 import { previewKeyLabels } from '@/lib/domain/preview';
 import { VIEW_LABELS, type ProductOption, type ViewKey } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
+import { useSimulatorCaseImages } from './case-images-context';
 
 type DisplayTabKey = ViewKey | 'case';
 
@@ -28,13 +28,6 @@ const BASE_TABS: DisplayTab[] = [
 ];
 const TAB_LABEL = new Map(BASE_TABS.map((t) => [t.key, t.label]));
 
-interface CaseImage {
-  id: string;
-  url: string;
-  alt: string;
-  caption: string | null;
-}
-
 interface Props {
   previews: Record<ViewKey, PreviewResolution>;
   view: ViewKey;
@@ -54,37 +47,14 @@ interface Frame {
  * PCの左右ボタンとスマホの横スワイプで同じ順番に移動する。
  */
 export function PreviewStage({ previews, view, onViewChange, options, modelName }: Props) {
-  const params = useParams();
-  const slugParam = params?.slug;
-  const slug = typeof slugParam === 'string' ? slugParam : Array.isArray(slugParam) ? slugParam[0] : '';
+  const caseImages = useSimulatorCaseImages();
   const labels = previewKeyLabels(options);
   const current = previews[view];
   const label = (k: string) => labels.get(k) ?? k;
   const frameKey = `${view}:${current.layers.map((l) => l.url).join('|')}`;
-  const [caseImages, setCaseImages] = useState<CaseImage[]>([]);
   const [showCase, setShowCase] = useState(false);
   const [caseIndex, setCaseIndex] = useState(0);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    if (!slug) return;
-    const controller = new AbortController();
-    fetch(`/api/simulator/${encodeURIComponent(slug)}/case-images`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : { images: [] }))
-      .then((data: { images?: CaseImage[] }) => {
-        const images = Array.isArray(data.images) ? data.images : [];
-        setCaseImages(images);
-        setCaseIndex(0);
-        if (images.length === 0) setShowCase(false);
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        setCaseImages([]);
-        setShowCase(false);
-        setCaseIndex(0);
-      });
-    return () => controller.abort();
-  }, [slug]);
 
   const tabs: DisplayTab[] = caseImages.length > 0
     ? [BASE_TABS[0], BASE_TABS[1], { key: 'case', label: '施工事例' }, BASE_TABS[2]]

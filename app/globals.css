@@ -216,3 +216,19 @@
     scroll-behavior: auto;
   }
 }
+
+/* シミュレーター：スマホもPCと同じ情報順（平面図 → 完成イメージ → 立面図 → 設備表）にする。 */
+@media (max-width: 1023.98px) {
+  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-1 {
+    order: 1;
+  }
+  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-4 {
+    order: 2;
+  }
+  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-2 {
+    order: 3;
+  }
+  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-3 {
+    order: 4;
+  }
+}

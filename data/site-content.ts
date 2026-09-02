@@ -122,8 +122,8 @@ export const genten = {
 /* ---------------- 品質（Wing・BOX・Flat共通） ---------------- */
 
 export const quality = {
-  labelEn: 'QUALITY',
-  title: '不陸調整折畳み式木造コンテナの品質',
+  labelEn: 'PRODUCTS',
+  title: '不陸調整折畳み式木造コンテナの商品説明',
   lead: '株式会社技術の杜が提供するWing・BOX・Flat共通の特長',
   items: [
     '全ての商品が不陸調整可能',
@@ -158,10 +158,14 @@ export interface ShowcaseProduct {
   images: { src: string; alt: string }[];
   /** テキスト付きの活用トピック（BOX用） */
   topics: ShowcaseTopic[];
-  /** ラベル付き平面図の列（Flat用）。tag/lead はまとめの見出しと本文 */
+  /** 見積ボタンの上に置く基本平面図（Flat用・Word 準拠） */
+  basicPlan?: { image: string; alt: string };
+  /** 物置Plus の設置例写真（Flat用） */
+  storagePhoto?: { image: string; alt: string; caption: string };
+  /** ラベル付き組合せ平面図の列（Flat用）。tag/lead はまとめの見出しと本文 */
   plansTag?: string;
   plansLead?: string;
-  plans?: { label: string; image: string; alt: string }[];
+  plans?: { label: string; images: { image: string; alt: string }[] }[];
 }
 
 export const showcase = {
@@ -172,6 +176,7 @@ export const showcase = {
   steps: [
     { label: '現地で下ろし → 広げ設置後 → 基礎工事', image: '/images/transport/unic-seaside.jpg', alt: '海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ' },
     { label: '折畳み屋根面', image: '/images/elevation/wing-roof-face.png', alt: '折り畳み時に屋根面になる木板張りの立面図' },
+    { label: '', image: '/images/elevation/wing-entrance-color.png', alt: '木製玄関ドアのある白い外壁の立面図' },
     { label: 'UB・エアコン・ウォッシュレット・洗面／エアコン付き', image: '/images/elevation/wing-equipment-side.png', alt: '給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図' },
     { label: '広さ約2倍', image: '/images/plan/wing-hotel-guest.png', alt: '広げるとコンテナ約2倍の広さになる平面図' },
   ],
@@ -200,7 +205,10 @@ export const showcase = {
       name: 'BOX',
       size: '基本 2,100×4,800',
       body: 'コンパクトに纏めたホテル、ワンルーム仕様最小サイズ、重ねが容易で2階建て以上も可能に・・・（各種法律に基づきますので詳しくは代理店に問合せて下さい。）\n水回りキットとWingの組合せで仮設住宅の2LDKに。',
-      images: [{ src: '/images/products/box-white.png', alt: '伸縮可能な設置足の上に建つ白い外壁の BOX' }],
+      images: [
+        { src: '/images/products/box-white.png', alt: '伸縮可能な設置足の上に建つ白い外壁の BOX' },
+        { src: '/images/plan/box-hotel-double.jpg', alt: '玄関・ユニットバス・キッチン・ベッド2台を収めた BOX の内装レイアウト' },
+      ],
       topics: [
         {
           tag: '土地活用例',
@@ -227,17 +235,23 @@ export const showcase = {
       name: 'Flat',
       size: '基本 2,100×1,800〜4,800',
       body: '平らに折り畳んで、何部屋も平積みで配送、運送費を大幅削減！Wing＋Flatで2LDKも実現、BOX＋Flatの組合せなどプラスαの商品。\nホームセンター等の物置販売にはスペースを取らない平積みとして在庫管理も容易な格安商品の決定版！',
-      images: [
-        { src: '/images/products/flat-gray.png', alt: '片流れ屋根と設置足を備えた Flat の外観' },
-        { src: '/images/cases/flat-entrance.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat' },
-      ],
+      images: [{ src: '/images/products/flat-gray.png', alt: '片流れ屋根と設置足を備えた Flat の外観' }],
       topics: [],
+      /** 左列・見積ボタンの上に置く基本平面図（Word 準拠） */
+      basicPlan: { image: '/images/plan/flat-basic.jpg', alt: '物置・居室タイプ フラット 6.8 帖の平面図' },
       plansTag: '物置にもう一部屋Plus',
       plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
+      /** 物置Plus の右列：設置例写真＋組合せ平面図（BOX＋Flat は Word と同じく水回りキット＋居室の2枚重ね） */
+      storagePhoto: { image: '/images/cases/flat-entrance.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置' },
       plans: [
-        { label: 'Flat＋Wing', image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' },
-        { label: '物置', image: '/images/plan/flat-basic.jpg', alt: '物置・居室タイプ フラット 6.8 帖の平面図' },
-        { label: 'BOX＋Flat', image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
+        { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' }] },
+        {
+          label: 'BOX＋Flat',
+          images: [
+            { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
+            { image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
+          ],
+        },
       ],
     },
   ] as ShowcaseProduct[],

@@ -15,7 +15,8 @@ export function EstimateCtaSection() {
           <p className="mx-auto mt-3 max-w-2xl text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{estimate.lead}</p>
         </Reveal>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        {/* スマホでも3列（先方：小さな画像で問題ない） */}
+        <div className="mt-6 grid grid-cols-3 gap-2 sm:gap-4">
           {estimate.buttons.map((b) => (
             <Reveal key={b.slug}>
               <Link href={`/simulator/${b.slug}`} className="group block border border-forest-line bg-forest-deep/60 transition-colors hover:border-gold">
@@ -29,7 +30,7 @@ export function EstimateCtaSection() {
                     className={`${b.contain ? 'object-contain p-2' : 'object-cover'} transition-transform duration-500 group-hover:scale-105`}
                   />
                 </div>
-                <p className="flex items-center justify-center gap-1.5 px-3 py-2.5 font-serif text-sm tracking-wider text-gold-light group-hover:text-gold sm:text-base">
+                <p className="flex items-center justify-center gap-1 px-1 py-2 font-serif text-[0.68rem] tracking-wide text-gold-light group-hover:text-gold sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-base sm:tracking-wider">
                   {b.label}
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </p>

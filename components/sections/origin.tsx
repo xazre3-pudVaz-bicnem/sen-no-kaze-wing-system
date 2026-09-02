@@ -10,14 +10,14 @@ export function OriginSection() {
       <div className="container-x">
         <RuleHeading labelEn={genten.labelEn} title={genten.title} compact />
 
-        {/* ストーリー1：写真右 */}
-        <div className="mt-8 grid items-stretch gap-5 lg:grid-cols-2 lg:gap-10">
+        {/* ストーリー1：写真右（写真は4列グリッド2列分の控えめサイズ） */}
+        <div className="mt-8 grid items-start gap-5 lg:grid-cols-[1.2fr_1fr] lg:gap-10">
           <Reveal>
             <h3 className="font-serif text-lg leading-snug whitespace-pre-line text-gold sm:text-2xl">{genten.story1.title}</h3>
             <p className="mt-3 text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{genten.story1.body}</p>
           </Reveal>
-          <Reveal variant="image" className="relative min-h-56 overflow-hidden">
-            <Image src={genten.story1.image} alt={genten.story1.alt} fill sizes="(min-width: 1024px) 45vw, 100vw" className="object-cover" />
+          <Reveal variant="image" className="relative aspect-[16/10] w-full max-w-sm overflow-hidden lg:max-w-none">
+            <Image src={genten.story1.image} alt={genten.story1.alt} fill sizes="(min-width: 1024px) 38vw, 60vw" className="object-cover" />
           </Reveal>
         </div>
 
@@ -34,8 +34,9 @@ export function OriginSection() {
           ))}
         </div>
 
-        {/* ストーリー2：3つの「何故」。スマホでは文章→写真の順、PCでは写真が左（lg:order で入れ替え） */}
-        <div className="mt-10 grid items-stretch gap-5 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        {/* ストーリー2：3つの「何故」。写真は強調不要なので1列分に抑える（2026-09-02 先方指摘）。
+            スマホでは文章→写真の順、PCでは写真が左（lg:order で入れ替え） */}
+        <div className="mt-10 grid items-start gap-5 lg:grid-cols-[minmax(0,320px)_1fr] lg:gap-10">
           <Reveal className="lg:order-2">
             <p className="inline-block border border-gold/60 px-2 py-0.5 text-[0.65rem] tracking-[0.2em] text-gold">{genten.story2.badge}</p>
             <h3 className="mt-2 font-serif text-lg leading-snug whitespace-pre-line text-gold sm:text-2xl">{genten.story2.title}</h3>
@@ -49,8 +50,8 @@ export function OriginSection() {
               ))}
             </dl>
           </Reveal>
-          <Reveal variant="image" className="relative min-h-56 overflow-hidden lg:order-1">
-            <Image src={genten.story2.image} alt={genten.story2.alt} fill sizes="(min-width: 1024px) 42vw, 100vw" className="object-cover" />
+          <Reveal variant="image" className="relative aspect-[4/3] w-full max-w-[16rem] overflow-hidden sm:max-w-xs lg:order-1 lg:max-w-none">
+            <Image src={genten.story2.image} alt={genten.story2.alt} fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-cover" />
           </Reveal>
         </div>
       </div>

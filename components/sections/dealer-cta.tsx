@@ -21,8 +21,8 @@ export function DealerCtaSection() {
           </Reveal>
         </div>
         <Reveal variant="image">
-          <div className="relative aspect-[16/9] w-full overflow-hidden">
-            <Image src={dealerRecruit.image} alt={dealerRecruit.alt} fill sizes="(min-width: 1024px) 45vw, 100vw" className="object-cover" />
+          <div className="relative aspect-[16/9] w-full max-w-sm overflow-hidden lg:max-w-none">
+            <Image src={dealerRecruit.image} alt={dealerRecruit.alt} fill sizes="(min-width: 1024px) 45vw, 60vw" className="object-cover" />
           </div>
         </Reveal>
       </div>

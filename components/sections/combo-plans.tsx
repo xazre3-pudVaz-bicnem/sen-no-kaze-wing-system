@@ -15,15 +15,20 @@ export function ComboPlansSection() {
           <p className="mt-1 text-[0.7rem] leading-relaxed text-ink-soft/80">{combos.caution}</p>
         </Reveal>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {combos.items.map((item) => (
-            <Reveal key={item.image} variant="image">
-              <figure className="flex h-full flex-col border border-brown/15 bg-white">
-                <div className="relative aspect-[4/3] w-full overflow-hidden">
-                  <Image src={item.image} alt={item.alt} fill sizes="(min-width: 640px) 22vw, 45vw" className="object-contain p-1.5" />
-                </div>
-                <figcaption className="border-t border-brown/10 px-2 py-1 text-center text-[0.68rem] leading-snug text-ink sm:text-xs">{item.label}</figcaption>
-              </figure>
+        {/* 修正案どおり：ラベル見出しの下に図を並べるグループ構成 */}
+        <div className="mt-6 flex flex-wrap gap-x-8 gap-y-6">
+          {combos.groups.map((g) => (
+            <Reveal key={g.label} variant="image" className="min-w-0">
+              <p className="font-serif text-[0.8rem] font-semibold text-ink sm:text-sm">{g.label}</p>
+              <div className="mt-1.5 flex flex-wrap gap-3">
+                {g.items.map((item) => (
+                  <figure key={item.image} className="w-36 border border-brown/15 bg-white sm:w-44">
+                    <div className="relative aspect-[4/3] w-full overflow-hidden">
+                      <Image src={item.image} alt={item.alt} fill sizes="11rem" className="object-contain p-1" />
+                    </div>
+                  </figure>
+                ))}
+              </div>
             </Reveal>
           ))}
         </div>

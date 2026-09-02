@@ -34,11 +34,8 @@ export function OriginSection() {
           ))}
         </div>
 
-        {/* ストーリー2：3つの「何故」。写真は文字量に合わせて伸ばし、下に余白を作らない */}
+        {/* ストーリー2：3つの「何故」。スマホでは文章→写真の順、PCでは写真が左（lg:order で入れ替え） */}
         <div className="mt-10 grid items-stretch gap-5 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
-          <Reveal variant="image" className="relative min-h-56 overflow-hidden lg:order-1">
-            <Image src={genten.story2.image} alt={genten.story2.alt} fill sizes="(min-width: 1024px) 42vw, 100vw" className="object-cover" />
-          </Reveal>
           <Reveal className="lg:order-2">
             <p className="inline-block border border-gold/60 px-2 py-0.5 text-[0.65rem] tracking-[0.2em] text-gold">{genten.story2.badge}</p>
             <h3 className="mt-2 font-serif text-lg leading-snug whitespace-pre-line text-gold sm:text-2xl">{genten.story2.title}</h3>
@@ -51,6 +48,9 @@ export function OriginSection() {
                 </div>
               ))}
             </dl>
+          </Reveal>
+          <Reveal variant="image" className="relative min-h-56 overflow-hidden lg:order-1">
+            <Image src={genten.story2.image} alt={genten.story2.alt} fill sizes="(min-width: 1024px) 42vw, 100vw" className="object-cover" />
           </Reveal>
         </div>
       </div>

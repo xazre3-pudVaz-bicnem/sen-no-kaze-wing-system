@@ -19,8 +19,15 @@ export function EstimateCtaSection() {
           {estimate.buttons.map((b) => (
             <Reveal key={b.slug}>
               <Link href={`/simulator/${b.slug}`} className="group block border border-forest-line bg-forest-deep/60 transition-colors hover:border-gold">
-                <div className="relative aspect-[16/9] w-full overflow-hidden bg-white/5">
-                  <Image src={b.image} alt={b.alt} fill sizes="(min-width: 640px) 30vw, 90vw" className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                <div className="relative aspect-[16/9] w-full overflow-hidden">
+                  {/* 透過版CGは全体が見えるよう contain、写真は cover */}
+                  <Image
+                    src={b.image}
+                    alt={b.alt}
+                    fill
+                    sizes="(min-width: 640px) 30vw, 90vw"
+                    className={`${b.contain ? 'object-contain p-2' : 'object-cover'} transition-transform duration-500 group-hover:scale-105`}
+                  />
                 </div>
                 <p className="flex items-center justify-center gap-1.5 px-3 py-2.5 font-serif text-sm tracking-wider text-gold-light group-hover:text-gold sm:text-base">
                   {b.label}

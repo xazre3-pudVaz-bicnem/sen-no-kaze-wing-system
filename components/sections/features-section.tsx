@@ -6,7 +6,7 @@ import { Reveal } from '@/components/ui/reveal';
 /** 商品のメリット：不陸調整折畳み式木造コンテナの特徴（枠で囲まない素のチェックリスト。2026-09-02 先方指摘対応） */
 export function FeaturesSection() {
   return (
-    <section id="features" className="scroll-mt-20 bg-paper py-8 sm:py-12">
+    <section id="features" className="scroll-mt-20 bg-ivory py-8 sm:py-12">
       <div className="container-x">
         <RuleHeading labelEn={features.labelEn} title={features.title} lead={features.lead} tone="light" compact />
         <Reveal>

@@ -6,7 +6,7 @@ import { Reveal } from '@/components/ui/reveal';
 /** 品質：Wing・BOX・Flat 共通の特長（枠なしのコンパクトなチェックリスト。設置の流れは商品ラインナップ側へ移動） */
 export function QualitySection() {
   return (
-    <section id="quality" className="scroll-mt-20 bg-paper py-8 sm:py-12">
+    <section id="quality" className="scroll-mt-20 bg-ivory py-8 sm:py-12">
       <div className="container-x">
         <RuleHeading labelEn={quality.labelEn} title={quality.title} lead={quality.lead} tone="light" compact />
         <Reveal>

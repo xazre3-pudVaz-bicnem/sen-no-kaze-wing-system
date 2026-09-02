@@ -6,7 +6,7 @@ import { Reveal } from '@/components/ui/reveal';
 /** 組合せプラン：本体＋水回りキット・居室の平面図ギャラリー（2026-09-02 文字・余白を圧縮） */
 export function ComboPlansSection() {
   return (
-    <section id="plans" className="scroll-mt-20 bg-paper py-8 sm:py-12">
+    <section id="plans" className="scroll-mt-20 bg-ivory py-8 sm:py-12">
       <div className="container-x">
         <RuleHeading labelEn={combos.labelEn} title={combos.title} tone="light" compact />
 

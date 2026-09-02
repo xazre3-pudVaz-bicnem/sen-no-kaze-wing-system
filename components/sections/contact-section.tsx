@@ -8,7 +8,7 @@ import { ContactForm } from '@/components/sections/contact-form';
 /** トップページ下部のお問い合わせ */
 export function ContactSection() {
   return (
-    <section id="contact" className="scroll-mt-20 bg-paper py-20 sm:py-28">
+    <section id="contact" className="scroll-mt-20 bg-ivory py-20 sm:py-28">
       <div className="container-x grid gap-12 lg:grid-cols-[1fr_1.4fr]">
         <div>
           <RuleHeading labelEn={contact.labelEn} title={contact.title} lead={contact.lead} tone="light" />

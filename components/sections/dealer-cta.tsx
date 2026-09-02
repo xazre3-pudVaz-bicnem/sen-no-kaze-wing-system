@@ -8,7 +8,7 @@ import { Reveal } from '@/components/ui/reveal';
 /** 代理店募集：地域の代理店募集の案内（2026-09-02 文字・余白を圧縮） */
 export function DealerCtaSection() {
   return (
-    <section id="dealer" className="scroll-mt-20 bg-paper py-8 sm:py-12">
+    <section id="dealer" className="scroll-mt-20 bg-ivory py-8 sm:py-12">
       <div className="container-x grid items-center gap-6 lg:grid-cols-2 lg:gap-10">
         <div>
           <RuleHeading labelEn={dealerRecruit.labelEn} title={dealerRecruit.title} tone="light" compact />

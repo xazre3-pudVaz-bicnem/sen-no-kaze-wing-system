@@ -33,11 +33,14 @@ export const hero = {
   ],
   cta: '商品のメリット',
   ctaDealer: '代理店募集',
-  /** 3枚をクロスフェードで入れ替える（修正案ヒーローの画像：湖畔・海岸・内装）。1枚目が下地 */
+  /**
+   * 3枚をクロスフェードで入れ替える（2026-09-02 先方モックに貼られていた3点）。1枚目が下地。
+   * ①昼の湖畔 ②内装4点の組写真（TVの部屋・海の寝室・庭の寝室・洗面） ③夕暮れの黒コンテナ（キービジュアル右側の切出し）
+   */
   slides: [
     { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
-    { src: '/images/products/wing-rockshore-triple.jpg', alt: '雪山を望む海岸の岩場に並ぶ折り畳み式木造コンテナ Wing' },
-    { src: '/images/interior/bedroom-garden.jpg', alt: '低窓から緑を望むベッドと小上がりを備えた Wing の室内' },
+    { src: '/images/hero/interior-collage.jpg', alt: 'テレビのある部屋・海を望む寝室・庭を望む寝室・丸鏡の洗面を並べた Wing の内装' },
+    { src: '/images/hero/sunset-dark-wing.jpg', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
   ],
 };
 

@@ -28,9 +28,20 @@ test.describe('顧客フロー', () => {
   test('1-2. トップ → 商品詳細 → シミュレーター開始', async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
-    // 先方サイトと同じセクション構成
-    for (const t of ['コンセプト動画', 'Wing 開発の原点', '木造コンテナについて', '活用アイディア', '費用・比較', '導入のご相談', 'プロジェクトの参加', 'よくあるご質問', 'お知らせ']) {
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('不陸調整');
+    // 2026-09-01 トップ修正案のセクション構成
+    for (const t of [
+      'コンセプト動画',
+      '不陸調整折畳み式木造コンテナの特徴',
+      'Wing 開発の原点',
+      '不陸調整折畳み式木造コンテナの品質',
+      '商品ラインナップ',
+      '不陸調整折畳み式木造コンテナの組合せプラン',
+      '見積シミュレーション',
+      '代理店募集',
+      'よくあるご質問',
+      'お知らせ',
+    ]) {
       await expect(page.getByRole('heading', { name: t })).toBeVisible();
     }
     // TOP に会員様ログインの導線がある
@@ -107,10 +118,12 @@ test.describe('顧客フロー', () => {
     await expect(quoteLine(page, 'aircon')).toBeHidden();
     await expect(page.getByTestId('preview-stage')).not.toHaveAttribute('data-preview-src', /wing-room-aircon/);
 
-    // ── 変更方法②: 立面図クリック → 外壁の選択。ウッドデッキで外観画像が切り替わる
-    await openPicker(page, 'elevation-正面（南）');
-    await expect(page.getByRole('heading', { name: '外壁を選ぶ' })).toBeVisible();
+    // ── 変更方法②: 立面図クリック → 面別の外壁選択ダイアログ。ウッドデッキで外観画像が切り替わる
+    await page.getByTestId('elevation-正面（南）').click();
+    await expect(page.getByTestId('exterior-wall-faces-dialog')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '外壁を4面ごとに選ぶ' })).toBeVisible();
     await page.getByRole('button', { name: 'キャンセル' }).click();
+    await expect(page.getByTestId('exterior-wall-faces-dialog')).toBeHidden();
     await page.getByTestId('view-exterior').click();
     expect(await previewSrc(page)).toContain('wing-lakeside.jpg');
     const beforeDeck = await readTotal(page);
@@ -144,7 +157,10 @@ test.describe('顧客フロー', () => {
     await page.getByTestId('finish-level-shell').click();
     await expect(page.getByTestId('finish-level-shell')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('equip-sash')).toBeHidden();
-    await expect(page.getByTestId('equip-insulation')).toBeVisible();
+    // 断熱は床・壁・天井の3カテゴリーに分かれて表示される（2026-08-30 PR#19）
+    await expect(page.getByTestId('equip-insulation-floor')).toBeVisible();
+    await expect(page.getByTestId('equip-insulation-wall')).toBeVisible();
+    await expect(page.getByTestId('equip-insulation-ceiling')).toBeVisible();
     await expect(page.getByTestId('equip-exterior-wall')).toBeVisible();
     await expect(page.getByTestId('equip-ub')).toBeHidden();
     await expect(page.getByTestId('equip-floor')).toBeHidden();
@@ -440,15 +456,15 @@ test.describe('商品選択ポップアップ', () => {
   test('選ぶと選択中の商品だけの表示に切り替わり、下で色・仕様を選べる', async ({ page }) => {
     await openFreshSimulator(page);
 
-    // 1つ選択（外壁）：選択済みで開くと選択中表示 → 一覧に戻して選び替えると再びたたまれる
+    // 外壁：タイルをクリックすると4面選択ダイアログが開き、現在の外壁が選択中で表示される（2026-08-30 PR#20）
     await page.getByTestId('equip-exterior-wall').click();
-    await expect(page.getByTestId('option-picker')).toBeVisible();
-    await expect(page.getByTestId('picker-selected')).toContainText('ガルノート');
-    await page.getByTestId('picker-expand').click();
-    await page.getByTestId('pick-exterior-wood').click();
-    await expect(page.getByTestId('picker-selected')).toContainText('木板下見板張り');
-    await expect(page.getByTestId('pick-exterior-galnote')).toBeHidden();
-    await page.getByTestId('picker-apply').click();
+    await expect(page.getByTestId('exterior-wall-faces-dialog')).toBeVisible();
+    await expect(page.getByTestId('exterior-face-product-exterior-galnote')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('exterior-face-product-exterior-wood').click();
+    await expect(page.getByTestId('exterior-face-product-exterior-wood')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('exterior-faces-apply').click();
+    await expect(page.getByTestId('exterior-wall-faces-dialog')).toBeHidden();
+    // 正面の面別カード（equip-exterior-wall）に反映される
     await expect(page.getByTestId('equip-exterior-wall')).toContainText('木板下見板張り');
 
     // 複数選択（外構部品）：未選択で開くと一覧 → 選ぶと選択中表示にたたまれ、「外す」で一覧に戻る

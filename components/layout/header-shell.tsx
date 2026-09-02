@@ -45,19 +45,18 @@ export function HeaderShell({ items, user }: Props) {
   }, [open]);
 
   useEffect(() => {
-    if (!user || !pathname.startsWith('/simulator/')) {
-      setSimulatorAccountTarget(null);
-      return;
-    }
-
+    // setState はエフェクト本体で同期的に呼ばず、描画後の rAF コールバック内で行う（react-hooks/set-state-in-effect）
     const findTarget = () => {
+      if (!user || !pathname.startsWith('/simulator/')) {
+        setSimulatorAccountTarget(null);
+        return;
+      }
       const mypageLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href="/mypage"]')).find(
         (node) => !node.closest('header') && !node.closest('#mobile-menu')
       );
       setSimulatorAccountTarget(mypageLink?.parentElement?.parentElement ?? null);
     };
 
-    findTarget();
     const frame = window.requestAnimationFrame(findTarget);
     return () => window.cancelAnimationFrame(frame);
   }, [pathname, user]);

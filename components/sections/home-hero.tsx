@@ -5,7 +5,7 @@ import { hero } from '@/data/site-content';
 import { getSessionUser } from '@/lib/auth/session';
 import { canEditDealerItems } from '@/lib/domain/types';
 
-/** ファーストビュー：全面写真＋「− 折畳木造コンテナ − Wing」 */
+/** ファーストビュー：全面写真＋「世界初⁉ 不陸調整、木造コンテナ」（2026-09-01 トップ修正案） */
 export async function HomeHero() {
   // 会員のログイン導線はヘッダーだけだと見つけにくいので、ファーストビューにも置く
   const user = await getSessionUser();
@@ -28,15 +28,32 @@ export async function HomeHero() {
 
       <div className="relative flex min-h-[100svh] flex-col justify-center">
         <div className="container-x pt-24 pb-24 text-center sm:pb-28">
-          <p className="reveal reveal-delay-1 font-serif text-sm tracking-[0.3em] text-white/90 sm:text-lg">{hero.eyebrow}</p>
-          <h1 className="reveal reveal-delay-1 mt-3 font-serif text-[4.5rem] leading-none tracking-[0.06em] text-gold-light drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)] sm:text-[7rem] lg:text-[8.5rem]">
-            Wing
+          <p className="reveal reveal-delay-1 font-serif text-sm tracking-[0.3em] text-gold-light sm:text-lg">{hero.eyebrow}</p>
+          <h1 className="reveal reveal-delay-1 mt-4 font-serif text-[2rem] leading-tight tracking-[0.06em] whitespace-pre-line text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)] sm:text-[3.4rem] lg:text-[4.2rem]">
+            {hero.title}
           </h1>
           <p className="reveal reveal-delay-2 mx-auto mt-6 max-w-xl text-sm leading-[2] whitespace-pre-line text-white/90 sm:text-base">{hero.lead}</p>
+
+          {/* Wing / BOX / Flat の 3 商品導線 */}
+          <div className="reveal reveal-delay-2 mx-auto mt-8 flex max-w-md items-center justify-center gap-3 sm:gap-4">
+            {hero.products.map((p) => (
+              <a
+                key={p.label}
+                href={p.href}
+                className="flex-1 rounded-sm border border-gold/60 bg-forest-deep/40 px-2 py-3 font-serif text-lg tracking-[0.15em] text-gold-light backdrop-blur-sm transition-colors hover:bg-gold hover:text-forest-deep sm:text-2xl"
+              >
+                {p.label}
+              </a>
+            ))}
+          </div>
+
           <div className="reveal reveal-delay-3 mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link href="#concept" className="btn-outline-gold font-serif tracking-wider">
+            <Link href="#features" className="btn-outline-gold font-serif tracking-wider">
               {hero.cta}
               <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+            <Link href="#dealer" className="btn-outline-gold font-serif tracking-wider">
+              {hero.ctaDealer}
             </Link>
             <Link
               href={account.href}

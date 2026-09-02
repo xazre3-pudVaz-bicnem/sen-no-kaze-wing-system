@@ -1,42 +1,30 @@
-import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
 import { faqItems } from '@/data/site-content';
-import { getPublicCatalog } from '@/lib/data/public-catalog';
 import { buildMetadata, faqJsonLd, organizationJsonLd } from '@/lib/seo';
 import { JsonLd } from '@/components/ui';
-import { Reveal } from '@/components/ui/reveal';
-import { RuleHeading } from '@/components/ui/section-heading';
 import { HomeHero } from '@/components/sections/home-hero';
 import { ConceptMovieSection } from '@/components/sections/concept-movie';
+import { FeaturesSection } from '@/components/sections/features-section';
 import { OriginSection } from '@/components/sections/origin';
-import { WoodenContainerSection } from '@/components/sections/wooden-container';
-import { ProductChapters } from '@/components/sections/product-chapters';
-import { UseCaseSlider } from '@/components/sections/use-case-slider';
-import { CostSection } from '@/components/sections/cost';
-import { ConsultationSection } from '@/components/sections/consultation';
-import { OwnersSection } from '@/components/sections/owners';
+import { QualitySection } from '@/components/sections/quality-section';
+import { ProductShowcase } from '@/components/sections/product-showcase';
+import { ComboPlansSection } from '@/components/sections/combo-plans';
+import { EstimateCtaSection } from '@/components/sections/estimate-cta';
+import { DealerCtaSection } from '@/components/sections/dealer-cta';
 import { FaqSection } from '@/components/sections/faq-section';
 import { NewsSection } from '@/components/sections/news-section';
 import { ContactSection } from '@/components/sections/contact-section';
 
 export const metadata = buildMetadata({
-  title: '千の風プロジェクト｜折畳木造コンテナホテル Wing',
+  title: '千の風プロジェクト｜世界初⁉不陸調整 折畳み式木造コンテナ Wing・BOX・Flat',
   description:
-    '折り畳み式木造コンテナ「Wing」。4tユニック1台で運び、現地で約30分で展開。傾斜地・遊休地にも造成を抑えて設置でき、宿泊施設・店舗・事務所に。見積シミュレーターで仕様と概算金額をその場で確認できます。',
+    '世界初⁉不陸調整の折り畳み式木造コンテナ（特許出願中）。確認申請・住宅ローンに対応し、傾斜地にも最小限の造成で設置。Wing・BOX・Flatの3商品と組合せプランを、見積シミュレーターで概算確認できます。',
   path: '/',
   image: '/og-image.jpg',
-  keywords: ['折り畳み式コンテナ', '木造コンテナ', 'コンテナホテル', 'コンテナハウス', '宿泊事業', '遊休地活用', '傾斜地', 'Wing', '千の風プロジェクト', '技術の杜'],
+  keywords: ['不陸調整', '折り畳み式コンテナ', '木造コンテナ', 'コンテナホテル', 'コンテナハウス', '宿泊事業', '遊休地活用', '傾斜地', 'Wing', 'BOX', 'Flat', '千の風プロジェクト', '技術の杜'],
 });
 
-export default async function HomePage() {
-  const { models, bundles } = await getPublicCatalog();
-  const primary = models[0] ?? null;
-  const simulatorHref = primary ? `/simulator/${primary.slug}` : '/products';
-  const chapters = models.map((m) => {
-    const imgs = bundles[m.id]?.images ?? [];
-    return { model: m, image: imgs.find((img) => img.kind === 'exterior') ?? imgs.find((img) => img.kind === 'hero') ?? null };
-  });
-
+/** トップページ（2026-09-01 先方修正案の構成：ヒーロー → 動画 → 特徴 → 原点 → 品質 → 商品 → 組合せ → 見積 → 代理店募集） */
+export default function HomePage() {
   return (
     <>
       <JsonLd data={organizationJsonLd()} />
@@ -44,47 +32,15 @@ export default async function HomePage() {
 
       <HomeHero />
       <ConceptMovieSection />
+      <FeaturesSection />
       <OriginSection />
-      <WoodenContainerSection />
-
-      {/* ラインナップ（価格・見積シミュレーターへの導線） */}
-      <section id="models" className="scroll-mt-20">
-        <div className="container-x bg-paper py-16 sm:py-20">
-          <RuleHeading
-            labelEn="LINE UP"
-            title="ベースモデルと価格"
-            lead={'Wing、BOX、フラットの3モデル。設備はシミュレーターで選べます。\n表示は本体価格計（本体一式＋諸費用・税別）です。'}
-            tone="light"
-            className="max-w-2xl"
-          />
-        </div>
-        <ProductChapters items={chapters} />
-      </section>
-
-      <UseCaseSlider />
-      <CostSection simulatorHref={simulatorHref} />
-      <ConsultationSection />
-      <OwnersSection />
+      <QualitySection />
+      <ProductShowcase />
+      <ComboPlansSection />
+      <EstimateCtaSection />
+      <DealerCtaSection />
       <FaqSection />
       <NewsSection />
-
-      {/* 見積シミュレーターへの導線 */}
-      <section className="bg-forest py-16 text-center text-white sm:py-20">
-        <div className="container-x">
-          <Reveal>
-            <p className="label-en text-gold">SIMULATOR</p>
-            <h2 className="mt-4 text-2xl text-white sm:text-4xl">仕様を選んで、概算見積をその場で。</h2>
-            <p className="mx-auto mt-4 max-w-xl text-sm text-white/80 sm:text-base">
-              ユニットバス、トイレ、キッチン、エアコン、デッキ。選ぶたびに完成イメージと金額が変わります。保存した仕様から見積書PDFの発行までオンラインで完結します。
-            </p>
-            <Link href={simulatorHref} className="btn-gold btn-lg mt-8">
-              見積シミュレーションを始める
-              <ArrowRight className="size-5" aria-hidden="true" />
-            </Link>
-          </Reveal>
-        </div>
-      </section>
-
       <ContactSection />
     </>
   );

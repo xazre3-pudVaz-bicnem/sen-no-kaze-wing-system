@@ -9,14 +9,13 @@ export interface NavItem {
   label: string;
 }
 
-/** ヘッダー／フッター共通のナビゲーション（先方サイトと同じ並び） */
+/** ヘッダー／フッター共通のナビゲーション（2026-09-01 トップ修正案の構成） */
 export const LP_NAV: NavItem[] = [
-  { href: '/#concept', label: 'Wingとは？' },
+  { href: '/#features', label: '商品のメリット' },
   { href: '/#genten', label: '開発の原点' },
-  { href: '/#idea', label: '活用アイディア' },
-  { href: '/#price', label: '費用・比較' },
-  { href: '/#consultation', label: '導入のご相談' },
-  { href: '/#owners', label: 'プロジェクト参加' },
+  { href: '/#lineup', label: '商品ラインナップ' },
+  { href: '/#plans', label: '組合せプラン' },
+  { href: '/#dealer', label: '代理店募集' },
   { href: '/#faq', label: 'よくある質問' },
   { href: '/news', label: 'お知らせ' },
 ];
@@ -24,15 +23,17 @@ export const LP_NAV: NavItem[] = [
 /* ---------------- Hero ---------------- */
 
 export const hero = {
-  eyebrow: '− 折畳木造コンテナ −',
-  title: 'Wing',
-  notice: {
-    title: '能登の拠点を開設します。',
-    strong: '成約者には特別仕様「能登の夢」',
-    body: '石川県穴水駅にモデルハウスを７月１５日開設予定。来場者の方にもれなく粗品を贈呈します。',
-  },
-  lead: '海辺や湖畔に迫り出し、傾斜地にも対応可能です。\n自然の中に溶け込んだ、別荘やホテルとしても最適。',
-  cta: 'Wing のメリット',
+  eyebrow: '− 特許出願中 −',
+  title: '世界初⁉ 不陸調整、\n木造コンテナ',
+  lead: '確認申請・住宅ローンに対応した、折畳み式の木造コンテナ。\n傾斜地にも最小限の造成で設置できます。',
+  /** 3 商品への導線（トップ内の各商品セクションへ） */
+  products: [
+    { label: 'Wing', href: '#wing' },
+    { label: 'BOX', href: '#box' },
+    { label: 'Flat', href: '#flat' },
+  ],
+  cta: '商品のメリット',
+  ctaDealer: '代理店募集',
 };
 
 /* ---------------- Concept ---------------- */
@@ -44,6 +45,21 @@ export const concept = {
   copy: 'コンパクト設計だから狭小地、傾斜地にも対応し、運搬も容易な木造コンテナの決定版',
 };
 
+/* ---------------- 商品のメリット（特徴） ---------------- */
+
+export const features = {
+  labelEn: 'FEATURES',
+  title: '不陸調整折畳み式木造コンテナの特徴',
+  lead: '確認申請、住宅ローン対応コンテナ',
+  items: [
+    '設置場所、最小限の造成（傾斜地に対応）',
+    'トラック荷台の約2倍の広さを実現',
+    '木造だから軽量で運送が容易',
+    '設置後に給排水・給湯、電気、基礎工事の施工が可能で施工性が格段に向上',
+    '将来、不要になった時、撤去・移動が容易だから売却に有利',
+  ],
+};
+
 /* ---------------- 開発の原点 ---------------- */
 
 export const genten = {
@@ -51,30 +67,233 @@ export const genten = {
   title: 'Wing 開発の原点',
   story1: {
     title: '災害の経験から生まれた、\n新しい建築のかたち',
-    body: '東日本大震災により、私の故郷は大きな被害を受けました。\n多くの人が住まいを失い、親族もまた、仮設住宅が完成するまで、長い時間を慣れない場所で過ごさなくてはいけませんでした。\n「落ち着ける場所を早く作ってあげたい。」そう思い、千葉県の自社で木造コンテナハウスを制作しました。\n岩手県の実家の敷地へトラックで運搬・設置をし、親族の一時的な生活の場として提供できた実体験が、「Wing」の開発の原点です。',
+    body: '東日本大震災により、私の故郷は大きな被害を受けました。\n多くの人が住まいを失い、親族もまた、仮設住宅が完成するまで、長い時間慣れない場所で過ごさなくてはいけませんでした。\n「落ち着ける場所を早く作ってあげたい。」即断即決で自社工場でBOXを造り、被災地に届けました。\nその時、仮設住宅建築費約500万、解体費約200万でしたが、解体する費用が無駄だと強く感じ、持ち運び出来て、地域の工務店でもできる木造コンテナの技術研究開発を開始しました。',
     image: '/images/cases/iwate-yamada-funakoshi.png',
     alt: '岩手県山田町・船越大島の海辺に設置された木造コンテナ',
   },
   story2: {
-    title: '経験から生まれた\n折りたたみ式コンテナ「Wing」',
-    body: '必要な場所へ早く届けられること、建築や解体にかかる負担を抑えられること、使い終えた後も別の場所で再活用できることの重要性を感じるようになりました。\n\n長年培ってきた木造建築の技術と知識をもとに、主要な設備を内蔵したまま折りたたんで運ぶことができ、独自開発の伸縮可能な設置足により高低差のある土地でも設置することが可能な「Wing」の開発に取り組みました。',
+    title: '経験から生まれた\n不陸調整方式採用 折畳み木造コンテナ',
+    badge: '特許出願中',
+    lead: 'もっと合理的に、もっと将来の不安を無くすために',
+    whys: [
+      {
+        q: '何故・・・不陸調整が必要なのか？',
+        a: '建物を建築するためには土地の整備が必要だが、災害時にはコスト削減とスピードが求められる。そこで造成工事を最小限に最速で設置できるという技術を開発しました。',
+      },
+      {
+        q: '何故・・・折畳みなのか？',
+        a: '災害時にトレーラーや大型トラックで運ぶのは、数量に制限があり、より多くの仮設住宅を被災地に届けるため、狭い道路にも適応できて、スピーディーに設置できるものとしました。',
+      },
+      {
+        q: '何故・・・木造なのか？',
+        a: '普段住んでいる住まいの感覚を大事にしたい。被災者に落ち着ける空間を提供するため、木造に拘りました。',
+      },
+    ],
     image: '/images/transport/unic-crane-lift.jpg',
     alt: '4tユニック車のクレーンで吊り上げられる折り畳み状態のWing',
   },
-  features: {
-    title: 'Wingの特長',
+  needs: {
+    title: '社会のニーズに応える新しい選択肢',
     items: [
-      '水回り、エアコン、収納、折り畳み小上がりを備えた1室完結型の木造コンテナ',
-      '宿泊施設、小規模店舗、事務所、離れ客室、既存施設の増設などに幅広く活用可能',
-      '4t車で搬送可能、移設・再利用が可能',
-      '傾斜地や高低差のある土地にも造成なしで設置可',
+      {
+        title: '子供や孫の負担を軽減する。',
+        body: '将来、相続する子供や孫に有効な資産を残す事が求められています。多機能性と撤去移動が容易だから相続を受けた子供や孫は貸家APは勿論、ホテルや貸事務所など収益性のあるものに、又は故郷に別荘を持つなど・・・それでも負担と感じるなら売却する。色々な選択肢があるから負担にならない。',
+      },
+      {
+        title: '日本社会は観光立国を目指す。',
+        body: '観光庁の観光立国推進基本計画では、2030年に訪日外国人旅行者数6000万人、訪日外国人旅行消費額15兆円という目標が掲げられ、地方誘客の促進も重要な方針とされています。近年、訪日外国人観光客数は、回復・増加傾向にあり、地方における宿泊・滞在の受け皿づくりは、今後ますます重要になると考えています。Wing・BOX・Flatがその選択肢の一つとして、地域の新たな滞在拠点となり、地域の活性化に貢献できれば幸いです。',
+      },
+      {
+        title: '度重なる災害対応はスピーディーにコスト削減',
+        body: '災害時の土地の確保や造成に迅速に低価格で提供できて、仮設住宅、店舗に対応し、更には仮設から本設のために確認申請取得、住宅ローンの借り入れも可能だから安心して設置できる理想のコンテナの決定版！',
+      },
     ],
   },
-  needs: {
-    title: '社会のニーズに応える、新しい選択肢',
-    body: '観光庁の観光立国推進基本計画では、2030年に訪日外国人旅行者数6000万人、訪日外国人旅行消費額15兆円という目標が掲げられ、地方誘客の促進も重要な方針とされています。\n近年、訪日外国人観光客数は、回復・増加傾向にあり、地方における宿泊・滞在の受け皿づくりは、今後ますます重要になると考えています。\nWingがその選択肢の一つとして、地域での新たな滞在拠点づくりの手助けとなり、地域の活性化に貢献できれば幸いです。',
-    closing: '地域の未来は、一社では創れません。\n皆さまとともに、地域の可能性を築いていけることを願っています。',
-  },
+};
+
+/* ---------------- 品質（Wing・BOX・Flat共通） ---------------- */
+
+export const quality = {
+  labelEn: 'QUALITY',
+  title: '不陸調整折畳み式木造コンテナの品質',
+  lead: '株式会社技術の杜が提供するWing・BOX・Flat共通の特長',
+  items: [
+    '全ての商品が不陸調整可能',
+    '確認申請取得可能（30年住宅ローン対応）',
+    '構造や断熱、耐用年数は木造住宅の品質をそのままに',
+    '内外装の自由度も他のコンテナやトレーラーハウスと比較しても高い',
+    '多機能、多様性に対応',
+  ],
+  /** 設置の流れ・仕組み（修正案のキャプション付き画像列） */
+  steps: [
+    { label: '現地で下ろし', image: '/images/transport/unic-crane-lift.jpg', alt: 'ユニック車のクレーンで折り畳み状態のコンテナを現地に下ろす様子' },
+    { label: '広げ設置後', image: '/images/products/box-white.jpg', alt: '現地で広げて設置したコンテナの外観' },
+    { label: '基礎工事', image: '/images/transport/unic-seaside.jpg', alt: '伸縮可能な設置足で立つコンテナ。設置後に基礎工事を行う' },
+    { label: '折畳み屋根面', image: '/images/elevation/wing-side-wood.png', alt: '折り畳み時に屋根面になる木板張りの立面図' },
+    { label: 'UB・ウォッシュレット・洗面', image: '/images/interior/unit-bath-3point.jpg', alt: 'ユニットバス・ウォッシュレット・洗面を備えた水回り' },
+    { label: 'エアコン付き', image: '/images/interior/wing-room-aircon.jpg', alt: 'エアコンを備えた室内' },
+    { label: '広さ約2倍', image: '/images/plan/wing-hotel-guest.jpg', alt: '広げるとコンテナ約2倍の広さになる平面図' },
+  ],
+};
+
+/* ---------------- 商品ラインナップ（Wing / BOX / Flat） ---------------- */
+
+export interface ShowcaseTopic {
+  tag?: string;
+  title: string;
+  body: string;
+  image: string;
+  alt: string;
+  caption?: string;
+}
+
+export interface ShowcaseProduct {
+  /** セクションアンカー（#wing など）と見積導線のモデル slug */
+  id: string;
+  slug: string;
+  catch: string;
+  name: string;
+  size: string;
+  body: string;
+  highlight?: string;
+  images: { src: string; alt: string; caption?: string }[];
+  topics: ShowcaseTopic[];
+}
+
+export const showcase = {
+  labelEn: 'LINE UP',
+  title: '商品ラインナップ',
+  cta: 'この商品で見積する',
+  detail: '商品詳細を見る',
+  products: [
+    {
+      id: 'wing',
+      slug: 'wing-01',
+      catch: '高級ホテルのイメージを・・・',
+      name: '小さな宝箱 Wing',
+      size: '基本 3,900×4,800',
+      body: 'トラック一台分でコンテナ2個分の広さを実現しました。\n運送費を削減でき、高級感溢れる内装と、使い勝手の良い間取りだから、お一人様の住宅にも最適で、水回りが無ければ事務所、店舗にも活用出来る丁度いい広さです。',
+      highlight: '住居として使って将来はホテルで運用・・・高利回りを実現可能',
+      images: [
+        { src: '/images/interior/bedroom-garden.jpg', alt: '低窓から緑を望むベッドと小上がりを備えた Wing の室内' },
+        { src: '/images/interior/bedroom-seaview.webp', alt: '海を望む大きな窓とベッドを備えた Wing の室内' },
+        { src: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面と水回りを備えた Wing の室内' },
+        { src: '/images/plan/wing-isometric.jpg', alt: 'ベッド・ダイニング・水回り・デッキを収めた Wing のアイソメ図' },
+        { src: '/images/cases/box-forest-terrace.jpg', alt: '木立の中にデッキ付きで設置された木造コンテナ' },
+        { src: '/images/cases/box-shore-sakura.jpg', alt: '桜咲く湖畔の遊歩道沿いに設置された木造コンテナ' },
+      ],
+      topics: [],
+    },
+    {
+      id: 'box',
+      slug: 'box',
+      catch: 'よりコンパクトに合理的に・・・',
+      name: 'BOX',
+      size: '基本 2,100×4,800',
+      body: 'コンパクトに纏めたホテル、ワンルーム仕様最小サイズ、重ねが容易で2階建て以上も可能に・・・（各種法律に基づきますので詳しくは代理店に問合せて下さい。）\n水回りキットとWingの組合せで仮設住宅の2LDKに。',
+      images: [{ src: '/images/products/box-white.jpg', alt: '伸縮可能な設置足の上に建つ白い外壁の BOX' }],
+      topics: [
+        {
+          tag: '土地活用例',
+          title: '駐車場の上にBOX又はFlat',
+          body: '土地の有効活用を目的とした活用方法です。コンビニや、都心の駐車場の上にホテルやレンタル事務所を設置できるので、高収入高収益が期待できます。',
+          image: '/images/cases/box-garage-top.jpg',
+          alt: '住宅の駐車場の上に設置された BOX',
+          caption: '駐車場の上に',
+        },
+        {
+          tag: '事務所やワンルーム',
+          title: '現場の仮設事務所やワンルームマンションにも活用可能',
+          body: 'あなたの遊休地や狭小地にも最適解を提供します。\n※重ねる場合、必ず確認申請が必要になります。ご注意下さい。',
+          image: '/images/cases/box-stacked.jpg',
+          alt: '2 階建てに重ねて設置された BOX',
+          caption: '重ねて',
+        },
+      ],
+    },
+    {
+      id: 'flat',
+      slug: 'flat',
+      catch: 'よりコンパクトに合理的に・・・',
+      name: 'Flat',
+      size: '基本 2,100×1,800〜4,800',
+      body: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。\nWing又はBOXにもう一部屋欲しいとき。\n平らに折り畳んで、何部屋も平積みで配送、運送費を大幅削減！Wing＋Flatで2LDKも実現、BOX＋Flatの組合せなどプラスαの商品。\nホームセンター等の物置販売にはスペースを取らない平積みとして在庫管理も容易な格安商品の決定版！',
+      images: [{ src: '/images/products/flat-gray.jpg', alt: '片流れ屋根と設置足を備えた Flat の外観' }],
+      topics: [
+        {
+          tag: '物置にもう一部屋Plus',
+          title: 'Flat＋Wing',
+          body: 'Wing＋Flatの組合せで2LDKを実現する居室プラン例です。',
+          image: '/images/plan/flat-wing-2ldk.jpg',
+          alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図',
+          caption: 'Flat＋Wing',
+        },
+        {
+          tag: '物置',
+          title: '物置・もう一部屋居室タイプ',
+          body: '物置の場合仕上げ無し、もう一部屋居室タイプは仕上げあり（6.8帖）。',
+          image: '/images/plan/flat-basic.jpg',
+          alt: '物置・居室タイプ フラット 6.8 帖の平面図',
+          caption: '物置',
+        },
+        {
+          tag: 'BOX＋Flat',
+          title: 'BOX＋Flat',
+          body: 'BOXの水回りキットとFlatの居室を組み合わせたプラン例です。',
+          image: '/images/plan/flat-two-rooms.jpg',
+          alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図',
+          caption: 'BOX＋Flat',
+        },
+      ],
+    },
+  ] as ShowcaseProduct[],
+};
+
+/* ---------------- 組合せプラン ---------------- */
+
+export const combos = {
+  labelEn: 'COMBINATION PLANS',
+  title: '不陸調整折畳み式木造コンテナの組合せプラン',
+  note: 'Wing、BOX、Flatともに、本体とは、折畳み式で水回りや内外装の仕上げの無い状態を言います。お客様ご自身で、現場配送後に内外装工事をDIYできるので、ご自身の使い道、好みにあわせて、使用してください。但し保証や各種関係法令に適合しているかについては責任の範囲外となります。',
+  caution: '※全ての画像はイメージで実際の商品と異なる場合があります。',
+  legal: '※BOX及びFlatは、単体で10㎡以内となる商品は確認申請が不要となります。',
+  items: [
+    { label: 'Wingホテル用', image: '/images/plan/wing-hotel-ld.jpg', alt: 'シャワー・トイレと LD7 帖を収めた Wing ホテル用の平面図' },
+    { label: 'Wingホテル用（客室）', image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' },
+    { label: '各コンテナの基本本体（Wing）', image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
+    { label: '各コンテナの基本本体（Flat）', image: '/images/plan/flat-basic.jpg', alt: 'フラット 6.8 帖の平面図' },
+    { label: 'BOX水回りキット例', image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
+    { label: 'Wing居住用（2居室）', image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing 居住用の平面図' },
+    { label: 'Wing居室プラン例', image: '/images/plan/wing-living.jpg', alt: 'リビング 5.7 帖と洋室 4.9 帖を収めた Wing 居室プランの平面図' },
+    { label: 'Flatプラス居室例', image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
+    { label: 'Wing＋BOX水回りキットの組合せ例', image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
+    { label: 'Wing＋Flatの組合せ例（2LDK）', image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
+    { label: 'BOXロフト付きプラン例', image: '/images/plan/box-loft.jpg', alt: '3 点ユニットバスとロフト梯子を収めた BOX の平面図' },
+  ],
+};
+
+/* ---------------- 見積シミュレーション導線 ---------------- */
+
+export const estimate = {
+  labelEn: 'SIMULATOR',
+  title: '見積シミュレーション',
+  lead: 'あなたは、どんな事業やお住まいに、どの商品を活用しますか？\n見積シミュレーションで概算を確認し、あなたの希望にあった商品を見つけましょう。',
+  buttons: [
+    { label: 'Wingで見積してみる', slug: 'wing-01', image: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる湖畔に建つ夜の Wing' },
+    { label: 'BOXで見積してみる', slug: 'box', image: '/images/products/box-white.jpg', alt: '白い外壁の BOX' },
+    { label: 'Flatで見積してみる', slug: 'flat', image: '/images/products/flat-navy.jpg', alt: '紺色の外壁の Flat' },
+  ],
+};
+
+/* ---------------- 代理店募集 ---------------- */
+
+export const dealerRecruit = {
+  labelEn: 'PARTNERS',
+  title: '代理店募集',
+  body: 'この木造コンテナは新しい選択肢を提供し、災害時にも迅速に行動できるように、地域の代理店を募集しています。',
+  image: '/images/cases/box-lakeside-family.jpg',
+  alt: '湖畔のデッキで家族が過ごす木造コンテナ BOX',
+  cta: '加盟について問い合わせる',
 };
 
 /* ---------------- 木造コンテナについて ---------------- */

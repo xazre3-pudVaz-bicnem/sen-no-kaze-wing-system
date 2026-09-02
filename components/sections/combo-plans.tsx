@@ -17,7 +17,7 @@ export function ComboPlansSection() {
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {combos.items.map((item) => (
-            <Reveal key={item.label} variant="image">
+            <Reveal key={item.image} variant="image">
               <figure className="flex h-full flex-col border border-brown/15 bg-white">
                 <div className="relative aspect-[4/3] w-full overflow-hidden">
                   <Image src={item.image} alt={item.alt} fill sizes="(min-width: 640px) 22vw, 45vw" className="object-contain p-1.5" />

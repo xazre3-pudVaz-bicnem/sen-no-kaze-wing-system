@@ -165,14 +165,11 @@ export const showcase = {
   labelEn: 'LINE UP',
   title: '商品ラインナップ',
   cta: 'この商品で見積する',
-  /** Wing ブロック下の設置の流れ（Word の写真列） */
+  /** Wing ブロック下の設置の流れ（Word の写真列に忠実：クレーン写真＋彩色立面図＋平面図の4点） */
   steps: [
-    { label: '現地で下ろし', image: '/images/transport/unic-crane-lift.jpg', alt: 'ユニック車のクレーンで折り畳み状態のコンテナを現地に下ろす様子' },
-    { label: '広げ設置後', image: '/images/products/box-white.jpg', alt: '現地で広げて設置したコンテナの外観' },
-    { label: '基礎工事', image: '/images/transport/unic-seaside.jpg', alt: '伸縮可能な設置足で立つコンテナ。設置後に基礎工事を行う' },
-    { label: '折畳み屋根面', image: '/images/elevation/wing-side-wood.png', alt: '折り畳み時に屋根面になる木板張りの立面図' },
-    { label: 'UB・ウォッシュレット・洗面', image: '/images/interior/unit-bath-3point.jpg', alt: 'ユニットバス・ウォッシュレット・洗面を備えた水回り' },
-    { label: 'エアコン付き', image: '/images/interior/wing-room-aircon.jpg', alt: 'エアコンを備えた室内' },
+    { label: '現地で下ろし → 広げ設置後 → 基礎工事', image: '/images/transport/unic-crane-lift.jpg', alt: 'ユニック車のクレーンで折り畳み状態のコンテナを現地に下ろす様子' },
+    { label: '折畳み屋根面', image: '/images/elevation/wing-roof-face.jpg', alt: '折り畳み時に屋根面になる木板張りの立面図' },
+    { label: 'UB・エアコン・ウォッシュレット・洗面／エアコン付き', image: '/images/elevation/wing-equipment-side.jpg', alt: '給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図' },
     { label: '広さ約2倍', image: '/images/plan/wing-hotel-guest.jpg', alt: '広げるとコンテナ約2倍の広さになる平面図' },
   ],
   products: [
@@ -185,12 +182,11 @@ export const showcase = {
       body: 'トラック一台分でコンテナ2個分の広さを実現しました。\n運送費を削減でき、高級感溢れる内装と、使い勝手の良い間取りだから、お一人様の住宅にも最適で、水回りが無ければ事務所、店舗にも活用出来る丁度いい広さです。',
       highlight: '住居として使って将来はホテルで運用・・・高利回りを実現可能',
       images: [
-        { src: '/images/cases/box-forest-terrace.jpg', alt: '木立の中にデッキ付きで設置された木造コンテナ' },
-        { src: '/images/cases/box-shore-sakura.jpg', alt: '桜咲く湖畔の遊歩道沿いに設置された木造コンテナ' },
-        { src: '/images/products/wing-lakeside-deck.jpg', alt: '湖を望む高台に建つウッドデッキ付きの Wing' },
         { src: '/images/plan/wing-isometric.jpg', alt: 'ベッド・ダイニング・水回り・デッキを収めた Wing のアイソメ図' },
-        { src: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面と水回りを備えた Wing の室内' },
+        { src: '/images/cases/box-forest-terrace.jpg', alt: '木立の中にデッキ付きで設置された木造コンテナ' },
+        { src: '/images/interior/bedroom-seaview.webp', alt: '海を望む大きな窓とベッドを備えた Wing の室内' },
         { src: '/images/interior/bedroom-garden.jpg', alt: '低窓から緑を望むベッドと小上がりを備えた Wing の室内' },
+        { src: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面と水回りを備えた Wing の室内' },
       ],
       topics: [],
     },
@@ -228,7 +224,10 @@ export const showcase = {
       name: 'Flat',
       size: '基本 2,100×1,800〜4,800',
       body: '平らに折り畳んで、何部屋も平積みで配送、運送費を大幅削減！Wing＋Flatで2LDKも実現、BOX＋Flatの組合せなどプラスαの商品。\nホームセンター等の物置販売にはスペースを取らない平積みとして在庫管理も容易な格安商品の決定版！',
-      images: [{ src: '/images/products/flat-gray.jpg', alt: '片流れ屋根と設置足を備えた Flat の外観' }],
+      images: [
+        { src: '/images/products/flat-gray.jpg', alt: '片流れ屋根と設置足を備えた Flat の外観' },
+        { src: '/images/cases/flat-entrance.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat' },
+      ],
       topics: [],
       plansTag: '物置にもう一部屋Plus',
       plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
@@ -249,18 +248,18 @@ export const combos = {
   note: 'Wing、BOX、Flatともに、本体とは、折畳み式で水回りや内外装の仕上げの無い状態を言います。お客様ご自身で、現場配送後に内外装工事をDIYできるので、ご自身の使い道、好みにあわせて、使用してください。但し保証や各種関係法令に適合しているかについては責任の範囲外となります。',
   caution: '※全ての画像はイメージで実際の商品と異なる場合があります。',
   legal: '※BOX及びFlatは、単体で10㎡以内となる商品は確認申請が不要となります。',
+  /** ラベルは修正案の表記そのまま（同じラベルに複数の図が付く） */
   items: [
     { label: 'Wingホテル用', image: '/images/plan/wing-hotel-ld.jpg', alt: 'シャワー・トイレと LD7 帖を収めた Wing ホテル用の平面図' },
-    { label: 'Wingホテル用（客室）', image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' },
-    { label: '各コンテナの基本本体（Wing）', image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
-    { label: '各コンテナの基本本体（Flat）', image: '/images/plan/flat-basic.jpg', alt: 'フラット 6.8 帖の平面図' },
+    { label: 'Wingホテル用', image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' },
+    { label: '各コンテナの基本本体', image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
+    { label: '各コンテナの基本本体', image: '/images/plan/flat-basic.jpg', alt: 'フラット 6.8 帖の平面図' },
+    { label: 'Wing居住用', image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing 居住用の平面図' },
     { label: 'BOX水回りキット例', image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
-    { label: 'Wing居住用（2居室）', image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing 居住用の平面図' },
     { label: 'Wing居室プラン例', image: '/images/plan/wing-living.jpg', alt: 'リビング 5.7 帖と洋室 4.9 帖を収めた Wing 居室プランの平面図' },
     { label: 'Flatプラス居室例', image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
-    { label: 'Wing＋BOX水回りキットの組合せ例', image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
-    { label: 'Wing＋Flatの組合せ例（2LDK）', image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
-    { label: 'BOXロフト付きプラン例', image: '/images/plan/box-loft.jpg', alt: '3 点ユニットバスとロフト梯子を収めた BOX の平面図' },
+    { label: 'Wing＋BOXまたはFlatの組合せ例', image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
+    { label: 'Wing＋BOXまたはFlatの組合せ例', image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
   ],
 };
 

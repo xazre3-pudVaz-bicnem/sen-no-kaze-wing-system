@@ -79,6 +79,8 @@ export function HeaderShell({ items, user }: Props) {
         <div className="mx-auto flex h-16 w-full max-w-[110rem] items-center justify-between gap-4 px-5 sm:px-8 lg:h-[6.5rem]">
           <Link href="/" className="flex shrink-0 items-center gap-3" aria-label="千の風プロジェクト トップページ" onClick={close}>
             <Image src="/images/brand/sennokaze-logo-white.png" alt="" width={120} height={80} priority className="h-11 w-auto lg:h-14" />
+            {/* 先方モック（2026-09-02）：ロゴ横に「プロジェクト」 */}
+            <span aria-hidden="true" className="font-serif text-sm tracking-[0.2em] text-white/90 lg:text-base">プロジェクト</span>
             <span className="sr-only">{PROJECT_NAME}</span>
           </Link>
 

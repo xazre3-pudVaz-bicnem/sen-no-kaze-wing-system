@@ -40,20 +40,14 @@ export function ProductShowcase() {
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
             </Reveal>
-            {/* コラージュ：上段に外観3枚、下段にアイソメ図（大）＋室内2枚（Word のコラージュ準拠） */}
+            {/* コラージュ：左に縦長のアイソメ図（大）、右に外観1枚＋室内3枚の2×2（Word のコラージュ準拠） */}
             <Reveal variant="image">
               <div className="grid grid-cols-3 gap-1.5">
-                {wing.images.slice(0, 3).map((img) => (
-                  <div key={img.src} className="relative aspect-[4/3] overflow-hidden">
-                    <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-cover" />
-                  </div>
-                ))}
-                {/* 下段：縦長のアイソメ図（大）＋室内2枚を縦に */}
-                <div className="relative col-span-2 row-span-2 aspect-[5/4] overflow-hidden bg-white">
-                  <Image src={wing.images[3].src} alt={wing.images[3].alt} fill sizes="(min-width: 1024px) 36vw, 64vw" className="object-contain p-1" />
+                <div className="relative row-span-2 overflow-hidden bg-white">
+                  <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-contain p-1" />
                 </div>
-                {wing.images.slice(4, 6).map((img) => (
-                  <div key={img.src} className="relative overflow-hidden">
+                {wing.images.slice(1, 5).map((img) => (
+                  <div key={img.src} className="relative aspect-[4/3] overflow-hidden">
                     <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-cover" />
                   </div>
                 ))}
@@ -61,13 +55,13 @@ export function ProductShowcase() {
             </Reveal>
           </div>
 
-          {/* 設置の流れ（Word の写真列） */}
-          <div className="mt-6 grid grid-cols-4 gap-2 sm:grid-cols-7">
+          {/* 設置の流れ（Word の写真列：クレーン写真＋彩色立面図＋平面図） */}
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
             {showcase.steps.map((s) => (
               <Reveal key={s.label} variant="image">
                 <figure>
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-white">
-                    <Image src={s.image} alt={s.alt} fill sizes="(min-width: 640px) 14vw, 24vw" className="object-cover" />
+                  <div className="relative aspect-[16/10] w-full overflow-hidden bg-white">
+                    <Image src={s.image} alt={s.alt} fill sizes="(min-width: 640px) 23vw, 45vw" className={s.image.includes('/transport/') ? 'object-cover' : 'object-contain p-1'} />
                   </div>
                   <figcaption className="mt-1 text-center text-[0.65rem] leading-tight text-white/80 sm:text-xs">{s.label}</figcaption>
                 </figure>
@@ -121,9 +115,15 @@ export function ProductShowcase() {
                 <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
             </Reveal>
+            {/* 外観CG＋玄関先の設置例（Word 準拠） */}
             <Reveal variant="image">
-              <div className="relative aspect-[4/3] w-full max-w-sm overflow-hidden bg-white lg:ml-auto">
-                <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 30vw, 90vw" className="object-contain p-1" />
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="relative aspect-[4/3] overflow-hidden bg-white">
+                  <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 45vw" className="object-contain p-1" />
+                </div>
+                <div className="relative aspect-[4/3] overflow-hidden">
+                  <Image src={flat.images[1].src} alt={flat.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 45vw" className="object-cover" />
+                </div>
               </div>
             </Reveal>
           </div>

@@ -6,7 +6,7 @@ import { hero } from '@/data/site-content';
 /** ファーストビュー：3枚クロスフェード＋左寄せの商品導線（2026-09-02 先方モック準拠） */
 export function HomeHero() {
   return (
-    <section className="relative isolate min-h-[78svh] overflow-hidden bg-forest-deep text-white">
+    <section className="relative isolate min-h-[55svh] lg:min-h-[70svh] overflow-hidden bg-forest-deep text-white">
       {/* 1枚目は常時表示の下地、2〜3枚目が hero-crossfade で入れ替わる */}
       <Image src={hero.slides[0].src} alt={hero.slides[0].alt} fill priority sizes="100vw" className="object-cover" />
       {hero.slides.slice(1).map((s, i) => (
@@ -23,8 +23,8 @@ export function HomeHero() {
       ))}
       <div className="absolute inset-0 bg-gradient-to-r from-forest-deep/70 via-forest-deep/25 to-transparent" aria-hidden="true" />
 
-      <div className="relative flex min-h-[78svh] flex-col justify-center">
-        <div className="container-x py-20">
+      <div className="relative flex min-h-[55svh] lg:min-h-[70svh] flex-col justify-center">
+        <div className="container-x py-12 sm:py-16">
           <h1 className="reveal reveal-delay-1 max-w-xl font-serif text-[1.45rem] leading-snug tracking-[0.04em] text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.55)] sm:text-4xl">
             {hero.title}
             <span className="mt-1 block text-sm tracking-[0.12em] text-white/90 sm:text-lg">{hero.patent}</span>

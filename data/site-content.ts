@@ -97,8 +97,6 @@ export const genten = {
         a: '普段住んでいる住まいの感覚を大事にしたい。被災者に落ち着ける空間を提供するため、木造に拘りました。',
       },
     ],
-    image: '/images/transport/unic-crane-lift.jpg',
-    alt: '4tユニック車のクレーンで吊り上げられる折り畳み状態のWing',
   },
   needs: {
     title: '社会のニーズに応える新しい選択肢',
@@ -247,9 +245,10 @@ export const showcase = {
         { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' }] },
         {
           label: 'BOX＋Flat',
+          /** 水回りキットの下に居室（Word モック準拠で左右反転版）を隙間なく連結 */
           images: [
             { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
-            { image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
+            { image: '/images/plan/flat-two-rooms-mirror.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図（左右反転）' },
           ],
         },
       ],
@@ -265,8 +264,15 @@ export const combos = {
   note: 'Wing、BOX、Flatともに、本体とは、折畳み式で水回りや内外装の仕上げの無い状態を言います。お客様ご自身で、現場配送後に内外装工事をDIYできるので、ご自身の使い道、好みにあわせて、使用してください。但し保証や各種関係法令に適合しているかについては責任の範囲外となります。',
   caution: '※全ての画像はイメージで実際の商品と異なる場合があります。',
   legal: '※BOX及びFlatは、単体で10㎡以内となる商品は確認申請が不要となります。',
-  /** 修正案どおりのグループ構成（ラベル見出しの下に図を並べる）。並び順も Word に合わせている */
+  /** グループ構成（2026-09-02 赤入れ：基本本体を先頭に、給湯器付き水回り図は BOX 水回りキット例へ） */
   groups: [
+    {
+      label: '各コンテナの基本本体',
+      items: [
+        { image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
+        { image: '/images/plan/flat-basic.jpg', alt: 'フラット 6.8 帖の平面図' },
+      ],
+    },
     {
       label: 'Wingホテル用',
       items: [
@@ -275,20 +281,15 @@ export const combos = {
       ],
     },
     {
-      label: '各コンテナの基本本体',
-      items: [
-        { image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
-        { image: '/images/plan/flat-basic.jpg', alt: 'フラット 6.8 帖の平面図' },
-        { image: '/images/plan/box-water-kit-basic.jpg', alt: 'ガス給湯器・エアコン室外機付き BOX 水回りキットの平面図' },
-      ],
-    },
-    {
       label: 'Wing居住用',
       items: [{ image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing 居住用の平面図' }],
     },
     {
       label: 'BOX水回りキット例',
-      items: [{ image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' }],
+      items: [
+        { image: '/images/plan/box-water-kit-basic.jpg', alt: 'ガス給湯器・エアコン室外機付き BOX 水回りキットの平面図' },
+        { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
+      ],
     },
     {
       label: 'Wing居室プラン例',

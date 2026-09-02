@@ -62,8 +62,8 @@ export function ProductShowcase() {
             </Reveal>
           </div>
 
-          {/* 設置の流れ（Word の写真列：クレーン写真＋透過の彩色立面図3枚＋平面図） */}
-          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
+          {/* 設置の流れ（Word の写真列：クレーン写真＋透過の彩色立面図3枚＋平面図。スマホも Word と同じ密度で3列） */}
+          <div className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
             {showcase.steps.map((s) => (
               <Reveal key={s.image} variant="image">
                 <figure>
@@ -86,12 +86,12 @@ export function ProductShowcase() {
       <article id="box" className="scroll-mt-24 bg-navy py-10 sm:py-12">
         <div className="container-x">
           <ProductHeading p={box} />
-          <div className="mt-4 grid items-start gap-6 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:gap-8">
+          {/* スマホでも Word と同じく「説明文の横に外観」の2列（2026-09-02 赤入れ） */}
+          <div className="mt-4 grid grid-cols-2 items-start gap-4 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:gap-8">
             <Reveal>
-              <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{box.body}</p>
+              <p className="text-[0.75rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-sm sm:leading-[1.8]">{box.body}</p>
             </Reveal>
-            {/* 外観（透過）＋内装レイアウト（スマホは2列、PCは縦積み） */}
-            <Reveal variant="image" className="grid grid-cols-2 items-center gap-3 lg:grid-cols-1">
+            <Reveal variant="image" className="grid grid-cols-1 gap-3">
               <div className="relative aspect-[3/2] w-full">
                 <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 32vw, 45vw" className="object-contain" />
               </div>
@@ -100,7 +100,7 @@ export function ProductShowcase() {
               </div>
             </Reveal>
             {/* 活用トピック（Word の並び：見出し・本文の下に写真） */}
-            <div className="space-y-5">
+            <div className="col-span-2 space-y-5 lg:col-span-1">
               {box.topics.map((t) => (
                 <Reveal key={t.title}>
                   {t.tag && <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{t.tag}】</p>}
@@ -127,27 +127,28 @@ export function ProductShowcase() {
       <article id="flat" className="scroll-mt-24 bg-[#303030] py-10 sm:py-12">
         <div className="container-x">
           <ProductHeading p={flat} />
-          <div className="mt-4 grid items-start gap-6 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:gap-8">
-            {/* 左：本文＋基本平面図（Word 準拠） */}
-            <Reveal>
-              <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{flat.body}</p>
-              {flat.basicPlan && (
-                <div className="relative mt-3 aspect-[21/9] w-full max-w-xs overflow-hidden bg-white sm:max-w-sm">
-                  <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 640px) 24rem, 20rem" className="object-contain p-0.5" />
-                </div>
-              )}
+          {/* スマホは「説明｜基本平面図」「外観CG｜物置Plus」の2列、PCは Word の3列（2026-09-02 赤入れ） */}
+          <div className="mt-4 grid grid-cols-2 items-start gap-4 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:gap-8">
+            <Reveal className="lg:col-start-1 lg:row-start-1">
+              <p className="text-[0.75rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-sm sm:leading-[1.8]">{flat.body}</p>
             </Reveal>
-            {/* 中：透過の外観CG（スマホでは控えめサイズ） */}
-            <Reveal variant="image">
+            {flat.basicPlan && (
+              <Reveal variant="image" className="lg:col-start-1 lg:row-start-2">
+                <div className="relative aspect-[21/9] w-full overflow-hidden bg-white">
+                  <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 640px) 24rem, 45vw" className="object-contain p-0.5" />
+                </div>
+              </Reveal>
+            )}
+            <Reveal variant="image" className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
               <div className="relative aspect-[4/3] w-full max-w-[16rem] sm:max-w-sm lg:mx-auto lg:max-w-md">
                 <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 32vw, 45vw" className="object-contain" />
               </div>
             </Reveal>
-            {/* 右：物置にもう一部屋Plus（本文 → 設置例写真 → 組合せ平面図） */}
-            <div>
+            {/* 物置にもう一部屋Plus（本文 → 設置例写真） */}
+            <div className="lg:col-start-3 lg:row-span-2 lg:row-start-1">
               <Reveal>
                 <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{flat.plansTag}】</p>
-                <p className="mt-1 text-[0.8rem] leading-[1.7] text-white/85 sm:text-sm">{flat.plansLead}</p>
+                <p className="mt-1 text-[0.75rem] leading-[1.7] text-white/85 sm:text-sm">{flat.plansLead}</p>
               </Reveal>
               {flat.storagePhoto && (
                 <Reveal variant="image" className="relative mt-2 aspect-[4/3] w-full max-w-[14rem] sm:max-w-xs">
@@ -163,13 +164,16 @@ export function ProductShowcase() {
             <div className="mt-6 grid max-w-lg grid-cols-2 gap-3 sm:max-w-xl sm:gap-5">
               {flat.plans.map((pl) => (
                 <Reveal key={pl.label} variant="image">
-                  <figure className="space-y-1.5">
-                    {pl.images.map((img) => (
-                      <div key={img.image} className="relative aspect-[4/3] w-full overflow-hidden bg-white">
-                        <Image src={img.image} alt={img.alt} fill sizes="(min-width: 640px) 24vw, 45vw" className="object-contain p-1" />
-                      </div>
-                    ))}
-                    <figcaption className="text-center font-serif text-xs tracking-wider text-gold-light">{pl.label}</figcaption>
+                  <figure>
+                    {/* 複数枚は隙間なく連結（BOX＋Flat は1枚の間取りとして見せる。2026-09-02 赤入れ） */}
+                    <div className="overflow-hidden bg-white">
+                      {pl.images.map((img) => (
+                        <div key={img.image} className={`relative w-full ${pl.images.length > 1 ? 'aspect-[7/3]' : 'aspect-[4/3]'}`}>
+                          <Image src={img.image} alt={img.alt} fill sizes="(min-width: 640px) 24vw, 45vw" className="object-contain" />
+                        </div>
+                      ))}
+                    </div>
+                    <figcaption className="mt-1 text-center font-serif text-xs tracking-wider text-gold-light">{pl.label}</figcaption>
                   </figure>
                 </Reveal>
               ))}

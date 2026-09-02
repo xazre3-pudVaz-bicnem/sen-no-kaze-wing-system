@@ -34,25 +34,21 @@ export function OriginSection() {
           ))}
         </div>
 
-        {/* ストーリー2：3つの「何故」。写真は強調不要なので1列分に抑える（2026-09-02 先方指摘）。
-            スマホでは文章→写真の順、PCでは写真が左（lg:order で入れ替え） */}
-        <div className="mt-10 grid items-start gap-5 lg:grid-cols-[minmax(0,320px)_1fr] lg:gap-10">
-          <Reveal className="lg:order-2">
+        {/* ストーリー2：3つの「何故」。写真は先方指示（2026-09-02 赤×）で撤去し、文章のみ3列で */}
+        <div className="mt-10">
+          <Reveal>
             <p className="inline-block border border-gold/60 px-2 py-0.5 text-[0.65rem] tracking-[0.2em] text-gold">{genten.story2.badge}</p>
             <h3 className="mt-2 font-serif text-lg leading-snug whitespace-pre-line text-gold sm:text-2xl">{genten.story2.title}</h3>
             <p className="mt-1.5 text-xs tracking-wider text-white/80 sm:text-sm">{genten.story2.lead}</p>
-            <dl className="mt-4 space-y-3.5">
-              {genten.story2.whys.map((w) => (
-                <div key={w.q}>
-                  <dt className="font-serif text-sm text-white sm:text-base">{w.q}</dt>
-                  <dd className="mt-1 border-l-2 border-gold/50 pl-3 text-[0.75rem] leading-[1.7] text-white/85 sm:text-[0.8rem]">{w.a}</dd>
-                </div>
-              ))}
-            </dl>
           </Reveal>
-          <Reveal variant="image" className="relative aspect-[4/3] w-full max-w-[16rem] overflow-hidden sm:max-w-xs lg:order-1 lg:max-w-none">
-            <Image src={genten.story2.image} alt={genten.story2.alt} fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-cover" />
-          </Reveal>
+          <dl className="mt-4 grid gap-3.5 lg:grid-cols-3 lg:gap-6">
+            {genten.story2.whys.map((w) => (
+              <Reveal key={w.q}>
+                <dt className="font-serif text-sm text-white sm:text-base">{w.q}</dt>
+                <dd className="mt-1 border-l-2 border-gold/50 pl-3 text-[0.75rem] leading-[1.7] text-white/85 sm:text-[0.8rem]">{w.a}</dd>
+              </Reveal>
+            ))}
+          </dl>
         </div>
       </div>
     </section>

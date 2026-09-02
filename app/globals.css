@@ -232,3 +232,19 @@
     order: 4;
   }
 }
+
+/* トップのヒーロー：3枚の画像をクロスフェードで入れ替える（2026-09-02 先方指示） */
+@keyframes hero-crossfade {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  33% { opacity: 1; }
+  40% { opacity: 0; }
+  100% { opacity: 0; }
+}
+.hero-slide {
+  opacity: 0;
+  animation: hero-crossfade 18s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-slide { animation: none; }
+}

@@ -23,9 +23,8 @@ export const LP_NAV: NavItem[] = [
 /* ---------------- Hero ---------------- */
 
 export const hero = {
-  eyebrow: '− 特許出願中 −',
-  title: '世界初⁉ 不陸調整、\n木造コンテナ',
-  lead: '確認申請・住宅ローンに対応した、折畳み式の木造コンテナ。\n傾斜地にも最小限の造成で設置できます。',
+  title: '世界初⁉不陸調整、木造コンテナ',
+  patent: '（特許出願中）',
   /** 3 商品への導線（トップ内の各商品セクションへ） */
   products: [
     { label: 'Wing', href: '#wing' },
@@ -34,6 +33,12 @@ export const hero = {
   ],
   cta: '商品のメリット',
   ctaDealer: '代理店募集',
+  /** 3枚をクロスフェードで入れ替える（2026-09-02 先方指示）。1枚目が下地 */
+  slides: [
+    { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
+    { src: '/images/products/wing-rockshore-triple.jpg', alt: '雪山を望む海岸の岩場に並ぶ折り畳み式木造コンテナ Wing' },
+    { src: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる湖畔に建つ夜の Wing' },
+  ],
 };
 
 /* ---------------- Concept ---------------- */
@@ -124,16 +129,6 @@ export const quality = {
     '内外装の自由度も他のコンテナやトレーラーハウスと比較しても高い',
     '多機能、多様性に対応',
   ],
-  /** 設置の流れ・仕組み（修正案のキャプション付き画像列） */
-  steps: [
-    { label: '現地で下ろし', image: '/images/transport/unic-crane-lift.jpg', alt: 'ユニック車のクレーンで折り畳み状態のコンテナを現地に下ろす様子' },
-    { label: '広げ設置後', image: '/images/products/box-white.jpg', alt: '現地で広げて設置したコンテナの外観' },
-    { label: '基礎工事', image: '/images/transport/unic-seaside.jpg', alt: '伸縮可能な設置足で立つコンテナ。設置後に基礎工事を行う' },
-    { label: '折畳み屋根面', image: '/images/elevation/wing-side-wood.png', alt: '折り畳み時に屋根面になる木板張りの立面図' },
-    { label: 'UB・ウォッシュレット・洗面', image: '/images/interior/unit-bath-3point.jpg', alt: 'ユニットバス・ウォッシュレット・洗面を備えた水回り' },
-    { label: 'エアコン付き', image: '/images/interior/wing-room-aircon.jpg', alt: 'エアコンを備えた室内' },
-    { label: '広さ約2倍', image: '/images/plan/wing-hotel-guest.jpg', alt: '広げるとコンテナ約2倍の広さになる平面図' },
-  ],
 };
 
 /* ---------------- 商品ラインナップ（Wing / BOX / Flat） ---------------- */
@@ -156,15 +151,30 @@ export interface ShowcaseProduct {
   size: string;
   body: string;
   highlight?: string;
-  images: { src: string; alt: string; caption?: string }[];
+  /** 右側のコラージュ（Word のレイアウト準拠。先頭3枚＝上段の小さな外観、4枚目＝大きめの図、以降＝小さめ） */
+  images: { src: string; alt: string }[];
+  /** テキスト付きの活用トピック（BOX用） */
   topics: ShowcaseTopic[];
+  /** ラベル付き平面図の列（Flat用）。tag/lead はまとめの見出しと本文 */
+  plansTag?: string;
+  plansLead?: string;
+  plans?: { label: string; image: string; alt: string }[];
 }
 
 export const showcase = {
   labelEn: 'LINE UP',
   title: '商品ラインナップ',
   cta: 'この商品で見積する',
-  detail: '商品詳細を見る',
+  /** Wing ブロック下の設置の流れ（Word の写真列） */
+  steps: [
+    { label: '現地で下ろし', image: '/images/transport/unic-crane-lift.jpg', alt: 'ユニック車のクレーンで折り畳み状態のコンテナを現地に下ろす様子' },
+    { label: '広げ設置後', image: '/images/products/box-white.jpg', alt: '現地で広げて設置したコンテナの外観' },
+    { label: '基礎工事', image: '/images/transport/unic-seaside.jpg', alt: '伸縮可能な設置足で立つコンテナ。設置後に基礎工事を行う' },
+    { label: '折畳み屋根面', image: '/images/elevation/wing-side-wood.png', alt: '折り畳み時に屋根面になる木板張りの立面図' },
+    { label: 'UB・ウォッシュレット・洗面', image: '/images/interior/unit-bath-3point.jpg', alt: 'ユニットバス・ウォッシュレット・洗面を備えた水回り' },
+    { label: 'エアコン付き', image: '/images/interior/wing-room-aircon.jpg', alt: 'エアコンを備えた室内' },
+    { label: '広さ約2倍', image: '/images/plan/wing-hotel-guest.jpg', alt: '広げるとコンテナ約2倍の広さになる平面図' },
+  ],
   products: [
     {
       id: 'wing',
@@ -175,12 +185,12 @@ export const showcase = {
       body: 'トラック一台分でコンテナ2個分の広さを実現しました。\n運送費を削減でき、高級感溢れる内装と、使い勝手の良い間取りだから、お一人様の住宅にも最適で、水回りが無ければ事務所、店舗にも活用出来る丁度いい広さです。',
       highlight: '住居として使って将来はホテルで運用・・・高利回りを実現可能',
       images: [
-        { src: '/images/interior/bedroom-garden.jpg', alt: '低窓から緑を望むベッドと小上がりを備えた Wing の室内' },
-        { src: '/images/interior/bedroom-seaview.webp', alt: '海を望む大きな窓とベッドを備えた Wing の室内' },
-        { src: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面と水回りを備えた Wing の室内' },
-        { src: '/images/plan/wing-isometric.jpg', alt: 'ベッド・ダイニング・水回り・デッキを収めた Wing のアイソメ図' },
         { src: '/images/cases/box-forest-terrace.jpg', alt: '木立の中にデッキ付きで設置された木造コンテナ' },
         { src: '/images/cases/box-shore-sakura.jpg', alt: '桜咲く湖畔の遊歩道沿いに設置された木造コンテナ' },
+        { src: '/images/products/wing-lakeside-deck.jpg', alt: '湖を望む高台に建つウッドデッキ付きの Wing' },
+        { src: '/images/plan/wing-isometric.jpg', alt: 'ベッド・ダイニング・水回り・デッキを収めた Wing のアイソメ図' },
+        { src: '/images/interior/washroom-seaview.jpg', alt: '海を望む洗面と水回りを備えた Wing の室内' },
+        { src: '/images/interior/bedroom-garden.jpg', alt: '低窓から緑を望むベッドと小上がりを備えた Wing の室内' },
       ],
       topics: [],
     },
@@ -217,33 +227,15 @@ export const showcase = {
       catch: 'よりコンパクトに合理的に・・・',
       name: 'Flat',
       size: '基本 2,100×1,800〜4,800',
-      body: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。\nWing又はBOXにもう一部屋欲しいとき。\n平らに折り畳んで、何部屋も平積みで配送、運送費を大幅削減！Wing＋Flatで2LDKも実現、BOX＋Flatの組合せなどプラスαの商品。\nホームセンター等の物置販売にはスペースを取らない平積みとして在庫管理も容易な格安商品の決定版！',
+      body: '平らに折り畳んで、何部屋も平積みで配送、運送費を大幅削減！Wing＋Flatで2LDKも実現、BOX＋Flatの組合せなどプラスαの商品。\nホームセンター等の物置販売にはスペースを取らない平積みとして在庫管理も容易な格安商品の決定版！',
       images: [{ src: '/images/products/flat-gray.jpg', alt: '片流れ屋根と設置足を備えた Flat の外観' }],
-      topics: [
-        {
-          tag: '物置にもう一部屋Plus',
-          title: 'Flat＋Wing',
-          body: 'Wing＋Flatの組合せで2LDKを実現する居室プラン例です。',
-          image: '/images/plan/flat-wing-2ldk.jpg',
-          alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図',
-          caption: 'Flat＋Wing',
-        },
-        {
-          tag: '物置',
-          title: '物置・もう一部屋居室タイプ',
-          body: '物置の場合仕上げ無し、もう一部屋居室タイプは仕上げあり（6.8帖）。',
-          image: '/images/plan/flat-basic.jpg',
-          alt: '物置・居室タイプ フラット 6.8 帖の平面図',
-          caption: '物置',
-        },
-        {
-          tag: 'BOX＋Flat',
-          title: 'BOX＋Flat',
-          body: 'BOXの水回りキットとFlatの居室を組み合わせたプラン例です。',
-          image: '/images/plan/flat-two-rooms.jpg',
-          alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図',
-          caption: 'BOX＋Flat',
-        },
+      topics: [],
+      plansTag: '物置にもう一部屋Plus',
+      plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
+      plans: [
+        { label: 'Flat＋Wing', image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' },
+        { label: '物置', image: '/images/plan/flat-basic.jpg', alt: '物置・居室タイプ フラット 6.8 帖の平面図' },
+        { label: 'BOX＋Flat', image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
       ],
     },
   ] as ShowcaseProduct[],

@@ -64,7 +64,7 @@ export function HeaderShell({ items, user }: Props) {
   const solid = !overlay || scrolled || open;
   // isAdmin は「管理画面に入れる権限（代理店以上）」の意味
   const accountHref = user ? (user.isAdmin ? '/admin' : '/mypage') : '/login';
-  const accountLabel = user ? (user.isAdmin ? '管理画面' : 'マイページ') : 'ログイン';
+  const accountLabel = user ? (user.isAdmin ? '管理画面' : 'マイページ') : '会員様ログイン';
   const close = () => setOpen(false);
 
   return (
@@ -95,15 +95,16 @@ export function HeaderShell({ items, user }: Props) {
           </nav>
 
           <div className="hidden shrink-0 items-center gap-2 lg:flex">
-            <Link href={accountHref} className="btn btn-sm gap-1.5 px-3 text-white/90 hover:bg-white/10" aria-label={accountLabel}>
-              <UserRound className="size-4" aria-hidden="true" />
-              <span className="hidden 2xl:inline">{accountLabel}</span>
-            </Link>
             <Link href="/simulator/wing-01" className="btn-gold btn-sm px-4 text-[0.82rem] font-semibold whitespace-nowrap 2xl:text-sm">
               見積シミュレーション
             </Link>
             <Link href="/#contact" className="btn-outline-gold btn-sm px-4 font-serif tracking-wider whitespace-nowrap">
               Contact&nbsp;Us
+            </Link>
+            {/* 会員様ログインはヘッダー右端の金ボタン（2026-09-02 先方モック） */}
+            <Link href={accountHref} data-testid="hero-login" className="btn-gold btn-sm gap-1.5 px-3 text-[0.82rem] font-semibold whitespace-nowrap 2xl:text-sm" aria-label={accountLabel}>
+              <UserRound className="size-4" aria-hidden="true" />
+              {accountLabel}
             </Link>
           </div>
 

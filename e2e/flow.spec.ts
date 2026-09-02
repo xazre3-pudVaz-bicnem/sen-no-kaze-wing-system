@@ -44,17 +44,19 @@ test.describe('顧客フロー', () => {
     ]) {
       await expect(page.getByRole('heading', { name: t })).toBeVisible();
     }
-    // TOP に会員様ログインの導線がある
+    // 会員様ログインの導線（ヘッダーの金ボタン。2026-09-02 先方モックでヒーローから移動）
     await expect(page.getByTestId('hero-login')).toContainText('会員様ログイン');
-    await page.getByRole('link', { name: '商品詳細を見る' }).first().click();
-    await expect(page).toHaveURL(/\/products\/wing-01$/);
+    // トップの「この商品で見積する」から直接シミュレーターへ（商品詳細ボタンは先方指示で廃止）
+    await page.getByRole('link', { name: 'この商品で見積する' }).first().click();
+    await expect(page).toHaveURL(/\/simulator\/wing-01$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
+    // 商品一覧に 3 モデル、商品詳細からも見積を開始できる
+    await page.goto('/products');
+    await expect(page.getByRole('heading', { level: 2 })).toHaveCount(3);
+    await page.goto('/products/wing-01');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
     await page.getByRole('link', { name: 'この商品で見積を作る' }).first().click();
     await expect(page).toHaveURL(/\/simulator\/wing-01$/);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Wing');
-    // 商品一覧に 3 モデル
-    await page.goto('/products');
-    await expect(page.getByRole('heading', { level: 2 })).toHaveCount(3);
     await expectNoConsoleErrors(page, errors);
   });
 

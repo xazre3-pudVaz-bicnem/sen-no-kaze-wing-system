@@ -9,11 +9,11 @@ import { Reveal } from '@/components/ui/reveal';
 export function ConceptMovieSection() {
   const movie = process.env.NEXT_PUBLIC_CONCEPT_MOVIE_URL?.trim();
   return (
-    <section id="concept" className="scroll-mt-20 bg-forest py-20 sm:py-28">
+    <section id="concept" className="scroll-mt-20 bg-forest py-10 sm:py-14">
       <div className="container-x">
-        <RuleHeading labelEn={concept.labelEn} title={concept.title} />
+        <RuleHeading labelEn={concept.labelEn} title={concept.title} compact />
 
-        <Reveal variant="image" className="mt-12">
+        <Reveal variant="image" className="mt-5">
           <div className="relative aspect-video w-full overflow-hidden bg-forest-deep">
             {movie ? (
               <iframe

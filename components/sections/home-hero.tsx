@@ -1,78 +1,60 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ChevronDown, UserRound } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { hero } from '@/data/site-content';
-import { getSessionUser } from '@/lib/auth/session';
-import { canEditDealerItems } from '@/lib/domain/types';
 
-/** ファーストビュー：全面写真＋「世界初⁉ 不陸調整、木造コンテナ」（2026-09-01 トップ修正案） */
-export async function HomeHero() {
-  // 会員のログイン導線はヘッダーだけだと見つけにくいので、ファーストビューにも置く
-  const user = await getSessionUser();
-  const account = user
-    ? { href: canEditDealerItems(user.role) ? '/admin' : '/mypage', label: canEditDealerItems(user.role) ? '管理画面へ' : 'マイページへ' }
-    : { href: '/login', label: '会員様ログイン' };
-
+/** ファーストビュー：3枚クロスフェード＋左寄せの商品導線（2026-09-02 先方モック準拠） */
+export function HomeHero() {
   return (
-    <section className="relative isolate min-h-[100svh] overflow-hidden bg-forest-deep text-white">
-      {/* 先方指示（2026-08-29）で差し替え。パンフレット提供の海岸 CG */}
-      <Image
-        src="/images/products/wing-rockshore-triple.jpg"
-        alt="雪山を望む海岸の岩場に並ぶ、折り畳み式木造コンテナ Wing"
-        fill
-        priority
-        sizes="100vw"
-        className="object-cover object-[60%_center]"
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-forest-deep/55 via-transparent to-forest-deep/75" aria-hidden="true" />
+    <section className="relative isolate min-h-[78svh] overflow-hidden bg-forest-deep text-white">
+      {/* 1枚目は常時表示の下地、2〜3枚目が hero-crossfade で入れ替わる */}
+      <Image src={hero.slides[0].src} alt={hero.slides[0].alt} fill priority sizes="100vw" className="object-cover" />
+      {hero.slides.slice(1).map((s, i) => (
+        <Image
+          key={s.src}
+          src={s.src}
+          alt=""
+          aria-hidden="true"
+          fill
+          sizes="100vw"
+          className="hero-slide object-cover"
+          style={{ animationDelay: `${(i + 1) * 6}s` }}
+        />
+      ))}
+      <div className="absolute inset-0 bg-gradient-to-r from-forest-deep/70 via-forest-deep/25 to-transparent" aria-hidden="true" />
 
-      <div className="relative flex min-h-[100svh] flex-col justify-center">
-        <div className="container-x pt-24 pb-24 text-center sm:pb-28">
-          <p className="reveal reveal-delay-1 font-serif text-sm tracking-[0.3em] text-gold-light sm:text-lg">{hero.eyebrow}</p>
-          <h1 className="reveal reveal-delay-1 mt-4 font-serif text-[2rem] leading-tight tracking-[0.06em] whitespace-pre-line text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.5)] sm:text-[3.4rem] lg:text-[4.2rem]">
+      <div className="relative flex min-h-[78svh] flex-col justify-center">
+        <div className="container-x py-20">
+          <h1 className="reveal reveal-delay-1 max-w-xl font-serif text-[1.45rem] leading-snug tracking-[0.04em] text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.55)] sm:text-4xl">
             {hero.title}
+            <span className="mt-1 block text-sm tracking-[0.12em] text-white/90 sm:text-lg">{hero.patent}</span>
           </h1>
-          <p className="reveal reveal-delay-2 mx-auto mt-6 max-w-xl text-sm leading-[2] whitespace-pre-line text-white/90 sm:text-base">{hero.lead}</p>
 
-          {/* Wing / BOX / Flat の 3 商品導線 */}
-          <div className="reveal reveal-delay-2 mx-auto mt-8 flex max-w-md items-center justify-center gap-3 sm:gap-4">
+          {/* Wing / BOX / Flat を縦積みで（先方モック） */}
+          <div className="reveal reveal-delay-2 mt-6 flex w-40 flex-col gap-2.5 sm:w-44">
             {hero.products.map((p) => (
               <a
                 key={p.label}
                 href={p.href}
-                className="flex-1 rounded-sm border border-gold/60 bg-forest-deep/40 px-2 py-3 font-serif text-lg tracking-[0.15em] text-gold-light backdrop-blur-sm transition-colors hover:bg-gold hover:text-forest-deep sm:text-2xl"
+                className="rounded-sm border border-white/70 bg-forest-deep/35 px-4 py-2 text-center font-serif text-lg tracking-[0.2em] text-white backdrop-blur-sm transition-colors hover:bg-gold hover:border-gold hover:text-forest-deep sm:text-xl"
               >
                 {p.label}
               </a>
             ))}
           </div>
 
-          <div className="reveal reveal-delay-3 mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link href="#features" className="btn-outline-gold font-serif tracking-wider">
+          <div className="reveal reveal-delay-3 mt-5 flex w-40 flex-col gap-2 sm:w-44">
+            <Link href="#features" className="rounded-sm bg-gold px-4 py-1.5 text-center text-xs font-semibold tracking-wider text-forest-deep transition-colors hover:bg-gold-light sm:text-sm">
               {hero.cta}
-              <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
-            <Link href="#dealer" className="btn-outline-gold font-serif tracking-wider">
+            <Link href="#dealer" className="rounded-sm bg-gold px-4 py-1.5 text-center text-xs font-semibold tracking-wider text-forest-deep transition-colors hover:bg-gold-light sm:text-sm">
               {hero.ctaDealer}
             </Link>
-            <Link
-              href={account.href}
-              className="inline-flex items-center gap-2 rounded-full border border-white/50 px-6 py-3 text-sm tracking-wider text-white transition-colors hover:border-gold hover:text-gold"
-              data-testid="hero-login"
-            >
-              <UserRound className="size-4" aria-hidden="true" />
-              {account.label}
-            </Link>
           </div>
-          {!user && (
-            <p className="reveal reveal-delay-3 mt-3 text-xs text-white/70">
-              見積の保存・見積書のご確認は会員登録（無料）が必要です
-            </p>
-          )}
         </div>
       </div>
 
-      <a href="#concept" className="absolute bottom-5 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1 text-[0.6rem] tracking-[0.3em] text-white/70 hover:text-gold" aria-label="下へスクロール">
+      <a href="#concept" className="absolute bottom-4 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1 text-[0.6rem] tracking-[0.3em] text-white/70 hover:text-gold" aria-label="下へスクロール">
         SCROLL
         <ChevronDown className="size-4 animate-bounce" aria-hidden="true" />
       </a>

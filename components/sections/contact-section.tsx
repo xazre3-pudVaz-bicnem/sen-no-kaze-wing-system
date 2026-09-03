@@ -8,14 +8,14 @@ import { ContactForm } from '@/components/sections/contact-form';
 /** トップページ下部のお問い合わせ */
 export function ContactSection() {
   return (
-    <section id="contact" className="scroll-mt-20 bg-ivory py-20 sm:py-28">
-      <div className="container-x grid gap-12 lg:grid-cols-[1fr_1.4fr]">
+    <section id="contact" className="scroll-mt-20 bg-ivory py-8 sm:py-12">
+      <div className="container-x grid gap-6 lg:grid-cols-[1fr_1.4fr]">
         <div>
-          <RuleHeading labelEn={contact.labelEn} title={contact.title} lead={contact.lead} tone="light" />
-          <Reveal className="mt-10 space-y-6 text-sm">
+          <RuleHeading labelEn={contact.labelEn} title={contact.title} lead={contact.lead} tone="light" compact />
+          <Reveal className="mt-5 space-y-4 text-sm">
             <div>
               <p className="text-muted">お電話でのご相談</p>
-              <a href={`tel:${COMPANY.tel.replace(/-/g, '')}`} className="font-serif text-3xl tracking-wider">
+              <a href={`tel:${COMPANY.tel.replace(/-/g, '')}`} className="font-serif text-2xl tracking-wider">
                 {COMPANY.tel}
               </a>
               <p className="mt-1 text-xs text-muted">{COMPANY.telHours}</p>

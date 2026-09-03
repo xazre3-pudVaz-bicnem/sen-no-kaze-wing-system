@@ -30,20 +30,20 @@ export function HomeHero() {
             <span className="mt-1 block text-sm tracking-[0.12em] text-white/90 sm:text-lg">{hero.patent}</span>
           </h1>
 
-          {/* Wing / BOX / Flat を縦積みで（先方モック） */}
-          <div className="reveal reveal-delay-2 mt-6 flex w-40 flex-col gap-2.5 sm:w-44">
+          {/* Wing / BOX / Flat を縦積みで（先方モック。2026-09-03「幅広すぎ」で縮小） */}
+          <div className="reveal reveal-delay-2 mt-5 flex w-28 flex-col gap-2 sm:w-36">
             {hero.products.map((p) => (
               <a
                 key={p.label}
                 href={p.href}
-                className="rounded-sm border border-white/70 bg-forest-deep/35 px-4 py-2 text-center font-serif text-lg tracking-[0.2em] text-white backdrop-blur-sm transition-colors hover:bg-gold hover:border-gold hover:text-forest-deep sm:text-xl"
+                className="rounded-sm border border-white/70 bg-forest-deep/35 px-3 py-1.5 text-center font-serif text-base tracking-[0.18em] text-white backdrop-blur-sm transition-colors hover:bg-gold hover:border-gold hover:text-forest-deep sm:text-lg"
               >
                 {p.label}
               </a>
             ))}
           </div>
 
-          <div className="reveal reveal-delay-3 mt-5 flex w-40 flex-col gap-2 sm:w-44">
+          <div className="reveal reveal-delay-3 mt-4 flex w-28 flex-col gap-1.5 sm:w-36">
             <Link href="#features" className="rounded-sm bg-gold px-4 py-1.5 text-center text-xs font-semibold tracking-wider text-forest-deep transition-colors hover:bg-gold-light sm:text-sm">
               {hero.cta}
             </Link>

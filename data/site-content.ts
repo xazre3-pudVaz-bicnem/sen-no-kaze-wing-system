@@ -186,7 +186,7 @@ export const showcase = {
       name: '小さな宝箱 Wing',
       size: '基本 3,900×4,800',
       body: 'トラック一台分でコンテナ2個分の広さを実現しました。\n運送費を削減でき、高級感溢れる内装と、使い勝手の良い間取りだから、お一人様の住宅にも最適で、水回りが無ければ事務所、店舗にも活用出来る丁度いい広さです。',
-      highlight: '住居として使って将来はホテルで運用・・・高利回りを実現可能',
+      highlight: '住居として使って将来はホテルで運用・・・\n高利回りを実現可能',
       images: [
         { src: '/images/plan/wing-isometric.png', alt: 'ベッド・ダイニング・水回り・デッキを収めた Wing のアイソメ図' },
         { src: '/images/cases/box-forest-terrace.jpg', alt: '木立の中にデッキ付きで設置された木造コンテナ' },
@@ -245,10 +245,10 @@ export const showcase = {
         { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' }] },
         {
           label: 'BOX＋Flat',
-          /** 水回りキットの下に居室（Word モック準拠で左右反転版）を隙間なく連結 */
+          /** 水回りキットの下に居室を隙間なく連結（反転版は文字が裏返るため元の向きに戻した。2026-09-03 赤入れ「ここも違う」） */
           images: [
             { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
-            { image: '/images/plan/flat-two-rooms-mirror.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図（左右反転）' },
+            { image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
           ],
         },
       ],
@@ -292,18 +292,16 @@ export const combos = {
       ],
     },
     {
-      label: 'Wing居室プラン例',
-      items: [{ image: '/images/plan/wing-living.jpg', alt: 'リビング 5.7 帖と洋室 4.9 帖を収めた Wing 居室プランの平面図' }],
-    },
-    {
       label: 'Flatプラス居室例',
       items: [{ image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
     },
     {
+      /** 2026-09-03 赤入れ：Wing居室プラン例の図はこのグループへ移動 */
       label: 'Wing＋BOXまたはFlatの組合せ例',
       items: [
         { image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
         { image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
+        { image: '/images/plan/wing-living.jpg', alt: 'リビング 5.7 帖と洋室 4.9 帖を収めた Wing 居室プランの平面図' },
       ],
     },
   ],
@@ -316,9 +314,9 @@ export const estimate = {
   title: '見積シミュレーション',
   lead: 'あなたは、どんな事業やお住まいに、どの商品を活用しますか？\n見積シミュレーションで概算を確認し、あなたの希望にあった商品を見つけましょう。',
   buttons: [
-    { label: 'Wingで見積してみる', slug: 'wing-01', image: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる湖畔に建つ夜の Wing', contain: false },
-    { label: 'BOXで見積してみる', slug: 'box', image: '/images/products/box-white.png', alt: '白い外壁の BOX', contain: true },
-    { label: 'Flatで見積してみる', slug: 'flat', image: '/images/products/flat-navy.png', alt: '紺色の外壁の Flat', contain: true },
+    { label: 'Wingで見積', slug: 'wing-01', image: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる湖畔に建つ夜の Wing', contain: false },
+    { label: 'BOXで見積', slug: 'box', image: '/images/products/box-white.png', alt: '白い外壁の BOX', contain: true },
+    { label: 'Flatで見積', slug: 'flat', image: '/images/products/flat-navy.png', alt: '紺色の外壁の Flat', contain: true },
   ],
 };
 

@@ -30,7 +30,8 @@ export function EstimateCtaSection() {
                     className={`${b.contain ? 'object-contain p-2' : 'object-cover'} transition-transform duration-500 group-hover:scale-105`}
                   />
                 </div>
-                <p className="flex items-center justify-center gap-1 px-1 py-2 font-serif text-[0.68rem] tracking-wide text-gold-light group-hover:text-gold sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-base sm:tracking-wider">
+                {/* ラベルは金地に濃緑文字で視認性を確保（2026-09-03「色かえる・見えない」） */}
+                <p className="flex items-center justify-center gap-1 bg-gold px-1 py-2 text-[0.75rem] font-semibold tracking-wide text-forest-deep transition-colors group-hover:bg-gold-light sm:gap-1.5 sm:px-3 sm:py-2.5 sm:text-base">
                   {b.label}
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </p>

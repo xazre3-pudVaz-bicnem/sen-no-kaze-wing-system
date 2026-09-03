@@ -34,27 +34,33 @@ function EstimateButton({ p }: { p: ShowcaseProduct }) {
 function WingFlowStrip() {
   return (
     <div className="mt-6 overflow-x-auto pb-1">
-      <div className="flex min-w-[660px] items-stretch gap-1.5 sm:gap-2">
-        <div className="relative w-[21%] shrink-0 overflow-hidden">
+      <div className="flex min-w-[760px] items-stretch gap-1.5 sm:gap-2">
+        {/* 1) クレーン写真 */}
+        <div className="relative w-[16%] shrink-0 overflow-hidden">
           <Image src="/images/transport/unic-seaside.jpg" alt="海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ" fill sizes="180px" className="object-cover" />
         </div>
-        <div className="flex w-[15%] shrink-0 flex-col justify-between gap-1.5">
-          <p className="bg-sand px-2 py-2 text-center text-[0.7rem] font-semibold text-ink">折畳み屋根面</p>
-          <div className="relative aspect-[872/392] w-full">
-            <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="120px" className="object-contain" />
-          </div>
-          <div className="relative aspect-[872/392] w-full">
-            <Image src="/images/elevation/wing-roof-face.png" alt="折り畳み時に屋根面になる木板張りの立面図" fill sizes="120px" className="object-contain" />
+        {/* 2) 折畳み屋根ラベル＋（AC小箱・木板） */}
+        <div className="flex w-[14%] shrink-0 flex-col justify-between gap-1.5">
+          <p className="bg-sand px-2 py-2 text-center text-[0.72rem] font-semibold text-ink">折畳み屋根</p>
+          <div className="flex items-end gap-1">
+            <div className="relative aspect-[265/390] w-[34%]">
+              <Image src="/images/elevation/wing-equipment-ac.png" alt="給湯器とエアコン室外機まわりの立面図" fill sizes="60px" className="object-contain" />
+            </div>
+            <div className="relative aspect-[872/392] flex-1">
+              <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="110px" className="object-contain" />
+            </div>
           </div>
         </div>
-        <div className="relative w-[11%] shrink-0">
+        {/* 3) 玄関側立面図 */}
+        <div className="relative w-[9%] shrink-0">
           <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="90px" className="object-contain" />
         </div>
-        <div className="relative w-[9%] shrink-0 bg-white">
+        {/* 4) 折畳み時の平面 */}
+        <div className="relative w-[8%] shrink-0 bg-white">
           <Image src="/images/plan/wing-folded-half.png" alt="折り畳んだ状態の平面図" fill sizes="70px" className="object-contain p-0.5" />
         </div>
-        {/* 中央のラベル群（Word の赤矢印「広さ約2倍」） */}
-        <div className="flex w-[13%] shrink-0 flex-col items-center justify-center gap-1.5 text-center">
+        {/* 5) ラベル群（Word の赤字「広さ約2倍→」） */}
+        <div className="flex w-[12%] shrink-0 flex-col items-center justify-center gap-1.5 text-center">
           <p className="text-[0.62rem] leading-snug whitespace-pre-line text-white/85">{'現地で下ろし\n広げ設置後\n基礎工事'}</p>
           <p className="flex items-center gap-0.5 text-[0.7rem] font-bold whitespace-nowrap text-red-400">
             広さ約2倍
@@ -62,15 +68,31 @@ function WingFlowStrip() {
           </p>
           <p className="text-[0.6rem] leading-snug whitespace-pre-line text-white/85">{'UB・エアコン\nウォッシュレット・洗面\nエアコン付き'}</p>
         </div>
-        <div className="relative w-[15%] shrink-0 bg-white">
+        {/* 6) 展開後の平面 */}
+        <div className="relative w-[14%] shrink-0 bg-white">
           <Image src="/images/plan/wing-hotel-guest.png" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="130px" className="object-contain p-0.5" />
         </div>
-        <div className="flex w-[15%] shrink-0 flex-col justify-between gap-1.5">
+        {/* 7) 木板（窓・戸あり）＋（玄関小・木板） */}
+        <div className="flex w-[13%] shrink-0 flex-col justify-between gap-1.5">
+          <div className="relative aspect-[912/420] w-full">
+            <Image src="/images/elevation/wing-roof-face.png" alt="窓と戸のある木板張りの立面図" fill sizes="110px" className="object-contain" />
+          </div>
+          <div className="flex items-end gap-1">
+            <div className="relative aspect-[556/365] w-[45%]">
+              <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="55px" className="object-contain" />
+            </div>
+            <div className="relative aspect-[872/392] flex-1">
+              <Image src="/images/elevation/wing-wood-panel-2.png" alt="木板張りの外壁パネル" fill sizes="60px" className="object-contain" />
+            </div>
+          </div>
+        </div>
+        {/* 8) 設備側立面図＋木板 */}
+        <div className="flex w-[14%] shrink-0 flex-col justify-between gap-1.5">
           <div className="relative aspect-[631/390] w-full">
             <Image src="/images/elevation/wing-equipment-side.png" alt="給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図" fill sizes="120px" className="object-contain" />
           </div>
           <div className="relative aspect-[872/392] w-full">
-            <Image src="/images/elevation/wing-wood-panel-2.png" alt="木板張りの外壁パネル" fill sizes="120px" className="object-contain" />
+            <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="120px" className="object-contain" />
           </div>
         </div>
       </div>

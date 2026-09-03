@@ -76,8 +76,9 @@ export const genten = {
   story1: {
     title: '災害の経験から生まれた、\n新しい建築のかたち',
     body: '東日本大震災により、私の故郷は大きな被害を受けました。\n多くの人が住まいを失い、親族もまた、仮設住宅が完成するまで、長い時間慣れない場所で過ごさなくてはいけませんでした。\n「落ち着ける場所を早く作ってあげたい。」即断即決で自社工場でBOXを造り、被災地に届けました。\nその時、仮設住宅建築費約500万、解体費約200万でしたが、解体する費用が無駄だと強く感じ、持ち運び出来て、地域の工務店でもできる木造コンテナの技術研究開発を開始しました。',
-    image: '/images/cases/iwate-yamada-funakoshi.png',
-    alt: '岩手県山田町・船越大島の海辺に設置された木造コンテナ',
+    /** 先方提供の被災地写真（「wing開発の原点」資料）を指定どおり白黒加工で使用（2026-09-03） */
+    image: '/images/cases/quake-damage-bw.jpg',
+    alt: '地震で倒壊した家屋が並ぶ被災地の街並み（白黒写真）',
   },
   story2: {
     title: '経験から生まれた\n不陸調整方式採用 折畳み木造コンテナ',
@@ -240,15 +241,16 @@ export const showcase = {
       plansTag: '物置にもう一部屋Plus',
       plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
       /** 物置Plus の右列：設置例写真＋組合せ平面図（BOX＋Flat は Word と同じく水回りキット＋居室の2枚重ね） */
-      storagePhoto: { image: '/images/cases/flat-entrance.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置' },
+      /** 右側（住宅玄関部分）はトリミング済み（2026-09-03 赤入れ） */
+      storagePhoto: { image: '/images/cases/flat-entrance-trim.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置' },
       plans: [
         { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' }] },
         {
           label: 'BOX＋Flat',
-          /** 水回りキットの下に居室を隙間なく連結（反転版は文字が裏返るため元の向きに戻した。2026-09-03 赤入れ「ここも違う」） */
+          /** 水回りキットの下に、先方提供の「正しい向き」の居室図を隙間なく連結（2026-09-03） */
           images: [
             { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
-            { image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' },
+            { image: '/images/plan/flat-rooms-under.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図（出入口が下側）' },
           ],
         },
       ],

@@ -24,45 +24,45 @@ export function FoldingTechSection() {
             <p className="text-[0.8rem] leading-[1.8] text-white/85 sm:text-sm">{foldingTech.body}</p>
           </Reveal>
 
-          {/* 写真列（スマホは横スクロール） */}
+          {/* 写真列（PDF どおりの並び。透過画像は背景に直置き。スマホは横スクロールで同じ並びを保つ） */}
           <Reveal variant="image" className="overflow-x-auto pb-1">
-            <div className="flex min-w-[640px] items-stretch gap-1.5 sm:gap-2">
-              {/* 折畳み屋根ラベル＋玄関立面／AC＋木板 */}
-              <div className="flex w-[22%] shrink-0 flex-col justify-between gap-1.5">
-                <div className="flex items-stretch gap-1.5">
-                  <p className="flex flex-1 items-center justify-center bg-sand px-2 py-2 text-center text-[0.72rem] font-semibold text-ink">折畳み屋根</p>
-                  <div className="relative aspect-[556/365] w-[38%]">
-                    <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="70px" className="object-contain" />
+            <div className="flex min-w-[680px] items-stretch gap-2">
+              {/* 1) 折畳み屋根ラベル＋ドア／AC＋木板 */}
+              <div className="flex w-[26%] shrink-0 flex-col justify-between gap-2">
+                <div className="flex items-stretch gap-2">
+                  <p className="flex flex-1 items-center justify-center bg-[#d9d9d9] px-2 py-3 text-center text-[0.78rem] font-semibold text-ink">折畳み屋根</p>
+                  <div className="relative aspect-[222/365] w-[22%]">
+                    <Image src="/images/elevation/wing-door-only.png" alt="木製玄関ドアの立面図" fill sizes="60px" className="object-contain" />
                   </div>
                 </div>
-                <div className="flex items-end gap-1.5">
-                  <div className="relative aspect-[265/390] w-[26%]">
+                <div className="flex items-end gap-2">
+                  <div className="relative aspect-[265/390] w-[22%]">
                     <Image src="/images/elevation/wing-equipment-ac.png" alt="給湯器とエアコン室外機まわりの立面図" fill sizes="50px" className="object-contain" />
                   </div>
                   <div className="relative aspect-[872/392] flex-1">
-                    <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="140px" className="object-contain" />
+                    <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="150px" className="object-contain" />
                   </div>
                 </div>
               </div>
-              {/* 折畳み時の平面 */}
-              <div className="relative w-[10%] shrink-0 bg-white">
-                <Image src="/images/plan/wing-folded-half.png" alt="折り畳んだ状態の平面図" fill sizes="80px" className="object-contain p-0.5" />
+              {/* 2) 折畳み時の平面（縦長・白地） */}
+              <div className="relative w-[9%] shrink-0 bg-white">
+                <Image src="/images/plan/wing-folded-half.png" alt="折り畳んだ状態の平面図" fill sizes="70px" className="object-contain p-0.5" />
               </div>
-              {/* クレーン写真（今後、先方提供の動画に差し替え予定） */}
+              {/* 3) クレーン写真＋「動画に変更する」（PDF 注記。後日、先方提供の動画へ差し替え） */}
               <div className="relative w-[30%] shrink-0 overflow-hidden">
                 <Image src="/images/transport/unic-seaside.jpg" alt="海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ" fill sizes="260px" className="object-cover" />
               </div>
-              {/* 広さ約2倍 → */}
-              <div className="flex w-[11%] shrink-0 flex-col items-center justify-center gap-1 text-center">
+              {/* 4) 広さ約2倍 →（PDF は白い矢印） */}
+              <div className="flex w-[10%] shrink-0 flex-col items-center justify-center gap-1 text-center">
                 <p className="text-[0.62rem] leading-snug whitespace-pre-line text-white/85">{'現地で下ろし\n広げ設置後\n基礎工事'}</p>
-                <p className="flex items-center gap-0.5 text-[0.72rem] font-bold whitespace-nowrap text-red-400">
+                <p className="flex items-center gap-0.5 bg-white px-1.5 py-0.5 text-[0.7rem] font-bold whitespace-nowrap text-red-600">
                   広さ約2倍
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </p>
               </div>
-              {/* 展開後の平面 */}
-              <div className="relative w-[20%] shrink-0 bg-white">
-                <Image src="/images/plan/wing-hotel-guest.png" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="180px" className="object-contain p-0.5" />
+              {/* 5) 展開後の平面（PDF は縦長・白地） */}
+              <div className="relative w-[16%] shrink-0 bg-white">
+                <Image src="/images/plan/wing-hotel-guest-portrait.png" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="150px" className="object-contain p-0.5" />
               </div>
             </div>
           </Reveal>

@@ -46,14 +46,14 @@ export function ProductShowcase() {
               )}
               <EstimateButton p={wing} />
             </Reveal>
-            {/* コラージュ：左に透過のアイソメ図（大）、右に外観1枚＋室内3枚の2×2 */}
+            {/* コラージュ：PDF どおり 左＝透過アイソメ図（大）／右＝外観1枚＋室内3枚の2×2 */}
             <Reveal variant="image">
-              <div className="grid grid-cols-3 gap-1.5">
-                <div className="relative row-span-2">
+              <div className="grid grid-cols-[0.85fr_1fr_1fr] gap-2">
+                <div className="relative row-span-2 min-h-40">
                   <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-contain" />
                 </div>
                 {wing.images.slice(1, 5).map((img) => (
-                  <div key={img.src} className="relative aspect-video overflow-hidden">
+                  <div key={img.src} className="relative aspect-[4/3] overflow-hidden">
                     <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-cover" />
                   </div>
                 ))}

@@ -3,24 +3,25 @@ import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { hero } from '@/data/site-content';
 
-/** ファーストビュー：Ver4 PDF の静止構成（湖畔の背景＋右上に夕暮れパネル＋右下に内装パネル） */
+/** ファーストビュー：3枚クロスフェード（従来どおり）＋ Ver4 の見出し・サブラベル付きボタン */
 export function HomeHero() {
   return (
     <section className="relative isolate min-h-[55svh] overflow-hidden bg-forest-deep text-white lg:min-h-[70svh]">
-      <Image src={hero.bg.src} alt={hero.bg.alt} fill priority sizes="100vw" className="object-cover" />
+      {/* 1枚目は常時表示の下地、2〜3枚目が hero-crossfade で入れ替わる */}
+      <Image src={hero.slides[0].src} alt={hero.slides[0].alt} fill priority sizes="100vw" className="object-cover" />
+      {hero.slides.slice(1).map((s, i) => (
+        <Image
+          key={s.src}
+          src={s.src}
+          alt=""
+          aria-hidden="true"
+          fill
+          sizes="100vw"
+          className="hero-slide object-cover"
+          style={{ animationDelay: `${(i + 1) * 6}s` }}
+        />
+      ))}
       <div className="absolute inset-0 bg-gradient-to-r from-forest-deep/70 via-forest-deep/25 to-transparent" aria-hidden="true" />
-
-      {/* 右上：夕暮れの黒コンテナ／右下：内装の組写真（Ver4。狭い画面では背景のみ） */}
-      <div className="absolute top-0 right-0 hidden w-[38%] md:block">
-        <div className="relative aspect-[2/1] w-full">
-          <Image src={hero.panelTop.src} alt={hero.panelTop.alt} fill sizes="38vw" className="object-cover" />
-        </div>
-      </div>
-      <div className="absolute right-0 bottom-0 hidden w-[42%] md:block">
-        <div className="relative aspect-[16/9] w-full">
-          <Image src={hero.panelBottom.src} alt={hero.panelBottom.alt} fill sizes="42vw" className="object-cover" />
-        </div>
-      </div>
 
       <div className="relative flex min-h-[55svh] flex-col justify-center lg:min-h-[70svh]">
         <div className="container-x py-12 sm:py-16">

@@ -19,7 +19,7 @@ export function ComboPlansSection() {
         <div className="mt-5 flex flex-wrap items-start gap-x-8 gap-y-5">
           {combos.groups.map((g) => (
             <Reveal key={g.label} variant="image" className="min-w-0">
-              <p className="inline-block rounded-sm px-2.5 py-1 text-[0.72rem] font-semibold tracking-wider text-white sm:text-xs" style={{ backgroundColor: g.badge }}>
+              <p className="inline-block rounded-full border border-gold/60 px-4 py-1 font-serif text-[0.72rem] tracking-wider text-white sm:text-xs" style={{ backgroundColor: g.badge }}>
                 {g.label}
               </p>
               <div className={`mt-1.5 flex flex-wrap gap-3 ${g.panel ? 'bg-[#0b4f66] p-2.5' : ''}`}>

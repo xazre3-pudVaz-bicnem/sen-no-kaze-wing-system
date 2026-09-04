@@ -126,7 +126,8 @@ export function ProductShowcase() {
       <article id="flat" className="scroll-mt-24 bg-[#303030] py-10 sm:py-12">
         <div className="container-x">
           <ProductHeading p={flat} />
-          <div className="mt-4 grid gap-5 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:items-start lg:gap-8">
+          {/* Ver4 PDF の4列：本文＋基本平面図｜外観CG｜物置Plus文＋Flat＋Wing図｜物置写真＋BOX＋Flat図 */}
+          <div className="mt-4 grid gap-5 lg:grid-cols-[0.95fr_1fr_0.95fr_0.95fr] lg:items-start lg:gap-6">
             <Reveal className="lg:col-start-1 lg:row-start-1">
               <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{flat.body}</p>
               <EstimateButton p={flat} />
@@ -140,43 +141,37 @@ export function ProductShowcase() {
             )}
             <Reveal variant="image" className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
               <div className="relative aspect-[4/3] w-full max-w-[18rem] sm:max-w-sm lg:mx-auto lg:max-w-md">
-                <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 32vw, 60vw" className="object-contain" />
+                <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 60vw" className="object-contain" />
               </div>
             </Reveal>
-            <div className="lg:col-start-3 lg:row-span-2 lg:row-start-1">
-              <Reveal>
-                <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{flat.plansTag}】</p>
-                <p className="mt-1 text-[0.75rem] leading-[1.7] text-white/85 sm:text-sm">{flat.plansLead}</p>
+            <Reveal className="lg:col-start-3 lg:row-start-1">
+              <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{flat.plansTag}】</p>
+              <p className="mt-1 text-[0.75rem] leading-[1.7] text-white/85 sm:text-sm">{flat.plansLead}</p>
+            </Reveal>
+            {flat.plans && (
+              <Reveal variant="image" className="lg:col-start-3 lg:row-start-2">
+                <div className="relative aspect-square w-full max-w-[15rem] overflow-hidden bg-white sm:max-w-[17rem]">
+                  <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 640px) 17rem, 60vw" className="object-contain p-1" />
+                </div>
               </Reveal>
-              {flat.storagePhoto && (
-                <Reveal variant="image" className="mt-2 w-full max-w-[13rem] sm:max-w-[15rem]">
-                  <div className="relative aspect-[4/3] w-full">
-                    <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 55vw" className="object-cover" />
-                    <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
-                  </div>
-                  {flat.storagePhoto.note && <p className="mt-1 text-[0.7rem] text-white/80">{flat.storagePhoto.note}</p>}
-                </Reveal>
-              )}
-            </div>
+            )}
+            {flat.storagePhoto && (
+              <Reveal variant="image" className="w-full max-w-[13rem] sm:max-w-[15rem] lg:col-start-4 lg:row-start-1">
+                <div className="relative aspect-[4/3] w-full">
+                  <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 55vw" className="object-cover" />
+                  <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
+                </div>
+                {flat.storagePhoto.note && <p className="mt-1 text-[0.7rem] text-white/80">{flat.storagePhoto.note}</p>}
+              </Reveal>
+            )}
+            {flat.plans && (
+              <Reveal variant="image" className="lg:col-start-4 lg:row-start-2">
+                <div className="relative aspect-square w-full max-w-[15rem] overflow-hidden bg-white sm:max-w-[17rem]">
+                  <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 640px) 17rem, 60vw" className="object-contain p-1" />
+                </div>
+              </Reveal>
+            )}
           </div>
-
-          {/* 組合せ平面図（BOX＋Flat は合成済みの1枚画像。2026-09-04「変です」対応） */}
-          {flat.plans && (
-            <div className="mt-6 grid max-w-lg grid-cols-2 gap-3 sm:max-w-xl sm:gap-5">
-              {flat.plans.map((pl) => (
-                <Reveal key={pl.label} variant="image">
-                  <figure>
-                    {pl.images.map((img) => (
-                      <div key={img.image} className="relative aspect-square w-full overflow-hidden bg-white">
-                        <Image src={img.image} alt={img.alt} fill sizes="(min-width: 640px) 24vw, 45vw" className="object-contain p-1" />
-                      </div>
-                    ))}
-                    <figcaption className="mt-1 text-center font-serif text-xs tracking-wider text-gold-light">{pl.label}</figcaption>
-                  </figure>
-                </Reveal>
-              ))}
-            </div>
-          )}
         </div>
       </article>
     </section>

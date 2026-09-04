@@ -33,10 +33,12 @@ export const hero = {
   ],
   cta: '商品のメリット',
   ctaDealer: '代理店募集',
-  /** Ver4 PDF の静止構成：湖畔の背景＋右上に夕暮れの黒コンテナ＋右下に内装の組写真 */
-  bg: { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
-  panelTop: { src: '/images/hero/sunset-dark-wing.jpg', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
-  panelBottom: { src: '/images/hero/interior-collage.jpg', alt: 'テレビのある部屋・海を望む寝室・庭を望む寝室・丸鏡の洗面を並べた Wing の内装' },
+  /** 3枚をクロスフェードで入れ替える（2026-09-04 先方指示で復活。従来と同じ3枚）。1枚目が下地 */
+  slides: [
+    { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
+    { src: '/images/hero/interior-collage.jpg', alt: 'テレビのある部屋・海を望む寝室・庭を望む寝室・丸鏡の洗面を並べた Wing の内装' },
+    { src: '/images/hero/sunset-dark-wing.jpg', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
+  ],
 };
 
 /* ---------------- Concept ---------------- */

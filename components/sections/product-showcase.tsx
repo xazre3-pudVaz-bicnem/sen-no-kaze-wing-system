@@ -42,9 +42,9 @@ export function ProductShowcase() {
             {/* 左：見出し＋本文＋アイソメ図＋ボタン（固定2列） */}
             <Reveal>
               <ProductHeading p={wing} />
-              <div className="mt-2 grid grid-cols-[1fr_1.15fr] items-start gap-3">
+              <div className="mt-2 grid grid-cols-[1.15fr_1fr] items-start gap-3">
                 <div>
-                  <p className="text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-[0.8rem]">{wing.body}</p>
+                  <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{wing.body}</p>
                   <EstimateButton p={wing} />
                 </div>
                 <div className="relative aspect-[4/5] w-full">
@@ -62,7 +62,7 @@ export function ProductShowcase() {
                   </div>
                 ))}
               </div>
-              {wing.caption && <p className="mt-1.5 text-right text-[0.72rem] leading-relaxed text-white/90">{wing.caption}</p>}
+              {wing.caption && <p className="mt-1.5 text-right text-[0.78rem] leading-relaxed text-white/90 sm:text-[0.85rem]">{wing.caption}</p>}
             </Reveal>
           </PairBlocks>
 
@@ -95,9 +95,9 @@ export function ProductShowcase() {
             {/* 左：見出し＋本文＋外観CG＋内装図＋ボタン（固定2列） */}
             <Reveal>
               <ProductHeading p={box} />
-              <div className="mt-2 grid grid-cols-[1fr_1.25fr] items-start gap-3">
+              <div className="mt-2 grid grid-cols-[1.1fr_1fr] items-start gap-3">
                 <div>
-                  <p className="text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-[0.8rem]">{box.body}</p>
+                  <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{box.body}</p>
                   <EstimateButton p={box} />
                 </div>
                 <div className="space-y-2">
@@ -116,9 +116,9 @@ export function ProductShowcase() {
               {box.topics.map((t) => (
                 <Reveal key={t.title} className="grid grid-cols-[1fr_0.85fr] items-start gap-3">
                   <div>
-                    {t.tag && <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{t.tag}】</p>}
-                    <h4 className="mt-0.5 font-serif text-[0.8rem] leading-snug text-white">{t.title}</h4>
-                    <p className="mt-1 text-[0.68rem] leading-[1.65] whitespace-pre-line text-white/80">{t.body}</p>
+                    {t.tag && <p className="font-serif text-[0.78rem] tracking-wider text-gold sm:text-[0.9rem]">【{t.tag}】</p>}
+                    <h4 className="mt-0.5 font-serif text-[0.86rem] leading-snug text-white sm:text-[0.95rem]">{t.title}</h4>
+                    <p className="mt-1 text-[0.76rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{t.body}</p>
                   </div>
                   <div className="relative aspect-[16/11] w-full">
                     <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 18vw, 40vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
@@ -140,18 +140,19 @@ export function ProductShowcase() {
             {/* 左：見出し＋本文＋外観CG＋基本平面図＋ボタン */}
             <Reveal>
               <ProductHeading p={flat} />
-              <div className="mt-2 grid grid-cols-[1fr_1.15fr] items-start gap-3">
+              {/* PDF の比率：文字が主役、画像は控えめ */}
+              <div className="mt-2 grid grid-cols-[1.15fr_1fr] items-start gap-3">
                 <div>
-                  <p className="text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-[0.8rem]">{flat.body}</p>
+                  <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{flat.body}</p>
                   <EstimateButton p={flat} />
                 </div>
                 <div className="space-y-2">
                   <div className="relative aspect-[4/3] w-full">
-                    <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain" />
+                    <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain" />
                   </div>
                   {flat.basicPlan && (
                     <div className="relative aspect-[21/9] w-full overflow-hidden bg-white">
-                      <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain p-0.5" />
+                      <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-0.5" />
                     </div>
                   )}
                 </div>
@@ -161,8 +162,8 @@ export function ProductShowcase() {
             {/* 右：物置Plus 文＋Flat＋Wing図｜物置写真＋BOX＋Flat図（固定2列） */}
             <Reveal className="grid grid-cols-2 items-start gap-3">
               <div>
-                <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{flat.plansTag}】</p>
-                <p className="mt-1 text-[0.7rem] leading-[1.65] text-white/85 sm:text-[0.78rem]">{flat.plansLead}</p>
+                <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
+                <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
                 {flat.plans && (
                   <div className="relative mt-2 aspect-square w-full overflow-hidden bg-white">
                     <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
@@ -176,7 +177,7 @@ export function ProductShowcase() {
                       <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-cover" />
                       <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
                     </div>
-                    {flat.storagePhoto.note && <p className="mt-1 text-[0.68rem] text-white/80">{flat.storagePhoto.note}</p>}
+                    {flat.storagePhoto.note && <p className="mt-1 text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
                   </>
                 )}
                 {flat.plans && (

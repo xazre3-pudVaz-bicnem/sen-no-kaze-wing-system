@@ -91,12 +91,12 @@ export function ProductShowcase() {
               <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{box.body}</p>
               <EstimateButton p={box} />
             </Reveal>
-            {/* 外観（透過）＋内装レイアウト */}
-            <Reveal variant="image" className="grid grid-cols-2 items-center gap-3 lg:grid-cols-1">
-              <div className="relative aspect-[3/2] w-full">
+            {/* 外観（透過）＋内装レイアウト（PDF と同じく間を詰める） */}
+            <Reveal variant="image" className="grid grid-cols-2 items-center gap-2 lg:grid-cols-1 lg:gap-3">
+              <div className="relative aspect-[16/9] w-full">
                 <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 32vw, 45vw" className="object-contain" />
               </div>
-              <div className="relative aspect-[21/9] w-full overflow-hidden bg-white">
+              <div className="relative aspect-[16/7] w-full overflow-hidden bg-white">
                 <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 32vw, 45vw" className="object-contain p-0.5" />
               </div>
             </Reveal>
@@ -109,7 +109,7 @@ export function ProductShowcase() {
                     <h4 className="mt-0.5 font-serif text-sm leading-snug text-white">{t.title}</h4>
                     <p className="mt-1 text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/80">{t.body}</p>
                   </div>
-                  <div className="relative aspect-[4/3] w-full lg:mt-2 lg:max-w-xs">
+                  <div className="relative aspect-[16/11] w-full lg:mt-2 lg:max-w-xs">
                     <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 20rem, 45vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
                     {t.caption && (
                       <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>

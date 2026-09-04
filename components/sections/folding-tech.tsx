@@ -52,10 +52,9 @@ export function FoldingTechSection() {
               <div className="relative w-[30%] shrink-0 overflow-hidden">
                 <Image src="/images/transport/unic-seaside.jpg" alt="海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ" fill sizes="260px" className="object-cover" />
               </div>
-              {/* 4) 広さ約2倍 →（PDF は白い矢印） */}
-              <div className="flex w-[10%] shrink-0 flex-col items-center justify-center gap-1 text-center">
-                <p className="text-[0.62rem] leading-snug whitespace-pre-line text-white/85">{'現地で下ろし\n広げ設置後\n基礎工事'}</p>
-                <p className="flex items-center gap-0.5 bg-white px-1.5 py-0.5 text-[0.7rem] font-bold whitespace-nowrap text-red-600">
+              {/* 4) 広さ約2倍 →（PDF は白地の矢印バナーのみ。説明テキストは PDF に無いので置かない） */}
+              <div className="flex w-[10%] shrink-0 items-center justify-center">
+                <p className="flex items-center gap-0.5 bg-white px-1.5 py-1 text-[0.7rem] font-bold whitespace-nowrap text-red-600">
                   広さ約2倍
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </p>

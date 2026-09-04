@@ -221,11 +221,11 @@ export const showcase = {
       /** 右側（住宅玄関部分）はトリミング済み。Ver4 でキャプションに寸法を追記 */
       storagePhoto: { image: '/images/cases/flat-entrance-trim.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置', note: '庭に物置（最小 2,100×1,800）' },
       plans: [
-        { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' }] },
+        { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-labeled.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図（Flat＋Wing）' }] },
         {
           label: 'BOX＋Flat',
           /** 水回りキット＋居室（正しい向き）を1枚に合成済み（2026-09-04「変です」対応） */
-          images: [{ image: '/images/plan/box-flat-combo.jpg', alt: 'BOX 水回りキットとフラットの食堂・洋室をつなげた平面図' }],
+          images: [{ image: '/images/plan/box-flat-labeled.jpg', alt: 'BOX 水回りキットとフラットの寝室・食堂をつなげた平面図（BOX＋Flat）' }],
         },
       ],
     },

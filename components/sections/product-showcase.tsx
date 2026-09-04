@@ -47,7 +47,7 @@ export function ProductShowcase() {
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{wing.body}</p>
                   <EstimateButton p={wing} />
                 </div>
-                <div className="relative mx-auto aspect-[4/5] w-[70%] lg:w-full">
+                <div className="relative aspect-[4/5] w-full">
                   <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain" />
                 </div>
               </div>
@@ -69,18 +69,18 @@ export function ProductShowcase() {
           {/* 立面図：左2面／右2面の2ブロック */}
           <PairBlocks>
             <Reveal variant="image" className="grid grid-cols-2 items-end gap-2">
-              <div className="relative aspect-[556/365] w-[85%] lg:w-full">
+              <div className="relative aspect-[556/365] w-full">
                 <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
-              <div className="relative aspect-[912/420] w-[85%] lg:w-full">
+              <div className="relative aspect-[912/420] w-full">
                 <Image src="/images/elevation/wing-roof-face.png" alt="窓と戸のある木板張りの立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
             </Reveal>
             <Reveal variant="image" className="grid grid-cols-2 items-end gap-2">
-              <div className="relative aspect-[631/390] w-[85%] lg:w-full">
+              <div className="relative aspect-[631/390] w-full">
                 <Image src="/images/elevation/wing-equipment-side.png" alt="給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
-              <div className="relative aspect-[872/392] w-[85%] lg:w-full">
+              <div className="relative aspect-[872/392] w-full">
                 <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
             </Reveal>
@@ -101,11 +101,11 @@ export function ProductShowcase() {
                   <EstimateButton p={box} />
                 </div>
                 <div className="space-y-2">
-                  <div className="relative mx-auto aspect-[16/9] w-[68%] lg:w-full">
+                  <div className="relative aspect-[16/9] w-full">
                     <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
                   </div>
                   {/* 先方提供の内装レイアウト図（向きはそのまま） */}
-                  <div className="relative mx-auto aspect-[1000/439] w-[68%] overflow-hidden lg:w-full">
+                  <div className="relative aspect-[1000/439] w-full overflow-hidden">
                     <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
                   </div>
                 </div>
@@ -121,7 +121,7 @@ export function ProductShowcase() {
                     <h4 className="mt-0.5 font-serif text-[0.86rem] leading-snug text-white sm:text-[0.95rem]">{t.title}</h4>
                     <p className="mt-1 text-[0.76rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{t.body}</p>
                   </div>
-                  <div className="relative aspect-[16/11] w-[75%] lg:w-full">
+                  <div className={`relative aspect-[16/11] ${t.size === 'sm' ? 'w-[78%] lg:w-[85%]' : 'w-full'}`}>
                     <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 18vw, 40vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
                     {t.caption && (
                       <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>

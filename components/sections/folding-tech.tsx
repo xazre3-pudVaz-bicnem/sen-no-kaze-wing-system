@@ -25,12 +25,12 @@ export function FoldingTechSection() {
             <p className="text-[0.72rem] leading-[1.7] text-white/85 sm:text-[0.78rem]">{foldingTech.body}</p>
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-[1fr_0.42fr] items-stretch gap-2">
-                <p className="flex items-center justify-center bg-[#d9d9d9] px-2 py-3 text-center text-[0.7rem] font-semibold text-ink sm:text-[0.78rem]">折畳み屋根</p>
+                <p className="flex items-center justify-center bg-[#d9d9d9] px-2 py-1.5 text-center text-[0.7rem] font-semibold text-ink sm:text-[0.78rem]">折畳み屋根</p>
                 <div className="relative aspect-[222/365] w-full">
                   <Image src="/images/elevation/wing-door-only.png" alt="木製玄関ドアの立面図" fill sizes="60px" className="object-contain" />
                 </div>
               </div>
-              <div className="grid grid-cols-[0.3fr_1fr] items-end gap-2">
+              <div className="grid grid-cols-[0.42fr_1fr] items-end gap-2">
                 <div className="relative aspect-[265/390] w-full">
                   <Image src="/images/elevation/wing-equipment-ac.png" alt="給湯器とエアコン室外機まわりの立面図" fill sizes="50px" className="object-contain" />
                 </div>
@@ -40,7 +40,7 @@ export function FoldingTechSection() {
               </div>
             </div>
             {/* 折畳み時の平面（先方提供図。向きはそのまま） */}
-            <div className="relative mx-auto aspect-[400/1106] w-[80%] bg-white lg:w-full">
+            <div className="relative aspect-[400/1106] w-full bg-white">
               <Image src="/images/plan/wing-folded-plan.jpg" alt="折り畳んだ状態の平面図" fill sizes="80px" className="object-contain" />
             </div>
           </Reveal>
@@ -52,7 +52,7 @@ export function FoldingTechSection() {
             </div>
             <p className="bg-white px-1 py-1 text-center text-[0.62rem] font-bold whitespace-nowrap text-red-600 sm:text-[0.7rem]">広さ約2倍 →</p>
             {/* 展開後の平面（先方提供図。向きはそのまま） */}
-            <div className="relative mx-auto aspect-[800/1166] w-[85%] bg-white lg:w-full">
+            <div className="relative aspect-[800/1166] w-full bg-white">
               <Image src="/images/plan/wing-expanded-plan.jpg" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="160px" className="object-contain" />
             </div>
           </Reveal>

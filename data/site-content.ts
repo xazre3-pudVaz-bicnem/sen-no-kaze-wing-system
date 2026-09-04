@@ -116,6 +116,8 @@ export interface ShowcaseTopic {
   image: string;
   alt: string;
   caption?: string;
+  /** 2026-09-04 赤入れの赤枠サイズ（sm＝小さく / lg＝少し大きく） */
+  size?: 'sm' | 'lg';
 }
 
 export interface ShowcaseProduct {
@@ -193,6 +195,7 @@ export const showcase = {
           image: '/images/cases/box-garage-top.jpg',
           alt: '住宅の駐車場の上に設置された BOX',
           caption: '駐車場の上に',
+          size: 'sm',
         },
         {
           tag: '事務所やワンルーム',
@@ -201,6 +204,7 @@ export const showcase = {
           image: '/images/cases/box-stacked.png',
           alt: '2 階建てに重ねて設置された BOX',
           caption: '重ねて',
+          size: 'lg',
         },
       ],
     },

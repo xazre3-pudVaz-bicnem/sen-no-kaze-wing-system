@@ -39,8 +39,9 @@ export function FoldingTechSection() {
                 </div>
               </div>
             </div>
-            <div className="relative aspect-[178/276] w-full bg-white">
-              <Image src="/images/plan/wing-folded-half.png" alt="折り畳んだ状態の平面図" fill sizes="70px" className="object-contain p-0.5" />
+            {/* 折畳み時の平面（先方提供図。向きはそのまま） */}
+            <div className="relative aspect-[400/1106] w-full bg-white">
+              <Image src="/images/plan/wing-folded-plan.jpg" alt="折り畳んだ状態の平面図" fill sizes="80px" className="object-contain" />
             </div>
           </Reveal>
 
@@ -50,8 +51,9 @@ export function FoldingTechSection() {
               <Image src="/images/transport/unic-seaside.jpg" alt="海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-cover" />
             </div>
             <p className="bg-white px-1 py-1 text-center text-[0.62rem] font-bold whitespace-nowrap text-red-600 sm:text-[0.7rem]">広さ約2倍 →</p>
-            <div className="relative aspect-[276/387] w-full bg-white">
-              <Image src="/images/plan/wing-hotel-guest-portrait.png" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="150px" className="object-contain p-0.5" />
+            {/* 展開後の平面（先方提供図。向きはそのまま） */}
+            <div className="relative aspect-[800/1166] w-full bg-white">
+              <Image src="/images/plan/wing-expanded-plan.jpg" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="160px" className="object-contain" />
             </div>
           </Reveal>
         </PairBlocks>

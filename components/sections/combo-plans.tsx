@@ -21,8 +21,8 @@ function PlanGroup({ g }: { g: Group }) {
       </p>
       <div className={`mt-1.5 grid gap-2 ${g.items.length > 1 && !g.panel ? 'grid-cols-2' : 'grid-cols-1'} ${g.panel ? 'bg-[#0b4f66] p-2' : ''}`}>
         {g.items.map((item) => (
-          <figure key={item.image} className="border border-brown/15 bg-white">
-            <div className="relative aspect-[4/3] w-full overflow-hidden">
+          <figure key={item.image}>
+            <div className={`relative aspect-[4/3] w-full overflow-hidden ${g.panel ? 'bg-white' : ''}`}>
               <Image src={item.image} alt={item.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
             </div>
           </figure>
@@ -76,7 +76,7 @@ export function ComboPlansSection() {
           {[combos.comboBand.items.slice(0, 2), combos.comboBand.items.slice(2, 4)].map((pair, i) => (
             <Reveal key={i} variant="image" className="grid grid-cols-2 gap-3">
               {pair.map((item) => (
-                <figure key={item.image} className="border border-brown/15 bg-white">
+                <figure key={item.image}>
                   <div className="relative aspect-[4/5] w-full overflow-hidden">
                     <Image src={item.image} alt={item.alt} fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain p-1" />
                   </div>

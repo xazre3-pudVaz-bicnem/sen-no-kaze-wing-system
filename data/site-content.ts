@@ -256,32 +256,32 @@ export const combos = {
     {
       label: 'Wing居住用',
       badge: '#5a3e2b',
-      items: [{ image: '/images/plan/wing-hotel-ld.jpg', alt: 'シャワー・トイレと LD7 帖を収めた Wing 居住用の平面図' }],
+      items: [{ image: '/images/plan/wing-hotel-ld.png', alt: 'シャワー・トイレと LD7 帖を収めた Wing 居住用の平面図' }],
     },
     {
       label: 'Flatプラス居室例',
       badge: '#1d1a16',
-      items: [{ image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
+      items: [{ image: '/images/plan/flat-two-rooms.png', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
     },
   ],
   rightGroups: [
     {
       label: 'Wingホテル用',
       badge: '#5a3e2b',
-      items: [{ image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' }],
+      items: [{ image: '/images/plan/wing-hotel-guest.png', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' }],
     },
     {
       label: 'Wing居室プラン例',
       badge: '#5a3e2b',
-      items: [{ image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing の平面図' }],
+      items: [{ image: '/images/plan/wing-two-rooms.png', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing の平面図' }],
     },
     {
       label: 'BOX水回りキット例',
       badge: '#0b4f66',
       wide: true,
       items: [
-        { image: '/images/plan/box-water-kit-basic.jpg', alt: 'ガス給湯器・エアコン室外機付き BOX 水回りキットの平面図' },
-        { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
+        { image: '/images/plan/box-water-kit-basic.png', alt: 'ガス給湯器・エアコン室外機付き BOX 水回りキットの平面図' },
+        { image: '/images/plan/box-water-kit.png', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
       ],
     },
   ],
@@ -291,10 +291,10 @@ export const combos = {
     note: '※BOX及びFlatは、単体で10㎡以内となる商品は確認申請が不要となります。',
     color: '#414537',
     items: [
-      { image: '/images/plan/box-wing-living-combo.jpg', alt: 'BOX 水回りキットと Wing のリビング・洋室を組み合わせた平面図' },
-      { image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
-      { image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
-      { image: '/images/plan/box-wing-rooms-combo.jpg', alt: 'BOX 水回りキットと Wing の洋室2部屋を組み合わせた平面図' },
+      { image: '/images/plan/box-wing-living-combo.png', alt: 'BOX 水回りキットと Wing のリビング・洋室を組み合わせた平面図' },
+      { image: '/images/plan/wing-box-combo.png', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
+      { image: '/images/plan/flat-wing-2ldk.png', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
+      { image: '/images/plan/box-wing-rooms-combo.png', alt: 'BOX 水回りキットと Wing の洋室2部屋を組み合わせた平面図' },
     ],
   },
 };

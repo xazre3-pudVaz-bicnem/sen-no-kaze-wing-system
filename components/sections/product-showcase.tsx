@@ -152,7 +152,7 @@ export function ProductShowcase() {
                     <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain" />
                   </div>
                   {flat.basicPlan && (
-                    <div className="relative aspect-[21/9] w-full overflow-hidden bg-white">
+                    <div className="relative aspect-[21/9] w-full overflow-hidden">
                       <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-0.5" />
                     </div>
                   )}
@@ -166,7 +166,7 @@ export function ProductShowcase() {
                 <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
                 <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
                 {flat.plans && (
-                  <div className="relative mt-2 aspect-square w-full overflow-hidden bg-white">
+                  <div className="relative mt-2 aspect-square w-full overflow-hidden">
                     <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
                 )}
@@ -182,7 +182,7 @@ export function ProductShowcase() {
                   </>
                 )}
                 {flat.plans && (
-                  <div className="relative mt-2 aspect-square w-full overflow-hidden bg-white">
+                  <div className="relative mt-2 aspect-square w-full overflow-hidden">
                     <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
                 )}

@@ -183,7 +183,7 @@ export const showcase = {
       body: 'コンパクトに纏めたホテル、ワンルーム仕様最小サイズ、重ねが容易で2階建て以上も可能に・・・（各種法律に基づきますので詳しくは代理店に問合せて下さい。）\n水回りキットとWingの組合せで仮設住宅の2LDKに。',
       images: [
         { src: '/images/products/box-white.png', alt: '伸縮可能な設置足の上に建つ白い外壁の BOX' },
-        { src: '/images/plan/box-hotel-double.jpg', alt: '玄関・ユニットバス・キッチン・ベッド2台を収めた BOX の内装レイアウト' },
+        { src: '/images/plan/box-interior-layout.jpg', alt: '3点ユニットバス・キッチン・ベッドを収めた BOX の内装レイアウト' },
       ],
       topics: [
         {

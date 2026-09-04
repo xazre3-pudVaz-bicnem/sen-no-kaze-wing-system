@@ -104,8 +104,9 @@ export function ProductShowcase() {
                   <div className="relative aspect-[16/9] w-full">
                     <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
                   </div>
-                  <div className="relative aspect-[16/7] w-full overflow-hidden bg-white">
-                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain p-0.5" />
+                  {/* 先方提供の内装レイアウト図（向きはそのまま） */}
+                  <div className="relative aspect-[1000/439] w-full overflow-hidden">
+                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
                   </div>
                 </div>
               </div>

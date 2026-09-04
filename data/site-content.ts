@@ -239,12 +239,14 @@ export const combos = {
   title: '不陸調整折畳み式木造コンテナの組合せプラン',
   note: 'Wing、BOX、Flatともに、本体とは、折畳み式で水回りや内外装の仕上げの無い状態を言います。\nお客様ご自身で、現場配送後に内外装工事をDIYできるので、ご自身の使い道、好みにあわせて、使用してください。\n但し保証や各種関係法令に適合しているかについては責任の範囲外となります。',
   caution: '※全ての画像はイメージで実際の商品と異なる場合があります。',
-  /** Ver4：ラベルは色付きバッジ。badge はバッジの背景色 */
-  groups: [
+  /**
+   * Ver5 PDF の2ブロック構成（黒枠）。左ブロック／右ブロックの中身は画面幅が変わっても崩さない。
+   * badge = ラベルの背景色。panel = 青緑パネルに入れる（各コンテナの基本本体のみ）。
+   */
+  leftGroups: [
     {
       label: '各コンテナの基本本体',
-      badge: '#1e2a3a',
-      /** 基本本体だけ青緑のパネルに入れる（Ver4） */
+      badge: '#0b4f66',
       panel: true,
       items: [
         { image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
@@ -257,6 +259,13 @@ export const combos = {
       items: [{ image: '/images/plan/wing-hotel-ld.jpg', alt: 'シャワー・トイレと LD7 帖を収めた Wing 居住用の平面図' }],
     },
     {
+      label: 'Flatプラス居室例',
+      badge: '#1d1a16',
+      items: [{ image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
+    },
+  ],
+  rightGroups: [
+    {
       label: 'Wingホテル用',
       badge: '#5a3e2b',
       items: [{ image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' }],
@@ -267,13 +276,9 @@ export const combos = {
       items: [{ image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing の平面図' }],
     },
     {
-      label: 'Flatプラス居室例',
-      badge: '#303030',
-      items: [{ image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
-    },
-    {
       label: 'BOX水回りキット例',
       badge: '#0b4f66',
+      wide: true,
       items: [
         { image: '/images/plan/box-water-kit-basic.jpg', alt: 'ガス給湯器・エアコン室外機付き BOX 水回りキットの平面図' },
         { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },

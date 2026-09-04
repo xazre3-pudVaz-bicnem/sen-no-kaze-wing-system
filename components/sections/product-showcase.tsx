@@ -3,23 +3,24 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { showcase, type ShowcaseProduct } from '@/data/site-content';
 import { Reveal } from '@/components/ui/reveal';
+import { PairBlocks } from '@/components/ui/pair-blocks';
 
-/** 商品見出し：「よりコンパクトに合理的に・・・ BOX（基本 2,100×4,800）」の帯（Word 準拠） */
+/** 商品見出し（Ver5 PDF：キャッチ → 商品名（寸法）） */
 function ProductHeading({ p }: { p: ShowcaseProduct }) {
   return (
-    <Reveal>
+    <>
       <p className="font-serif text-sm tracking-wider text-white/85 sm:text-base">{p.catch}</p>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="font-serif text-2xl leading-tight text-gold sm:text-3xl">{p.name}</h3>
         <p className="text-xs tracking-[0.1em] text-white/80 sm:text-sm">（{p.size}）</p>
       </div>
-    </Reveal>
+    </>
   );
 }
 
 function EstimateButton({ p }: { p: ShowcaseProduct }) {
   return (
-    <Link href={`/simulator/${p.slug}`} className="btn-gold btn-sm mt-4">
+    <Link href={`/simulator/${p.slug}`} className="btn-gold btn-sm mt-3">
       {showcase.cta}
       <ArrowRight className="size-4" aria-hidden="true" />
     </Link>
@@ -27,82 +28,100 @@ function EstimateButton({ p }: { p: ShowcaseProduct }) {
 }
 
 /**
- * 商品ラインナップ：Wing / BOX / Flat。
- * スマホは Word の赤線指示どおり「左列 → 右列」の順で1列に流す（見積ボタンは Word と同じく説明文の直下）。
+ * 商品ラインナップ：Ver5 PDF の「最小ブロック」モデル。
+ * 各行は2ブロックで、狭い画面では右ブロックが下へ落ちるだけ。ブロック内部の配置は固定。
  */
 export function ProductShowcase() {
   const [wing, box, flat] = showcase.products;
   return (
     <section id="lineup" className="scroll-mt-20 text-white">
       {/* ── Wing（濃緑） ── */}
-      <article id="wing" className="scroll-mt-24 bg-forest-deep py-10 sm:py-12">
-        <div className="container-x">
-          <ProductHeading p={wing} />
-          {/* PDF の3列：本文＋ボタン｜透過アイソメ図｜室内2×2＋キャプション */}
-          <div className="mt-3 grid items-start gap-4 lg:grid-cols-[0.85fr_0.85fr_1.5fr] lg:gap-5">
+      <article id="wing" className="scroll-mt-24 bg-forest-deep py-8 sm:py-12">
+        <div className="container-x space-y-4">
+          <PairBlocks className="lg:items-start">
+            {/* 左：見出し＋本文＋アイソメ図＋ボタン（固定2列） */}
             <Reveal>
-              <p className="text-[0.78rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{wing.body}</p>
-              <EstimateButton p={wing} />
+              <ProductHeading p={wing} />
+              <div className="mt-2 grid grid-cols-[1fr_1.15fr] items-start gap-3">
+                <div>
+                  <p className="text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-[0.8rem]">{wing.body}</p>
+                  <EstimateButton p={wing} />
+                </div>
+                <div className="relative aspect-[4/5] w-full">
+                  <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain" />
+                </div>
+              </div>
             </Reveal>
-            <Reveal variant="image" className="relative aspect-[4/5] w-full">
-              <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 60vw" className="object-contain" />
-            </Reveal>
+
+            {/* 右：室内2×2＋キャプション */}
             <Reveal variant="image">
               <div className="grid grid-cols-2 gap-2">
                 {wing.images.slice(1, 5).map((img) => (
                   <div key={img.src} className="relative aspect-[16/10] overflow-hidden">
-                    <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 19vw, 45vw" className="object-cover" />
+                    <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 24vw, 45vw" className="object-cover" />
                   </div>
                 ))}
               </div>
-              {wing.caption && <p className="mt-1.5 text-right text-[0.75rem] leading-relaxed text-white/90">{wing.caption}</p>}
+              {wing.caption && <p className="mt-1.5 text-right text-[0.72rem] leading-relaxed text-white/90">{wing.caption}</p>}
             </Reveal>
-          </div>
-          {/* 立面図4面（Ver4：玄関側・木板窓戸・設備側・木板） */}
-          <div className="mt-5 grid grid-cols-4 items-end gap-2 sm:gap-3">
-            {[
-              { src: '/images/elevation/wing-entrance-color.png', alt: '木製玄関ドアのある白い外壁の立面図', ar: 'aspect-[556/365]' },
-              { src: '/images/elevation/wing-roof-face.png', alt: '窓と戸のある木板張りの立面図', ar: 'aspect-[912/420]' },
-              { src: '/images/elevation/wing-equipment-side.png', alt: '給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図', ar: 'aspect-[631/390]' },
-              { src: '/images/elevation/wing-wood-panel.png', alt: '木板張りの外壁パネル', ar: 'aspect-[872/392]' },
-            ].map((e) => (
-              <Reveal key={e.src} variant="image" className={`relative w-full ${e.ar}`}>
-                <Image src={e.src} alt={e.alt} fill sizes="(min-width: 640px) 23vw, 24vw" className="object-contain" />
-              </Reveal>
-            ))}
-          </div>
+          </PairBlocks>
+
+          {/* 立面図：左2面／右2面の2ブロック */}
+          <PairBlocks>
+            <Reveal variant="image" className="grid grid-cols-2 items-end gap-2">
+              <div className="relative aspect-[556/365] w-full">
+                <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
+              </div>
+              <div className="relative aspect-[912/420] w-full">
+                <Image src="/images/elevation/wing-roof-face.png" alt="窓と戸のある木板張りの立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
+              </div>
+            </Reveal>
+            <Reveal variant="image" className="grid grid-cols-2 items-end gap-2">
+              <div className="relative aspect-[631/390] w-full">
+                <Image src="/images/elevation/wing-equipment-side.png" alt="給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
+              </div>
+              <div className="relative aspect-[872/392] w-full">
+                <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
+              </div>
+            </Reveal>
+          </PairBlocks>
         </div>
       </article>
 
-      {/* ── BOX（紺） ── */}
-      <article id="box" className="scroll-mt-24 bg-[#0b4f66] py-10 sm:py-12">
+      {/* ── BOX（青緑） ── */}
+      <article id="box" className="scroll-mt-24 bg-[#0b4f66] py-8 sm:py-12">
         <div className="container-x">
-          <ProductHeading p={box} />
-          {/* PDF の3列：本文＋ボタン｜外観CG＋内装図｜土地活用例・事務所やワンルーム */}
-          <div className="mt-3 grid gap-4 lg:grid-cols-[0.85fr_1.15fr_1fr] lg:items-start lg:gap-5">
+          <PairBlocks className="lg:items-start">
+            {/* 左：見出し＋本文＋外観CG＋内装図＋ボタン（固定2列） */}
             <Reveal>
-              <p className="text-[0.78rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{box.body}</p>
-              <EstimateButton p={box} />
-            </Reveal>
-            <Reveal variant="image" className="grid grid-cols-2 items-start gap-2 lg:grid-cols-1">
-              <div className="relative aspect-[16/9] w-full">
-                <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 30vw, 45vw" className="object-contain" />
+              <ProductHeading p={box} />
+              <div className="mt-2 grid grid-cols-[1fr_1.25fr] items-start gap-3">
+                <div>
+                  <p className="text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-[0.8rem]">{box.body}</p>
+                  <EstimateButton p={box} />
+                </div>
+                <div className="space-y-2">
+                  <div className="relative aspect-[16/9] w-full">
+                    <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
+                  </div>
+                  <div className="relative aspect-[16/7] w-full overflow-hidden bg-white">
+                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain p-0.5" />
+                  </div>
+                </div>
               </div>
-              <div className="relative aspect-[16/7] w-full overflow-hidden bg-white">
-                <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 30vw, 45vw" className="object-contain p-0.5" />
-              </div>
             </Reveal>
-            {/* 活用トピック（PDF：見出し・本文の下に写真。スマホは文章｜写真の2列） */}
+
+            {/* 右：土地活用例／事務所やワンルーム（各「文章｜写真」の固定2列） */}
             <div className="space-y-3">
               {box.topics.map((t) => (
-                <Reveal key={t.title} className="grid grid-cols-2 items-start gap-3 lg:block">
+                <Reveal key={t.title} className="grid grid-cols-[1fr_0.85fr] items-start gap-3">
                   <div>
                     {t.tag && <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{t.tag}】</p>}
-                    <h4 className="mt-0.5 font-serif text-[0.82rem] leading-snug text-white">{t.title}</h4>
-                    <p className="mt-1 text-[0.7rem] leading-[1.65] whitespace-pre-line text-white/80">{t.body}</p>
+                    <h4 className="mt-0.5 font-serif text-[0.8rem] leading-snug text-white">{t.title}</h4>
+                    <p className="mt-1 text-[0.68rem] leading-[1.65] whitespace-pre-line text-white/80">{t.body}</p>
                   </div>
-                  <div className="relative aspect-[16/10] w-full lg:mt-1.5 lg:max-w-[15rem]">
-                    <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 15rem, 45vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
+                  <div className="relative aspect-[16/11] w-full">
+                    <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 18vw, 40vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
                     {t.caption && (
                       <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>
                     )}
@@ -110,60 +129,64 @@ export function ProductShowcase() {
                 </Reveal>
               ))}
             </div>
-          </div>
+          </PairBlocks>
         </div>
       </article>
 
-      {/* ── Flat（黒）。スマホは説明→基本平面図→外観CG→物置Plus→組合せ図の1列（Word の赤線指示） ── */}
-      <article id="flat" className="scroll-mt-24 bg-[#303030] py-10 sm:py-12">
+      {/* ── Flat（黒） ── */}
+      <article id="flat" className="scroll-mt-24 bg-[#303030] py-8 sm:py-12">
         <div className="container-x">
-          <ProductHeading p={flat} />
-          {/* Ver4 PDF の4列：本文＋基本平面図｜外観CG｜物置Plus文＋Flat＋Wing図｜物置写真＋BOX＋Flat図 */}
-          <div className="mt-4 grid gap-5 lg:grid-cols-[0.95fr_1fr_0.95fr_0.95fr] lg:items-start lg:gap-6">
-            <Reveal className="lg:col-start-1 lg:row-start-1">
-              <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{flat.body}</p>
-              <EstimateButton p={flat} />
-            </Reveal>
-            {flat.basicPlan && (
-              <Reveal variant="image" className="lg:col-start-1 lg:row-start-2">
-                <div className="relative aspect-[21/9] w-full max-w-sm overflow-hidden bg-white">
-                  <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 640px) 24rem, 80vw" className="object-contain p-0.5" />
+          <PairBlocks className="lg:items-start">
+            {/* 左：見出し＋本文＋外観CG＋基本平面図＋ボタン */}
+            <Reveal>
+              <ProductHeading p={flat} />
+              <div className="mt-2 grid grid-cols-[1fr_1.15fr] items-start gap-3">
+                <div>
+                  <p className="text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/85 sm:text-[0.8rem]">{flat.body}</p>
+                  <EstimateButton p={flat} />
                 </div>
-              </Reveal>
-            )}
-            <Reveal variant="image" className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
-              <div className="relative aspect-[4/3] w-full max-w-[18rem] sm:max-w-sm lg:mx-auto lg:max-w-md">
-                <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 60vw" className="object-contain" />
+                <div className="space-y-2">
+                  <div className="relative aspect-[4/3] w-full">
+                    <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain" />
+                  </div>
+                  {flat.basicPlan && (
+                    <div className="relative aspect-[21/9] w-full overflow-hidden bg-white">
+                      <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain p-0.5" />
+                    </div>
+                  )}
+                </div>
               </div>
             </Reveal>
-            <Reveal className="lg:col-start-3 lg:row-start-1">
-              <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{flat.plansTag}】</p>
-              <p className="mt-1 text-[0.75rem] leading-[1.7] text-white/85 sm:text-sm">{flat.plansLead}</p>
+
+            {/* 右：物置Plus 文＋Flat＋Wing図｜物置写真＋BOX＋Flat図（固定2列） */}
+            <Reveal className="grid grid-cols-2 items-start gap-3">
+              <div>
+                <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{flat.plansTag}】</p>
+                <p className="mt-1 text-[0.7rem] leading-[1.65] text-white/85 sm:text-[0.78rem]">{flat.plansLead}</p>
+                {flat.plans && (
+                  <div className="relative mt-2 aspect-square w-full overflow-hidden bg-white">
+                    <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                  </div>
+                )}
+              </div>
+              <div>
+                {flat.storagePhoto && (
+                  <>
+                    <div className="relative aspect-[4/3] w-full">
+                      <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-cover" />
+                      <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
+                    </div>
+                    {flat.storagePhoto.note && <p className="mt-1 text-[0.68rem] text-white/80">{flat.storagePhoto.note}</p>}
+                  </>
+                )}
+                {flat.plans && (
+                  <div className="relative mt-2 aspect-square w-full overflow-hidden bg-white">
+                    <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                  </div>
+                )}
+              </div>
             </Reveal>
-            {flat.plans && (
-              <Reveal variant="image" className="lg:col-start-3 lg:row-start-2">
-                <div className="relative aspect-square w-full max-w-[15rem] overflow-hidden bg-white sm:max-w-[17rem]">
-                  <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 640px) 17rem, 60vw" className="object-contain p-1" />
-                </div>
-              </Reveal>
-            )}
-            {flat.storagePhoto && (
-              <Reveal variant="image" className="w-full max-w-[13rem] sm:max-w-[15rem] lg:col-start-4 lg:row-start-1">
-                <div className="relative aspect-[4/3] w-full">
-                  <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 55vw" className="object-cover" />
-                  <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
-                </div>
-                {flat.storagePhoto.note && <p className="mt-1 text-[0.7rem] text-white/80">{flat.storagePhoto.note}</p>}
-              </Reveal>
-            )}
-            {flat.plans && (
-              <Reveal variant="image" className="lg:col-start-4 lg:row-start-2">
-                <div className="relative aspect-square w-full max-w-[15rem] overflow-hidden bg-white sm:max-w-[17rem]">
-                  <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 640px) 17rem, 60vw" className="object-contain p-1" />
-                </div>
-              </Reveal>
-            )}
-          </div>
+          </PairBlocks>
         </div>
       </article>
     </section>

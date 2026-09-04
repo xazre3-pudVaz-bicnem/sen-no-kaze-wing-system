@@ -27,80 +27,6 @@ function EstimateButton({ p }: { p: ShowcaseProduct }) {
 }
 
 /**
- * Wing の設置の流れ：Word の貼り込み構成をそのまま再現した横長コラージュ（2026-09-03 赤入れ「この通りに」）。
- * クレーン写真／折畳み屋根ラベル＋木板／玄関側立面図／折畳み時平面 →（広さ約2倍）→ 展開後平面／設備側立面図＋木板。
- * スマホでは横スクロールで Word と同じ並びを保つ。
- */
-function WingFlowStrip() {
-  return (
-    <div className="mt-6 overflow-x-auto pb-1">
-      <div className="flex min-w-[760px] items-stretch gap-1.5 sm:gap-2">
-        {/* 1) クレーン写真 */}
-        <div className="relative w-[16%] shrink-0 overflow-hidden">
-          <Image src="/images/transport/unic-seaside.jpg" alt="海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ" fill sizes="180px" className="object-cover" />
-        </div>
-        {/* 2) 折畳み屋根ラベル＋（AC小箱・木板） */}
-        <div className="flex w-[14%] shrink-0 flex-col justify-between gap-1.5">
-          <p className="bg-sand px-2 py-2 text-center text-[0.72rem] font-semibold text-ink">折畳み屋根</p>
-          <div className="flex items-end gap-1">
-            <div className="relative aspect-[265/390] w-[34%]">
-              <Image src="/images/elevation/wing-equipment-ac.png" alt="給湯器とエアコン室外機まわりの立面図" fill sizes="60px" className="object-contain" />
-            </div>
-            <div className="relative aspect-[872/392] flex-1">
-              <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="110px" className="object-contain" />
-            </div>
-          </div>
-        </div>
-        {/* 3) 玄関側立面図 */}
-        <div className="relative w-[9%] shrink-0">
-          <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="90px" className="object-contain" />
-        </div>
-        {/* 4) 折畳み時の平面 */}
-        <div className="relative w-[8%] shrink-0 bg-white">
-          <Image src="/images/plan/wing-folded-half.png" alt="折り畳んだ状態の平面図" fill sizes="70px" className="object-contain p-0.5" />
-        </div>
-        {/* 5) ラベル群（Word の赤字「広さ約2倍→」） */}
-        <div className="flex w-[12%] shrink-0 flex-col items-center justify-center gap-1.5 text-center">
-          <p className="text-[0.62rem] leading-snug whitespace-pre-line text-white/85">{'現地で下ろし\n広げ設置後\n基礎工事'}</p>
-          <p className="flex items-center gap-0.5 text-[0.7rem] font-bold whitespace-nowrap text-red-400">
-            広さ約2倍
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </p>
-          <p className="text-[0.6rem] leading-snug whitespace-pre-line text-white/85">{'UB・エアコン\nウォッシュレット・洗面\nエアコン付き'}</p>
-        </div>
-        {/* 6) 展開後の平面 */}
-        <div className="relative w-[14%] shrink-0 bg-white">
-          <Image src="/images/plan/wing-hotel-guest.png" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="130px" className="object-contain p-0.5" />
-        </div>
-        {/* 7) 木板（窓・戸あり）＋（玄関小・木板） */}
-        <div className="flex w-[13%] shrink-0 flex-col justify-between gap-1.5">
-          <div className="relative aspect-[912/420] w-full">
-            <Image src="/images/elevation/wing-roof-face.png" alt="窓と戸のある木板張りの立面図" fill sizes="110px" className="object-contain" />
-          </div>
-          <div className="flex items-end gap-1">
-            <div className="relative aspect-[556/365] w-[45%]">
-              <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="55px" className="object-contain" />
-            </div>
-            <div className="relative aspect-[872/392] flex-1">
-              <Image src="/images/elevation/wing-wood-panel-2.png" alt="木板張りの外壁パネル" fill sizes="60px" className="object-contain" />
-            </div>
-          </div>
-        </div>
-        {/* 8) 設備側立面図＋木板 */}
-        <div className="flex w-[14%] shrink-0 flex-col justify-between gap-1.5">
-          <div className="relative aspect-[631/390] w-full">
-            <Image src="/images/elevation/wing-equipment-side.png" alt="給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図" fill sizes="120px" className="object-contain" />
-          </div>
-          <div className="relative aspect-[872/392] w-full">
-            <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="120px" className="object-contain" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * 商品ラインナップ：Wing / BOX / Flat。
  * スマホは Word の赤線指示どおり「左列 → 右列」の順で1列に流す（見積ボタンは Word と同じく説明文の直下）。
  */
@@ -134,12 +60,30 @@ export function ProductShowcase() {
               </div>
             </Reveal>
           </div>
-          <WingFlowStrip />
+          {/* コラージュ下のキャプション（Ver4） */}
+          {wing.caption && (
+            <Reveal>
+              <p className="mt-3 text-center text-[0.8rem] leading-relaxed text-white/90 sm:text-right sm:text-sm">{wing.caption}</p>
+            </Reveal>
+          )}
+          {/* 立面図4面（Ver4：玄関側・木板窓戸・設備側・木板） */}
+          <div className="mt-5 grid grid-cols-4 items-end gap-2 sm:gap-3">
+            {[
+              { src: '/images/elevation/wing-entrance-color.png', alt: '木製玄関ドアのある白い外壁の立面図', ar: 'aspect-[556/365]' },
+              { src: '/images/elevation/wing-roof-face.png', alt: '窓と戸のある木板張りの立面図', ar: 'aspect-[912/420]' },
+              { src: '/images/elevation/wing-equipment-side.png', alt: '給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図', ar: 'aspect-[631/390]' },
+              { src: '/images/elevation/wing-wood-panel.png', alt: '木板張りの外壁パネル', ar: 'aspect-[872/392]' },
+            ].map((e) => (
+              <Reveal key={e.src} variant="image" className={`relative w-full ${e.ar}`}>
+                <Image src={e.src} alt={e.alt} fill sizes="(min-width: 640px) 23vw, 24vw" className="object-contain" />
+              </Reveal>
+            ))}
+          </div>
         </div>
       </article>
 
       {/* ── BOX（紺） ── */}
-      <article id="box" className="scroll-mt-24 bg-navy py-10 sm:py-12">
+      <article id="box" className="scroll-mt-24 bg-[#0b4f66] py-10 sm:py-12">
         <div className="container-x">
           <ProductHeading p={box} />
           <div className="mt-4 grid gap-5 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:items-start lg:gap-8">
@@ -205,27 +149,28 @@ export function ProductShowcase() {
                 <p className="mt-1 text-[0.75rem] leading-[1.7] text-white/85 sm:text-sm">{flat.plansLead}</p>
               </Reveal>
               {flat.storagePhoto && (
-                <Reveal variant="image" className="relative mt-2 aspect-[4/3] w-full max-w-[14rem] sm:max-w-xs">
-                  <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 22vw, 60vw" className="object-cover" />
-                  <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
+                <Reveal variant="image" className="mt-2 w-full max-w-[13rem] sm:max-w-[15rem]">
+                  <div className="relative aspect-[4/3] w-full">
+                    <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 55vw" className="object-cover" />
+                    <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
+                  </div>
+                  {flat.storagePhoto.note && <p className="mt-1 text-[0.7rem] text-white/80">{flat.storagePhoto.note}</p>}
                 </Reveal>
               )}
             </div>
           </div>
 
-          {/* 組合せ平面図（BOX＋Flat は水回りキット＋居室の2枚重ね） */}
+          {/* 組合せ平面図（BOX＋Flat は合成済みの1枚画像。2026-09-04「変です」対応） */}
           {flat.plans && (
             <div className="mt-6 grid max-w-lg grid-cols-2 gap-3 sm:max-w-xl sm:gap-5">
               {flat.plans.map((pl) => (
                 <Reveal key={pl.label} variant="image">
                   <figure>
-                    <div className="overflow-hidden bg-white">
-                      {pl.images.map((img) => (
-                        <div key={img.image} className={`relative w-full ${pl.images.length > 1 ? 'aspect-[7/3]' : 'aspect-[4/3]'}`}>
-                          <Image src={img.image} alt={img.alt} fill sizes="(min-width: 640px) 24vw, 45vw" className="object-contain" />
-                        </div>
-                      ))}
-                    </div>
+                    {pl.images.map((img) => (
+                      <div key={img.image} className="relative aspect-square w-full overflow-hidden bg-white">
+                        <Image src={img.image} alt={img.alt} fill sizes="(min-width: 640px) 24vw, 45vw" className="object-contain p-1" />
+                      </div>
+                    ))}
                     <figcaption className="mt-1 text-center font-serif text-xs tracking-wider text-gold-light">{pl.label}</figcaption>
                   </figure>
                 </Reveal>

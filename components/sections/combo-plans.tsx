@@ -3,7 +3,7 @@ import { combos } from '@/data/site-content';
 import { RuleHeading } from '@/components/ui/section-heading';
 import { Reveal } from '@/components/ui/reveal';
 
-/** 組合せプラン：本体＋水回りキット・居室の平面図ギャラリー（2026-09-02 文字・余白を圧縮） */
+/** 組合せプラン：Ver4 PDF（色付きバッジのグループ＋帯見出し付きの組合せ4例） */
 export function ComboPlansSection() {
   return (
     <section id="plans" className="scroll-mt-20 bg-ivory py-8 sm:py-12">
@@ -11,16 +11,18 @@ export function ComboPlansSection() {
         <RuleHeading labelEn={combos.labelEn} title={combos.title} tone="light" compact />
 
         <Reveal className="mt-3 max-w-3xl">
-          <p className="text-[0.8rem] leading-[1.7] text-ink-soft sm:text-sm">{combos.note}</p>
-          <p className="mt-1 text-[0.7rem] leading-relaxed text-ink-soft/80">{combos.caution}</p>
+          <p className="text-[0.8rem] leading-[1.7] whitespace-pre-line text-ink-soft sm:text-sm">{combos.note}</p>
+          <p className="mt-1 text-[0.7rem] leading-relaxed text-red-600">{combos.caution}</p>
         </Reveal>
 
-        {/* 修正案どおり：ラベル見出しの下に図を並べるグループ構成 */}
-        <div className="mt-6 flex flex-wrap gap-x-8 gap-y-6">
+        {/* グループ：色付きバッジ＋図の列（基本本体だけ青緑のパネル入り） */}
+        <div className="mt-5 flex flex-wrap items-start gap-x-8 gap-y-5">
           {combos.groups.map((g) => (
             <Reveal key={g.label} variant="image" className="min-w-0">
-              <p className="font-serif text-[0.8rem] font-semibold text-ink sm:text-sm">{g.label}</p>
-              <div className="mt-1.5 flex flex-wrap gap-3">
+              <p className="inline-block rounded-sm px-2.5 py-1 text-[0.72rem] font-semibold tracking-wider text-white sm:text-xs" style={{ backgroundColor: g.badge }}>
+                {g.label}
+              </p>
+              <div className={`mt-1.5 flex flex-wrap gap-3 ${g.panel ? 'bg-[#0b4f66] p-2.5' : ''}`}>
                 {g.items.map((item) => (
                   <figure key={item.image} className="w-36 border border-brown/15 bg-white sm:w-44">
                     <div className="relative aspect-[4/3] w-full overflow-hidden">
@@ -33,9 +35,23 @@ export function ComboPlansSection() {
           ))}
         </div>
 
-        <Reveal className="mt-4">
-          <p className="text-[0.7rem] leading-relaxed text-ink-soft sm:text-xs">{combos.legal}</p>
+        {/* 組合せ4例：帯見出し＋注記（Ver4） */}
+        <Reveal className="mt-6">
+          <p className="rounded-sm px-3 py-1.5 text-[0.75rem] font-semibold tracking-wide text-white sm:text-sm" style={{ backgroundColor: combos.comboBand.color }}>
+            {combos.comboBand.label}　{combos.comboBand.note}
+          </p>
         </Reveal>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          {combos.comboBand.items.map((item) => (
+            <Reveal key={item.image} variant="image">
+              <figure className="border border-brown/15 bg-white">
+                <div className="relative aspect-[4/5] w-full overflow-hidden">
+                  <Image src={item.image} alt={item.alt} fill sizes="(min-width: 640px) 22vw, 45vw" className="object-contain p-1" />
+                </div>
+              </figure>
+            </Reveal>
+          ))}
+        </div>
       </div>
     </section>
   );

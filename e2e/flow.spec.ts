@@ -28,16 +28,17 @@ test.describe('顧客フロー', () => {
   test('1-2. トップ → 商品詳細 → シミュレーター開始', async ({ page }) => {
     const errors = collectConsoleErrors(page);
     await page.goto('/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('不陸調整');
-    // 2026-09-01 トップ修正案のセクション構成
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('木造コンテナ');
+    // 2026-09-03 修正Ver4 のセクション構成
     for (const t of [
       'コンセプト動画',
       '不陸調整折畳み式木造コンテナの特徴',
       'Wing 開発の原点',
+      '折畳み木造コンテナ',
       '不陸調整折畳み式木造コンテナの商品説明',
       '不陸調整折畳み式木造コンテナの組合せプラン',
       '見積シミュレーション',
-      '代理店募集',
+      '代理店様募集',
       'よくあるご質問',
       'お知らせ',
     ]) {

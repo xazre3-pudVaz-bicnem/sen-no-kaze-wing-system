@@ -2,14 +2,13 @@ import { faqItems } from '@/data/site-content';
 import { buildMetadata, faqJsonLd, organizationJsonLd } from '@/lib/seo';
 import { JsonLd } from '@/components/ui';
 import { HomeHero } from '@/components/sections/home-hero';
-import { ConceptMovieSection } from '@/components/sections/concept-movie';
 import { FeaturesSection } from '@/components/sections/features-section';
 import { OriginSection } from '@/components/sections/origin';
+import { FoldingTechSection } from '@/components/sections/folding-tech';
 import { QualitySection } from '@/components/sections/quality-section';
 import { ProductShowcase } from '@/components/sections/product-showcase';
 import { ComboPlansSection } from '@/components/sections/combo-plans';
 import { EstimateCtaSection } from '@/components/sections/estimate-cta';
-import { DealerCtaSection } from '@/components/sections/dealer-cta';
 import { FaqSection } from '@/components/sections/faq-section';
 import { NewsSection } from '@/components/sections/news-section';
 import { ContactSection } from '@/components/sections/contact-section';
@@ -31,14 +30,13 @@ export default function HomePage() {
       <JsonLd data={faqJsonLd(faqItems.map((f) => ({ q: f.q, a: f.a })))} />
 
       <HomeHero />
-      <ConceptMovieSection />
       <FeaturesSection />
       <OriginSection />
+      <FoldingTechSection />
       <QualitySection />
       <ProductShowcase />
       <ComboPlansSection />
       <EstimateCtaSection />
-      <DealerCtaSection />
       <FaqSection />
       <NewsSection />
       <ContactSection />

@@ -23,25 +23,20 @@ export const LP_NAV: NavItem[] = [
 /* ---------------- Hero ---------------- */
 
 export const hero = {
-  title: '世界初⁉不陸調整、木造コンテナ',
+  title: '世界初⁉傾斜地対応木造コンテナ',
   patent: '（特許出願中）',
-  /** 3 商品への導線（トップ内の各商品セクションへ） */
+  /** 3 商品への導線（Ver4：方式のサブラベル付き） */
   products: [
-    { label: 'Wing', href: '#wing' },
-    { label: 'BOX', href: '#box' },
-    { label: 'Flat', href: '#flat' },
+    { label: 'Wing', sub: '折畳み式', href: '#wing' },
+    { label: 'BOX', sub: '固定式', href: '#box' },
+    { label: 'Flat', sub: '水平折畳み', href: '#flat' },
   ],
   cta: '商品のメリット',
   ctaDealer: '代理店募集',
-  /**
-   * 3枚をクロスフェードで入れ替える（2026-09-02 先方モックに貼られていた3点）。1枚目が下地。
-   * ①昼の湖畔 ②内装4点の組写真（TVの部屋・海の寝室・庭の寝室・洗面） ③夕暮れの黒コンテナ（キービジュアル右側の切出し）
-   */
-  slides: [
-    { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
-    { src: '/images/hero/interior-collage.jpg', alt: 'テレビのある部屋・海を望む寝室・庭を望む寝室・丸鏡の洗面を並べた Wing の内装' },
-    { src: '/images/hero/sunset-dark-wing.jpg', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
-  ],
+  /** Ver4 PDF の静止構成：湖畔の背景＋右上に夕暮れの黒コンテナ＋右下に内装の組写真 */
+  bg: { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
+  panelTop: { src: '/images/hero/sunset-dark-wing.jpg', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
+  panelBottom: { src: '/images/hero/interior-collage.jpg', alt: 'テレビのある部屋・海を望む寝室・庭を望む寝室・丸鏡の洗面を並べた Wing の内装' },
 };
 
 /* ---------------- Concept ---------------- */
@@ -60,8 +55,8 @@ export const features = {
   title: '不陸調整折畳み式木造コンテナの特徴',
   lead: '確認申請、住宅ローン対応コンテナ',
   items: [
-    '設置場所、最小限の造成（傾斜地に対応）',
-    'トラック荷台の約2倍の広さを実現',
+    '設置場所、最小限の造成',
+    'トラック荷台約2倍の広さを実現',
     '木造だから軽量で運送が容易',
     '設置後に給排水・給湯、電気、基礎工事の施工が可能で施工性が格段に向上',
     '将来、不要になった時、撤去・移動が容易だから売却に有利',
@@ -74,48 +69,25 @@ export const genten = {
   labelEn: 'OUR ORIGIN',
   title: 'Wing 開発の原点',
   story1: {
-    title: '災害の経験から生まれた、\n新しい建築のかたち',
-    body: '東日本大震災により、私の故郷は大きな被害を受けました。\n多くの人が住まいを失い、親族もまた、仮設住宅が完成するまで、長い時間慣れない場所で過ごさなくてはいけませんでした。\n「落ち着ける場所を早く作ってあげたい。」即断即決で自社工場でBOXを造り、被災地に届けました。\nその時、仮設住宅建築費約500万、解体費約200万でしたが、解体する費用が無駄だと強く感じ、持ち運び出来て、地域の工務店でもできる木造コンテナの技術研究開発を開始しました。',
-    /** 先方提供の被災地写真（「wing開発の原点」資料）を指定どおり白黒加工で使用（2026-09-03） */
+    title: '解体しない仮設住宅を目指して',
+    body: '震災で住まいを失った人を見て、「早く落ち着ける場所を届けたい」と思い、自社でBOXを製作しました。\n仮設住宅の建築費・解体費の無駄を感じ、移動・再利用でき、地域の工務店でも作れる木造コンテナの開発を始めました。',
+    /** 先方提供の被災地写真（「wing開発の原点」資料）を白黒加工・左端の白線をトリミング済み */
     image: '/images/cases/quake-damage-bw.jpg',
     alt: '地震で倒壊した家屋が並ぶ被災地の街並み（白黒写真）',
   },
-  story2: {
-    title: '経験から生まれた\n不陸調整方式採用 折畳み木造コンテナ',
-    badge: '特許出願中',
-    lead: 'もっと合理的に、もっと将来の不安を無くすために',
-    whys: [
-      {
-        q: '何故・・・不陸調整が必要なのか？',
-        a: '建物を建築するためには土地の整備が必要だが、災害時にはコスト削減とスピードが求められる。そこで造成工事を最小限に最速で設置できるという技術を開発しました。',
-      },
-      {
-        q: '何故・・・折畳みなのか？',
-        a: '災害時にトレーラーや大型トラックで運ぶのは、数量に制限があり、より多くの仮設住宅を被災地に届けるため、狭い道路にも適応できて、スピーディーに設置できるものとしました。',
-      },
-      {
-        q: '何故・・・木造なのか？',
-        a: '普段住んでいる住まいの感覚を大事にしたい。被災者に落ち着ける空間を提供するため、木造に拘りました。',
-      },
-    ],
-  },
   needs: {
     title: '社会のニーズに応える新しい選択肢',
-    items: [
-      {
-        title: '子供や孫の負担を軽減する。',
-        body: '将来、相続する子供や孫に有効な資産を残す事が求められています。多機能性と撤去移動が容易だから相続を受けた子供や孫は貸家APは勿論、ホテルや貸事務所など収益性のあるものに、又は故郷に別荘を持つなど・・・それでも負担と感じるなら売却する。色々な選択肢があるから負担にならない。',
-      },
-      {
-        title: '日本社会は観光立国を目指す。',
-        body: '観光庁の観光立国推進基本計画では、2030年に訪日外国人旅行者数6000万人、訪日外国人旅行消費額15兆円という目標が掲げられ、地方誘客の促進も重要な方針とされています。近年、訪日外国人観光客数は、回復・増加傾向にあり、地方における宿泊・滞在の受け皿づくりは、今後ますます重要になると考えています。Wing・BOX・Flatがその選択肢の一つとして、地域の新たな滞在拠点となり、地域の活性化に貢献できれば幸いです。',
-      },
-      {
-        title: '度重なる災害対応はスピーディーにコスト削減',
-        body: '災害時の土地の確保や造成に迅速に低価格で提供できて、仮設住宅、店舗に対応し、更には仮設から本設のために確認申請取得、住宅ローンの借り入れも可能だから安心して設置できる理想のコンテナの決定版！',
-      },
-    ],
+    bullet: '・子供や孫の負担を軽減する。',
+    body: 'Wing・BOX・Flatは、移動・撤去・再利用がしやすく、住宅、別荘、貸家、ホテル、貸事務所、店舗、災害時の仮設住宅まで幅広く活用できます。\n将来、子供や孫に負担ではなく「使える資産」として残せること。\n観光立国を目指す日本において、地方の宿泊・滞在拠点づくりに貢献できること。\nそして、災害時には土地造成や建設コストを抑えながら、スピーディーに住まいや店舗を届けられること。\n仮設から本設へ、移動から再活用へ。\nこれからの社会に求められる、柔軟で無駄の少ない木造コンテナの新しい形です。',
   },
+};
+
+/* ---------------- 折畳み木造コンテナ（旧・3つの何故に代わる Ver4 のブロック） ---------------- */
+
+export const foldingTech = {
+  title: '経験から生まれた不陸調整方式採用\n折畳み木造コンテナ',
+  badge: '特許出願中',
+  body: '災害時に早く安心できる住まいを届けるため、造成を最小限に抑えられる不陸調整、狭い道路でも運びやすい折畳み構造、普段の住まいに近い木造にこだわりました。コストを抑え、スピーディーに設置できる木造コンテナです。',
 };
 
 /* ---------------- 品質（Wing・BOX・Flat共通） ---------------- */
@@ -153,14 +125,16 @@ export interface ShowcaseProduct {
   size: string;
   body: string;
   highlight?: string;
+  /** コラージュ下のキャプション（Wing用・Ver4） */
+  caption?: string;
   /** 右側のコラージュ（Word のレイアウト準拠。先頭3枚＝上段の小さな外観、4枚目＝大きめの図、以降＝小さめ） */
   images: { src: string; alt: string }[];
   /** テキスト付きの活用トピック（BOX用） */
   topics: ShowcaseTopic[];
   /** 見積ボタンの上に置く基本平面図（Flat用・Word 準拠） */
   basicPlan?: { image: string; alt: string };
-  /** 物置Plus の設置例写真（Flat用） */
-  storagePhoto?: { image: string; alt: string; caption: string };
+  /** 物置Plus の設置例写真（Flat用）。note は写真下の寸法キャプション */
+  storagePhoto?: { image: string; alt: string; caption: string; note?: string };
   /** ラベル付き組合せ平面図の列（Flat用）。tag/lead はまとめの見出しと本文 */
   plansTag?: string;
   plansLead?: string;
@@ -186,8 +160,9 @@ export const showcase = {
       catch: '高級ホテルのイメージを・・・',
       name: '小さな宝箱 Wing',
       size: '基本 3,900×4,800',
-      body: 'トラック一台分でコンテナ2個分の広さを実現しました。\n運送費を削減でき、高級感溢れる内装と、使い勝手の良い間取りだから、お一人様の住宅にも最適で、水回りが無ければ事務所、店舗にも活用出来る丁度いい広さです。',
-      highlight: '住居として使って将来はホテルで運用・・・\n高利回りを実現可能',
+      body: 'トラック一台分でコンテナ2個分の広さを実現しました。\n運送費を削減でき、高級感溢れる内装と、使い勝手の良い間取りだから、お一人様の住宅にも最適で、水回りが無ければ事務所、店舗にも活用出来る丁度いい広さです。\n住居として使って将来はホテルで運用・・・高利回りを実現可能',
+      /** コラージュ下のキャプション（Ver4） */
+      caption: 'コンテナの常識を覆す広さと、木造の優雅さを融合した一品です。',
       images: [
         { src: '/images/plan/wing-isometric.png', alt: 'ベッド・ダイニング・水回り・デッキを収めた Wing のアイソメ図' },
         { src: '/images/cases/box-forest-terrace.jpg', alt: '木立の中にデッキ付きで設置された木造コンテナ' },
@@ -241,17 +216,14 @@ export const showcase = {
       plansTag: '物置にもう一部屋Plus',
       plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
       /** 物置Plus の右列：設置例写真＋組合せ平面図（BOX＋Flat は Word と同じく水回りキット＋居室の2枚重ね） */
-      /** 右側（住宅玄関部分）はトリミング済み（2026-09-03 赤入れ） */
-      storagePhoto: { image: '/images/cases/flat-entrance-trim.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置' },
+      /** 右側（住宅玄関部分）はトリミング済み。Ver4 でキャプションに寸法を追記 */
+      storagePhoto: { image: '/images/cases/flat-entrance-trim.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置', note: '庭に物置（最小 2,100×1,800）' },
       plans: [
         { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図' }] },
         {
           label: 'BOX＋Flat',
-          /** 水回りキットの下に、先方提供の「正しい向き」の居室図を隙間なく連結（2026-09-03） */
-          images: [
-            { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
-            { image: '/images/plan/flat-rooms-under.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図（出入口が下側）' },
-          ],
+          /** 水回りキット＋居室（正しい向き）を1枚に合成済み（2026-09-04「変です」対応） */
+          images: [{ image: '/images/plan/box-flat-combo.jpg', alt: 'BOX 水回りキットとフラットの食堂・洋室をつなげた平面図' }],
         },
       ],
     },
@@ -263,50 +235,61 @@ export const showcase = {
 export const combos = {
   labelEn: 'COMBINATION PLANS',
   title: '不陸調整折畳み式木造コンテナの組合せプラン',
-  note: 'Wing、BOX、Flatともに、本体とは、折畳み式で水回りや内外装の仕上げの無い状態を言います。お客様ご自身で、現場配送後に内外装工事をDIYできるので、ご自身の使い道、好みにあわせて、使用してください。但し保証や各種関係法令に適合しているかについては責任の範囲外となります。',
+  note: 'Wing、BOX、Flatともに、本体とは、折畳み式で水回りや内外装の仕上げの無い状態を言います。\nお客様ご自身で、現場配送後に内外装工事をDIYできるので、ご自身の使い道、好みにあわせて、使用してください。\n但し保証や各種関係法令に適合しているかについては責任の範囲外となります。',
   caution: '※全ての画像はイメージで実際の商品と異なる場合があります。',
-  legal: '※BOX及びFlatは、単体で10㎡以内となる商品は確認申請が不要となります。',
-  /** グループ構成（2026-09-02 赤入れ：基本本体を先頭に、給湯器付き水回り図は BOX 水回りキット例へ） */
+  /** Ver4：ラベルは色付きバッジ。badge はバッジの背景色 */
   groups: [
     {
       label: '各コンテナの基本本体',
+      badge: '#1e2a3a',
+      /** 基本本体だけ青緑のパネルに入れる（Ver4） */
+      panel: true,
       items: [
         { image: '/images/plan/wing-office.jpg', alt: 'Wing 事務所（物置）11.3 帖の平面図' },
         { image: '/images/plan/flat-basic.jpg', alt: 'フラット 6.8 帖の平面図' },
       ],
     },
     {
-      label: 'Wingホテル用',
-      items: [
-        { image: '/images/plan/wing-hotel-ld.jpg', alt: 'シャワー・トイレと LD7 帖を収めた Wing ホテル用の平面図' },
-        { image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' },
-      ],
+      label: 'Wing居住用',
+      badge: '#5a3e2b',
+      items: [{ image: '/images/plan/wing-hotel-ld.jpg', alt: 'シャワー・トイレと LD7 帖を収めた Wing 居住用の平面図' }],
     },
     {
-      label: 'Wing居住用',
-      items: [{ image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing 居住用の平面図' }],
+      label: 'Wingホテル用',
+      badge: '#5a3e2b',
+      items: [{ image: '/images/plan/wing-hotel-guest.jpg', alt: '客室（居室）7.4 帖とユニットバスを収めた Wing ホテル用の平面図' }],
+    },
+    {
+      label: 'Wing居室プラン例',
+      badge: '#5a3e2b',
+      items: [{ image: '/images/plan/wing-two-rooms.jpg', alt: '洋室 4.9 帖×2 とウォークインクローゼットを収めた Wing の平面図' }],
+    },
+    {
+      label: 'Flatプラス居室例',
+      badge: '#303030',
+      items: [{ image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
     },
     {
       label: 'BOX水回りキット例',
+      badge: '#0b4f66',
       items: [
         { image: '/images/plan/box-water-kit-basic.jpg', alt: 'ガス給湯器・エアコン室外機付き BOX 水回りキットの平面図' },
         { image: '/images/plan/box-water-kit.jpg', alt: 'キッチン 3.9 帖・トイレ・ユニットバスを収めた BOX 水回りキットの平面図' },
       ],
     },
-    {
-      label: 'Flatプラス居室例',
-      items: [{ image: '/images/plan/flat-two-rooms.jpg', alt: 'フラットの食堂 3 帖と洋室 3 帖の平面図' }],
-    },
-    {
-      /** 2026-09-03 赤入れ：Wing居室プラン例の図はこのグループへ移動 */
-      label: 'Wing＋BOXまたはFlatの組合せ例',
-      items: [
-        { image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
-        { image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
-        { image: '/images/plan/wing-living.jpg', alt: 'リビング 5.7 帖と洋室 4.9 帖を収めた Wing 居室プランの平面図' },
-      ],
-    },
   ],
+  /** Ver4：帯見出し＋注記の下に組合せ4例 */
+  comboBand: {
+    label: 'Wing＋BOXまたはFlatの組合せ例',
+    note: '※BOX及びFlatは、単体で10㎡以内となる商品は確認申請が不要となります。',
+    color: '#414537',
+    items: [
+      { image: '/images/plan/box-wing-living-combo.jpg', alt: 'BOX 水回りキットと Wing のリビング・洋室を組み合わせた平面図' },
+      { image: '/images/plan/wing-box-combo.jpg', alt: 'BOX 水回りキットと Wing 8.7 帖を組み合わせた平面図' },
+      { image: '/images/plan/flat-wing-2ldk.jpg', alt: 'フラットと Wing を組み合わせた 2LDK の平面図' },
+      { image: '/images/plan/box-wing-rooms-combo.jpg', alt: 'BOX 水回りキットと Wing の洋室2部屋を組み合わせた平面図' },
+    ],
+  },
 };
 
 /* ---------------- 見積シミュレーション導線 ---------------- */
@@ -314,11 +297,12 @@ export const combos = {
 export const estimate = {
   labelEn: 'SIMULATOR',
   title: '見積シミュレーション',
-  lead: 'あなたは、どんな事業やお住まいに、どの商品を活用しますか？\n見積シミュレーションで概算を確認し、あなたの希望にあった商品を見つけましょう。',
+  lead: 'あなたは、どんな事業やお住まいに、どの商品を活用しますか？見積シミュレーションで概算を確認し、あなたの希望にあった商品を見つけましょう',
+  /** Ver4：ラベルは画像の上の色付きバッジ（Wing=黒／BOX=青緑／Flat=紺） */
   buttons: [
-    { label: 'Wingで見積', slug: 'wing-01', image: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる湖畔に建つ夜の Wing', contain: false },
-    { label: 'BOXで見積', slug: 'box', image: '/images/products/box-white.png', alt: '白い外壁の BOX', contain: true },
-    { label: 'Flatで見積', slug: 'flat', image: '/images/products/flat-navy.png', alt: '紺色の外壁の Flat', contain: true },
+    { label: 'Wingで見積', slug: 'wing-01', image: '/images/exterior/wing-night-fireworks.jpg', alt: '花火の上がる湖畔に建つ夜の Wing', contain: false, badge: '#211f20' },
+    { label: 'BOXで見積', slug: 'box', image: '/images/products/box-white.png', alt: '白い外壁の BOX', contain: true, badge: '#0b4f66' },
+    { label: 'Flatで見積', slug: 'flat', image: '/images/products/flat-navy.png', alt: '紺色の外壁の Flat', contain: true, badge: '#1e2a3a' },
   ],
 };
 
@@ -326,7 +310,7 @@ export const estimate = {
 
 export const dealerRecruit = {
   labelEn: 'PARTNERS',
-  title: '代理店募集',
+  title: '代理店様募集',
   body: 'この木造コンテナは新しい選択肢を提供し、災害時にも迅速に行動できるように、地域の代理店を募集しています。',
   image: '/images/cases/box-lakeside-family.jpg',
   alt: '湖畔のデッキで家族が過ごす木造コンテナ BOX',

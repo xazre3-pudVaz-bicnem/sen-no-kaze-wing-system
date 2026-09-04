@@ -38,34 +38,26 @@ export function ProductShowcase() {
       <article id="wing" className="scroll-mt-24 bg-forest-deep py-10 sm:py-12">
         <div className="container-x">
           <ProductHeading p={wing} />
-          <div className="mt-4 grid items-start gap-5 lg:grid-cols-[1fr_1.1fr] lg:gap-10">
+          {/* PDF の3列：本文＋ボタン｜透過アイソメ図｜室内2×2＋キャプション */}
+          <div className="mt-3 grid items-start gap-4 lg:grid-cols-[0.85fr_0.85fr_1.5fr] lg:gap-5">
             <Reveal>
-              <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{wing.body}</p>
-              {wing.highlight && (
-                <p className="mt-3 border-l-2 border-gold pl-3 font-serif text-sm leading-relaxed whitespace-pre-line text-gold-light sm:text-base">{wing.highlight}</p>
-              )}
+              <p className="text-[0.78rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{wing.body}</p>
               <EstimateButton p={wing} />
             </Reveal>
-            {/* コラージュ：PDF どおり 左＝透過アイソメ図（大）／右＝外観1枚＋室内3枚の2×2 */}
+            <Reveal variant="image" className="relative aspect-[4/5] w-full">
+              <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 60vw" className="object-contain" />
+            </Reveal>
             <Reveal variant="image">
-              <div className="grid grid-cols-[0.85fr_1fr_1fr] gap-2">
-                <div className="relative row-span-2 min-h-40">
-                  <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-contain" />
-                </div>
+              <div className="grid grid-cols-2 gap-2">
                 {wing.images.slice(1, 5).map((img) => (
-                  <div key={img.src} className="relative aspect-[4/3] overflow-hidden">
-                    <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 18vw, 32vw" className="object-cover" />
+                  <div key={img.src} className="relative aspect-[16/10] overflow-hidden">
+                    <Image src={img.src} alt={img.alt} fill sizes="(min-width: 1024px) 19vw, 45vw" className="object-cover" />
                   </div>
                 ))}
               </div>
+              {wing.caption && <p className="mt-1.5 text-right text-[0.75rem] leading-relaxed text-white/90">{wing.caption}</p>}
             </Reveal>
           </div>
-          {/* コラージュ下のキャプション（Ver4） */}
-          {wing.caption && (
-            <Reveal>
-              <p className="mt-3 text-center text-[0.8rem] leading-relaxed text-white/90 sm:text-right sm:text-sm">{wing.caption}</p>
-            </Reveal>
-          )}
           {/* 立面図4面（Ver4：玄関側・木板窓戸・設備側・木板） */}
           <div className="mt-5 grid grid-cols-4 items-end gap-2 sm:gap-3">
             {[
@@ -86,31 +78,31 @@ export function ProductShowcase() {
       <article id="box" className="scroll-mt-24 bg-[#0b4f66] py-10 sm:py-12">
         <div className="container-x">
           <ProductHeading p={box} />
-          <div className="mt-4 grid gap-5 lg:grid-cols-[0.9fr_1.1fr_1fr] lg:items-start lg:gap-8">
+          {/* PDF の3列：本文＋ボタン｜外観CG＋内装図｜土地活用例・事務所やワンルーム */}
+          <div className="mt-3 grid gap-4 lg:grid-cols-[0.85fr_1.15fr_1fr] lg:items-start lg:gap-5">
             <Reveal>
-              <p className="text-[0.8rem] leading-[1.8] whitespace-pre-line text-white/85 sm:text-sm">{box.body}</p>
+              <p className="text-[0.78rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{box.body}</p>
               <EstimateButton p={box} />
             </Reveal>
-            {/* 外観（透過）＋内装レイアウト（PDF と同じく間を詰める） */}
-            <Reveal variant="image" className="grid grid-cols-2 items-center gap-2 lg:grid-cols-1 lg:gap-3">
+            <Reveal variant="image" className="grid grid-cols-2 items-start gap-2 lg:grid-cols-1">
               <div className="relative aspect-[16/9] w-full">
-                <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 32vw, 45vw" className="object-contain" />
+                <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 30vw, 45vw" className="object-contain" />
               </div>
               <div className="relative aspect-[16/7] w-full overflow-hidden bg-white">
-                <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 32vw, 45vw" className="object-contain p-0.5" />
+                <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 30vw, 45vw" className="object-contain p-0.5" />
               </div>
             </Reveal>
-            {/* 活用トピック：スマホは「文章｜写真」の2列（2026-09-03 赤入れ）、PCは文章の下に写真 */}
-            <div className="space-y-5">
+            {/* 活用トピック（PDF：見出し・本文の下に写真。スマホは文章｜写真の2列） */}
+            <div className="space-y-3">
               {box.topics.map((t) => (
                 <Reveal key={t.title} className="grid grid-cols-2 items-start gap-3 lg:block">
                   <div>
                     {t.tag && <p className="text-[0.65rem] tracking-[0.15em] text-gold">【{t.tag}】</p>}
-                    <h4 className="mt-0.5 font-serif text-sm leading-snug text-white">{t.title}</h4>
-                    <p className="mt-1 text-[0.72rem] leading-[1.7] whitespace-pre-line text-white/80">{t.body}</p>
+                    <h4 className="mt-0.5 font-serif text-[0.82rem] leading-snug text-white">{t.title}</h4>
+                    <p className="mt-1 text-[0.7rem] leading-[1.65] whitespace-pre-line text-white/80">{t.body}</p>
                   </div>
-                  <div className="relative aspect-[16/11] w-full lg:mt-2 lg:max-w-xs">
-                    <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 20rem, 45vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
+                  <div className="relative aspect-[16/10] w-full lg:mt-1.5 lg:max-w-[15rem]">
+                    <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 15rem, 45vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
                     {t.caption && (
                       <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>
                     )}

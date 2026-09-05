@@ -101,11 +101,11 @@ export function ProductShowcase() {
                   <EstimateButton p={box} />
                 </div>
                 <div className="space-y-2">
-                  <div className="relative aspect-[16/9] w-full">
+                  <div className="relative mx-auto aspect-[16/9] w-[90%] lg:w-full">
                     <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
                   </div>
                   {/* 先方提供の内装レイアウト図（向きはそのまま） */}
-                  <div className="relative aspect-[1000/439] w-full overflow-hidden">
+                  <div className="relative mx-auto aspect-[1000/439] w-[78%] overflow-hidden lg:w-full">
                     <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
                   </div>
                 </div>
@@ -121,7 +121,7 @@ export function ProductShowcase() {
                     <h4 className="mt-0.5 font-serif text-[0.86rem] leading-snug text-white sm:text-[0.95rem]">{t.title}</h4>
                     <p className="mt-1 text-[0.76rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{t.body}</p>
                   </div>
-                  <div className={`relative aspect-[16/11] ${t.size === 'sm' ? 'w-[78%] lg:w-[85%]' : 'w-[115%] max-w-none lg:w-full'}`}>
+                  <div className={`relative aspect-[16/11] ${t.size === 'sm' ? 'w-[85%]' : 'w-[112%] max-w-none lg:w-full'}`}>
                     <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 18vw, 40vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
                     {t.caption && (
                       <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>
@@ -148,11 +148,11 @@ export function ProductShowcase() {
                   <EstimateButton p={flat} />
                 </div>
                 <div className="space-y-2">
-                  <div className="relative mx-auto aspect-[4/3] w-[70%] lg:w-full">
+                  <div className="relative aspect-[4/3] w-[78%] lg:w-full">
                     <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain" />
                   </div>
                   {flat.basicPlan && (
-                    <div className="relative mx-auto aspect-[21/9] w-[85%] overflow-hidden bg-white lg:w-full">
+                    <div className="relative aspect-[21/9] w-[78%] overflow-hidden bg-white lg:w-full">
                       <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-0.5" />
                     </div>
                   )}
@@ -166,7 +166,7 @@ export function ProductShowcase() {
                 <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
                 <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
                 {flat.plans && (
-                  <div className="relative mt-2 aspect-square w-[80%] overflow-hidden bg-white lg:w-full">
+                  <div className="relative mt-2 aspect-square w-[88%] overflow-hidden bg-white lg:w-full">
                     <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
                 )}
@@ -174,7 +174,7 @@ export function ProductShowcase() {
               <div>
                 {flat.storagePhoto && (
                   <>
-                    <div className="relative aspect-[4/3] w-[80%] lg:w-full">
+                    <div className="relative aspect-[4/3] w-[87%] lg:w-full">
                       <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-cover" />
                       <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
                     </div>
@@ -182,7 +182,7 @@ export function ProductShowcase() {
                   </>
                 )}
                 {flat.plans && (
-                  <div className="relative mt-2 aspect-square w-[80%] overflow-hidden bg-white lg:w-full">
+                  <div className="relative mt-2 aspect-square w-[83%] overflow-hidden bg-white lg:w-full">
                     <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
                 )}

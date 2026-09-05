@@ -21,11 +21,11 @@ export function FoldingTechSection() {
 
         <PairBlocks className="mt-4 lg:items-center">
           {/* 左ブロック：本文｜折畳み屋根ラベル・ドア・AC・木板｜縦長平面（固定3列） */}
-          <Reveal variant="image" className="grid grid-cols-[1fr_1.1fr_0.42fr] items-center gap-2">
+          <Reveal variant="image" className="grid grid-cols-[1fr_1fr_0.5fr] items-center gap-2">
             <p className="text-[0.72rem] leading-[1.7] text-white/85 sm:text-[0.78rem]">{foldingTech.body}</p>
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-[1fr_0.42fr] items-stretch gap-2">
-                <p className="flex items-center justify-center bg-[#d9d9d9] px-2 py-1.5 text-center text-[0.7rem] font-semibold text-ink sm:text-[0.78rem]">折畳み屋根</p>
+                <p className="flex items-center justify-center bg-[#d9d9d9] px-2 py-1 text-center text-[0.66rem] font-semibold text-ink sm:text-[0.74rem]">折畳み屋根</p>
                 <div className="relative aspect-[222/365] w-full">
                   <Image src="/images/elevation/wing-door-only.png" alt="木製玄関ドアの立面図" fill sizes="60px" className="object-contain" />
                 </div>
@@ -46,11 +46,11 @@ export function FoldingTechSection() {
           </Reveal>
 
           {/* 右ブロック：クレーン写真｜広さ約2倍→｜展開後平面（固定3列） */}
-          <Reveal variant="image" className="grid grid-cols-[1.5fr_0.5fr_0.8fr] items-center gap-2">
+          <Reveal variant="image" className="grid grid-cols-[1.5fr_0.55fr_0.85fr] items-center gap-1.5">
             <div className="relative aspect-[4/3] w-full overflow-hidden">
               <Image src="/images/transport/unic-seaside.jpg" alt="海辺の設置場所で設置足の上に置かれた折り畳み状態のコンテナ" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-cover" />
             </div>
-            <p className="bg-white px-1 py-1 text-center text-[0.62rem] font-bold whitespace-nowrap text-red-600 sm:text-[0.7rem]">広さ約2倍 →</p>
+            <p className="mx-auto bg-white px-1 py-0.5 text-center text-[0.54rem] leading-tight font-bold whitespace-nowrap text-red-600 sm:text-[0.66rem]">広さ約2倍 →</p>
             {/* 展開後の平面（先方提供図。向きはそのまま） */}
             <div className="relative aspect-[800/1166] w-full bg-white">
               <Image src="/images/plan/wing-expanded-plan.jpg" alt="広げるとコンテナ約2倍の広さになる平面図" fill sizes="160px" className="object-contain" />

@@ -161,16 +161,12 @@ export function ProductShowcase() {
             </Reveal>
 
             {/* 右：物置Plus 文＋Flat＋Wing図｜物置写真＋BOX＋Flat図（固定2列） */}
-            <Reveal className="grid grid-cols-2 items-start gap-3">
+            <Reveal className="grid grid-cols-2 items-start gap-x-3 gap-y-2">
               <div>
                 <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
                 <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
-                {flat.plans && (
-                  <div className="relative mt-2 aspect-square w-[88%] overflow-hidden bg-white lg:w-full">
-                    <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
-                  </div>
-                )}
               </div>
+              {/* 右上：物置写真＋寸法 */}
               <div>
                 {flat.storagePhoto && (
                   <>
@@ -181,12 +177,18 @@ export function ProductShowcase() {
                     {flat.storagePhoto.note && <p className="mt-1 text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
                   </>
                 )}
-                {flat.plans && (
-                  <div className="relative mt-2 aspect-square w-[83%] overflow-hidden bg-white lg:w-full">
-                    <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
-                  </div>
-                )}
               </div>
+              {/* 下段：2つの組合せ図を同じ高さに揃える（2026-09-05 赤入れ「下げる」） */}
+              {flat.plans && (
+                <div className="relative aspect-square w-[88%] overflow-hidden bg-white lg:w-full">
+                  <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                </div>
+              )}
+              {flat.plans && (
+                <div className="relative aspect-square w-[83%] overflow-hidden bg-white lg:w-full">
+                  <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                </div>
+              )}
             </Reveal>
           </PairBlocks>
         </div>

@@ -69,18 +69,18 @@ export function ProductShowcase() {
           {/* 立面図：左2面／右2面の2ブロック */}
           <PairBlocks>
             <Reveal variant="image" className="grid grid-cols-2 items-center gap-2">
-              <div className="relative aspect-[3/2] w-full">
+              <div className="relative aspect-[5/3] w-full">
                 <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
-              <div className="relative aspect-[3/2] w-full">
+              <div className="relative aspect-[5/3] w-full">
                 <Image src="/images/elevation/wing-roof-face.png" alt="窓と戸のある木板張りの立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
             </Reveal>
             <Reveal variant="image" className="grid grid-cols-2 items-center gap-2">
-              <div className="relative aspect-[3/2] w-full">
+              <div className="relative aspect-[5/3] w-full">
                 <Image src="/images/elevation/wing-equipment-side.png" alt="給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
-              <div className="relative aspect-[3/2] w-full">
+              <div className="relative aspect-[5/3] w-full">
                 <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
               </div>
             </Reveal>

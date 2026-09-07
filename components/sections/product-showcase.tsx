@@ -105,10 +105,10 @@ export function ProductShowcase() {
                   <EstimateButton p={box} />
                 </div>
                 <div className="space-y-3">
-                  <div className="relative mx-auto aspect-[1672/941] w-full max-w-[135px] lg:max-w-[230px]">
+                  <div className="relative mx-auto aspect-[1672/941] w-full max-w-[135px] sm:max-w-[230px]">
                     <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 230px, 135px" unoptimized className="object-contain" />
                   </div>
-                  <div className="relative mx-auto aspect-[2098/750] w-[94%] max-w-[135px] lg:w-full lg:max-w-[230px]">
+                  <div className="relative mx-auto aspect-[2098/750] w-[94%] max-w-[135px] sm:w-full sm:max-w-[230px]">
                     <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 230px, 135px" unoptimized className="object-contain" />
                   </div>
                 </div>
@@ -171,31 +171,31 @@ export function ProductShowcase() {
             </Reveal>
 
             {/* 右：物置Plus 文→Flat＋Wing図｜物置写真→BOX＋Flat図（固定2列） */}
-            <Reveal className="grid grid-cols-2 items-start gap-x-3">
-              <div className="flex h-full flex-col">
+            <Reveal className="grid grid-cols-2 items-start gap-x-10">
+              <div>
                 <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
                 <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
-                {flat.plans && (
-                  <div className="relative mx-auto mt-3 aspect-[900/948] w-[69%] overflow-hidden bg-white">
-                    <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
-                  </div>
-                )}
               </div>
-              <div className="flex h-full flex-col">
+              <div>
                 {flat.storagePhoto && (
                   <>
-                    <div className="relative ml-auto aspect-[4/3] w-[69%]">
+                    <div className="relative mr-auto aspect-[4/3] w-[69%]">
                       <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" unoptimized className="object-cover" />
                     </div>
-                    {flat.storagePhoto.note && <p className="mt-1 ml-auto w-[69%] text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
+                    {flat.storagePhoto.note && <p className="mt-1 mr-auto w-[69%] text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
                   </>
                 )}
-                {flat.plans && (
-                  <div className="relative mt-4 ml-auto aspect-[900/715] w-[69%] overflow-hidden bg-white">
+              </div>
+              {flat.plans && (
+                <>
+                  <div className="relative mt-3 ml-auto aspect-[900/948] w-[69%] overflow-hidden bg-white">
+                    <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                  </div>
+                  <div className="relative mt-3 mr-auto aspect-[900/715] w-[69%] overflow-hidden bg-white">
                     <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </Reveal>
           </PairBlocks>
         </div>

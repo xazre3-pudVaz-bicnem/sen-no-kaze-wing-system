@@ -5,7 +5,7 @@ import { PairBlocks } from '@/components/ui/pair-blocks';
 
 /**
  * 経験から生まれた不陸調整方式採用 折畳み木造コンテナ（Ver5 PDF）。
- * 2ブロック：左＝本文＋折畳み時構成図／右＝クレーン写真＋「広さ約2倍→」＋展開後平面。
+ * 2ブロック：左＝本文＋立面図まわり／右＝クレーン写真＋「広さ約2倍→」＋展開後平面。
  * ※クレーン写真は先方が動画に差し替え予定（PDF 注記「動画に変更する」）。
  */
 export function FoldingTechSection() {
@@ -20,17 +20,28 @@ export function FoldingTechSection() {
         </Reveal>
 
         <PairBlocks className="mt-4 lg:items-center">
-          {/* 左ブロック：本文｜添付見本に合わせた折畳み時構成図 */}
-          <Reveal variant="image" className="grid grid-cols-[0.9fr_1.6fr] items-center gap-3 sm:gap-4">
+          {/* 左ブロック：本文｜折畳み屋根ラベル・ドア・AC・木板｜縦長平面（固定3列） */}
+          <Reveal variant="image" className="grid grid-cols-[1fr_1fr_0.5fr] items-center gap-2">
             <p className="text-[0.72rem] leading-[1.7] text-white/85 sm:text-[0.78rem]">{foldingTech.body}</p>
-            <div className="relative aspect-[375/267] w-full">
-              <Image
-                src="/images/folding-tech/wing-folded-composite.png"
-                alt="折畳み屋根面、玄関ドア、設備、木板外壁、折り畳み時の平面図をまとめた図"
-                fill
-                sizes="(min-width: 1024px) 27vw, 58vw"
-                className="object-contain"
-              />
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-[1fr_0.42fr] items-stretch gap-2">
+                <p className="flex items-center justify-center bg-[#d9d9d9] px-2 py-1 text-center text-[0.66rem] font-semibold text-ink sm:text-[0.74rem]">折畳み屋根</p>
+                <div className="relative aspect-[222/365] w-full">
+                  <Image src="/images/elevation/wing-door-only.png" alt="木製玄関ドアの立面図" fill sizes="60px" className="object-contain" />
+                </div>
+              </div>
+              <div className="grid grid-cols-[0.42fr_1fr] items-end gap-2">
+                <div className="relative aspect-[265/390] w-full">
+                  <Image src="/images/elevation/wing-equipment-ac.png" alt="給湯器とエアコン室外機まわりの立面図" fill sizes="50px" className="object-contain" />
+                </div>
+                <div className="relative aspect-[872/392] w-full">
+                  <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="150px" className="object-contain" />
+                </div>
+              </div>
+            </div>
+            {/* 折畳み時の平面（先方提供図。向きはそのまま） */}
+            <div className="relative aspect-[400/1106] w-full bg-white">
+              <Image src="/images/plan/wing-folded-plan.jpg" alt="折り畳んだ状態の平面図" fill sizes="80px" className="object-contain" />
             </div>
           </Reveal>
 

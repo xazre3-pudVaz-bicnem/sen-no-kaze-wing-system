@@ -31,24 +31,24 @@ export function HomeHero() {
           </h1>
 
           {/* Wing / BOX / Flat（Ver4：方式のサブラベル付き） */}
-          <div className="reveal reveal-delay-2 mt-4 flex w-32 flex-col gap-1.5 sm:w-40">
+          <div className="reveal reveal-delay-2 mt-4 flex w-24 flex-col gap-1.5 sm:w-[7.5rem]">
             {hero.products.map((p) => (
               <a
                 key={p.label}
                 href={p.href}
-                className="flex items-baseline justify-between gap-2 rounded-sm border border-white/70 bg-navy/60 px-3 py-1.5 backdrop-blur-sm transition-colors hover:border-gold hover:bg-gold hover:text-forest-deep"
+                className="flex items-baseline justify-between gap-1 rounded-sm border border-white/70 bg-navy/60 px-2 py-1.5 backdrop-blur-sm transition-colors hover:border-gold hover:bg-gold hover:text-forest-deep"
               >
-                <span className="font-serif text-sm tracking-[0.15em] text-gold-light sm:text-base">{p.label}</span>
-                <span className="text-[0.58rem] tracking-wider text-gold-light sm:text-[0.7rem]">{p.sub}</span>
+                <span className="font-serif text-[0.78rem] tracking-[0.12em] text-gold-light sm:text-base sm:tracking-[0.15em]">{p.label}</span>
+                <span className="text-[0.5rem] tracking-wider text-gold-light sm:text-[0.7rem]">{p.sub}</span>
               </a>
             ))}
           </div>
 
-          <div className="reveal reveal-delay-3 mt-3 flex w-32 flex-col gap-1.5 sm:w-40">
-            <Link href="#features" className="rounded-full border border-gold bg-forest-deep/70 px-3 py-1 text-center text-[0.68rem] font-semibold tracking-wider text-white transition-colors hover:bg-gold hover:text-forest-deep sm:text-xs">
+          <div className="reveal reveal-delay-3 mt-3 flex w-24 flex-col gap-1.5 sm:w-[7.5rem]">
+            <Link href="#features" className="rounded-full border border-gold bg-forest-deep/70 px-2 py-1 text-center text-[0.58rem] font-semibold tracking-wider text-white transition-colors hover:bg-gold hover:text-forest-deep sm:px-3 sm:text-xs">
               {hero.cta}
             </Link>
-            <Link href="#dealer" className="rounded-full border border-gold bg-forest-deep/70 px-3 py-1 text-center text-[0.68rem] font-semibold tracking-wider text-white transition-colors hover:bg-gold hover:text-forest-deep sm:text-xs">
+            <Link href="#dealer" className="rounded-full border border-gold bg-forest-deep/70 px-2 py-1 text-center text-[0.58rem] font-semibold tracking-wider text-white transition-colors hover:bg-gold hover:text-forest-deep sm:px-3 sm:text-xs">
               {hero.ctaDealer}
             </Link>
           </div>

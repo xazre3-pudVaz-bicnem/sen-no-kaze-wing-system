@@ -31,7 +31,7 @@ export function HomeHero() {
           </h1>
 
           {/* Wing / BOX / Flat（Ver4：方式のサブラベル付き） */}
-          <div className="reveal reveal-delay-2 mt-4 flex w-36 flex-col gap-1.5 sm:w-44">
+          <div className="reveal reveal-delay-2 mt-4 flex w-32 flex-col gap-1.5 sm:w-40">
             {hero.products.map((p) => (
               <a
                 key={p.label}

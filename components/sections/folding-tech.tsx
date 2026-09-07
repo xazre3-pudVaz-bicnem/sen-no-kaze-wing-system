@@ -25,7 +25,7 @@ export function FoldingTechSection() {
             <p className="text-[0.72rem] leading-[1.7] text-white/85 sm:text-[0.78rem]">{foldingTech.body}</p>
             <div className="relative aspect-[375/267] w-full">
               <Image
-                src="/images/folding-tech/wing-folded-composite.svg"
+                src="/images/folding-tech/wing-folded-composite.png"
                 alt="折畳み屋根面、玄関ドア、設備、木板外壁、折り畳み時の平面図をまとめた図"
                 fill
                 sizes="(min-width: 1024px) 27vw, 58vw"

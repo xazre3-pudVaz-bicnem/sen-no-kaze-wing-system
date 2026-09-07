@@ -66,23 +66,25 @@ export function ProductShowcase() {
             </Reveal>
           </PairBlocks>
 
-          {/* 立面図：左2面／右2面の2ブロック */}
+          {/* 立面図：正面側2面／設備・木板側2面 */}
           <PairBlocks>
-            <Reveal variant="image" className="grid grid-cols-2 items-center gap-2">
-              <div className="relative aspect-[5/3] w-full">
-                <Image src="/images/elevation/wing-entrance-color.png" alt="木製玄関ドアのある白い外壁の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
-              </div>
-              <div className="relative aspect-[5/3] w-full">
-                <Image src="/images/elevation/wing-roof-face.png" alt="窓と戸のある木板張りの立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
-              </div>
+            <Reveal variant="image" className="relative aspect-[587/203] w-full">
+              <Image
+                src="/images/elevation/wing-front-elevations-cutout.png"
+                alt="玄関ドア側と掃き出し窓側の立面図"
+                fill
+                sizes="(min-width: 1024px) 45vw, 100vw"
+                className="object-contain"
+              />
             </Reveal>
-            <Reveal variant="image" className="grid grid-cols-2 items-center gap-2">
-              <div className="relative aspect-[5/3] w-full">
-                <Image src="/images/elevation/wing-equipment-side.png" alt="給湯器とエアコン室外機、ユニットバスの窓が並ぶ設備側の立面図" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
-              </div>
-              <div className="relative aspect-[5/3] w-full">
-                <Image src="/images/elevation/wing-wood-panel.png" alt="木板張りの外壁パネル" fill sizes="(min-width: 1024px) 22vw, 45vw" className="object-contain" />
-              </div>
+            <Reveal variant="image" className="relative aspect-[580/200] w-full">
+              <Image
+                src="/images/elevation/wing-side-elevations.png"
+                alt="設備側と木板外壁側の立面図"
+                fill
+                sizes="(min-width: 1024px) 45vw, 100vw"
+                className="object-contain"
+              />
             </Reveal>
           </PairBlocks>
         </div>
@@ -100,36 +102,39 @@ export function ProductShowcase() {
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{box.body}</p>
                   <EstimateButton p={box} />
                 </div>
-                <div className="space-y-2">
-                  <div className="relative mx-auto aspect-[16/9] w-[90%] lg:w-full">
-                    <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
-                  </div>
-                  {/* 先方提供の内装レイアウト図（向きはそのまま） */}
-                  <div className="relative mx-auto aspect-[1000/439] w-[78%] overflow-hidden lg:w-full">
-                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 26vw, 50vw" className="object-contain" />
-                  </div>
+                <div className="relative mx-auto aspect-[278/313] w-[88%] lg:w-[90%]">
+                  <Image
+                    src="/images/products/box-product-composition.png"
+                    alt="BOXの外観と内装レイアウト図"
+                    fill
+                    sizes="(min-width: 1024px) 22vw, 45vw"
+                    className="object-contain"
+                  />
                 </div>
               </div>
             </Reveal>
 
-            {/* 右：土地活用例／事務所やワンルーム（各「文章｜写真」の固定2列） */}
-            <div className="space-y-3">
-              {box.topics.map((t) => (
-                <Reveal key={t.title} className="grid grid-cols-[1fr_0.85fr] items-start gap-3">
-                  <div>
+            {/* 右：土地活用例／事務所やワンルームの文章｜事例画像 */}
+            <Reveal className="grid grid-cols-[1fr_0.85fr] items-start gap-3">
+              <div className="space-y-10">
+                {box.topics.map((t) => (
+                  <div key={t.title}>
                     {t.tag && <p className="font-serif text-[0.78rem] tracking-wider text-gold sm:text-[0.9rem]">【{t.tag}】</p>}
                     <h4 className="mt-0.5 font-serif text-[0.86rem] leading-snug text-white sm:text-[0.95rem]">{t.title}</h4>
                     <p className="mt-1 text-[0.76rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{t.body}</p>
                   </div>
-                  <div className={`relative aspect-[16/11] ${t.size === 'sm' ? 'w-[85%]' : 'w-[112%] max-w-none lg:w-full'}`}>
-                    <Image src={t.image} alt={t.alt} fill sizes="(min-width: 1024px) 18vw, 40vw" className={t.image.endsWith('.png') ? 'object-contain' : 'object-cover'} />
-                    {t.caption && (
-                      <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>
-                    )}
-                  </div>
-                </Reveal>
-              ))}
-            </div>
+                ))}
+              </div>
+              <div className="relative ml-auto aspect-[236/389] w-[88%]">
+                <Image
+                  src="/images/cases/box-use-cases-composition.png"
+                  alt="駐車場上に設置したBOXと2階建てに重ねたBOX"
+                  fill
+                  sizes="(min-width: 1024px) 20vw, 40vw"
+                  className="object-contain"
+                />
+              </div>
+            </Reveal>
           </PairBlocks>
         </div>
       </article>

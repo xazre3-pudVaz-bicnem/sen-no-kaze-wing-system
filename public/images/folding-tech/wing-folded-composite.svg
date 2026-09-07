@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="375" height="267" viewBox="0 0 375 267" role="img" aria-labelledby="title desc">
+  <title id="title">折畳み時の構成図</title>
+  <desc id="desc">折畳み屋根面、玄関ドア、設備、木板外壁、折畳み時の平面図を一枚にまとめた図</desc>
+
+  <rect x="29" y="49" width="155" height="75" fill="#d9d9d9" />
+  <text x="106.5" y="92" text-anchor="middle" dominant-baseline="middle" fill="#111111" font-family="sans-serif" font-size="17" font-weight="700">折畳み屋根面</text>
+
+  <image href="/images/elevation/wing-door-only.png" x="193" y="48" width="67" height="82" preserveAspectRatio="xMidYMid meet" />
+  <image href="/images/plan/wing-folded-plan.jpg" x="278" y="39" width="69" height="192" preserveAspectRatio="xMidYMid meet" />
+  <image href="/images/elevation/wing-equipment-ac.png" x="30" y="149" width="65" height="79" preserveAspectRatio="xMidYMid meet" />
+  <image href="/images/elevation/wing-wood-panel.png" x="108" y="149" width="159" height="78" preserveAspectRatio="xMidYMid meet" />
+</svg>

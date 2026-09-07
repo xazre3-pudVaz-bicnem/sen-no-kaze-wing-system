@@ -223,7 +223,7 @@ export const showcase = {
       plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
       /** 物置Plus の右列：設置例写真＋組合せ平面図（BOX＋Flat は Word と同じく水回りキット＋居室の2枚重ね） */
       /** 右側（住宅玄関部分）はトリミング済み。Ver4 でキャプションに寸法を追記 */
-      storagePhoto: { image: '/images/cases/flat-entrance-trim.jpg', alt: '住宅の玄関先に設置された黒い外壁の Flat', caption: '物置', note: '庭に物置（最小 2,100×1,800）' },
+      storagePhoto: { image: '/images/cases/box-garage-installation.png', alt: '住宅の駐車場上に設置された黒い外壁の BOX', caption: '物置', note: '庭に物置（最小 2,100×1,800）' },
       plans: [
         { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-labeled.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図（Flat＋Wing）' }] },
         {

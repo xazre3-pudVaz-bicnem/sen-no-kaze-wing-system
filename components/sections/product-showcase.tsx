@@ -68,21 +68,23 @@ export function ProductShowcase() {
 
           {/* 立面図：正面側2面／設備・木板側2面 */}
           <PairBlocks>
-            <Reveal variant="image" className="relative aspect-[587/203] w-full">
+            <Reveal variant="image" className="relative aspect-[3/1] w-full">
               <Image
                 src="/images/elevation/wing-front-elevations-cutout.png"
                 alt="玄関ドア側と掃き出し窓側の立面図"
                 fill
                 sizes="(min-width: 1024px) 45vw, 100vw"
+                unoptimized
                 className="object-contain"
               />
             </Reveal>
-            <Reveal variant="image" className="relative aspect-[580/200] w-full">
+            <Reveal variant="image" className="relative aspect-[3/1] w-full">
               <Image
                 src="/images/elevation/wing-side-elevations.png"
                 alt="設備側と木板外壁側の立面図"
                 fill
                 sizes="(min-width: 1024px) 45vw, 100vw"
+                unoptimized
                 className="object-contain"
               />
             </Reveal>
@@ -152,48 +154,45 @@ export function ProductShowcase() {
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{flat.body}</p>
                   <EstimateButton p={flat} />
                 </div>
-                <div className="space-y-2">
-                  <div className="relative aspect-[4/3] w-[78%] lg:w-full">
-                    <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain" />
+                <div className="mx-auto w-[88%] space-y-3 lg:w-[90%]">
+                  <div className="relative mx-auto aspect-[237/202] w-[74%]">
+                    <Image src={flat.images[0].src} alt={flat.images[0].alt} fill sizes="(min-width: 1024px) 17vw, 34vw" unoptimized className="object-contain" />
                   </div>
                   {flat.basicPlan && (
-                    <div className="relative aspect-[21/9] w-[78%] overflow-hidden bg-white lg:w-full">
-                      <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-0.5" />
+                    <div className="relative aspect-[733/266] w-full overflow-hidden bg-white">
+                      <Image src={flat.basicPlan.image} alt={flat.basicPlan.alt} fill sizes="(min-width: 1024px) 22vw, 45vw" unoptimized className="object-contain" />
                     </div>
                   )}
                 </div>
               </div>
             </Reveal>
 
-            {/* 右：物置Plus 文＋Flat＋Wing図｜物置写真＋BOX＋Flat図（固定2列） */}
-            <Reveal className="grid grid-cols-2 items-start gap-x-3 gap-y-2">
-              <div>
+            {/* 右：物置Plus 文→Flat＋Wing図｜物置写真→BOX＋Flat図（固定2列） */}
+            <Reveal className="grid grid-cols-2 items-start gap-x-3">
+              <div className="flex h-full flex-col">
                 <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
                 <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
-              </div>
-              {/* 右上：物置写真＋寸法 */}
-              <div>
-                {flat.storagePhoto && (
-                  <>
-                    <div className="relative aspect-[4/3] w-[87%] lg:w-full">
-                      <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-cover" />
-                      <p className="absolute right-0 bottom-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{flat.storagePhoto.caption}</p>
-                    </div>
-                    {flat.storagePhoto.note && <p className="mt-1 text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
-                  </>
+                {flat.plans && (
+                  <div className="relative mt-3 aspect-[900/948] w-[94%] overflow-hidden bg-white">
+                    <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                  </div>
                 )}
               </div>
-              {/* 下段：2つの組合せ図を同じ高さに揃える（2026-09-05 赤入れ「下げる」） */}
-              {flat.plans && (
-                <div className="relative aspect-square w-[88%] overflow-hidden bg-white lg:w-full">
-                  <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
-                </div>
-              )}
-              {flat.plans && (
-                <div className="relative aspect-square w-[83%] overflow-hidden bg-white lg:w-full">
-                  <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
-                </div>
-              )}
+              <div className="flex h-full flex-col">
+                {flat.storagePhoto && (
+                  <>
+                    <div className="relative ml-auto aspect-[4/3] w-[88%]">
+                      <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" unoptimized className="object-cover" />
+                    </div>
+                    {flat.storagePhoto.note && <p className="mt-1 ml-auto w-[88%] text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
+                  </>
+                )}
+                {flat.plans && (
+                  <div className="relative mt-4 ml-auto aspect-[900/715] w-[86%] overflow-hidden bg-white">
+                    <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
+                  </div>
+                )}
+              </div>
             </Reveal>
           </PairBlocks>
         </div>

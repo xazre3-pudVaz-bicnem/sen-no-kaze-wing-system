@@ -38,8 +38,8 @@ export function HomeHero() {
                 href={p.href}
                 className="flex items-baseline justify-between gap-1 rounded-sm border border-white/70 bg-navy/60 px-2 py-1.5 backdrop-blur-sm transition-colors hover:border-gold hover:bg-gold hover:text-forest-deep"
               >
-                <span className="font-serif text-[0.78rem] tracking-[0.12em] text-gold-light sm:text-base sm:tracking-[0.15em]">{p.label}</span>
-                <span className="text-[0.5rem] tracking-wider text-gold-light sm:text-[0.7rem]">{p.sub}</span>
+                <span className="shrink-0 whitespace-nowrap font-serif text-[0.78rem] tracking-[0.12em] text-gold-light sm:text-[0.9rem] sm:tracking-[0.12em]">{p.label}</span>
+                <span className="whitespace-nowrap text-[0.5rem] tracking-wider text-gold-light sm:text-[0.62rem]">{p.sub}</span>
               </a>
             ))}
           </div>

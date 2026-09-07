@@ -116,27 +116,31 @@ export function ProductShowcase() {
               </div>
             </Reveal>
 
-            {/* 右：土地活用例／事務所やワンルームの文章｜事例画像 */}
-            <Reveal className="grid grid-cols-[1fr_0.85fr] items-start gap-3">
-              <div className="space-y-10">
-                {box.topics.map((t) => (
-                  <div key={t.title}>
+            {/* 右：土地活用例／事務所やワンルーム（各「文章｜写真」の固定2列） */}
+            <div className="space-y-3">
+              {box.topics.map((t) => (
+                <Reveal key={t.title} className="grid grid-cols-[1fr_0.85fr] items-start gap-3">
+                  <div>
                     {t.tag && <p className="font-serif text-[0.78rem] tracking-wider text-gold sm:text-[0.9rem]">【{t.tag}】</p>}
                     <h4 className="mt-0.5 font-serif text-[0.86rem] leading-snug text-white sm:text-[0.95rem]">{t.title}</h4>
                     <p className="mt-1 text-[0.76rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{t.body}</p>
                   </div>
-                ))}
-              </div>
-              <div className="relative ml-auto aspect-[236/389] w-[88%]">
-                <Image
-                  src="/images/cases/box-use-cases-composition.png"
-                  alt="駐車場上に設置したBOXと2階建てに重ねたBOX"
-                  fill
-                  sizes="(min-width: 1024px) 20vw, 40vw"
-                  className="object-contain"
-                />
-              </div>
-            </Reveal>
+                  <div className={`relative ml-auto w-[88%] ${t.size === 'sm' ? 'aspect-[4/3]' : 'aspect-[1239/1269]'}`}>
+                    <Image
+                      src={t.image}
+                      alt={t.alt}
+                      fill
+                      sizes="(min-width: 1024px) 18vw, 40vw"
+                      unoptimized
+                      className={t.size === 'sm' ? 'object-cover' : 'object-contain'}
+                    />
+                    {t.caption && (
+                      <p className="absolute bottom-0 left-0 bg-forest-deep/80 px-2 py-0.5 font-serif text-xs tracking-wider text-gold-light">{t.caption}</p>
+                    )}
+                  </div>
+                </Reveal>
+              ))}
+            </div>
           </PairBlocks>
         </div>
       </article>
@@ -173,7 +177,7 @@ export function ProductShowcase() {
                 <p className="font-serif text-[0.8rem] tracking-wider text-gold sm:text-[0.95rem]">【{flat.plansTag}】</p>
                 <p className="mt-1.5 text-[0.78rem] leading-[1.8] text-white/90 sm:text-[0.88rem]">{flat.plansLead}</p>
                 {flat.plans && (
-                  <div className="relative mt-3 aspect-[900/948] w-[94%] overflow-hidden bg-white">
+                  <div className="relative mx-auto mt-3 aspect-[900/948] w-[86%] overflow-hidden bg-white">
                     <Image src={flat.plans[0].images[0].image} alt={flat.plans[0].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
                 )}
@@ -181,14 +185,14 @@ export function ProductShowcase() {
               <div className="flex h-full flex-col">
                 {flat.storagePhoto && (
                   <>
-                    <div className="relative ml-auto aspect-[4/3] w-[88%]">
+                    <div className="relative ml-auto aspect-[4/3] w-[84%]">
                       <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" unoptimized className="object-cover" />
                     </div>
-                    {flat.storagePhoto.note && <p className="mt-1 ml-auto w-[88%] text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
+                    {flat.storagePhoto.note && <p className="mt-1 ml-auto w-[84%] text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
                   </>
                 )}
                 {flat.plans && (
-                  <div className="relative mt-4 ml-auto aspect-[900/715] w-[86%] overflow-hidden bg-white">
+                  <div className="relative mt-4 ml-auto aspect-[900/715] w-[81%] overflow-hidden bg-white">
                     <Image src={flat.plans[1].images[0].image} alt={flat.plans[1].images[0].alt} fill sizes="(min-width: 1024px) 20vw, 45vw" className="object-contain p-1" />
                   </div>
                 )}

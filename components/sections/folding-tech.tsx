@@ -33,6 +33,16 @@ export function FoldingTechSection() {
                 unoptimized
                 className="object-contain"
               />
+              <div className="absolute inset-y-0 right-0 w-[29%] bg-forest-deep sm:hidden" aria-hidden="true">
+                <div
+                  className="absolute inset-y-0 right-0 w-[63%] bg-no-repeat"
+                  style={{
+                    backgroundImage: "url('/images/elevation/wing-folded-composition.png')",
+                    backgroundPosition: 'right center',
+                    backgroundSize: 'auto 65%',
+                  }}
+                />
+              </div>
             </div>
           </Reveal>
 

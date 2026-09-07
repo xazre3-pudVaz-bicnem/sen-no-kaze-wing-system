@@ -192,7 +192,7 @@ export const showcase = {
           tag: '土地活用例',
           title: '駐車場の上にBOX又はFlat',
           body: '土地の有効活用を目的とした活用方法です。コンビニや、都心の駐車場の上にホテルやレンタル事務所を設置できるので、高収入高収益が期待できます。',
-          image: '/images/cases/box-garage-top.jpg',
+          image: '/images/cases/box-garage-installation.png',
           alt: '住宅の駐車場の上に設置された BOX',
           caption: '駐車場の上に',
           size: 'sm',
@@ -201,7 +201,7 @@ export const showcase = {
           tag: '事務所やワンルーム',
           title: '現場の仮設事務所やワンルームマンションにも活用可能',
           body: 'あなたの遊休地や狭小地にも最適解を提供します。\n※重ねる場合、必ず確認申請が必要になります。ご注意下さい。',
-          image: '/images/cases/box-stacked.png',
+          image: '/images/cases/box-stacked-installation.png',
           alt: '2 階建てに重ねて設置された BOX',
           caption: '重ねて',
           size: 'lg',
@@ -223,7 +223,7 @@ export const showcase = {
       plansLead: '物置に、もう一部屋子供部屋に、置くだけで完成（風対策は別途）。Wing又はBOXにもう一部屋欲しいとき。',
       /** 物置Plus の右列：設置例写真＋組合せ平面図（BOX＋Flat は Word と同じく水回りキット＋居室の2枚重ね） */
       /** 右側（住宅玄関部分）はトリミング済み。Ver4 でキャプションに寸法を追記 */
-      storagePhoto: { image: '/images/cases/box-garage-installation.png', alt: '住宅の駐車場上に設置された黒い外壁の BOX', caption: '物置', note: '庭に物置（最小 2,100×1,800）' },
+      storagePhoto: { image: '/images/cases/flat-storage-installation.png', alt: '住宅の庭に設置された黒い外壁の物置', caption: '物置', note: '庭に物置（最小 2,100×1,800）' },
       plans: [
         { label: 'Flat＋Wing', images: [{ image: '/images/plan/flat-wing-labeled.jpg', alt: 'フラットの食堂・洋室と Wing の LD を組み合わせた 2LDK の平面図（Flat＋Wing）' }] },
         {

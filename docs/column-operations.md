@@ -137,3 +137,24 @@ ANTHROPIC_API_KEY=sk-ant-... node scripts/generate-column.ts --slug seaside-inst
 - 月30記事：**約 $0.27（約40円）**
 
 再試行や見送りを含めても月$1未満に収まる見込みです。記事数を増やしたり、渡す情報を増やすと比例して増えます。
+
+## 10. 未対応（設定が必要な項目）
+
+### canonical が vercel.app を指している（コラム以外にも影響）
+
+現在 `NEXT_PUBLIC_SITE_URL` が `https://sen-no-kaze-wing-system.vercel.app` のため、`https://www.sen-no-kaze.com/` で表示しても canonical・OGP・sitemap が vercel.app を指します。**カスタムドメインが正規URLとして評価されない状態**です。
+
+対応（Vercel の設定変更のみ。コード修正は不要）:
+
+1. Vercel → プロジェクト `sen-no-kaze-wing-system` → **Settings** → **Environment Variables**
+2. `NEXT_PUBLIC_SITE_URL` を `https://www.sen-no-kaze.com` に変更（Production）
+3. **Deployments** → 最新 → **Redeploy**
+
+変更後、既存ページとコラムの canonical・OGP・sitemap がすべて www.sen-no-kaze.com になります。
+
+### 自動投稿に必要な設定
+
+1. GitHub → Settings → **Secrets and variables** → **Actions** → **New repository secret**
+   - Name: `ANTHROPIC_API_KEY` / Value: Anthropic コンソールで発行した API キー
+2. GitHub → Settings → **Actions** → **General** → **Workflow permissions**
+   - 「Read and write permissions」を選択（自動コミットを push するため）

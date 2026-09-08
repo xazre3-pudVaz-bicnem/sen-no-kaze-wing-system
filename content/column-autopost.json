@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "model": "claude-haiku-4-5-20251001",
+  "maxOutputTokens": 4000,
+  "maxRetries": 3,
+  "readme": "コラム自動投稿の設定。enabled を false にすると GitHub Actions は生成せず終了する（停止スイッチ）。model を変更すると生成モデルを差し替えられる。指定モデルが使えない場合、スクリプトは別モデルへ勝手に切り替えず失敗として終了する。"
+}

@@ -164,6 +164,10 @@ export function HeaderShell({ items, user }: Props) {
           <Link href="/products" onClick={close} className="border-b border-forest-line/60 px-1 py-4 font-serif text-lg text-white">
             商品ラインナップ
           </Link>
+          {/* コラム（お知らせとは別。PC ヘッダーは横幅が足りないため追加しない） */}
+          <Link href="/column" onClick={close} className="border-b border-forest-line/60 px-1 py-4 font-serif text-lg text-white">
+            コラム
+          </Link>
         </nav>
       </div>
     </>

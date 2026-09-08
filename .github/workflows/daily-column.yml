@@ -1,0 +1,81 @@
+name: コラム自動投稿
+
+# 毎日 00:17 UTC ＝ 日本時間 9:17 頃に実行する。
+# GitHub Actions の cron は混雑状況により数分〜数十分ずれることがあり、定刻実行は保証されない。
+on:
+  schedule:
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '公開せず生成だけ試す'
+        type: boolean
+        default: false
+      slug:
+        description: '計画から特定の slug を指定（空なら自動選択）'
+        type: string
+        required: false
+      model:
+        description: 'モデル ID を上書き（空なら content/column-autopost.json の設定）'
+        type: string
+        required: false
+
+# 同時に走らないようにする（二重投稿・コンフリクト防止）
+concurrency:
+  group: daily-column
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 依存関係のインストール
+        run: npm ci
+
+      - name: 記事を生成
+        id: generate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # リポジトリ変数 COLUMN_AUTOPOST を off にすると停止（content/column-autopost.json でも停止できる）
+          COLUMN_AUTOPOST: ${{ vars.COLUMN_AUTOPOST }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ -n "${{ inputs.slug }}" ]; then ARGS="$ARGS --slug ${{ inputs.slug }}"; fi
+          if [ -n "${{ inputs.model }}" ]; then ARGS="$ARGS --model ${{ inputs.model }}"; fi
+          node scripts/generate-column.ts $ARGS
+
+      # 生成物が壊れていないことを確認してからコミットする。
+      # 失敗した場合は次のコミット手順に進まないので、既存サイト・既存記事は変更されない。
+      - name: 型チェック・テスト・ビルド
+        if: inputs.dry_run != true
+        run: |
+          npm run typecheck
+          npm run test
+          npm run build
+
+      - name: 変更をコミット
+        if: inputs.dry_run != true
+        run: |
+          if [ -z "$(git status --porcelain content/column content/column-plan.json docs/column-log.md)" ]; then
+            echo "コミット対象の変更なし（見送りまたは停止）"
+            exit 0
+          fi
+          git config user.name "column-bot"
+          git config user.email "actions@github.com"
+          # 自動投稿が触ってよい範囲だけを add する（固定ページ・商品データ・設定は対象外）
+          git add content/column content/column-plan.json docs/column-log.md
+          git commit -m "コラムを自動投稿: $(date -u +%Y-%m-%d)"
+          git pull --rebase origin main
+          git push origin HEAD:main

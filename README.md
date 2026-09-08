@@ -158,3 +158,13 @@ E2E は `playwright.config.ts` がローカルモードの dev サーバー（po
 - [docs/assumptions.md](docs/assumptions.md) — 仮定した価格・会社情報・要確認事項
 - [docs/required-preview-assets.md](docs/required-preview-assets.md) — 不足している組み合わせ画像の仕様一覧
 - [docs/roadmap.md](docs/roadmap.md) — 第二・第三段階への拡張ポイント
+
+## コラム（/column）と自動投稿
+
+お知らせ（`/news`）とは別機能です。記事は `content/column/*.md`（Git 管理の Markdown＋frontmatter）で、Supabase は使いません。
+
+- 一覧 `/column`、ページ送り `/column/page/2`、記事 `/column/[slug]`
+- 毎日 9:17 頃（JST）に GitHub Actions「コラム自動投稿」が1記事を生成・公開
+- 停止スイッチ：リポジトリ変数 `COLUMN_AUTOPOST=off`、または `content/column-autopost.json` の `enabled: false`
+- 必要な Secret：`ANTHROPIC_API_KEY`
+- 手順の詳細は [docs/column-operations.md](docs/column-operations.md)

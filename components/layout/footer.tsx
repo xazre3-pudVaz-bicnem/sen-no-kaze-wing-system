@@ -49,6 +49,10 @@ export function Footer() {
             <Link href="/products" className="text-white/80 hover:text-gold">
               商品ラインナップ
             </Link>
+            {/* コラム（お知らせとは別の読み物。2026-09-05 追加） */}
+            <Link href="/column" className="text-white/80 hover:text-gold">
+              コラム
+            </Link>
             <Link href="/simulator/wing-01" className="text-white/80 hover:text-gold">
               見積シミュレーション
             </Link>

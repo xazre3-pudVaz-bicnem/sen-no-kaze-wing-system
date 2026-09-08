@@ -93,3 +93,26 @@ export function productJsonLd(model: BaseModel, imageUrls: string[]) {
     },
   };
 }
+
+/**
+ * コラム記事（/column/[slug]）の BlogPosting。
+ * 実際の本文・公開日と一致する値だけを入れる。著者は運営元の法人のみ（架空の監修者を作らない）。
+ */
+export function blogPostingJsonLd(input: { title: string; description: string; slug: string; publishedAt: string; updatedAt?: string; image?: string }) {
+  const base = getSiteUrl() ?? '';
+  const url = `${base}/column/${input.slug}`;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: input.title,
+    description: input.description,
+    datePublished: input.publishedAt,
+    dateModified: input.updatedAt ?? input.publishedAt,
+    inLanguage: 'ja',
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+    ...(base ? { url } : {}),
+    ...(input.image && base ? { image: [`${base}${input.image}`] } : {}),
+    author: { '@type': 'Organization', name: COMPANY.name, ...(base ? { url: base } : {}) },
+    publisher: { '@type': 'Organization', name: COMPANY.name, ...(base ? { url: base } : {}) },
+  };
+}

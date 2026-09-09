@@ -436,17 +436,6 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     setPicker(categoryId);
   };
 
-  const reset = () => {
-    const p = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
-    const nextSel = pruneToScope(ctx, p?.ids ?? defaults, finishLevel);
-    const nextVariants = defaultVariantIds(bundle, nextSel);
-    setSelected(nextSel);
-    setVariantIds(nextVariants);
-    resetExteriorFaces(nextSel, nextVariants);
-    setDirty(true);
-    pushToast('標準構成に戻しました', 'info');
-  };
-
   // ---- 保存・見積依頼 ----
   const requireLogin = (pending: 'save' | 'quote') => {
     persistDraft({ pending });
@@ -509,35 +498,56 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
   const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));
+  const modelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline;
+  const modelCrumbNames = models.map((m) => (m.name === 'フラット' ? 'Flat' : m.name));
+  const modelCrumb = modelCrumbNames.length > 0 ? `【 ${modelCrumbNames.join(' / ')} 】` : model.name;
 
   return (
     <div className="bg-paper">
-      <div className="container-x pt-5 sm:pt-8">
-        <Breadcrumbs
-          items={[
-            { name: 'ホーム', path: '/' },
-            { name: '商品一覧', path: '/products' },
-            { name: model.name, path: `/products/${model.slug}` },
-            { name: '見積シミュレーター' },
-          ]}
-        />
+      <div className="container-x pt-4 sm:pt-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+          <Breadcrumbs
+            items={[
+              { name: 'ホーム', path: '/' },
+              { name: '商品選択', path: '/products' },
+              { name: `${modelCrumb}見積シミュレーター` },
+            ]}
+          />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleSaveClick}
+              disabled={saving || readOnly}
+              className="inline-flex min-h-7 min-w-32 items-center justify-center rounded-full border border-gold/45 bg-white px-5 text-[0.72rem] font-medium text-ink-soft transition hover:border-gold hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="top-save-button"
+            >
+              見積を保存する
+            </button>
+            <Link
+              href="#"
+              className="inline-flex min-h-7 min-w-32 items-center justify-center rounded-full border border-gold/45 bg-white px-5 text-[0.72rem] font-medium text-ink-soft transition hover:border-gold hover:text-ink"
+            >
+              土地を探している方
+            </Link>
+          </div>
+        </div>
 
-        {/* 商品名 ＋ 本体切替 ＋ 仕様タブ（先方モックアップの上部） */}
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-          <div>
+        <div className="mt-4">
+          <div className="min-w-0">
             <p className="label-en text-forest">Simulator</p>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-2xl sm:text-4xl">
+            <div className="mt-1 flex flex-wrap items-center gap-x-7 gap-y-2">
+              <h1 className="text-3xl sm:text-4xl">
                 {model.name}
-                {specName && <span className="text-xl sm:text-3xl">（{specName}）</span>}
+                {modelSubtitle && <span className="align-baseline text-[1.35rem] font-normal text-ink-soft sm:text-[1.65rem]">（{modelSubtitle}）</span>}
+                {specName && <span className="sr-only">（{specName}）</span>}
               </h1>
               {models.length > 1 && (
-                <label className="text-xs text-muted">
-                  本体を変える
+                <label className="inline-flex min-h-10 items-center gap-2 bg-white px-3 text-sm text-muted">
+                  <span className="font-semibold text-ink-soft">本体を変える</span>
                   <select
                     value={model.slug}
                     onChange={(e) => router.push(`/simulator/${e.target.value}`)}
-                    className="ml-1.5 rounded-lg border border-line bg-white px-2 py-1 text-sm text-ink"
+                    className="min-h-9 rounded-lg border border-line bg-white px-3 text-[0.95rem] text-ink"
                     aria-label="本体（モデル）を切り替える"
                     data-testid="model-switcher"
                   >
@@ -549,59 +559,107 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                   </select>
                 </label>
               )}
+              {fireproofCat && (
+                <div
+                  className="inline-flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-0.5"
+                  data-testid="fireproof-picker"
+                >
+                  <span className="text-[0.82rem] font-semibold text-ink-soft">防火仕様</span>
+                  <div className="flex flex-wrap gap-1">
+                    {fireproofOptions.map((o) => {
+                      const active = selected.includes(o.id);
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          disabled={readOnly}
+                          aria-pressed={active}
+                          onClick={() => !active && applyPicker(fireproofCat.id, [o.id])}
+                          className={cn(
+                            'rounded-md px-2.5 py-1 text-[0.78rem] font-medium transition disabled:opacity-50',
+                            active ? 'bg-brown text-white' : 'bg-sand text-ink-soft hover:bg-sand-dark'
+                          )}
+                          data-testid={`fireproof-${o.code}`}
+                        >
+                          {o.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          {/* ログイン案内は右上へ（先方指示） */}
-          <div className="order-first ml-auto w-full text-right text-xs sm:order-none sm:w-auto sm:text-sm">
-            {user ? (
-              <span className="text-ink-soft">
-                {user.name} さん｜
-                <Link href="/mypage" className="underline underline-offset-4">
-                  マイページ
-                </Link>
-              </span>
-            ) : (
-              <span className="text-ink-soft">
-                保存には{' '}
-                <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
-                  ログイン
-                </Link>{' '}
-                が必要です（選択内容は保持されます）
-              </span>
-            )}
+
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
+                {(model.presets?.length ?? 0) > 0 && (
+                  <>
+                    <span className="mx-1 h-5 w-px bg-line" aria-hidden="true" />
+                    {model.presets.map((p) => (
+                      <button
+                        key={p.code}
+                        type="button"
+                        onClick={() => applyPreset(p.code)}
+                        disabled={readOnly}
+                        aria-pressed={specCode === p.code}
+                        title={p.description}
+                        className={cn(
+                          'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
+                          specCode === p.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                        )}
+                        data-testid={`preset-${p.code}`}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
+              <div className="text-left lg:text-center">
+                <p className="text-xs text-muted">現在選択している見積金額は</p>
+                <p className="font-serif text-[2.05rem] leading-tight tabular-nums sm:text-[2.65rem]">{formatYen(pricing.total)}</p>
+              </div>
+              <div className="hidden lg:block">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" onClick={handleSaveClick} disabled={saving || readOnly} data-testid="save-button">
+                    <Save className="size-4" aria-hidden="true" />
+                    見積を保存する
+                  </Button>
+                  <Button size="sm" onClick={handleQuoteClick} disabled={saving} data-testid="quote-button">
+                    見積を依頼する
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
+                {!user && (
+                  <p className="mt-1 text-right text-[0.7rem] leading-snug text-muted/80">
+                    保存には{' '}
+                    <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
+                      ログイン
+                    </Link>{' '}
+                    が必要です（選択内容は保持されます）
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* 仕様の切り替え（「仕様」ラベルは出さない：先方指示） */}
-        {(model.presets?.length ?? 0) > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-y border-line py-2.5">
-            {model.presets.map((p) => (
-              <button
-                key={p.code}
-                type="button"
-                onClick={() => applyPreset(p.code)}
-                disabled={readOnly}
-                aria-pressed={specCode === p.code}
-                title={p.description}
-                className={cn(
-                  'rounded-full border px-4 py-1.5 text-sm font-medium transition disabled:opacity-50',
-                  specCode === p.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
-                )}
-                data-testid={`preset-${p.code}`}
-              >
-                {p.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={reset}
-              disabled={readOnly}
-              className="ml-auto text-xs text-muted underline underline-offset-4 hover:text-ink disabled:opacity-40"
-            >
-              標準構成に戻す
-            </button>
-          </div>
-        )}
+        <div className="mt-2 space-y-0.5 text-sm leading-relaxed text-ink-soft">
+          <p>この段階の見積りは、運搬・設置・基礎・電気・給排水などの別途工事は現地の代理店・工務店のお見積りになります。</p>
+          <p>防火に関しては標準「非防火」の選択になっていますが、地域により防火構造にしなければならないので、詳しくは代理店に相談してください。</p>
+          {fireproofChosen?.price_on_request && (
+            <p className="text-xs font-semibold text-warn">
+              防火仕様の金額は場所の条件により異なるため、見積書には「防火仕様（別途見積）」と明記され、本部が本体明細を確認のうえ確定します。
+            </p>
+          )}
+        </div>
 
         {loadError && (
           <Alert tone="warn" className="mt-4">
@@ -618,50 +676,6 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
           </Alert>
         )}
       </div>
-
-      {/* どこまで頼むか */}
-      <div className="mt-6">
-        <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
-      </div>
-
-      {/* 防火／非防火（先方の本体分類表の最上位項目。標準＝非防火） */}
-      {fireproofCat && (
-        <div className="container-x mt-4">
-          <div
-            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-white px-4 py-3"
-            data-testid="fireproof-picker"
-          >
-            <span className="text-sm font-semibold">防火仕様</span>
-            <span className="text-xs text-muted">建築する場所によって異なります（標準＝非防火）</span>
-            <div className="flex flex-wrap gap-2 sm:ml-auto">
-              {fireproofOptions.map((o) => {
-                const active = selected.includes(o.id);
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    disabled={readOnly}
-                    aria-pressed={active}
-                    onClick={() => !active && applyPicker(fireproofCat.id, [o.id])}
-                    className={cn(
-                      'rounded-full border px-4 py-1.5 text-sm font-medium transition disabled:opacity-50',
-                      active ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
-                    )}
-                    data-testid={`fireproof-${o.code}`}
-                  >
-                    {o.name}
-                  </button>
-                );
-              })}
-            </div>
-            {fireproofChosen?.price_on_request && (
-              <p className="w-full text-xs text-warn">
-                防火仕様の金額は場所の条件により異なるため、見積書には「防火仕様（別途見積）」と明記され、本部が本体明細を確認のうえ確定します。
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 先方モック（2026-08-29）：平面図｜完成イメージ → 立面図（横帯）→ 標準設備及び仕上げ表。
           スマホでは完成イメージが下の方（平面図 → 立面図 → 設備表 → 完成イメージ）に並ぶ */}
@@ -697,17 +711,6 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         <div className="order-4 min-w-0 space-y-4 lg:order-2">
           {/* 完成イメージ（外観・室内・その他） */}
           <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
-
-          <div className="hidden justify-end gap-2 lg:flex">
-            <Button variant="secondary" onClick={handleSaveClick} disabled={saving || readOnly} data-testid="save-button">
-              <Save className="size-4" aria-hidden="true" />
-              一時保存
-            </Button>
-            <Button onClick={handleQuoteClick} disabled={saving} data-testid="quote-button">
-              見積を依頼する
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Button>
-          </div>
         </div>
       </div>
 

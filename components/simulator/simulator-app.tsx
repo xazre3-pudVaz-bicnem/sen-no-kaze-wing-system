@@ -149,6 +149,10 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
   const readOnly = status !== 'draft';
   const specName = model.presets?.find((p) => p.code === specCode)?.name ?? '';
+  const planSize =
+    model.specs.find((spec) => spec.label === '展開後')?.value ??
+    model.specs.find((spec) => spec.label.includes('床面積'))?.value ??
+    null;
 
   const pushToast = useCallback((message: string, tone: Toast['tone'] = 'info') => {
     const tid = `${Date.now()}-${Math.random()}`;
@@ -677,41 +681,45 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         )}
       </div>
 
-      {/* 先方モック（2026-08-29）：平面図｜完成イメージ → 立面図（横帯）→ 標準設備及び仕上げ表。
-          スマホでは完成イメージが下の方（平面図 → 立面図 → 設備表 → 完成イメージ）に並ぶ */}
-      <div className="container-x grid gap-5 pt-6 pb-2 lg:grid-cols-2 lg:items-start lg:gap-6">
-        <div className="order-1 min-w-0">
-          <PlanBoard plan={previews.floorplan} readOnly={readOnly} />
-        </div>
+      {/* 先方モック（2026-08-29）：平面図｜完成イメージ → 立面図（4面）→ 標準設備及び仕上げ表。 */}
+      <div className="container-x pt-6 pb-2">
+        <h2 className="mb-2 text-lg font-semibold text-ink">プランボード</h2>
+        <section aria-label="プランボード" className="space-y-4 lg:space-y-0">
+          <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
+            <div className="min-w-0">
+              <PlanBoard plan={previews.floorplan} specName={specName} planSize={planSize} readOnly={readOnly} />
+            </div>
 
-        <div className="order-2 min-w-0 lg:order-3 lg:col-span-2">
-          <ElevationStrip
-            elevations={elevations}
-            categories={bundle.categories}
-            options={bundle.options}
-            variantChoices={bundle.variantChoices}
-            exteriorFaces={exteriorFaces}
-            readOnly={readOnly}
-            onPickExteriorFace={openExteriorFace}
-          />
-        </div>
+            <div className="min-w-0">
+              {/* 完成イメージ（外観・室内・施工事例・その他） */}
+              <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
+            </div>
+          </div>
 
-        <div className="order-3 min-w-0 space-y-4 lg:order-4 lg:col-span-2">
-          <EquipmentBoard categories={specCategories} options={scopedOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
+          <div className="min-w-0">
+            <ElevationStrip
+              elevations={elevations}
+              categories={bundle.categories}
+              options={bundle.options}
+              variantChoices={bundle.variantChoices}
+              exteriorFaces={exteriorFaces}
+              readOnly={readOnly}
+              onPickExteriorFace={openExteriorFace}
+            />
+          </div>
+        </section>
+      </div>
 
-          {issues.length > 0 && (
-            <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">
-              {issues.map((i, idx) => (
-                <li key={idx}>{i.message}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <div className="container-x space-y-4 pt-3 pb-2">
+        <EquipmentBoard categories={specCategories} options={scopedOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
 
-        <div className="order-4 min-w-0 space-y-4 lg:order-2">
-          {/* 完成イメージ（外観・室内・その他） */}
-          <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
-        </div>
+        {issues.length > 0 && (
+          <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">
+            {issues.map((i, idx) => (
+              <li key={idx}>{i.message}</li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* 御見積書（完成イメージとの行間は詰める：先方指示） */}

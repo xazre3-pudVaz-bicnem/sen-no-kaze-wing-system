@@ -217,22 +217,6 @@
   }
 }
 
-/* シミュレーター：スマホは平面図 → 立面図 → 完成イメージ → 設備表の順にする。 */
-@media (max-width: 1023.98px) {
-  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-1 {
-    order: 1;
-  }
-  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-2 {
-    order: 2;
-  }
-  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-4 {
-    order: 3;
-  }
-  .container-x.grid:has(> .order-1 [data-testid='plan-board']) > .order-3 {
-    order: 4;
-  }
-}
-
 /* トップのヒーロー：3枚の画像をクロスフェードで入れ替える（2026-09-02 先方指示） */
 @keyframes hero-crossfade {
   0% { opacity: 0; }

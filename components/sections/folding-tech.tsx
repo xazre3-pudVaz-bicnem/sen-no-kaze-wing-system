@@ -30,19 +30,19 @@ export function FoldingTechSection() {
               aria-label="折畳み屋根面、ドア、設備、木板外壁、折畳み時平面図をまとめた図"
             >
               <div
-                className="absolute inset-y-0 left-0 w-[52%] bg-no-repeat"
+                className="absolute inset-y-0 left-[-10px] w-[56%] bg-no-repeat"
                 style={{
                   backgroundImage: "url('/images/elevation/wing-folded-composition.png')",
                   backgroundPosition: 'left center',
-                  backgroundSize: 'auto 105%',
+                  backgroundSize: 'auto 114%',
                 }}
               />
               <div
-                className="absolute inset-y-0 right-[15%] w-[18%] translate-y-1 bg-no-repeat"
+                className="absolute inset-y-0 right-[12%] w-[19%] translate-y-1 bg-no-repeat"
                 style={{
                   backgroundImage: "url('/images/elevation/wing-folded-composition.png')",
                   backgroundPosition: 'right center',
-                  backgroundSize: 'auto 97%',
+                  backgroundSize: 'auto 105%',
                 }}
               />
             </div>
@@ -60,7 +60,7 @@ export function FoldingTechSection() {
           </Reveal>
 
           {/* 右ブロック：クレーン写真｜広さ約2倍｜展開後平面図 */}
-          <Reveal variant="image" className="relative mx-auto aspect-[2521/1257] w-[92%]">
+          <Reveal variant="image" className="relative mx-auto aspect-[2521/1257] w-full sm:w-[92%]">
             <Image
               src="/images/transport/wing-expanded-composition.png"
               alt="クレーンで吊り上げた折畳みコンテナと展開後平面図"

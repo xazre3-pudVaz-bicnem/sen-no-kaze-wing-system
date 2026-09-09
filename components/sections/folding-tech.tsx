@@ -24,7 +24,30 @@ export function FoldingTechSection() {
           <Reveal variant="image" className="grid gap-3 sm:grid-cols-[0.72fr_1.55fr] sm:items-center">
             <p className="text-[0.72rem] leading-[1.7] text-white/85 sm:text-[0.78rem]">{foldingTech.body}</p>
 
-            <div className="relative aspect-[1867/1390] w-full">
+            <div
+              className="relative aspect-[2521/1257] w-full sm:hidden"
+              role="img"
+              aria-label="折畳み屋根面、ドア、設備、木板外壁、折畳み時平面図をまとめた図"
+            >
+              <div
+                className="absolute inset-y-0 left-0 w-[52%] bg-no-repeat"
+                style={{
+                  backgroundImage: "url('/images/elevation/wing-folded-composition.png')",
+                  backgroundPosition: 'left center',
+                  backgroundSize: 'auto 105%',
+                }}
+              />
+              <div
+                className="absolute inset-y-0 right-[15%] w-[18%] translate-y-1 bg-no-repeat"
+                style={{
+                  backgroundImage: "url('/images/elevation/wing-folded-composition.png')",
+                  backgroundPosition: 'right center',
+                  backgroundSize: 'auto 97%',
+                }}
+              />
+            </div>
+
+            <div className="relative hidden aspect-[1867/1390] w-full sm:block">
               <Image
                 src="/images/elevation/wing-folded-composition.png"
                 alt="折畳み屋根面、ドア、設備、木板外壁、折畳み時平面図をまとめた図"
@@ -33,16 +56,6 @@ export function FoldingTechSection() {
                 unoptimized
                 className="object-contain"
               />
-              <div className="absolute inset-y-0 right-0 w-[29%] bg-forest-deep sm:hidden" aria-hidden="true">
-                <div
-                  className="absolute inset-y-0 right-0 w-[63%] bg-no-repeat"
-                  style={{
-                    backgroundImage: "url('/images/elevation/wing-folded-composition.png')",
-                    backgroundPosition: 'right center',
-                    backgroundSize: 'auto 65%',
-                  }}
-                />
-              </div>
             </div>
           </Reveal>
 

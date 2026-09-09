@@ -3,24 +3,52 @@ import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { hero } from '@/data/site-content';
 
+const heroInteriorGrid = [
+  { src: '/images/interior/living-tv.jpg', alt: 'テレビのある Wing の室内' },
+  { src: '/images/interior/bedroom-seaview.webp', alt: '海を望む Wing の寝室' },
+  { src: '/images/interior/bedroom-garden.jpg', alt: '庭を望む Wing の寝室' },
+  { src: '/images/interior/washroom-seaview.jpg', alt: '丸鏡のある Wing の洗面室' },
+] as const;
+
 /** ファーストビュー：3枚クロスフェード（従来どおり）＋ Ver4 の見出し・サブラベル付きボタン */
 export function HomeHero() {
   return (
     <section className="relative isolate min-h-[55svh] overflow-hidden bg-forest-deep text-white lg:min-h-[70svh]">
       {/* 1枚目は常時表示の下地、2〜3枚目が hero-crossfade で入れ替わる */}
       <Image src={hero.slides[0].src} alt={hero.slides[0].alt} fill priority sizes="100vw" className="object-cover" />
-      {hero.slides.slice(1).map((s, i) => (
-        <Image
-          key={s.src}
-          src={s.src}
-          alt=""
-          aria-hidden="true"
-          fill
-          sizes="100vw"
-          className={`hero-slide object-cover ${i === 1 ? 'object-[center_60%]' : ''}`}
-          style={{ animationDelay: `${(i + 1) * 5}s` }}
-        />
-      ))}
+      {hero.slides.slice(1).map((s, i) =>
+        i === 0 ? (
+          <div
+            key={s.src}
+            className="hero-slide absolute inset-0 grid grid-cols-[44fr_56fr] grid-rows-2 gap-[10px] bg-forest-deep"
+            style={{ animationDelay: `${(i + 1) * 5}s` }}
+            aria-hidden="true"
+          >
+            {heroInteriorGrid.map((image, gridIndex) => (
+              <div key={image.src} className="relative overflow-hidden">
+                <Image
+                  src={image.src}
+                  alt=""
+                  fill
+                  sizes={gridIndex % 2 === 0 ? '44vw' : '56vw'}
+                  className="object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Image
+            key={s.src}
+            src={s.src}
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="100vw"
+            className={`hero-slide object-cover ${i === 1 ? 'object-[center_60%]' : ''}`}
+            style={{ animationDelay: `${(i + 1) * 5}s` }}
+          />
+        ),
+      )}
       <div className="absolute inset-0 bg-gradient-to-r from-forest-deep/70 via-forest-deep/25 to-transparent" aria-hidden="true" />
 
       <div className="relative flex min-h-[55svh] flex-col justify-center lg:min-h-[70svh]">

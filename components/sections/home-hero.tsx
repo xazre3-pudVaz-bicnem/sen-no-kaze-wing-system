@@ -17,8 +17,8 @@ export function HomeHero() {
           aria-hidden="true"
           fill
           sizes="100vw"
-          className="hero-slide object-cover"
-          style={{ animationDelay: `${(i + 1) * 6}s` }}
+          className={`hero-slide object-cover ${i === 1 ? 'object-[center_60%]' : ''}`}
+          style={{ animationDelay: `${(i + 1) * 5}s` }}
         />
       ))}
       <div className="absolute inset-0 bg-gradient-to-r from-forest-deep/70 via-forest-deep/25 to-transparent" aria-hidden="true" />

@@ -104,12 +104,12 @@ export function ProductShowcase() {
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{box.body}</p>
                   <EstimateButton p={box} />
                 </div>
-                <div className="space-y-3">
-                  <div className="relative mx-auto aspect-[1672/941] w-full max-w-[135px] sm:max-w-[230px]">
-                    <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 230px, 135px" unoptimized className="object-contain" />
+                <div className="space-y-1.5 sm:space-y-3">
+                  <div className="relative mx-auto aspect-[1672/941] w-full max-w-[155px] sm:max-w-[230px]">
+                    <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 230px, 155px" unoptimized className="object-contain" />
                   </div>
-                  <div className="relative mx-auto aspect-[2098/750] w-[94%] max-w-[135px] sm:w-full sm:max-w-[230px]">
-                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 230px, 135px" unoptimized className="object-contain" />
+                  <div className="relative mx-auto aspect-[2098/750] w-full max-w-[150px] sm:max-w-[230px]">
+                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 230px, 150px" unoptimized className="object-contain" />
                   </div>
                 </div>
               </div>
@@ -124,7 +124,7 @@ export function ProductShowcase() {
                     <h4 className="mt-0.5 font-serif text-[0.86rem] leading-snug text-white sm:text-[0.95rem]">{t.title}</h4>
                     <p className="mt-1 text-[0.76rem] leading-[1.75] whitespace-pre-line text-white/85 sm:text-[0.82rem]">{t.body}</p>
                   </div>
-                  <div className={`relative ml-auto w-[88%] ${t.size === 'sm' ? 'aspect-[4/3]' : 'aspect-[1239/1269]'}`}>
+                  <div className={`relative mx-auto w-[78%] sm:mr-0 sm:ml-auto sm:w-[88%] ${t.size === 'sm' ? 'aspect-[4/3]' : 'aspect-[1239/1269]'}`}>
                     <Image
                       src={t.image}
                       alt={t.alt}

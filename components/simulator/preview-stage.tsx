@@ -116,9 +116,13 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
   const currentCase = caseImages[caseIndex] ?? null;
 
   return (
-    <section aria-label="完成イメージ" className="overflow-hidden bg-white lg:rounded-none">
+    <section aria-label="完成イメージ" className="flex h-full flex-col overflow-hidden rounded-lg border border-[#e8b100] bg-white lg:-ml-px lg:rounded-none">
+      <div className="px-4 pt-3 pb-2 text-base font-medium leading-tight text-ink">
+        完成イメージ
+        <span className="ml-2 text-xs font-normal text-ink-soft">（実物と一致しているものではありません）</span>
+      </div>
       <div
-        className="relative aspect-[3/2] touch-pan-y bg-sand"
+        className="relative mx-4 aspect-[16/10] touch-pan-y bg-sand"
         data-testid="preview-stage"
         data-preview-kind={showCase ? 'case' : current.kind}
         data-preview-src={showCase ? currentCase?.url ?? '' : current.layers[0]?.url ?? ''}
@@ -189,13 +193,11 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
           </>
         )}
 
-        <span className="absolute top-4 left-4 z-10 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">
-          {showCase
-            ? `施工事例 ${caseIndex + 1} / ${caseImages.length}`
-            : current.approximate
-              ? '画像は完成イメージです（参考）'
-              : '完成イメージ'}
-        </span>
+        {showCase && (
+          <span className="absolute top-4 left-4 z-10 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">
+            施工事例 {caseIndex + 1} / {caseImages.length}
+          </span>
+        )}
 
         <button
           type="button"
@@ -217,11 +219,11 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
         </button>
       </div>
 
-      <div className="border-t border-line px-3 py-2">
+      <div className="px-4 pt-3 pb-4">
         <div
           role="tablist"
           aria-label="表示切替"
-          className="flex max-w-full gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex max-w-full justify-start gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {tabs.map((t) => {
             const selected = t.key === activeTab;
@@ -232,8 +234,8 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
                 aria-selected={selected}
                 onClick={() => selectTab(t.key)}
                 className={cn(
-                  'min-h-10 shrink-0 rounded-full px-4 text-sm font-medium transition-colors',
-                  selected ? 'bg-ink text-white' : 'text-ink-soft hover:bg-sand'
+                  'min-h-10 shrink-0 rounded-full border px-6 text-sm font-medium transition-colors',
+                  selected ? 'border-brown bg-brown text-white' : 'border-gold bg-white text-ink hover:bg-sand'
                 )}
                 data-testid={`view-${t.key}`}
               >

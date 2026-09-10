@@ -545,51 +545,62 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                 {modelSubtitle && <span className="align-baseline text-[1.35rem] font-normal text-ink-soft sm:text-[1.65rem]">（{modelSubtitle}）</span>}
                 {specName && <span className="sr-only">（{specName}）</span>}
               </h1>
-              {models.length > 1 && (
-                <label className="inline-flex min-h-10 items-center gap-2 bg-white px-3 text-sm text-muted">
-                  <span className="font-semibold text-ink-soft">本体を変える</span>
-                  <select
-                    value={model.slug}
-                    onChange={(e) => router.push(`/simulator/${e.target.value}`)}
-                    className="min-h-9 rounded-lg border border-line bg-white px-3 text-[0.95rem] text-ink"
-                    aria-label="本体（モデル）を切り替える"
-                    data-testid="model-switcher"
-                  >
-                    {models.map((m) => (
-                      <option key={m.slug} value={m.slug}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {fireproofCat && (
-                <div
-                  className="inline-flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-0.5"
-                  data-testid="fireproof-picker"
-                >
-                  <span className="text-[0.82rem] font-semibold text-ink-soft">防火仕様</span>
-                  <div className="flex flex-wrap gap-1">
-                    {fireproofOptions.map((o) => {
-                      const active = selected.includes(o.id);
-                      return (
-                        <button
-                          key={o.id}
-                          type="button"
-                          disabled={readOnly}
-                          aria-pressed={active}
-                          onClick={() => !active && applyPicker(fireproofCat.id, [o.id])}
-                          className={cn(
-                            'rounded-md px-2.5 py-1 text-[0.78rem] font-medium transition disabled:opacity-50',
-                            active ? 'bg-brown text-white' : 'bg-sand text-ink-soft hover:bg-sand-dark'
-                          )}
-                          data-testid={`fireproof-${o.code}`}
-                        >
-                          {o.name}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {(models.length > 1 || fireproofCat) && (
+                <div className="flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
+                  {models.length > 1 && (
+                    <label className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
+                      <span className="whitespace-nowrap font-semibold text-ink-soft">
+                        <span className="sm:hidden">本体</span>
+                        <span className="hidden sm:inline">本体を変える</span>
+                      </span>
+                      <select
+                        value={model.slug}
+                        onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                        className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
+                        aria-label="本体（モデル）を切り替える"
+                        data-testid="model-switcher"
+                      >
+                        {models.map((m) => (
+                          <option key={m.slug} value={m.slug}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {fireproofCat && (
+                    <label
+                      className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm"
+                      data-testid="fireproof-picker"
+                    >
+                      <span className="whitespace-nowrap font-semibold text-ink-soft">
+                        <span className="sm:hidden">防火</span>
+                        <span className="hidden sm:inline">防火仕様</span>
+                      </span>
+                      <select
+                        value={fireproofChosen?.id ?? ''}
+                        onChange={(e) => {
+                          const nextId = e.target.value;
+                          if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
+                        }}
+                        disabled={readOnly}
+                        className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
+                        aria-label="防火仕様を切り替える"
+                        data-testid="fireproof-select"
+                      >
+                        {!fireproofChosen && (
+                          <option value="" disabled>
+                            選択
+                          </option>
+                        )}
+                        {fireproofOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name.includes('非防火') ? '非防火' : o.name.includes('防火構造') ? '防火構造' : o.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
               )}
             </div>

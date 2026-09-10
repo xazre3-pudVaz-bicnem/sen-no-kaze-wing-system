@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
+import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getStore } from '@/lib/data/store';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { PRICE_DISCLAIMER } from '@/lib/site';
@@ -23,7 +24,17 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   const bundle = await store.getCatalogBundle(configuration.base_model_id);
   if (!bundle) notFound();
   const profile = await store.getProfile(user.id);
-  const pricing = computePricing(bundle.model, bundle.options, bundle.categories, items.map((i) => ({ option_id: i.option_id, quantity: i.quantity })));
+  const exteriorFaces = await getExteriorFaces(configuration.id);
+  const pricing = computePricing(
+    bundle.model,
+    bundle.options,
+    bundle.categories,
+    items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
+    undefined,
+    { groups: bundle.variantGroups, choices: bundle.variantChoices },
+    null,
+    exteriorFaces
+  );
   const optionLines = pricing.lines.filter((l) => !l.is_installation);
   const siteworkLines = pricing.lines.filter((l) => l.is_installation);
   const slug = bundle.model.slug;
@@ -59,7 +70,7 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
                 <div className="flex justify-between"><dt className="text-ink-soft">本体一式</dt><dd>{formatYen(pricing.base_price)}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted">本体諸費用</dt><dd className="text-muted">{formatYen(pricing.base_expense)}</dd></div>
                 {optionLines.map((l) => (
-                  <div key={l.option_id} className="flex justify-between gap-2"><dt className="text-ink-soft">{l.name}</dt><dd className="shrink-0">{l.price_on_request ? '別途' : formatYen(l.amount)}</dd></div>
+                  <div key={l.code} className="flex justify-between gap-2"><dt className="text-ink-soft">{l.name}</dt><dd className="shrink-0">{l.price_on_request ? '別途' : formatYen(l.amount)}</dd></div>
                 ))}
                 <div className="flex justify-between"><dt className="text-muted">オプション諸費用</dt><dd className="text-muted">{formatYen(pricing.option_expense)}</dd></div>
                 {siteworkLines.length > 0 && <div className="flex justify-between"><dt className="text-muted">別途工事（{siteworkLines.length}項目）</dt><dd className="text-muted">別途</dd></div>}

@@ -70,7 +70,7 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
                 <div className="flex justify-between"><dt className="text-ink-soft">本体一式</dt><dd>{formatYen(pricing.base_price)}</dd></div>
                 <div className="flex justify-between"><dt className="text-muted">本体諸費用</dt><dd className="text-muted">{formatYen(pricing.base_expense)}</dd></div>
                 {optionLines.map((l) => (
-                  <div key={l.option_id} className="flex justify-between gap-2"><dt className="text-ink-soft">{l.name}</dt><dd className="shrink-0">{l.price_on_request ? '別途' : formatYen(l.amount)}</dd></div>
+                  <div key={l.code} className="flex justify-between gap-2"><dt className="text-ink-soft">{l.name}</dt><dd className="shrink-0">{l.price_on_request ? '別途' : formatYen(l.amount)}</dd></div>
                 ))}
                 <div className="flex justify-between"><dt className="text-muted">オプション諸費用</dt><dd className="text-muted">{formatYen(pricing.option_expense)}</dd></div>
                 {siteworkLines.length > 0 && <div className="flex justify-between"><dt className="text-muted">別途工事（{siteworkLines.length}項目）</dt><dd className="text-muted">別途</dd></div>}

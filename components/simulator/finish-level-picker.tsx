@@ -66,6 +66,30 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
       </ul>
 
       <style jsx global>{`
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-hotel'],
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-residence'],
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-office'] {
+          font-size: 0;
+        }
+
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-hotel']::after,
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-residence']::after,
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-office']::after {
+          font-size: 0.82rem;
+        }
+
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-hotel']::after {
+          content: 'ホテル仕様';
+        }
+
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-residence']::after {
+          content: '住宅仕様';
+        }
+
+        div:has(> section > ul[data-testid='finish-levels']) > button[data-testid='preset-office']::after {
+          content: '事務所・店舗用';
+        }
+
         @media (max-width: 639px) {
           div:has(> section > ul[data-testid='finish-levels']) {
             flex-wrap: nowrap;
@@ -81,8 +105,12 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
             flex: 0 0 auto;
             white-space: nowrap;
             padding: 0.25rem 0.45rem;
-            font-size: 0.68rem;
+            font-size: 0;
             line-height: 1rem;
+          }
+
+          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']::after {
+            font-size: 0.68rem;
           }
         }
       `}</style>

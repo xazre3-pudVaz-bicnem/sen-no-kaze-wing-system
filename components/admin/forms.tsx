@@ -310,7 +310,7 @@ export function PreviewRuleForm({
   rule: PreviewImageRule | null;
   models: BaseModel[];
   previewKeys: { key: string; label: string }[];
-  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[] };
+  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[]; alt?: string; note?: string };
 }) {
   const [state, action, pending] = useActionState(savePreviewRuleAction, initial);
   const e = state.fieldErrors ?? {};
@@ -334,10 +334,10 @@ export function PreviewRuleForm({
           <Input id="pr-file" name="file" type="file" accept="image/*" className="py-2" />
         </Field>
         <Field label="代替テキスト" htmlFor="pr-alt" errors={e.alt}>
-          <Input id="pr-alt" name="alt" defaultValue={rule?.alt ?? ''} />
+          <Input id="pr-alt" name="alt" defaultValue={rule?.alt ?? defaults?.alt ?? ''} />
         </Field>
         <Field label="補足" htmlFor="pr-note" hint="必要な場合だけ画面に小さく表示します" errors={e.note}>
-          <Input id="pr-note" name="note" defaultValue={rule?.note ?? ''} />
+          <Input id="pr-note" name="note" defaultValue={rule?.note ?? defaults?.note ?? ''} />
         </Field>
         <Field label="公開状態" htmlFor="pr-status" errors={e.status}>
           <Select id="pr-status" name="status" defaultValue={rule?.status ?? 'published'}>

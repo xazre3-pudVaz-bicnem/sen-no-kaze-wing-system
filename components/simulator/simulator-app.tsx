@@ -17,7 +17,7 @@ import {
 } from '@/lib/domain/exterior-wall';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
-import { Alert, Breadcrumbs, Button } from '@/components/ui';
+import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
 import { EquipmentBoard } from './equipment-board';
@@ -75,6 +75,7 @@ function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[]
 export function SimulatorApp({ bundle, models, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
   const { model } = bundle;
+  const displayModelName = model.name === 'フラット' ? 'Flat' : model.name;
   const ctx = useMemo<RuleContext>(
     () => ({ options: bundle.options, categories: bundle.categories, dependencies: bundle.dependencies, conflicts: bundle.conflicts }),
     [bundle]
@@ -135,7 +136,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
-  const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
+  const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
   const [status, setStatus] = useState<ConfigurationStatus>(initial?.status ?? 'draft');
   const [view, setView] = useState<ViewKey>('exterior');
@@ -502,21 +503,54 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
   const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));
-  const modelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline;
-  const modelCrumbNames = models.map((m) => (m.name === 'フラット' ? 'Flat' : m.name));
-  const modelCrumb = modelCrumbNames.length > 0 ? `【 ${modelCrumbNames.join(' / ')} 】` : model.name;
+  const rawModelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline ?? '';
+  const [modelDescriptor, ...modelDescriptionParts] = rawModelSubtitle
+    .split('。')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const modelDescription = modelDescriptionParts.length > 0 ? `${modelDescriptionParts.join('。')}。` : '';
+  const breadcrumbModels = (models.length > 0 ? models : [{ slug: model.slug, name: model.name }]).map((m) => ({
+    ...m,
+    name: m.name === 'フラット' ? 'Flat' : m.name,
+  }));
 
   return (
     <div className="bg-paper">
       <div className="container-x pt-4 sm:pt-6">
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
-          <Breadcrumbs
-            items={[
-              { name: 'ホーム', path: '/' },
-              { name: '商品選択', path: '/products' },
-              { name: `${modelCrumb}見積シミュレーター` },
-            ]}
-          />
+          <nav aria-label="パンくずリスト" className="max-w-full overflow-x-auto text-xs text-muted sm:text-sm">
+            <ol className="flex w-max items-center gap-1.5 whitespace-nowrap">
+              <li>
+                <Link href="/" className="hover:text-ink hover:underline">
+                  ホーム
+                </Link>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span aria-hidden="true">/</span>
+                <Link href="/products" className="hover:text-ink hover:underline">
+                  商品選択
+                </Link>
+              </li>
+              <li className="flex items-center gap-1.5 text-ink-soft">
+                <span aria-hidden="true">/</span>
+                <span aria-hidden="true">【</span>
+                {breadcrumbModels.map((m, index) => (
+                  <span key={m.slug} className="inline-flex items-center gap-1">
+                    {index > 0 && <span aria-hidden="true">/</span>}
+                    {m.slug === model.slug ? (
+                      <span className="font-semibold text-danger">{m.name}</span>
+                    ) : (
+                      <Link href={`/simulator/${m.slug}`} className="hover:text-ink hover:underline">
+                        {m.name}
+                      </Link>
+                    )}
+                  </span>
+                ))}
+                <span aria-hidden="true">】</span>
+                <span>見積シミュレーター</span>
+              </li>
+            </ol>
+          </nav>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
@@ -539,64 +573,84 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         <div className="mt-4">
           <div className="min-w-0">
             <p className="label-en text-forest">Simulator</p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-7 gap-y-2">
-              <h1 className="text-3xl sm:text-4xl">
-                {model.name}
-                {modelSubtitle && <span className="align-baseline text-[1.35rem] font-normal text-ink-soft sm:text-[1.65rem]">（{modelSubtitle}）</span>}
-                {specName && <span className="sr-only">（{specName}）</span>}
-              </h1>
-              {models.length > 1 && (
-                <label className="inline-flex min-h-10 items-center gap-2 bg-white px-3 text-sm text-muted">
-                  <span className="font-semibold text-ink-soft">本体を変える</span>
-                  <select
-                    value={model.slug}
-                    onChange={(e) => router.push(`/simulator/${e.target.value}`)}
-                    className="min-h-9 rounded-lg border border-line bg-white px-3 text-[0.95rem] text-ink"
-                    aria-label="本体（モデル）を切り替える"
-                    data-testid="model-switcher"
-                  >
-                    {models.map((m) => (
-                      <option key={m.slug} value={m.slug}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {fireproofCat && (
-                <div
-                  className="inline-flex min-h-10 flex-wrap items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-0.5"
-                  data-testid="fireproof-picker"
-                >
-                  <span className="text-[0.82rem] font-semibold text-ink-soft">防火仕様</span>
-                  <div className="flex flex-wrap gap-1">
-                    {fireproofOptions.map((o) => {
-                      const active = selected.includes(o.id);
-                      return (
-                        <button
-                          key={o.id}
-                          type="button"
-                          disabled={readOnly}
-                          aria-pressed={active}
-                          onClick={() => !active && applyPicker(fireproofCat.id, [o.id])}
-                          className={cn(
-                            'rounded-md px-2.5 py-1 text-[0.78rem] font-medium transition disabled:opacity-50',
-                            active ? 'bg-brown text-white' : 'bg-sand text-ink-soft hover:bg-sand-dark'
-                          )}
-                          data-testid={`fireproof-${o.code}`}
-                        >
-                          {o.name}
-                        </button>
-                      );
-                    })}
-                  </div>
+            <div className="mt-1 flex flex-wrap items-start gap-x-7 gap-y-2">
+              <div className="min-w-0">
+                <h1 className="text-[1.625rem] sm:text-4xl">
+                  <span className="inline-flex max-w-full items-baseline whitespace-nowrap">
+                    <span>{displayModelName}</span>
+                    {modelDescriptor && (
+                      <span className="ml-1 align-baseline text-[0.85rem] font-normal text-ink-soft sm:text-[1.65rem]">
+                        （{modelDescriptor}）
+                      </span>
+                    )}
+                  </span>
+                  {specName && <span className="sr-only">（{specName}）</span>}
+                </h1>
+                {modelDescription && <p className="mt-1 text-sm leading-relaxed text-ink-soft sm:text-base">{modelDescription}</p>}
+              </div>
+              {(models.length > 1 || fireproofCat) && (
+                <div className="flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
+                  {models.length > 1 && (
+                    <label className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
+                      <span className="whitespace-nowrap font-semibold text-ink-soft">
+                        <span className="sm:hidden">本体</span>
+                        <span className="hidden sm:inline">本体を変える</span>
+                      </span>
+                      <select
+                        value={model.slug}
+                        onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                        className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
+                        aria-label="本体（モデル）を切り替える"
+                        data-testid="model-switcher"
+                      >
+                        {models.map((m) => (
+                          <option key={m.slug} value={m.slug}>
+                            {m.name === 'フラット' ? 'Flat' : m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {fireproofCat && (
+                    <label
+                      className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm"
+                      data-testid="fireproof-picker"
+                    >
+                      <span className="whitespace-nowrap font-semibold text-ink-soft">
+                        <span className="sm:hidden">防火</span>
+                        <span className="hidden sm:inline">防火仕様</span>
+                      </span>
+                      <select
+                        value={fireproofChosen?.id ?? ''}
+                        onChange={(e) => {
+                          const nextId = e.target.value;
+                          if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
+                        }}
+                        disabled={readOnly}
+                        className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
+                        aria-label="防火仕様を切り替える"
+                        data-testid="fireproof-select"
+                      >
+                        {!fireproofChosen && (
+                          <option value="" disabled>
+                            選択
+                          </option>
+                        )}
+                        {fireproofOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name.includes('非防火') ? '非防火' : o.name.includes('防火構造') ? '防火構造' : o.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-2.5">
-            <div className="min-w-0 flex-1">
+          <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 lg:flex-row lg:items-end lg:justify-between lg:gap-x-6">
+            <div className="w-full min-w-0 lg:flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
                 {(model.presets?.length ?? 0) > 0 && (
@@ -622,11 +676,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                   </>
                 )}
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
+              <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
-              <div className="text-left lg:text-center">
+            <div className="flex w-full flex-wrap items-center justify-end gap-3 lg:w-auto lg:justify-end">
+              <div className="w-full text-right lg:w-auto lg:text-center">
                 <p className="text-xs text-muted">現在選択している見積金額は</p>
                 <p className="font-serif text-[2.05rem] leading-tight tabular-nums sm:text-[2.65rem]">{formatYen(pricing.total)}</p>
               </div>
@@ -692,7 +746,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
             <div className="min-w-0">
               {/* 完成イメージ（外観・室内・施工事例・その他） */}
-              <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
+              <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={displayModelName} />
             </div>
           </div>
 
@@ -725,7 +779,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       {/* 御見積書（完成イメージとの行間は詰める：先方指示） */}
       <div className="container-x pt-2 pb-10">
         <QuoteSheet
-          modelName={model.name}
+          modelName={displayModelName}
           specName={specName}
           finishLevel={finishLevel}
           pricing={pricing}

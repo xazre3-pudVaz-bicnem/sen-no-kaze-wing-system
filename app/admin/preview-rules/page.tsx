@@ -22,8 +22,9 @@ function PreviewCard({
     <li className="card overflow-hidden" data-testid="preview-rule-card">
       <div className="relative aspect-[16/10] bg-sand">
         <SmartImage src={rule.url} alt={rule.alt} fill sizes="33vw" className={rule.view === 'floorplan' ? 'object-contain' : 'object-cover'} />
-        <span className="absolute top-2 left-2">
+        <span className="absolute top-2 left-2 flex gap-1">
           <Badge tone="neutral">{label}</Badge>
+          {rule.status !== 'published' && <Badge tone="warn">非公開</Badge>}
         </span>
       </div>
       <div className="space-y-2 p-3 text-xs">
@@ -85,7 +86,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
         {bundles.map((b) => {
           const labels = previewKeyLabels(b.options);
           const keyLabel = (key: string) => labels.get(key) ?? key;
-          const floorplans = b.previewRules.filter((r) => r.view === 'floorplan');
+          const floorplans = b.previewRules.filter((r) => r.view === 'floorplan').sort((a, c) => a.preview_keys.length - c.preview_keys.length);
           const elevations = b.images.filter((i) => i.kind === 'elevation').sort((a, c) => a.sort_order - c.sort_order);
           const cases = b.images.filter((i) => i.kind === 'case').sort((a, c) => a.sort_order - c.sort_order);
           const published = b.previewRules.filter((r) => r.status === 'published');
@@ -123,7 +124,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                 </div>
                 <div className="space-y-5">
                   {COMPLETION_VIEWS.map((view) => {
-                    const rules = b.previewRules.filter((r) => r.view === view);
+                    const rules = b.previewRules.filter((r) => r.view === view).sort((a, c) => a.preview_keys.length - c.preview_keys.length);
                     return (
                       <div key={view}>
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

@@ -1,18 +1,10 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
-import { ImageOff, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
-import { EXTERIOR_FACES } from '@/lib/domain/exterior-wall';
 import type { OptionCategory, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
-import {
-  getExteriorFaceDisplaysServerSnapshot,
-  getExteriorFaceDisplaysSnapshot,
-  requestExteriorFacePicker,
-  subscribeExteriorFaceDisplays,
-} from './exterior-face-display-store';
 
 interface Props {
   categories: OptionCategory[];
@@ -22,13 +14,12 @@ interface Props {
   onPickCategory: (categoryId: string) => void;
 }
 
-const INSULATION_ORDER = ['insulation-floor', 'insulation-wall', 'insulation-ceiling'] as const;
+const INTERIOR_EXTERIOR_CATEGORY_ORDER = [
+  'interior-door',
+  'sash',
+] as const;
 
 const OPTION_CATEGORY_ORDER = [
-  'floor',
-  'wall-ceiling',
-  'interior-door',
-  'carpentry',
   'ub',
   'toilet',
   'washbasin',
@@ -37,12 +28,19 @@ const OPTION_CATEGORY_ORDER = [
   'aircon',
   'lighting',
   'smartlock',
+] as const;
+
+const OTHER_PRODUCT_CATEGORY_ORDER = [
   'furniture',
   'appliances',
   'exterior-parts',
   'office-supplies',
   'free-product',
 ] as const;
+
+const INTERIOR_EXTERIOR_CATEGORY_CODES = new Set<string>(INTERIOR_EXTERIOR_CATEGORY_ORDER);
+const OPTION_CATEGORY_CODES = new Set<string>(OPTION_CATEGORY_ORDER);
+const OTHER_PRODUCT_CATEGORY_CODES = new Set<string>(OTHER_PRODUCT_CATEGORY_ORDER);
 
 function sortCategoriesForDisplay(categories: OptionCategory[], preferredCodes: readonly string[]): OptionCategory[] {
   const rank = new Map(preferredCodes.map((code, index) => [code, index]));
@@ -54,43 +52,28 @@ function sortCategoriesForDisplay(categories: OptionCategory[], preferredCodes: 
   });
 }
 
+function isInteriorExteriorCategory(category: OptionCategory): boolean {
+  return INTERIOR_EXTERIOR_CATEGORY_CODES.has(category.code);
+}
+
+function isOtherProductCategory(category: OptionCategory): boolean {
+  return OTHER_PRODUCT_CATEGORY_CODES.has(category.code);
+}
+
 /**
- * 「標準設備及び仕上げ表」。
- * 本体仕様は「外壁4面 → 断熱3部位 → その他本体仕様」の行構成で表示する。
- * サッシは将来、平面図ごとの設置位置に応じた可変枚数の行として追加する。
- * オプションは本体仕様から明確に区切り、お客様が仕様を決める順に並べる。
+ * プランボード後半の仕様表。
+ * 内外装工事は、既存の内部建具・サッシカテゴリーだけを表示する。
+ * オプションとその他の商品は別のレスポンシブ単位として分ける。
  */
 export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
   const selectedSet = new Set(selected);
-  const exteriorDisplays = useSyncExternalStore(
-    subscribeExteriorFaceDisplays,
-    getExteriorFaceDisplaysSnapshot,
-    getExteriorFaceDisplaysServerSnapshot
-  );
   const shown = categories.filter((c) => c.code !== 'sitework' && options.some((o) => o.category_id === c.id));
-  const baseCats = shown.filter((c) => c.finish_level === 'shell');
+  const interiorExteriorCats = sortCategoriesForDisplay(shown.filter(isInteriorExteriorCategory), INTERIOR_EXTERIOR_CATEGORY_ORDER);
   const optionCats = sortCategoriesForDisplay(
-    shown.filter((c) => c.finish_level !== 'shell'),
+    shown.filter((c) => OPTION_CATEGORY_CODES.has(c.code)),
     OPTION_CATEGORY_ORDER
   );
-
-  const exteriorCat = baseCats.find((c) => c.code === 'exterior-wall') ?? null;
-  const insulationCats = sortCategoriesForDisplay(
-    baseCats.filter((c) => INSULATION_ORDER.includes(c.code as (typeof INSULATION_ORDER)[number])),
-    INSULATION_ORDER
-  );
-  const otherBaseCats = baseCats.filter(
-    (c) => c.code !== 'exterior-wall' && !INSULATION_ORDER.includes(c.code as (typeof INSULATION_ORDER)[number])
-  );
-
-  const exteriorRows = EXTERIOR_FACES.map((face) => ({
-    ...face,
-    display: exteriorDisplays.find((row) => row.face_code === face.code) ?? null,
-  }));
-  const hasExteriorFaces = exteriorRows.every((row) => {
-    const display = row.display;
-    return Boolean(display && options.some((option) => option.id === display.option_id));
-  });
+  const otherProductCats = sortCategoriesForDisplay(shown.filter(isOtherProductCategory), OTHER_PRODUCT_CATEGORY_ORDER);
 
   const normalTile = (cat: OptionCategory) => {
     const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
@@ -117,8 +100,8 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
                   className="object-cover"
                 />
               ) : (
-                <span className="flex h-full min-h-20 items-center justify-center text-muted">
-                  <ImageOff className="size-5" aria-hidden="true" />
+                <span className="flex h-full min-h-20 items-center justify-center bg-ivory px-2 text-center text-[0.65rem] text-muted">
+                  画像未登録
                 </span>
               )}
             </span>
@@ -143,111 +126,54 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
     );
   };
 
-  const exteriorTiles = (cat: OptionCategory) =>
-    exteriorRows.map((row) => {
-      const display = row.display;
-      const option = display ? options.find((o) => o.id === display.option_id) ?? null : null;
-      return (
-        <li key={`${cat.id}-${row.code}`} className="bg-white">
-          <button
-            type="button"
-            disabled={readOnly}
-            onClick={() => {
-              if (!requestExteriorFacePicker(row.code)) onPickCategory(cat.id);
-            }}
-            title={`${row.label}の外壁を変更`}
-            className="group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
-            data-testid={row.code === 'front' ? `equip-${cat.code}` : `equip-${cat.code}-${row.code}`}
-            data-exterior-face={row.code}
-          >
-            <span className="block min-h-24 w-full p-1.5 sm:p-2">
-              <span className="relative block h-full min-h-20 w-full overflow-hidden rounded bg-sand">
-                {display?.image_url ? (
-                  <SmartImage
-                    src={display.image_url}
-                    alt={`${row.label} ${display.option_name}`}
-                    fill
-                    sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
-                    className="object-cover"
-                  />
-                ) : (
-                  <span className="flex h-full min-h-20 items-center justify-center text-muted">
-                    <ImageOff className="size-5" aria-hidden="true" />
-                  </span>
-                )}
-                <span className="absolute bottom-1 left-1 rounded bg-ink/75 px-1.5 py-0.5 text-[0.55rem] font-semibold leading-none text-white">
-                  {row.label}
-                </span>
-              </span>
-            </span>
-            <span className="flex min-w-0 flex-col justify-center p-2">
-              <span className="flex items-center justify-between gap-1">
-                <span className="truncate text-[0.65rem] font-semibold text-muted">外壁（{row.label}）</span>
-                {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
-              </span>
-              <span className={cn('block text-xs leading-snug font-semibold', !display && 'text-muted')}>
-                {display?.option_name ?? '選択なし'}
-              </span>
-              {(display?.variant_names.length ?? 0) > 0 && (
-                <span className="mt-0.5 block line-clamp-2 text-[0.65rem] leading-snug text-muted">
-                  {display?.variant_names.join('・')}
-                </span>
-              )}
-              {option && <span className="mt-0.5 block text-[0.65rem] text-ink-soft">面別指定</span>}
-            </span>
-          </button>
-        </li>
-      );
-    });
+  const sectionHeader = (id: string, title: string, description?: string) => (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gold/50 bg-white px-4 py-2">
+      <div className="min-w-0">
+        <h2 id={id} className="text-sm font-semibold">
+          【{title}】
+        </h2>
+        {description && <p className="mt-0.5 text-[0.7rem] text-muted">{description}</p>}
+      </div>
+      <span className="text-[0.7rem] text-muted">{readOnly ? '確認のみ' : '項目をクリックして変更'}</span>
+    </div>
+  );
 
-  const baseTile = (cat: OptionCategory) => {
-    if (cat.code === 'exterior-wall' && hasExteriorFaces) return exteriorTiles(cat);
-    return normalTile(cat);
-  };
+  const emptyState = <p className="px-4 py-6 text-sm text-muted">現在選択されている商品はありません</p>;
 
   return (
-    <section aria-labelledby="equipment-heading" className="card overflow-hidden">
-      <div className="flex items-center justify-between border-b border-line px-4 py-2">
-        <h2 id="equipment-heading" className="text-sm font-semibold">
-          標準設備及び仕上げ表
-        </h2>
-        <span className="text-[0.7rem] text-muted">項目をクリックして変更</span>
-      </div>
+    <div className="space-y-4" data-testid="equipment-board">
+      <section aria-labelledby="interior-exterior-heading" className="overflow-hidden border border-gold bg-white" data-testid="equipment-board-interior-exterior">
+        {sectionHeader('interior-exterior-heading', '内外装工事')}
+        {interiorExteriorCats.length > 0 ? (
+          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-interior-exterior-list">
+            {interiorExteriorCats.map(normalTile)}
+          </ul>
+        ) : (
+          emptyState
+        )}
+      </section>
 
-      {(exteriorCat || insulationCats.length > 0 || otherBaseCats.length > 0) && (
-        <div data-testid="equipment-board">
-          {exteriorCat && (
-            <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4">
-              {baseTile(exteriorCat)}
-            </ul>
-          )}
-
-          {insulationCats.length > 0 && (
-            <ul className="mt-px grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-insulation">
-              {insulationCats.map(normalTile)}
-            </ul>
-          )}
-
-          {otherBaseCats.length > 0 && (
-            <ul className="mt-px grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-other-base">
-              {otherBaseCats.map(normalTile)}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {optionCats.length > 0 && (
-        <>
-          <div className="flex items-center gap-3 bg-white px-4 py-3" aria-hidden="true">
-            <span className="h-px flex-1 bg-line" />
-            <span className="text-xs font-semibold tracking-wide text-ink-soft">オプション</span>
-            <span className="h-px flex-1 bg-line" />
-          </div>
+      <section aria-labelledby="option-heading" className="overflow-hidden border border-gold bg-white" data-testid="equipment-board-option-section">
+        {sectionHeader('option-heading', 'オプション')}
+        {optionCats.length > 0 ? (
           <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-options">
             {optionCats.map(normalTile)}
           </ul>
-        </>
-      )}
-    </section>
+        ) : (
+          emptyState
+        )}
+      </section>
+
+      <section aria-labelledby="other-products-heading" className="overflow-hidden border border-gold bg-white" data-testid="equipment-board-other-products">
+        {sectionHeader('other-products-heading', 'その他の商品', '外構及びオリジナル制作家具など')}
+        {otherProductCats.length > 0 ? (
+          <ul className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-4" data-testid="equipment-board-other-products-list">
+            {otherProductCats.map(normalTile)}
+          </ul>
+        ) : (
+          emptyState
+        )}
+      </section>
+    </div>
   );
 }

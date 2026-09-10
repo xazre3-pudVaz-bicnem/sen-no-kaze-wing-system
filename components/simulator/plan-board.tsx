@@ -150,7 +150,7 @@ export function ElevationStrip({
         {elevationGroups.map((group, groupIndex) => (
           <ul
             key={group[0]?.url}
-            className={`grid grid-cols-1 bg-white p-3 sm:grid-cols-2 sm:[&>li+li]:border-l sm:[&>li+li]:border-line lg:p-4 ${
+            className={`grid grid-cols-2 bg-white p-3 [&>li+li]:border-l [&>li+li]:border-line lg:p-4 ${
               groupIndex === 1 ? 'border-t border-[#e8b100] lg:border-t-0 lg:border-l' : ''
             }`}
             data-testid={groupIndex === 0 ? 'elevation-group-front' : 'elevation-group-back'}

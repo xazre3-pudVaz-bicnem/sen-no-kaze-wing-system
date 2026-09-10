@@ -19,10 +19,6 @@ interface Elevation {
   alt: string;
 }
 
-const PLAN_DISPLAY_URLS: Record<string, string> = {
-  '/images/plan/wing-hotel.png': '/images/plan/display/wing-hotel.png',
-  '/images/plan/wing-residence.png': '/images/plan/display/wing-residence.png',
-};
 
 interface Props {
   /** 表示中の平面図（resolvePreview の結果） */
@@ -39,7 +35,7 @@ interface Props {
 export function PlanBoard({ plan, specName, planSize, readOnly }: Props) {
   void readOnly;
   const planImage = plan.layers[0];
-  const displayPlanUrl = planImage ? (PLAN_DISPLAY_URLS[planImage.url] ?? planImage.url) : '';
+  const displayPlanUrl = planImage?.url ?? '';
   const shortSize = planSize?.split('（')[0]?.replace(/\s*mm$/, '').replace(/\s*×\s*/g, '×').trim() ?? null;
   const specLabel = specName ? specName.replace('仕様', '用') : '';
 

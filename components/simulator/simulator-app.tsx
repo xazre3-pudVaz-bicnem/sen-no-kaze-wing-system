@@ -75,6 +75,7 @@ function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[]
 export function SimulatorApp({ bundle, models, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
   const { model } = bundle;
+  const displayModelName = model.name === 'フラット' ? 'Flat' : model.name;
   const ctx = useMemo<RuleContext>(
     () => ({ options: bundle.options, categories: bundle.categories, dependencies: bundle.dependencies, conflicts: bundle.conflicts }),
     [bundle]
@@ -135,7 +136,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
-  const [name, setName] = useState(initial?.name ?? `${model.name} の仕様`);
+  const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
   const [status, setStatus] = useState<ConfigurationStatus>(initial?.status ?? 'draft');
   const [view, setView] = useState<ViewKey>('exterior');
@@ -574,11 +575,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
             <p className="label-en text-forest">Simulator</p>
             <div className="mt-1 flex flex-wrap items-start gap-x-7 gap-y-2">
               <div className="min-w-0">
-                <h1 className="text-[1.35rem] sm:text-4xl">
+                <h1 className="text-[1.625rem] sm:text-4xl">
                   <span className="inline-flex max-w-full items-baseline whitespace-nowrap">
-                    <span>{model.name}</span>
+                    <span>{displayModelName}</span>
                     {modelDescriptor && (
-                      <span className="ml-1 align-baseline text-[0.8rem] font-normal text-ink-soft sm:text-[1.65rem]">
+                      <span className="ml-1 align-baseline text-[0.85rem] font-normal text-ink-soft sm:text-[1.65rem]">
                         （{modelDescriptor}）
                       </span>
                     )}
@@ -604,7 +605,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                       >
                         {models.map((m) => (
                           <option key={m.slug} value={m.slug}>
-                            {m.name}
+                            {m.name === 'フラット' ? 'Flat' : m.name}
                           </option>
                         ))}
                       </select>
@@ -745,7 +746,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
             <div className="min-w-0">
               {/* 完成イメージ（外観・室内・施工事例・その他） */}
-              <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={model.name} />
+              <PreviewStage previews={previews} view={view} onViewChange={setView} options={bundle.options} modelName={displayModelName} />
             </div>
           </div>
 
@@ -778,7 +779,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       {/* 御見積書（完成イメージとの行間は詰める：先方指示） */}
       <div className="container-x pt-2 pb-10">
         <QuoteSheet
-          modelName={model.name}
+          modelName={displayModelName}
           specName={specName}
           finishLevel={finishLevel}
           pricing={pricing}

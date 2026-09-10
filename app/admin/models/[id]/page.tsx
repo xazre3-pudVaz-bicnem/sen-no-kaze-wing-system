@@ -14,6 +14,7 @@ export default async function EditModelPage({ params, searchParams }: { params: 
   const bundle = await store.getCatalogBundle(id, { includeDraft: true });
   if (!bundle) notFound();
   const { model, images } = bundle;
+  const productPageImages = images.filter((img) => img.kind !== 'elevation' && img.kind !== 'case');
   return (
     <AdminPage title={model.name} lead={`/products/${model.slug}`} actions={<Link href={`/products/${model.slug}`} target="_blank" className="btn-secondary btn-sm">公開ページを見る</Link>}>
       <BackLink href="/admin/models" label="一覧へ戻る" />
@@ -21,9 +22,12 @@ export default async function EditModelPage({ params, searchParams }: { params: 
       <ModelForm model={model} />
 
       <section className="space-y-4">
-        <h2 className="text-lg">商品画像（{images.length}）</h2>
+        <div>
+          <h2 className="text-lg">商品紹介画像（{productPageImages.length}）</h2>
+          <p className="mt-1 text-xs text-muted">公開商品ページで使う画像です。立面図・施工事例は <Link href="/admin/preview-rules" className="underline">シミュレーター画像</Link> で管理します。</p>
+        </div>
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {images.map((img) => (
+          {productPageImages.map((img) => (
             <li key={img.id} className="card overflow-hidden">
               <div className="relative aspect-[16/10] bg-sand">
                 <SmartImage src={img.url} alt={img.alt} fill sizes="33vw" className="object-cover" />
@@ -43,7 +47,7 @@ export default async function EditModelPage({ params, searchParams }: { params: 
             </li>
           ))}
         </ul>
-        <ProductImageForm modelId={model.id} />
+        <ProductImageForm modelId={model.id} allowedKinds={['hero', 'exterior', 'interior', 'floorplan', 'transport']} title="商品紹介画像を追加" />
       </section>
     </AdminPage>
   );

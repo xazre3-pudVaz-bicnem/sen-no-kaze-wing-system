@@ -15,7 +15,7 @@ interface Props {
 
 /**
  * 「どこまで頼むか」の選択。
- * モバイルでは本体・用途ボタンを2行表記にして横幅を抑える。
+ * モバイルでは本体・用途ボタンを1行表記にして横一列に収める。
  */
 export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) {
   const visibleLevels = FINISH_LEVELS.filter((level) => level === 'shell');
@@ -34,7 +34,7 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
             <li key={level} className="group/card relative shrink-0">
               <span
                 className={cn(
-                  'inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-full border bg-white text-[0.72rem] font-medium transition sm:min-h-8 sm:text-[0.82rem]',
+                  'inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full border bg-white text-[0.68rem] font-medium transition sm:text-[0.82rem]',
                   active ? 'border-brown bg-white text-brown shadow-soft ring-1 ring-brown/20' : 'border-line bg-white text-ink-soft hover:border-ink/40'
                 )}
               >
@@ -45,15 +45,10 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
                   aria-pressed={active}
                   title={typeof total === 'number' ? `${info.name} 概算 ${formatYen(total)}` : info.name}
                   data-testid={`finish-level-${level}`}
-                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-center leading-tight transition disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-8 sm:gap-1.5 sm:px-3 sm:text-left"
+                  className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-center leading-tight transition disabled:cursor-not-allowed disabled:opacity-60 sm:gap-1.5 sm:px-3 sm:text-left"
                 >
                   {active && <Check className="hidden size-3.5 sm:block" aria-hidden="true" />}
-                  <span className="sm:hidden">
-                    本体
-                    <br />
-                    のみ
-                  </span>
-                  <span className="hidden sm:inline">{info.name}</span>
+                  <span>{info.name}</span>
                 </button>
               </span>
               <div
@@ -81,38 +76,13 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
             display: none;
           }
 
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(1),
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(2),
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(3) {
-            display: inline-flex;
-            min-height: 2.5rem;
+          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-'] {
+            min-height: 2rem;
             flex: 0 0 auto;
-            align-items: center;
-            justify-content: center;
             white-space: nowrap;
-            padding: 0.25rem 0.5rem;
-            font-size: 0;
-            text-align: center;
-          }
-
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(1)::after,
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(2)::after,
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(3)::after {
-            white-space: pre-line;
+            padding: 0.25rem 0.45rem;
             font-size: 0.68rem;
-            line-height: 0.9rem;
-          }
-
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(1)::after {
-            content: 'ホテル\\A仕様';
-          }
-
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(2)::after {
-            content: '住宅\\A仕様';
-          }
-
-          div:has(> section > ul[data-testid='finish-levels']) > button[data-testid^='preset-']:nth-of-type(3)::after {
-            content: '事務所\\A店舗用';
+            line-height: 1rem;
           }
         }
       `}</style>

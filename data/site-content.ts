@@ -37,7 +37,7 @@ export const hero = {
   slides: [
     { src: '/images/cases/box-lakeside-family.jpg', alt: '湖畔のデッキで家族が過ごす木造コンテナ' },
     { src: '/images/hero/interior-collage.jpg', alt: 'テレビのある部屋・海を望む寝室・庭を望む寝室・丸鏡の洗面を並べた Wing の内装' },
-    { src: '/images/hero/sunset-dark-wing.jpg', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
+    { src: '/images/hero/sunset-dark-wing.webp', alt: '夕暮れの海を望む丘に建つ黒い外壁の連棟コンテナ' },
   ],
 };
 

@@ -45,6 +45,7 @@ export function HomeHero() {
             fill
             sizes="100vw"
             className={`hero-slide object-cover ${i === 1 ? 'object-[center_60%]' : ''}`}
+            quality={90}
             style={{ animationDelay: `${(i + 1) * 5}s` }}
           />
         ),

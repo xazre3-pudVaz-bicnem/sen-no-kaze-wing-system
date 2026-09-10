@@ -27,6 +27,7 @@ import type {
   ContactMessage,
   ContactStatus,
 } from '@/lib/domain/types';
+import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
@@ -323,6 +324,8 @@ export class LocalStore implements DataStore {
   private recalc(db: LocalDb, cfg: Configuration) {
     const model = db.models.find((m) => m.id === cfg.base_model_id);
     if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');
+    const savedExteriorFaces = (cfg as Configuration & { exterior_faces?: unknown }).exterior_faces;
+    const exteriorFaces = Array.isArray(savedExteriorFaces) ? (savedExteriorFaces as ExteriorFaceSelection[]) : [];
     const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
     // 本体内訳マスター（仕様別）が登録されていれば、その合計を本体一式とする
     const breakdown = db.baseBreakdownItems.filter(
@@ -336,7 +339,8 @@ export class LocalStore implements DataStore {
       items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
       undefined,
       { groups: db.variantGroups, choices: db.variantChoices },
-      baseOverride
+      baseOverride,
+      exteriorFaces
     );
     Object.assign(cfg, {
       base_price: pricing.base_price,

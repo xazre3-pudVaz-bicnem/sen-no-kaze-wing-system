@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, Pencil } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
@@ -19,39 +20,51 @@ interface Props {
 
 /** 表の列（項目／数量／単位／単価／金額／備考）を揃えるための共通セル */
 const td = {
-  name: 'px-3 py-1.5',
-  qty: 'w-16 px-2 py-1.5 text-right tabular-nums',
-  unit: 'w-16 px-2 py-1.5 whitespace-nowrap text-muted',
-  price: 'w-24 px-2 py-1.5 text-right tabular-nums',
-  amount: 'w-28 px-3 py-1.5 text-right tabular-nums',
-  remark: 'w-32 px-3 py-1.5 text-[0.7rem] text-muted',
+  name: 'px-3 py-1.5 leading-snug sm:px-4',
+  qty: 'w-16 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-20',
+  unit: 'w-14 px-2 py-1.5 whitespace-nowrap text-muted sm:w-16',
+  price: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32',
+  amount: 'w-32 px-3 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-36',
+  remark: 'hidden w-32 px-3 py-1.5 text-[0.7rem] leading-snug text-muted lg:table-cell',
+};
+
+const th = {
+  name: 'px-3 py-2 text-left font-semibold sm:px-4',
+  qty: 'w-16 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-20',
+  unit: 'w-14 px-2 py-2 text-left font-semibold whitespace-nowrap sm:w-16',
+  price: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32',
+  amount: 'w-32 px-3 py-2 text-right font-semibold whitespace-nowrap sm:w-36',
+  remark: 'hidden w-32 px-3 py-2 text-left font-semibold lg:table-cell',
 };
 
 /** 工事区分の見出し行（１．金物関係費用 など） */
-function SectionRow({ label, tone = 'sand' }: { label: string; tone?: 'sand' | 'ivory' }) {
+function SectionRow({ label, tone = 'sand', action }: { label: ReactNode; tone?: 'sand' | 'ivory'; action?: ReactNode }) {
   return (
-    <tr className={tone === 'sand' ? 'bg-sand/40' : 'bg-ivory'}>
-      <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
-        {label}
+    <tr className={tone === 'sand' ? 'border-y border-line bg-sand/60' : 'border-y border-line bg-ivory'}>
+      <td colSpan={6} className="px-3 py-2 text-xs font-semibold tracking-wide text-ink-soft sm:px-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0">{label}</span>
+          {action}
+        </div>
       </td>
     </tr>
   );
 }
 
 /** 【本体価格計】のような小計行。明細と区別できるよう色を変える（先方指示） */
-function SubtotalRow({ label, amount, testId }: { label: string; amount: string; testId?: string }) {
+function SubtotalRow({ label, amount, amountColSpan = 1, testId }: { label: string; amount: ReactNode; amountColSpan?: 1 | 2; testId?: string }) {
   return (
-    <tr className="border-y border-brown/40 bg-brown/10 font-semibold">
-      <td colSpan={4} className="px-3 py-2 text-sm">{label}</td>
-      <td className="px-3 py-2 text-right text-sm tabular-nums" data-testid={testId}>{amount}</td>
-      <td></td>
+    <tr className="border-y border-line bg-sand/70 font-semibold">
+      <td colSpan={4} className="px-3 py-2 text-sm sm:px-4">{label}</td>
+      <td colSpan={amountColSpan} className="px-3 py-2 text-right text-sm tabular-nums sm:px-4" data-testid={testId}>{amount}</td>
+      {amountColSpan === 1 && <td className="hidden lg:table-cell"></td>}
     </tr>
   );
 }
 
 /**
  * 先方の「ネット画面構成」シートの表示例に合わせた御見積書（エクセル形式・全行展開）。
- *   本体（内訳）→ 本体諸費用 →【本体価格計】
+ *   本体 →【内外装工事】→ オプション →【その他の工事】→【別途工事】→ 集計
  *   オプション（明細。クリックで変更＝方法③）→ オプション諸費用 →【オプション価格計】
  *   別途工事（9項目）→【別途工事計】／フリー商品
  *   小計 → 値引き等調整額 → 税抜請負額 → 消費税 → 合計
@@ -59,70 +72,70 @@ function SubtotalRow({ label, amount, testId }: { label: string; amount: string;
 export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
   const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const byOption = new Map(options.map((o) => [o.id, o]));
-  // 防火仕様は本体側に表示する（先方指示。オプション欄には出さない）
+  // 防火仕様は上部の選択UIで扱うため、見積書の表示分類からは除外する。
   const fireproofCatId = categories.find((c) => c.code === 'fireproof')?.id ?? null;
   const isFire = (l: PricingResult['lines'][number]) => byOption.get(l.option_id)?.category_id === fireproofCatId;
-  const optionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l));
-  const fireLines = pricing.lines.filter((l) => !l.is_installation && isFire(l));
+  // 表示上の区分。正式な estimate_section が入るまで category_code だけで振り分ける。
+  const interiorExteriorCategoryCodes = new Set([
+    'floor',
+    'flooring',
+    'wall-ceiling',
+    'interior-door',
+    'exterior-wall',
+    'roof',
+    'sash',
+    'entrance-door',
+    'service-door',
+  ]);
+  const otherConstructionCategoryCodes = new Set(['other-construction', 'other_construction']);
+  const isInteriorExterior = (l: PricingResult['lines'][number]) => interiorExteriorCategoryCodes.has(l.category_code);
+  const isOtherConstruction = (l: PricingResult['lines'][number]) => otherConstructionCategoryCodes.has(l.category_code);
+  const interiorExteriorLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && isInteriorExterior(l));
+  const optionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && !isInteriorExterior(l) && !isOtherConstruction(l));
+  const otherConstructionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && isOtherConstruction(l));
   const freeLines = pricing.lines.filter((l) => l.is_free_product);
   const sitework = pricing.lines.filter((l) => l.is_installation && !l.is_free_product);
   const siteworkTotal = sitework.reduce((s, l) => s + l.amount, 0);
   const freeTotal = pricing.free_subtotal;
 
   return (
-    <section aria-labelledby="quote-sheet-heading" className="card overflow-hidden" data-testid="quote-sheet">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line bg-ivory px-5 py-3">
-        <h2 id="quote-sheet-heading" className="font-serif text-lg">
-          御見積書
-        </h2>
-        <p className="text-xs text-muted" data-testid="quote-scope">
-          {modelName}（{specName}）／注文範囲：{levelInfo.name}／概算・税込
-        </p>
+    <section aria-labelledby="quote-sheet-heading" className="overflow-hidden border border-line bg-white shadow-soft" data-testid="quote-sheet">
+      <div className="border-b-2 border-ink px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <h2 id="quote-sheet-heading" className="font-serif text-2xl leading-none sm:text-3xl">
+            御見積書
+          </h2>
+          <p className="text-xs text-muted sm:text-sm" data-testid="quote-scope">
+            {modelName}（{specName}）／注文範囲：{levelInfo.name}／概算・税込
+          </p>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
-          <thead className="bg-sand/60 text-left text-xs text-muted">
+      <div className="overflow-x-auto overscroll-x-contain">
+        <table className="w-full min-w-[39rem] table-fixed text-[0.78rem] sm:min-w-[46rem] sm:text-sm">
+          <colgroup>
+            <col />
+            <col className="w-16 sm:w-20" />
+            <col className="w-14 sm:w-16" />
+            <col className="w-28 sm:w-32" />
+            <col className="w-32 sm:w-36" />
+            <col className="hidden w-32 lg:table-column" />
+          </colgroup>
+          <thead className="bg-sand text-[0.7rem] text-muted sm:text-xs">
             <tr>
-              <th className="px-3 py-2 font-semibold">項目</th>
-              <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
-              <th className="w-16 px-2 py-2 font-semibold whitespace-nowrap">単位</th>
-              <th className="w-24 px-2 py-2 text-right font-semibold">単価</th>
-              <th className="w-28 px-3 py-2 text-right font-semibold">金額</th>
-              <th className="w-32 px-3 py-2 font-semibold">備考</th>
+              <th className={th.name}>項目</th>
+              <th className={th.qty}>数量</th>
+              <th className={th.unit}>単位</th>
+              <th className={th.price}>単価</th>
+              <th className={th.amount}>金額</th>
+              <th className={th.remark}>備考</th>
             </tr>
           </thead>
 
           {/* ---- 本体（エンドユーザーには計のみ。明細は本部・総代理店・代理店の管理画面で見る） ---- */}
-          <tbody className="divide-y divide-line/60" data-testid="base-breakdown">
-            <SectionRow label="本体" tone="ivory" />
-            {/* 防火仕様はオプションではなく本体側の項目（先方指示） */}
-            {fireLines.map((l) => {
-              const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
-              return (
-                <tr key={l.code} className="bg-white">
-                  <td className={td.name}>
-                    <button
-                      type="button"
-                      disabled={readOnly || !cat}
-                      onClick={() => cat && onPickCategory(cat.id)}
-                      className="group inline-flex items-center gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
-                      data-testid={`quote-line-${l.code}`}
-                    >
-                      <span className="text-xs text-muted">{cat?.name}</span>
-                      <span>{l.name}</span>
-                      {!readOnly && cat && <Pencil className="size-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
-                    </button>
-                  </td>
-                  <td className={td.qty}>{formatQty(l.quantity)}</td>
-                  <td className={td.unit}>式</td>
-                  <td className={td.price}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
-                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
-                  <td className={td.remark}></td>
-                </tr>
-              );
-            })}
-            <tr className="bg-white">
+          <tbody className="divide-y divide-line/70" data-testid="base-breakdown">
+            <SectionRow label={<><span>本体</span><span className="sr-only">本体価格</span></>} tone="ivory" />
+            <tr className="bg-white align-top">
               <td className={td.name}>
                 {modelName} 本体一式
                 <span className="block text-[0.7rem] text-muted">
@@ -135,7 +148,52 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               <td className={td.amount}>{formatYen(pricing.base_total)}</td>
               <td className={td.remark}></td>
             </tr>
-            <SubtotalRow label="【本体価格計】" amount={formatYen(pricing.base_total)} />
+          </tbody>
+
+          {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
+          <tbody className="divide-y divide-line/70">
+            <SectionRow
+              label={(
+                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span>【内外装工事】</span>
+                  <span className="font-normal tracking-normal text-muted">※選択した商品には施工費も含んだ金額になります</span>
+                </span>
+              )}
+              tone="ivory"
+            />
+            {interiorExteriorLines.map((l) => {
+              const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
+              const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
+              return (
+                <tr key={l.code} className="bg-white align-top">
+                  <td className={td.name}>
+                    <button
+                      type="button"
+                      disabled={readOnly || !cat}
+                      onClick={() => cat && onPickCategory(cat.id)}
+                      className="group inline-flex items-start gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
+                      data-testid={`quote-line-${l.code}`}
+                    >
+                      <span className="text-xs text-muted">{cat?.name}</span>
+                      <span>
+                        {l.name}
+                        {l.variants.length > 0 && (
+                          <span className="block text-[0.7rem] text-muted">
+                            {l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}
+                          </span>
+                        )}
+                      </span>
+                      {!readOnly && cat && <Pencil className="size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
+                    </button>
+                  </td>
+                  <td className={td.qty}>{formatQty(l.quantity)}</td>
+                  <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
+                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
+                  <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
+                </tr>
+              );
+            })}
           </tbody>
 
           {/* ---- オプション（クリックで変更） ---- */}
@@ -145,7 +203,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
-                <tr key={l.code} className="bg-white">
+                <tr key={l.code} className="bg-white align-top">
                   <td className={td.name}>
                     <button
                       type="button"
@@ -185,11 +243,52 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
             <SubtotalRow label="【オプション価格計】" amount={formatYen(pricing.option_total)} />
           </tbody>
 
+          {/* ---- その他の工事（将来の estimate_section=other_construction 用） ---- */}
+          <tbody className="divide-y divide-line/70">
+            <SectionRow
+              label={(
+                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span>【その他の工事】</span>
+                  <span className="font-normal tracking-normal text-muted">※選択した商品には施工費も含まれます</span>
+                </span>
+              )}
+              tone="ivory"
+            />
+            {otherConstructionLines.map((l) => (
+              <tr key={l.code} className="bg-white text-xs align-top">
+                <td className={td.name}>{l.name}</td>
+                <td className={td.qty}>{formatQty(l.quantity)}</td>
+                <td className={td.unit}>式</td>
+                <td className={td.price}>{l.price_on_request ? '別途見積' : formatYen(l.unit_price)}</td>
+                <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount > 0 ? formatYen(l.amount) : '標準'}</td>
+                <td className={td.remark}></td>
+              </tr>
+            ))}
+          </tbody>
+
           {/* ---- 別途工事（現地確認後に代理店が見積） ---- */}
           <tbody className="divide-y divide-line/60">
-            <SectionRow label="別途工事（設置場所の確認後、代理店がお見積りします）" tone="ivory" />
+            <SectionRow
+              label={
+                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span>【別途工事】</span>
+                  <span className="font-normal tracking-normal text-muted">※ 主に現場施工になりますので、お近くの代理店にお問合せ下さい</span>
+                </span>
+              }
+              tone="ivory"
+              action={(
+                <Link
+                  href="/dealers"
+                  className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
+                  data-testid="nearby-dealers-heading-link"
+                >
+                  近くの代理店を探す。
+                  <ArrowRight className="size-3" aria-hidden="true" />
+                </Link>
+              )}
+            />
             {sitework.map((l) => (
-              <tr key={l.code} className="bg-white text-xs">
+              <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{l.quantity}</td>
                 <td className={td.unit}>式</td>
@@ -198,7 +297,20 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 <td className={td.remark}></td>
               </tr>
             ))}
-            <SubtotalRow label="【別途工事計】" amount={siteworkTotal > 0 ? formatYen(siteworkTotal) : '別途'} />
+            <SubtotalRow
+              label="【別途工事計】"
+              amountColSpan={siteworkTotal > 0 ? 1 : 2}
+              amount={siteworkTotal > 0 ? formatYen(siteworkTotal) : (
+                <Link
+                  href="/dealers"
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
+                  data-testid="nearby-dealers-link"
+                >
+                  近くの代理店を探す。
+                  <ArrowRight className="size-3" aria-hidden="true" />
+                </Link>
+              )}
+            />
           </tbody>
 
           {/* ---- フリー商品（代理店・工務店の取扱商品／諸費用なし） ---- */}
@@ -223,42 +335,42 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
             </tbody>
           )}
 
-          {/* ---- 合計 ---- */}
-          <tfoot>
+          {/* ---- 金額集計 ---- */}
+          <tfoot className="border-t-2 border-ink/70 bg-white">
             <tr className="text-sm">
-              <td colSpan={4} className="px-3 pt-3 pb-1">小　計</td>
-              <td className="px-3 pt-3 pb-1 text-right tabular-nums">{formatYen(pricing.subtotal_raw)}</td>
-              <td></td>
+              <td colSpan={4} className="px-3 pt-4 pb-1 sm:px-4">小計</td>
+              <td className="px-3 pt-4 pb-1 text-right tabular-nums sm:px-4">{formatYen(pricing.subtotal_raw)}</td>
+              <td className="hidden lg:table-cell"></td>
             </tr>
             <tr className="text-sm text-ink-soft">
-              <td colSpan={4} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
-              <td className="px-3 py-1 text-right tabular-nums">{formatYen(pricing.adjustment)}</td>
-              <td></td>
+              <td colSpan={4} className="px-3 py-1 sm:px-4">値引き等調整額（千円未満切捨て）</td>
+              <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.adjustment)}</td>
+              <td className="hidden lg:table-cell"></td>
             </tr>
             <tr className="text-sm">
-              <td colSpan={4} className="px-3 py-1">税抜請負額</td>
-              <td className="px-3 py-1 text-right tabular-nums">{formatYen(pricing.subtotal)}</td>
-              <td></td>
+              <td colSpan={4} className="px-3 py-1 sm:px-4">税抜請負額</td>
+              <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.subtotal)}</td>
+              <td className="hidden lg:table-cell"></td>
             </tr>
             <tr className="text-sm text-ink-soft">
-              <td colSpan={4} className="px-3 py-1">消費税（{Math.round(pricing.tax_rate * 100)}%）</td>
-              <td className="px-3 py-1 text-right tabular-nums">{formatYen(pricing.tax)}</td>
-              <td></td>
+              <td colSpan={4} className="px-3 py-1 sm:px-4">消費税（{Math.round(pricing.tax_rate * 100)}%）</td>
+              <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.tax)}</td>
+              <td className="hidden lg:table-cell"></td>
             </tr>
-            <tr className="border-t-2 border-ink bg-ivory">
-              <td colSpan={4} className="px-3 py-3 font-serif text-lg">合　計（税込）</td>
-              <td className="px-3 py-3 text-right">
-                <span className="font-serif text-2xl tabular-nums" data-testid="total-price">
+            <tr className="border-t border-line bg-ivory">
+              <td colSpan={4} className="px-3 py-3 font-serif text-lg sm:px-4 sm:text-xl">合計（税込）</td>
+              <td className="px-3 py-3 text-right sm:px-4">
+                <span className="font-serif text-xl tabular-nums sm:text-2xl" data-testid="total-price">
                   {formatYen(pricing.total)}
                 </span>
               </td>
-              <td></td>
+              <td className="hidden lg:table-cell"></td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      <div className="space-y-2 border-t border-line px-5 py-4 text-xs text-ink-soft">
+      <div className="space-y-2 border-t border-line px-4 py-4 text-xs leading-relaxed text-ink-soft sm:px-6">
         <p>
           <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong>
           — {levelInfo.lead}

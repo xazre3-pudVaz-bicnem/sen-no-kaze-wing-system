@@ -11,8 +11,8 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
   const keys = [...previewKeyLabels(options).entries()].map(([key, label]) => ({ key, label }));
   const view = VIEW_KEYS.includes(sp.view as ViewKey) ? (sp.view as ViewKey) : undefined;
   return (
-    <AdminPage title="画像ルールを追加">
-      <BackLink href="/admin/preview-rules" label="一覧へ戻る" />
+    <AdminPage title="シミュレーター画像を追加">
+      <BackLink href="/admin/preview-rules" label="シミュレーター画像へ戻る" />
       <PreviewRuleForm rule={null} models={models} previewKeys={keys} defaults={{ base_model_id: sp.model, view, keys: sp.keys ? sp.keys.split(',').filter(Boolean) : [] }} />
     </AdminPage>
   );

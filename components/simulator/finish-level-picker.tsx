@@ -24,21 +24,21 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
   const visibleLevels = FINISH_LEVELS.filter((level) => level === 'shell');
 
   return (
-    <section aria-labelledby="finish-level-heading" className="min-w-0">
+    <section aria-labelledby="finish-level-heading" className="min-w-max flex-none sm:min-w-0 sm:flex-initial">
       <h2 id="finish-level-heading" className="sr-only">
         注文範囲
       </h2>
-      <ul className="flex flex-wrap items-center gap-1.5" data-testid="finish-levels">
+      <ul className="flex flex-nowrap items-center gap-1.5 sm:flex-wrap" data-testid="finish-levels">
         {visibleLevels.map((level) => {
           const info = FINISH_LEVEL_INFO[level];
           const active = value === level;
           const total = totals?.[level];
           const showInfo = infoOpen === level;
           return (
-            <li key={level} className="group/card relative">
+            <li key={level} className="group/card relative shrink-0">
               <span
                 className={cn(
-                  'inline-flex min-h-8 items-center rounded-full border bg-white text-[0.82rem] font-medium transition',
+                  'inline-flex min-h-8 shrink-0 items-center whitespace-nowrap rounded-full border bg-white text-[0.82rem] font-medium transition',
                   active ? 'border-brown bg-white text-brown shadow-soft ring-1 ring-brown/20' : 'border-line bg-white text-ink-soft hover:border-ink/40'
                 )}
               >
@@ -49,7 +49,7 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
                   aria-pressed={active}
                   title={typeof total === 'number' ? `${info.name} 概算 ${formatYen(total)}` : info.name}
                   data-testid={`finish-level-${level}`}
-                  className="inline-flex min-h-8 items-center gap-1.5 rounded-l-full px-3 py-1 transition disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-l-full px-3 py-1 transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {active && <Check className="size-3.5" aria-hidden="true" />}
                   {info.name}
@@ -59,7 +59,7 @@ export function FinishLevelPicker({ value, totals, readOnly, onChange }: Props) 
                   onClick={() => setInfoOpen((v) => (v === level ? null : level))}
                   aria-expanded={showInfo}
                   aria-label={`${info.name}に含まれる内容を表示`}
-                  className="inline-flex min-h-8 items-center rounded-r-full border-l border-line px-2 text-muted transition hover:bg-sand hover:text-ink"
+                  className="inline-flex min-h-8 shrink-0 items-center rounded-r-full border-l border-line px-2 text-muted transition hover:bg-sand hover:text-ink"
                   data-testid={`finish-level-info-${level}`}
                 >
                   <Info className="size-3.5" aria-hidden="true" />

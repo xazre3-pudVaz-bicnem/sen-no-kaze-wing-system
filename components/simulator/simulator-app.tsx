@@ -574,11 +574,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
             <p className="label-en text-forest">Simulator</p>
             <div className="mt-1 flex flex-wrap items-start gap-x-7 gap-y-2">
               <div className="min-w-0">
-                <h1 className="text-3xl sm:text-4xl">
+                <h1 className="text-[1.35rem] sm:text-4xl">
                   <span className="inline-flex max-w-full items-baseline whitespace-nowrap">
                     <span>{model.name}</span>
                     {modelDescriptor && (
-                      <span className="ml-1 align-baseline text-[1.35rem] font-normal text-ink-soft sm:text-[1.65rem]">
+                      <span className="ml-1 align-baseline text-[0.8rem] font-normal text-ink-soft sm:text-[1.65rem]">
                         （{modelDescriptor}）
                       </span>
                     )}

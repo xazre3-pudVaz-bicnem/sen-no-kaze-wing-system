@@ -502,7 +502,12 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
   const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));
-  const modelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline;
+  const rawModelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline ?? '';
+  const [modelDescriptor, ...modelDescriptionParts] = rawModelSubtitle
+    .split('。')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const modelDescription = modelDescriptionParts.length > 0 ? `${modelDescriptionParts.join('。')}。` : '';
   const breadcrumbModels = (models.length > 0 ? models : [{ slug: model.slug, name: model.name }]).map((m) => ({
     ...m,
     name: m.name === 'フラット' ? 'Flat' : m.name,
@@ -567,12 +572,21 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         <div className="mt-4">
           <div className="min-w-0">
             <p className="label-en text-forest">Simulator</p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-7 gap-y-2">
-              <h1 className="text-3xl sm:text-4xl">
-                {model.name}
-                {modelSubtitle && <span className="align-baseline text-[1.35rem] font-normal text-ink-soft sm:text-[1.65rem]">（{modelSubtitle}）</span>}
-                {specName && <span className="sr-only">（{specName}）</span>}
-              </h1>
+            <div className="mt-1 flex flex-wrap items-start gap-x-7 gap-y-2">
+              <div className="min-w-0">
+                <h1 className="text-3xl sm:text-4xl">
+                  <span className="inline-flex max-w-full items-baseline whitespace-nowrap">
+                    <span>{model.name}</span>
+                    {modelDescriptor && (
+                      <span className="ml-1 align-baseline text-[1.35rem] font-normal text-ink-soft sm:text-[1.65rem]">
+                        （{modelDescriptor}）
+                      </span>
+                    )}
+                  </span>
+                  {specName && <span className="sr-only">（{specName}）</span>}
+                </h1>
+                {modelDescription && <p className="mt-1 text-sm leading-relaxed text-ink-soft sm:text-base">{modelDescription}</p>}
+              </div>
               {(models.length > 1 || fireproofCat) && (
                 <div className="flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
                   {models.length > 1 && (

@@ -22,6 +22,7 @@ import {
   type OptionDependency,
   type PreviewImageRule,
   type ProductOption,
+  type ProductImageKind,
   type Quote,
   type QuoteRequest,
   type ViewKey,
@@ -87,25 +88,49 @@ export function ModelForm({ model }: { model: BaseModel | null }) {
 
 /* ---------- 商品画像 ---------- */
 
-export function ProductImageForm({ modelId }: { modelId: string }) {
+export function ProductImageForm({
+  modelId,
+  allowedKinds,
+  title = '画像を追加',
+}: {
+  modelId: string;
+  allowedKinds?: ProductImageKind[];
+  title?: string;
+}) {
   const [state, action, pending] = useActionState(addProductImageAction, initial);
   const e = state.fieldErrors ?? {};
+  const kinds: ProductImageKind[] = allowedKinds ?? ['hero', 'exterior', 'interior', 'floorplan', 'elevation', 'transport', 'case'];
+  const kindLabel = (kind: ProductImageKind) =>
+    kind === 'hero'
+      ? 'メイン'
+      : kind === 'exterior'
+        ? '外観'
+        : kind === 'interior'
+          ? '室内'
+          : kind === 'floorplan'
+            ? '平面図（商品紹介用）'
+            : kind === 'elevation'
+              ? '立面図'
+              : kind === 'transport'
+                ? '輸送・設置'
+                : '施工事例';
+
   return (
     <form action={action} className="card space-y-4 p-6" noValidate>
       <input type="hidden" name="base_model_id" value={modelId} />
-      <p className="font-semibold">画像を追加</p>
+      <p className="font-semibold">{title}</p>
       <Status state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="種類" htmlFor="img-kind" required errors={e.kind}>
-          <Select id="img-kind" name="kind" defaultValue="exterior">
-            <option value="hero">メイン</option><option value="exterior">外観</option><option value="interior">室内</option><option value="floorplan">平面図</option><option value="elevation">立面図</option><option value="transport">輸送・設置</option><option value="case">施工事例</option>
+        <Field label="種類" htmlFor={`img-kind-${modelId}`} required errors={e.kind}>
+          <Select id={`img-kind-${modelId}`} name="kind" defaultValue={kinds[0] ?? 'exterior'}>
+            {kinds.map((kind) => <option key={kind} value={kind}>{kindLabel(kind)}</option>)}
           </Select>
         </Field>
-        <Field label="表示順" htmlFor="img-sort" errors={e.sort_order}><Input id="img-sort" name="sort_order" type="number" defaultValue={0} /></Field>
-        <Field label="画像ファイル" htmlFor="img-file" hint="JPEG/PNG/WebP、10MBまで"><Input id="img-file" name="file" type="file" accept="image/*" className="py-2" /></Field>
-        <Field label="または画像URL" htmlFor="img-url" errors={e.url}><Input id="img-url" name="url" placeholder="/images/... または https://..." /></Field>
-        <Field label="代替テキスト" htmlFor="img-alt" errors={e.alt}><Input id="img-alt" name="alt" /></Field>
-        <Field label="キャプション" htmlFor="img-caption" hint="立面図はここが面のラベルになります（例：正面（南））" errors={e.caption}><Input id="img-caption" name="caption" /></Field>
+        <Field label="表示順" htmlFor={`img-sort-${modelId}`} errors={e.sort_order}><Input id={`img-sort-${modelId}`} name="sort_order" type="number" defaultValue={0} /></Field>
+        <Field label="画像ファイル" htmlFor={`img-file-${modelId}`} hint="JPEG/PNG/WebP/AVIF、10MBまで"><Input id={`img-file-${modelId}`} name="file" type="file" accept="image/*" className="py-2" /></Field>
+        <Field label="または画像URL" htmlFor={`img-url-${modelId}`} errors={e.url}><Input id={`img-url-${modelId}`} name="url" placeholder="/images/... または https://..." /></Field>
+        <Field label="代替テキスト" htmlFor={`img-alt-${modelId}`} errors={e.alt}><Input id={`img-alt-${modelId}`} name="alt" /></Field>
+        <Field label="キャプション" htmlFor={`img-caption-${modelId}`} hint="立面図は面の名称（例：正面（南））、施工事例は写真説明を入力"><Input id={`img-caption-${modelId}`} name="caption" /></Field>
       </div>
       <SubmitButton pending={pending} label="追加する" />
     </form>

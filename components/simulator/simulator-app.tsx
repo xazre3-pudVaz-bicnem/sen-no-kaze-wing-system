@@ -606,8 +606,8 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-2.5">
-            <div className="min-w-0 flex-1">
+          <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 lg:flex-row lg:items-end lg:justify-between lg:gap-x-6">
+            <div className="w-full min-w-0 lg:flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
                 {(model.presets?.length ?? 0) > 0 && (
@@ -633,11 +633,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                   </>
                 )}
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
+              <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-3 lg:justify-end">
-              <div className="text-left lg:text-center">
+            <div className="flex w-full flex-wrap items-center justify-end gap-3 lg:w-auto lg:justify-end">
+              <div className="w-full text-right lg:w-auto lg:text-center">
                 <p className="text-xs text-muted">現在選択している見積金額は</p>
                 <p className="font-serif text-[2.05rem] leading-tight tabular-nums sm:text-[2.65rem]">{formatYen(pricing.total)}</p>
               </div>

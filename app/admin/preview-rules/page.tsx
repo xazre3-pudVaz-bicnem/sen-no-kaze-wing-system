@@ -126,7 +126,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                         </div>
                         <div className="space-y-2 p-3 text-xs">
                           <p className="font-semibold">{b.model.name}本体</p>
-                          <p className="text-muted">標準状態（設備構成なし）</p>
+                          <p className="text-muted">本体専用平面図</p>
                           <Link href={`/admin/preview-rules/${baseFloorplan.id}`} className="font-semibold underline">画像を変更</Link>
                         </div>
                       </>
@@ -178,8 +178,8 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
 
                 {otherFloorplans.length > 0 && (
                   <details className="rounded-xl border border-line bg-white p-4">
-                    <summary className="cursor-pointer text-sm font-semibold">その他の構成（{otherFloorplans.length}件）</summary>
-                    <p className="mt-2 text-xs text-muted">標準の見積テンプレートに一致しない、個別の設備構成用平面図です。</p>
+                    <summary className="cursor-pointer text-sm font-semibold">標準状態／fallback・その他の構成（{otherFloorplans.length}件）</summary>
+                    <p className="mt-2 text-xs text-muted">preset専用と確認できない既存ルールや、個別の設備構成用平面図を保持しています。</p>
                     <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {otherFloorplans.map((rule) => (
                         <PreviewCard

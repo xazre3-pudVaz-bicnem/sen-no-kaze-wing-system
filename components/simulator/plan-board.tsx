@@ -174,15 +174,15 @@ export function ElevationStrip({
                     <span className="mt-2 block text-[0.72rem] font-semibold leading-tight text-ink-soft">
                       {e.label} <span className="font-normal text-muted">（{exteriorFaceLabel(face)}）</span>
                     </span>
-                    <span className="mt-2 flex w-full min-w-0 items-start gap-2 border-t border-line pt-2">
+                    <span className="mt-2 flex w-full min-w-0 items-start gap-1.5 border-t border-line pt-2 sm:gap-2">
                       {details.imageUrl && (
-                        <span className="relative block size-14 shrink-0 overflow-hidden border border-line bg-sand">
-                          <SmartImage src={details.imageUrl} alt="" fill sizes="3.5rem" className="object-cover" />
+                        <span className="relative block size-10 shrink-0 overflow-hidden border border-line bg-sand sm:size-14">
+                          <SmartImage src={details.imageUrl} alt="" fill sizes="(min-width: 640px) 3.5rem, 2.5rem" className="object-cover" />
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="line-clamp-2 text-[0.68rem] leading-snug font-semibold text-ink">{details.materialName}</span>
-                        <span className="mt-1 block truncate border border-line bg-ivory px-1.5 py-1 text-[0.6rem] leading-none text-ink-soft" title={`色・仕様：${details.finishName}`}>
+                        <span className="line-clamp-2 break-words text-[0.52rem] leading-tight font-semibold text-ink sm:text-[0.68rem] sm:leading-snug">{details.materialName}</span>
+                        <span className="mt-1 block whitespace-nowrap border border-line bg-ivory px-1 py-1 text-[0.48rem] leading-none tracking-[-0.02em] text-ink-soft sm:px-1.5 sm:text-[0.6rem] sm:tracking-normal" title={`色・仕様：${details.finishName}`}>
                           色・仕様：{details.finishName}
                         </span>
                       </span>

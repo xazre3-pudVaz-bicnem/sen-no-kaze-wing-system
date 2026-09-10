@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { deleteProductImageAction, deletePreviewRuleAction } from '@/lib/actions/admin';
 import { getStore } from '@/lib/data/store';
-import { findMissingPreviewCombos, previewKeyLabels, selectedPreviewKeys } from '@/lib/domain/preview';
-import { buildPresetSelection } from '@/lib/domain/preset';
+import { findMissingPreviewCombos, previewKeyLabels } from '@/lib/domain/preview';
+import { buildStandardFloorplanSlots, isDedicatedBaseFloorplanRule } from '@/lib/domain/floorplan-admin';
 import { VIEW_LABELS, type PreviewImageRule, type ProductImage, type ViewKey } from '@/lib/domain/types';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -88,29 +88,8 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
           const labels = previewKeyLabels(b.options);
           const keyLabel = (key: string) => labels.get(key) ?? key;
           const floorplans = b.previewRules.filter((r) => r.view === 'floorplan').sort((a, c) => a.preview_keys.length - c.preview_keys.length);
-          const normalizeKeys = (keys: string[]) => [...new Set(keys)].sort();
-          const sameKeys = (a: string[], c: string[]) => {
-            const aa = normalizeKeys(a);
-            const cc = normalizeKeys(c);
-            return aa.length === cc.length && aa.every((key, index) => key === cc[index]);
-          };
-          const presetFloorplans = (b.model.presets ?? []).map((preset) => {
-            const ctx = {
-              options: b.options,
-              categories: b.categories,
-              dependencies: b.dependencies,
-              conflicts: b.conflicts,
-            };
-            const selectedIds = buildPresetSelection(ctx, preset);
-            const keys = selectedPreviewKeys(b.options, selectedIds, 'floorplan');
-            return {
-              code: preset.code,
-              name: preset.name,
-              keys,
-              rule: floorplans.find((rule) => sameKeys(rule.preview_keys, keys)) ?? null,
-            };
-          });
-          const baseFloorplan = floorplans.find((rule) => rule.preview_keys.length === 0) ?? null;
+          const presetFloorplans = buildStandardFloorplanSlots(b);
+          const baseFloorplan = floorplans.find(isDedicatedBaseFloorplanRule) ?? null;
           const presetMatchedRuleIds = new Set(presetFloorplans.flatMap((slot) => slot.rule ? [slot.rule.id] : []));
           if (baseFloorplan) presetMatchedRuleIds.add(baseFloorplan.id);
           const otherFloorplans = floorplans.filter((rule) => !presetMatchedRuleIds.has(rule.id));
@@ -133,7 +112,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="text-lg font-semibold">平面図</h3>
-                    <p className="text-xs text-muted">見積テンプレート（標準構成）ごとに登録します。新しい構成を追加すると、画像が未登録でもここに登録枠が自動で増えます。</p>
+                    <p className="text-xs text-muted">現在は標準構成（preset）ごとに登録します。新しいpresetを追加すると、画像が未登録でもここに登録枠が自動で増えます。</p>
                   </div>
                   <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan`} className="btn-secondary btn-sm">その他の構成を追加</Link>
                 </div>
@@ -157,7 +136,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                           <p className="font-semibold">{b.model.name}本体</p>
                           <p className="mt-1 text-xs text-muted">平面図は未登録です。</p>
                         </div>
-                        <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan`} className="btn-secondary btn-sm self-start">画像を登録</Link>
+                        <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan&slot=base`} className="btn-secondary btn-sm self-start">画像を登録</Link>
                       </div>
                     )}
                   </div>
@@ -203,7 +182,12 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                     <p className="mt-2 text-xs text-muted">標準の見積テンプレートに一致しない、個別の設備構成用平面図です。</p>
                     <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {otherFloorplans.map((rule) => (
-                        <PreviewCard key={rule.id} rule={rule} label="その他の構成" keyLabel={keyLabel} />
+                        <PreviewCard
+                          key={rule.id}
+                          rule={rule}
+                          label={rule.preview_keys.length === 0 ? '標準状態／fallback' : 'その他の構成'}
+                          keyLabel={keyLabel}
+                        />
                       ))}
                     </ul>
                   </details>

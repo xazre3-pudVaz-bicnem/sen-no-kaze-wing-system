@@ -17,7 +17,7 @@ import {
 } from '@/lib/domain/exterior-wall';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
-import { Alert, Breadcrumbs, Button } from '@/components/ui';
+import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
 import { EquipmentBoard } from './equipment-board';
@@ -503,20 +503,48 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     .sort((a, b) => a.sort_order - b.sort_order);
   const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));
   const modelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline;
-  const modelCrumbNames = models.map((m) => (m.name === 'フラット' ? 'Flat' : m.name));
-  const modelCrumb = modelCrumbNames.length > 0 ? `【 ${modelCrumbNames.join(' / ')} 】` : model.name;
+  const breadcrumbModels = (models.length > 0 ? models : [{ slug: model.slug, name: model.name }]).map((m) => ({
+    ...m,
+    name: m.name === 'フラット' ? 'Flat' : m.name,
+  }));
 
   return (
     <div className="bg-paper">
       <div className="container-x pt-4 sm:pt-6">
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
-          <Breadcrumbs
-            items={[
-              { name: 'ホーム', path: '/' },
-              { name: '商品選択', path: '/products' },
-              { name: `${modelCrumb}見積シミュレーター` },
-            ]}
-          />
+          <nav aria-label="パンくずリスト" className="max-w-full overflow-x-auto text-xs text-muted sm:text-sm">
+            <ol className="flex w-max items-center gap-1.5 whitespace-nowrap">
+              <li>
+                <Link href="/" className="hover:text-ink hover:underline">
+                  ホーム
+                </Link>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span aria-hidden="true">/</span>
+                <Link href="/products" className="hover:text-ink hover:underline">
+                  商品選択
+                </Link>
+              </li>
+              <li className="flex items-center gap-1.5 text-ink-soft">
+                <span aria-hidden="true">/</span>
+                <span aria-hidden="true">【</span>
+                {breadcrumbModels.map((m, index) => (
+                  <span key={m.slug} className="inline-flex items-center gap-1">
+                    {index > 0 && <span aria-hidden="true">/</span>}
+                    {m.slug === model.slug ? (
+                      <span className="font-semibold text-danger">{m.name}</span>
+                    ) : (
+                      <Link href={`/simulator/${m.slug}`} className="hover:text-ink hover:underline">
+                        {m.name}
+                      </Link>
+                    )}
+                  </span>
+                ))}
+                <span aria-hidden="true">】</span>
+                <span>見積シミュレーター</span>
+              </li>
+            </ol>
+          </nav>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"

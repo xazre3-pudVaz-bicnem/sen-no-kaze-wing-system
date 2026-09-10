@@ -31,7 +31,7 @@ export default async function EditModelPage({ params, searchParams }: { params: 
             <li key={img.id} className="card overflow-hidden">
               <div className="relative aspect-[16/10] bg-sand">
                 <SmartImage src={img.url} alt={img.alt} fill sizes="33vw" className="object-cover" />
-                <span className="absolute top-2 left-2 rounded-full bg-ink/70 px-2 py-0.5 text-xs text-white">{IMAGE_KIND_LABELS[img.kind]}</span>
+                <span className="absolute top-2 left-2 rounded-full bg-ink/70 px-2 py-0.5 text-xs text-white">{img.kind === 'floorplan' ? '平面図（商品紹介用）' : IMAGE_KIND_LABELS[img.kind]}</span>
               </div>
               <div className="flex items-start justify-between gap-2 p-3 text-xs">
                 <div className="min-w-0">

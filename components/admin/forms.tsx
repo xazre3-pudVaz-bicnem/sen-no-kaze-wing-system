@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 import {
   addProductImageAction,
   updateContactStatusAction,
@@ -17,6 +17,7 @@ import {
   VIEW_KEYS,
   VIEW_LABELS,
   type BaseModel,
+  type ModelPreset,
   type OptionCategory,
   type OptionConflict,
   type OptionDependency,
@@ -29,6 +30,7 @@ import {
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
+import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 
 const initial: AdminFormState = { ok: false };
 
@@ -50,38 +52,253 @@ export function SubmitButton({ pending, label = '保存する' }: { pending: boo
 
 /* ---------- ベースコンテナ ---------- */
 
+type EditablePreset = ModelPreset & { _key: string };
+
 export function ModelForm({ model }: { model: BaseModel | null }) {
   const [state, action, pending] = useActionState(saveModelAction, initial);
   const e = state.fieldErrors ?? {};
   const joinPairs = (arr: { [k: string]: string }[] | undefined, a: string, b: string) => (arr ?? []).map((x) => `${x[a]}|${x[b]}`).join('\n');
+
+  const [planDisplaySize, setPlanDisplaySize] = useState(() =>
+    normalizePlanDisplaySize(planDisplaySizeFromSpecs(model?.specs ?? []))
+  );
+  const [presets, setPresets] = useState<EditablePreset[]>(() =>
+    (model?.presets ?? []).map((preset, index) => ({
+      ...preset,
+      display_name: preset.display_name ?? customerPlanName(preset, preset.name),
+      _key: `${preset.code || 'plan'}-${index}`,
+    }))
+  );
+  const [defaultPresetKey, setDefaultPresetKey] = useState(() => {
+    const first = model?.presets?.[0];
+    return first ? `${first.code || 'plan'}-0` : '';
+  });
+
+  const visibleSpecs = publicSpecs(model?.specs ?? []);
+  const updatePreset = (key: string, patch: Partial<ModelPreset>) => {
+    setPresets((rows) => rows.map((row) => (row._key === key ? { ...row, ...patch } : row)));
+  };
+  const addPreset = () => {
+    const nextIndex = presets.length + 1;
+    const key = `new-plan-${Date.now()}-${nextIndex}`;
+    const next: EditablePreset = {
+      _key: key,
+      code: `plan-${nextIndex}`,
+      name: '',
+      display_name: '',
+      description: '',
+      option_codes: [],
+    };
+    setPresets((rows) => [...rows, next]);
+    if (!defaultPresetKey) setDefaultPresetKey(key);
+  };
+  const removePreset = (key: string) => {
+    setPresets((rows) => {
+      const next = rows.filter((row) => row._key !== key);
+      if (defaultPresetKey === key) setDefaultPresetKey(next[0]?._key ?? '');
+      return next;
+    });
+  };
+
+  const orderedPresets = useMemo(() => {
+    const first = presets.find((preset) => preset._key === defaultPresetKey);
+    return first ? [first, ...presets.filter((preset) => preset._key !== defaultPresetKey)] : presets;
+  }, [defaultPresetKey, presets]);
+
+  const serializedPresets = useMemo(
+    () =>
+      JSON.stringify(
+        orderedPresets.map(({ _key: _ignored, ...preset }) => ({
+          ...preset,
+          code: preset.code.trim(),
+          name: preset.name.trim(),
+          display_name: preset.display_name?.trim() ?? '',
+          description: preset.description.trim(),
+          option_codes: preset.option_codes.map((code) => code.trim()).filter(Boolean),
+        }))
+      ),
+    [orderedPresets]
+  );
+
+  const previewPreset = orderedPresets[0] ?? null;
+  const previewName = customerPlanName(previewPreset, previewPreset?.name ?? '');
+  const previewSize = normalizePlanDisplaySize(planDisplaySize);
+
   return (
-    <form action={action} className="card space-y-5 p-6" noValidate>
+    <form action={action} className="card space-y-6 p-6" noValidate>
       <input type="hidden" name="id" value={model?.id ?? ''} />
+      <input type="hidden" name="presets_json" value={serializedPresets} />
       <Status state={state} />
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="商品名" htmlFor="name" required errors={e.name}><Input id="name" name="name" defaultValue={model?.name} required /></Field>
-        <Field label="slug（URL）" htmlFor="slug" required hint="英小文字・数字・ハイフン" errors={e.slug}><Input id="slug" name="slug" defaultValue={model?.slug} required /></Field>
-        <Field label="本体一式（諸費用別・税別・円）" htmlFor="base_price" required hint="見積書テンプレートの本体明細合計（諸費用を除く）" errors={e.base_price}><Input id="base_price" name="base_price" type="number" min={0} step={1} defaultValue={model?.base_price ?? 0} required data-testid="model-base-price" /></Field>
-        <Field label="諸費用率（%）" htmlFor="expense_rate" required hint="本体・オプションそれぞれの小計に掛ける（テンプレート: 15%）" errors={e.expense_rate}><Input id="expense_rate" name="expense_rate" type="number" min={0} max={100} step={0.1} defaultValue={Math.round((model?.expense_rate ?? 0.15) * 1000) / 10} required /></Field>
-        <Field label="公開状態" htmlFor="status" required errors={e.status}>
-          <Select id="status" name="status" defaultValue={model?.status ?? 'draft'}>
-            <option value="published">公開</option>
-            <option value="draft">非公開</option>
-          </Select>
-        </Field>
-        <Field label="表示順" htmlFor="sort_order" errors={e.sort_order}><Input id="sort_order" name="sort_order" type="number" defaultValue={model?.sort_order ?? 0} /></Field>
-      </div>
-      <Field label="キャッチコピー" htmlFor="tagline" errors={e.tagline}><Input id="tagline" name="tagline" defaultValue={model?.tagline} /></Field>
-      <Field label="説明文" htmlFor="description" errors={e.description}><Textarea id="description" name="description" defaultValue={model?.description} /></Field>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="サイズ・仕様" htmlFor="specs" hint="1行1項目、「ラベル|値」" errors={e.specs}><Textarea id="specs" name="specs" defaultValue={joinPairs(model?.specs, 'label', 'value')} className="min-h-48 font-mono text-xs" /></Field>
-        <Field label="特徴" htmlFor="features" hint="1行1項目、「見出し|本文」" errors={e.features}><Textarea id="features" name="features" defaultValue={joinPairs(model?.features, 'title', 'body')} className="min-h-48 font-mono text-xs" /></Field>
-        <Field label="標準装備" htmlFor="standard_equipment" hint="1行1項目" errors={e.standard_equipment}><Textarea id="standard_equipment" name="standard_equipment" defaultValue={model?.standard_equipment.join('\n')} className="min-h-40 text-xs" /></Field>
-        <Field label="用途" htmlFor="use_cases" hint="1行1項目" errors={e.use_cases}><Textarea id="use_cases" name="use_cases" defaultValue={model?.use_cases.join('\n')} className="min-h-40 text-xs" /></Field>
-      </div>
-      <Field label="プラン（推奨構成）" htmlFor="presets" hint="1行1プラン、「コード|プラン名|説明|オプションコード,オプションコード,…」。先頭のプランがシミュレーターの初期構成になります" errors={e.presets}>
-        <Textarea id="presets" name="presets" defaultValue={(model?.presets ?? []).map((p) => `${p.code}|${p.name}|${p.description}|${p.option_codes.join(',')}`).join('\n')} className="min-h-32 font-mono text-xs" />
-      </Field>
+
+      <section className="space-y-5">
+        <div>
+          <h2 className="text-lg font-semibold">基本情報</h2>
+          <p className="mt-1 text-xs text-muted">商品そのものの基本情報です。</p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="商品名" htmlFor="name" required errors={e.name}><Input id="name" name="name" defaultValue={model?.name} required /></Field>
+          <Field label="slug（URL）" htmlFor="slug" required hint="英小文字・数字・ハイフン" errors={e.slug}><Input id="slug" name="slug" defaultValue={model?.slug} required /></Field>
+          <Field label="本体一式（諸費用別・税別・円）" htmlFor="base_price" required hint="見積書テンプレートの本体明細合計（諸費用を除く）" errors={e.base_price}><Input id="base_price" name="base_price" type="number" min={0} step={1} defaultValue={model?.base_price ?? 0} required data-testid="model-base-price" /></Field>
+          <Field label="諸費用率（%）" htmlFor="expense_rate" required hint="本体・オプションそれぞれの小計に掛ける（テンプレート: 15%）" errors={e.expense_rate}><Input id="expense_rate" name="expense_rate" type="number" min={0} max={100} step={0.1} defaultValue={Math.round((model?.expense_rate ?? 0.15) * 1000) / 10} required /></Field>
+          <Field label="公開状態" htmlFor="status" required errors={e.status}>
+            <Select id="status" name="status" defaultValue={model?.status ?? 'draft'}>
+              <option value="published">公開</option>
+              <option value="draft">非公開</option>
+            </Select>
+          </Field>
+          <Field label="表示順" htmlFor="sort_order" errors={e.sort_order}><Input id="sort_order" name="sort_order" type="number" defaultValue={model?.sort_order ?? 0} /></Field>
+        </div>
+        <Field label="キャッチコピー" htmlFor="tagline" errors={e.tagline}><Input id="tagline" name="tagline" defaultValue={model?.tagline} /></Field>
+        <Field label="説明文" htmlFor="description" errors={e.description}><Textarea id="description" name="description" defaultValue={model?.description} /></Field>
+      </section>
+
+      <section className="rounded-xl border border-line bg-ivory/50 p-4 sm:p-5">
+        <div>
+          <h2 className="text-lg font-semibold">お客様画面の表示設定</h2>
+          <p className="mt-1 text-xs text-muted">シミュレーターの平面図見出しに表示する文言を、ここで確認できます。</p>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field
+            label="平面図表示サイズ"
+            htmlFor="plan_display_size"
+            hint="例：3,900×4,800。未入力なら「展開後」または「床面積」から従来どおり自動表示します。"
+          >
+            <Input
+              id="plan_display_size"
+              name="plan_display_size"
+              value={planDisplaySize}
+              onChange={(event) => setPlanDisplaySize(event.target.value)}
+              placeholder="3,900×4,800"
+            />
+          </Field>
+          <div>
+            <p className="label">平面図タイトルのプレビュー</p>
+            <div className="mt-2 rounded-lg border border-[#e8b100] bg-white px-4 py-3 text-base text-ink">
+              <span className="font-semibold">【平面図】</span>
+              {(previewName || previewSize) && (
+                <span className="ml-1">
+                  {previewName}
+                  {previewName && previewSize ? '/' : ''}
+                  {previewSize}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-muted">「平面図表示名」は下の各プランで設定します。初期プランの表示名をここにプレビューします。</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-5">
+        <div>
+          <h2 className="text-lg font-semibold">商品情報</h2>
+          <p className="mt-1 text-xs text-muted">商品詳細ページなどで表示する仕様・特徴・標準装備・用途です。</p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="サイズ・仕様" htmlFor="specs" hint="1行1項目、「ラベル|値」。平面図表示サイズは上の専用欄で設定します。" errors={e.specs}>
+            <Textarea id="specs" name="specs" defaultValue={joinPairs(visibleSpecs, 'label', 'value')} className="min-h-48 font-mono text-xs" />
+          </Field>
+          <Field label="特徴" htmlFor="features" hint="1行1項目、「見出し|本文」" errors={e.features}><Textarea id="features" name="features" defaultValue={joinPairs(model?.features, 'title', 'body')} className="min-h-48 font-mono text-xs" /></Field>
+          <Field label="標準装備" htmlFor="standard_equipment" hint="1行1項目" errors={e.standard_equipment}><Textarea id="standard_equipment" name="standard_equipment" defaultValue={model?.standard_equipment.join('\n')} className="min-h-40 text-xs" /></Field>
+          <Field label="用途" htmlFor="use_cases" hint="1行1項目" errors={e.use_cases}><Textarea id="use_cases" name="use_cases" defaultValue={model?.use_cases.join('\n')} className="min-h-40 text-xs" /></Field>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">プラン（推奨構成）</h2>
+            <p className="mt-1 text-xs text-muted">お客様向けの表示名と、管理用のプラン情報を分けて設定します。初期プランはシミュレーターを開いたとき最初に選ばれます。</p>
+          </div>
+          <button type="button" onClick={addPreset} className="btn-secondary btn-sm">プランを追加</button>
+        </div>
+        {e.presets && <p className="text-sm text-danger">{e.presets[0]}</p>}
+
+        {presets.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-muted">
+            プランがありません。「プランを追加」から登録してください。
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {presets.map((preset, index) => {
+              const displayName = customerPlanName(preset, preset.name);
+              return (
+                <div key={preset._key} className="rounded-xl border border-line bg-white p-4">
+                  <div className="grid gap-4 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                    <label className="flex min-h-10 items-center gap-2 text-sm font-semibold text-ink">
+                      <input
+                        type="radio"
+                        name="default_preset_ui"
+                        checked={defaultPresetKey === preset._key}
+                        onChange={() => setDefaultPresetKey(preset._key)}
+                      />
+                      初期
+                    </label>
+                    <Field label="管理名" htmlFor={`preset-name-${index}`} hint="管理画面・見積で使う名称">
+                      <Input
+                        id={`preset-name-${index}`}
+                        value={preset.name}
+                        onChange={(event) => updatePreset(preset._key, { name: event.target.value })}
+                        placeholder="住宅仕様"
+                      />
+                    </Field>
+                    <Field label="お客様表示名" htmlFor={`preset-display-${index}`} hint="平面図見出しにそのまま表示">
+                      <Input
+                        id={`preset-display-${index}`}
+                        value={preset.display_name ?? ''}
+                        onChange={(event) => updatePreset(preset._key, { display_name: event.target.value })}
+                        placeholder="住宅用"
+                      />
+                    </Field>
+                    <button type="button" className="text-sm text-danger hover:underline" onClick={() => removePreset(preset._key)}>
+                      削除
+                    </button>
+                  </div>
+
+                  <Field label="説明" htmlFor={`preset-description-${index}`} hint="このプランの用途・構成を管理者向けに分かりやすく記載">
+                    <Input
+                      id={`preset-description-${index}`}
+                      value={preset.description}
+                      onChange={(event) => updatePreset(preset._key, { description: event.target.value })}
+                      placeholder="キッチンとミニキッチンを備えた住宅向け構成。"
+                    />
+                  </Field>
+
+                  <div className="mt-3 rounded-lg bg-ivory px-3 py-2 text-sm text-ink-soft">
+                    お客様表示：
+                    <span className="ml-1 font-semibold text-ink">【平面図】{displayName}{displayName && previewSize ? '/' : ''}{previewSize}</span>
+                  </div>
+
+                  <details className="mt-3 rounded-lg border border-line bg-white">
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink-soft">高度な設定</summary>
+                    <div className="grid gap-4 border-t border-line p-3 sm:grid-cols-2">
+                      <Field label="プランコード" htmlFor={`preset-code-${index}`} hint="hotel / residence / office など。標準見積と連携するため通常は変更しません。">
+                        <Input
+                          id={`preset-code-${index}`}
+                          value={preset.code}
+                          onChange={(event) => updatePreset(preset._key, { code: event.target.value })}
+                        />
+                      </Field>
+                      <Field label="オプションコード" htmlFor={`preset-options-${index}`} hint="カンマ区切り。通常は商品構成変更時だけ編集します。">
+                        <Textarea
+                          id={`preset-options-${index}`}
+                          value={preset.option_codes.join(',')}
+                          onChange={(event) =>
+                            updatePreset(preset._key, {
+                              option_codes: event.target.value.split(',').map((code) => code.trim()).filter(Boolean),
+                            })
+                          }
+                          className="min-h-20 font-mono text-xs"
+                        />
+                      </Field>
+                    </div>
+                  </details>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       <SubmitButton pending={pending} />
     </form>
   );

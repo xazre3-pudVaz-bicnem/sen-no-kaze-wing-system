@@ -14,14 +14,14 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
 
-  // 代理店は自分に割り当てられた見積だけを見る。総代理店は本部と同じく全件（本体明細を編集するため）
+  // 代理店は自分に割り当てられた案件だけ。総代理店以上は全件を管理する。
   if (!canEditCatalog(actor.role)) {
     const mine = await store.listDealerQuotes(actor.id);
     const latest = mine.filter((q) => q.status !== 'superseded');
     return (
       <AdminPage
         title="担当の見積"
-        lead={`割り当てられた見積 ${latest.length} 件。別途工事・フリー商品を入力して確定見積を発行できます。`}
+        lead={`割り当てられた見積 ${latest.length} 件。案件内容に合わせて見積を直接編集し、確定見積を発行できます。`}
         actions={
           <Link href="/admin/quotes/new" className="btn-primary btn-sm" data-testid="new-quote-link">
             新規見積を作成
@@ -57,7 +57,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 </Td>
                 <Td right>
                   <Link href={`/admin/quotes/${q.id}`} className="btn-secondary btn-sm">
-                    別途工事を入力
+                    見積を編集
                   </Link>
                 </Td>
               </tr>

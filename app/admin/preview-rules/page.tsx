@@ -3,7 +3,7 @@ import { deleteProductImageAction, deletePreviewRuleAction } from '@/lib/actions
 import { getStore } from '@/lib/data/store';
 import { findMissingPreviewCombos, previewKeyLabels } from '@/lib/domain/preview';
 import { buildStandardFloorplanSlots } from '@/lib/domain/floorplan-admin';
-import { isDedicatedBaseFloorplanRule, previewRuleDisplayNote } from '@/lib/domain/preview-rule-meta';
+import { findDedicatedBaseFloorplanRule, previewRuleDisplayNote } from '@/lib/domain/preview-rule-meta';
 import { VIEW_LABELS, type PreviewImageRule, type ProductImage, type ViewKey } from '@/lib/domain/types';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -90,7 +90,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
           const keyLabel = (key: string) => labels.get(key) ?? key;
           const floorplans = b.previewRules.filter((r) => r.view === 'floorplan').sort((a, c) => a.preview_keys.length - c.preview_keys.length);
           const presetFloorplans = buildStandardFloorplanSlots(b);
-          const baseFloorplan = floorplans.find(isDedicatedBaseFloorplanRule) ?? null;
+          const baseFloorplan = findDedicatedBaseFloorplanRule(floorplans);
           const presetMatchedRuleIds = new Set(presetFloorplans.flatMap((slot) => slot.rule ? [slot.rule.id] : []));
           if (baseFloorplan) presetMatchedRuleIds.add(baseFloorplan.id);
           const otherFloorplans = floorplans.filter((rule) => !presetMatchedRuleIds.has(rule.id));

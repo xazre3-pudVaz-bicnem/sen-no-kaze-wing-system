@@ -6,6 +6,7 @@ import type {
   BaseBreakdownItem,
   BaseModel,
   EstimateTemplate,
+  EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
   CatalogBundle,
@@ -186,6 +187,27 @@ export class LocalStore implements DataStore {
         .filter((row) => !modelId || row.base_model_id === modelId)
         .sort((a, b) => a.base_model_id.localeCompare(b.base_model_id) || a.spec_code.localeCompare(b.spec_code))
     );
+  }
+
+  async getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null> {
+    return this.read((db) => {
+      const template = db.estimateTemplates.find(
+        (row) => row.base_model_id === modelId && row.spec_code === specCode
+      );
+      if (!template) return null;
+      return {
+        template,
+        sections: db.estimateTemplateSections
+          .filter((row) => row.template_id === template.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+        lines: db.estimateTemplateLines
+          .filter((row) => row.template_id === template.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+        base_breakdown_items: db.baseBreakdownItems
+          .filter((row) => row.base_model_id === modelId && row.spec_code === specCode)
+          .sort((a, b) => a.sort_order - b.sort_order),
+      };
+    });
   }
 
   async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {

@@ -527,7 +527,16 @@ export interface Quote {
 }
 
 /** base=本体一式 / base_expense=本体諸費用 / option=オプション / option_expense=オプション諸費用 / installation=別途工事（現地） */
-export type QuoteItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free' | 'discount';
+export type QuoteItemKind =
+  | 'base'
+  | 'base_expense'
+  | 'interior_exterior'
+  | 'interior_exterior_expense'
+  | 'option'
+  | 'option_expense'
+  | 'installation'
+  | 'free'
+  | 'discount';
 
 export interface QuoteItem {
   id: string;

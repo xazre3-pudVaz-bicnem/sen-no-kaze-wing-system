@@ -7,7 +7,7 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, isLocalMode, StoreError } from '@/lib/data/store';
+import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput } from '@/lib/data/store';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
@@ -745,7 +745,7 @@ export async function importEstimateTemplatesAction(
   const store = await getStore();
   const models = await store.listModels({ includeDraft: true });
   const bySlug = new Map(models.map((model) => [model.slug, model.id]));
-  const inputs = [];
+  const inputs: EstimateTemplateImportInput[] = [];
   for (const template of parsed.templates) {
     const modelId = bySlug.get(template.model_slug);
     if (!modelId) return { ok: false, error: `本体モデル「${template.model_slug}」が登録されていません。` };
@@ -800,7 +800,8 @@ export async function importEstimateTemplatesAction(
     updateTag(CATALOG_TAG);
     return { ok: true, preview, applied: { templates: inputs.length, names: inputs.map((row) => row.name) } };
   } catch (e) {
-    return { ...(errState(e) as EstimateTemplateImportState), preview };
+    const failed = errState(e);
+    return { ok: false, error: failed.error, preview };
   }
 }
 

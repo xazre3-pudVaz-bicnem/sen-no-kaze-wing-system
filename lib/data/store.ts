@@ -64,7 +64,7 @@ export interface SaveConfigurationInput {
   variant_choice_ids?: string[];
 }
 
-/** 見積の 1 行。本部・総代理店は全区分、代理店は installation / free だけ */
+/** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */
 export type RevisionItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free';
 
 export interface DealerRevisionItem {

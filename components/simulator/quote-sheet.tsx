@@ -5,6 +5,7 @@ import { ArrowRight, Minus, Pencil, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
+import type { StandardEstimatePricingResult } from '@/lib/domain/standard-estimate-pricing';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   specName: string;
   finishLevel: FinishLevel;
   pricing: PricingResult;
+  standardEstimate?: StandardEstimatePricingResult | null;
   categories: OptionCategory[];
   options: ProductOption[];
   readOnly: boolean;
@@ -110,6 +112,7 @@ export function QuoteSheet({
   specName,
   finishLevel,
   pricing,
+  standardEstimate = null,
   categories,
   options,
   readOnly,
@@ -163,6 +166,52 @@ export function QuoteSheet({
     return formatYen(amount);
   };
 
+  const standardSection = (code: 'interior_exterior' | 'option' | 'sitework') =>
+    standardEstimate?.sections.find((section) => section.code === code) ?? null;
+  const standardLines = (code: 'interior_exterior' | 'option' | 'sitework') =>
+    standardEstimate?.template.lines.filter((line) => line.section_code === code) ?? [];
+  const standardLineRows = (code: 'interior_exterior' | 'option' | 'sitework') => {
+    const section = standardSection(code);
+    if (!section) return null;
+    return (
+      <>
+        {standardLines(code).map((line) => (
+          <tr key={line.id} className="bg-white align-top">
+            <td className={td.name}>
+              {line.group_label && <span className="mr-2 text-xs text-muted">{line.group_label}</span>}
+              {line.name}
+            </td>
+            <td className={td.qty}>{line.quantity == null ? '' : formatQty(line.quantity)}</td>
+            <td className={td.unit}>{line.unit ?? ''}</td>
+            <td className={td.price}>{line.unit_price == null ? '' : formatYen(line.unit_price)}</td>
+            <td className={td.amount}>{formatYen(line.amount)}</td>
+            <td className={td.remark}>{line.remark ?? ''}</td>
+          </tr>
+        ))}
+        {section.delta_line !== 0 && (
+          <tr className="bg-white align-top font-semibold">
+            <td className={td.name}>選択商品の変更差額</td>
+            <td className={td.qty}>1</td>
+            <td className={td.unit}>式</td>
+            <td className={td.price}></td>
+            <td className={td.amount}>{formatYen(section.delta_line)}</td>
+            <td className={td.remark}>商品マスターとの差額</td>
+          </tr>
+        )}
+        {code !== 'sitework' && section.expense_amount !== 0 && (
+          <tr className="bg-white text-xs text-ink-soft">
+            <td className={td.name}>{code === 'interior_exterior' ? '内外装工事経費' : 'オプション諸費用'}</td>
+            <td className={td.qty}>1</td>
+            <td className={td.unit}>式</td>
+            <td className={td.price}></td>
+            <td className={td.amount}>{formatYen(section.expense_amount)}</td>
+            <td className={td.remark}></td>
+          </tr>
+        )}
+      </>
+    );
+  };
+
   return (
     <section aria-labelledby="quote-sheet-heading" className="overflow-hidden border border-line bg-white shadow-soft" data-testid="quote-sheet">
       <div className="border-b-2 border-ink px-4 py-4 sm:px-6 sm:py-5">
@@ -171,7 +220,7 @@ export function QuoteSheet({
             御見積書
           </h2>
           <p className="text-xs text-muted sm:text-sm" data-testid="quote-scope">
-            {modelName}（{specName}）／注文範囲：{levelInfo.name}／概算・税込
+            {modelName}（{specName}）／{standardEstimate ? 'Excel標準見積を基準' : `注文範囲：${levelInfo.name}`}／概算・税込
           </p>
         </div>
       </div>
@@ -223,7 +272,7 @@ export function QuoteSheet({
           </tbody>
 
           {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
-          <tbody className="divide-y divide-line/70">
+          {!standardEstimate && <tbody className="divide-y divide-line/70">
             <SectionRow
               label={(
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -235,9 +284,16 @@ export function QuoteSheet({
               expanded={expandedSections.interiorExterior}
               onToggle={() => toggleSection('interiorExterior')}
               toggleLabel="内外装工事の明細"
-              summary={expandedSections.interiorExterior ? undefined : collapsedSectionSummary(interiorExteriorLines)}
+              summary={
+                expandedSections.interiorExterior
+                  ? undefined
+                  : standardSection('interior_exterior')
+                    ? formatYen(standardSection('interior_exterior')!.total)
+                    : collapsedSectionSummary(interiorExteriorLines)
+              }
             />
-            {expandedSections.interiorExterior && interiorExteriorLines.map((l) => {
+            {expandedSections.interiorExterior && standardEstimate && standardLineRows('interior_exterior')}
+            {expandedSections.interiorExterior && !standardEstimate && interiorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
@@ -270,6 +326,12 @@ export function QuoteSheet({
                 </tr>
               );
             })}
+            {expandedSections.interiorExterior && standardEstimate && (
+              <SubtotalRow
+                label="【内外装価格計】"
+                amount={formatYen(standardSection('interior_exterior')?.total ?? 0)}
+              />
+            )}
           </tbody>
 
           {/* ---- オプション（クリックで変更） ---- */}
@@ -280,9 +342,16 @@ export function QuoteSheet({
               expanded={expandedSections.options}
               onToggle={() => toggleSection('options')}
               toggleLabel="オプションの明細"
-              summary={expandedSections.options ? undefined : formatYen(pricing.option_total)}
+              summary={
+                expandedSections.options
+                  ? undefined
+                  : standardSection('option')
+                    ? formatYen(standardSection('option')!.total)
+                    : formatYen(pricing.option_total)
+              }
             />
-            {expandedSections.options && optionLines.map((l) => {
+            {expandedSections.options && standardEstimate && standardLineRows('option')}
+            {expandedSections.options && !standardEstimate && optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
@@ -315,7 +384,7 @@ export function QuoteSheet({
                 </tr>
               );
             })}
-            {expandedSections.options && <tr className="bg-white text-xs text-ink-soft">
+            {expandedSections.options && !standardEstimate && <tr className="bg-white text-xs text-ink-soft">
               <td className={td.name}>オプション諸費用（交通費、労災、安全管理費等）</td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>
@@ -323,7 +392,12 @@ export function QuoteSheet({
               <td className={td.amount}>{formatYen(pricing.option_expense)}</td>
               <td className={td.remark}>{Math.round(pricing.expense_rate * 100)}%</td>
             </tr>}
-            {expandedSections.options && <SubtotalRow label="【オプション価格計】" amount={formatYen(pricing.option_total)} />}
+            {expandedSections.options && (
+              <SubtotalRow
+                label="【オプション価格計】"
+                amount={formatYen(standardSection('option')?.total ?? pricing.option_total)}
+              />
+            )}
           </tbody>
 
           {/* ---- その他の工事（将来の estimate_section=other_construction 用） ---- */}
@@ -351,7 +425,7 @@ export function QuoteSheet({
                 <td className={td.remark}></td>
               </tr>
             ))}
-          </tbody>
+          </tbody>}
 
           {/* ---- 別途工事（現地確認後に代理店が見積） ---- */}
           <tbody className="divide-y divide-line/60">
@@ -366,7 +440,15 @@ export function QuoteSheet({
               expanded={expandedSections.sitework}
               onToggle={() => toggleSection('sitework')}
               toggleLabel="別途工事の明細"
-              summary={expandedSections.sitework ? undefined : siteworkTotal > 0 ? formatYen(siteworkTotal) : '−'}
+              summary={
+                expandedSections.sitework
+                  ? undefined
+                  : standardSection('sitework')
+                    ? formatYen(standardSection('sitework')!.total)
+                    : siteworkTotal > 0
+                      ? formatYen(siteworkTotal)
+                      : '−'
+              }
               action={showDealerFinder ? (
                 <Link
                   href="/dealers"
@@ -378,7 +460,8 @@ export function QuoteSheet({
                 </Link>
               ) : undefined}
             />
-            {expandedSections.sitework && sitework.map((l) => (
+            {expandedSections.sitework && standardEstimate && standardLineRows('sitework')}
+            {expandedSections.sitework && !standardEstimate && sitework.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{l.quantity}</td>
@@ -391,7 +474,13 @@ export function QuoteSheet({
             {expandedSections.sitework && (
               <SubtotalRow
                 label="【別途工事計】"
-                amount={siteworkTotal > 0 ? formatYen(siteworkTotal) : '−'}
+                amount={
+                  standardSection('sitework')
+                    ? formatYen(standardSection('sitework')!.total)
+                    : siteworkTotal > 0
+                      ? formatYen(siteworkTotal)
+                      : '−'
+                }
               />
             )}
           </tbody>

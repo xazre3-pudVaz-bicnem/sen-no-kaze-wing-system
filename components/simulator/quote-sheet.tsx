@@ -23,20 +23,20 @@ interface Props {
 /** 表の列（項目／数量／単位／単価／金額／備考）を揃えるための共通セル */
 const td = {
   name: 'px-3 py-1.5 leading-snug sm:px-4',
-  qty: 'w-16 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-20',
-  unit: 'w-14 px-2 py-1.5 whitespace-nowrap text-muted sm:w-16',
-  price: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32',
-  amount: 'w-32 px-3 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-36',
-  remark: 'hidden w-32 px-3 py-1.5 text-[0.7rem] leading-snug text-muted lg:table-cell',
+  qty: 'w-12 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2',
+  unit: 'w-10 px-1.5 py-1.5 whitespace-nowrap text-muted sm:w-12 sm:px-2',
+  price: 'w-24 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-28 sm:px-2',
+  amount: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32 sm:px-3',
+  remark: 'w-20 px-1.5 py-1.5 text-[0.68rem] leading-snug text-muted sm:w-24 sm:px-2 lg:w-32 lg:px-3 lg:text-[0.7rem]',
 };
 
 const th = {
   name: 'px-3 py-2 text-left font-semibold sm:px-4',
-  qty: 'w-16 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-20',
-  unit: 'w-14 px-2 py-2 text-left font-semibold whitespace-nowrap sm:w-16',
-  price: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32',
-  amount: 'w-32 px-3 py-2 text-right font-semibold whitespace-nowrap sm:w-36',
-  remark: 'hidden w-32 px-3 py-2 text-left font-semibold lg:table-cell',
+  qty: 'w-12 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-16 sm:px-2',
+  unit: 'w-10 px-1.5 py-2 text-left font-semibold whitespace-nowrap sm:w-12 sm:px-2',
+  price: 'w-24 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-28 sm:px-2',
+  amount: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32 sm:px-3',
+  remark: 'w-20 px-1.5 py-2 text-left font-semibold sm:w-24 sm:px-2 lg:w-32 lg:px-3',
 };
 
 /** 工事区分の見出し行（１．金物関係費用 など） */
@@ -93,7 +93,7 @@ function SubtotalRow({ label, amount, amountColSpan = 1, testId }: { label: stri
     <tr className="border-y border-line bg-sand/70 font-semibold">
       <td colSpan={4} className="px-3 py-2 text-sm sm:px-4">{label}</td>
       <td colSpan={amountColSpan} className="px-3 py-2 text-right text-sm tabular-nums sm:px-4" data-testid={testId}>{amount}</td>
-      {amountColSpan === 1 && <td className="hidden lg:table-cell"></td>}
+      {amountColSpan === 1 && <td></td>}
     </tr>
   );
 }
@@ -149,6 +149,34 @@ export function QuoteSheet({
   const isInteriorExterior = (l: PricingResult['lines'][number]) => interiorExteriorCategoryCodes.has(l.category_code);
   const isOtherConstruction = (l: PricingResult['lines'][number]) => otherConstructionCategoryCodes.has(l.category_code);
   const interiorExteriorLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && isInteriorExterior(l));
+  const isExteriorFaceLine = (line: PricingResult['lines'][number]) =>
+    line.category_code === 'exterior-wall' && line.code.includes('__face_');
+  const exteriorFaceLines = interiorExteriorLines.filter(isExteriorFaceLine);
+  const exteriorFaceSignature = (line: PricingResult['lines'][number]) =>
+    JSON.stringify({
+      optionId: line.option_id,
+      unitPrice: line.unit_price,
+      priceOnRequest: line.price_on_request,
+      variants: line.variants.map((variant) => [variant.group, variant.choice, variant.extra_price]),
+    });
+  const combineExteriorFaces =
+    exteriorFaceLines.length === 4 &&
+    exteriorFaceLines.every((line) => exteriorFaceSignature(line) === exteriorFaceSignature(exteriorFaceLines[0]));
+  let displayInteriorExteriorLines = interiorExteriorLines;
+  if (combineExteriorFaces) {
+    const firstFace = exteriorFaceLines[0];
+    const firstFaceIndex = interiorExteriorLines.findIndex(isExteriorFaceLine);
+    const optionName = byOption.get(firstFace.option_id)?.name ?? firstFace.name.replace(/^外壁仕様（[^）]+）：/, '');
+    const combinedFace = {
+      ...firstFace,
+      code: `${firstFace.code.split('__face_')[0]}__all_faces`,
+      name: `外壁仕様：${optionName}`,
+      quantity: 4,
+      amount: exteriorFaceLines.reduce((sum, line) => sum + line.amount, 0),
+    };
+    displayInteriorExteriorLines = interiorExteriorLines.filter((line) => !isExteriorFaceLine(line));
+    displayInteriorExteriorLines.splice(firstFaceIndex, 0, combinedFace);
+  }
   const optionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && !isInteriorExterior(l) && !isOtherConstruction(l));
   const otherConstructionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && isOtherConstruction(l));
   const freeLines = pricing.lines.filter((l) => l.is_free_product);
@@ -177,14 +205,14 @@ export function QuoteSheet({
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full min-w-[39rem] table-fixed text-[0.78rem] sm:min-w-[46rem] sm:text-sm">
+        <table className="w-full min-w-[34rem] table-fixed text-[0.78rem] sm:min-w-[42rem] sm:text-sm">
           <colgroup>
             <col />
-            <col className="w-16 sm:w-20" />
-            <col className="w-14 sm:w-16" />
+            <col className="w-12 sm:w-16" />
+            <col className="w-10 sm:w-12" />
+            <col className="w-24 sm:w-28" />
             <col className="w-28 sm:w-32" />
-            <col className="w-32 sm:w-36" />
-            <col className="hidden w-32 lg:table-column" />
+            <col className="w-20 sm:w-24 lg:w-32" />
           </colgroup>
           <thead className="bg-sand text-[0.7rem] text-muted sm:text-xs">
             <tr>
@@ -210,9 +238,6 @@ export function QuoteSheet({
             {expandedSections.base && <tr className="bg-white align-top">
               <td className={td.name}>
                 {modelName} 本体一式
-                <span className="block text-[0.7rem] text-muted">
-                  躯体・金物・断熱・屋根外壁・サッシ建具（工場生産分・諸費用込み）。明細は担当代理店・本部が管理します
-                </span>
               </td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>
@@ -237,9 +262,10 @@ export function QuoteSheet({
               toggleLabel="内外装工事の明細"
               summary={expandedSections.interiorExterior ? undefined : collapsedSectionSummary(interiorExteriorLines)}
             />
-            {expandedSections.interiorExterior && interiorExteriorLines.map((l) => {
+            {expandedSections.interiorExterior && displayInteriorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
-              const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
+              const isExteriorFace =
+                l.category_code === 'exterior-wall' && (l.code.includes('__face_') || l.code.endsWith('__all_faces'));
               return (
                 <tr key={l.code} className="bg-white align-top">
                   <td className={td.name}>
@@ -250,7 +276,6 @@ export function QuoteSheet({
                       className="group inline-flex items-start gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
                       data-testid={`quote-line-${l.code}`}
                     >
-                      <span className="text-xs text-muted">{cat?.name}</span>
                       <span>
                         {l.name}
                         {l.variants.length > 0 && (
@@ -264,8 +289,8 @@ export function QuoteSheet({
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
                   <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
-                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
-                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '' : formatYen(l.unit_price)}</td>
+                  <td className={td.amount}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '追加費用なし' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
                   <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
                 </tr>
               );
@@ -295,7 +320,6 @@ export function QuoteSheet({
                       className="group inline-flex items-center gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
                       data-testid={`quote-line-${l.code}`}
                     >
-                      <span className="text-xs text-muted">{cat?.name}</span>
                       <span>
                         {l.name}
                         {l.variants.length > 0 && (
@@ -309,8 +333,8 @@ export function QuoteSheet({
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
                   <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
-                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
-                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '' : formatYen(l.unit_price)}</td>
+                  <td className={td.amount}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '追加費用なし' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
                   <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
                 </tr>
               );
@@ -426,22 +450,22 @@ export function QuoteSheet({
             <tr className="text-sm">
               <td colSpan={4} className="px-3 pt-4 pb-1 sm:px-4">小計</td>
               <td className="px-3 pt-4 pb-1 text-right tabular-nums sm:px-4">{formatYen(pricing.subtotal_raw)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="text-sm text-ink-soft">
               <td colSpan={4} className="px-3 py-1 sm:px-4">値引き等調整額（千円未満切捨て）</td>
               <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.adjustment)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="text-sm">
               <td colSpan={4} className="px-3 py-1 sm:px-4">税抜請負額</td>
               <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.subtotal)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="text-sm text-ink-soft">
               <td colSpan={4} className="px-3 py-1 sm:px-4">消費税（{Math.round(pricing.tax_rate * 100)}%）</td>
               <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.tax)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="border-t border-line bg-ivory">
               <td colSpan={4} className="px-3 py-3 font-serif text-lg sm:px-4 sm:text-xl">合計（税込）</td>
@@ -450,7 +474,7 @@ export function QuoteSheet({
                   {formatYen(pricing.total)}
                 </span>
               </td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
           </tfoot>
         </table>

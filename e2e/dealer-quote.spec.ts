@@ -45,10 +45,11 @@ test.describe('代理店による確定見積（改訂版）', () => {
 
     const form = page.getByTestId('dealer-revision-form');
     await expect(form).toBeVisible();
-    // 代理店でも本体・オプションを含む案件見積全体を編集できる
-    await expect(page.getByTestId('add-base')).toBeVisible();
+    // 代理店は本体を閲覧のみ。オプション・別途等は案件ごとに編集できる。
+    await expect(page.getByTestId('add-base')).toBeHidden();
     await expect(page.getByTestId('add-option')).toBeVisible();
-    await expect(form.locator('tbody tr').first().getByRole('combobox')).toHaveCount(1);
+    await expect(page.getByTestId('quote-table')).toContainText('本体一式');
+    await expect(form.locator('select option[value="base"]')).toHaveCount(0);
     // 追加の別途工事とフリー商品
     await page.getByTestId('add-installation').click();
     const rows = await form.locator('tbody tr').count();
@@ -107,7 +108,7 @@ test.describe('代理店による確定見積（改訂版）', () => {
 });
 
 test.describe('案件見積の直接編集（エクセル表）', () => {
-  test('本部・代理店とも案件見積の全行を編集でき、標準見積は変更しない', async ({ page }) => {
+  test('本部は本体まで編集でき、代理店は本体閲覧のみでオプション・別途等を編集できる', async ({ page }) => {
     const customer = uniqueEmail('grid');
     const { quoteId, total } = await requestQuoteAsCustomer(page, customer, '本体編集のテスト');
     await logout(page);
@@ -139,7 +140,7 @@ test.describe('案件見積の直接編集（エクセル表）', () => {
     await expect(page.getByTestId('quote-table')).toContainText('サッシ木製建具工事');
     await logout(page);
 
-    // --- 代理店：担当案件なら本体・オプションも編集できる ---
+    // --- 代理店：担当案件でも本体は閲覧のみ。オプション・別途等は編集できる ---
     await ensureDealerFreeProduct(page);
     await logout(page);
     const c2 = uniqueEmail('grid-dealer');
@@ -156,10 +157,11 @@ test.describe('案件見積の直接編集（エクセル表）', () => {
     await signIn(page, DEALER, '/admin', '代理店 担当');
     await page.goto(`/admin/quotes/${q2}`);
     await expect(page.getByTestId('dealer-revision-form')).toBeVisible();
-    await expect(page.getByTestId('add-base')).toBeVisible();
+    await expect(page.getByTestId('add-base')).toBeHidden();
     await expect(page.getByTestId('add-option')).toBeVisible();
-    // 区分も変更できる
-    await expect(page.getByTestId('dealer-revision-form').locator('tbody tr').first().getByRole('combobox')).toHaveCount(1);
+    await expect(page.getByTestId('quote-table')).toContainText('本体一式');
+    // 代理店の区分選択には本体を出さない
+    await expect(page.getByTestId('dealer-revision-form').locator('select option[value="base"]')).toHaveCount(0);
     await logout(page);
   });
 });

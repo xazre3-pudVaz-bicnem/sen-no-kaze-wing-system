@@ -256,7 +256,7 @@ export class SupabaseStore implements DataStore {
 
   async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
     const db = await this.db();
-    const { error } = await db.rpc('replace_estimate_templates', { p_templates: items });
+    const { error } = await db.rpc('replace_estimate_templates_with_baselines', { p_templates: items });
     if (error) mapPgError(error);
   }
 

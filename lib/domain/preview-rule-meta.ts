@@ -6,15 +6,19 @@ import type { PreviewImageRule } from './types';
  */
 export const BASE_FLOORPLAN_NOTE = '本体専用平面図';
 
+export function hasBaseFloorplanInternalMarker(rule: PreviewImageRule): boolean {
+  return rule.note?.trim() === BASE_FLOORPLAN_NOTE;
+}
+
 export function isDedicatedBaseFloorplanRule(rule: PreviewImageRule): boolean {
   return (
     rule.view === 'floorplan' &&
     rule.preview_keys.length === 0 &&
-    rule.note?.trim() === BASE_FLOORPLAN_NOTE
+    hasBaseFloorplanInternalMarker(rule)
   );
 }
 
 /** 内部識別値は管理画面・シミュレーターの通常の補足文には表示しない。 */
 export function previewRuleDisplayNote(rule: PreviewImageRule): string | null {
-  return isDedicatedBaseFloorplanRule(rule) ? null : rule.note;
+  return hasBaseFloorplanInternalMarker(rule) ? null : rule.note;
 }

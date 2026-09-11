@@ -16,6 +16,7 @@ interface Row {
   quantity: number;
   unit: string;
   unit_price: number;
+  amount: number;
   remark: string;
 }
 
@@ -57,14 +58,14 @@ export function BaseBreakdownForm({
     const out: Section[] = [];
     for (const b of items) {
       const last = out[out.length - 1];
-      const row: Row = { key: newKey(), name: b.name, quantity: b.quantity, unit: b.unit ?? '', unit_price: b.unit_price, remark: b.remark ?? '' };
+      const row: Row = { key: newKey(), name: b.name, quantity: b.quantity, unit: b.unit ?? '', unit_price: b.unit_price, amount: b.amount, remark: b.remark ?? '' };
       if (last && last.name === b.section) last.rows.push(row);
       else out.push({ key: newKey(), name: b.section, rows: [row] });
     }
     return out;
   });
 
-  const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
+  const amountOf = (r: Row) => lockedByTemplate ? r.amount : Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sectionTotal = (sec: Section) => sec.rows.reduce((s, r) => s + amountOf(r), 0);
   const linesTotal = sections.reduce((s, sec) => s + sectionTotal(sec), 0);
   const expense = lockedByTemplate && expenseAmountOverride != null
@@ -84,7 +85,7 @@ export function BaseBreakdownForm({
         const i = afterKey ? s.rows.findIndex((r) => r.key === afterKey) : s.rows.length - 1;
         const base = i >= 0 ? s.rows[i] : undefined;
         const rows = [...s.rows];
-        rows.splice(i + 1, 0, { key: newKey(), name: '', quantity: 1, unit: base?.unit ?? '式', unit_price: 0, remark: '' });
+        rows.splice(i + 1, 0, { key: newKey(), name: '', quantity: 1, unit: base?.unit ?? '式', unit_price: 0, amount: 0, remark: '' });
         return { ...s, rows };
       })
     );
@@ -96,7 +97,7 @@ export function BaseBreakdownForm({
       {
         key: newKey(),
         name: `${cur.length + 1}．新しい工事区分`,
-        rows: [{ key: newKey(), name: '', quantity: 1, unit: '式', unit_price: 0, remark: '' }],
+        rows: [{ key: newKey(), name: '', quantity: 1, unit: '式', unit_price: 0, amount: 0, remark: '' }],
       },
     ]);
   const removeSection = (secKey: string) => setSections((cur) => cur.filter((s) => s.key !== secKey));
@@ -172,7 +173,7 @@ export function BaseBreakdownForm({
                       <Input name={`items.${i}.unit`} value={r.unit} onChange={(e) => updateRow(sec.key, r.key, { unit: e.target.value })} aria-label={`${i + 1} 行目の単位`} className="min-w-[4.5rem]" disabled={lockedByTemplate} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input name={`items.${i}.unit_price`} type="number" min={0} value={r.unit_price} onChange={(e) => updateRow(sec.key, r.key, { unit_price: Number(e.target.value) })} aria-label={`${i + 1} 行目の単価`} className="text-right" />
+                      <Input name={`items.${i}.unit_price`} type="number" min={0} value={r.unit_price} onChange={(e) => updateRow(sec.key, r.key, { unit_price: Number(e.target.value) })} aria-label={`${i + 1} 行目の単価`} className="text-right" disabled={lockedByTemplate} />
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{formatYen(amountOf(r))}</td>
                     <td className="px-3 py-1.5">

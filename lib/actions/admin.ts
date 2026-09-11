@@ -7,7 +7,13 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput } from '@/lib/data/store';
+import {
+  getStore,
+  isLocalMode,
+  StoreError,
+  type EstimateImportDraftInput,
+  type EstimateTemplateImportInput,
+} from '@/lib/data/store';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
@@ -30,6 +36,16 @@ import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset'
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 import { withPlanDisplaySize } from '@/lib/domain/plan-display';
+import {
+  categoryIdForCode,
+  defaultEstimateLinkPolicy,
+  estimateLineFingerprint,
+  estimateLineSourceText,
+  extractEstimateProductHints,
+  findExactEstimateProductMatch,
+  inferEstimateCategoryCode,
+  normalizeEstimateMatchText,
+} from '@/lib/domain/estimate-product-matching';
 
 export interface AdminFormState {
   ok: boolean;
@@ -733,17 +749,25 @@ export interface EstimateTemplateImportState {
       adjustment: number;
       tax: number;
       total: number;
+      matching: {
+        total: number;
+        required: number;
+        auto: number;
+        needsReview: number;
+        optional: number;
+        none: number;
+      };
     }[];
   };
-  applied?: { templates: number; names: string[] };
+  applied?: { imports: number; names: string[]; importIds: string[] };
 }
 
 const MAX_ESTIMATE_TEMPLATE_BYTES = 8 * 1024 * 1024;
 
 /**
- * 実物の分類表見積Excelを解析・検算し、標準見積として一括登録する。
- * preset / options.price は参照しない。標準見積の価格源はExcelだけに限定する。
- * base 明細は base_breakdown_items、残り3分類は estimate_template_lines に保存する。
+ * 実物の分類表見積Excelを解析・検算する。
+ * 「apply」でも本番標準見積はまだ置き換えず、商品照合用の取込バージョンとして保存する。
+ * 有効化は必須商品の照合完了後、別操作で行う。
  */
 export async function importEstimateTemplatesAction(
   _prev: EstimateTemplateImportState,
@@ -771,10 +795,21 @@ export async function importEstimateTemplatesAction(
   }
 
   const store = await getStore();
-  const models = await store.listModels({ includeDraft: true });
+  const [models, categories] = await Promise.all([
+    store.listModels({ includeDraft: true }),
+    store.listCategories(),
+  ]);
   const bySlug = new Map(models.map((model) => [model.slug, model]));
   const bundleCache = new Map<string, Awaited<ReturnType<typeof store.getCatalogBundle>>>();
-  const inputs: EstimateTemplateImportInput[] = [];
+  const inputs: EstimateImportDraftInput[] = [];
+  const matchingByTemplate = new Map<string, EstimateTemplateImportState['preview'] extends infer P
+    ? P extends { templates: (infer T)[] }
+      ? T extends { matching: infer M }
+        ? M
+        : never
+      : never
+    : never>();
+
   for (const template of parsed.templates) {
     const model = bySlug.get(template.model_slug);
     if (!model) return { ok: false, error: `本体モデル「${template.model_slug}」が登録されていません。` };
@@ -791,10 +826,126 @@ export async function importEstimateTemplatesAction(
     if (missingBaselineCodes.length) {
       return {
         ok: false,
-        error: `${template.name}: 標準商品の紐付けが不足しています（${missingBaselineCodes.join('、')}）。商品マスターを確認してください。`,
+        error: `${template.name}: 現行シミュレーターの標準商品の紐付けが不足しています（${missingBaselineCodes.join('、')}）。商品マスターを確認してください。`,
       };
     }
     const baselineOptionIds = baselineCodes.map((code) => optionByCode.get(code)!).filter(Boolean);
+
+    const baseRows = template.base_breakdown_items.map(({ source_row: _sourceRow, ...row }) => row);
+    const estimateLines = template.lines.map(({ source_row: _sourceRow, ...row }) => row);
+    const templatePayload: EstimateTemplateImportInput = {
+      base_model_id: model.id,
+      spec_code: template.spec_code,
+      name: template.name,
+      source_file_name: file.name,
+      source_sheet_name: template.source_sheet_name,
+      source_sha256: sha256,
+      tax_rate: template.tax_rate,
+      subtotal_raw: template.subtotal_raw,
+      adjustment: template.adjustment,
+      subtotal: template.subtotal,
+      tax: template.tax,
+      total: template.total,
+      sections: template.sections,
+      base_breakdown_items: baseRows,
+      lines: estimateLines,
+      baseline_option_ids: baselineOptionIds,
+    };
+
+    const sourceRows = [
+      ...template.base_breakdown_items.map((row) => ({
+        section_code: 'base' as const,
+        group_label: row.section,
+        source_row: row.source_row,
+        name: row.name,
+        quantity: row.quantity,
+        unit: row.unit,
+        unit_price: row.unit_price,
+        amount: row.amount,
+        remark: row.remark,
+      })),
+      ...template.lines.map((row) => ({
+        section_code: row.section_code,
+        group_label: row.group_label,
+        source_row: row.source_row,
+        name: row.name,
+        quantity: row.quantity,
+        unit: row.unit,
+        unit_price: row.unit_price,
+        amount: row.amount,
+        remark: row.remark,
+      })),
+    ];
+
+    const fingerprintCounts = new Map<string, number>();
+    let required = 0;
+    let auto = 0;
+    let optional = 0;
+    let none = 0;
+
+    const draftLines = sourceRows.map((row, index) => {
+      const matchSource = {
+        section_code: row.section_code,
+        group_label: row.group_label,
+        name: row.name,
+        unit: row.unit,
+        remark: row.remark,
+      };
+      const categoryCode = inferEstimateCategoryCode(matchSource);
+      const categoryId = categoryIdForCode(categories, categoryCode);
+      const linkPolicy = defaultEstimateLinkPolicy(categoryCode, row.section_code);
+      const sourceText = estimateLineSourceText(matchSource);
+      const hints = extractEstimateProductHints(sourceText, bundle!.options);
+      const exact =
+        linkPolicy === 'none'
+          ? null
+          : findExactEstimateProductMatch({
+              sourceText,
+              options: bundle!.options,
+              categoryId,
+              baseModelId: model.id,
+            });
+      const fingerprint = estimateLineFingerprint(matchSource, categoryCode);
+      const ordinal = (fingerprintCounts.get(fingerprint) ?? 0) + 1;
+      fingerprintCounts.set(fingerprint, ordinal);
+
+      if (linkPolicy === 'required') required += 1;
+      else if (linkPolicy === 'optional') optional += 1;
+      else none += 1;
+      if (exact) auto += 1;
+
+      return {
+        section_code: row.section_code,
+        group_label: row.group_label,
+        source_row: row.source_row,
+        original_name: row.name,
+        normalized_name: normalizeEstimateMatchText(row.name),
+        category_id: categoryId,
+        manufacturer_text: hints.manufacturer,
+        model_text: hints.model,
+        size_text: hints.size,
+        quantity: row.quantity,
+        unit: row.unit,
+        unit_price: row.unit_price,
+        amount: row.amount,
+        remark: row.remark,
+        link_policy: linkPolicy,
+        line_fingerprint: fingerprint,
+        fingerprint_ordinal: ordinal,
+        sort_order: index + 1,
+        auto_option_id: exact?.option.id ?? null,
+        auto_match_reason: exact?.reason ?? null,
+      };
+    });
+
+    matchingByTemplate.set(`${template.model_slug}:${template.spec_code}`, {
+      total: draftLines.length,
+      required,
+      auto,
+      needsReview: Math.max(0, required - auto),
+      optional,
+      none,
+    });
 
     inputs.push({
       base_model_id: model.id,
@@ -809,10 +960,8 @@ export async function importEstimateTemplatesAction(
       subtotal: template.subtotal,
       tax: template.tax,
       total: template.total,
-      sections: template.sections,
-      base_breakdown_items: template.base_breakdown_items,
-      lines: template.lines,
-      baseline_option_ids: baselineOptionIds,
+      template_payload: templatePayload,
+      lines: draftLines,
     });
   }
 
@@ -821,20 +970,29 @@ export async function importEstimateTemplatesAction(
     sha256,
     ignoredSheets: parsed.ignoredSheets,
     templates: parsed.templates.map((template) => {
-      const section = new Map(template.sections.map((row) => [row.code, row.total]));
+      const sectionTotals = new Map(template.sections.map((row) => [row.code, row.total]));
       return {
         modelSlug: template.model_slug,
         specCode: template.spec_code,
         name: template.name,
         sheetName: template.source_sheet_name,
-        base: section.get('base') ?? 0,
-        interiorExterior: section.get('interior_exterior') ?? 0,
-        option: section.get('option') ?? 0,
-        sitework: section.get('sitework') ?? 0,
+        base: sectionTotals.get('base') ?? 0,
+        interiorExterior: sectionTotals.get('interior_exterior') ?? 0,
+        option: sectionTotals.get('option') ?? 0,
+        sitework: sectionTotals.get('sitework') ?? 0,
         subtotal: template.subtotal,
         adjustment: template.adjustment,
         tax: template.tax,
         total: template.total,
+        matching:
+          matchingByTemplate.get(`${template.model_slug}:${template.spec_code}`) ?? {
+            total: 0,
+            required: 0,
+            auto: 0,
+            needsReview: 0,
+            optional: 0,
+            none: 0,
+          },
       };
     }),
   };
@@ -842,15 +1000,74 @@ export async function importEstimateTemplatesAction(
   if (!apply) return { ok: true, preview };
 
   try {
-    await store.replaceEstimateTemplates(inputs);
+    const created = await store.createEstimateImports(inputs);
     revalidatePath('/admin/base-breakdown');
-    revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
-    return { ok: true, preview, applied: { templates: inputs.length, names: inputs.map((row) => row.name) } };
+    return {
+      ok: true,
+      preview,
+      applied: {
+        imports: created.length,
+        names: created.map((row) => row.name),
+        importIds: created.map((row) => row.id),
+      },
+    };
   } catch (e) {
     const failed = errState(e);
     return { ok: false, error: failed.error, preview };
   }
+}
+
+/** 商品照合画面の1行を確定する。 */
+export async function saveEstimateImportLineReviewAction(formData: FormData): Promise<void> {
+  await requireCatalogEditor();
+  const importId = String(formData.get('import_id') ?? '').trim();
+  const lineId = String(formData.get('line_id') ?? '').trim();
+  const categoryId = String(formData.get('category_id') ?? '').trim() || null;
+  const optionId = String(formData.get('option_id') ?? '').trim() || null;
+  const linkPolicy = String(formData.get('link_policy') ?? 'none');
+  const ruleScope = String(formData.get('rule_scope') ?? 'spec');
+  const saveRule = formData.get('save_rule') === 'on';
+
+  if (!importId || !lineId || !['required', 'optional', 'none'].includes(linkPolicy) || !['global', 'model', 'spec'].includes(ruleScope)) {
+    redirect(`/admin/base-breakdown/imports/${importId}?error=${encodeURIComponent('入力内容が正しくありません。')}`);
+  }
+
+  try {
+    const store = await getStore();
+    await store.updateEstimateImportLineReview({
+      line_id: lineId,
+      category_id: categoryId,
+      link_policy: linkPolicy as 'required' | 'optional' | 'none',
+      option_id: optionId,
+      save_rule: saveRule,
+      rule_scope: ruleScope as 'global' | 'model' | 'spec',
+    });
+    revalidatePath(`/admin/base-breakdown/imports/${importId}`);
+  } catch (e) {
+    const state = errState(e);
+    redirect(`/admin/base-breakdown/imports/${importId}?error=${encodeURIComponent(state.error ?? '保存できませんでした。')}`);
+  }
+  redirect(`/admin/base-breakdown/imports/${importId}?saved=1`);
+}
+
+/** 必須照合が完了した取込バージョンを本番標準見積へ反映する。 */
+export async function activateEstimateImportAction(formData: FormData): Promise<void> {
+  await requireCatalogEditor();
+  const importId = String(formData.get('import_id') ?? '').trim();
+  if (!importId) redirect('/admin/base-breakdown?error=invalid-import');
+
+  try {
+    const store = await getStore();
+    await store.activateEstimateImport(importId);
+    revalidatePath('/admin/base-breakdown');
+    revalidatePath(`/admin/base-breakdown/imports/${importId}`);
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+  } catch (e) {
+    const state = errState(e);
+    redirect(`/admin/base-breakdown/imports/${importId}?error=${encodeURIComponent(state.error ?? '有効化できませんでした。')}`);
+  }
+  redirect(`/admin/base-breakdown/imports/${importId}?activated=1`);
 }
 
 /* ---------------- 本体内訳マスター ---------------- */

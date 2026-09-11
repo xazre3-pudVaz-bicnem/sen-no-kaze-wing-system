@@ -26,6 +26,9 @@ import type {
   RoleCode,
   ContactMessage,
   ContactStatus,
+  EstimateTemplate,
+  EstimateTemplateLine,
+  EstimateTemplateSection,
 } from '@/lib/domain/types';
 
 export interface SessionUser {
@@ -118,6 +121,28 @@ export interface CatalogImportBatch {
   variantChoices: OptionVariantChoice[];
 }
 
+
+/** 実物Excelを価格の正本として取り込む標準見積テンプレート。 */
+export interface EstimateTemplateImportInput {
+  base_model_id: string;
+  spec_code: string;
+  name: string;
+  source_file_name: string;
+  source_sheet_name: string;
+  source_sha256: string;
+  tax_rate: number;
+  subtotal_raw: number;
+  adjustment: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+  sections: Omit<EstimateTemplateSection, 'id' | 'template_id'>[];
+  /** 本体明細だけは既存 base_breakdown_items に保存する。 */
+  base_breakdown_items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code'>[];
+  /** 本体以外の3分類だけ。 */
+  lines: Omit<EstimateTemplateLine, 'id' | 'template_id'>[];
+}
+
 /**
  * データアクセス層のインターフェース。
  * - SupabaseStore: 本番（RLS ＋ security definer RPC）
@@ -188,6 +213,11 @@ export interface DataStore {
     specCode: string,
     items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
   ): Promise<BaseBreakdownItem[]>;
+
+  // ---- 標準見積テンプレート（Excelが価格の正本） ----
+  listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]>;
+  /** 解析・検算済みの標準見積を一括置換する。base 明細も同じ transaction で更新する。 */
+  replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void>;
 
   // ---- 商品のバリエーション ----
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;

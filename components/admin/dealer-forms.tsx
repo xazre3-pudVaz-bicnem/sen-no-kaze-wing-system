@@ -245,7 +245,7 @@ export function DealerRevisionForm({
                   <Input
                     name={`items.${i}.unit_price`}
                     type="number"
-                    min={0}
+                    min={r.name === '選択商品の変更差額' ? undefined : 0}
                     step={1000}
                     value={r.unit_price}
                     onChange={(e) => update(r.key, { unit_price: Number(e.target.value) })}

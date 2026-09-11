@@ -715,7 +715,7 @@ export class LocalStore implements DataStore {
         cfg.finish_level ?? 'full'
       );
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
-      const { pricing, model } = this.recalc(db, cfg);
+      const { pricing, model, standardPricing } = this.recalc(db, cfg);
 
       const req: QuoteRequest = {
         id: randomUUID(),
@@ -775,7 +775,8 @@ export class LocalStore implements DataStore {
         link: `/admin/quotes/${quote.id}`,
       });
       const ratePct = Math.round(pricing.expense_rate * 100);
-      // 本体：内訳マスター（分類表見積書）があれば行に展開、なければ従来どおり一式 1 行
+
+      // 本体：標準見積でも本体内訳マスターを詳細スナップショットとして維持する。
       const breakdown = db.baseBreakdownItems
         .filter((b) => b.base_model_id === model.id && b.spec_code === (cfg.spec_code ?? ''))
         .sort((a, b) => a.sort_order - b.sort_order);
@@ -817,47 +818,125 @@ export class LocalStore implements DataStore {
         quote_id: quote.id,
         kind: 'base_expense',
         name: '本体諸費用',
-        description: `交通費、労災、安全管理費等（${ratePct}%）`,
+        description: standardPricing ? 'Excel標準見積' : `交通費、労災、安全管理費等（${ratePct}%）`,
         unit: '式',
         remark: null,
-        unit_price: pricing.base_expense,
+        unit_price: Math.round(pricing.base_expense),
         quantity: 1,
-        amount: pricing.base_expense,
+        amount: Math.round(pricing.base_expense),
         image_url: null,
         sort_order: 900,
       });
-      const ordered = [...pricing.lines].sort((a, b) => Number(a.is_installation) - Number(b.is_installation));
-      ordered.forEach((l, i) =>
+
+      if (standardPricing) {
+        const addTemplateSection = (
+          code: 'interior_exterior' | 'option' | 'sitework',
+          kind: QuoteItem['kind'],
+          expenseKind?: QuoteItem['kind']
+        ) => {
+          const section = standardPricing.sections.find((row) => row.code === code);
+          if (!section) return;
+          const lines = standardPricing.template.lines
+            .filter((line) => line.section_code === code)
+            .sort((a, b) => a.sort_order - b.sort_order);
+
+          lines.forEach((line, index) => {
+            const quantity = line.quantity ?? 1;
+            const unitPrice =
+              line.unit_price ??
+              (quantity !== 0 ? line.amount / quantity : line.amount);
+            db.quoteItems.push({
+              id: randomUUID(),
+              quote_id: quote.id,
+              kind,
+              name: line.name,
+              description: line.group_label,
+              unit: line.unit,
+              remark: line.remark,
+              unit_price: Math.round(unitPrice),
+              quantity,
+              amount: Math.round(line.amount),
+              image_url: null,
+              sort_order:
+                (code === 'interior_exterior' ? 1000 : code === 'option' ? 2000 : 3000) + index,
+            });
+          });
+
+          if (section.delta_line !== 0) {
+            db.quoteItems.push({
+              id: randomUUID(),
+              quote_id: quote.id,
+              kind,
+              name: '選択商品の変更差額',
+              description: '商品マスターとの差額',
+              unit: '式',
+              remark: null,
+              unit_price: Math.round(section.delta_line),
+              quantity: 1,
+              amount: Math.round(section.delta_line),
+              image_url: null,
+              sort_order: code === 'interior_exterior' ? 1900 : code === 'option' ? 2900 : 3900,
+            });
+          }
+
+          if (expenseKind && section.expense_amount !== 0) {
+            db.quoteItems.push({
+              id: randomUUID(),
+              quote_id: quote.id,
+              kind: expenseKind,
+              name: code === 'interior_exterior' ? '内外装工事経費' : 'オプション諸費用',
+              description: '交通費、労災、安全管理費等',
+              unit: '式',
+              remark: null,
+              unit_price: Math.round(section.expense_amount),
+              quantity: 1,
+              amount: Math.round(section.expense_amount),
+              image_url: null,
+              sort_order: code === 'interior_exterior' ? 1950 : 2950,
+            });
+          }
+        };
+
+        addTemplateSection('interior_exterior', 'interior_exterior', 'interior_exterior_expense');
+        addTemplateSection('option', 'option', 'option_expense');
+        addTemplateSection('sitework', 'installation');
+      } else {
+        const ordered = [...pricing.lines].sort(
+          (a, b) => Number(a.is_installation) - Number(b.is_installation)
+        );
+        ordered.forEach((l, i) =>
+          db.quoteItems.push({
+            id: randomUUID(),
+            quote_id: quote.id,
+            kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
+            name: l.variants.length
+              ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）`
+              : l.name,
+            description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
+            unit: '式',
+            remark: null,
+            unit_price: l.unit_price,
+            quantity: l.quantity,
+            amount: l.amount,
+            image_url: l.image_url,
+            sort_order: 1000 + i,
+          })
+        );
         db.quoteItems.push({
           id: randomUUID(),
           quote_id: quote.id,
-          kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
-          // 選んだ仕様（壁色など）は見積書にも残す
-          name: l.variants.length ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）` : l.name,
-          description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
+          kind: 'option_expense',
+          name: 'オプション諸費用',
+          description: `交通費、労災、安全管理費等（${ratePct}%）`,
           unit: '式',
           remark: null,
-          unit_price: l.unit_price,
-          quantity: l.quantity,
-          amount: l.amount,
-          image_url: l.image_url,
-          sort_order: 1000 + i,
-        })
-      );
-      db.quoteItems.push({
-        id: randomUUID(),
-        quote_id: quote.id,
-        kind: 'option_expense',
-        name: 'オプション諸費用',
-        description: `交通費、労災、安全管理費等（${ratePct}%）`,
-        unit: '式',
-        remark: null,
-        unit_price: pricing.option_expense,
-        quantity: 1,
-        amount: pricing.option_expense,
-        image_url: null,
-        sort_order: 9000,
-      });
+          unit_price: pricing.option_expense,
+          quantity: 1,
+          amount: pricing.option_expense,
+          image_url: null,
+          sort_order: 9000,
+        });
+      }
       cfg.status = 'quote_requested';
       db.snapshots.push({
         id: randomUUID(),

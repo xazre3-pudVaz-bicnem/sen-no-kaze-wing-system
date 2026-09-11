@@ -151,6 +151,9 @@ export class LocalStore implements DataStore {
     items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
   ) {
     return this.mutate((db) => {
+      if (db.estimateTemplates.some((row) => row.base_model_id === modelId && row.spec_code === specCode)) {
+        throw new StoreError('LOCKED', 'Excel取込済みの標準見積です。Excelを修正して再取込してください。');
+      }
       db.baseBreakdownItems = db.baseBreakdownItems.filter((b) => !(b.base_model_id === modelId && b.spec_code === specCode));
       const rows: BaseBreakdownItem[] = items.map((it, i) => ({
         id: randomUUID(),
@@ -244,17 +247,19 @@ export class LocalStore implements DataStore {
             section.code === 'base'
               ? baseRows.reduce((sum, row) => sum + row.amount, 0)
               : lines.filter((row) => row.section_code === section.code).reduce((sum, row) => sum + row.amount, 0);
-          if (lineSubtotal !== section.line_subtotal || section.line_subtotal + section.expense_amount !== section.total) {
+          const sameMoney = (a: number, b: number) => Math.abs(a - b) < 0.0001;
+          if (!sameMoney(lineSubtotal, section.line_subtotal) || !sameMoney(section.line_subtotal + section.expense_amount, section.total)) {
             throw new StoreError('VALIDATION', `${input.name}: ${section.label} の検算が一致しません`);
           }
         }
-        if (sections.reduce((sum, row) => sum + row.total, 0) !== input.subtotal_raw) {
+        const sameMoney = (a: number, b: number) => Math.abs(a - b) < 0.0001;
+        if (!sameMoney(sections.reduce((sum, row) => sum + row.total, 0), input.subtotal_raw)) {
           throw new StoreError('VALIDATION', `${input.name}: 4分類合計と小計が一致しません`);
         }
-        if (input.subtotal_raw + input.adjustment !== input.subtotal) {
+        if (!sameMoney(input.subtotal_raw + input.adjustment, input.subtotal)) {
           throw new StoreError('VALIDATION', `${input.name}: 値引き等調整額の検算が一致しません`);
         }
-        if (Math.floor(input.subtotal * input.tax_rate) !== input.tax || input.subtotal + input.tax !== input.total) {
+        if (Math.abs(input.subtotal * input.tax_rate - input.tax) >= 1 || !sameMoney(input.subtotal + input.tax, input.total)) {
           throw new StoreError('VALIDATION', `${input.name}: 税・合計の検算が一致しません`);
         }
 
@@ -842,17 +847,18 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      // 本体まで触れるのは総代理店以上。代理店は担当見積の別途工事とフリー商品だけ
-      const full = hasRoleAtLeast(actor.role, 'master_dealer');
-      if (!(full || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
+      // 案件見積は代理店以上が直接編集できる。代理店は自分の担当案件、総代理店以上は全案件。
+      const canEditAnyQuote = hasRoleAtLeast(actor.role, 'master_dealer');
+      const canEditAllLines = hasRoleAtLeast(actor.role, 'dealer');
+      if (!(canEditAnyQuote || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
         throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');
       }
       if (parent.status === 'superseded') {
         throw new StoreError('LOCKED', 'この版はすでに改訂されています。最新の版から作成してください。');
       }
       for (const it of input.items) {
-        if (!full && it.kind !== 'installation' && it.kind !== 'free') {
-          throw new StoreError('FORBIDDEN', '本体・オプションを変更できるのは本部と総代理店だけです');
+        if (!canEditAllLines) {
+          throw new StoreError('FORBIDDEN', '見積を編集できるのは代理店以上です');
         }
         if (it.unit_price < 0 || it.quantity <= 0) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
       }
@@ -892,10 +898,8 @@ export class LocalStore implements DataStore {
         subtotal,
         tax,
         total: subtotal + tax,
-        notes: full
-          ? '本見積書は最新の内容で作成した確定見積です。'
-          : '本見積書は現地の代理店・工務店が別途工事を確認したうえで作成した確定見積です。',
-        dealer_id: parent.dealer_id ?? (full ? null : actor.id),
+        notes: '本見積書は標準見積を基に、担当者が案件内容を反映して作成した確定見積です。',
+        dealer_id: parent.dealer_id ?? (actor.role === 'dealer' ? actor.id : null),
         dealer_note: input.dealer_note,
         revision: parent.revision + 1,
         parent_quote_id: parent.id,

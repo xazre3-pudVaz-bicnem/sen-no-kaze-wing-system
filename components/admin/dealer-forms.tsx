@@ -61,29 +61,31 @@ const KIND_LABELS: Record<RevisionItemKind, string> = {
 };
 /** 案件見積で編集できる区分 */
 const FULL_KINDS: RevisionItemKind[] = ['base', 'base_expense', 'option', 'option_expense', 'installation', 'free'];
+const DEALER_KINDS: RevisionItemKind[] = ['option', 'option_expense', 'installation', 'free'];
 
 /**
  * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
- * 代理店以上は、担当権限の範囲で本体・オプション・別途を直接編集できる。
+ * 代理店は本体を閲覧のみ、オプション・別途等を編集可能。
+ * 総代理店・本部は本体を含めて編集可能。
  */
 export function DealerRevisionForm({
   quote,
   items,
   freeProducts,
   catalog = [],
-  canEditAll,
+  canEditBase,
 }: {
   quote: Quote;
   items: QuoteItem[];
   freeProducts: { code: string; name: string; price: number }[];
   /** 商品台帳（公開中の商品）。行の追加時に呼び出して選べる */
   catalog?: CatalogPickerItem[];
-  /** 代理店以上は案件見積の全行を編集できる */
-  canEditAll: boolean;
+  /** 本体まで編集できるのは総代理店・本部。代理店は本体を閲覧のみ */
+  canEditBase: boolean;
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
   const editable = (k: QuoteItem['kind']): k is RevisionItemKind =>
-    canEditAll ? FULL_KINDS.includes(k as RevisionItemKind) : k === 'installation' || k === 'free';
+    (canEditBase ? FULL_KINDS : DEALER_KINDS).includes(k as RevisionItemKind);
 
   const [rows, setRows] = useState<Row[]>(() =>
     items
@@ -103,9 +105,9 @@ export function DealerRevisionForm({
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
-  // 本体・オプションを編集できないときは、元の版の金額をそのまま使う
-  const baseTotal = canEditAll ? sumOf('base', 'base_expense') : quote.base_price + quote.base_expense;
-  const optionTotal = canEditAll ? sumOf('option', 'option_expense') : quote.option_subtotal + quote.option_expense;
+  // 代理店は本体を変更できないため親見積の本体金額を固定で使う。オプションは代理店でも編集できる。
+  const baseTotal = canEditBase ? sumOf('base', 'base_expense') : quote.base_price + quote.base_expense;
+  const optionTotal = sumOf('option', 'option_expense');
   const entered = sumOf('installation', 'free');
   const subRaw = baseTotal + optionTotal + entered;
   const subtotal = Math.floor(subRaw / 1000) * 1000;
@@ -141,9 +143,9 @@ export function DealerRevisionForm({
       <div>
         <p className="font-semibold">案件見積の編集</p>
         <p className="mt-1 text-xs text-muted">
-          {canEditAll
-            ? '標準見積の原本は変更せず、この案件の項目・数量・単位・単価・備考を直接編集できます。行の追加・削除もできます。入力して発行すると'
-            : 'この権限では編集できる項目が制限されています。入力して発行すると'}
+          {canEditBase
+            ? '標準見積の原本は変更せず、この案件の本体を含む各項目を直接編集できます。行の追加・削除もできます。入力して発行すると'
+            : '本体は上の見積表示で閲覧のみです。オプション・別途工事等はこの案件用に直接編集できます。入力して発行すると'}
           <strong className="mx-1">第{quote.revision + 1}版</strong>の確定見積が作られ、現在の版は履歴として残ります。
         </p>
       </div>
@@ -169,22 +171,18 @@ export function DealerRevisionForm({
                 <td className="px-3 py-2">
                   <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
                   <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
-                  {canEditAll ? (
-                    <Select
-                      value={r.kind}
-                      onChange={(e) => update(r.key, { kind: e.target.value as RevisionItemKind })}
-                      aria-label={`${i + 1} 行目の区分`}
-                      className="py-1 text-xs"
-                    >
-                      {FULL_KINDS.map((k) => (
-                        <option key={k} value={k}>
-                          {KIND_LABELS[k]}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <span className={r.kind === 'free' ? 'text-brown' : 'text-muted'}>{KIND_LABELS[r.kind]}</span>
-                  )}
+                  <Select
+                    value={r.kind}
+                    onChange={(e) => update(r.key, { kind: e.target.value as RevisionItemKind })}
+                    aria-label={`${i + 1} 行目の区分`}
+                    className="py-1 text-xs"
+                  >
+                    {(canEditBase ? FULL_KINDS : DEALER_KINDS).map((k) => (
+                      <option key={k} value={k}>
+                        {KIND_LABELS[k]}
+                      </option>
+                    ))}
+                  </Select>
                 </td>
                 <td className="px-3 py-2">
                   <Input
@@ -280,18 +278,16 @@ export function DealerRevisionForm({
           <Plus className="size-4" aria-hidden="true" />
           別途工事を追加
         </Button>
-        {canEditAll && (
-          <>
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
-              <Plus className="size-4" aria-hidden="true" />
-              本体の行を追加
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
-              <Plus className="size-4" aria-hidden="true" />
-              オプションの行を追加
-            </Button>
-          </>
+        {canEditBase && (
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
+            <Plus className="size-4" aria-hidden="true" />
+            本体の行を追加
+          </Button>
         )}
+        <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
+          <Plus className="size-4" aria-hidden="true" />
+          オプションの行を追加
+        </Button>
         <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
           <Plus className="size-4" aria-hidden="true" />
           フリー商品を追加
@@ -316,8 +312,12 @@ export function DealerRevisionForm({
 
       <dl className="space-y-1 rounded-lg bg-ivory px-4 py-3 text-sm" data-testid="revision-preview">
         <div className="flex justify-between text-muted">
-          <dt>本体価格計＋オプション価格計{canEditAll ? '' : '（変更不可）'}</dt>
-          <dd className="tabular-nums">{formatYen(baseTotal + optionTotal)}</dd>
+          <dt>本体価格計{canEditBase ? '' : '（変更不可）'}</dt>
+          <dd className="tabular-nums">{formatYen(baseTotal)}</dd>
+        </div>
+        <div className="flex justify-between text-muted">
+          <dt>オプション価格計</dt>
+          <dd className="tabular-nums">{formatYen(optionTotal)}</dd>
         </div>
         <div className="flex justify-between">
           <dt>別途工事・フリー商品</dt>
@@ -344,7 +344,7 @@ export function DealerRevisionForm({
       {pickerOpen && (
         <CatalogPickerDialog
           catalog={catalog}
-          kinds={canEditAll ? FULL_KINDS : (['installation', 'free'] as RevisionItemKind[])}
+          kinds={canEditBase ? FULL_KINDS : DEALER_KINDS}
           kindLabels={KIND_LABELS}
           onPick={(item, kind) =>
             addRow(kind, {

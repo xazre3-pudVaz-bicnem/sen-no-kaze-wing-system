@@ -20,13 +20,16 @@ if (!fs.existsSync(file)) {
   process.exit(1);
 }
 
-/** シート名 → モデル slug と仕様コード（BOX は 1 シートを全仕様に使う） */
+/** シート名 → モデル slug と見積種別。base は各商品の「本体」見積そのもの。 */
 const SHEET_MAP: { match: RegExp; slug: string; specs: string[] }[] = [
+  { match: /ウィング【本体】/, slug: 'wing-01', specs: ['base'] },
   { match: /ウィング【ホテルUB】/, slug: 'wing-01', specs: ['hotel'] },
   { match: /ウィング【単身者用】/, slug: 'wing-01', specs: ['residence'] },
   { match: /ウィング【事務所】\s*$/, slug: 'wing-01', specs: ['office'] },
+  { match: /BOX.*本体/, slug: 'box', specs: ['base'] },
   { match: /BOX（ホテル単身者）/, slug: 'box', specs: ['hotel', 'residence', 'office'] },
-  { match: /フラット/, slug: 'flat', specs: ['office'] },
+  { match: /フラット.*本体/, slug: 'flat', specs: ['base'] },
+  { match: /フラット(?!.*本体)/, slug: 'flat', specs: ['office'] },
 ];
 
 function stableId(key: string): string {
@@ -139,7 +142,18 @@ for (const sheet of sheets) {
   }
 }
 
-const expectKeys = ['wing-01:hotel', 'wing-01:residence', 'wing-01:office', 'box:hotel', 'box:residence', 'box:office', 'flat:office'];
+const expectKeys = [
+  'wing-01:base',
+  'wing-01:hotel',
+  'wing-01:residence',
+  'wing-01:office',
+  'box:base',
+  'box:hotel',
+  'box:residence',
+  'box:office',
+  'flat:base',
+  'flat:office',
+];
 for (const k of expectKeys) {
   if (!totals[k]) throw new Error(`内訳が見つかりません: ${k}`);
 }

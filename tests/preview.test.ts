@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { findMissingPreviewCombos, resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { defaultSelection, toggleOption } from '@/lib/domain/rules';
 import { MODEL_WING01_ID, O, seedCategories, seedConflicts, seedDependencies, seedOptions, seedPreviewRules } from '@/lib/seed/catalog';
+import { presetFloorplanInternalNote } from '@/lib/domain/preview-rule-meta';
 
 const wingOptions = seedOptions.filter((o) => o.base_model_id === null || o.base_model_id === MODEL_WING01_ID);
 const wingRules = seedPreviewRules.filter((r) => r.base_model_id === MODEL_WING01_ID);
@@ -40,6 +41,24 @@ describe('resolvePreview', () => {
     expect(r.kind).toBe('nearest');
     expect(r.extra_keys).toEqual(['washbasin']);
     expect(r.missing_keys).toEqual([]);
+  });
+
+  it('事務所仕様は空キーの旧fallbackより office専用平面図を優先する', () => {
+    const officeRule = {
+      id: '99999999-0000-4000-8000-000000000010',
+      base_model_id: MODEL_WING01_ID,
+      view: 'floorplan' as const,
+      kind: 'composite' as const,
+      preview_keys: [],
+      url: '/images/plan/wing-office.jpg',
+      alt: 'Wing 事務所・店舗用',
+      note: presetFloorplanInternalNote('office'),
+      z_index: 0,
+      status: 'published' as const,
+    };
+    const r = resolvePreview([...wingRules, officeRule], 'floorplan', [], 'office');
+    expect(r.kind).toBe('exact');
+    expect(r.layers[0].url).toContain('wing-office.jpg');
   });
 
   it('画像が 1 枚もないビューは none', () => {

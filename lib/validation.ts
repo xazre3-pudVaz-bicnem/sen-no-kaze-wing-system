@@ -165,7 +165,7 @@ export const previewRuleSchema = z.object({
   preview_keys: z.array(z.string().regex(/^[a-z0-9_]+$/)),
   url: trimmed(500).min(1, '画像をアップロードするか URL を入力してください'),
   alt: trimmed(200),
-  note: optional(300),
+  note: optional(300).nullable(),
   z_index: z.coerce.number().int(),
   status: statusSchema,
 });

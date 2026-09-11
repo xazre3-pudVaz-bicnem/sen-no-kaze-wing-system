@@ -20,7 +20,7 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
       <input type="hidden" name="quote_id" value={quote.id} />
       <p className="font-semibold">担当代理店</p>
       <p className="text-xs text-muted">
-        割り当てると、その代理店が別途工事・フリー商品を入力して確定見積（次の版）を発行できるようになります。
+        割り当てると、その代理店が案件見積を直接編集し、確定見積（次の版）を発行できるようになります。
       </p>
       <Status state={state} />
       <Field label="代理店・工務店" htmlFor="dealer_id">
@@ -59,12 +59,12 @@ const KIND_LABELS: Record<RevisionItemKind, string> = {
   installation: '別途工事',
   free: 'フリー商品',
 };
-/** 本部・総代理店が追加できる区分 */
+/** 案件見積で編集できる区分 */
 const FULL_KINDS: RevisionItemKind[] = ['base', 'base_expense', 'option', 'option_expense', 'installation', 'free'];
 
 /**
- * 代理店：別途工事・フリー商品を入力して確定見積を発行する。
- * 本体・オプションの金額は編集できない（技術の杜のスナップショット）。
+ * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
+ * 代理店以上は、担当権限の範囲で本体・オプション・別途を直接編集できる。
  */
 export function DealerRevisionForm({
   quote,
@@ -78,7 +78,7 @@ export function DealerRevisionForm({
   freeProducts: { code: string; name: string; price: number }[];
   /** 商品台帳（公開中の商品）。行の追加時に呼び出して選べる */
   catalog?: CatalogPickerItem[];
-  /** 本部・総代理店は本体・オプションの行も編集できる */
+  /** 代理店以上は案件見積の全行を編集できる */
   canEditAll: boolean;
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
@@ -139,11 +139,11 @@ export function DealerRevisionForm({
     >
       <input type="hidden" name="quote_id" value={quote.id} />
       <div>
-        <p className="font-semibold">別途工事・フリー商品の入力</p>
+        <p className="font-semibold">案件見積の編集</p>
         <p className="mt-1 text-xs text-muted">
           {canEditAll
-            ? '項目・数量・単位・単価・備考を直接編集できます。行の追加・削除もできます。入力して発行すると'
-            : '本体価格・オプション価格は変更できません（発行時のスナップショット）。入力して発行すると'}
+            ? '標準見積の原本は変更せず、この案件の項目・数量・単位・単価・備考を直接編集できます。行の追加・削除もできます。入力して発行すると'
+            : 'この権限では編集できる項目が制限されています。入力して発行すると'}
           <strong className="mx-1">第{quote.revision + 1}版</strong>の確定見積が作られ、現在の版は履歴として残ります。
         </p>
       </div>

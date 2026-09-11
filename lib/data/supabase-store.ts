@@ -5,6 +5,8 @@ import type {
   BaseModel,
   EstimateTemplate,
   EstimateTemplateBundle,
+  EstimateImport,
+  EstimateImportBundle,
   CatalogBundle,
   Configuration,
   ConfigurationItem,
@@ -53,6 +55,8 @@ import {
   type DealerRevisionInput,
   type CatalogImportBatch,
   type EstimateTemplateImportInput,
+  type EstimateImportDraftInput,
+  type EstimateImportLineReviewInput,
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -257,6 +261,79 @@ export class SupabaseStore implements DataStore {
   async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
     const db = await this.db();
     const { error } = await db.rpc('replace_estimate_templates_with_baselines', { p_templates: items });
+    if (error) mapPgError(error);
+  }
+
+
+  async listEstimateImports(modelId?: string, specCode?: string): Promise<EstimateImport[]> {
+    const db = await this.db();
+    let q = db.from('estimate_imports').select('*').order('created_at', { ascending: false });
+    if (modelId) q = q.eq('base_model_id', modelId);
+    if (specCode) q = q.eq('spec_code', specCode);
+    const { data, error } = await q;
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as EstimateImport[];
+  }
+
+  async getEstimateImportBundle(id: string): Promise<EstimateImportBundle | null> {
+    const db = await this.db();
+    const importResult = await db.from('estimate_imports').select('*').eq('id', id).maybeSingle();
+    if (importResult.error) {
+      if (isMissingRelation(importResult.error)) return null;
+      mapPgError(importResult.error);
+    }
+    const estimateImport = importResult.data as EstimateImport | null;
+    if (!estimateImport) return null;
+
+    const lineResult = await db.from('estimate_import_lines').select('*').eq('import_id', id).order('sort_order');
+    if (lineResult.error) mapPgError(lineResult.error);
+    const lines = (lineResult.data ?? []) as EstimateImportBundle['lines'];
+    const lineIds = lines.map((line) => line.id);
+    const linkResult = lineIds.length
+      ? await db.from('estimate_product_links').select('*').in('import_line_id', lineIds)
+      : { data: [], error: null };
+    if (linkResult.error) mapPgError(linkResult.error);
+    const linkByLine = new Map((linkResult.data ?? []).map((row: Record<string, unknown>) => [String(row.import_line_id), row]));
+
+    return {
+      import: estimateImport,
+      lines: lines.map((line) => ({
+        ...line,
+        product_link: (linkByLine.get(line.id) as EstimateImportBundle['lines'][number]['product_link']) ?? null,
+      })),
+    };
+  }
+
+  async createEstimateImports(items: EstimateImportDraftInput[]): Promise<EstimateImport[]> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_estimate_imports', { p_imports: items });
+    if (error) mapPgError(error);
+    const ids = Array.isArray(data) ? data.map(String) : [];
+    if (!ids.length) return [];
+    const result = await db.from('estimate_imports').select('*').in('id', ids).order('created_at');
+    if (result.error) mapPgError(result.error);
+    return (result.data ?? []) as EstimateImport[];
+  }
+
+  async updateEstimateImportLineReview(input: EstimateImportLineReviewInput): Promise<void> {
+    const db = await this.db();
+    const { error } = await db.rpc('update_estimate_import_line_review', {
+      p_line_id: input.line_id,
+      p_category_id: input.category_id,
+      p_link_policy: input.link_policy,
+      p_option_id: input.option_id,
+      p_save_rule: input.save_rule,
+      p_rule_scope: input.rule_scope,
+    });
+    if (error) mapPgError(error);
+  }
+
+  async activateEstimateImport(id: string): Promise<void> {
+    const db = await this.db();
+    const { error } = await db.rpc('activate_estimate_import', { p_import_id: id });
     if (error) mapPgError(error);
   }
 

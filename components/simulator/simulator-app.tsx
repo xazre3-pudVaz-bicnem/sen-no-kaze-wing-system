@@ -593,7 +593,6 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                       >
                         <span className="sm:hidden">本体</span>
                         <span className="hidden sm:inline">本体を変える</span>
-                        <ArrowRight className="size-3" aria-hidden="true" />
                       </Link>
                       <select
                         value={model.slug}

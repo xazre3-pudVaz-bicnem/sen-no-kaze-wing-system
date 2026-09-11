@@ -16,6 +16,8 @@ interface Props {
   options: ProductOption[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
+  /** お客様向け見積シミュレーターでだけ、代理店検索の導線を表示する */
+  showDealerFinder?: boolean;
 }
 
 /** 表の列（項目／数量／単位／単価／金額／備考）を揃えるための共通セル */
@@ -103,7 +105,17 @@ function SubtotalRow({ label, amount, amountColSpan = 1, testId }: { label: stri
  *   別途工事（9項目）→【別途工事計】／フリー商品
  *   小計 → 値引き等調整額 → 税抜請負額 → 消費税 → 合計
  */
-export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
+export function QuoteSheet({
+  modelName,
+  specName,
+  finishLevel,
+  pricing,
+  categories,
+  options,
+  readOnly,
+  onPickCategory,
+  showDealerFinder = false,
+}: Props) {
   const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const [expandedSections, setExpandedSections] = useState({
     base: true,
@@ -267,6 +279,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               expanded={expandedSections.options}
               onToggle={() => toggleSection('options')}
               toggleLabel="オプションの明細"
+              summary={expandedSections.options ? undefined : formatYen(pricing.option_total)}
             />
             {expandedSections.options && optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
@@ -309,7 +322,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               <td className={td.amount}>{formatYen(pricing.option_expense)}</td>
               <td className={td.remark}>{Math.round(pricing.expense_rate * 100)}%</td>
             </tr>}
-            <SubtotalRow label="【オプション価格計】" amount={formatYen(pricing.option_total)} />
+            {expandedSections.options && <SubtotalRow label="【オプション価格計】" amount={formatYen(pricing.option_total)} />}
           </tbody>
 
           {/* ---- その他の工事（将来の estimate_section=other_construction 用） ---- */}
@@ -352,7 +365,8 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               expanded={expandedSections.sitework}
               onToggle={() => toggleSection('sitework')}
               toggleLabel="別途工事の明細"
-              action={(
+              summary={expandedSections.sitework ? undefined : siteworkTotal > 0 ? formatYen(siteworkTotal) : '−'}
+              action={showDealerFinder ? (
                 <Link
                   href="/dealers"
                   className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
@@ -361,7 +375,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                   近くの代理店を探す。
                   <ArrowRight className="size-3" aria-hidden="true" />
                 </Link>
-              )}
+              ) : undefined}
             />
             {expandedSections.sitework && sitework.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
@@ -373,20 +387,12 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 <td className={td.remark}></td>
               </tr>
             ))}
-            <SubtotalRow
-              label="【別途工事計】"
-              amountColSpan={siteworkTotal > 0 ? 1 : 2}
-              amount={siteworkTotal > 0 ? formatYen(siteworkTotal) : (
-                <Link
-                  href="/dealers"
-                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
-                  data-testid="nearby-dealers-link"
-                >
-                  近くの代理店を探す。
-                  <ArrowRight className="size-3" aria-hidden="true" />
-                </Link>
-              )}
-            />
+            {expandedSections.sitework && (
+              <SubtotalRow
+                label="【別途工事計】"
+                amount={siteworkTotal > 0 ? formatYen(siteworkTotal) : '−'}
+              />
+            )}
           </tbody>
 
           {/* ---- フリー商品（代理店・工務店の取扱商品／諸費用なし） ---- */}
@@ -398,6 +404,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 expanded={expandedSections.freeProducts}
                 onToggle={() => toggleSection('freeProducts')}
                 toggleLabel="フリー商品の明細"
+                summary={expandedSections.freeProducts ? undefined : formatYen(freeTotal)}
               />
               {expandedSections.freeProducts && freeLines.map((l) => (
                 <tr key={l.code} className="bg-white text-xs">
@@ -409,7 +416,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                   <td className={td.remark}></td>
                 </tr>
               ))}
-              <SubtotalRow label="【フリー商品計】" amount={formatYen(freeTotal)} />
+              {expandedSections.freeProducts && <SubtotalRow label="【フリー商品計】" amount={formatYen(freeTotal)} />}
             </tbody>
           )}
 

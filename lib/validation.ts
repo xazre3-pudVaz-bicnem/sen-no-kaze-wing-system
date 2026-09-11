@@ -218,11 +218,19 @@ export const dealerRevisionItemSchema = z.object({
   description: optional(200).nullable(),
   unit: optional(12).nullable(),
   remark: optional(200).nullable(),
-  unit_price: z.coerce.number().int().min(0, '金額は 0 円以上で入力してください').max(100_000_000),
+  unit_price: z.coerce.number().int().min(-100_000_000).max(100_000_000),
   /** 本体内訳は 17.6㎡ のような小数の数量を持つ */
   quantity: z.coerce.number().min(0.01).max(99_999),
   /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧用） */
   image_url: optional(500).nullable(),
+}).superRefine((row, ctx) => {
+  if (row.unit_price < 0 && row.name !== '選択商品の変更差額') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['unit_price'],
+      message: '通常明細の金額は 0 円以上で入力してください',
+    });
+  }
 });
 
 export const dealerRevisionSchema = z.object({

@@ -19,12 +19,16 @@ export const STANDARD_ESTIMATE_SHEETS: {
   specCode: string;
   name: string;
 }[] = [
-  // 第1段階はシミュレーターの4ボタンに対応する Wing 4見積だけ。
-  // DB構造自体はモデル共通なので、BOX / Flat は各Excel構造を確認後に定義を追加する。
+  // Wing: 実物Excelに存在する4つの標準見積
   { sheetName: 'ウィング【本体】', modelSlug: 'wing-01', specCode: 'base', name: '本体のみ' },
   { sheetName: 'ウィング【ホテルUB】', modelSlug: 'wing-01', specCode: 'hotel', name: 'ホテル仕様' },
   { sheetName: 'ウィング【単身者用】', modelSlug: 'wing-01', specCode: 'residence', name: '住宅仕様' },
   { sheetName: 'ウィング【事務所】', modelSlug: 'wing-01', specCode: 'office', name: '事務所・店舗用' },
+
+  // BOX: 旧 preset ではなく、実物Excelに存在する標準見積体系を正本とする
+  { sheetName: 'BOX（本体）', modelSlug: 'box', specCode: 'base', name: '本体のみ' },
+  { sheetName: 'BOX（ホテル単身者）', modelSlug: 'box', specCode: 'hotel-single', name: 'ホテル・単身者用' },
+  { sheetName: 'BOX（水回りキット）', modelSlug: 'box', specCode: 'water-kit', name: '水回りキット' },
 ];
 
 export interface ParsedEstimateLine {

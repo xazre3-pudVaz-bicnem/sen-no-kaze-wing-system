@@ -2,9 +2,9 @@
 -- 案件見積の編集権限
 --
 -- 標準見積テンプレートはExcel原本として固定する一方、
--- そこから作成された案件見積は代理店以上が管理画面で直接編集できる。
---   * 代理店: 自分に割り当てられた案件だけ
---   * 総代理店 / 管理者: 全案件
+-- そこから作成された案件見積は代理店以上が管理画面で編集できる。
+--   * 代理店: 自分に割り当てられた案件。オプション・別途等を編集可。本体は閲覧のみ。
+--   * 総代理店 / 管理者: 全案件。本体を含めて編集可。
 -- 編集時は元の版を上書きせず、次版を発行して履歴を残す。
 -- =============================================================
 
@@ -19,7 +19,7 @@ declare
   v_uid uuid := auth.uid();
   v_rank integer := public.current_role_rank();
   v_can_any boolean;
-  v_can_edit_all_lines boolean;
+  v_can_edit_base boolean;
   v_new uuid;
   v_base integer := 0;
   v_base_exp integer := 0;
@@ -40,7 +40,7 @@ begin
   if not found then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
 
   v_can_any := v_rank >= 2;
-  v_can_edit_all_lines := v_rank >= 1;
+  v_can_edit_base := v_rank >= 2;
 
   if not (v_can_any or (v_rank >= 1 and parent.dealer_id = v_uid)) then
     raise exception 'FORBIDDEN: この見積を編集できる権限がありません' using errcode = '42501';
@@ -48,7 +48,7 @@ begin
   if parent.status = 'superseded' then
     raise exception 'LOCKED: この版はすでに改訂されています。最新の版から作成してください' using errcode = 'P0001';
   end if;
-  if not v_can_edit_all_lines then
+  if v_rank < 1 then
     raise exception 'FORBIDDEN: 見積を編集できるのは代理店以上です' using errcode = '42501';
   end if;
 
@@ -57,6 +57,9 @@ begin
     v_kind := r ->> 'kind';
     if v_kind not in ('base', 'base_expense', 'option', 'option_expense', 'installation', 'free') then
       raise exception 'VALIDATION: 区分の指定が不正です（%）', v_kind using errcode = 'P0001';
+    end if;
+    if not v_can_edit_base and v_kind in ('base', 'base_expense') then
+      raise exception 'FORBIDDEN: 本体を編集できるのは総代理店・本部だけです' using errcode = '42501';
     end if;
     v_qty := greatest(coalesce((r ->> 'quantity')::numeric, 1), 0.01);
     v_amount := round(coalesce((r ->> 'unit_price')::integer, 0) * v_qty)::integer;
@@ -69,6 +72,11 @@ begin
     else v_inst := v_inst + v_amount;
     end if;
   end loop;
+
+  if not v_can_edit_base then
+    v_base := parent.base_price;
+    v_base_exp := parent.base_expense;
+  end if;
 
   v_sub_raw := v_base + v_base_exp + v_opt + v_opt_exp + v_inst;
   v_sub := floor(v_sub_raw / 1000.0)::integer * 1000;
@@ -89,6 +97,21 @@ begin
     '本見積書は標準見積を基に、担当者が案件内容を反映して作成した確定見積です。',
     coalesce(parent.dealer_id, case when v_rank = 1 then v_uid else null end), p_dealer_note, parent.revision + 1, parent.id)
   returning id into v_new;
+
+  -- 代理店は本体を編集できないため、親見積の本体明細をそのまま次版へ複製する。
+  if not v_can_edit_base then
+    insert into public.quote_items (
+      quote_id, kind, name, description, unit, remark, unit_price, quantity, amount, image_url, sort_order
+    )
+    select
+      v_new, kind, name, description, unit, remark, unit_price, quantity, amount, image_url, sort_order
+    from public.quote_items
+    where quote_id = parent.id and kind in ('base', 'base_expense');
+
+    select coalesce(max(sort_order), 0) into v_sort
+    from public.quote_items
+    where quote_id = v_new;
+  end if;
 
   for r in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
   loop

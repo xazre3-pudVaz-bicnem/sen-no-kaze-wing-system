@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Pencil } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ArrowRight, Minus, Pencil, Plus } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
@@ -38,13 +38,47 @@ const th = {
 };
 
 /** 工事区分の見出し行（１．金物関係費用 など） */
-function SectionRow({ label, tone = 'sand', action }: { label: ReactNode; tone?: 'sand' | 'ivory'; action?: ReactNode }) {
+function SectionRow({
+  label,
+  tone = 'sand',
+  action,
+  expanded,
+  onToggle,
+  summary,
+  toggleLabel = '明細',
+}: {
+  label: ReactNode;
+  tone?: 'sand' | 'ivory';
+  action?: ReactNode;
+  expanded?: boolean;
+  onToggle?: () => void;
+  summary?: ReactNode;
+  toggleLabel?: string;
+}) {
+  const collapsible = typeof expanded === 'boolean' && Boolean(onToggle);
+
   return (
     <tr className={tone === 'sand' ? 'border-y border-line bg-sand/60' : 'border-y border-line bg-ivory'}>
       <td colSpan={6} className="px-3 py-2 text-xs font-semibold tracking-wide text-ink-soft sm:px-4">
         <div className="flex items-center justify-between gap-3">
-          <span className="min-w-0">{label}</span>
-          {action}
+          <div className="flex min-w-0 items-start gap-2">
+            {collapsible && (
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={expanded}
+                aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
+                className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
+              >
+                {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
+              </button>
+            )}
+            <span className="min-w-0">{label}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {summary !== undefined && <span className="whitespace-nowrap text-xs font-semibold tabular-nums text-ink">{summary}</span>}
+            {action}
+          </div>
         </div>
       </td>
     </tr>
@@ -71,6 +105,17 @@ function SubtotalRow({ label, amount, amountColSpan = 1, testId }: { label: stri
  */
 export function QuoteSheet({ modelName, specName, finishLevel, pricing, categories, options, readOnly, onPickCategory }: Props) {
   const levelInfo = FINISH_LEVEL_INFO[finishLevel];
+  const [expandedSections, setExpandedSections] = useState({
+    base: true,
+    interiorExterior: true,
+    options: true,
+    otherConstruction: true,
+    sitework: true,
+    freeProducts: true,
+  });
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+  };
   const byOption = new Map(options.map((o) => [o.id, o]));
   // 防火仕様は上部の選択UIで扱うため、見積書の表示分類からは除外する。
   const fireproofCatId = categories.find((c) => c.code === 'fireproof')?.id ?? null;
@@ -97,6 +142,13 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
   const sitework = pricing.lines.filter((l) => l.is_installation && !l.is_free_product);
   const siteworkTotal = sitework.reduce((s, l) => s + l.amount, 0);
   const freeTotal = pricing.free_subtotal;
+  const sectionAmount = (lines: PricingResult['lines']) => lines.reduce((sum, line) => sum + line.amount, 0);
+  const collapsedSectionSummary = (lines: PricingResult['lines']) => {
+    const amount = sectionAmount(lines);
+    const hasPriceOnRequest = lines.some((line) => line.price_on_request);
+    if (hasPriceOnRequest) return amount > 0 ? `${formatYen(amount)}＋別途見積` : '別途見積';
+    return formatYen(amount);
+  };
 
   return (
     <section aria-labelledby="quote-sheet-heading" className="overflow-hidden border border-line bg-white shadow-soft" data-testid="quote-sheet">
@@ -134,8 +186,15 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
 
           {/* ---- 本体（エンドユーザーには計のみ。明細は本部・総代理店・代理店の管理画面で見る） ---- */}
           <tbody className="divide-y divide-line/70" data-testid="base-breakdown">
-            <SectionRow label={<><span>本体</span><span className="sr-only">本体価格</span></>} tone="ivory" />
-            <tr className="bg-white align-top">
+            <SectionRow
+              label={<><span>本体</span><span className="sr-only">本体価格</span></>}
+              tone="ivory"
+              expanded={expandedSections.base}
+              onToggle={() => toggleSection('base')}
+              toggleLabel="本体の明細"
+              summary={expandedSections.base ? undefined : formatYen(pricing.base_total)}
+            />
+            {expandedSections.base && <tr className="bg-white align-top">
               <td className={td.name}>
                 {modelName} 本体一式
                 <span className="block text-[0.7rem] text-muted">
@@ -147,7 +206,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
               <td className={td.price}></td>
               <td className={td.amount}>{formatYen(pricing.base_total)}</td>
               <td className={td.remark}></td>
-            </tr>
+            </tr>}
           </tbody>
 
           {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
@@ -160,8 +219,12 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 </span>
               )}
               tone="ivory"
+              expanded={expandedSections.interiorExterior}
+              onToggle={() => toggleSection('interiorExterior')}
+              toggleLabel="内外装工事の明細"
+              summary={expandedSections.interiorExterior ? undefined : collapsedSectionSummary(interiorExteriorLines)}
             />
-            {interiorExteriorLines.map((l) => {
+            {expandedSections.interiorExterior && interiorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
@@ -198,8 +261,14 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
 
           {/* ---- オプション（クリックで変更） ---- */}
           <tbody className="divide-y divide-line/60">
-            <SectionRow label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`} tone="ivory" />
-            {optionLines.map((l) => {
+            <SectionRow
+              label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`}
+              tone="ivory"
+              expanded={expandedSections.options}
+              onToggle={() => toggleSection('options')}
+              toggleLabel="オプションの明細"
+            />
+            {expandedSections.options && optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
@@ -232,14 +301,14 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 </tr>
               );
             })}
-            <tr className="bg-white text-xs text-ink-soft">
+            {expandedSections.options && <tr className="bg-white text-xs text-ink-soft">
               <td className={td.name}>オプション諸費用（交通費、労災、安全管理費等）</td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>
               <td className={td.price}></td>
               <td className={td.amount}>{formatYen(pricing.option_expense)}</td>
               <td className={td.remark}>{Math.round(pricing.expense_rate * 100)}%</td>
-            </tr>
+            </tr>}
             <SubtotalRow label="【オプション価格計】" amount={formatYen(pricing.option_total)} />
           </tbody>
 
@@ -253,8 +322,12 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 </span>
               )}
               tone="ivory"
+              expanded={expandedSections.otherConstruction}
+              onToggle={() => toggleSection('otherConstruction')}
+              toggleLabel="その他の工事の明細"
+              summary={expandedSections.otherConstruction ? undefined : collapsedSectionSummary(otherConstructionLines)}
             />
-            {otherConstructionLines.map((l) => (
+            {expandedSections.otherConstruction && otherConstructionLines.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{formatQty(l.quantity)}</td>
@@ -276,6 +349,9 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 </span>
               }
               tone="ivory"
+              expanded={expandedSections.sitework}
+              onToggle={() => toggleSection('sitework')}
+              toggleLabel="別途工事の明細"
               action={(
                 <Link
                   href="/dealers"
@@ -287,7 +363,7 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
                 </Link>
               )}
             />
-            {sitework.map((l) => (
+            {expandedSections.sitework && sitework.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{l.quantity}</td>
@@ -316,12 +392,14 @@ export function QuoteSheet({ modelName, specName, finishLevel, pricing, categori
           {/* ---- フリー商品（代理店・工務店の取扱商品／諸費用なし） ---- */}
           {freeLines.length > 0 && (
             <tbody className="divide-y divide-line/60">
-              <tr className="bg-ivory" data-testid="quote-free-products">
-                <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
-                  フリー商品（代理店・工務店の取扱商品／諸費用なし）
-                </td>
-              </tr>
-              {freeLines.map((l) => (
+              <SectionRow
+                label="フリー商品（代理店・工務店の取扱商品／諸費用なし）"
+                tone="ivory"
+                expanded={expandedSections.freeProducts}
+                onToggle={() => toggleSection('freeProducts')}
+                toggleLabel="フリー商品の明細"
+              />
+              {expandedSections.freeProducts && freeLines.map((l) => (
                 <tr key={l.code} className="bg-white text-xs">
                   <td className={td.name} data-testid={`quote-line-${l.code}`}>{l.name}</td>
                   <td className={td.qty}>{l.quantity}</td>

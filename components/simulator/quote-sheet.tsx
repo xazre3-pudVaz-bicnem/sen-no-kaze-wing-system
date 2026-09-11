@@ -149,6 +149,34 @@ export function QuoteSheet({
   const isInteriorExterior = (l: PricingResult['lines'][number]) => interiorExteriorCategoryCodes.has(l.category_code);
   const isOtherConstruction = (l: PricingResult['lines'][number]) => otherConstructionCategoryCodes.has(l.category_code);
   const interiorExteriorLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && isInteriorExterior(l));
+  const isExteriorFaceLine = (line: PricingResult['lines'][number]) =>
+    line.category_code === 'exterior-wall' && line.code.includes('__face_');
+  const exteriorFaceLines = interiorExteriorLines.filter(isExteriorFaceLine);
+  const exteriorFaceSignature = (line: PricingResult['lines'][number]) =>
+    JSON.stringify({
+      optionId: line.option_id,
+      unitPrice: line.unit_price,
+      priceOnRequest: line.price_on_request,
+      variants: line.variants.map((variant) => [variant.group, variant.choice, variant.extra_price]),
+    });
+  const combineExteriorFaces =
+    exteriorFaceLines.length === 4 &&
+    exteriorFaceLines.every((line) => exteriorFaceSignature(line) === exteriorFaceSignature(exteriorFaceLines[0]));
+  let displayInteriorExteriorLines = interiorExteriorLines;
+  if (combineExteriorFaces) {
+    const firstFace = exteriorFaceLines[0];
+    const firstFaceIndex = interiorExteriorLines.findIndex(isExteriorFaceLine);
+    const optionName = byOption.get(firstFace.option_id)?.name ?? firstFace.name.replace(/^外壁仕様（[^）]+）：/, '');
+    const combinedFace = {
+      ...firstFace,
+      code: `${firstFace.code.split('__face_')[0]}__all_faces`,
+      name: `外壁仕様：${optionName}`,
+      quantity: 4,
+      amount: exteriorFaceLines.reduce((sum, line) => sum + line.amount, 0),
+    };
+    displayInteriorExteriorLines = interiorExteriorLines.filter((line) => !isExteriorFaceLine(line));
+    displayInteriorExteriorLines.splice(firstFaceIndex, 0, combinedFace);
+  }
   const optionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && !isInteriorExterior(l) && !isOtherConstruction(l));
   const otherConstructionLines = pricing.lines.filter((l) => !l.is_installation && !isFire(l) && isOtherConstruction(l));
   const freeLines = pricing.lines.filter((l) => l.is_free_product);
@@ -234,9 +262,10 @@ export function QuoteSheet({
               toggleLabel="内外装工事の明細"
               summary={expandedSections.interiorExterior ? undefined : collapsedSectionSummary(interiorExteriorLines)}
             />
-            {expandedSections.interiorExterior && interiorExteriorLines.map((l) => {
+            {expandedSections.interiorExterior && displayInteriorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
-              const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
+              const isExteriorFace =
+                l.category_code === 'exterior-wall' && (l.code.includes('__face_') || l.code.endsWith('__all_faces'));
               return (
                 <tr key={l.code} className="bg-white align-top">
                   <td className={td.name}>

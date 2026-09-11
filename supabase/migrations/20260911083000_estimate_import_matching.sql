@@ -113,6 +113,7 @@ create unique index if not exists product_match_rules_scope_key_idx
     match_key
   );
 
+drop trigger if exists trg_product_match_rules_updated on public.product_match_rules;
 create trigger trg_product_match_rules_updated
 before update on public.product_match_rules
 for each row execute function public.set_updated_at();

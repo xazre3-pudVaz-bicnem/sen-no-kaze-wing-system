@@ -94,7 +94,10 @@ export interface Profile {
 /** プラン（見積書テンプレートのシートに相当する推奨構成） */
 export interface ModelPreset {
   code: string;
+  /** 管理画面・見積内で使う名称 */
   name: string;
+  /** お客様画面の平面図見出しに使う名称。未設定時は name から従来互換で生成する */
+  display_name?: string;
   description: string;
   option_codes: string[];
 }

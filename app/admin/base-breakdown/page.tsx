@@ -3,67 +3,58 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { BASE_ESTIMATE_SPEC_CODE, estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { formatYen } from '@/lib/domain/pricing';
-import { buildPresetSelection } from '@/lib/domain/preset';
-import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { Alert } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import { BaseBreakdownForm } from '@/components/admin/base-breakdown-form';
-import { OptionPriceSheet, type PriceSheetRow } from '@/components/admin/option-price-sheet';
+import { EstimateTemplateImportForm } from '@/components/admin/estimate-template-import-form';
 import { cn } from '@/lib/utils';
 
 /**
- * 本体内訳マスター（分類表見積書）。
- * 「本体のみ」は用途別 preset の省略形ではなく、専用の見積Excelを基準に独立管理する。
- * 用途別は本体内訳の下にオプション・別途工事も続け、分類表見積書と同じ形で確認する。
+ * 標準見積Excelと本体明細の管理。
+ * 標準見積の価格源はExcel。preset＋商品価格から標準見積を再構成しない。
+ * 本体明細だけは base_breakdown_items を正本として従来どおり編集できる。
  */
 export default async function BaseBreakdownPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireCatalogEditor();
   const sp = await searchParams;
   const store = await getStore();
-  const [models, allItems] = await Promise.all([store.listModels({ includeDraft: true }), store.listBaseBreakdownItems()]);
+  const [models, allItems, allTemplates] = await Promise.all([
+    store.listModels({ includeDraft: true }),
+    store.listBaseBreakdownItems(),
+    store.listEstimateTemplates(),
+  ]);
 
   const model = models.find((m) => m.id === sp.model) ?? models[0];
-  const specs = model ? estimateTemplatesFor(model) : [];
-  const specCode = specs.some((p) => p.code === sp.spec) ? (sp.spec as string) : (specs[0]?.code ?? BASE_ESTIMATE_SPEC_CODE);
-  const specName = specs.find((p) => p.code === specCode)?.name ?? specCode;
-  const items = allItems.filter((b) => b.base_model_id === model?.id && b.spec_code === specCode);
+  const imported = allTemplates
+    .filter((row) => row.base_model_id === model?.id)
+    .sort((a, b) => {
+      const order = new Map([
+        ['base', 0],
+        ['hotel', 1],
+        ['residence', 2],
+        ['office', 3],
+      ]);
+      return (order.get(a.spec_code) ?? 99) - (order.get(b.spec_code) ?? 99) || a.spec_code.localeCompare(b.spec_code);
+    });
+  const fallback = model ? estimateTemplatesFor(model) : [];
+  const tabs =
+    imported.length > 0
+      ? imported.map((row) => ({ code: row.spec_code, name: row.name }))
+      : fallback.map((row) => ({ code: row.code, name: row.name }));
+  const specCode = tabs.some((row) => row.code === sp.spec) ? (sp.spec as string) : (tabs[0]?.code ?? BASE_ESTIMATE_SPEC_CODE);
+  const specName = tabs.find((row) => row.code === specCode)?.name ?? specCode;
+  const template = imported.find((row) => row.spec_code === specCode);
+  const items = allItems.filter((row) => row.base_model_id === model?.id && row.spec_code === specCode);
   const rate = model?.expense_rate ?? 0.15;
-  const baseLines = items.reduce((s, b) => s + b.amount, 0);
-
-  // 用途別標準見積だけ、本体の下に標準構成の「オプション」「別途工事」を続ける。
-  // 「本体のみ」は用途別 preset を流用せず、本体見積Excel由来の内訳だけを表示する。
-  let optionRows: PriceSheetRow[] = [];
-  let siteworkRows: PriceSheetRow[] = [];
-  if (model) {
-    const bundle = await store.getCatalogBundle(model.id, { includeDraft: false });
-    const preset = bundle?.model.presets?.find((p) => p.code === specCode);
-    if (bundle && preset) {
-      const ctx = { options: bundle.options, categories: bundle.categories, dependencies: bundle.dependencies, conflicts: bundle.conflicts };
-      const ids = new Set(buildPresetSelection(ctx, preset));
-      const catOf = new Map(bundle.categories.map((c) => [c.id, c]));
-      const rows = bundle.options
-        .filter((o) => ids.has(o.id))
-        .map((o) => {
-          const cat = catOf.get(o.category_id);
-          return {
-            id: o.id,
-            name: o.name,
-            category: cat?.name ?? 'その他',
-            price: o.price,
-            price_on_request: o.price_on_request,
-            installation: o.is_installation || cat?.code === FREE_PRODUCT_CATEGORY_CODE,
-          };
-        });
-      optionRows = rows.filter((r) => !r.installation);
-      siteworkRows = rows.filter((r) => r.installation);
-    }
-  }
+  const baseLines = items.reduce((sum, row) => sum + row.amount, 0);
 
   return (
     <AdminPage
-      title="本体内訳マスター"
-      lead="実際の見積書を基準に、本体のみ／ホテル仕様／住宅仕様／事務所・店舗用を分けて管理します。ここを直すと、これから作られる見積に反映されます。"
+      title="標準見積・本体内訳"
+      lead="実物の分類表見積Excelを価格の正本として管理します。本体明細は本体内訳マスター、内外装工事・オプション・別途は標準見積テンプレートとして保持します。"
     >
+      <EstimateTemplateImportForm />
+
       {sp.saved && <Alert tone="success">保存しました。新しく作られる見積から反映されます。</Alert>}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -80,41 +71,63 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
           </Link>
         ))}
         <span className="mx-2 text-muted">／</span>
-        {specs.map((p) => (
+        {tabs.map((row) => (
           <Link
-            key={p.code}
-            href={`/admin/base-breakdown?model=${model?.id}&spec=${p.code}`}
+            key={row.code}
+            href={`/admin/base-breakdown?model=${model?.id}&spec=${row.code}`}
             className={cn(
               'rounded-full border px-4 py-1.5 text-sm font-medium',
-              p.code === specCode ? 'border-forest bg-forest text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+              row.code === specCode ? 'border-forest bg-forest text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
             )}
-            data-testid={`breakdown-spec-${p.code}`}
+            data-testid={`breakdown-spec-${row.code}`}
           >
-            {p.name}
+            {row.name}
           </Link>
         ))}
       </div>
 
-      {specCode === BASE_ESTIMATE_SPEC_CODE && items.length === 0 && (
+      {model && imported.length === 0 && (
         <Alert tone="warn">
-          「本体のみ」の見積内訳はまだ登録されていません。実際の「本体」見積Excelの内容を確認してから登録してください。
+          この本体には標準見積Excelがまだ登録されていません。上の「標準見積Excelの取込」で、まず検算してから登録してください。
         </Alert>
+      )}
+
+      {template && (
+        <section className="card grid gap-3 p-5 text-sm sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-muted">標準見積</p>
+            <p className="font-semibold">{model?.name}／{template.name}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Excel原本</p>
+            <p className="font-semibold">{template.source_sheet_name}</p>
+          </div>
+          <div className="sm:text-right">
+            <p className="text-xs text-muted">標準見積 税込合計</p>
+            <p className="font-serif text-xl tabular-nums">{formatYen(template.total)}</p>
+          </div>
+        </section>
       )}
 
       {model && (
         <>
-          <p className="text-sm text-ink-soft">
-            {model.name}／{specName}：本体 {items.length} 行・本体一式 {formatYen(baseLines)}（諸費用{Math.round(rate * 100)}%は自動加算）
-          </p>
-          <BaseBreakdownForm key={`${model.id}:${specCode}`} modelId={model.id} specCode={specCode} items={items} expenseRate={rate} />
-          <OptionPriceSheet
-            key={`opt-${model.id}:${specCode}`}
-            options={optionRows}
-            sitework={siteworkRows}
-            baseLines={baseLines}
+          <div>
+            <h2 className="font-semibold">本体明細</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              {model.name}／{specName}：{items.length} 行・本体明細 {formatYen(baseLines)}
+              （本体諸費用{Math.round(rate * 100)}%は標準見積Excelの検算対象です）
+            </p>
+          </div>
+          <BaseBreakdownForm
+            key={`${model.id}:${specCode}`}
+            modelId={model.id}
+            specCode={specCode}
+            items={items}
             expenseRate={rate}
-            specName={`${model.name}・${specName}`}
           />
+          <Alert tone="info">
+            内外装工事・オプション・別途の標準価格は商品マスターから再計算しません。実物Excelから取り込んだ標準見積テンプレートを正本として扱います。
+          </Alert>
         </>
       )}
     </AdminPage>

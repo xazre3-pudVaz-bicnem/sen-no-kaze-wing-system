@@ -26,7 +26,7 @@ import {
 } from '@/lib/validation';
 import { pruneToScope } from '@/lib/domain/rules';
 import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
-import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields } from '@/lib/domain/preview-rule-meta';
+import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
 
 export interface AdminFormState {
   ok: boolean;
@@ -253,7 +253,7 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
     }
   }
 
-  const protectedFields = enforceDedicatedBaseFloorplanFields(
+  let protectedFields = enforceDedicatedBaseFloorplanFields(
     existingRule,
     {
       base_model_id: String(formData.get('base_model_id') ?? ''),
@@ -263,6 +263,12 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
       note: String(formData.get('note') ?? '').trim() || null,
     },
     formData.get('internal_note') === BASE_FLOORPLAN_NOTE
+  );
+  const presetCode = String(formData.get('preset_code') ?? '').trim();
+  protectedFields = enforcePresetFloorplanFields(
+    existingRule,
+    protectedFields,
+    /^[a-z0-9-]+$/.test(presetCode) ? presetCode : null
   );
 
   let url: string;

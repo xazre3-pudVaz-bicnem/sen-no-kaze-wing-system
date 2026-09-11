@@ -22,6 +22,8 @@ interface StandardEstimateSheetDef {
   sectionMarkers?: Partial<Record<EstimateSectionCode, { label: string; occurrence?: number }>>;
   /** Flatの旧Excelでは内外装経費が「本体諸費用」と表記されるため、取込時に正規化する。 */
   normalizeInteriorExpenseFromBase?: boolean;
+  /** 旧Excelでオプションに置かれた室内造作を、現行ルールの内外装工事へ移す。 */
+  normalizeCarpentryIntoInterior?: boolean;
 }
 
 export const STANDARD_ESTIMATE_SHEETS: StandardEstimateSheetDef[] = [
@@ -32,9 +34,9 @@ export const STANDARD_ESTIMATE_SHEETS: StandardEstimateSheetDef[] = [
   { sheetName: 'ウィング【事務所】', modelSlug: 'wing-01', specCode: 'office', name: '事務所・店舗用' },
 
   // BOX: 旧 preset ではなく、実物Excelに存在する標準見積体系を正本とする
-  { sheetName: 'BOX（本体）', modelSlug: 'box', specCode: 'base', name: '本体のみ' },
-  { sheetName: 'BOX（ホテル単身者）', modelSlug: 'box', specCode: 'hotel-single', name: 'ホテル・単身者用' },
-  { sheetName: 'BOX（水回りキット）', modelSlug: 'box', specCode: 'water-kit', name: '水回りキット' },
+  { sheetName: 'BOX（本体）', modelSlug: 'box', specCode: 'base', name: '本体のみ', normalizeCarpentryIntoInterior: true },
+  { sheetName: 'BOX（ホテル単身者）', modelSlug: 'box', specCode: 'hotel-single', name: 'ホテル・単身者用', normalizeCarpentryIntoInterior: true },
+  { sheetName: 'BOX（水回りキット）', modelSlug: 'box', specCode: 'water-kit', name: '水回りキット', normalizeCarpentryIntoInterior: true },
 
   // Flat: Excel上は内外装の合計見出しも「【本体価格計】」だが、
   // システムではWingと同じ4分類（本体 / 内外装工事 / オプション / 別途）へ正規化する。
@@ -45,6 +47,7 @@ export const STANDARD_ESTIMATE_SHEETS: StandardEstimateSheetDef[] = [
     name: '本体のみ',
     sectionMarkers: { interior_exterior: { label: '【本体価格計】', occurrence: 2 } },
     normalizeInteriorExpenseFromBase: true,
+    normalizeCarpentryIntoInterior: true,
   },
   {
     sheetName: 'フラット (物置事務所)',
@@ -53,6 +56,7 @@ export const STANDARD_ESTIMATE_SHEETS: StandardEstimateSheetDef[] = [
     name: '事務所・店舗用',
     sectionMarkers: { interior_exterior: { label: '【本体価格計】', occurrence: 2 } },
     normalizeInteriorExpenseFromBase: true,
+    normalizeCarpentryIntoInterior: true,
   },
 ];
 
@@ -324,6 +328,52 @@ function parseSection(
   };
 }
 
+
+function normalizeLegacyCarpentry(
+  def: StandardEstimateSheetDef,
+  sections: ParsedEstimateSection[],
+  lines: ParsedEstimateLine[],
+  globalExpenseRate: number | null
+): void {
+  if (!def.normalizeCarpentryIntoInterior) return;
+
+  const moved = lines.filter(
+    (line) =>
+      line.section_code === 'option' &&
+      (line.group_label?.includes('造作工事') || line.name.includes('室内造作'))
+  );
+  if (!moved.length) return;
+
+  const movedAmount = moved.reduce((sum, line) => sum + line.amount, 0);
+  for (const line of moved) {
+    line.section_code = 'interior_exterior';
+    line.group_label = '造作工事';
+  }
+
+  const interior = sections.find((section) => section.code === 'interior_exterior');
+  const option = sections.find((section) => section.code === 'option');
+  if (!interior || !option) return;
+
+  const rate = globalExpenseRate ?? interior.expense_rate ?? option.expense_rate ?? 0;
+  // 古いExcelは内外装・オプションとも同じ経費率で計算している。
+  // 造作工事の金額に対応する経費だけを分類間で移し、見積全体の金額は変えない。
+  const expenseShift = Math.min(option.expense_amount, Math.floor(movedAmount * rate));
+
+  interior.line_subtotal += movedAmount;
+  option.line_subtotal -= movedAmount;
+  interior.expense_amount += expenseShift;
+  option.expense_amount -= expenseShift;
+  interior.total += movedAmount + expenseShift;
+  option.total -= movedAmount + expenseShift;
+
+  interior.expense_label = '内外装工事経費';
+  interior.expense_rate = rate || interior.expense_rate;
+  if (option.expense_amount <= 0) {
+    option.expense_amount = 0;
+    option.expense_rate = null;
+  }
+}
+
 function parseTemplate(sheet: Sheet, def: StandardEstimateSheetDef): ParsedEstimateTemplate {
   const rows = sheet.rows;
   const markerRows = new Map<EstimateSectionCode, number>();
@@ -368,6 +418,8 @@ function parseTemplate(sheet: Sheet, def: StandardEstimateSheetDef): ParsedEstim
     lines.push(...parsed.lines);
     previousEnd = end + 1;
   });
+
+  normalizeLegacyCarpentry(def, sections, lines, globalExpenseRate);
 
   const summary: Record<'raw' | 'adjustment' | 'tax' | 'total', number> = {
     raw: -1,

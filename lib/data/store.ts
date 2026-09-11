@@ -65,7 +65,15 @@ export interface SaveConfigurationInput {
 }
 
 /** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */
-export type RevisionItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free';
+export type RevisionItemKind =
+  | 'base'
+  | 'base_expense'
+  | 'interior_exterior'
+  | 'interior_exterior_expense'
+  | 'option'
+  | 'option_expense'
+  | 'installation'
+  | 'free';
 
 export interface DealerRevisionItem {
   kind: RevisionItemKind;

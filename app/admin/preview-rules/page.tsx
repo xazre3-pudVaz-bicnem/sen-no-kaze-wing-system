@@ -51,7 +51,7 @@ function PreviewCard({
           <p className="font-semibold">{label}</p>
           {displayNote && <p className="mt-1 line-clamp-2 text-xs text-muted">{displayNote}</p>}
         </div>
-        <Link href={`/admin/preview-rules/${rule.id}`} className="btn-secondary btn-sm inline-flex">
+        <Link href={`/admin/preview-rules/${rule.id}?model=${rule.base_model_id}&section=${rule.view === 'floorplan' ? 'floorplan' : 'completion'}`} className="btn-secondary btn-sm inline-flex">
           画像を変更
         </Link>
         <details className="text-xs text-muted">
@@ -175,14 +175,14 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
       title: `${b.model.name}本体`,
       rule: baseFloorplan,
       detail: '本体専用',
-      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&slot=base`,
+      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&slot=base&section=floorplan`,
     },
     ...presetFloorplans.map((slot) => ({
       key: slot.code,
       title: slot.name,
       rule: slot.rule,
       detail: slot.keys.length ? `対応条件：${slot.keys.map(keyLabel).join(' + ')}` : '標準構成',
-      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&keys=${slot.keys.join(',')}`,
+      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&keys=${slot.keys.join(',')}&section=floorplan`,
     })),
   ];
   const visibleFloorplanSlots = missingOnly ? floorplanSlots.filter((slot) => !slot.rule) : floorplanSlots;
@@ -308,7 +308,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                           <p className="text-lg font-semibold">{slot.title}</p>
                           <p className="mt-1 text-xs text-muted">{slot.key === 'base' ? '本体専用平面図' : '標準構成の平面図'}</p>
                         </div>
-                        <Link href={`/admin/preview-rules/${slot.rule.id}`} className="btn-secondary btn-sm inline-flex">画像を変更</Link>
+                        <Link href={`/admin/preview-rules/${slot.rule.id}?model=${b.model.id}&section=floorplan`} className="btn-secondary btn-sm inline-flex">画像を変更</Link>
                         {slot.key !== 'base' && (
                           <details className="text-xs text-muted">
                             <summary className="cursor-pointer">詳細を見る</summary>
@@ -328,7 +328,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
 
             {!missingOnly && (
               <div className="flex flex-wrap gap-2">
-                <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan`} className="btn-secondary btn-sm">＋ その他の平面図を追加</Link>
+                <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan&section=floorplan`} className="btn-secondary btn-sm">＋ その他の平面図を追加</Link>
               </div>
             )}
 
@@ -362,7 +362,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                       <h3 className="text-lg font-semibold">{VIEW_LABELS[view]}</h3>
                       <p className="text-xs text-muted">登録済み {rules.length}件</p>
                     </div>
-                    <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${view}`} className="btn-secondary btn-sm">＋ 画像を追加</Link>
+                    <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${view}&section=completion`} className="btn-secondary btn-sm">＋ 画像を追加</Link>
                   </div>
                   {rules.length > 0 ? (
                     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -447,7 +447,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                 {missing.map((m, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 text-xs">
                     <span><span className="font-semibold">{VIEW_LABELS[m.view]}</span>：{m.keys.length ? m.keys.map(keyLabel).join(' + ') : '標準状態'}</span>
-                    <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${m.view}&keys=${m.keys.join(',')}`} className="shrink-0 underline">登録</Link>
+                    <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${m.view}&keys=${m.keys.join(',')}&section=${m.view === 'floorplan' ? 'floorplan' : 'completion'}`} className="shrink-0 underline">登録</Link>
                   </li>
                 ))}
               </ul>

@@ -272,7 +272,7 @@ export function QuoteSheet({
           </tbody>
 
           {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
-          {!standardEstimate && <tbody className="divide-y divide-line/70">
+          <tbody className="divide-y divide-line/70">
             <SectionRow
               label={(
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -400,8 +400,8 @@ export function QuoteSheet({
             )}
           </tbody>
 
-          {/* ---- その他の工事（将来の estimate_section=other_construction 用） ---- */}
-          <tbody className="divide-y divide-line/70">
+          {/* ---- その他の工事（従来計算時だけ表示） ---- */}
+          {!standardEstimate && <tbody className="divide-y divide-line/70">
             <SectionRow
               label={(
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

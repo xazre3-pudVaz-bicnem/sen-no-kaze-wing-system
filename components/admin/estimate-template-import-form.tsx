@@ -42,8 +42,8 @@ export function EstimateTemplateImportForm() {
         <h2 className="font-semibold">標準見積Excelの取込</h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-soft">
           実物の分類表見積書を、本体／内外装工事／オプション／別途の4分類のまま取り込みます。
-          本体明細は既存の本体内訳マスターへ、残り3分類は標準見積テンプレートへ保存します。
-          商品マスターの価格から標準見積を作り直すことはありません。
+          Wingに加えて、BOXの「本体のみ／ホテル・単身者用／水回りキット」に対応します。
+          本体明細は既存の本体内訳マスターへ、残り3分類は標準見積テンプレートへ保存し、商品マスターの価格から標準見積を作り直しません。
         </p>
       </div>
 
@@ -158,7 +158,7 @@ export function EstimateTemplateImportForm() {
 
       {state.applied && (
         <Alert tone="success">
-          標準見積 {state.applied.templates} 件を登録しました。シミュレーターの4ボタンにはまだ接続していません。
+          標準見積 {state.applied.templates} 件を登録しました。シミュレーターの仕様切替にはまだ接続していません。
         </Alert>
       )}
     </section>

@@ -1,0 +1,38 @@
+name: Fix PR65 once
+
+on:
+  push:
+    branches:
+      - work/standard-estimate-simulator-20260911
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/standard-estimate-simulator-20260911
+      - name: Remove stale duplicate model id line
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/actions/admin.ts')
+          text = path.read_text(encoding='utf-8')
+          stale = '      base_model_id: modelId,\n'
+          if text.count(stale) != 1:
+              raise SystemExit(f'expected exactly one stale line, found {text.count(stale)}')
+          path.write_text(text.replace(stale, ''), encoding='utf-8')
+          PY
+          rm .github/workflows/fix-pr65-once.yml
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/actions/admin.ts .github/workflows/fix-pr65-once.yml
+          git commit -m "fix: remove stale estimate import model id"
+          git push origin HEAD:work/standard-estimate-simulator-20260911

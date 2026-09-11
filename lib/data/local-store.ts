@@ -5,6 +5,9 @@ import { randomUUID } from 'node:crypto';
 import type {
   BaseBreakdownItem,
   BaseModel,
+  EstimateTemplate,
+  EstimateTemplateLine,
+  EstimateTemplateSection,
   CatalogBundle,
   Configuration,
   FinishLevel,
@@ -58,6 +61,7 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type DealerRevisionItem,
+  type EstimateTemplateImportInput,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
@@ -169,6 +173,102 @@ export class LocalStore implements DataStore {
         summary: `本体内訳を更新（${specCode}・${rows.length}行）`,
       });
       return rows;
+    });
+  }
+
+  // ---------- 標準見積テンプレート ----------
+  async listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]> {
+    return this.read((db) =>
+      db.estimateTemplates
+        .filter((row) => !modelId || row.base_model_id === modelId)
+        .sort((a, b) => a.base_model_id.localeCompare(b.base_model_id) || a.spec_code.localeCompare(b.spec_code))
+    );
+  }
+
+  async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
+    this.mutate((db) => {
+      for (const input of items) {
+        const old = db.estimateTemplates.find(
+          (row) => row.base_model_id === input.base_model_id && row.spec_code === input.spec_code
+        );
+        if (old) {
+          db.estimateTemplateSections = db.estimateTemplateSections.filter((row) => row.template_id !== old.id);
+          db.estimateTemplateLines = db.estimateTemplateLines.filter((row) => row.template_id !== old.id);
+          db.estimateTemplates = db.estimateTemplates.filter((row) => row.id !== old.id);
+        }
+        db.baseBreakdownItems = db.baseBreakdownItems.filter(
+          (row) => !(row.base_model_id === input.base_model_id && row.spec_code === input.spec_code)
+        );
+
+        const now = nowIso();
+        const template: EstimateTemplate = {
+          id: randomUUID(),
+          base_model_id: input.base_model_id,
+          spec_code: input.spec_code,
+          name: input.name,
+          source_file_name: input.source_file_name,
+          source_sheet_name: input.source_sheet_name,
+          source_sha256: input.source_sha256,
+          tax_rate: input.tax_rate,
+          subtotal_raw: input.subtotal_raw,
+          adjustment: input.adjustment,
+          subtotal: input.subtotal,
+          tax: input.tax,
+          total: input.total,
+          imported_at: now,
+          updated_at: now,
+        };
+        const sections: EstimateTemplateSection[] = input.sections.map((row) => ({
+          ...row,
+          id: randomUUID(),
+          template_id: template.id,
+        }));
+        const lines: EstimateTemplateLine[] = input.lines.map((row) => ({
+          ...row,
+          id: randomUUID(),
+          template_id: template.id,
+        }));
+        const baseRows: BaseBreakdownItem[] = input.base_breakdown_items.map((row) => ({
+          ...row,
+          id: randomUUID(),
+          base_model_id: input.base_model_id,
+          spec_code: input.spec_code,
+        }));
+
+        const sectionByCode = new Map(sections.map((row) => [row.code, row]));
+        if (sections.length !== 4 || sectionByCode.size !== 4) {
+          throw new StoreError('VALIDATION', `${input.name}: 4分類が揃っていません`);
+        }
+        for (const section of sections) {
+          const lineSubtotal =
+            section.code === 'base'
+              ? baseRows.reduce((sum, row) => sum + row.amount, 0)
+              : lines.filter((row) => row.section_code === section.code).reduce((sum, row) => sum + row.amount, 0);
+          if (lineSubtotal !== section.line_subtotal || section.line_subtotal + section.expense_amount !== section.total) {
+            throw new StoreError('VALIDATION', `${input.name}: ${section.label} の検算が一致しません`);
+          }
+        }
+        if (sections.reduce((sum, row) => sum + row.total, 0) !== input.subtotal_raw) {
+          throw new StoreError('VALIDATION', `${input.name}: 4分類合計と小計が一致しません`);
+        }
+        if (input.subtotal_raw + input.adjustment !== input.subtotal) {
+          throw new StoreError('VALIDATION', `${input.name}: 値引き等調整額の検算が一致しません`);
+        }
+        if (Math.floor(input.subtotal * input.tax_rate) !== input.tax || input.subtotal + input.tax !== input.total) {
+          throw new StoreError('VALIDATION', `${input.name}: 税・合計の検算が一致しません`);
+        }
+
+        db.estimateTemplates.push(template);
+        db.estimateTemplateSections.push(...sections);
+        db.estimateTemplateLines.push(...lines);
+        db.baseBreakdownItems.push(...baseRows);
+        this.pushAudit(db, null, {
+          action: 'update',
+          entity: 'estimate_template',
+          entity_id: input.base_model_id,
+          summary: `標準見積をExcelから更新（${input.name}・${input.spec_code}）`,
+        });
+      }
     });
   }
 

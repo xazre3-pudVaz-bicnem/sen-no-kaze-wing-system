@@ -6,7 +6,7 @@ import { VIEW_KEYS, type ViewKey } from '@/lib/domain/types';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { PreviewRuleForm } from '@/components/admin/forms';
 
-export default async function NewPreviewRulePage({ searchParams }: { searchParams: Promise<{ model?: string; view?: string; keys?: string; slot?: string; section?: string; preset?: string }> }) {
+export default async function NewPreviewRulePage({ searchParams }: { searchParams: Promise<{ model?: string; view?: string; keys?: string; slot?: string; section?: string; preset?: string; back?: string }> }) {
   const sp = await searchParams;
   const store = await getStore();
   const [models, options] = await Promise.all([store.listModels({ includeDraft: true }), store.listOptions()]);
@@ -19,9 +19,11 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
     : undefined;
   const requestedKeys = sp.keys ? sp.keys.split(',').filter(Boolean) : [];
   const presetCode = view === 'floorplan' && selectedEstimate && requestedKeys.length === 0 ? selectedEstimate.code : undefined;
+  const fallbackBack = `/admin/preview-rules?model=${sp.model ?? models[0]?.id ?? ''}&section=${sp.section ?? (view === 'floorplan' ? 'floorplan' : 'completion')}`;
+  const back = sp.back?.startsWith('/admin/models/') || sp.back?.startsWith('/admin/preview-rules') ? sp.back : fallbackBack;
   return (
     <AdminPage title="シミュレーター画像を追加">
-      <BackLink href={`/admin/preview-rules?model=${sp.model ?? models[0]?.id ?? ''}&section=${sp.section ?? (view === 'floorplan' ? 'floorplan' : 'completion')}`} label="シミュレーター画像へ戻る" />
+      <BackLink href={back} label="画像管理へ戻る" />
       <PreviewRuleForm
         rule={null}
         models={models}

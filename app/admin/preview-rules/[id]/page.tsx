@@ -4,7 +4,7 @@ import { previewKeyLabels } from '@/lib/domain/preview';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { PreviewRuleForm } from '@/components/admin/forms';
 
-export default async function EditPreviewRulePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ model?: string; section?: string }> }) {
+export default async function EditPreviewRulePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ model?: string; section?: string; back?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const store = await getStore();
@@ -20,9 +20,11 @@ export default async function EditPreviewRulePage({ params, searchParams }: { pa
   }
   if (!rule) notFound();
   const keys = [...previewKeyLabels(options).entries()].map(([key, label]) => ({ key, label }));
+  const fallbackBack = `/admin/preview-rules?model=${sp.model ?? rule.base_model_id}&section=${sp.section ?? (rule.view === 'floorplan' ? 'floorplan' : 'completion')}`;
+  const back = sp.back?.startsWith('/admin/models/') || sp.back?.startsWith('/admin/preview-rules') ? sp.back : fallbackBack;
   return (
     <AdminPage title="シミュレーター画像を変更">
-      <BackLink href={`/admin/preview-rules?model=${sp.model ?? rule.base_model_id}&section=${sp.section ?? (rule.view === 'floorplan' ? 'floorplan' : 'completion')}`} label="シミュレーター画像へ戻る" />
+      <BackLink href={back} label="画像管理へ戻る" />
       <PreviewRuleForm rule={rule} models={models} previewKeys={keys} />
     </AdminPage>
   );

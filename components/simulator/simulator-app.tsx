@@ -36,6 +36,7 @@ import {
   type ViewKey,
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
+import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
@@ -162,11 +163,16 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     );
   }, [bundle, ctx, defaults, model, standardEstimateChoices, usesStandardEstimates]);
 
+  const preferredPresetCode = model.presets?.[0]?.code;
+  const managedDefaultSpecCode =
+    preferredPresetCode && specSelections.some((row) => row.code === preferredPresetCode)
+      ? preferredPresetCode
+      : null;
   const defaultSpecCode =
     initial?.spec_code ??
+    managedDefaultSpecCode ??
     standardEstimateChoices.find((row) => row.template.spec_code !== 'base')?.template.spec_code ??
     standardEstimateChoices[0]?.template.spec_code ??
-    model.presets?.[0]?.code ??
     'hotel';
   const initialLevel: FinishLevel =
     initial?.finish_level ??
@@ -217,14 +223,13 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
   const readOnly = status !== 'draft';
   const activeEstimateTemplate = estimateTemplateByCode.get(specCode) ?? null;
+  const activePreset = model.presets?.find((preset) => preset.code === specCode) ?? null;
   const specName =
     activeEstimateTemplate?.template.name ??
-    model.presets?.find((preset) => preset.code === specCode)?.name ??
+    activePreset?.name ??
     '';
-  const planSize =
-    model.specs.find((spec) => spec.label === '展開後')?.value ??
-    model.specs.find((spec) => spec.label.includes('床面積'))?.value ??
-    null;
+  const planDisplayName = customerPlanName(activePreset, specName);
+  const planSize = planDisplaySizeFromSpecs(model.specs);
 
   const pushToast = useCallback((message: string, tone: Toast['tone'] = 'info') => {
     const tid = `${Date.now()}-${Math.random()}`;
@@ -848,7 +853,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         <section aria-label="プランボード" className="space-y-4 lg:space-y-0">
           <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
             <div className="min-w-0">
-              <PlanBoard plan={previews.floorplan} specName={specName} planSize={planSize} readOnly={readOnly} />
+              <PlanBoard plan={previews.floorplan} specName={planDisplayName} planSize={planSize} readOnly={readOnly} />
             </div>
 
             <div className="min-w-0">

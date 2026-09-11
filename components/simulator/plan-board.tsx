@@ -37,7 +37,7 @@ export function PlanBoard({ plan, specName, planSize, readOnly }: Props) {
   const planImage = plan.layers[0];
   const displayPlanUrl = planImage?.url ?? '';
   const shortSize = planSize?.split('（')[0]?.replace(/\s*mm$/, '').replace(/\s*×\s*/g, '×').trim() ?? null;
-  const specLabel = specName ? specName.replace('仕様', '用') : '';
+  const specLabel = specName.trim();
 
   return (
     <figure className="overflow-hidden rounded-lg border border-[#e8b100] bg-white lg:rounded-none" data-testid="plan-board">

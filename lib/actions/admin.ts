@@ -29,6 +29,7 @@ import { pruneToScope } from '@/lib/domain/rules';
 import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
+import { withPlanDisplaySize } from '@/lib/domain/plan-display';
 
 export interface AdminFormState {
   ok: boolean;
@@ -77,6 +78,23 @@ const nullableId = (v: FormDataEntryValue | null) => {
 
 export async function saveModelAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
+
+  let presets: unknown[];
+  const presetsJson = String(formData.get('presets_json') ?? '').trim();
+  try {
+    presets = presetsJson
+      ? JSON.parse(presetsJson)
+      : lines(formData.get('presets')).map((line) => {
+          const [code = '', name = '', description = '', opts = ''] = line.split('|').map((s) => s.trim());
+          return { code, name, display_name: '', description, option_codes: opts.split(',').map((s) => s.trim()).filter(Boolean) };
+        });
+  } catch {
+    return { ok: false, fieldErrors: { presets: ['プラン設定の読み取りに失敗しました。入力内容を確認してください。'] } };
+  }
+
+  const baseSpecs = pairs(formData.get('specs'), 'label', 'value') as { label: string; value: string }[];
+  const planDisplaySize = String(formData.get('plan_display_size') ?? '').trim();
+
   const parsed = modelSchema.safeParse({
     id: nullableId(formData.get('id')),
     slug: formData.get('slug'),
@@ -85,13 +103,10 @@ export async function saveModelAction(_prev: AdminFormState, formData: FormData)
     description: formData.get('description'),
     base_price: formData.get('base_price'),
     expense_rate: Number(formData.get('expense_rate') || 15) / 100,
-    presets: lines(formData.get('presets')).map((line) => {
-      const [code = '', name = '', description = '', opts = ''] = line.split('|').map((s) => s.trim());
-      return { code, name, description, option_codes: opts.split(',').map((s) => s.trim()).filter(Boolean) };
-    }),
+    presets,
     status: formData.get('status'),
     sort_order: formData.get('sort_order'),
-    specs: pairs(formData.get('specs'), 'label', 'value'),
+    specs: withPlanDisplaySize(baseSpecs, planDisplaySize),
     features: pairs(formData.get('features'), 'title', 'body'),
     standard_equipment: lines(formData.get('standard_equipment')),
     use_cases: lines(formData.get('use_cases')),
@@ -306,9 +321,10 @@ export async function deletePreviewRuleAction(formData: FormData): Promise<void>
   updateTag(CATALOG_TAG);
 
   const requestedBack = String(formData.get('redirect_to') ?? '').trim();
-  const back = requestedBack.startsWith('/admin/preview-rules')
-    ? requestedBack
-    : '/admin/preview-rules';
+  const back =
+    requestedBack.startsWith('/admin/preview-rules') || requestedBack.startsWith('/admin/models/')
+      ? requestedBack
+      : '/admin/preview-rules';
   redirect(`${back}${back.includes('?') ? '&' : '?'}deleted=1`);
 }
 

@@ -28,6 +28,7 @@ import {
 import { pruneToScope } from '@/lib/domain/rules';
 import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
+import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 
 export interface AdminFormState {
   ok: boolean;
@@ -755,12 +756,32 @@ export async function importEstimateTemplatesAction(
 
   const store = await getStore();
   const models = await store.listModels({ includeDraft: true });
-  const bySlug = new Map(models.map((model) => [model.slug, model.id]));
+  const bySlug = new Map(models.map((model) => [model.slug, model]));
+  const bundleCache = new Map<string, Awaited<ReturnType<typeof store.getCatalogBundle>>>();
   const inputs: EstimateTemplateImportInput[] = [];
   for (const template of parsed.templates) {
-    const modelId = bySlug.get(template.model_slug);
-    if (!modelId) return { ok: false, error: `本体モデル「${template.model_slug}」が登録されていません。` };
+    const model = bySlug.get(template.model_slug);
+    if (!model) return { ok: false, error: `本体モデル「${template.model_slug}」が登録されていません。` };
+    let bundle = bundleCache.get(model.id);
+    if (bundle === undefined) {
+      bundle = await store.getCatalogBundle(model.id, { includeDraft: true });
+      bundleCache.set(model.id, bundle);
+    }
+    if (!bundle) return { ok: false, error: `本体モデル「${template.model_slug}」の商品マスターを読み込めません。` };
+
+    const baselineCodes = estimateBaselineOptionCodes(model, template.spec_code);
+    const optionByCode = new Map(bundle.options.map((option) => [option.code, option.id]));
+    const missingBaselineCodes = baselineCodes.filter((code) => !optionByCode.has(code));
+    if (missingBaselineCodes.length) {
+      return {
+        ok: false,
+        error: `${template.name}: 標準商品の紐付けが不足しています（${missingBaselineCodes.join('、')}）。商品マスターを確認してください。`,
+      };
+    }
+    const baselineOptionIds = baselineCodes.map((code) => optionByCode.get(code)!).filter(Boolean);
+
     inputs.push({
+      base_model_id: model.id,
       base_model_id: modelId,
       spec_code: template.spec_code,
       name: template.name,
@@ -776,6 +797,7 @@ export async function importEstimateTemplatesAction(
       sections: template.sections,
       base_breakdown_items: template.base_breakdown_items,
       lines: template.lines,
+      baseline_option_ids: baselineOptionIds,
     });
   }
 

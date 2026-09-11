@@ -65,7 +65,15 @@ export interface SaveConfigurationInput {
 }
 
 /** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */
-export type RevisionItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free';
+export type RevisionItemKind =
+  | 'base'
+  | 'base_expense'
+  | 'interior_exterior'
+  | 'interior_exterior_expense'
+  | 'option'
+  | 'option_expense'
+  | 'installation'
+  | 'free';
 
 export interface DealerRevisionItem {
   kind: RevisionItemKind;
@@ -142,6 +150,8 @@ export interface EstimateTemplateImportInput {
   base_breakdown_items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code'>[];
   /** 本体以外の3分類だけ。 */
   lines: Omit<EstimateTemplateLine, 'id' | 'template_id'>[];
+  /** この標準見積で標準選択されている商品ID。差額計算の基準。 */
+  baseline_option_ids: string[];
 }
 
 /**

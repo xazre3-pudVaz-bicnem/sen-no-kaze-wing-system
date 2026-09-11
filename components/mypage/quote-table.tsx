@@ -62,8 +62,8 @@ function ItemRow({ it, showImage = false }: { it: QuoteItem; showImage?: boolean
       </td>
       <td className={td.qty}>{formatQty(it.quantity)}</td>
       <td className={td.unit}>{it.unit ?? '式'}</td>
-      <td className={td.price}>{it.unit_price > 0 ? formatYen(it.unit_price) : ''}</td>
-      <td className={td.amount}>{it.amount > 0 ? formatYen(it.amount) : it.unit_price > 0 ? formatYen(it.amount) : '−'}</td>
+      <td className={td.price}>{it.unit_price !== 0 ? formatYen(it.unit_price) : ''}</td>
+      <td className={td.amount}>{it.amount !== 0 ? formatYen(it.amount) : it.unit_price !== 0 ? formatYen(it.amount) : '−'}</td>
       <td className={td.remark}>{it.remark ?? ''}</td>
     </tr>
   );
@@ -83,6 +83,8 @@ export function QuoteTable({
 }) {
   const baseItems = items.filter((i) => i.kind === 'base');
   const baseExpense = items.find((i) => i.kind === 'base_expense') ?? null;
+  const interiorItems = items.filter((i) => i.kind === 'interior_exterior');
+  const interiorExpense = items.find((i) => i.kind === 'interior_exterior_expense') ?? null;
   // 防火仕様は本体側に表示する（先方指示）
   const allOptionItems = items.filter((i) => i.kind === 'option');
   const fireItems = allOptionItems.filter((i) => i.name.includes('防火'));
@@ -93,7 +95,14 @@ export function QuoteTable({
   const freeAmount = freeItems.reduce((s, i) => s + i.amount, 0);
   const siteworkAmount = siteworkItems.reduce((s, i) => s + i.amount, 0);
   const baseTotal = quote.base_price + quote.base_expense;
-  const optionTotal = quote.option_subtotal + quote.option_expense;
+  const interiorTotal =
+    interiorItems.reduce((sum, item) => sum + item.amount, 0) + (interiorExpense?.amount ?? 0);
+  const optionItemsTotal =
+    optionItems.reduce((sum, item) => sum + item.amount, 0) + (optionExpense?.amount ?? 0);
+  const optionTotal =
+    interiorItems.length > 0 || interiorExpense
+      ? optionItemsTotal
+      : quote.option_subtotal + quote.option_expense;
   // 画像一覧はオプションに限らず、画像を持つ明細すべて（フリー商品・別途工事も）
   const withImages = items.filter((i) => i.image_url);
   const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
@@ -173,6 +182,18 @@ export function QuoteTable({
             {showBaseDetail && baseExpense && <ItemRow it={baseExpense} />}
             <SubtotalRow label="【本体価格計】" amount={formatYen(baseTotal)} />
           </tbody>
+
+          {/* ---- 内外装工事 ---- */}
+          {(interiorItems.length > 0 || interiorExpense) && (
+            <tbody className="divide-y divide-line/60">
+              <SectionRow label="内外装工事" tone="ivory" />
+              {interiorItems.map((it) => (
+                <ItemRow key={it.id} it={it} showImage />
+              ))}
+              {interiorExpense && <ItemRow it={interiorExpense} />}
+              <SubtotalRow label="【内外装価格計】" amount={formatYen(interiorTotal)} />
+            </tbody>
+          )}
 
           {/* ---- オプション価格 ---- */}
           <tbody className="divide-y divide-line/60">

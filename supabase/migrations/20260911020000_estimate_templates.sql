@@ -89,7 +89,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_model uuid;
   v_spec text;
@@ -112,7 +112,7 @@ begin
 
   if tg_op = 'DELETE' then return old; else return new; end if;
 end;
-$;
+$$;
 
 drop trigger if exists base_breakdown_template_lock on public.base_breakdown_items;
 create trigger base_breakdown_template_lock

@@ -23,6 +23,7 @@ import type {
   Profile,
   RoleCode,
   Quote,
+  QuoteItem,
   QuoteContact,
   QuoteDocument,
   QuoteRequest,
@@ -33,6 +34,10 @@ import type {
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
+import {
+  computeStandardEstimatePricing,
+  type StandardEstimatePricingResult,
+} from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
 import { ROUNDING_UNIT } from '@/lib/domain/pricing';
@@ -206,6 +211,7 @@ export class LocalStore implements DataStore {
         base_breakdown_items: db.baseBreakdownItems
           .filter((row) => row.base_model_id === modelId && row.spec_code === specCode)
           .sort((a, b) => a.sort_order - b.sort_order),
+        baseline_option_ids: template.baseline_option_ids ?? [],
       };
     });
   }
@@ -234,6 +240,7 @@ export class LocalStore implements DataStore {
           source_file_name: input.source_file_name,
           source_sheet_name: input.source_sheet_name,
           source_sha256: input.source_sha256,
+          baseline_option_ids: input.baseline_option_ids,
           tax_rate: input.tax_rate,
           subtotal_raw: input.subtotal_raw,
           adjustment: input.adjustment,
@@ -448,40 +455,123 @@ export class LocalStore implements DataStore {
       return { configuration, items: db.configurationItems.filter((i) => i.configuration_id === id) };
     });
   }
-  private recalc(db: LocalDb, cfg: Configuration) {
+  static recalculateInMemory(db: LocalDb, cfg: Configuration) {
     const model = db.models.find((m) => m.id === cfg.base_model_id);
     if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');
     const savedExteriorFaces = (cfg as Configuration & { exterior_faces?: unknown }).exterior_faces;
     const exteriorFaces = Array.isArray(savedExteriorFaces) ? (savedExteriorFaces as ExteriorFaceSelection[]) : [];
     const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
-    // 本体内訳マスター（仕様別）が登録されていれば、その合計を本体一式とする
-    const breakdown = db.baseBreakdownItems.filter(
-      (b) => b.base_model_id === cfg.base_model_id && b.spec_code === (cfg.spec_code ?? '')
+
+    const estimateTemplate = db.estimateTemplates.find(
+      (row) => row.base_model_id === cfg.base_model_id && row.spec_code === (cfg.spec_code ?? '')
     );
-    const baseOverride = breakdown.length ? breakdown.reduce((sum, b) => sum + b.amount, 0) : null;
-    const pricing = computePricing(
-      model,
-      db.options,
-      db.categories,
-      items.map((i) => ({ option_id: i.option_id, quantity: i.quantity, variant_choice_ids: i.variant_choice_ids ?? [] })),
-      undefined,
-      { groups: db.variantGroups, choices: db.variantChoices },
-      baseOverride,
-      exteriorFaces
-    );
+
+    let standardPricing: StandardEstimatePricingResult | null = null;
+    let pricing;
+    if (estimateTemplate) {
+      const options = db.options
+        .filter(
+          (option) =>
+            option.status === 'published' &&
+            (option.base_model_id === null || option.base_model_id === model.id)
+        )
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const optionIds = new Set(options.map((option) => option.id));
+      const bundle: CatalogBundle = {
+        model,
+        images: db.images.filter((image) => image.base_model_id === model.id),
+        categories: db.categories.filter((category) => category.status === 'published'),
+        options,
+        dependencies: db.dependencies.filter(
+          (row) => optionIds.has(row.option_id) && optionIds.has(row.requires_option_id)
+        ),
+        conflicts: db.conflicts.filter(
+          (row) => optionIds.has(row.option_id) && optionIds.has(row.conflicts_with_option_id)
+        ),
+        previewRules: db.previewRules.filter(
+          (row) => row.base_model_id === model.id && row.status === 'published'
+        ),
+        hotspots: db.hotspots.filter((hotspot) =>
+          db.previewRules.some(
+            (rule) => rule.id === hotspot.rule_id && rule.base_model_id === model.id
+          )
+        ),
+        variantGroups: db.variantGroups.filter(
+          (group) => optionIds.has(group.option_id) && group.status === 'published'
+        ),
+        variantChoices: db.variantChoices.filter(
+          (choice) =>
+            choice.status === 'published' &&
+            db.variantGroups.some(
+              (group) => group.id === choice.group_id && optionIds.has(group.option_id)
+            )
+        ),
+        baseBreakdowns: db.baseBreakdownItems.filter((row) => row.base_model_id === model.id),
+      };
+      const templateBundle: EstimateTemplateBundle = {
+        template: estimateTemplate,
+        sections: db.estimateTemplateSections
+          .filter((row) => row.template_id === estimateTemplate.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+        lines: db.estimateTemplateLines
+          .filter((row) => row.template_id === estimateTemplate.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+        base_breakdown_items: db.baseBreakdownItems
+          .filter(
+            (row) =>
+              row.base_model_id === model.id &&
+              row.spec_code === estimateTemplate.spec_code
+          )
+          .sort((a, b) => a.sort_order - b.sort_order),
+        baseline_option_ids: estimateTemplate.baseline_option_ids ?? [],
+      };
+      standardPricing = computeStandardEstimatePricing(
+        bundle,
+        templateBundle,
+        items.map((item) => item.option_id),
+        items.flatMap((item) => item.variant_choice_ids ?? []),
+        exteriorFaces,
+        cfg.finish_level
+      );
+      pricing = standardPricing.pricing;
+    } else {
+      // 標準見積が未登録のモデル・仕様は従来計算へ安全にフォールバックする。
+      const breakdown = db.baseBreakdownItems.filter(
+        (b) => b.base_model_id === cfg.base_model_id && b.spec_code === (cfg.spec_code ?? '')
+      );
+      const baseOverride = breakdown.length ? breakdown.reduce((sum, b) => sum + b.amount, 0) : null;
+      pricing = computePricing(
+        model,
+        db.options,
+        db.categories,
+        items.map((i) => ({
+          option_id: i.option_id,
+          quantity: i.quantity,
+          variant_choice_ids: i.variant_choice_ids ?? [],
+        })),
+        undefined,
+        { groups: db.variantGroups, choices: db.variantChoices },
+        baseOverride,
+        exteriorFaces
+      );
+    }
+
     Object.assign(cfg, {
-      base_price: pricing.base_price,
-      base_expense: pricing.base_expense,
-      option_subtotal: pricing.option_subtotal,
-      option_expense: pricing.option_expense,
-      installation_subtotal: pricing.installation_subtotal,
-      adjustment: pricing.adjustment,
-      subtotal: pricing.subtotal,
-      tax: pricing.tax,
-      total: pricing.total,
+      base_price: Math.round(pricing.base_price),
+      base_expense: Math.round(pricing.base_expense),
+      option_subtotal: Math.round(pricing.option_subtotal),
+      option_expense: Math.round(pricing.option_expense),
+      installation_subtotal: Math.round(pricing.installation_subtotal),
+      adjustment: Math.round(pricing.adjustment),
+      subtotal: Math.round(pricing.subtotal),
+      tax: Math.round(pricing.tax),
+      total: Math.round(pricing.total),
       updated_at: nowIso(),
     });
-    return { pricing, model };
+    return { pricing, model, standardPricing };
+  }
+  private recalc(db: LocalDb, cfg: Configuration) {
+    return LocalStore.recalculateInMemory(db, cfg);
   }
   async saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     return this.mutate((db) => {
@@ -628,7 +718,7 @@ export class LocalStore implements DataStore {
         cfg.finish_level ?? 'full'
       );
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
-      const { pricing, model } = this.recalc(db, cfg);
+      const { pricing, model, standardPricing } = this.recalc(db, cfg);
 
       const req: QuoteRequest = {
         id: randomUUID(),
@@ -688,7 +778,8 @@ export class LocalStore implements DataStore {
         link: `/admin/quotes/${quote.id}`,
       });
       const ratePct = Math.round(pricing.expense_rate * 100);
-      // 本体：内訳マスター（分類表見積書）があれば行に展開、なければ従来どおり一式 1 行
+
+      // 本体：標準見積でも本体内訳マスターを詳細スナップショットとして維持する。
       const breakdown = db.baseBreakdownItems
         .filter((b) => b.base_model_id === model.id && b.spec_code === (cfg.spec_code ?? ''))
         .sort((a, b) => a.sort_order - b.sort_order);
@@ -730,47 +821,125 @@ export class LocalStore implements DataStore {
         quote_id: quote.id,
         kind: 'base_expense',
         name: '本体諸費用',
-        description: `交通費、労災、安全管理費等（${ratePct}%）`,
+        description: standardPricing ? 'Excel標準見積' : `交通費、労災、安全管理費等（${ratePct}%）`,
         unit: '式',
         remark: null,
-        unit_price: pricing.base_expense,
+        unit_price: Math.round(pricing.base_expense),
         quantity: 1,
-        amount: pricing.base_expense,
+        amount: Math.round(pricing.base_expense),
         image_url: null,
         sort_order: 900,
       });
-      const ordered = [...pricing.lines].sort((a, b) => Number(a.is_installation) - Number(b.is_installation));
-      ordered.forEach((l, i) =>
+
+      if (standardPricing) {
+        const addTemplateSection = (
+          code: 'interior_exterior' | 'option' | 'sitework',
+          kind: QuoteItem['kind'],
+          expenseKind?: QuoteItem['kind']
+        ) => {
+          const section = standardPricing.sections.find((row) => row.code === code);
+          if (!section) return;
+          const lines = standardPricing.template.lines
+            .filter((line) => line.section_code === code)
+            .sort((a, b) => a.sort_order - b.sort_order);
+
+          lines.forEach((line, index) => {
+            const quantity = line.quantity ?? 1;
+            const unitPrice =
+              line.unit_price ??
+              (quantity !== 0 ? line.amount / quantity : line.amount);
+            db.quoteItems.push({
+              id: randomUUID(),
+              quote_id: quote.id,
+              kind,
+              name: line.name,
+              description: line.group_label,
+              unit: line.unit,
+              remark: line.remark,
+              unit_price: Math.round(unitPrice),
+              quantity,
+              amount: Math.round(line.amount),
+              image_url: null,
+              sort_order:
+                (code === 'interior_exterior' ? 1000 : code === 'option' ? 2000 : 3000) + index,
+            });
+          });
+
+          if (section.delta_line !== 0) {
+            db.quoteItems.push({
+              id: randomUUID(),
+              quote_id: quote.id,
+              kind,
+              name: '選択商品の変更差額',
+              description: '商品マスターとの差額',
+              unit: '式',
+              remark: null,
+              unit_price: Math.round(section.delta_line),
+              quantity: 1,
+              amount: Math.round(section.delta_line),
+              image_url: null,
+              sort_order: code === 'interior_exterior' ? 1900 : code === 'option' ? 2900 : 3900,
+            });
+          }
+
+          if (expenseKind && section.expense_amount !== 0) {
+            db.quoteItems.push({
+              id: randomUUID(),
+              quote_id: quote.id,
+              kind: expenseKind,
+              name: code === 'interior_exterior' ? '内外装工事経費' : 'オプション諸費用',
+              description: '交通費、労災、安全管理費等',
+              unit: '式',
+              remark: null,
+              unit_price: Math.round(section.expense_amount),
+              quantity: 1,
+              amount: Math.round(section.expense_amount),
+              image_url: null,
+              sort_order: code === 'interior_exterior' ? 1950 : 2950,
+            });
+          }
+        };
+
+        addTemplateSection('interior_exterior', 'interior_exterior', 'interior_exterior_expense');
+        addTemplateSection('option', 'option', 'option_expense');
+        addTemplateSection('sitework', 'installation');
+      } else {
+        const ordered = [...pricing.lines].sort(
+          (a, b) => Number(a.is_installation) - Number(b.is_installation)
+        );
+        ordered.forEach((l, i) =>
+          db.quoteItems.push({
+            id: randomUUID(),
+            quote_id: quote.id,
+            kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
+            name: l.variants.length
+              ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）`
+              : l.name,
+            description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
+            unit: '式',
+            remark: null,
+            unit_price: l.unit_price,
+            quantity: l.quantity,
+            amount: l.amount,
+            image_url: l.image_url,
+            sort_order: 1000 + i,
+          })
+        );
         db.quoteItems.push({
           id: randomUUID(),
           quote_id: quote.id,
-          kind: l.is_free_product ? 'free' : l.is_installation ? 'installation' : 'option',
-          // 選んだ仕様（壁色など）は見積書にも残す
-          name: l.variants.length ? `${l.name}（${l.variants.map((v) => `${v.group}：${v.choice}`).join('／')}）` : l.name,
-          description: l.price_on_request ? '設置場所確認後に別途お見積り' : l.category_name,
+          kind: 'option_expense',
+          name: 'オプション諸費用',
+          description: `交通費、労災、安全管理費等（${ratePct}%）`,
           unit: '式',
           remark: null,
-          unit_price: l.unit_price,
-          quantity: l.quantity,
-          amount: l.amount,
-          image_url: l.image_url,
-          sort_order: 1000 + i,
-        })
-      );
-      db.quoteItems.push({
-        id: randomUUID(),
-        quote_id: quote.id,
-        kind: 'option_expense',
-        name: 'オプション諸費用',
-        description: `交通費、労災、安全管理費等（${ratePct}%）`,
-        unit: '式',
-        remark: null,
-        unit_price: pricing.option_expense,
-        quantity: 1,
-        amount: pricing.option_expense,
-        image_url: null,
-        sort_order: 9000,
-      });
+          unit_price: pricing.option_expense,
+          quantity: 1,
+          amount: pricing.option_expense,
+          image_url: null,
+          sort_order: 9000,
+        });
+      }
       cfg.status = 'quote_requested';
       db.snapshots.push({
         id: randomUUID(),
@@ -885,7 +1054,10 @@ export class LocalStore implements DataStore {
         if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
           throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
-        if (it.unit_price < 0 || it.quantity <= 0) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
+        const isStandardDelta = it.name === '選択商品の変更差額';
+        if ((!isStandardDelta && it.unit_price < 0) || it.quantity <= 0) {
+          throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
+        }
       }
 
       // 本体内訳は 17.6㎡ のような小数の数量を持つ
@@ -896,10 +1068,14 @@ export class LocalStore implements DataStore {
       // 代理店の本体は親見積の値を固定で継承。総代理店・本部だけ入力値で置換できる。
       const basePrice = canEditBase ? sumOf('base') : parent.base_price;
       const baseExpense = canEditBase ? sumOf('base_expense') : parent.base_expense;
-      // オプションは代理店以上が編集できるため、入力された案件明細をそのまま採用する。
-      const optionSubtotal = sumOf('option');
-      const optionExpense = sumOf('option_expense');
+      // 内外装工事・オプションは代理店以上が案件内容に合わせて編集できる。
+      const interiorSubtotal = sumOf('interior_exterior');
+      const interiorExpense = sumOf('interior_exterior_expense');
+      const optionLines = sumOf('option');
+      const optionExpenseLines = sumOf('option_expense');
       const baseTotal = basePrice + baseExpense;
+      const optionSubtotal = interiorSubtotal + optionLines;
+      const optionExpense = interiorExpense + optionExpenseLines;
       const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
       const subtotal = Math.floor(subRaw / ROUNDING_UNIT) * ROUNDING_UNIT;

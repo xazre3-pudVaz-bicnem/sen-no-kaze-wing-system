@@ -250,12 +250,13 @@ export class SupabaseStore implements DataStore {
       sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
       lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
       base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
+      baseline_option_ids: template.baseline_option_ids ?? [],
     };
   }
 
   async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
     const db = await this.db();
-    const { error } = await db.rpc('replace_estimate_templates', { p_templates: items });
+    const { error } = await db.rpc('replace_estimate_templates_with_baselines', { p_templates: items });
     if (error) mapPgError(error);
   }
 

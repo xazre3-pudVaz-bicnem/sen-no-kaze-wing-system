@@ -36,6 +36,14 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   const model = bundle.model;
   const allModels = catalog.models;
 
+  // Excelから取り込んだ標準見積をシミュレーターへ渡す。
+  // 未登録・未マイグレーション環境では空配列になり、従来計算へ安全にフォールバックする。
+  const store = await getStore();
+  const templateHeaders = await store.listEstimateTemplates(model.id);
+  const estimateTemplates = (
+    await Promise.all(templateHeaders.map((row) => store.getEstimateTemplateBundle(model.id, row.spec_code)))
+  ).filter((row): row is NonNullable<typeof row> => Boolean(row));
+
   // 立面図は商品台帳で登録した画像（kind=elevation）。未登録の Wing だけ従来の固定データで補う
   const registered = bundle.images
     .filter((i) => i.kind === 'elevation')
@@ -59,7 +67,6 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
     if (!user) {
       loadError = '保存した仕様を開くにはログインが必要です。';
     } else {
-      const store = await getStore();
       const found = await store.getConfiguration(c, user);
       if (!found) loadError = '保存した仕様が見つからないか、閲覧権限がありません。';
       else {
@@ -84,6 +91,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
           bundle={bundle}
+          estimateTemplates={estimateTemplates}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}
           initial={initial}

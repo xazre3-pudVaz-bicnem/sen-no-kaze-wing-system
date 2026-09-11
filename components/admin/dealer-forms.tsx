@@ -54,14 +54,32 @@ interface Row {
 const KIND_LABELS: Record<RevisionItemKind, string> = {
   base: '本体',
   base_expense: '本体諸費用',
+  interior_exterior: '内外装工事',
+  interior_exterior_expense: '内外装工事経費',
   option: 'オプション',
   option_expense: 'オプション諸費用',
   installation: '別途工事',
   free: 'フリー商品',
 };
 /** 案件見積で編集できる区分 */
-const FULL_KINDS: RevisionItemKind[] = ['base', 'base_expense', 'option', 'option_expense', 'installation', 'free'];
-const DEALER_KINDS: RevisionItemKind[] = ['option', 'option_expense', 'installation', 'free'];
+const FULL_KINDS: RevisionItemKind[] = [
+  'base',
+  'base_expense',
+  'interior_exterior',
+  'interior_exterior_expense',
+  'option',
+  'option_expense',
+  'installation',
+  'free',
+];
+const DEALER_KINDS: RevisionItemKind[] = [
+  'interior_exterior',
+  'interior_exterior_expense',
+  'option',
+  'option_expense',
+  'installation',
+  'free',
+];
 
 /**
  * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
@@ -107,9 +125,10 @@ export function DealerRevisionForm({
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
   // 代理店は本体を変更できないため親見積の本体金額を固定で使う。オプションは代理店でも編集できる。
   const baseTotal = canEditBase ? sumOf('base', 'base_expense') : quote.base_price + quote.base_expense;
+  const interiorExteriorTotal = sumOf('interior_exterior', 'interior_exterior_expense');
   const optionTotal = sumOf('option', 'option_expense');
   const entered = sumOf('installation', 'free');
-  const subRaw = baseTotal + optionTotal + entered;
+  const subRaw = baseTotal + interiorExteriorTotal + optionTotal + entered;
   const subtotal = Math.floor(subRaw / 1000) * 1000;
   const tax = Math.floor(subtotal * quote.tax_rate);
 
@@ -226,7 +245,7 @@ export function DealerRevisionForm({
                   <Input
                     name={`items.${i}.unit_price`}
                     type="number"
-                    min={0}
+                    min={r.name === '選択商品の変更差額' ? undefined : 0}
                     step={1000}
                     value={r.unit_price}
                     onChange={(e) => update(r.key, { unit_price: Number(e.target.value) })}
@@ -284,6 +303,10 @@ export function DealerRevisionForm({
             本体の行を追加
           </Button>
         )}
+        <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
+          <Plus className="size-4" aria-hidden="true" />
+          内外装工事の行を追加
+        </Button>
         <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
           <Plus className="size-4" aria-hidden="true" />
           オプションの行を追加
@@ -314,6 +337,10 @@ export function DealerRevisionForm({
         <div className="flex justify-between text-muted">
           <dt>本体価格計{canEditBase ? '' : '（変更不可）'}</dt>
           <dd className="tabular-nums">{formatYen(baseTotal)}</dd>
+        </div>
+        <div className="flex justify-between text-muted">
+          <dt>内外装工事計</dt>
+          <dd className="tabular-nums">{formatYen(interiorExteriorTotal)}</dd>
         </div>
         <div className="flex justify-between text-muted">
           <dt>オプション価格計</dt>

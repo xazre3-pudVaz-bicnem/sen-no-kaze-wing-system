@@ -10,12 +10,31 @@ import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
 import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
 import {
+  estimateBaselineOptionCodes,
+  estimateTemplatesFor,
+  finishLevelForEstimateSpec,
+} from '@/lib/domain/estimate-template';
+import {
+  computeStandardEstimatePricing,
+  type StandardEstimatePricingResult,
+} from '@/lib/domain/standard-estimate-pricing';
+import {
   makeDefaultExteriorFaces,
   normalizeExteriorFaces,
   type ExteriorFaceCode,
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
-import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
+import {
+  FINISH_LEVELS,
+  FINISH_LEVEL_INFO,
+  VIEW_KEYS,
+  finishLevelRank,
+  type CatalogBundle,
+  type ConfigurationStatus,
+  type EstimateTemplateBundle,
+  type FinishLevel,
+  type ViewKey,
+} from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
@@ -43,6 +62,8 @@ export interface SimulatorInitial {
 
 interface Props {
   bundle: CatalogBundle;
+  /** Excelから取り込んだ標準見積。存在するときはこちらを価格・仕様選択の正本にする。 */
+  estimateTemplates: EstimateTemplateBundle[];
   /** 本体切り替え用（タイトル横のセレクト。先方指示「ここで本体を変える」） */
   models: { slug: string; name: string }[];
   /** 立面図（モデル共通の図面。現状は Wing のみ） */
@@ -72,7 +93,7 @@ function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[]
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
 }
 
-export function SimulatorApp({ bundle, models, elevations, initial, loadError, resume, user }: Props) {
+export function SimulatorApp({ bundle, estimateTemplates, models, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
   const { model } = bundle;
   const displayModelName = model.name === 'フラット' ? 'Flat' : model.name;
@@ -82,33 +103,79 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   );
   const defaults = useMemo(() => defaultSelection(ctx), [ctx]);
 
-  /** 仕様（ホテル／住宅／事務所）＝ presets。選ぶと標準構成が入る */
-  const presetSelections = useMemo(() => {
-    const byCode = new Map(bundle.options.map((o) => [o.code, o.id]));
-    return (model.presets ?? []).map((p) => {
-      let cur: string[] = [];
-      for (const code of p.option_codes) {
-        const oid = byCode.get(code);
-        if (!oid) continue;
-        const r = toggleOption(ctx, cur, oid);
-        if (!r.rejected) cur = r.next;
-      }
+  const estimateTemplateByCode = useMemo(
+    () => new Map(estimateTemplates.map((row) => [row.template.spec_code, row])),
+    [estimateTemplates]
+  );
+  const standardEstimateChoices = useMemo(() => {
+    const order = estimateTemplatesFor(model);
+    const orderMap = new Map(order.map((choice, index) => [choice.code, index]));
+    return [...estimateTemplates].sort(
+      (a, b) =>
+        (orderMap.get(a.template.spec_code) ?? 99) -
+          (orderMap.get(b.template.spec_code) ?? 99) ||
+        a.template.spec_code.localeCompare(b.template.spec_code)
+    );
+  }, [estimateTemplates, model]);
+  const usesStandardEstimates = standardEstimateChoices.length > 0;
+
+  /**
+   * 仕様を選んだときの標準商品構成。
+   * 標準価格はExcelが正本で、ここは商品変更差額・画像・設備選択の初期状態だけに使う。
+   */
+  const specSelections = useMemo(() => {
+    const byCode = new Map(bundle.options.map((option) => [option.code, option.id]));
+    const build = (code: string, optionIds: string[]) => {
+      let cur = [...new Set(optionIds.filter((id) => bundle.options.some((option) => option.id === id)))];
       for (const oid of defaults) {
         if (cur.includes(oid)) continue;
-        const o = bundle.options.find((x) => x.id === oid);
-        const cat = bundle.categories.find((c) => c.id === o?.category_id);
-        const hasCat = cur.some((x) => bundle.options.find((y) => y.id === x)?.category_id === cat?.id);
-        if (o?.is_required || (cat?.is_required && !hasCat)) {
-          const r = toggleOption(ctx, cur, oid);
-          if (!r.rejected) cur = r.next;
+        const option = bundle.options.find((item) => item.id === oid);
+        const category = bundle.categories.find((item) => item.id === option?.category_id);
+        const hasCategory = cur.some(
+          (id) => bundle.options.find((item) => item.id === id)?.category_id === category?.id
+        );
+        if (option?.is_required || (category?.is_required && !hasCategory)) {
+          const result = toggleOption(ctx, cur, oid);
+          if (!result.rejected) cur = result.next;
         }
       }
-      return { code: p.code, ids: [...new Set(cur)] };
-    });
-  }, [bundle, ctx, defaults, model.presets]);
+      return { code, ids: [...new Set(cur)] };
+    };
 
-  const initialLevel: FinishLevel = initial?.finish_level ?? 'full';
-  const initialSelection = pruneToScope(ctx, initial?.option_ids ?? presetSelections[0]?.ids ?? defaults, initialLevel);
+    if (usesStandardEstimates) {
+      return standardEstimateChoices.map((template) => {
+        const saved = template.baseline_option_ids.filter((id) => bundle.options.some((option) => option.id === id));
+        const fallbackCodes =
+          saved.length > 0 ? [] : estimateBaselineOptionCodes(model, template.template.spec_code);
+        const ids = saved.length > 0
+          ? saved
+          : fallbackCodes.map((code) => byCode.get(code)).filter((id): id is string => Boolean(id));
+        return build(template.template.spec_code, ids);
+      });
+    }
+
+    return (model.presets ?? []).map((preset) =>
+      build(
+        preset.code,
+        preset.option_codes.map((code) => byCode.get(code)).filter((id): id is string => Boolean(id))
+      )
+    );
+  }, [bundle, ctx, defaults, model, standardEstimateChoices, usesStandardEstimates]);
+
+  const defaultSpecCode =
+    initial?.spec_code ??
+    standardEstimateChoices.find((row) => row.template.spec_code !== 'base')?.template.spec_code ??
+    standardEstimateChoices[0]?.template.spec_code ??
+    model.presets?.[0]?.code ??
+    'hotel';
+  const initialLevel: FinishLevel =
+    initial?.finish_level ??
+    (estimateTemplateByCode.has(defaultSpecCode) ? finishLevelForEstimateSpec(defaultSpecCode) : 'full');
+  const initialSelection = pruneToScope(
+    ctx,
+    initial?.option_ids ?? specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaults,
+    initialLevel
+  );
   const initialVariants = pruneHiddenVariantChoices(
     bundle.variantGroups,
     bundle.variantChoices,
@@ -133,7 +200,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       initialVariants
     )
   );
-  const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
+  const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
@@ -149,7 +216,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
-  const specName = model.presets?.find((p) => p.code === specCode)?.name ?? '';
+  const activeEstimateTemplate = estimateTemplateByCode.get(specCode) ?? null;
+  const specName =
+    activeEstimateTemplate?.template.name ??
+    model.presets?.find((preset) => preset.code === specCode)?.name ??
+    '';
   const planSize =
     model.specs.find((spec) => spec.label === '展開後')?.value ??
     model.specs.find((spec) => spec.label.includes('床面積'))?.value ??
@@ -228,10 +299,13 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   }, [hydrated, persistDraft]);
 
   // ---- 仕様で絞り込んだカタログ ----
-  const specOptions = useMemo(
-    () => bundle.options.filter((o) => o.spec_codes.length === 0 || o.spec_codes.includes(specCode)),
-    [bundle.options, specCode]
-  );
+  const specOptions = useMemo(() => {
+    const hasLegacyPreset = model.presets?.some((preset) => preset.code === specCode);
+    if (activeEstimateTemplate && !hasLegacyPreset) return bundle.options;
+    return bundle.options.filter(
+      (option) => option.spec_codes.length === 0 || option.spec_codes.includes(specCode)
+    );
+  }, [activeEstimateTemplate, bundle.options, model.presets, specCode]);
   /** 注文範囲に入っているカテゴリー（本体のみ → サッシ・外壁・断熱・防火・別途工事だけ） */
   // customer_visible=false のカテゴリー（サッシ等）は本体に含めるためお客様には出さない
   const scopedCategories = useMemo(
@@ -248,10 +322,29 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);
 
   // ---- 計算・画像解決 ----
-  /** 本体内訳マスター（仕様別）の合計。登録があれば本体一式をこれで上書きする */
-  const baseOverride = useMemo(() => baseBreakdownTotal(bundle, specCode), [bundle, specCode]);
+  /** 標準見積があればExcelを基準価格にし、商品変更分だけ差額反映する。 */
+  const standardEstimatePricing = useMemo<StandardEstimatePricingResult | null>(
+    () =>
+      activeEstimateTemplate
+        ? computeStandardEstimatePricing(
+            bundle,
+            activeEstimateTemplate,
+            selected,
+            variantIds,
+            exteriorFaces,
+            finishLevel
+          )
+        : null,
+    [activeEstimateTemplate, bundle, exteriorFaces, finishLevel, selected, variantIds]
+  );
+  /** 標準見積未登録の仕様だけ従来計算へフォールバックする。 */
+  const baseOverride = useMemo(
+    () => (activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
+    [activeEstimateTemplate, bundle, specCode]
+  );
   const pricing = useMemo(
     () =>
+      standardEstimatePricing?.pricing ??
       computePricing(
         model,
         bundle.options,
@@ -262,11 +355,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
         baseOverride,
         exteriorFaces
       ),
-    [model, bundle, selected, variantIds, baseOverride, exteriorFaces]
+    [model, bundle, selected, variantIds, baseOverride, exteriorFaces, standardEstimatePricing]
   );
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
-    const preset = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+    const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
     const base = preset?.ids ?? defaults;
     const out: Partial<Record<FinishLevel, number>> = {};
     for (const lv of FINISH_LEVELS) {
@@ -283,7 +376,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       ).total;
     }
     return out;
-  }, [ctx, model, bundle, presetSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
+  }, [ctx, model, bundle, specSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
 
   const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
@@ -304,17 +397,24 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
   // ---- 操作 ----
   const applyPreset = (code: string) => {
-    setSpecCode(code);
     if (readOnly) return;
-    const p = presetSelections.find((x) => x.code === code);
-    if (!p) return;
-    const nextSel = pruneToScope(ctx, p.ids, finishLevel);
+    const selection = specSelections.find((row) => row.code === code);
+    if (!selection) return;
+    const template = estimateTemplateByCode.get(code);
+    const nextLevel = template ? finishLevelForEstimateSpec(code) : finishLevel;
+    const nextSel = pruneToScope(ctx, selection.ids, nextLevel);
     const nextVariants = defaultVariantIds(bundle, nextSel);
+    setSpecCode(code);
+    if (template) setFinishLevel(nextLevel);
     setSelected(nextSel);
     setVariantIds(nextVariants);
     resetExteriorFaces(nextSel, nextVariants);
     setDirty(true);
-    pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準構成を読み込みました`, 'success');
+    const label =
+      template?.template.name ??
+      model.presets.find((preset) => preset.code === code)?.name ??
+      code;
+    pushToast(`「${label}」の標準見積を読み込みました`, 'success');
   };
 
   /**
@@ -325,7 +425,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
     if (readOnly || level === finishLevel) return;
     const widening = finishLevelRank(level) > finishLevelRank(finishLevel);
     if (widening) {
-      const preset = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+      const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
       const wanted = pruneToScope(ctx, preset?.ids ?? defaults, level);
       let cur = selected;
       for (const oid of wanted) {
@@ -650,25 +750,34 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
           <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 lg:flex-row lg:items-end lg:justify-between lg:gap-x-6">
             <div className="w-full min-w-0 lg:flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
-                <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
-                {(model.presets?.length ?? 0) > 0 && (
+                {!usesStandardEstimates && (
+                  <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
+                )}
+                {(usesStandardEstimates || (model.presets?.length ?? 0) > 0) && (
                   <>
-                    <span className="mx-1 h-5 w-px bg-line" aria-hidden="true" />
-                    {model.presets.map((p) => (
+                    {!usesStandardEstimates && <span className="mx-1 h-5 w-px bg-line" aria-hidden="true" />}
+                    {(usesStandardEstimates
+                      ? standardEstimateChoices.map((row) => ({
+                          code: row.template.spec_code,
+                          name: row.template.name,
+                          description: `Excel標準見積：${row.template.source_sheet_name}`,
+                        }))
+                      : model.presets
+                    ).map((choice) => (
                       <button
-                        key={p.code}
+                        key={choice.code}
                         type="button"
-                        onClick={() => applyPreset(p.code)}
+                        onClick={() => applyPreset(choice.code)}
                         disabled={readOnly}
-                        aria-pressed={specCode === p.code}
-                        title={p.description}
+                        aria-pressed={specCode === choice.code}
+                        title={choice.description}
                         className={cn(
                           'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
-                          specCode === p.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                          specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
                         )}
-                        data-testid={`preset-${p.code}`}
+                        data-testid={`preset-${choice.code}`}
                       >
-                        {p.name}
+                        {choice.name}
                       </button>
                     ))}
                   </>

@@ -204,16 +204,33 @@ export const assignDealerSchema = z.object({
 
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({
-  kind: z.enum(['base', 'base_expense', 'option', 'option_expense', 'installation', 'free']),
+  kind: z.enum([
+    'base',
+    'base_expense',
+    'interior_exterior',
+    'interior_exterior_expense',
+    'option',
+    'option_expense',
+    'installation',
+    'free',
+  ]),
   name: trimmed(120).min(1, '項目名を入力してください'),
   description: optional(200).nullable(),
   unit: optional(12).nullable(),
   remark: optional(200).nullable(),
-  unit_price: z.coerce.number().int().min(0, '金額は 0 円以上で入力してください').max(100_000_000),
+  unit_price: z.coerce.number().int().min(-100_000_000).max(100_000_000),
   /** 本体内訳は 17.6㎡ のような小数の数量を持つ */
   quantity: z.coerce.number().min(0.01).max(99_999),
   /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧用） */
   image_url: optional(500).nullable(),
+}).superRefine((row, ctx) => {
+  if (row.unit_price < 0 && row.name !== '選択商品の変更差額') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['unit_price'],
+      message: '通常明細の金額は 0 円以上で入力してください',
+    });
+  }
 });
 
 export const dealerRevisionSchema = z.object({

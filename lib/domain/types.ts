@@ -197,6 +197,8 @@ export interface EstimateTemplate {
   source_file_name: string;
   source_sheet_name: string;
   source_sha256: string;
+  /** 標準見積に含まれる商品マスターの標準選択。差額計算の基準。 */
+  baseline_option_ids: string[];
   tax_rate: number;
   /** 4分類の合計（調整前） */
   subtotal_raw: number;
@@ -249,6 +251,8 @@ export interface EstimateTemplateBundle {
   lines: EstimateTemplateLine[];
   /** base だけ */
   base_breakdown_items: BaseBreakdownItem[];
+  /** 標準見積に含まれる商品マスターの標準選択。差額計算の基準に使う。 */
+  baseline_option_ids: string[];
 }
 
 export interface ProductOption {
@@ -523,7 +527,16 @@ export interface Quote {
 }
 
 /** base=本体一式 / base_expense=本体諸費用 / option=オプション / option_expense=オプション諸費用 / installation=別途工事（現地） */
-export type QuoteItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free' | 'discount';
+export type QuoteItemKind =
+  | 'base'
+  | 'base_expense'
+  | 'interior_exterior'
+  | 'interior_exterior_expense'
+  | 'option'
+  | 'option_expense'
+  | 'installation'
+  | 'free'
+  | 'discount';
 
 export interface QuoteItem {
   id: string;

@@ -869,9 +869,9 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      // 案件見積は代理店以上が直接編集できる。代理店は自分の担当案件、総代理店以上は全案件。
+      // 代理店は担当案件のオプション・別途等を編集可能。本体は総代理店・本部だけ。
       const canEditAnyQuote = hasRoleAtLeast(actor.role, 'master_dealer');
-      const canEditAllLines = hasRoleAtLeast(actor.role, 'dealer');
+      const canEditBase = hasRoleAtLeast(actor.role, 'master_dealer');
       if (!(canEditAnyQuote || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
         throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');
       }
@@ -879,8 +879,11 @@ export class LocalStore implements DataStore {
         throw new StoreError('LOCKED', 'この版はすでに改訂されています。最新の版から作成してください。');
       }
       for (const it of input.items) {
-        if (!canEditAllLines) {
+        if (!hasRoleAtLeast(actor.role, 'dealer')) {
           throw new StoreError('FORBIDDEN', '見積を編集できるのは代理店以上です');
+        }
+        if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
+          throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
         if (it.unit_price < 0 || it.quantity <= 0) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
       }
@@ -890,13 +893,12 @@ export class LocalStore implements DataStore {
       const sumOf = (...kinds: DealerRevisionItem['kind'][]) =>
         input.items.filter((it) => kinds.includes(it.kind)).reduce((sum, it) => sum + amount(it), 0);
       const installation = sumOf('installation', 'free');
-      // 本体・オプションの行が入力されていればそれを採用し、なければ元の版のまま
-      const hasBase = input.items.some((it) => it.kind === 'base' || it.kind === 'base_expense');
-      const hasOption = input.items.some((it) => it.kind === 'option' || it.kind === 'option_expense');
-      const basePrice = hasBase ? sumOf('base') : parent.base_price;
-      const baseExpense = hasBase ? sumOf('base_expense') : parent.base_expense;
-      const optionSubtotal = hasOption ? sumOf('option') : parent.option_subtotal;
-      const optionExpense = hasOption ? sumOf('option_expense') : parent.option_expense;
+      // 代理店の本体は親見積の値を固定で継承。総代理店・本部だけ入力値で置換できる。
+      const basePrice = canEditBase ? sumOf('base') : parent.base_price;
+      const baseExpense = canEditBase ? sumOf('base_expense') : parent.base_expense;
+      // オプションは代理店以上が編集できるため、入力された案件明細をそのまま採用する。
+      const optionSubtotal = sumOf('option');
+      const optionExpense = sumOf('option_expense');
       const baseTotal = basePrice + baseExpense;
       const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
@@ -930,18 +932,14 @@ export class LocalStore implements DataStore {
       };
       db.quotes.push(next);
 
-      // 入力がない区分は親の版から複製する（代理店が別途工事だけ直した場合など）
-      const enteredKinds = new Set(input.items.map((it) => it.kind));
-      const keepBase = !hasBase;
-      const keepOption = !hasOption;
-      for (const it of db.quoteItems.filter((x) => x.quote_id === parent.id)) {
-        const isBase = it.kind === 'base' || it.kind === 'base_expense';
-        const isOption = it.kind === 'option' || it.kind === 'option_expense';
-        if ((isBase && keepBase) || (isOption && keepOption)) {
+      // 代理店が本体を触れない場合だけ、親見積の本体明細をそのまま複製する。
+      if (!canEditBase) {
+        for (const it of db.quoteItems.filter(
+          (x) => x.quote_id === parent.id && (x.kind === 'base' || x.kind === 'base_expense')
+        )) {
           db.quoteItems.push({ ...it, id: randomUUID(), quote_id: next.id });
         }
       }
-      void enteredKinds;
       let sort = 1000;
       for (const it of input.items) {
         db.quoteItems.push({

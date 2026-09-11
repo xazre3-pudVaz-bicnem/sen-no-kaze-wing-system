@@ -96,7 +96,7 @@ describe('標準見積Excelの取込・検算', () => {
       unit_price: 1000,
       amount: 1000,
     });
-    expect(template.lines.some((x) => x.section_code === 'base' as never)).toBe(false);
+    expect((template.lines.map((x) => x.section_code) as string[])).not.toContain('base');
     expect(template.lines.map((x) => x.section_code)).toEqual([
       'interior_exterior',
       'option',

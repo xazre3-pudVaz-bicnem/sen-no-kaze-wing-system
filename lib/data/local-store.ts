@@ -33,6 +33,11 @@ import type {
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
+import {
+  computeStandardEstimatePricing,
+  INTERIOR_EXTERIOR_CATEGORY_CODES,
+  type StandardEstimatePricingResult,
+} from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
 import { ROUNDING_UNIT } from '@/lib/domain/pricing';

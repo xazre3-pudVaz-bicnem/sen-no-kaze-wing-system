@@ -1,6 +1,6 @@
 import { buildPresetSelection } from './preset';
 import { selectedPreviewKeys } from './preview';
-import type { CatalogBundle } from './types';
+import type { CatalogBundle, PreviewImageRule } from './types';
 import { isDedicatedBaseFloorplanRule } from './preview-rule-meta';
 
 const normalizeKeys = (keys: string[]) => [...new Set(keys)].sort();

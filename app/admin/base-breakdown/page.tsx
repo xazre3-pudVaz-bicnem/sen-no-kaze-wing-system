@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 /**
  * 標準見積Excelと本体明細の管理。
  * 標準見積の価格源はExcel。preset＋商品価格から標準見積を再構成しない。
- * 本体明細だけは base_breakdown_items を正本として従来どおり編集できる。
+ * 本体明細だけは base_breakdown_items を正本とし、Excel取込後は原本整合のため直接編集しない。
  */
 export default async function BaseBreakdownPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireCatalogEditor();
@@ -31,7 +31,9 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
       const order = new Map([
         ['base', 0],
         ['hotel', 1],
+        ['hotel-single', 1],
         ['residence', 2],
+        ['water-kit', 2],
         ['office', 3],
       ]);
       return (order.get(a.spec_code) ?? 99) - (order.get(b.spec_code) ?? 99) || a.spec_code.localeCompare(b.spec_code);

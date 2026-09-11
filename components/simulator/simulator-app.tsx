@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ArrowRight, Save } from 'lucide-react';
 import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-configurations';
-import { BASE_ESTIMATE_SPEC_CODE, activeEstimateSpecCode, estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
@@ -16,7 +15,7 @@ import {
   type ExteriorFaceCode,
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
-import { VIEW_KEYS, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
+import { FINISH_LEVELS, FINISH_LEVEL_INFO, VIEW_KEYS, finishLevelRank, type CatalogBundle, type ConfigurationStatus, type FinishLevel, type ViewKey } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
@@ -109,12 +108,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   }, [bundle, ctx, defaults, model.presets]);
 
   const initialLevel: FinishLevel = initial?.finish_level ?? 'full';
-  const initialSpecCode = activeEstimateSpecCode(initialLevel, initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
-  const initialStandardSelection =
-    initialSpecCode === BASE_ESTIMATE_SPEC_CODE
-      ? defaultSelection(ctx, 'shell')
-      : (presetSelections.find((p) => p.code === initialSpecCode)?.ids ?? presetSelections[0]?.ids ?? defaults);
-  const initialSelection = pruneToScope(ctx, initial?.option_ids ?? initialStandardSelection, initialLevel);
+  const initialSelection = pruneToScope(ctx, initial?.option_ids ?? presetSelections[0]?.ids ?? defaults, initialLevel);
   const initialVariants = pruneHiddenVariantChoices(
     bundle.variantGroups,
     bundle.variantChoices,
@@ -139,7 +133,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       initialVariants
     )
   );
-  const [specCode, setSpecCode] = useState<string>(initialSpecCode);
+  const [specCode, setSpecCode] = useState<string>(initial?.spec_code ?? model.presets?.[0]?.code ?? 'hotel');
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
@@ -155,8 +149,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
-  const estimateTemplates = useMemo(() => estimateTemplatesFor(model), [model]);
-  const specName = estimateTemplates.find((p) => p.code === specCode)?.name ?? '';
+  const specName = model.presets?.find((p) => p.code === specCode)?.name ?? '';
   const planSize =
     model.specs.find((spec) => spec.label === '展開後')?.value ??
     model.specs.find((spec) => spec.label.includes('床面積'))?.value ??
@@ -177,12 +170,8 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
       if (!initial && draft) {
         const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
-        if (draft.finishLevel) {
-          setFinishLevel(draft.finishLevel);
-          setSpecCode(activeEstimateSpecCode(draft.finishLevel, draft.spec ?? model.presets?.[0]?.code ?? 'hotel'));
-        } else if (draft.spec) {
-          setSpecCode(draft.spec);
-        }
+        if (draft.finishLevel) setFinishLevel(draft.finishLevel);
+        if (draft.spec) setSpecCode(draft.spec);
         if (draft.variantIds?.length) setVariantIds(draft.variantIds);
         if (draft.exteriorFaces?.length) {
           setExteriorFaces(
@@ -240,12 +229,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(
-    () =>
-      bundle.options.filter(
-        (o) =>
-          o.spec_codes.length === 0 ||
-          (specCode !== BASE_ESTIMATE_SPEC_CODE && o.spec_codes.includes(specCode))
-      ),
+    () => bundle.options.filter((o) => o.spec_codes.length === 0 || o.spec_codes.includes(specCode)),
     [bundle.options, specCode]
   );
   /** 注文範囲に入っているカテゴリー（本体のみ → サッシ・外壁・断熱・防火・別途工事だけ） */
@@ -280,22 +264,26 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
       ),
     [model, bundle, selected, variantIds, baseOverride, exteriorFaces]
   );
-  /** 「本体のみ」ボタンの概算。用途別見積とは別の base 内訳で計算する。 */
+  /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
-    const ids = specCode === BASE_ESTIMATE_SPEC_CODE && finishLevel === 'shell' ? selected : defaultSelection(ctx, 'shell');
-    return {
-      shell: computePricing(
+    const preset = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+    const base = preset?.ids ?? defaults;
+    const out: Partial<Record<FinishLevel, number>> = {};
+    for (const lv of FINISH_LEVELS) {
+      const ids = pruneToScope(ctx, lv === finishLevel ? selected : base, lv);
+      out[lv] = computePricing(
         model,
         bundle.options,
         bundle.categories,
         ids.map((sid) => ({ option_id: sid })),
         undefined,
         undefined,
-        baseBreakdownTotal(bundle, BASE_ESTIMATE_SPEC_CODE),
-        specCode === BASE_ESTIMATE_SPEC_CODE && finishLevel === 'shell' ? exteriorFaces : []
-      ).total,
-    } satisfies Partial<Record<FinishLevel, number>>;
-  }, [ctx, model, bundle, specCode, selected, finishLevel, exteriorFaces]);
+        baseBreakdownTotal(bundle, specCode),
+        lv === finishLevel ? exteriorFaces : []
+      ).total;
+    }
+    return out;
+  }, [ctx, model, bundle, presetSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
 
   const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
@@ -316,34 +304,45 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
 
   // ---- 操作 ----
   const applyPreset = (code: string) => {
+    setSpecCode(code);
     if (readOnly) return;
     const p = presetSelections.find((x) => x.code === code);
     if (!p) return;
-    // 用途ボタンは「注文範囲」の一部ではなく、完成した標準見積そのものを切り替える。
-    // shell が localStorage に残っていても、ホテル／住宅／事務所を押したら必ず full に戻す。
-    const nextSel = pruneToScope(ctx, p.ids, 'full');
+    const nextSel = pruneToScope(ctx, p.ids, finishLevel);
     const nextVariants = defaultVariantIds(bundle, nextSel);
-    setFinishLevel('full');
-    setSpecCode(code);
     setSelected(nextSel);
     setVariantIds(nextVariants);
     resetExteriorFaces(nextSel, nextVariants);
     setDirty(true);
-    pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準見積を読み込みました`, 'success');
+    pushToast(`「${model.presets.find((x) => x.code === code)?.name ?? code}」の標準構成を読み込みました`, 'success');
   };
 
-  /** 「本体のみ」は用途別 preset と独立した標準見積として切り替える。 */
+  /**
+   * 注文範囲の切り替え。
+   * 狭めるときは範囲外の選択を落とし、広げるときは仕様の標準構成から不足分を補う。
+   */
   const changeFinishLevel = (level: FinishLevel) => {
-    if (readOnly || level !== 'shell') return;
-    const nextSel = defaultSelection(ctx, 'shell');
-    const nextVariants = defaultVariantIds(bundle, nextSel);
-    setFinishLevel('shell');
-    setSpecCode(BASE_ESTIMATE_SPEC_CODE);
-    setSelected(nextSel);
-    setVariantIds(nextVariants);
-    resetExteriorFaces(nextSel, nextVariants);
+    if (readOnly || level === finishLevel) return;
+    const widening = finishLevelRank(level) > finishLevelRank(finishLevel);
+    if (widening) {
+      const preset = presetSelections.find((x) => x.code === specCode) ?? presetSelections[0];
+      const wanted = pruneToScope(ctx, preset?.ids ?? defaults, level);
+      let cur = selected;
+      for (const oid of wanted) {
+        if (cur.includes(oid)) continue;
+        const r = toggleOption(ctx, cur, oid);
+        if (!r.rejected) cur = r.next;
+      }
+      setSelected(cur);
+    } else {
+      const kept = pruneToScope(ctx, selected, level);
+      const dropped = selected.length - kept.length;
+      setSelected(kept);
+      if (dropped > 0) pushToast(`注文範囲を外れた ${dropped} 点を見積から外しました`, 'info');
+    }
+    setFinishLevel(level);
     setDirty(true);
-    pushToast('「本体のみ」の標準見積を読み込みました', 'success');
+    pushToast(`「${FINISH_LEVEL_INFO[level].name}」で見積を作ります`, 'success');
   };
 
   const applyPicker = (categoryId: string, nextInCategory: string[], nextVariants: string[] = []) => {
@@ -663,13 +662,11 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                         type="button"
                         onClick={() => applyPreset(p.code)}
                         disabled={readOnly}
-                        aria-pressed={finishLevel !== 'shell' && specCode === p.code}
+                        aria-pressed={specCode === p.code}
                         title={p.description}
                         className={cn(
                           'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
-                          finishLevel !== 'shell' && specCode === p.code
-                            ? 'border-brown bg-brown text-white'
-                            : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                          specCode === p.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
                         )}
                         data-testid={`preset-${p.code}`}
                       >

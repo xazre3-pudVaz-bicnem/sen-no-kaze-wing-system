@@ -137,6 +137,16 @@ describe('標準見積Excelの取込・検算', () => {
     expect(template.total).toBe(7700);
   });
 
+  it('本体明細に1円未満がある場合は暗黙に丸めず登録を止める', () => {
+    const sheet = workbookSheet();
+    sheet.rows[14][20] = '1000.5';
+    sheet.rows[14][21] = '1000.5';
+    sheet.rows[15][21] = '150.075';
+    sheet.rows[16][21] = '1150.575';
+
+    expect(() => parseStandardEstimateWorkbook([sheet])).toThrow('Excel記載値を保持できないため登録を中止しました');
+  });
+
   it('防火シートは今回の対象外として読み飛ばす', () => {
     const parsed = parseStandardEstimateWorkbook([
       workbookSheet(),

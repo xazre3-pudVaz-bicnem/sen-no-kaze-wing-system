@@ -832,6 +832,15 @@ export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: F
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   try {
     const store = await getStore();
+    const locked = (await store.listEstimateTemplates(parsed.data.base_model_id)).some(
+      (row) => row.spec_code === parsed.data.spec_code
+    );
+    if (locked) {
+      return {
+        ok: false,
+        error: 'Excel取込済みの標準見積です。本体明細を直接変更せず、Excelを修正して再取込してください。',
+      };
+    }
     const saved = await store.saveBaseBreakdownItems(parsed.data.base_model_id, parsed.data.spec_code, parsed.data.items);
     revalidatePath('/admin/base-breakdown');
     revalidatePath('/', 'layout');

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS, canEditCatalog, hasRoleAtLeast } from '@/lib/domain/types';
+import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
@@ -26,7 +26,7 @@ export default async function AdminQuoteDetailPage({
   const isAdmin = actor.role === 'admin';
   // 案件見積は代理店以上が直接編集できる。代理店は担当案件、総代理店以上は全案件。
   const canManageAllQuotes = canEditCatalog(actor.role);
-  const canEditAllQuoteLines = hasRoleAtLeast(actor.role, 'dealer');
+  const canEditBase = canEditCatalog(actor.role);
   if (!canManageAllQuotes && quote.dealer_id !== actor.id) notFound();
 
   const canRevise = quote.status !== 'superseded' && (canManageAllQuotes || quote.dealer_id === actor.id);
@@ -82,11 +82,11 @@ export default async function AdminQuoteDetailPage({
           )}
           {sp.from === 'mail' && canRevise && (
             <Alert tone="info" title="メールからお越しの方へ">
-              この画面で案件見積の明細・数量・単価・別途工事などを編集し、確定見積を発行できます。入力表は下にあります。
+              この画面で案件見積を編集し、確定見積を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。入力表は下にあります。
             </Alert>
           )}
           {canRevise && (
-            <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} catalog={catalog} canEditAll={canEditAllQuoteLines} />
+            <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} catalog={catalog} canEditBase={canEditBase} />
           )}
           {quote.status === 'superseded' && (
             <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>

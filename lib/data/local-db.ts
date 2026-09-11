@@ -26,6 +26,9 @@ import type {
   QuoteDocument,
   QuoteItem,
   QuoteRequest,
+  EstimateTemplate,
+  EstimateTemplateSection,
+  EstimateTemplateLine,
 } from '@/lib/domain/types';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
@@ -66,6 +69,9 @@ export interface LocalDb {
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   baseBreakdownItems: BaseBreakdownItem[];
+  estimateTemplates: EstimateTemplate[];
+  estimateTemplateSections: EstimateTemplateSection[];
+  estimateTemplateLines: EstimateTemplateLine[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
 }
@@ -97,6 +103,9 @@ export function emptyDb(): LocalDb {
     variantGroups: clone(seedCatalog.variantGroups),
     variantChoices: clone(seedCatalog.variantChoices),
     baseBreakdownItems: clone(seedCatalog.baseBreakdownItems),
+    estimateTemplates: [],
+    estimateTemplateSections: [],
+    estimateTemplateLines: [],
     configurations: [],
     configurationItems: [],
     snapshots: [],

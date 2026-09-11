@@ -8,6 +8,7 @@ import type {
   EstimateImport,
   EstimateImportBundle,
   EstimateImportLine,
+  EstimateProductLink,
   CatalogBundle,
   Configuration,
   ConfigurationItem,
@@ -297,13 +298,14 @@ export class SupabaseStore implements DataStore {
       ? await db.from('estimate_product_links').select('*').in('import_line_id', lineIds)
       : { data: [], error: null };
     if (linkResult.error) mapPgError(linkResult.error);
-    const linkByLine = new Map((linkResult.data ?? []).map((row: Record<string, unknown>) => [String(row.import_line_id), row]));
+    const links = (linkResult.data ?? []) as unknown as EstimateProductLink[];
+    const linkByLine = new Map(links.map((row) => [row.import_line_id, row]));
 
     return {
       import: estimateImport,
       lines: lines.map((line) => ({
         ...line,
-        product_link: (linkByLine.get(line.id) as EstimateImportBundle['lines'][number]['product_link']) ?? null,
+        product_link: linkByLine.get(line.id) ?? null,
       })),
     };
   }

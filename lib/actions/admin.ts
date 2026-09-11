@@ -782,7 +782,6 @@ export async function importEstimateTemplatesAction(
 
     inputs.push({
       base_model_id: model.id,
-      base_model_id: modelId,
       spec_code: template.spec_code,
       name: template.name,
       source_file_name: file.name,

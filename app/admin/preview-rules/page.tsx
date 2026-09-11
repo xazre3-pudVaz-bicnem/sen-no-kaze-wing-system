@@ -60,7 +60,15 @@ function PreviewCard({
             <p>対応条件：{rule.preview_keys.length ? rule.preview_keys.map(keyLabel).join(' + ') : '標準状態'}</p>
             <form action={deletePreviewRuleAction}>
               <input type="hidden" name="id" value={rule.id} />
-              <ConfirmSubmit message="この画像ルールを削除しますか？" className="text-danger underline">
+              <input
+                type="hidden"
+                name="redirect_to"
+                value={sectionHref(rule.base_model_id, rule.view === 'floorplan' ? 'floorplan' : 'completion')}
+              />
+              <ConfirmSubmit
+                message="この画像の登録を削除しますか？削除後は未登録になります。"
+                className="text-danger underline"
+              >
                 この画像を削除
               </ConfirmSubmit>
             </form>
@@ -308,7 +316,21 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
                           <p className="text-lg font-semibold">{slot.title}</p>
                           <p className="mt-1 text-xs text-muted">{slot.key === 'base' ? '本体専用平面図' : '標準構成の平面図'}</p>
                         </div>
-                        <Link href={`/admin/preview-rules/${slot.rule.id}?model=${b.model.id}&section=floorplan`} className="btn-secondary btn-sm inline-flex">画像を変更</Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link href={`/admin/preview-rules/${slot.rule.id}?model=${b.model.id}&section=floorplan`} className="btn-secondary btn-sm inline-flex">
+                            画像を変更
+                          </Link>
+                          <form action={deletePreviewRuleAction}>
+                            <input type="hidden" name="id" value={slot.rule.id} />
+                            <input type="hidden" name="redirect_to" value={sectionHref(b.model.id, 'floorplan')} />
+                            <ConfirmSubmit
+                              message={`${slot.title}の平面図を削除しますか？削除後は「未登録」になり、シミュレーターではこの平面図を使用しなくなります。`}
+                              className="btn-secondary btn-sm border-danger/30 text-danger hover:border-danger/60 hover:bg-danger/5"
+                            >
+                              画像を削除
+                            </ConfirmSubmit>
+                          </form>
+                        </div>
                         {slot.key !== 'base' && (
                           <details className="text-xs text-muted">
                             <summary className="cursor-pointer">詳細を見る</summary>

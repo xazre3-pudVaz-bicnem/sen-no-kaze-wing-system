@@ -5,6 +5,10 @@ import { randomUUID } from 'node:crypto';
 import type {
   BaseBreakdownItem,
   BaseModel,
+  EstimateTemplate,
+  EstimateTemplateBundle,
+  EstimateTemplateLine,
+  EstimateTemplateSection,
   CatalogBundle,
   Configuration,
   FinishLevel,
@@ -58,6 +62,7 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type DealerRevisionItem,
+  type EstimateTemplateImportInput,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
@@ -147,6 +152,9 @@ export class LocalStore implements DataStore {
     items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
   ) {
     return this.mutate((db) => {
+      if (db.estimateTemplates.some((row) => row.base_model_id === modelId && row.spec_code === specCode)) {
+        throw new StoreError('LOCKED', 'Excel取込済みの標準見積です。Excelを修正して再取込してください。');
+      }
       db.baseBreakdownItems = db.baseBreakdownItems.filter((b) => !(b.base_model_id === modelId && b.spec_code === specCode));
       const rows: BaseBreakdownItem[] = items.map((it, i) => ({
         id: randomUUID(),
@@ -169,6 +177,125 @@ export class LocalStore implements DataStore {
         summary: `本体内訳を更新（${specCode}・${rows.length}行）`,
       });
       return rows;
+    });
+  }
+
+  // ---------- 標準見積テンプレート ----------
+  async listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]> {
+    return this.read((db) =>
+      db.estimateTemplates
+        .filter((row) => !modelId || row.base_model_id === modelId)
+        .sort((a, b) => a.base_model_id.localeCompare(b.base_model_id) || a.spec_code.localeCompare(b.spec_code))
+    );
+  }
+
+  async getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null> {
+    return this.read((db) => {
+      const template = db.estimateTemplates.find(
+        (row) => row.base_model_id === modelId && row.spec_code === specCode
+      );
+      if (!template) return null;
+      return {
+        template,
+        sections: db.estimateTemplateSections
+          .filter((row) => row.template_id === template.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+        lines: db.estimateTemplateLines
+          .filter((row) => row.template_id === template.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
+        base_breakdown_items: db.baseBreakdownItems
+          .filter((row) => row.base_model_id === modelId && row.spec_code === specCode)
+          .sort((a, b) => a.sort_order - b.sort_order),
+      };
+    });
+  }
+
+  async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
+    this.mutate((db) => {
+      for (const input of items) {
+        const old = db.estimateTemplates.find(
+          (row) => row.base_model_id === input.base_model_id && row.spec_code === input.spec_code
+        );
+        if (old) {
+          db.estimateTemplateSections = db.estimateTemplateSections.filter((row) => row.template_id !== old.id);
+          db.estimateTemplateLines = db.estimateTemplateLines.filter((row) => row.template_id !== old.id);
+          db.estimateTemplates = db.estimateTemplates.filter((row) => row.id !== old.id);
+        }
+        db.baseBreakdownItems = db.baseBreakdownItems.filter(
+          (row) => !(row.base_model_id === input.base_model_id && row.spec_code === input.spec_code)
+        );
+
+        const now = nowIso();
+        const template: EstimateTemplate = {
+          id: randomUUID(),
+          base_model_id: input.base_model_id,
+          spec_code: input.spec_code,
+          name: input.name,
+          source_file_name: input.source_file_name,
+          source_sheet_name: input.source_sheet_name,
+          source_sha256: input.source_sha256,
+          tax_rate: input.tax_rate,
+          subtotal_raw: input.subtotal_raw,
+          adjustment: input.adjustment,
+          subtotal: input.subtotal,
+          tax: input.tax,
+          total: input.total,
+          imported_at: now,
+          updated_at: now,
+        };
+        const sections: EstimateTemplateSection[] = input.sections.map((row) => ({
+          ...row,
+          id: randomUUID(),
+          template_id: template.id,
+        }));
+        const lines: EstimateTemplateLine[] = input.lines.map((row) => ({
+          ...row,
+          id: randomUUID(),
+          template_id: template.id,
+        }));
+        const baseRows: BaseBreakdownItem[] = input.base_breakdown_items.map((row) => ({
+          ...row,
+          id: randomUUID(),
+          base_model_id: input.base_model_id,
+          spec_code: input.spec_code,
+        }));
+
+        const sectionByCode = new Map(sections.map((row) => [row.code, row]));
+        if (sections.length !== 4 || sectionByCode.size !== 4) {
+          throw new StoreError('VALIDATION', `${input.name}: 4分類が揃っていません`);
+        }
+        for (const section of sections) {
+          const lineSubtotal =
+            section.code === 'base'
+              ? baseRows.reduce((sum, row) => sum + row.amount, 0)
+              : lines.filter((row) => row.section_code === section.code).reduce((sum, row) => sum + row.amount, 0);
+          const sameMoney = (a: number, b: number) => Math.abs(a - b) < 0.0001;
+          if (!sameMoney(lineSubtotal, section.line_subtotal) || !sameMoney(section.line_subtotal + section.expense_amount, section.total)) {
+            throw new StoreError('VALIDATION', `${input.name}: ${section.label} の検算が一致しません`);
+          }
+        }
+        const sameMoney = (a: number, b: number) => Math.abs(a - b) < 0.0001;
+        if (!sameMoney(sections.reduce((sum, row) => sum + row.total, 0), input.subtotal_raw)) {
+          throw new StoreError('VALIDATION', `${input.name}: 4分類合計と小計が一致しません`);
+        }
+        if (!sameMoney(input.subtotal_raw + input.adjustment, input.subtotal)) {
+          throw new StoreError('VALIDATION', `${input.name}: 値引き等調整額の検算が一致しません`);
+        }
+        if (Math.abs(input.subtotal * input.tax_rate - input.tax) >= 1 || !sameMoney(input.subtotal + input.tax, input.total)) {
+          throw new StoreError('VALIDATION', `${input.name}: 税・合計の検算が一致しません`);
+        }
+
+        db.estimateTemplates.push(template);
+        db.estimateTemplateSections.push(...sections);
+        db.estimateTemplateLines.push(...lines);
+        db.baseBreakdownItems.push(...baseRows);
+        this.pushAudit(db, null, {
+          action: 'update',
+          entity: 'estimate_template',
+          entity_id: input.base_model_id,
+          summary: `標準見積をExcelから更新（${input.name}・${input.spec_code}）`,
+        });
+      }
     });
   }
 
@@ -718,8 +845,8 @@ export class LocalStore implements DataStore {
           recipient_id: dealerId,
           audience: 'dealer',
           kind: 'quote_assigned',
-          title: `別途工事の入力をお願いします：${q.quote_no}`,
-          body: `${q.customer_name} 様の見積です。下のリンクを開くと、そのまま別途工事とフリー商品を入力できます。`,
+          title: `案件見積の確認をお願いします：${q.quote_no}`,
+          body: `${q.customer_name} 様の見積です。本体は閲覧のみで、オプション・別途工事等を編集できます。`,
           // メールから 1 回で入力表まで飛べるようにする
           link: `/admin/quotes/${q.id}?from=mail#quote-editor`,
         });
@@ -742,17 +869,21 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      // 本体まで触れるのは総代理店以上。代理店は担当見積の別途工事とフリー商品だけ
-      const full = hasRoleAtLeast(actor.role, 'master_dealer');
-      if (!(full || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
+      // 代理店は担当案件のオプション・別途等を編集可能。本体は総代理店・本部だけ。
+      const canEditAnyQuote = hasRoleAtLeast(actor.role, 'master_dealer');
+      const canEditBase = hasRoleAtLeast(actor.role, 'master_dealer');
+      if (!(canEditAnyQuote || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
         throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');
       }
       if (parent.status === 'superseded') {
         throw new StoreError('LOCKED', 'この版はすでに改訂されています。最新の版から作成してください。');
       }
       for (const it of input.items) {
-        if (!full && it.kind !== 'installation' && it.kind !== 'free') {
-          throw new StoreError('FORBIDDEN', '本体・オプションを変更できるのは本部と総代理店だけです');
+        if (!hasRoleAtLeast(actor.role, 'dealer')) {
+          throw new StoreError('FORBIDDEN', '見積を編集できるのは代理店以上です');
+        }
+        if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
+          throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
         if (it.unit_price < 0 || it.quantity <= 0) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
       }
@@ -762,13 +893,12 @@ export class LocalStore implements DataStore {
       const sumOf = (...kinds: DealerRevisionItem['kind'][]) =>
         input.items.filter((it) => kinds.includes(it.kind)).reduce((sum, it) => sum + amount(it), 0);
       const installation = sumOf('installation', 'free');
-      // 本体・オプションの行が入力されていればそれを採用し、なければ元の版のまま
-      const hasBase = input.items.some((it) => it.kind === 'base' || it.kind === 'base_expense');
-      const hasOption = input.items.some((it) => it.kind === 'option' || it.kind === 'option_expense');
-      const basePrice = hasBase ? sumOf('base') : parent.base_price;
-      const baseExpense = hasBase ? sumOf('base_expense') : parent.base_expense;
-      const optionSubtotal = hasOption ? sumOf('option') : parent.option_subtotal;
-      const optionExpense = hasOption ? sumOf('option_expense') : parent.option_expense;
+      // 代理店の本体は親見積の値を固定で継承。総代理店・本部だけ入力値で置換できる。
+      const basePrice = canEditBase ? sumOf('base') : parent.base_price;
+      const baseExpense = canEditBase ? sumOf('base_expense') : parent.base_expense;
+      // オプションは代理店以上が編集できるため、入力された案件明細をそのまま採用する。
+      const optionSubtotal = sumOf('option');
+      const optionExpense = sumOf('option_expense');
       const baseTotal = basePrice + baseExpense;
       const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
@@ -792,10 +922,8 @@ export class LocalStore implements DataStore {
         subtotal,
         tax,
         total: subtotal + tax,
-        notes: full
-          ? '本見積書は最新の内容で作成した確定見積です。'
-          : '本見積書は現地の代理店・工務店が別途工事を確認したうえで作成した確定見積です。',
-        dealer_id: parent.dealer_id ?? (full ? null : actor.id),
+        notes: '本見積書は標準見積を基に、担当者が案件内容を反映して作成した確定見積です。',
+        dealer_id: parent.dealer_id ?? (actor.role === 'dealer' ? actor.id : null),
         dealer_note: input.dealer_note,
         revision: parent.revision + 1,
         parent_quote_id: parent.id,
@@ -804,18 +932,14 @@ export class LocalStore implements DataStore {
       };
       db.quotes.push(next);
 
-      // 入力がない区分は親の版から複製する（代理店が別途工事だけ直した場合など）
-      const enteredKinds = new Set(input.items.map((it) => it.kind));
-      const keepBase = !hasBase;
-      const keepOption = !hasOption;
-      for (const it of db.quoteItems.filter((x) => x.quote_id === parent.id)) {
-        const isBase = it.kind === 'base' || it.kind === 'base_expense';
-        const isOption = it.kind === 'option' || it.kind === 'option_expense';
-        if ((isBase && keepBase) || (isOption && keepOption)) {
+      // 代理店が本体を触れない場合だけ、親見積の本体明細をそのまま複製する。
+      if (!canEditBase) {
+        for (const it of db.quoteItems.filter(
+          (x) => x.quote_id === parent.id && (x.kind === 'base' || x.kind === 'base_expense')
+        )) {
           db.quoteItems.push({ ...it, id: randomUUID(), quote_id: next.id });
         }
       }
-      void enteredKinds;
       let sort = 1000;
       for (const it of input.items) {
         db.quoteItems.push({
@@ -839,7 +963,7 @@ export class LocalStore implements DataStore {
         audience: 'customer',
         kind: 'quote_revised',
         title: `確定見積が届きました：${next.quote_no}`,
-        body: `代理店が別途工事を確認し、第${next.revision}版の確定見積を発行しました。`,
+        body: `担当代理店が案件内容を確認し、第${next.revision}版の確定見積を発行しました。`,
         link: `/mypage/quotes/${next.id}`,
       });
       parent.status = 'superseded';

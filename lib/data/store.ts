@@ -26,6 +26,10 @@ import type {
   RoleCode,
   ContactMessage,
   ContactStatus,
+  EstimateTemplate,
+  EstimateTemplateBundle,
+  EstimateTemplateLine,
+  EstimateTemplateSection,
 } from '@/lib/domain/types';
 
 export interface SessionUser {
@@ -60,7 +64,7 @@ export interface SaveConfigurationInput {
   variant_choice_ids?: string[];
 }
 
-/** 見積の 1 行。本部・総代理店は全区分、代理店は installation / free だけ */
+/** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */
 export type RevisionItemKind = 'base' | 'base_expense' | 'option' | 'option_expense' | 'installation' | 'free';
 
 export interface DealerRevisionItem {
@@ -116,6 +120,28 @@ export interface CatalogImportBatch {
   options: (OptionInput & { import_operation: 'INSERT' | 'UPDATE' })[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
+}
+
+
+/** 実物Excelを価格の正本として取り込む標準見積テンプレート。 */
+export interface EstimateTemplateImportInput {
+  base_model_id: string;
+  spec_code: string;
+  name: string;
+  source_file_name: string;
+  source_sheet_name: string;
+  source_sha256: string;
+  tax_rate: number;
+  subtotal_raw: number;
+  adjustment: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+  sections: Omit<EstimateTemplateSection, 'id' | 'template_id'>[];
+  /** 本体明細だけは既存 base_breakdown_items に保存する。 */
+  base_breakdown_items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code'>[];
+  /** 本体以外の3分類だけ。 */
+  lines: Omit<EstimateTemplateLine, 'id' | 'template_id'>[];
 }
 
 /**
@@ -188,6 +214,12 @@ export interface DataStore {
     specCode: string,
     items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code' | 'sort_order' | 'amount'>[]
   ): Promise<BaseBreakdownItem[]>;
+
+  // ---- 標準見積テンプレート（Excelが価格の正本） ----
+  listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]>;
+  getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null>;
+  /** 解析・検算済みの標準見積を一括置換する。base 明細も同じ transaction で更新する。 */
+  replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void>;
 
   // ---- 商品のバリエーション ----
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;

@@ -15,7 +15,7 @@ const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 
   { href: '/admin/categories', label: 'オプションカテゴリー', need: 'catalog' },
   { href: '/admin/options', label: 'オプション', need: 'catalog' },
   { href: '/admin/import', label: '商品の一括登録', need: 'catalog' },
-  { href: '/admin/base-breakdown', label: '本体内訳マスター', need: 'catalog' },
+  { href: '/admin/base-breakdown', label: '標準見積・本体内訳', need: 'catalog' },
   { href: '/admin/preview-rules', label: 'シミュレーター画像', need: 'catalog' },
   { href: '/admin/customers', label: 'ユーザー・権限', need: 'admin' },
   { href: '/admin/configurations', label: '保存された仕様', need: 'admin' },

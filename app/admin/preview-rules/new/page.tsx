@@ -1,5 +1,6 @@
 import { getStore } from '@/lib/data/store';
 import { previewKeyLabels } from '@/lib/domain/preview';
+import { estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { BASE_FLOORPLAN_NOTE } from '@/lib/domain/preview-rule-meta';
 import { VIEW_KEYS, type ViewKey } from '@/lib/domain/types';
 import { AdminPage, BackLink } from '@/components/admin/ui';
@@ -13,9 +14,11 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
   const view = VIEW_KEYS.includes(sp.view as ViewKey) ? (sp.view as ViewKey) : undefined;
   const selectedModel = models.find((model) => model.id === sp.model);
   const isBaseFloorplan = sp.slot === 'base' && view === 'floorplan';
-  const selectedPreset = selectedModel?.presets?.find((preset) => preset.code === sp.preset);
+  const selectedEstimate = selectedModel
+    ? estimateTemplatesFor(selectedModel).find((choice) => choice.code === sp.preset)
+    : undefined;
   const requestedKeys = sp.keys ? sp.keys.split(',').filter(Boolean) : [];
-  const presetCode = view === 'floorplan' && selectedPreset && requestedKeys.length === 0 ? selectedPreset.code : undefined;
+  const presetCode = view === 'floorplan' && selectedEstimate && requestedKeys.length === 0 ? selectedEstimate.code : undefined;
   return (
     <AdminPage title="シミュレーター画像を追加">
       <BackLink href={`/admin/preview-rules?model=${sp.model ?? models[0]?.id ?? ''}&section=${sp.section ?? (view === 'floorplan' ? 'floorplan' : 'completion')}`} label="シミュレーター画像へ戻る" />
@@ -29,8 +32,8 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
           keys: requestedKeys,
           alt: isBaseFloorplan && selectedModel
             ? `${selectedModel.name} 本体平面図`
-            : selectedModel && selectedPreset
-              ? `${selectedModel.name} ${selectedPreset.name} 平面図`
+            : selectedModel && selectedEstimate
+              ? `${selectedModel.name} ${selectedEstimate.name} 平面図`
               : undefined,
           internalNote: isBaseFloorplan ? BASE_FLOORPLAN_NOTE : undefined,
           presetCode,

@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   BaseBreakdownItem,
   BaseModel,
+  EstimateTemplate,
+  EstimateTemplateBundle,
   CatalogBundle,
   Configuration,
   ConfigurationItem,
@@ -50,6 +52,7 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type CatalogImportBatch,
+  type EstimateTemplateImportInput,
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -61,6 +64,7 @@ function mapPgError(e: { code?: string; message?: string } | null): never {
   if (msg.startsWith('CONFLICT:') || msg.startsWith('DEPENDENCY:') || msg.startsWith('REQUIRED:') || msg.startsWith('SINGLE:')) {
     throw new StoreError('VALIDATION', msg.replace(/^[A-Z_]+:\s*/, ''));
   }
+  if (msg.startsWith('VALIDATION:')) throw new StoreError('VALIDATION', msg.replace(/^VALIDATION:\s*/, ''));
   if (msg.startsWith('LOCKED')) throw new StoreError('LOCKED', msg.replace(/^LOCKED:\s*/, ''));
   if (msg.startsWith('FORBIDDEN') || e?.code === '42501') throw new StoreError('FORBIDDEN', '権限がありません');
   if (msg.startsWith('NOT_FOUND') || e?.code === 'P0002' || e?.code === 'PGRST116') throw new StoreError('NOT_FOUND', 'データが見つかりません');
@@ -206,6 +210,53 @@ export class SupabaseStore implements DataStore {
     const ins = await db.from('base_breakdown_items').insert(rows).select('*');
     if (ins.error) mapPgError(ins.error);
     return (ins.data ?? []) as BaseBreakdownItem[];
+  }
+
+  // ---------- 標準見積テンプレート ----------
+  async listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]> {
+    const db = await this.db();
+    let q = db.from('estimate_templates').select('*').order('base_model_id').order('spec_code');
+    if (modelId) q = q.eq('base_model_id', modelId);
+    const { data, error } = await q;
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as EstimateTemplate[];
+  }
+
+  async getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null> {
+    const db = await this.db();
+    const templateResult = await db
+      .from('estimate_templates')
+      .select('*')
+      .eq('base_model_id', modelId)
+      .eq('spec_code', specCode)
+      .maybeSingle();
+    if (templateResult.error) {
+      if (isMissingRelation(templateResult.error)) return null;
+      mapPgError(templateResult.error);
+    }
+    const template = templateResult.data as EstimateTemplate | null;
+    if (!template) return null;
+    const [sections, lines, baseRows] = await Promise.all([
+      db.from('estimate_template_sections').select('*').eq('template_id', template.id).order('sort_order'),
+      db.from('estimate_template_lines').select('*').eq('template_id', template.id).order('sort_order'),
+      db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).eq('spec_code', specCode).order('sort_order'),
+    ]);
+    for (const result of [sections, lines, baseRows]) if (result.error) mapPgError(result.error);
+    return {
+      template,
+      sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
+      lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
+      base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
+    };
+  }
+
+  async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
+    const db = await this.db();
+    const { error } = await db.rpc('replace_estimate_templates', { p_templates: items });
+    if (error) mapPgError(error);
   }
 
   async respondToQuote(id: string, status: 'accepted' | 'declined') {

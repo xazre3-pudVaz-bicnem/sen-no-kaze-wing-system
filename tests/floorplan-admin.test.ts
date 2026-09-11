@@ -8,7 +8,7 @@ import {
   previewRuleDisplayNote,
 } from '@/lib/domain/preview-rule-meta';
 import type { CatalogBundle, PreviewImageRule } from '@/lib/domain/types';
-import { MODEL_WING01_ID, seedCatalog } from '@/lib/seed/catalog';
+import { MODEL_BOX_ID, MODEL_WING01_ID, seedCatalog } from '@/lib/seed/catalog';
 
 const wingModel = seedCatalog.models.find((model) => model.id === MODEL_WING01_ID)!;
 const wingOptions = seedCatalog.options.filter(
@@ -51,12 +51,20 @@ const dedicatedBaseRule = (): PreviewImageRule => ({
 
 describe('本体専用平面図の管理', () => {
   it('preview_keys=[] の既存fallbackは本体専用と判定されない', () => {
-    const fallback = wingRules.find(
+    const wingFallback = wingRules.find(
       (rule) => rule.view === 'floorplan' && rule.preview_keys.length === 0
     );
-    expect(fallback).toBeDefined();
-    expect(fallback?.url).toContain('wing-residence.png');
-    expect(isDedicatedBaseFloorplanRule(fallback!)).toBe(false);
+    const boxFallback = seedCatalog.previewRules.find(
+      (rule) =>
+        rule.base_model_id === MODEL_BOX_ID &&
+        rule.view === 'floorplan' &&
+        rule.preview_keys.length === 0
+    );
+
+    expect(wingFallback?.url).toContain('wing-residence.png');
+    expect(boxFallback?.url).toContain('box-office.jpg');
+    expect(isDedicatedBaseFloorplanRule(wingFallback!)).toBe(false);
+    expect(isDedicatedBaseFloorplanRule(boxFallback!)).toBe(false);
   });
 
   it('本体専用ルールだけが本体枠として選ばれる', () => {

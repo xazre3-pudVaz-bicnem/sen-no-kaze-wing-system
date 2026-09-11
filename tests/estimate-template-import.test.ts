@@ -76,6 +76,19 @@ function workbookSheet(name = 'ウィング【ホテルUB】'): Sheet {
   return { name, rows };
 }
 
+function flatWorkbookSheet(name: 'フラット (本体)' | 'フラット (物置事務所)'): Sheet {
+  const sheet = workbookSheet(name);
+  // Flatの実物Excelでは、内外装工事の合計見出しも2つ目の「【本体価格計】」になっている。
+  sheet.rows[19][12] = '【本体価格計】';
+  // 内外装経費も旧Excel上は「本体諸費用」と表記されるため、取込時に正規化する。
+  sheet.rows[18][12] = '本体諸費用（交通費、労災、安全管理費等）';
+  if (name === 'フラット (物置事務所)') {
+    // 実物シートでは内外装ブロック先頭が「本体」表記でも、位置で内外装工事として扱う。
+    sheet.rows[17][12] = '本体';
+  }
+  return sheet;
+}
+
 describe('標準見積Excelの取込・検算', () => {
   it('4分類を維持し、本体明細だけ base_breakdown_items に分離する', () => {
     const parsed = parseStandardEstimateWorkbook([workbookSheet()]);
@@ -159,6 +172,32 @@ describe('標準見積Excelの取込・検算', () => {
       ['box', 'hotel-single', 'ホテル・単身者用'],
       ['box', 'water-kit', '水回りキット'],
     ]);
+  });
+
+  it('Flatは2つ目の本体価格計をWingと同じ内外装工事として正規化する', () => {
+    const parsed = parseStandardEstimateWorkbook([
+      flatWorkbookSheet('フラット (本体)'),
+      flatWorkbookSheet('フラット (物置事務所)'),
+    ]);
+
+    expect(parsed.templates.map((x) => [x.model_slug, x.spec_code, x.name])).toEqual([
+      ['flat', 'base', '本体のみ'],
+      ['flat', 'office', '事務所・店舗用'],
+    ]);
+
+    for (const template of parsed.templates) {
+      expect(template.sections.map((x) => x.code)).toEqual([
+        'base',
+        'interior_exterior',
+        'option',
+        'sitework',
+      ]);
+      const interior = template.sections.find((x) => x.code === 'interior_exterior')!;
+      expect(interior.label).toBe('内外装工事');
+      expect(interior.expense_label).toBe('内外装工事経費');
+      expect(interior.total).toBe(2300);
+      expect(template.lines.find((x) => x.name === '・外壁工事')?.section_code).toBe('interior_exterior');
+    }
   });
 
   it('防火シートは今回の対象外として読み飛ばす', () => {

@@ -301,8 +301,13 @@ export async function deletePreviewRuleAction(formData: FormData): Promise<void>
   const store = await getStore();
   await store.deletePreviewRule(String(formData.get('id') ?? ''));
   revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
-  redirect('/admin/preview-rules?deleted=1');
+  updateTag(CATALOG_TAG);
+
+  const requestedBack = String(formData.get('redirect_to') ?? '').trim();
+  const back = requestedBack.startsWith('/admin/preview-rules')
+    ? requestedBack
+    : '/admin/preview-rules';
+  redirect(`${back}${back.includes('?') ? '&' : '?'}deleted=1`);
 }
 
 export async function addProductImageAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {

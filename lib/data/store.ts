@@ -27,6 +27,7 @@ import type {
   ContactMessage,
   ContactStatus,
   EstimateTemplate,
+  EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
 } from '@/lib/domain/types';
@@ -216,6 +217,7 @@ export interface DataStore {
 
   // ---- 標準見積テンプレート（Excelが価格の正本） ----
   listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]>;
+  getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null>;
   /** 解析・検算済みの標準見積を一括置換する。base 明細も同じ transaction で更新する。 */
   replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void>;
 

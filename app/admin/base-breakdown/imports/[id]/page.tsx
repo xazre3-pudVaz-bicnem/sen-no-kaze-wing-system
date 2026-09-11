@@ -33,7 +33,7 @@ export default async function EstimateImportReviewPage({
       <BackLink href={`/admin/base-breakdown?model=${bundle.import.base_model_id}&spec=${bundle.import.spec_code}`} label="標準見積・本体内訳へ戻る" />
       {sp.saved && <Alert tone="success">商品照合を保存しました。</Alert>}
       {sp.activated && <Alert tone="success">この標準見積を有効にしました。シミュレーターへ反映されます。</Alert>}
-      {sp.error && <Alert tone="danger">{decodeURIComponent(sp.error)}</Alert>}
+      {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       <EstimateImportReview
         bundle={bundle}
         categories={categories}

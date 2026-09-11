@@ -114,6 +114,7 @@ describe('標準見積Excelの取込・検算', () => {
 
     expect(template.base_breakdown_items).toHaveLength(1);
     expect(template.base_breakdown_items[0]).toMatchObject({
+      source_row: 15,
       section: '１．本体工事',
       name: '・本体材料',
       unit_price: 1000,
@@ -125,6 +126,7 @@ describe('標準見積Excelの取込・検算', () => {
       'option',
       'sitework',
     ]);
+    expect(template.lines.find((x) => x.name === '・ユニットバス')?.source_row).toBe(21);
   });
 
   it('preset や商品価格に依存せず、Excelの集計値だけで最終金額を検算する', () => {

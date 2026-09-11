@@ -787,6 +787,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
           options={bundle.options}
           readOnly={readOnly}
           onPickCategory={openPicker}
+          showDealerFinder
         />
         <p className="mt-3 text-xs text-muted">{PRICE_DISCLAIMER}</p>
       </div>

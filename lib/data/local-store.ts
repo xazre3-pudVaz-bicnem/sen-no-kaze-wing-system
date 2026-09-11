@@ -206,6 +206,7 @@ export class LocalStore implements DataStore {
         base_breakdown_items: db.baseBreakdownItems
           .filter((row) => row.base_model_id === modelId && row.spec_code === specCode)
           .sort((a, b) => a.sort_order - b.sort_order),
+        baseline_option_ids: template.baseline_option_ids ?? [],
       };
     });
   }
@@ -234,6 +235,7 @@ export class LocalStore implements DataStore {
           source_file_name: input.source_file_name,
           source_sheet_name: input.source_sheet_name,
           source_sha256: input.source_sha256,
+          baseline_option_ids: input.baseline_option_ids,
           tax_rate: input.tax_rate,
           subtotal_raw: input.subtotal_raw,
           adjustment: input.adjustment,

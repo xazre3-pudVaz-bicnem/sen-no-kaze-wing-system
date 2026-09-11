@@ -5,7 +5,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { saveBaseBreakdownAction } from '@/lib/actions/admin';
 import { formatYen } from '@/lib/domain/pricing';
 import type { BaseBreakdownItem } from '@/lib/domain/types';
-import { Button, Input } from '@/components/ui';
+import { Alert, Button, Input } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 
 const initial = { ok: false } as const;
@@ -40,11 +40,17 @@ export function BaseBreakdownForm({
   specCode,
   items,
   expenseRate,
+  lockedByTemplate = false,
+  expenseAmountOverride,
+  totalOverride,
 }: {
   modelId: string;
   specCode: string;
   items: BaseBreakdownItem[];
   expenseRate: number;
+  lockedByTemplate?: boolean;
+  expenseAmountOverride?: number;
+  totalOverride?: number;
 }) {
   const [state, action, pending] = useActionState(saveBaseBreakdownAction, initial);
   const [sections, setSections] = useState<Section[]>(() => {
@@ -61,7 +67,10 @@ export function BaseBreakdownForm({
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sectionTotal = (sec: Section) => sec.rows.reduce((s, r) => s + amountOf(r), 0);
   const linesTotal = sections.reduce((s, sec) => s + sectionTotal(sec), 0);
-  const expense = Math.floor(linesTotal * expenseRate);
+  const expense = lockedByTemplate && expenseAmountOverride != null
+    ? expenseAmountOverride
+    : Math.floor(linesTotal * expenseRate);
+  const grandTotal = lockedByTemplate && totalOverride != null ? totalOverride : linesTotal + expense;
 
   const updateSection = (key: string, name: string) => setSections((cur) => cur.map((s) => (s.key === key ? { ...s, name } : s)));
   const updateRow = (secKey: string, rowKey: string, patch: Partial<Row>) =>
@@ -100,6 +109,12 @@ export function BaseBreakdownForm({
       <input type="hidden" name="base_model_id" value={modelId} />
       <input type="hidden" name="spec_code" value={specCode} />
       <Status state={state} />
+      {lockedByTemplate && (
+        <Alert tone="info">
+          この本体明細はExcelから取り込んだ標準見積の一部です。原本との整合を保つため直接編集できません。
+          変更する場合はExcelを修正して標準見積を再取込してください。
+        </Alert>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[58rem] text-sm">
@@ -125,18 +140,21 @@ export function BaseBreakdownForm({
                     aria-label={`${si + 1} 番目の工事区分名`}
                     className="max-w-md bg-white text-xs font-semibold"
                     required
+                    disabled={lockedByTemplate}
                   />
                 </td>
                 <td className="px-2 py-1.5 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => removeSection(sec.key)}
-                    className="rounded p-1 text-muted hover:bg-white hover:text-warn"
-                    aria-label={`工事区分「${sec.name}」を削除`}
-                    title="この区分を削除（中の行ごと消えます）"
-                  >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                  </button>
+                  {!lockedByTemplate && (
+                    <button
+                      type="button"
+                      onClick={() => removeSection(sec.key)}
+                      className="rounded p-1 text-muted hover:bg-white hover:text-warn"
+                      aria-label={`工事区分「${sec.name}」を削除`}
+                      title="この区分を削除（中の行ごと消えます）"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </button>
+                  )}
                 </td>
               </tr>
               {sec.rows.map((r, ri) => {
@@ -145,28 +163,32 @@ export function BaseBreakdownForm({
                   <tr key={r.key} className="bg-white" data-testid={`breakdown-row-${i}`}>
                     <td className="px-3 py-1.5">
                       <input type="hidden" name={`items.${i}.section`} value={sec.name} />
-                      <Input name={`items.${i}.name`} value={r.name} onChange={(e) => updateRow(sec.key, r.key, { name: e.target.value })} aria-label={`${i + 1} 行目の品名`} required />
+                      <Input name={`items.${i}.name`} value={r.name} onChange={(e) => updateRow(sec.key, r.key, { name: e.target.value })} aria-label={`${i + 1} 行目の品名`} required disabled={lockedByTemplate} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input name={`items.${i}.quantity`} type="number" min={0.1} step={0.1} value={r.quantity} onChange={(e) => updateRow(sec.key, r.key, { quantity: Number(e.target.value) })} aria-label={`${i + 1} 行目の数量`} className="text-right" />
+                      <Input name={`items.${i}.quantity`} type="number" min={0.1} step={0.1} value={r.quantity} onChange={(e) => updateRow(sec.key, r.key, { quantity: Number(e.target.value) })} aria-label={`${i + 1} 行目の数量`} className="text-right" disabled={lockedByTemplate} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input name={`items.${i}.unit`} value={r.unit} onChange={(e) => updateRow(sec.key, r.key, { unit: e.target.value })} aria-label={`${i + 1} 行目の単位`} className="min-w-[4.5rem]" />
+                      <Input name={`items.${i}.unit`} value={r.unit} onChange={(e) => updateRow(sec.key, r.key, { unit: e.target.value })} aria-label={`${i + 1} 行目の単位`} className="min-w-[4.5rem]" disabled={lockedByTemplate} />
                     </td>
                     <td className="px-2 py-1.5">
                       <Input name={`items.${i}.unit_price`} type="number" min={0} value={r.unit_price} onChange={(e) => updateRow(sec.key, r.key, { unit_price: Number(e.target.value) })} aria-label={`${i + 1} 行目の単価`} className="text-right" />
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{formatYen(amountOf(r))}</td>
                     <td className="px-3 py-1.5">
-                      <Input name={`items.${i}.remark`} value={r.remark} onChange={(e) => updateRow(sec.key, r.key, { remark: e.target.value })} aria-label={`${i + 1} 行目の備考`} className="text-xs" />
+                      <Input name={`items.${i}.remark`} value={r.remark} onChange={(e) => updateRow(sec.key, r.key, { remark: e.target.value })} aria-label={`${i + 1} 行目の備考`} className="text-xs" disabled={lockedByTemplate} />
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap">
-                      <button type="button" onClick={() => addRow(sec.key, r.key)} className="rounded p-1 text-muted hover:bg-sand hover:text-forest" aria-label={`${i + 1} 行目の下に行を追加`} title="下に行を追加">
-                        <Plus className="size-4" aria-hidden="true" />
-                      </button>
-                      <button type="button" onClick={() => removeRow(sec.key, r.key)} className="rounded p-1 text-muted hover:bg-sand hover:text-warn" aria-label={`${i + 1} 行目を削除`}>
-                        <Trash2 className="size-4" aria-hidden="true" />
-                      </button>
+                      {!lockedByTemplate && (
+                        <>
+                          <button type="button" onClick={() => addRow(sec.key, r.key)} className="rounded p-1 text-muted hover:bg-sand hover:text-forest" aria-label={`${i + 1} 行目の下に行を追加`} title="下に行を追加">
+                            <Plus className="size-4" aria-hidden="true" />
+                          </button>
+                          <button type="button" onClick={() => removeRow(sec.key, r.key)} className="rounded p-1 text-muted hover:bg-sand hover:text-warn" aria-label={`${i + 1} 行目を削除`}>
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );
@@ -180,9 +202,11 @@ export function BaseBreakdownForm({
                   {formatYen(sectionTotal(sec))}
                 </td>
                 <td colSpan={2} className="px-3 py-1.5">
-                  <button type="button" onClick={() => addRow(sec.key)} className="text-xs text-brown underline underline-offset-2 hover:text-ink">
-                    ＋ この区分に行を追加
-                  </button>
+                  {!lockedByTemplate && (
+                    <button type="button" onClick={() => addRow(sec.key)} className="text-xs text-brown underline underline-offset-2 hover:text-ink">
+                      ＋ この区分に行を追加
+                    </button>
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -203,29 +227,39 @@ export function BaseBreakdownForm({
               <td colSpan={2}></td>
             </tr>
             <tr className="text-sm text-ink-soft">
-              <td colSpan={4} className="px-3 py-1 text-right text-muted">本体諸費用（{Math.round(expenseRate * 100)}%・自動加算）</td>
+              <td colSpan={4} className="px-3 py-1 text-right text-muted">
+                本体諸費用（{Math.round(expenseRate * 100)}%{lockedByTemplate ? '・Excel記載額' : '・自動加算'}）
+              </td>
               <td className="px-3 py-1 text-right tabular-nums">{formatYen(expense)}</td>
               <td colSpan={2}></td>
             </tr>
             <tr className="bg-ivory font-semibold">
               <td colSpan={4} className="px-3 py-2 text-right">【本体価格計】</td>
-              <td className="px-3 py-2 text-right tabular-nums" data-testid="breakdown-total">{formatYen(linesTotal + expense)}</td>
+              <td className="px-3 py-2 text-right tabular-nums" data-testid="breakdown-total">{formatYen(grandTotal)}</td>
               <td colSpan={2}></td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="secondary" size="sm" onClick={addSection} data-testid="breakdown-add-section">
-          <Plus className="size-4" aria-hidden="true" />
-          工事区分を追加
-        </Button>
+      {lockedByTemplate ? (
         <p className="text-xs text-muted">
-          保存すると、これから作られる見積の本体明細・本体一式の金額に反映されます。発行済みの見積書は変わりません。
+          標準見積は原本として固定されています。案件ごとの見積はこの原本をコピーした後に編集します。
         </p>
-      </div>
-      <SubmitButton pending={pending} label="この内訳で保存する" />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" variant="secondary" size="sm" onClick={addSection} data-testid="breakdown-add-section">
+              <Plus className="size-4" aria-hidden="true" />
+              工事区分を追加
+            </Button>
+            <p className="text-xs text-muted">
+              保存すると、これから作られる見積の本体明細・本体一式の金額に反映されます。発行済みの見積書は変わりません。
+            </p>
+          </div>
+          <SubmitButton pending={pending} label="この内訳で保存する" />
+        </>
+      )}
     </form>
   );
 }

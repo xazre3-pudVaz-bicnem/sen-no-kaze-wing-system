@@ -83,7 +83,7 @@ grant all on public.estimate_templates, public.estimate_template_sections, publi
 
 
 -- Excel取込済みの標準見積では、本体明細の単独編集を禁止する。
--- replace_estimate_templates RPC の中だけ transaction-local flag で解除する。
+-- 取込RPCは、同一transaction内でテンプレートを先に外して本体明細を置換し、最後に再ロックする。
 create or replace function public.prevent_locked_base_breakdown_edit()
 returns trigger
 language plpgsql
@@ -100,10 +100,6 @@ begin
   else
     v_model := new.base_model_id;
     v_spec := new.spec_code;
-  end if;
-
-  if current_setting('wing.estimate_template_import', true) = '1' then
-    if tg_op = 'DELETE' then return old; else return new; end if;
   end if;
 
   if exists (
@@ -141,7 +137,6 @@ declare
   v_section_total numeric;
   s record;
 begin
-  perform set_config('wing.estimate_template_import', '1', true);
   if not public.can_edit_catalog() then
     raise exception 'FORBIDDEN: 標準見積を更新する権限がありません' using errcode = '42501';
   end if;
@@ -160,9 +155,38 @@ begin
       raise exception 'VALIDATION: 本体モデルが見つかりません' using errcode = 'P0001';
     end if;
 
+    -- 古いテンプレートを先に外すことで base_breakdown_items のロックを解除する。
+    -- この関数全体は1transactionなので、後続検算に失敗すれば旧状態へロールバックされる。
     delete from public.estimate_templates where base_model_id = v_model and spec_code = v_spec;
     delete from public.base_breakdown_items where base_model_id = v_model and spec_code = v_spec;
 
+    -- 本体明細は既存テーブルが唯一の正本。テンプレート行には複製しない。
+    insert into public.base_breakdown_items (
+      base_model_id, spec_code, section, name, quantity, unit, unit_price, amount, remark, sort_order
+    )
+    select
+      v_model,
+      v_spec,
+      x.section,
+      x.name,
+      x.quantity,
+      nullif(x.unit, ''),
+      x.unit_price,
+      x.amount,
+      nullif(x.remark, ''),
+      x.sort_order
+    from jsonb_to_recordset(coalesce(t -> 'base_breakdown_items', '[]'::jsonb)) as x(
+      section text,
+      name text,
+      quantity numeric,
+      unit text,
+      unit_price integer,
+      amount integer,
+      remark text,
+      sort_order integer
+    );
+
+    -- 本体明細を置換した後でテンプレートを作成し、以後の単独編集を再びロックする。
     insert into public.estimate_templates (
       base_model_id, spec_code, name, source_file_name, source_sheet_name, source_sha256,
       tax_rate, subtotal_raw, adjustment, subtotal, tax, total, imported_at, updated_at
@@ -200,31 +224,6 @@ begin
       expense_rate numeric,
       expense_amount numeric,
       total numeric,
-      sort_order integer
-    );
-
-    insert into public.base_breakdown_items (
-      base_model_id, spec_code, section, name, quantity, unit, unit_price, amount, remark, sort_order
-    )
-    select
-      v_model,
-      v_spec,
-      x.section,
-      x.name,
-      x.quantity,
-      nullif(x.unit, ''),
-      x.unit_price,
-      x.amount,
-      nullif(x.remark, ''),
-      x.sort_order
-    from jsonb_to_recordset(coalesce(t -> 'base_breakdown_items', '[]'::jsonb)) as x(
-      section text,
-      name text,
-      quantity numeric,
-      unit text,
-      unit_price numeric,
-      amount numeric,
-      remark text,
       sort_order integer
     );
 

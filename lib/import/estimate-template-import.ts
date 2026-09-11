@@ -116,10 +116,13 @@ function numberValue(row: string[], index: number): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Excel は経費率の計算で 0.1 円を持つことがあるが、システムは円単位なので切り捨てる。 */
-function yen(row: string[], index: number): number {
-  const n = numberValue(row, index);
-  return n == null ? 0 : Math.trunc(n);
+/** Excel に保存されている金額をそのまま使う。0.1円等も標準見積の正本として保持する。 */
+function money(row: string[], index: number): number {
+  return numberValue(row, index) ?? 0;
+}
+
+function sameMoney(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.0001;
 }
 
 function normalizeLabel(value: string): string {
@@ -194,7 +197,7 @@ function parseSection(
     const expLabel = expenseLabel(row, def.code);
     if (expLabel) {
       expenseName = expLabel;
-      expense = yen(row, C.amount);
+      expense = money(row, C.amount);
       continue;
     }
 
@@ -207,8 +210,8 @@ function parseSection(
       name,
       quantity,
       unit: text(row, C.unit) || null,
-      unit_price: unitPriceRaw == null ? null : Math.trunc(unitPriceRaw),
-      amount: yen(row, C.amount),
+      unit_price: unitPriceRaw,
+      amount: money(row, C.amount),
       remark: text(row, C.remark) || text(row, C.leftRemark) || null,
       sort_order: ++sort,
     };
@@ -236,21 +239,12 @@ function parseSection(
     def.code === 'base'
       ? baseItems.reduce((sum, row) => sum + row.amount, 0)
       : lines.reduce((sum, row) => sum + row.amount, 0);
-  const total = yen(rows[end], C.amount);
-  if (lineSubtotal + expense !== total) {
+  const total = money(rows[end], C.amount);
+  if (!sameMoney(lineSubtotal + expense, total)) {
     throw new Error(
       `${def.label}: 検算が合いません（明細 ${lineSubtotal.toLocaleString('ja-JP')} + 経費 ${expense.toLocaleString('ja-JP')} ≠ ${total.toLocaleString('ja-JP')}）`
     );
   }
-  if (expense > 0 && globalExpenseRate != null) {
-    const expected = Math.floor(lineSubtotal * globalExpenseRate);
-    if (Math.abs(expected - expense) > 1) {
-      throw new Error(
-        `${def.label}: 経費率の検算が合いません（${expense.toLocaleString('ja-JP')} ≠ ${expected.toLocaleString('ja-JP')}）`
-      );
-    }
-  }
-
   return {
     section: {
       code: def.code,
@@ -314,27 +308,28 @@ function parseTemplate(sheet: Sheet, def: (typeof STANDARD_ESTIMATE_SHEETS)[numb
     if (row < 0) throw new Error(`${sheet.name}: 見積集計（${key}）を読み取れませんでした`);
   }
 
-  const subtotalRaw = yen(rows[summary.raw], C.amount);
-  const adjustment = yen(rows[summary.adjustment], C.amount);
+  const subtotalRaw = money(rows[summary.raw], C.amount);
+  const adjustment = money(rows[summary.adjustment], C.amount);
   const subtotalFromExcel = numberValue(rows[summary.adjustment], C.remark);
-  const subtotal = subtotalFromExcel == null ? subtotalRaw + adjustment : Math.trunc(subtotalFromExcel);
+  const subtotal = subtotalFromExcel == null ? subtotalRaw + adjustment : subtotalFromExcel;
   const taxRate = numberValue(rows[summary.tax], C.unitPrice) ?? 0.1;
-  const tax = yen(rows[summary.tax], C.amount);
-  const total = yen(rows[summary.total], C.amount);
+  const tax = money(rows[summary.tax], C.amount);
+  const total = money(rows[summary.total], C.amount);
 
   const sectionTotal = sections.reduce((sum, section) => sum + section.total, 0);
-  if (sectionTotal !== subtotalRaw) {
+  if (!sameMoney(sectionTotal, subtotalRaw)) {
     throw new Error(
       `${sheet.name}: 4分類の合計が小計と一致しません（${sectionTotal.toLocaleString('ja-JP')} ≠ ${subtotalRaw.toLocaleString('ja-JP')}）`
     );
   }
-  if (subtotalRaw + adjustment !== subtotal) {
+  if (!sameMoney(subtotalRaw + adjustment, subtotal)) {
     throw new Error(`${sheet.name}: 値引き等調整額の検算が合いません`);
   }
-  if (Math.abs(Math.floor(subtotal * taxRate) - tax) > 1) {
+  // 税額もExcel記載値を正本とする。数式は異常検知だけに使い、1円未満の丸め差は許容する。
+  if (Math.abs(subtotal * taxRate - tax) >= 1) {
     throw new Error(`${sheet.name}: 消費税の検算が合いません`);
   }
-  if (subtotal + tax !== total) {
+  if (!sameMoney(subtotal + tax, total)) {
     throw new Error(`${sheet.name}: 合計金額の検算が合いません`);
   }
 

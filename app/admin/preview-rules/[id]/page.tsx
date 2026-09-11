@@ -4,8 +4,9 @@ import { previewKeyLabels } from '@/lib/domain/preview';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { PreviewRuleForm } from '@/components/admin/forms';
 
-export default async function EditPreviewRulePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditPreviewRulePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ model?: string; section?: string }> }) {
   const { id } = await params;
+  const sp = await searchParams;
   const store = await getStore();
   const [models, options] = await Promise.all([store.listModels({ includeDraft: true }), store.listOptions()]);
   let rule = null;
@@ -21,7 +22,7 @@ export default async function EditPreviewRulePage({ params }: { params: Promise<
   const keys = [...previewKeyLabels(options).entries()].map(([key, label]) => ({ key, label }));
   return (
     <AdminPage title="シミュレーター画像を変更">
-      <BackLink href="/admin/preview-rules" label="シミュレーター画像へ戻る" />
+      <BackLink href={`/admin/preview-rules?model=${sp.model ?? rule.base_model_id}&section=${sp.section ?? (rule.view === 'floorplan' ? 'floorplan' : 'completion')}`} label="シミュレーター画像へ戻る" />
       <PreviewRuleForm rule={rule} models={models} previewKeys={keys} />
     </AdminPage>
   );

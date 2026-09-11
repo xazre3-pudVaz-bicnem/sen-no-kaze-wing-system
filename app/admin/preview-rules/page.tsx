@@ -10,6 +10,22 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { ProductImageForm } from '@/components/admin/forms';
+import { cn } from '@/lib/utils';
+
+type ImageSection = 'floorplan' | 'completion' | 'elevation' | 'case';
+
+const SECTION_TABS: { key: ImageSection; label: string; lead: string }[] = [
+  { key: 'floorplan', label: '平面図', lead: '本体・ホテル・住宅・事務所などの平面図を管理します。' },
+  { key: 'completion', label: '完成イメージ', lead: '外観・室内・水まわりの完成イメージを管理します。' },
+  { key: 'elevation', label: '立面図', lead: '正面・側面・背面などの立面図を管理します。' },
+  { key: 'case', label: '施工事例', lead: 'シミュレーターに表示する施工事例写真を管理します。' },
+];
+
+const COMPLETION_VIEWS: ViewKey[] = ['exterior', 'interior', 'water'];
+
+function sectionHref(modelId: string, section: ImageSection, extra?: string) {
+  return `/admin/preview-rules?model=${modelId}&section=${section}${extra ? `&${extra}` : ''}`;
+}
 
 function PreviewCard({
   rule,
@@ -20,25 +36,36 @@ function PreviewCard({
   label: string;
   keyLabel: (key: string) => string;
 }) {
+  const displayNote = previewRuleDisplayNote(rule);
   return (
     <li className="card overflow-hidden" data-testid="preview-rule-card">
       <div className="relative aspect-[16/10] bg-sand">
         <SmartImage src={rule.url} alt={rule.alt} fill sizes="33vw" className={rule.view === 'floorplan' ? 'object-contain' : 'object-cover'} />
         <span className="absolute top-2 left-2 flex gap-1">
-          <Badge tone="neutral">{label}</Badge>
+          <Badge tone="success">登録済み</Badge>
           {rule.status !== 'published' && <Badge tone="warn">非公開</Badge>}
         </span>
       </div>
-      <div className="space-y-2 p-3 text-xs">
-        <p className="font-semibold">{rule.preview_keys.length ? rule.preview_keys.map(keyLabel).join(' + ') : '標準状態'}</p>
-        {previewRuleDisplayNote(rule) && <p className="line-clamp-2 text-muted">{previewRuleDisplayNote(rule)}</p>}
-        <div className="flex gap-3">
-          <Link href={`/admin/preview-rules/${rule.id}`} className="font-semibold underline">画像を変更</Link>
-          <form action={deletePreviewRuleAction}>
-            <input type="hidden" name="id" value={rule.id} />
-            <ConfirmSubmit message="この画像ルールを削除しますか？" className="text-danger underline">削除</ConfirmSubmit>
-          </form>
+      <div className="space-y-3 p-4">
+        <div>
+          <p className="font-semibold">{label}</p>
+          {displayNote && <p className="mt-1 line-clamp-2 text-xs text-muted">{displayNote}</p>}
         </div>
+        <Link href={`/admin/preview-rules/${rule.id}`} className="btn-secondary btn-sm inline-flex">
+          画像を変更
+        </Link>
+        <details className="text-xs text-muted">
+          <summary className="cursor-pointer">詳細・その他の操作</summary>
+          <div className="mt-2 space-y-2 rounded-lg bg-ivory/60 p-3">
+            <p>対応条件：{rule.preview_keys.length ? rule.preview_keys.map(keyLabel).join(' + ') : '標準状態'}</p>
+            <form action={deletePreviewRuleAction}>
+              <input type="hidden" name="id" value={rule.id} />
+              <ConfirmSubmit message="この画像ルールを削除しますか？" className="text-danger underline">
+                この画像を削除
+              </ConfirmSubmit>
+            </form>
+          </div>
+        </details>
       </div>
     </li>
   );
@@ -47,29 +74,60 @@ function PreviewCard({
 function ProductImageCard({
   image,
   modelId,
+  redirectTo,
 }: {
   image: ProductImage;
   modelId: string;
+  redirectTo: string;
 }) {
   return (
     <li className="card overflow-hidden">
       <div className="relative aspect-[16/10] bg-sand">
         <SmartImage src={image.url} alt={image.alt} fill sizes="33vw" className={image.kind === 'elevation' ? 'object-contain' : 'object-cover'} />
+        <span className="absolute top-2 left-2"><Badge tone="success">登録済み</Badge></span>
       </div>
-      <div className="space-y-2 p-3 text-xs">
-        <p className="font-semibold">{image.caption || image.alt || '（説明なし）'}</p>
-        <form action={deleteProductImageAction}>
-          <input type="hidden" name="id" value={image.id} />
-          <input type="hidden" name="base_model_id" value={modelId} />
-          <input type="hidden" name="redirect_to" value="/admin/preview-rules" />
-          <ConfirmSubmit message="この画像を削除しますか？" className="text-danger underline">削除して差し替える</ConfirmSubmit>
-        </form>
+      <div className="space-y-3 p-4">
+        <p className="font-semibold">{image.caption || image.alt || '画像'}</p>
+        <details className="text-xs text-muted">
+          <summary className="cursor-pointer">その他の操作</summary>
+          <div className="mt-2 rounded-lg bg-ivory/60 p-3">
+            <p className="mb-2">新しい画像へ差し替える場合は、いったんこの画像を削除してから追加してください。</p>
+            <form action={deleteProductImageAction}>
+              <input type="hidden" name="id" value={image.id} />
+              <input type="hidden" name="base_model_id" value={modelId} />
+              <input type="hidden" name="redirect_to" value={redirectTo} />
+              <ConfirmSubmit message="この画像を削除しますか？" className="text-danger underline">
+                この画像を削除
+              </ConfirmSubmit>
+            </form>
+          </div>
+        </details>
       </div>
     </li>
   );
 }
 
-const COMPLETION_VIEWS: ViewKey[] = ['exterior', 'interior', 'water'];
+function MissingFloorplanCard({
+  title,
+  detail,
+  href,
+}: {
+  title: string;
+  detail?: string;
+  href: string;
+}) {
+  return (
+    <div className="card flex min-h-56 flex-col justify-between gap-5 border-dashed p-5">
+      <div>
+        <Badge tone="warn">未登録</Badge>
+        <p className="mt-3 text-lg font-semibold">{title}</p>
+        <p className="mt-2 text-sm text-muted">まだ平面図が登録されていません。</p>
+        {detail && <p className="mt-2 text-xs text-muted">{detail}</p>}
+      </div>
+      <Link href={href} className="btn-primary btn-sm self-start">＋ 平面図を登録</Link>
+    </div>
+  );
+}
 
 export default async function AdminPreviewRulesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
@@ -77,200 +135,330 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
   const models = await store.listModels({ includeDraft: true });
   const bundles = (await Promise.all(models.map((m) => store.getCatalogBundle(m.id, { includeDraft: true })))).filter(Boolean) as NonNullable<Awaited<ReturnType<typeof store.getCatalogBundle>>>[];
 
+  const selectedBundle = bundles.find((b) => b.model.id === sp.model) ?? bundles[0];
+  const selectedSection: ImageSection = SECTION_TABS.some((tab) => tab.key === sp.section)
+    ? (sp.section as ImageSection)
+    : 'floorplan';
+  const missingOnly = sp.filter === 'missing';
+
+  if (!selectedBundle) {
+    return (
+      <AdminPage title="シミュレーター画像" lead="シミュレーターに表示する画像を管理します。">
+        <Alert tone="warn">管理できるベースコンテナがありません。</Alert>
+      </AdminPage>
+    );
+  }
+
+  const b = selectedBundle;
+  const labels = previewKeyLabels(b.options);
+  const keyLabel = (key: string) => labels.get(key) ?? key;
+  const floorplans = b.previewRules.filter((r) => r.view === 'floorplan').sort((a, c) => a.preview_keys.length - c.preview_keys.length);
+  const presetFloorplans = buildStandardFloorplanSlots(b);
+  const baseFloorplan = findDedicatedBaseFloorplanRule(floorplans);
+  const presetMatchedRuleIds = new Set(presetFloorplans.flatMap((slot) => slot.rule ? [slot.rule.id] : []));
+  if (baseFloorplan) presetMatchedRuleIds.add(baseFloorplan.id);
+  const otherFloorplans = floorplans.filter((rule) => !presetMatchedRuleIds.has(rule.id));
+  const elevations = b.images.filter((i) => i.kind === 'elevation').sort((a, c) => a.sort_order - c.sort_order);
+  const cases = b.images.filter((i) => i.kind === 'case').sort((a, c) => a.sort_order - c.sort_order);
+  const completionRules = b.previewRules.filter((r) => COMPLETION_VIEWS.includes(r.view));
+  const floorplanRegistered = Number(Boolean(baseFloorplan)) + presetFloorplans.filter((slot) => slot.rule).length;
+  const floorplanExpected = 1 + presetFloorplans.length;
+  const floorplanMissing = floorplanExpected - floorplanRegistered;
+  const published = b.previewRules.filter((r) => r.status === 'published');
+  const { missing, truncated } = findMissingPreviewCombos(published, b.options.filter((o) => o.status === 'published'));
+
+  const modelHref = (modelId: string) => sectionHref(modelId, selectedSection);
+  const currentSection = SECTION_TABS.find((tab) => tab.key === selectedSection)!;
+  const floorplanSlots = [
+    {
+      key: 'base',
+      title: `${b.model.name}本体`,
+      rule: baseFloorplan,
+      detail: '本体専用',
+      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&slot=base`,
+    },
+    ...presetFloorplans.map((slot) => ({
+      key: slot.code,
+      title: slot.name,
+      rule: slot.rule,
+      detail: slot.keys.length ? `対応条件：${slot.keys.map(keyLabel).join(' + ')}` : '標準構成',
+      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&keys=${slot.keys.join(',')}`,
+    })),
+  ];
+  const visibleFloorplanSlots = missingOnly ? floorplanSlots.filter((slot) => !slot.rule) : floorplanSlots;
+
   return (
     <AdminPage
       title="シミュレーター画像"
-      lead="シミュレーターに表示する平面図・完成イメージ・立面図・施工事例を本体ごとに管理します。通常は画像の追加・差し替えだけで運用できます。"
+      lead="変更したい商品と画像の種類を選び、画像を登録・変更してください。通常は詳細設定を触る必要はありません。"
     >
       <FlashMessages sp={sp} />
 
-      <div className="space-y-10">
-        {bundles.map((b) => {
-          const labels = previewKeyLabels(b.options);
-          const keyLabel = (key: string) => labels.get(key) ?? key;
-          const floorplans = b.previewRules.filter((r) => r.view === 'floorplan').sort((a, c) => a.preview_keys.length - c.preview_keys.length);
-          const presetFloorplans = buildStandardFloorplanSlots(b);
-          const baseFloorplan = findDedicatedBaseFloorplanRule(floorplans);
-          const presetMatchedRuleIds = new Set(presetFloorplans.flatMap((slot) => slot.rule ? [slot.rule.id] : []));
-          if (baseFloorplan) presetMatchedRuleIds.add(baseFloorplan.id);
-          const otherFloorplans = floorplans.filter((rule) => !presetMatchedRuleIds.has(rule.id));
-          const elevations = b.images.filter((i) => i.kind === 'elevation').sort((a, c) => a.sort_order - c.sort_order);
-          const cases = b.images.filter((i) => i.kind === 'case').sort((a, c) => a.sort_order - c.sort_order);
-          const published = b.previewRules.filter((r) => r.status === 'published');
-          const { missing, truncated } = findMissingPreviewCombos(published, b.options.filter((o) => o.status === 'published'));
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">1. 商品を選ぶ</p>
+          <p className="mt-1 text-xs text-muted">画像を変更したいベースコンテナを選んでください。</p>
+        </div>
+        <div className="flex flex-wrap gap-2" aria-label="ベースコンテナ">
+          {bundles.map((bundle) => (
+            <Link
+              key={bundle.model.id}
+              href={modelHref(bundle.model.id)}
+              className={cn(
+                'rounded-full border px-5 py-2 text-sm font-semibold transition',
+                bundle.model.id === b.model.id
+                  ? 'border-forest bg-forest text-white'
+                  : 'border-line bg-white text-ink-soft hover:border-forest/50 hover:text-forest'
+              )}
+            >
+              {bundle.model.name}
+            </Link>
+          ))}
+        </div>
+      </section>
 
-          return (
-            <section key={b.model.id} className="space-y-7 border-b border-line pb-10 last:border-b-0">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-xs text-muted">ベースコンテナ</p>
-                  <h2 className="text-2xl">{b.model.name}</h2>
-                </div>
-                <Link href={`/simulator/${b.model.slug}`} target="_blank" className="btn-secondary btn-sm">シミュレーターを見る</Link>
-              </div>
+      <section className="card space-y-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">{b.model.name} の登録状況</p>
+            <p className="mt-1 text-xs text-muted">画像の不足や登録件数を確認できます。</p>
+          </div>
+          <Link href={`/simulator/${b.model.slug}`} target="_blank" className="btn-secondary btn-sm">シミュレーターで確認</Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Link href={sectionHref(b.model.id, 'floorplan')} className={cn('rounded-xl border p-4 transition hover:border-forest/50', selectedSection === 'floorplan' ? 'border-forest bg-forest/5' : 'border-line bg-white')}>
+            <p className="text-xs text-muted">平面図</p>
+            <p className="mt-1 text-xl font-semibold">{floorplanRegistered} / {floorplanExpected}</p>
+            <p className={cn('mt-1 text-xs', floorplanMissing > 0 ? 'text-warn' : 'text-success')}>{floorplanMissing > 0 ? `未登録 ${floorplanMissing}件` : '必要な画像は登録済み'}</p>
+          </Link>
+          <Link href={sectionHref(b.model.id, 'completion')} className={cn('rounded-xl border p-4 transition hover:border-forest/50', selectedSection === 'completion' ? 'border-forest bg-forest/5' : 'border-line bg-white')}>
+            <p className="text-xs text-muted">完成イメージ</p>
+            <p className="mt-1 text-xl font-semibold">{completionRules.length}件</p>
+            <p className="mt-1 text-xs text-muted">外観・室内・水まわり</p>
+          </Link>
+          <Link href={sectionHref(b.model.id, 'elevation')} className={cn('rounded-xl border p-4 transition hover:border-forest/50', selectedSection === 'elevation' ? 'border-forest bg-forest/5' : 'border-line bg-white')}>
+            <p className="text-xs text-muted">立面図</p>
+            <p className="mt-1 text-xl font-semibold">{elevations.length}件</p>
+            <p className="mt-1 text-xs text-muted">正面・側面・背面など</p>
+          </Link>
+          <Link href={sectionHref(b.model.id, 'case')} className={cn('rounded-xl border p-4 transition hover:border-forest/50', selectedSection === 'case' ? 'border-forest bg-forest/5' : 'border-line bg-white')}>
+            <p className="text-xs text-muted">施工事例</p>
+            <p className="mt-1 text-xl font-semibold">{cases.length}件</p>
+            <p className="mt-1 text-xs text-muted">完成写真</p>
+          </Link>
+        </div>
+      </section>
 
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-lg font-semibold">平面図</h3>
-                    <p className="text-xs text-muted">現在は標準構成（preset）ごとに登録します。新しいpresetを追加すると、画像が未登録でもここに登録枠が自動で増えます。</p>
-                  </div>
-                  <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan`} className="btn-secondary btn-sm">その他の構成を追加</Link>
-                </div>
+      <section className="space-y-3">
+        <div>
+          <p className="text-sm font-semibold">2. 画像の種類を選ぶ</p>
+          <p className="mt-1 text-xs text-muted">普段は変更したい種類だけを開けば大丈夫です。</p>
+        </div>
+        <div className="flex flex-wrap gap-2" aria-label="画像の種類">
+          {SECTION_TABS.map((tab) => (
+            <Link
+              key={tab.key}
+              href={sectionHref(b.model.id, tab.key)}
+              className={cn(
+                'rounded-lg border px-4 py-2 text-sm font-semibold transition',
+                tab.key === selectedSection
+                  ? 'border-brown bg-brown text-white'
+                  : 'border-line bg-white text-ink-soft hover:border-brown/50 hover:text-brown'
+              )}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </div>
+      </section>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="card overflow-hidden">
-                    {baseFloorplan ? (
-                      <>
-                        <div className="relative aspect-[16/10] bg-sand">
-                          <SmartImage src={baseFloorplan.url} alt={baseFloorplan.alt} fill sizes="33vw" className="object-contain" />
-                        </div>
-                        <div className="space-y-2 p-3 text-xs">
-                          <p className="font-semibold">{b.model.name}本体</p>
-                          <p className="text-muted">本体専用平面図</p>
-                          <Link href={`/admin/preview-rules/${baseFloorplan.id}`} className="font-semibold underline">画像を変更</Link>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex min-h-48 flex-col justify-between gap-4 p-4">
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-3">
+          <div>
+            <p className="text-xs text-muted">{b.model.name}</p>
+            <h2 className="text-2xl">{currentSection.label}</h2>
+            <p className="mt-1 text-sm text-muted">{currentSection.lead}</p>
+          </div>
+          {selectedSection === 'floorplan' && floorplanMissing > 0 && (
+            <Link
+              href={missingOnly ? sectionHref(b.model.id, 'floorplan') : sectionHref(b.model.id, 'floorplan', 'filter=missing')}
+              className="btn-secondary btn-sm"
+            >
+              {missingOnly ? 'すべて表示' : `未登録だけ表示（${floorplanMissing}）`}
+            </Link>
+          )}
+        </div>
+
+        {selectedSection === 'floorplan' && (
+          <>
+            {visibleFloorplanSlots.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleFloorplanSlots.map((slot) =>
+                  slot.rule ? (
+                    <div key={slot.key} className="card overflow-hidden">
+                      <div className="relative aspect-[16/10] bg-sand">
+                        <SmartImage src={slot.rule.url} alt={slot.rule.alt} fill sizes="33vw" className="object-contain" />
+                        <span className="absolute top-2 left-2 flex gap-1">
+                          <Badge tone="success">登録済み</Badge>
+                          {slot.rule.status !== 'published' && <Badge tone="warn">非公開</Badge>}
+                        </span>
+                      </div>
+                      <div className="space-y-3 p-4">
                         <div>
-                          <p className="font-semibold">{b.model.name}本体</p>
-                          <p className="mt-1 text-xs text-muted">平面図は未登録です。</p>
+                          <p className="text-lg font-semibold">{slot.title}</p>
+                          <p className="mt-1 text-xs text-muted">{slot.key === 'base' ? '本体専用平面図' : '標準構成の平面図'}</p>
                         </div>
-                        <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan&slot=base`} className="btn-secondary btn-sm self-start">画像を登録</Link>
+                        <Link href={`/admin/preview-rules/${slot.rule.id}`} className="btn-secondary btn-sm inline-flex">画像を変更</Link>
+                        {slot.key !== 'base' && (
+                          <details className="text-xs text-muted">
+                            <summary className="cursor-pointer">詳細を見る</summary>
+                            <p className="mt-2 rounded-lg bg-ivory/60 p-3">{slot.detail}</p>
+                          </details>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {presetFloorplans.map((slot) => (
-                    <div key={slot.code} className="card overflow-hidden">
-                      {slot.rule ? (
-                        <>
-                          <div className="relative aspect-[16/10] bg-sand">
-                            <SmartImage src={slot.rule.url} alt={slot.rule.alt} fill sizes="33vw" className="object-contain" />
-                            {slot.rule.status !== 'published' && (
-                              <span className="absolute top-2 left-2"><Badge tone="warn">非公開</Badge></span>
-                            )}
-                          </div>
-                          <div className="space-y-2 p-3 text-xs">
-                            <p className="font-semibold">{slot.name}</p>
-                            <p className="text-muted">{slot.keys.length ? slot.keys.map(keyLabel).join(' + ') : '標準状態'}</p>
-                            <Link href={`/admin/preview-rules/${slot.rule.id}`} className="font-semibold underline">画像を変更</Link>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex min-h-48 flex-col justify-between gap-4 p-4">
-                          <div>
-                            <p className="font-semibold">{slot.name}</p>
-                            <p className="mt-1 text-xs text-muted">{slot.keys.length ? `対応条件：${slot.keys.map(keyLabel).join(' + ')}` : '対応条件：標準状態'}</p>
-                            <p className="mt-2 text-xs text-warn">平面図は未登録です。</p>
-                          </div>
-                          <Link
-                            href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan&keys=${slot.keys.join(',')}`}
-                            className="btn-secondary btn-sm self-start"
-                          >
-                            画像を登録
-                          </Link>
-                        </div>
-                      )}
                     </div>
+                  ) : (
+                    <MissingFloorplanCard key={slot.key} title={slot.title} detail={slot.detail} href={slot.href} />
+                  )
+                )}
+              </div>
+            ) : (
+              <Alert tone="success">未登録の平面図はありません。</Alert>
+            )}
+
+            {!missingOnly && (
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=floorplan`} className="btn-secondary btn-sm">＋ その他の平面図を追加</Link>
+              </div>
+            )}
+
+            {!missingOnly && otherFloorplans.length > 0 && (
+              <details className="rounded-xl border border-line bg-white p-4">
+                <summary className="cursor-pointer text-sm font-semibold">詳細・その他の平面図（{otherFloorplans.length}件）</summary>
+                <p className="mt-2 text-xs text-muted">標準構成以外の設備構成や、既存の標準状態画像を確認するときだけ開いてください。</p>
+                <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {otherFloorplans.map((rule) => (
+                    <PreviewCard
+                      key={rule.id}
+                      rule={rule}
+                      label={rule.preview_keys.length === 0 ? '標準状態の画像' : 'その他の構成'}
+                      keyLabel={keyLabel}
+                    />
                   ))}
-                </div>
+                </ul>
+              </details>
+            )}
+          </>
+        )}
 
-                {otherFloorplans.length > 0 && (
-                  <details className="rounded-xl border border-line bg-white p-4">
-                    <summary className="cursor-pointer text-sm font-semibold">標準状態／fallback・その他の構成（{otherFloorplans.length}件）</summary>
-                    <p className="mt-2 text-xs text-muted">preset専用と確認できない既存ルールや、個別の設備構成用平面図を保持しています。</p>
-                    <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {otherFloorplans.map((rule) => (
-                        <PreviewCard
-                          key={rule.id}
-                          rule={rule}
-                          label={rule.preview_keys.length === 0 ? '標準状態／fallback' : 'その他の構成'}
-                          keyLabel={keyLabel}
-                        />
-                      ))}
+        {selectedSection === 'completion' && (
+          <div className="space-y-7">
+            {COMPLETION_VIEWS.map((view) => {
+              const rules = b.previewRules.filter((r) => r.view === view).sort((a, c) => a.preview_keys.length - c.preview_keys.length);
+              return (
+                <section key={view} className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-lg font-semibold">{VIEW_LABELS[view]}</h3>
+                      <p className="text-xs text-muted">登録済み {rules.length}件</p>
+                    </div>
+                    <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${view}`} className="btn-secondary btn-sm">＋ 画像を追加</Link>
+                  </div>
+                  {rules.length > 0 ? (
+                    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {rules.map((rule) => <PreviewCard key={rule.id} rule={rule} label={VIEW_LABELS[view]} keyLabel={keyLabel} />)}
                     </ul>
-                  </details>
-                )}
-              </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-line p-5">
+                      <Badge tone="warn">未登録</Badge>
+                      <p className="mt-2 text-sm text-muted">{VIEW_LABELS[view]}の完成イメージはまだ登録されていません。</p>
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        )}
 
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-lg font-semibold">完成イメージ</h3>
-                  <p className="text-xs text-muted">外観・室内・その他（水まわり）を、選択内容に応じて切り替えます。</p>
-                </div>
-                <div className="space-y-5">
-                  {COMPLETION_VIEWS.map((view) => {
-                    const rules = b.previewRules.filter((r) => r.view === view).sort((a, c) => a.preview_keys.length - c.preview_keys.length);
-                    return (
-                      <div key={view}>
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="font-semibold">{VIEW_LABELS[view]}</h4>
-                          <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${view}`} className="text-xs font-semibold underline">画像を追加</Link>
-                        </div>
-                        {rules.length > 0 ? (
-                          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {rules.map((rule) => <PreviewCard key={rule.id} rule={rule} label={VIEW_LABELS[view]} keyLabel={keyLabel} />)}
-                          </ul>
-                        ) : <p className="text-sm text-muted">未登録です。</p>}
-                      </div>
-                    );
-                  })}
-                </div>
+        {selectedSection === 'elevation' && (
+          <div className="space-y-4">
+            {elevations.length > 0 ? (
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {elevations.map((image) => (
+                  <ProductImageCard
+                    key={image.id}
+                    image={image}
+                    modelId={b.model.id}
+                    redirectTo={sectionHref(b.model.id, 'elevation')}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <div className="rounded-xl border border-dashed border-line p-5">
+                <Badge tone="warn">未登録</Badge>
+                <p className="mt-2 text-sm text-muted">立面図はまだ登録されていません。</p>
               </div>
-
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-lg font-semibold">立面図</h3>
-                  <p className="text-xs text-muted">正面・右側面・背面・左側面など、シミュレーターの立面図欄に表示します。</p>
-                </div>
-                {elevations.length > 0 && (
-                  <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {elevations.map((image) => <ProductImageCard key={image.id} image={image} modelId={b.model.id} />)}
-                  </ul>
-                )}
+            )}
+            <details className="card p-4">
+              <summary className="cursor-pointer text-sm font-semibold">＋ 立面図を追加</summary>
+              <div className="mt-4">
                 <ProductImageForm modelId={b.model.id} allowedKinds={['elevation']} title="立面図を追加" />
               </div>
+            </details>
+          </div>
+        )}
 
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-lg font-semibold">施工事例</h3>
-                  <p className="text-xs text-muted">完成イメージ内の「施工事例」タブに表示する写真です。</p>
-                </div>
-                {cases.length > 0 && (
-                  <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {cases.map((image) => <ProductImageCard key={image.id} image={image} modelId={b.model.id} />)}
-                  </ul>
-                )}
+        {selectedSection === 'case' && (
+          <div className="space-y-4">
+            {cases.length > 0 ? (
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {cases.map((image) => (
+                  <ProductImageCard
+                    key={image.id}
+                    image={image}
+                    modelId={b.model.id}
+                    redirectTo={sectionHref(b.model.id, 'case')}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <div className="rounded-xl border border-dashed border-line p-5">
+                <Badge tone="warn">未登録</Badge>
+                <p className="mt-2 text-sm text-muted">施工事例はまだ登録されていません。</p>
+              </div>
+            )}
+            <details className="card p-4">
+              <summary className="cursor-pointer text-sm font-semibold">＋ 施工事例を追加</summary>
+              <div className="mt-4">
                 <ProductImageForm modelId={b.model.id} allowedKinds={['case']} title="施工事例を追加" />
               </div>
+            </details>
+          </div>
+        )}
+      </section>
 
-              <details className="card p-5">
-                <summary className="cursor-pointer font-semibold">画像ルールの詳細・不足チェック</summary>
-                <div className="mt-4 space-y-3">
-                  {missing.length > 0 ? (
-                    <Alert tone="warn" title={`画像が不足している組み合わせ：${missing.length}件`}>
-                      <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-                        {missing.map((m, i) => (
-                          <li key={i} className="flex items-center justify-between gap-2 text-xs">
-                            <span><span className="font-semibold">{VIEW_LABELS[m.view]}</span>：{m.keys.length ? m.keys.map(keyLabel).join(' + ') : '標準状態'}</span>
-                            <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${m.view}&keys=${m.keys.join(',')}`} className="shrink-0 underline">登録</Link>
-                          </li>
-                        ))}
-                      </ul>
-                      {truncated.length > 0 && <p className="mt-2 text-xs">※ 組み合わせ数が多いビューは一部のみチェックしています。</p>}
-                    </Alert>
-                  ) : (
-                    <Alert tone="success">現在の公開ルールでは不足警告はありません。</Alert>
-                  )}
-                  <p className="text-xs text-muted">composite / layer、プレビューキー、重ね順などの高度な設定は各画像の「画像を変更」から編集できます。</p>
-                </div>
-              </details>
-            </section>
-          );
-        })}
-      </div>
+      <details className="card p-5">
+        <summary className="cursor-pointer font-semibold">詳細設定・画像の不足チェック（通常は変更不要）</summary>
+        <div className="mt-4 space-y-3">
+          {missing.length > 0 ? (
+            <Alert tone="warn" title={`システム上の画像不足候補：${missing.length}件`}>
+              <p className="mb-2 text-xs">設備の組み合わせごとの詳細チェックです。日常の画像差し替えでは通常確認不要です。</p>
+              <ul className="grid gap-1 sm:grid-cols-2">
+                {missing.map((m, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 text-xs">
+                    <span><span className="font-semibold">{VIEW_LABELS[m.view]}</span>：{m.keys.length ? m.keys.map(keyLabel).join(' + ') : '標準状態'}</span>
+                    <Link href={`/admin/preview-rules/new?model=${b.model.id}&view=${m.view}&keys=${m.keys.join(',')}`} className="shrink-0 underline">登録</Link>
+                  </li>
+                ))}
+              </ul>
+              {truncated.length > 0 && <p className="mt-2 text-xs">※ 組み合わせ数が多いビューは一部のみチェックしています。</p>}
+            </Alert>
+          ) : (
+            <Alert tone="success">現在の公開ルールでは不足警告はありません。</Alert>
+          )}
+          <p className="text-xs text-muted">表示条件、プレビューキー、composite / layer、重ね順などは各画像の「画像を変更」から確認できます。</p>
+        </div>
+      </details>
     </AdminPage>
   );
 }

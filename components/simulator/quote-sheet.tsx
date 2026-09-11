@@ -152,22 +152,21 @@ function MobileQuoteLine({
   remark?: ReactNode;
   muted?: boolean;
 }) {
+  const showUnitPrice = unitPrice !== undefined && unitPrice !== null && unitPrice !== '';
+
   return (
     <div className={cn('border-b border-line/70 px-3 py-2.5', muted && 'text-ink-soft')}>
-      <div className="text-[0.82rem] leading-snug text-ink">{name}</div>
-      <div className="mt-2 grid grid-cols-[auto_1fr_auto] items-end gap-x-3 text-[0.7rem] leading-tight">
-        <div className="min-w-0 text-muted">
-          <span className="block text-[0.62rem]">数量</span>
-          <span className="whitespace-nowrap text-ink-soft">{quantity ?? '—'}</span>
+      <div className="text-[0.84rem] font-medium leading-snug text-ink">{name}</div>
+      <div className="mt-1.5 flex items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.7rem] leading-tight text-muted">
+          {quantity !== undefined && quantity !== null && (
+            <span className="whitespace-nowrap">{quantity}</span>
+          )}
+          {showUnitPrice && (
+            <span className="whitespace-nowrap">単価 {unitPrice}</span>
+          )}
         </div>
-        <div className="min-w-0 text-right text-muted">
-          <span className="block text-[0.62rem]">単価</span>
-          <span className="whitespace-nowrap text-ink-soft">{unitPrice ?? '—'}</span>
-        </div>
-        <div className="min-w-0 text-right">
-          <span className="block text-[0.62rem] text-muted">金額</span>
-          <span className="whitespace-nowrap font-semibold tabular-nums text-ink">{amount}</span>
-        </div>
+        <span className="shrink-0 whitespace-nowrap text-[0.78rem] font-semibold tabular-nums text-ink">{amount}</span>
       </div>
       {remark && <div className="mt-1.5 text-[0.68rem] leading-snug text-muted">{remark}</div>}
     </div>
@@ -333,7 +332,7 @@ export function QuoteSheet({
           const unitPriceText = line.price_on_request
             ? '別途見積'
             : isExteriorFace && line.amount === 0
-              ? '—'
+              ? undefined
               : formatYen(line.unit_price);
           return (
             <MobileQuoteLine

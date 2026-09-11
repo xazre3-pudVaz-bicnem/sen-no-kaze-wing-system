@@ -289,8 +289,8 @@ export function QuoteSheet({
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
                   <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
-                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
-                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '' : formatYen(l.unit_price)}</td>
+                  <td className={td.amount}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '追加費用なし' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
                   <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
                 </tr>
               );
@@ -333,8 +333,8 @@ export function QuoteSheet({
                   </td>
                   <td className={td.qty}>{formatQty(l.quantity)}</td>
                   <td className={td.unit}>{isExteriorFace ? '面' : '式'}</td>
-                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '標準' : formatYen(l.unit_price)}</td>
-                  <td className={td.amount}>{l.price_on_request ? '別途見積' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
+                  <td className={td.price}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '' : formatYen(l.unit_price)}</td>
+                  <td className={td.amount}>{l.price_on_request ? '別途見積' : isExteriorFace && l.amount === 0 ? '追加費用なし' : l.amount === 0 ? '標準' : formatYen(l.amount)}</td>
                   <td className={td.remark}>{isExteriorFace ? '面別外壁仕様' : ''}</td>
                 </tr>
               );

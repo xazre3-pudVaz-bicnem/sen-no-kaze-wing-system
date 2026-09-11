@@ -319,11 +319,19 @@ export function PreviewRuleForm({
   const selectedKeyLabels = previewKeys.filter((k) => selectedKeys.has(k.key)).map((k) => k.label);
   const internalNote = rule && hasBaseFloorplanInternalMarker(rule) ? BASE_FLOORPLAN_NOTE : defaults?.internalNote;
   const hasProtectedInternalNote = internalNote === BASE_FLOORPLAN_NOTE;
+  const protectedModelId = rule?.base_model_id ?? defaults?.base_model_id ?? models[0]?.id ?? '';
 
   return (
     <form action={action} className="card space-y-5 p-6" noValidate>
       <input type="hidden" name="id" value={rule?.id ?? ''} />
-      {hasProtectedInternalNote && <input type="hidden" name="internal_note" value={BASE_FLOORPLAN_NOTE} />}
+      {hasProtectedInternalNote && (
+        <>
+          <input type="hidden" name="internal_note" value={BASE_FLOORPLAN_NOTE} />
+          <input type="hidden" name="base_model_id" value={protectedModelId} />
+          <input type="hidden" name="view" value="floorplan" />
+          <input type="hidden" name="kind" value="composite" />
+        </>
+      )}
       <Status state={state} />
 
       <div>
@@ -362,17 +370,32 @@ export function PreviewRuleForm({
         <p className="mt-2 text-xs text-muted">通常の画像差し替えでは変更不要です。表示条件やレイヤー方式を調整するときだけ使用します。</p>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
           <Field label="ベースコンテナ" htmlFor="pr-model" required errors={e.base_model_id}>
-            <Select id="pr-model" name="base_model_id" defaultValue={rule?.base_model_id ?? defaults?.base_model_id ?? models[0]?.id}>
+            <Select
+              id="pr-model"
+              name="base_model_id"
+              defaultValue={protectedModelId}
+              disabled={hasProtectedInternalNote}
+            >
               {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </Select>
           </Field>
           <Field label="ビュー" htmlFor="pr-view" required errors={e.view}>
-            <Select id="pr-view" name="view" defaultValue={rule?.view ?? defaults?.view ?? 'exterior'}>
+            <Select
+              id="pr-view"
+              name="view"
+              defaultValue={hasProtectedInternalNote ? 'floorplan' : (rule?.view ?? defaults?.view ?? 'exterior')}
+              disabled={hasProtectedInternalNote}
+            >
               {VIEW_KEYS.map((v) => <option key={v} value={v}>{VIEW_LABELS[v]}</option>)}
             </Select>
           </Field>
           <Field label="方式" htmlFor="pr-kind" required hint="完成画像は通常こちら。レイヤーは透過PNGを重ねる場合に使用" errors={e.kind}>
-            <Select id="pr-kind" name="kind" defaultValue={rule?.kind ?? 'composite'}>
+            <Select
+              id="pr-kind"
+              name="kind"
+              defaultValue={hasProtectedInternalNote ? 'composite' : (rule?.kind ?? 'composite')}
+              disabled={hasProtectedInternalNote}
+            >
               <option value="composite">完成画像</option>
               <option value="layer">レイヤー</option>
             </Select>
@@ -386,12 +409,18 @@ export function PreviewRuleForm({
         </div>
         <div className="mt-5">
           <p className="label">対応するプレビューキー（画像に写っている設備）</p>
-          <p className="mb-2 text-xs text-muted">何も選ばなければ標準状態です。レイヤー方式では通常1つだけ選びます。</p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {previewKeys.map((k) => (
-              <Checkbox key={k.key} name="preview_keys" value={k.key} defaultChecked={selectedKeys.has(k.key)} label={<>{k.label} <span className="text-xs text-muted">({k.key})</span></>} />
-            ))}
-          </div>
+          {hasProtectedInternalNote ? (
+            <p className="mt-2 text-xs text-muted">本体専用平面図はプレビューキーなし（空配列）で固定されています。</p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-muted">何も選ばなければ標準状態です。レイヤー方式では通常1つだけ選びます。</p>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {previewKeys.map((k) => (
+                  <Checkbox key={k.key} name="preview_keys" value={k.key} defaultChecked={selectedKeys.has(k.key)} label={<>{k.label} <span className="text-xs text-muted">({k.key})</span></>} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </details>
 

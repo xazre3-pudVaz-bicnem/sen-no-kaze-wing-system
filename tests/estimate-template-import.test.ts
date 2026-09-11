@@ -147,13 +147,29 @@ describe('標準見積Excelの取込・検算', () => {
     expect(() => parseStandardEstimateWorkbook([sheet])).toThrow('Excel記載値を保持できないため登録を中止しました');
   });
 
+  it('BOXの本体・ホテル単身者・水回りキットを独立した標準見積として読み取る', () => {
+    const parsed = parseStandardEstimateWorkbook([
+      workbookSheet('BOX（本体）'),
+      workbookSheet('BOX（ホテル単身者）'),
+      workbookSheet('BOX（水回りキット）'),
+    ]);
+
+    expect(parsed.templates.map((x) => [x.model_slug, x.spec_code, x.name])).toEqual([
+      ['box', 'base', '本体のみ'],
+      ['box', 'hotel-single', 'ホテル・単身者用'],
+      ['box', 'water-kit', '水回りキット'],
+    ]);
+  });
+
   it('防火シートは今回の対象外として読み飛ばす', () => {
     const parsed = parseStandardEstimateWorkbook([
       workbookSheet(),
       workbookSheet('【防火】ウィング【ホテルUB】'),
+      workbookSheet('【防火】BOX（水回りキット）'),
     ]);
     expect(parsed.templates).toHaveLength(1);
     expect(parsed.ignoredSheets).toContain('【防火】ウィング【ホテルUB】');
+    expect(parsed.ignoredSheets).toContain('【防火】BOX（水回りキット）');
   });
 
   it('分類合計がExcelの小計と一致しない場合は登録前に止める', () => {

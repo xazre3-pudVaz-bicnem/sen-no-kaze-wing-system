@@ -20,7 +20,7 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
       <input type="hidden" name="quote_id" value={quote.id} />
       <p className="font-semibold">担当代理店</p>
       <p className="text-xs text-muted">
-        割り当てると、その代理店が案件見積を直接編集し、確定見積（次の版）を発行できるようになります。
+        割り当てると、その代理店は本体を閲覧しながら、オプション・別途工事等を編集して確定見積（次の版）を発行できます。
       </p>
       <Status state={state} />
       <Field label="代理店・工務店" htmlFor="dealer_id">

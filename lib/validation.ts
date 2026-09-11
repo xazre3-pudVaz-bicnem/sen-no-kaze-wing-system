@@ -102,7 +102,15 @@ export const modelSchema = z.object({
   description: trimmed(2000),
   base_price: intFromForm,
   expense_rate: z.coerce.number().min(0).max(1),
-  presets: z.array(z.object({ code: z.string().regex(/^[a-z0-9-]+$/), name: z.string().min(1), description: z.string(), option_codes: z.array(z.string()) })),
+  presets: z.array(
+    z.object({
+      code: z.string().regex(/^[a-z0-9-]+$/),
+      name: z.string().min(1),
+      display_name: z.string().optional(),
+      description: z.string(),
+      option_codes: z.array(z.string()),
+    })
+  ),
   status: statusSchema,
   sort_order: intFromForm,
   specs: z.array(z.object({ label: z.string(), value: z.string() })),

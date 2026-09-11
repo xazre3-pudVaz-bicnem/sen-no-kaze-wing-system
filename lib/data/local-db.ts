@@ -29,6 +29,10 @@ import type {
   EstimateTemplate,
   EstimateTemplateSection,
   EstimateTemplateLine,
+  EstimateImport,
+  EstimateImportLine,
+  EstimateProductLink,
+  ProductMatchRule,
 } from '@/lib/domain/types';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
@@ -72,6 +76,10 @@ export interface LocalDb {
   estimateTemplates: EstimateTemplate[];
   estimateTemplateSections: EstimateTemplateSection[];
   estimateTemplateLines: EstimateTemplateLine[];
+  estimateImports: EstimateImport[];
+  estimateImportLines: EstimateImportLine[];
+  estimateProductLinks: EstimateProductLink[];
+  productMatchRules: ProductMatchRule[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
 }
@@ -106,6 +114,10 @@ export function emptyDb(): LocalDb {
     estimateTemplates: [],
     estimateTemplateSections: [],
     estimateTemplateLines: [],
+    estimateImports: [],
+    estimateImportLines: [],
+    estimateProductLinks: [],
+    productMatchRules: [],
     configurations: [],
     configurationItems: [],
     snapshots: [],

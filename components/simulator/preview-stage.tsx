@@ -152,7 +152,7 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
               fill
               priority={caseIndex === 0}
               sizes="(min-width: 1024px) 62vw, 100vw"
-              className="object-cover"
+              className="object-contain"
             />
             {currentCase.caption && (
               <>
@@ -183,7 +183,7 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
                       fill
                       priority={isCurrent && i === 0}
                       sizes="(min-width: 1024px) 62vw, 100vw"
-                      className={cn(f.view === 'floorplan' ? 'object-contain' : 'object-cover', isCurrent && track.prev ? 'animate-[fadeIn_.7s_ease-out_both]' : '')}
+                      className={cn('object-contain', isCurrent && track.prev ? 'animate-[fadeIn_.7s_ease-out_both]' : '')}
                       style={{ zIndex: l.z_index }}
                     />
                   ))}

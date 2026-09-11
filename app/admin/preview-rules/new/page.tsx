@@ -14,7 +14,8 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
   const selectedModel = models.find((model) => model.id === sp.model);
   const isBaseFloorplan = sp.slot === 'base' && view === 'floorplan';
   const selectedPreset = selectedModel?.presets?.find((preset) => preset.code === sp.preset);
-  const presetCode = view === 'floorplan' && selectedPreset ? selectedPreset.code : undefined;
+  const requestedKeys = sp.keys ? sp.keys.split(',').filter(Boolean) : [];
+  const presetCode = view === 'floorplan' && selectedPreset && requestedKeys.length === 0 ? selectedPreset.code : undefined;
   return (
     <AdminPage title="シミュレーター画像を追加">
       <BackLink href={`/admin/preview-rules?model=${sp.model ?? models[0]?.id ?? ''}&section=${sp.section ?? (view === 'floorplan' ? 'floorplan' : 'completion')}`} label="シミュレーター画像へ戻る" />
@@ -25,7 +26,7 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
         defaults={{
           base_model_id: sp.model,
           view,
-          keys: sp.keys ? sp.keys.split(',').filter(Boolean) : [],
+          keys: requestedKeys,
           alt: isBaseFloorplan && selectedModel
             ? `${selectedModel.name} 本体平面図`
             : selectedModel && selectedPreset

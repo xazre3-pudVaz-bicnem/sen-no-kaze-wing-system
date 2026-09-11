@@ -28,6 +28,7 @@ import {
   type ViewKey,
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
+import { BASE_FLOORPLAN_NOTE, isDedicatedBaseFloorplanRule } from '@/lib/domain/preview-rule-meta';
 
 const initial: AdminFormState = { ok: false };
 
@@ -310,16 +311,19 @@ export function PreviewRuleForm({
   rule: PreviewImageRule | null;
   models: BaseModel[];
   previewKeys: { key: string; label: string }[];
-  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[]; alt?: string; note?: string };
+  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[]; alt?: string; internalNote?: string };
 }) {
   const [state, action, pending] = useActionState(savePreviewRuleAction, initial);
   const e = state.fieldErrors ?? {};
   const selectedKeys = new Set(rule?.preview_keys ?? defaults?.keys ?? []);
   const selectedKeyLabels = previewKeys.filter((k) => selectedKeys.has(k.key)).map((k) => k.label);
+  const internalNote = rule && isDedicatedBaseFloorplanRule(rule) ? BASE_FLOORPLAN_NOTE : defaults?.internalNote;
+  const hasProtectedInternalNote = internalNote === BASE_FLOORPLAN_NOTE;
 
   return (
     <form action={action} className="card space-y-5 p-6" noValidate>
       <input type="hidden" name="id" value={rule?.id ?? ''} />
+      {hasProtectedInternalNote && <input type="hidden" name="internal_note" value={BASE_FLOORPLAN_NOTE} />}
       <Status state={state} />
 
       <div>
@@ -336,9 +340,15 @@ export function PreviewRuleForm({
         <Field label="代替テキスト" htmlFor="pr-alt" errors={e.alt}>
           <Input id="pr-alt" name="alt" defaultValue={rule?.alt ?? defaults?.alt ?? ''} />
         </Field>
-        <Field label="補足" htmlFor="pr-note" hint="必要な場合だけ画面に小さく表示します" errors={e.note}>
-          <Input id="pr-note" name="note" defaultValue={rule?.note ?? defaults?.note ?? ''} />
-        </Field>
+        {hasProtectedInternalNote ? (
+          <div className="rounded-lg border border-line bg-ivory/60 px-3 py-2 text-xs text-muted">
+            本体専用平面図の識別情報は内部で固定されています。通常の補足欄からは変更できません。
+          </div>
+        ) : (
+          <Field label="補足" htmlFor="pr-note" hint="必要な場合だけ画面に小さく表示します" errors={e.note}>
+            <Input id="pr-note" name="note" defaultValue={rule?.note ?? ''} />
+          </Field>
+        )}
         <Field label="公開状態" htmlFor="pr-status" errors={e.status}>
           <Select id="pr-status" name="status" defaultValue={rule?.status ?? 'published'}>
             <option value="published">公開</option>

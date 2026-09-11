@@ -258,6 +258,90 @@ export interface EstimateTemplateBundle {
   baseline_option_ids: string[];
 }
 
+
+export type EstimateImportStatus = 'review' | 'ready' | 'activated' | 'superseded';
+export type EstimateLinkPolicy = 'required' | 'optional' | 'none';
+export type EstimateProductMatchType = 'automatic' | 'manual' | 'saved_rule';
+
+export interface EstimateImport {
+  id: string;
+  base_model_id: string;
+  spec_code: string;
+  name: string;
+  version: number;
+  source_file_name: string;
+  source_sheet_name: string;
+  source_sha256: string;
+  status: EstimateImportStatus;
+  tax_rate: number;
+  subtotal_raw: number;
+  adjustment: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+  /** 有効化時に既存 estimate_templates へ渡す検算済みデータ。 */
+  template_payload: Record<string, unknown>;
+  imported_by: string | null;
+  created_at: string;
+  activated_by: string | null;
+  activated_at: string | null;
+}
+
+export interface EstimateImportLine {
+  id: string;
+  import_id: string;
+  section_code: EstimateSectionCode;
+  group_label: string | null;
+  source_row: number | null;
+  original_name: string;
+  normalized_name: string;
+  category_id: string | null;
+  manufacturer_text: string | null;
+  model_text: string | null;
+  size_text: string | null;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  amount: number;
+  remark: string | null;
+  link_policy: EstimateLinkPolicy;
+  line_fingerprint: string;
+  fingerprint_ordinal: number;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface EstimateProductLink {
+  id: string;
+  import_line_id: string;
+  option_id: string;
+  match_type: EstimateProductMatchType;
+  match_reason: string | null;
+  confidence: number | null;
+  status: 'suggested' | 'confirmed';
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+}
+
+export interface ProductMatchRule {
+  id: string;
+  scope: 'global' | 'model' | 'spec';
+  base_model_id: string | null;
+  spec_code: string | null;
+  category_id: string | null;
+  match_key: string;
+  option_id: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EstimateImportBundle {
+  import: EstimateImport;
+  lines: (EstimateImportLine & { product_link: EstimateProductLink | null })[];
+}
+
 export interface ProductOption {
   id: string;
   base_model_id: string | null; // null = 全モデル共通

@@ -85,6 +85,8 @@ interface PdfInput {
 
 
 function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
+  const interiorItems = items.filter((i) => i.kind === 'interior_exterior');
+  const interiorExpense = items.find((i) => i.kind === 'interior_exterior_expense') ?? null;
   // 防火仕様は本体側に表示する（先方指示）
   const allOptionItems = items.filter((i) => i.kind === 'option');
   const fireItems = allOptionItems.filter((i) => i.name.includes('防火'));
@@ -96,7 +98,15 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const freeAmount = freeItems.reduce((sum, i) => sum + i.amount, 0);
   const siteworkAmount = sitework.reduce((sum, i) => sum + i.amount, 0);
   const baseTotal = quote.base_price + quote.base_expense;
-  const optionTotal = quote.option_subtotal + quote.option_expense;
+  const interiorTotal =
+    interiorItems.reduce((sum, item) => sum + item.amount, 0) + (interiorExpense?.amount ?? 0);
+  const optionItemsTotal =
+    optionItems.reduce((sum, item) => sum + item.amount, 0) + (optionExpense?.amount ?? 0);
+  const optionTotal =
+    interiorItems.length > 0 || interiorExpense
+      ? optionItemsTotal
+      : quote.option_subtotal + quote.option_expense;
+  const hasInterior = interiorItems.length > 0 || Boolean(interiorExpense);
   const withImages = items.filter((i) => i.image_url && productImages.get(i.id));
   /** 明細 1 行（項目・摘要／備考・単価・数量・金額）。金額 0 の別途工事は「−」 */
   const row = (it: QuoteItem, opts: { dash?: boolean } = {}) => (
@@ -104,7 +114,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
       <Text style={s.cNo}></Text>
       <Text style={s.cName}>{it.name}</Text>
       <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
-      <Text style={s.cPrice}>{it.unit_price > 0 ? yen(it.unit_price) : ''}</Text>
+      <Text style={s.cPrice}>{it.unit_price !== 0 ? yen(it.unit_price) : ''}</Text>
       <Text style={s.cQty}>{it.unit ? `${fmtQty(it.quantity)} ${it.unit}` : fmtQty(it.quantity)}</Text>
       <Text style={s.cAmount}>{opts.dash && it.amount === 0 ? '−' : yen(it.amount)}</Text>
     </View>
@@ -200,9 +210,21 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
           </View>
           {subtotalRow('【本体価格計】', yen(baseTotal))}
 
-          {/* 2. オプション */}
+          {/* 2. 内外装工事（標準見積接続後） */}
+          {hasInterior ? (
+            <>
+              <View style={s.section}>
+                <Text style={s.sectionLabel}>2　内外装工事</Text>
+              </View>
+              {interiorItems.map((it) => row(it))}
+              {interiorExpense ? row(interiorExpense) : null}
+              {subtotalRow('【内外装価格計】', yen(interiorTotal))}
+            </>
+          ) : null}
+
+          {/* オプション */}
           <View style={s.section}>
-            <Text style={s.sectionLabel}>2　オプション価格（選択された設備・仕上げ）</Text>
+            <Text style={s.sectionLabel}>{hasInterior ? '3' : '2'}　オプション価格（選択された設備・仕上げ）</Text>
           </View>
           {optionItems.map((it) => row(it))}
           {optionExpense ? row(optionExpense) : null}
@@ -210,7 +232,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
 
           {/* 3. 別途工事（運送費を含む） */}
           <View style={s.section}>
-            <Text style={s.sectionLabel}>3　別途工事（設置場所の確認後に確定します）</Text>
+            <Text style={s.sectionLabel}>{hasInterior ? '4' : '3'}　別途工事（設置場所の確認後に確定します）</Text>
           </View>
           {sitework.map((it) => row(it, { dash: true }))}
           {subtotalRow('【別途工事計】', siteworkAmount > 0 ? yen(siteworkAmount) : '別途')}
@@ -219,7 +241,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
           {freeItems.length > 0 ? (
             <>
               <View style={s.section}>
-                <Text style={s.sectionLabel}>4　フリー商品（代理店・工務店の取扱商品／諸費用なし）</Text>
+                <Text style={s.sectionLabel}>{hasInterior ? '5' : '4'}　フリー商品（代理店・工務店の取扱商品／諸費用なし）</Text>
               </View>
               {freeItems.map((it) => row(it))}
               {subtotalRow('【フリー商品計】', yen(freeAmount))}

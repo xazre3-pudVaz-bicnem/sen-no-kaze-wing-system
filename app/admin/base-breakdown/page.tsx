@@ -44,6 +44,8 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
   const specCode = tabs.some((row) => row.code === sp.spec) ? (sp.spec as string) : (tabs[0]?.code ?? BASE_ESTIMATE_SPEC_CODE);
   const specName = tabs.find((row) => row.code === specCode)?.name ?? specCode;
   const template = imported.find((row) => row.spec_code === specCode);
+  const templateBundle = model && template ? await store.getEstimateTemplateBundle(model.id, specCode) : null;
+  const baseSection = templateBundle?.sections.find((row) => row.code === 'base') ?? null;
   const items = allItems.filter((row) => row.base_model_id === model?.id && row.spec_code === specCode);
   const rate = model?.expense_rate ?? 0.15;
   const baseLines = items.reduce((sum, row) => sum + row.amount, 0);
@@ -124,9 +126,13 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
             specCode={specCode}
             items={items}
             expenseRate={rate}
+            lockedByTemplate={Boolean(template)}
+            expenseAmountOverride={baseSection?.expense_amount}
+            totalOverride={baseSection?.total}
           />
           <Alert tone="info">
-            内外装工事・オプション・別途の標準価格は商品マスターから再計算しません。実物Excelから取り込んだ標準見積テンプレートを正本として扱います。
+            標準見積はExcel原本を正本として固定します。標準見積そのものは直接編集せず、変更時はExcelを修正して再取込します。
+            案件ごとの見積は標準見積をコピーした後、代理店以上が管理画面で編集できる設計です。
           </Alert>
         </>
       )}

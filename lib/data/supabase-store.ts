@@ -63,6 +63,7 @@ function mapPgError(e: { code?: string; message?: string } | null): never {
   if (msg.startsWith('CONFLICT:') || msg.startsWith('DEPENDENCY:') || msg.startsWith('REQUIRED:') || msg.startsWith('SINGLE:')) {
     throw new StoreError('VALIDATION', msg.replace(/^[A-Z_]+:\s*/, ''));
   }
+  if (msg.startsWith('VALIDATION:')) throw new StoreError('VALIDATION', msg.replace(/^VALIDATION:\s*/, ''));
   if (msg.startsWith('LOCKED')) throw new StoreError('LOCKED', msg.replace(/^LOCKED:\s*/, ''));
   if (msg.startsWith('FORBIDDEN') || e?.code === '42501') throw new StoreError('FORBIDDEN', '権限がありません');
   if (msg.startsWith('NOT_FOUND') || e?.code === 'P0002' || e?.code === 'PGRST116') throw new StoreError('NOT_FOUND', 'データが見つかりません');

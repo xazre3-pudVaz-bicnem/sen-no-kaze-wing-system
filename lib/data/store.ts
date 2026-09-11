@@ -142,6 +142,8 @@ export interface EstimateTemplateImportInput {
   base_breakdown_items: Omit<BaseBreakdownItem, 'id' | 'base_model_id' | 'spec_code'>[];
   /** 本体以外の3分類だけ。 */
   lines: Omit<EstimateTemplateLine, 'id' | 'template_id'>[];
+  /** この標準見積で標準選択されている商品ID。差額計算の基準。 */
+  baseline_option_ids: string[];
 }
 
 /**

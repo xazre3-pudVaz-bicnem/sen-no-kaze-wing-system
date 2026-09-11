@@ -39,6 +39,32 @@ const wingBundle: CatalogBundle = {
   baseBreakdowns: seedCatalog.baseBreakdownItems.filter((item) => item.base_model_id === MODEL_WING01_ID),
 };
 
+const boxModel = seedCatalog.models.find((model) => model.id === MODEL_BOX_ID)!;
+const boxOptions = seedCatalog.options.filter(
+  (option) => option.base_model_id === null || option.base_model_id === MODEL_BOX_ID
+);
+const boxRules = seedCatalog.previewRules.filter((rule) => rule.base_model_id === MODEL_BOX_ID);
+const boxRuleIds = new Set(boxRules.map((rule) => rule.id));
+const boxOptionIds = new Set(boxOptions.map((option) => option.id));
+
+const boxBundle: CatalogBundle = {
+  model: boxModel,
+  images: seedCatalog.images.filter((image) => image.base_model_id === MODEL_BOX_ID),
+  categories: seedCatalog.categories,
+  options: boxOptions,
+  dependencies: seedCatalog.dependencies.filter(
+    (dependency) => boxOptionIds.has(dependency.option_id) || boxOptionIds.has(dependency.requires_option_id)
+  ),
+  conflicts: seedCatalog.conflicts.filter(
+    (conflict) => boxOptionIds.has(conflict.option_id) || boxOptionIds.has(conflict.conflicts_with_option_id)
+  ),
+  previewRules: boxRules,
+  hotspots: seedCatalog.hotspots.filter((hotspot) => boxRuleIds.has(hotspot.rule_id)),
+  variantGroups: seedCatalog.variantGroups.filter((group) => boxOptionIds.has(group.option_id)),
+  variantChoices: seedCatalog.variantChoices,
+  baseBreakdowns: seedCatalog.baseBreakdownItems.filter((item) => item.base_model_id === MODEL_BOX_ID),
+};
+
 const dedicatedBaseRule = (): PreviewImageRule => ({
   id: '99999999-0000-4000-8000-000000000001',
   base_model_id: MODEL_WING01_ID,
@@ -180,6 +206,36 @@ describe('本体専用平面図の管理', () => {
       note: presetFloorplanInternalNote('office'),
     });
     expect(previewRuleDisplayNote(existing)).toBeNull();
+  });
+
+  it('BOXは標準見積に合わせてホテル・単身者用と水回りキットの平面図枠を出す', () => {
+    const slots = buildStandardFloorplanSlots(boxBundle);
+
+    expect(slots.map((slot) => [slot.code, slot.name])).toEqual([
+      ['hotel-single', 'ホテル・単身者用'],
+      ['water-kit', '水回りキット'],
+    ]);
+    expect(slots.every((slot) => slot.keys.length === 0)).toBe(true);
+  });
+
+  it('BOX水回りキットの専用マーカー平面図を登録枠へ紐付ける', () => {
+    const waterKitRule: PreviewImageRule = {
+      id: '99999999-0000-4000-8000-000000000004',
+      base_model_id: MODEL_BOX_ID,
+      view: 'floorplan',
+      kind: 'composite',
+      preview_keys: [],
+      url: '/images/plan/box-water-kit.jpg',
+      alt: 'BOX 水回りキット平面図',
+      note: presetFloorplanInternalNote('water-kit'),
+      z_index: 0,
+      status: 'published',
+    };
+    const slots = buildStandardFloorplanSlots({ ...boxBundle, previewRules: [...boxRules, waterKitRule] });
+    const waterKit = slots.find((slot) => slot.code === 'water-kit');
+
+    expect(waterKit?.rule?.id).toBe(waterKitRule.id);
+    expect(waterKit?.rule?.url).toContain('box-water-kit.jpg');
   });
 
   it('hotel / residence のpresetがそれぞれ対応する平面図へ紐付く', () => {

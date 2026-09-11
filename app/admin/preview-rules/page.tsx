@@ -182,7 +182,7 @@ export default async function AdminPreviewRulesPage({ searchParams }: { searchPa
       title: slot.name,
       rule: slot.rule,
       detail: slot.keys.length ? `対応条件：${slot.keys.map(keyLabel).join(' + ')}` : '標準構成',
-      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&keys=${slot.keys.join(',')}&section=floorplan`,
+      href: `/admin/preview-rules/new?model=${b.model.id}&view=floorplan&keys=${slot.keys.join(',')}&preset=${slot.code}&section=floorplan`,
     })),
   ];
   const visibleFloorplanSlots = missingOnly ? floorplanSlots.filter((slot) => !slot.rule) : floorplanSlots;

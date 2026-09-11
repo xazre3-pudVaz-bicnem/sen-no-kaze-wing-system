@@ -24,21 +24,21 @@ interface Props {
 
 /** 表の列（項目／数量／単位／単価／金額／備考）を揃えるための共通セル */
 const td = {
-  name: 'px-3 py-1.5 leading-snug sm:px-4',
-  qty: 'w-12 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2',
-  unit: 'w-10 px-1.5 py-1.5 whitespace-nowrap text-muted sm:w-12 sm:px-2',
-  price: 'w-24 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-28 sm:px-2',
-  amount: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32 sm:px-3',
-  remark: 'w-20 px-1.5 py-1.5 text-[0.68rem] leading-snug text-muted sm:w-24 sm:px-2 lg:w-32 lg:px-3 lg:text-[0.7rem]',
+  name: 'px-2 py-1.5 leading-snug sm:px-4',
+  qty: 'w-10 px-1 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2',
+  unit: 'w-8 px-1 py-1.5 whitespace-nowrap text-muted sm:w-12 sm:px-2',
+  price: 'w-20 px-1 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-28 sm:px-2',
+  amount: 'w-24 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32 sm:px-3',
+  remark: 'w-16 px-1 py-1.5 text-[0.65rem] leading-snug text-muted sm:w-24 sm:px-2 sm:text-[0.68rem] lg:w-32 lg:px-3 lg:text-[0.7rem]',
 };
 
 const th = {
-  name: 'px-3 py-2 text-left font-semibold sm:px-4',
-  qty: 'w-12 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-16 sm:px-2',
-  unit: 'w-10 px-1.5 py-2 text-left font-semibold whitespace-nowrap sm:w-12 sm:px-2',
-  price: 'w-24 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-28 sm:px-2',
-  amount: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32 sm:px-3',
-  remark: 'w-20 px-1.5 py-2 text-left font-semibold sm:w-24 sm:px-2 lg:w-32 lg:px-3',
+  name: 'px-2 py-2 text-left font-semibold sm:px-4',
+  qty: 'w-10 px-1 py-2 text-right font-semibold whitespace-nowrap sm:w-16 sm:px-2',
+  unit: 'w-8 px-1 py-2 text-left font-semibold whitespace-nowrap sm:w-12 sm:px-2',
+  price: 'w-20 px-1 py-2 text-right font-semibold whitespace-nowrap sm:w-28 sm:px-2',
+  amount: 'w-24 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-32 sm:px-3',
+  remark: 'w-16 px-1 py-2 text-left font-semibold sm:w-24 sm:px-2 lg:w-32 lg:px-3',
 };
 
 /** 工事区分の見出し行（１．金物関係費用 など） */
@@ -256,14 +256,14 @@ export function QuoteSheet({
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full min-w-[34rem] table-fixed text-[0.78rem] sm:min-w-[42rem] sm:text-sm">
+        <table className="w-full min-w-[28rem] table-fixed text-[0.78rem] sm:min-w-[42rem] sm:text-sm">
           <colgroup>
-            <col />
-            <col className="w-12 sm:w-16" />
-            <col className="w-10 sm:w-12" />
-            <col className="w-24 sm:w-28" />
-            <col className="w-28 sm:w-32" />
-            <col className="w-20 sm:w-24 lg:w-32" />
+            <col className="w-40 sm:w-auto" />
+            <col className="w-10 sm:w-16" />
+            <col className="w-8 sm:w-12" />
+            <col className="w-20 sm:w-28" />
+            <col className="w-24 sm:w-32" />
+            <col className="w-16 sm:w-24 lg:w-32" />
           </colgroup>
           <thead className="bg-sand text-[0.7rem] text-muted sm:text-xs">
             <tr>

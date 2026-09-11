@@ -220,6 +220,13 @@ function parseSection(
       if (quantity == null || quantity <= 0 || item.unit_price == null) {
         throw new Error(`${def.label}: 本体明細「${name}」の数量または単価を読み取れませんでした`);
       }
+      // 既存 base_breakdown_items は単価・金額が1円単位の integer。
+      // 小数を暗黙変換するとExcel正本と食い違うため、丸めず明示的に止める。
+      if (!Number.isInteger(item.unit_price) || !Number.isInteger(item.amount)) {
+        throw new Error(
+          `${def.label}: 本体明細「${name}」に1円未満の単価・金額があります。Excel記載値を保持できないため登録を中止しました`
+        );
+      }
       baseItems.push({
         section: currentGroup || def.label,
         name,

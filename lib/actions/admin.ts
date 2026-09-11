@@ -321,9 +321,10 @@ export async function deletePreviewRuleAction(formData: FormData): Promise<void>
   updateTag(CATALOG_TAG);
 
   const requestedBack = String(formData.get('redirect_to') ?? '').trim();
-  const back = requestedBack.startsWith('/admin/preview-rules')
-    ? requestedBack
-    : '/admin/preview-rules';
+  const back =
+    requestedBack.startsWith('/admin/preview-rules') || requestedBack.startsWith('/admin/models/')
+      ? requestedBack
+      : '/admin/preview-rules';
   redirect(`${back}${back.includes('?') ? '&' : '?'}deleted=1`);
 }
 

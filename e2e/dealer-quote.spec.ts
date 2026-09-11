@@ -11,7 +11,7 @@ import {
 } from './helpers';
 
 test.describe('代理店による確定見積（改訂版）', () => {
-  test('割り当て → 別途工事の入力 → 第2版の発行。第1版の金額は変わらない', async ({ page }) => {
+  test('割り当て → 案件見積の編集 → 第2版の発行。第1版の金額は変わらない', async ({ page }) => {
     // 代理店のフリー商品を用意しておく
     await ensureDealerFreeProduct(page);
     await logout(page);
@@ -34,19 +34,21 @@ test.describe('代理店による確定見積（改訂版）', () => {
     await expect(page.getByText('担当代理店を割り当てました')).toBeVisible();
     await logout(page);
 
-    // --- 代理店が別途工事とフリー商品を入力して第2版を発行 ---
+    // --- 代理店が案件見積を編集して第2版を発行 ---
     await signIn(page, DEALER, '/admin', '代理店 担当');
     await page.goto('/admin/quotes');
     // 他のテストの見積も並ぶので、対象の見積番号の行だけを見る
     const row = page.getByTestId('dealer-quote-row').filter({ hasText: firstNo });
     await expect(row).toHaveCount(1);
-    await row.getByRole('link', { name: '別途工事を入力' }).click();
+    await row.getByRole('link', { name: '見積を編集' }).click();
     await expect(page).toHaveURL(new RegExp(firstQuoteId));
 
     const form = page.getByTestId('dealer-revision-form');
     await expect(form).toBeVisible();
-    // 既存の別途工事（要見積・0円）に金額を入れる
-    await form.locator('input[name="items.0.unit_price"]').fill('300000');
+    // 代理店でも本体・オプションを含む案件見積全体を編集できる
+    await expect(page.getByTestId('add-base')).toBeVisible();
+    await expect(page.getByTestId('add-option')).toBeVisible();
+    await expect(form.locator('tbody tr').first().getByRole('combobox')).toHaveCount(1);
     // 追加の別途工事とフリー商品
     await page.getByTestId('add-installation').click();
     const rows = await form.locator('tbody tr').count();
@@ -104,8 +106,8 @@ test.describe('代理店による確定見積（改訂版）', () => {
   });
 });
 
-test.describe('本部の見積編集（エクセル表）', () => {
-  test('本部は本体の行も編集でき、代理店は別途工事だけ', async ({ page }) => {
+test.describe('案件見積の直接編集（エクセル表）', () => {
+  test('本部・代理店とも案件見積の全行を編集でき、標準見積は変更しない', async ({ page }) => {
     const customer = uniqueEmail('grid');
     const { quoteId, total } = await requestQuoteAsCustomer(page, customer, '本体編集のテスト');
     await logout(page);
@@ -137,7 +139,7 @@ test.describe('本部の見積編集（エクセル表）', () => {
     await expect(page.getByTestId('quote-table')).toContainText('サッシ木製建具工事');
     await logout(page);
 
-    // --- 代理店：本体の行は出ない ---
+    // --- 代理店：担当案件なら本体・オプションも編集できる ---
     await ensureDealerFreeProduct(page);
     await logout(page);
     const c2 = uniqueEmail('grid-dealer');
@@ -154,10 +156,10 @@ test.describe('本部の見積編集（エクセル表）', () => {
     await signIn(page, DEALER, '/admin', '代理店 担当');
     await page.goto(`/admin/quotes/${q2}`);
     await expect(page.getByTestId('dealer-revision-form')).toBeVisible();
-    await expect(page.getByTestId('add-base')).toBeHidden();
-    await expect(page.getByTestId('add-option')).toBeHidden();
-    // 区分は固定表示（選べない）
-    await expect(page.getByTestId('dealer-revision-form').locator('tbody tr').first().getByRole('combobox')).toHaveCount(0);
+    await expect(page.getByTestId('add-base')).toBeVisible();
+    await expect(page.getByTestId('add-option')).toBeVisible();
+    // 区分も変更できる
+    await expect(page.getByTestId('dealer-revision-form').locator('tbody tr').first().getByRole('combobox')).toHaveCount(1);
     await logout(page);
   });
 });

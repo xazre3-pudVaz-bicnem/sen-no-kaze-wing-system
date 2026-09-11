@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   BaseBreakdownItem,
   BaseModel,
+  EstimateTemplate,
   CatalogBundle,
   Configuration,
   ConfigurationItem,
@@ -50,6 +51,7 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type CatalogImportBatch,
+  type EstimateTemplateImportInput,
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -206,6 +208,25 @@ export class SupabaseStore implements DataStore {
     const ins = await db.from('base_breakdown_items').insert(rows).select('*');
     if (ins.error) mapPgError(ins.error);
     return (ins.data ?? []) as BaseBreakdownItem[];
+  }
+
+  // ---------- 標準見積テンプレート ----------
+  async listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]> {
+    const db = await this.db();
+    let q = db.from('estimate_templates').select('*').order('base_model_id').order('spec_code');
+    if (modelId) q = q.eq('base_model_id', modelId);
+    const { data, error } = await q;
+    if (error) {
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as EstimateTemplate[];
+  }
+
+  async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
+    const db = await this.db();
+    const { error } = await db.rpc('replace_estimate_templates', { p_templates: items });
+    if (error) mapPgError(error);
   }
 
   async respondToQuote(id: string, status: 'accepted' | 'declined') {

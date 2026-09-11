@@ -13,12 +13,20 @@ export const STANDARD_ESTIMATE_SECTIONS: {
   { code: 'sitework', label: '別途', startLabel: '別途', subtotalLabel: '【別途工事計】' },
 ];
 
-export const STANDARD_ESTIMATE_SHEETS: {
+interface StandardEstimateSheetDef {
   sheetName: string;
   modelSlug: string;
   specCode: string;
   name: string;
-}[] = [
+  /** Excel上の見出しが共通形式と異なる場合だけ指定する。 */
+  sectionMarkers?: Partial<Record<EstimateSectionCode, { label: string; occurrence?: number }>>;
+  /** Flatの旧Excelでは内外装経費が「本体諸費用」と表記されるため、取込時に正規化する。 */
+  normalizeInteriorExpenseFromBase?: boolean;
+  /** 旧Excelでオプションに置かれた室内造作を、現行ルールの内外装工事へ移す。 */
+  normalizeCarpentryIntoInterior?: boolean;
+}
+
+export const STANDARD_ESTIMATE_SHEETS: StandardEstimateSheetDef[] = [
   // Wing: 実物Excelに存在する4つの標準見積
   { sheetName: 'ウィング【本体】', modelSlug: 'wing-01', specCode: 'base', name: '本体のみ' },
   { sheetName: 'ウィング【ホテルUB】', modelSlug: 'wing-01', specCode: 'hotel', name: 'ホテル仕様' },
@@ -26,9 +34,30 @@ export const STANDARD_ESTIMATE_SHEETS: {
   { sheetName: 'ウィング【事務所】', modelSlug: 'wing-01', specCode: 'office', name: '事務所・店舗用' },
 
   // BOX: 旧 preset ではなく、実物Excelに存在する標準見積体系を正本とする
-  { sheetName: 'BOX（本体）', modelSlug: 'box', specCode: 'base', name: '本体のみ' },
-  { sheetName: 'BOX（ホテル単身者）', modelSlug: 'box', specCode: 'hotel-single', name: 'ホテル・単身者用' },
-  { sheetName: 'BOX（水回りキット）', modelSlug: 'box', specCode: 'water-kit', name: '水回りキット' },
+  { sheetName: 'BOX（本体）', modelSlug: 'box', specCode: 'base', name: '本体のみ', normalizeCarpentryIntoInterior: true },
+  { sheetName: 'BOX（ホテル単身者）', modelSlug: 'box', specCode: 'hotel-single', name: 'ホテル・単身者用', normalizeCarpentryIntoInterior: true },
+  { sheetName: 'BOX（水回りキット）', modelSlug: 'box', specCode: 'water-kit', name: '水回りキット', normalizeCarpentryIntoInterior: true },
+
+  // Flat: Excel上は内外装の合計見出しも「【本体価格計】」だが、
+  // システムではWingと同じ4分類（本体 / 内外装工事 / オプション / 別途）へ正規化する。
+  {
+    sheetName: 'フラット (本体)',
+    modelSlug: 'flat',
+    specCode: 'base',
+    name: '本体のみ',
+    sectionMarkers: { interior_exterior: { label: '【本体価格計】', occurrence: 2 } },
+    normalizeInteriorExpenseFromBase: true,
+    normalizeCarpentryIntoInterior: true,
+  },
+  {
+    sheetName: 'フラット (物置事務所)',
+    modelSlug: 'flat',
+    specCode: 'office',
+    name: '事務所・店舗用',
+    sectionMarkers: { interior_exterior: { label: '【本体価格計】', occurrence: 2 } },
+    normalizeInteriorExpenseFromBase: true,
+    normalizeCarpentryIntoInterior: true,
+  },
 ];
 
 export interface ParsedEstimateLine {
@@ -142,6 +171,21 @@ function findRow(rows: string[][], predicate: (row: string[]) => boolean, from =
   return -1;
 }
 
+function findNthRow(
+  rows: string[][],
+  predicate: (row: string[]) => boolean,
+  occurrence = 1,
+  from = 0
+): number {
+  let matched = 0;
+  for (let i = from; i < rows.length; i++) {
+    if (!predicate(rows[i])) continue;
+    matched += 1;
+    if (matched === occurrence) return i;
+  }
+  return -1;
+}
+
 function lineName(row: string[]): string {
   const customer = text(row, C.name);
   if (customer) return customer;
@@ -151,7 +195,11 @@ function lineName(row: string[]): string {
   return isNumberedGroup(group) ? group : '';
 }
 
-function expenseLabel(row: string[], code: EstimateSectionCode): string | null {
+function expenseLabel(
+  row: string[],
+  code: EstimateSectionCode,
+  normalizeInteriorExpenseFromBase = false
+): string | null {
   const customer = text(row, C.section);
   const leftSection = text(row, C.leftSection);
   const leftGroup = text(row, C.leftGroup);
@@ -164,6 +212,13 @@ function expenseLabel(row: string[], code: EstimateSectionCode): string | null {
   ) {
     return customer || leftSection;
   }
+  if (
+    code === 'interior_exterior' &&
+    normalizeInteriorExpenseFromBase &&
+    (customer.includes('本体諸費用') || leftSection.includes('本体諸費用'))
+  ) {
+    return '内外装工事経費';
+  }
   if (code === 'option' && leftGroup.includes('オプション諸費用')) return leftGroup;
   return null;
 }
@@ -173,7 +228,8 @@ function parseSection(
   sectionIndex: number,
   start: number,
   end: number,
-  globalExpenseRate: number | null
+  globalExpenseRate: number | null,
+  normalizeInteriorExpenseFromBase = false
 ): {
   section: ParsedEstimateSection;
   baseItems: ParsedBaseBreakdownItem[];
@@ -198,7 +254,7 @@ function parseSection(
         : '';
     if (candidateGroup) currentGroup = candidateGroup;
 
-    const expLabel = expenseLabel(row, def.code);
+    const expLabel = expenseLabel(row, def.code, normalizeInteriorExpenseFromBase);
     if (expLabel) {
       expenseName = expLabel;
       expense = money(row, C.amount);
@@ -272,12 +328,66 @@ function parseSection(
   };
 }
 
-function parseTemplate(sheet: Sheet, def: (typeof STANDARD_ESTIMATE_SHEETS)[number]): ParsedEstimateTemplate {
+
+function normalizeLegacyCarpentry(
+  def: StandardEstimateSheetDef,
+  sections: ParsedEstimateSection[],
+  lines: ParsedEstimateLine[],
+  globalExpenseRate: number | null
+): void {
+  if (!def.normalizeCarpentryIntoInterior) return;
+
+  const moved = lines.filter(
+    (line) =>
+      line.section_code === 'option' &&
+      (line.group_label?.includes('造作工事') || line.name.includes('室内造作'))
+  );
+  if (!moved.length) return;
+
+  const movedAmount = moved.reduce((sum, line) => sum + line.amount, 0);
+  for (const line of moved) {
+    line.section_code = 'interior_exterior';
+    line.group_label = '造作工事';
+  }
+
+  const interior = sections.find((section) => section.code === 'interior_exterior');
+  const option = sections.find((section) => section.code === 'option');
+  if (!interior || !option) return;
+
+  const rate = globalExpenseRate ?? interior.expense_rate ?? option.expense_rate ?? 0;
+  // 古いExcelは内外装・オプションとも同じ経費率で計算している。
+  // 造作工事の金額に対応する経費だけを分類間で移し、見積全体の金額は変えない。
+  const expenseShift = Math.min(option.expense_amount, Math.floor(movedAmount * rate));
+
+  interior.line_subtotal += movedAmount;
+  option.line_subtotal -= movedAmount;
+  interior.expense_amount += expenseShift;
+  option.expense_amount -= expenseShift;
+  interior.total += movedAmount + expenseShift;
+  option.total -= movedAmount + expenseShift;
+
+  interior.expense_label = '内外装工事経費';
+  interior.expense_rate = rate || interior.expense_rate;
+  if (option.expense_amount <= 0) {
+    option.expense_amount = 0;
+    option.expense_rate = null;
+  }
+}
+
+function parseTemplate(sheet: Sheet, def: StandardEstimateSheetDef): ParsedEstimateTemplate {
   const rows = sheet.rows;
   const markerRows = new Map<EstimateSectionCode, number>();
   for (const section of STANDARD_ESTIMATE_SECTIONS) {
-    const row = findRow(rows, (r) => text(r, C.section) === section.subtotalLabel);
-    if (row < 0) throw new Error(`${sheet.name}: ${section.subtotalLabel} が見つかりません`);
+    const marker = def.sectionMarkers?.[section.code] ?? {
+      label: section.subtotalLabel,
+      occurrence: 1,
+    };
+    const row = findNthRow(
+      rows,
+      (r) => text(r, C.section) === marker.label,
+      marker.occurrence ?? 1
+    );
+    if (row < 0) throw new Error(`${sheet.name}: ${marker.label} が見つかりません`);
     markerRows.set(section.code, row);
   }
 
@@ -295,12 +405,21 @@ function parseTemplate(sheet: Sheet, def: (typeof STANDARD_ESTIMATE_SHEETS)[numb
       previousEnd
     );
     const start = startFound >= 0 && startFound < end ? startFound : previousEnd;
-    const parsed = parseSection(rows, index, start, end, globalExpenseRate);
+    const parsed = parseSection(
+      rows,
+      index,
+      start,
+      end,
+      globalExpenseRate,
+      def.normalizeInteriorExpenseFromBase ?? false
+    );
     sections.push(parsed.section);
     baseItems.push(...parsed.baseItems);
     lines.push(...parsed.lines);
     previousEnd = end + 1;
   });
+
+  normalizeLegacyCarpentry(def, sections, lines, globalExpenseRate);
 
   const summary: Record<'raw' | 'adjustment' | 'tax' | 'total', number> = {
     raw: -1,

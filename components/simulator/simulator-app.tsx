@@ -163,11 +163,16 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     );
   }, [bundle, ctx, defaults, model, standardEstimateChoices, usesStandardEstimates]);
 
+  const preferredPresetCode = model.presets?.[0]?.code;
+  const managedDefaultSpecCode =
+    preferredPresetCode && specSelections.some((row) => row.code === preferredPresetCode)
+      ? preferredPresetCode
+      : null;
   const defaultSpecCode =
     initial?.spec_code ??
+    managedDefaultSpecCode ??
     standardEstimateChoices.find((row) => row.template.spec_code !== 'base')?.template.spec_code ??
     standardEstimateChoices[0]?.template.spec_code ??
-    model.presets?.[0]?.code ??
     'hotel';
   const initialLevel: FinishLevel =
     initial?.finish_level ??

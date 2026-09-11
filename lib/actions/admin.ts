@@ -1,5 +1,6 @@
 'use server';
 
+import { createHash } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
@@ -680,6 +681,127 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
     return errState(e);
   }
   redirect(`/admin/quotes/${quoteId}?created=1`);
+}
+
+/* ---------------- 標準見積テンプレート ---------------- */
+
+export interface EstimateTemplateImportState {
+  ok: boolean;
+  error?: string;
+  preview?: {
+    fileName: string;
+    sha256: string;
+    ignoredSheets: string[];
+    templates: {
+      modelSlug: string;
+      specCode: string;
+      name: string;
+      sheetName: string;
+      base: number;
+      interiorExterior: number;
+      option: number;
+      sitework: number;
+      subtotal: number;
+      adjustment: number;
+      tax: number;
+      total: number;
+    }[];
+  };
+  applied?: { templates: number; names: string[] };
+}
+
+const MAX_ESTIMATE_TEMPLATE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * 実物の分類表見積Excelを解析・検算し、標準見積として一括登録する。
+ * preset / options.price は参照しない。標準見積の価格源はExcelだけに限定する。
+ * base 明細は base_breakdown_items、残り3分類は estimate_template_lines に保存する。
+ */
+export async function importEstimateTemplatesAction(
+  _prev: EstimateTemplateImportState,
+  formData: FormData
+): Promise<EstimateTemplateImportState> {
+  await requireCatalogEditor();
+  const apply = formData.get('mode') === 'apply';
+  const file = formData.get('sheet');
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: '分類表見積Excelを選んでください。' };
+  }
+  if (!/\.xlsx$/i.test(file.name)) return { ok: false, error: '標準見積は .xlsx ファイルから取り込んでください。' };
+  if (file.size > MAX_ESTIMATE_TEMPLATE_BYTES) return { ok: false, error: 'Excel が大きすぎます（8MB まで）。' };
+
+  let parsed;
+  let sha256 = '';
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    sha256 = createHash('sha256').update(buffer).digest('hex');
+    const { readXlsx } = await import('@/lib/import/archive');
+    const { parseStandardEstimateWorkbook } = await import('@/lib/import/estimate-template-import');
+    parsed = parseStandardEstimateWorkbook(readXlsx(buffer));
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : '標準見積Excelを読み取れませんでした。' };
+  }
+
+  const store = await getStore();
+  const models = await store.listModels({ includeDraft: true });
+  const bySlug = new Map(models.map((model) => [model.slug, model.id]));
+  const inputs = [];
+  for (const template of parsed.templates) {
+    const modelId = bySlug.get(template.model_slug);
+    if (!modelId) return { ok: false, error: `本体モデル「${template.model_slug}」が登録されていません。` };
+    inputs.push({
+      base_model_id: modelId,
+      spec_code: template.spec_code,
+      name: template.name,
+      source_file_name: file.name,
+      source_sheet_name: template.source_sheet_name,
+      source_sha256: sha256,
+      tax_rate: template.tax_rate,
+      subtotal_raw: template.subtotal_raw,
+      adjustment: template.adjustment,
+      subtotal: template.subtotal,
+      tax: template.tax,
+      total: template.total,
+      sections: template.sections,
+      base_breakdown_items: template.base_breakdown_items,
+      lines: template.lines,
+    });
+  }
+
+  const preview = {
+    fileName: file.name,
+    sha256,
+    ignoredSheets: parsed.ignoredSheets,
+    templates: parsed.templates.map((template) => {
+      const section = new Map(template.sections.map((row) => [row.code, row.total]));
+      return {
+        modelSlug: template.model_slug,
+        specCode: template.spec_code,
+        name: template.name,
+        sheetName: template.source_sheet_name,
+        base: section.get('base') ?? 0,
+        interiorExterior: section.get('interior_exterior') ?? 0,
+        option: section.get('option') ?? 0,
+        sitework: section.get('sitework') ?? 0,
+        subtotal: template.subtotal,
+        adjustment: template.adjustment,
+        tax: template.tax,
+        total: template.total,
+      };
+    }),
+  };
+
+  if (!apply) return { ok: true, preview };
+
+  try {
+    await store.replaceEstimateTemplates(inputs);
+    revalidatePath('/admin/base-breakdown');
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, preview, applied: { templates: inputs.length, names: inputs.map((row) => row.name) } };
+  } catch (e) {
+    return { ...(errState(e) as EstimateTemplateImportState), preview };
+  }
 }
 
 /* ---------------- 本体内訳マスター ---------------- */

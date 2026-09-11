@@ -55,3 +55,48 @@ export function estimateTemplatesFor(
     })),
   ];
 }
+
+
+/**
+ * 標準見積の「標準選択商品」。
+ * 標準価格そのものはExcelが正本で、ここは商品変更時の差額判定だけに使う。
+ */
+export function estimateBaselineOptionCodes(
+  model: Pick<BaseModel, 'slug' | 'presets'>,
+  specCode: string
+): string[] {
+  if (specCode === BASE_ESTIMATE_SPEC_CODE) return [];
+
+  const preset = model.presets?.find((row) => row.code === specCode);
+  if (preset) return [...preset.option_codes];
+
+  if (model.slug === 'box') {
+    if (specCode === 'hotel-single') {
+      return [
+        'interior-standard-box',
+        'carpentry-box',
+        'shower-unit-1116',
+        'mini-kitchen',
+        'folding-bed',
+      ];
+    }
+    if (specCode === 'water-kit') {
+      return [
+        'interior-standard-box',
+        'carpentry-box',
+        'ub-1216',
+        'toilet-washlet',
+        'mini-kitchen',
+        'gas-boiler-16',
+        'aircon',
+      ];
+    }
+  }
+
+  return [];
+}
+
+/** 標準見積の選択に合わせた注文範囲。 */
+export function finishLevelForEstimateSpec(specCode: string): 'shell' | 'full' {
+  return specCode === BASE_ESTIMATE_SPEC_CODE ? 'shell' : 'full';
+}

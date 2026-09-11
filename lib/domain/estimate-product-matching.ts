@@ -94,10 +94,10 @@ export function estimateLineFingerprint(
   line: Pick<EstimateLineMatchSource, 'section_code' | 'group_label' | 'name' | 'unit'>,
   categoryCode: string | null
 ): string {
+  void categoryCode;
   return [
     'v1',
     line.section_code,
-    categoryCode ?? '',
     normalizeEstimateMatchText(line.group_label),
     normalizeEstimateMatchText(line.name),
     normalizeEstimateMatchText(line.unit),

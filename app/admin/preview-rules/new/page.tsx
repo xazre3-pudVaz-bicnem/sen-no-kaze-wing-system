@@ -5,7 +5,7 @@ import { VIEW_KEYS, type ViewKey } from '@/lib/domain/types';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { PreviewRuleForm } from '@/components/admin/forms';
 
-export default async function NewPreviewRulePage({ searchParams }: { searchParams: Promise<{ model?: string; view?: string; keys?: string; slot?: string }> }) {
+export default async function NewPreviewRulePage({ searchParams }: { searchParams: Promise<{ model?: string; view?: string; keys?: string; slot?: string; section?: string }> }) {
   const sp = await searchParams;
   const store = await getStore();
   const [models, options] = await Promise.all([store.listModels({ includeDraft: true }), store.listOptions()]);
@@ -15,7 +15,7 @@ export default async function NewPreviewRulePage({ searchParams }: { searchParam
   const isBaseFloorplan = sp.slot === 'base' && view === 'floorplan';
   return (
     <AdminPage title="シミュレーター画像を追加">
-      <BackLink href="/admin/preview-rules" label="シミュレーター画像へ戻る" />
+      <BackLink href={`/admin/preview-rules?model=${sp.model ?? models[0]?.id ?? ''}&section=${sp.section ?? (view === 'floorplan' ? 'floorplan' : 'completion')}`} label="シミュレーター画像へ戻る" />
       <PreviewRuleForm
         rule={null}
         models={models}

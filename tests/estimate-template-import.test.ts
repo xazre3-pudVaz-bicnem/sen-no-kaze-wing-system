@@ -76,6 +76,16 @@ function workbookSheet(name = 'ウィング【ホテルUB】'): Sheet {
   return { name, rows };
 }
 
+function legacyCarpentryWorkbookSheet(name: string, flat = false): Sheet {
+  const sheet = flat
+    ? flatWorkbookSheet(name as 'フラット (本体)' | 'フラット (物置事務所)')
+    : workbookSheet(name);
+  // 旧Excelでは室内造作がオプションに置かれている。現行ルールでは内外装工事へ移す。
+  sheet.rows[20][2] = '３．造作工事';
+  sheet.rows[20][4] = '・室内造作（建具取付まで）';
+  return sheet;
+}
+
 function flatWorkbookSheet(name: 'フラット (本体)' | 'フラット (物置事務所)'): Sheet {
   const sheet = workbookSheet(name);
   // Flatの実物Excelでは、内外装工事の合計見出しも2つ目の「【本体価格計】」になっている。
@@ -172,6 +182,31 @@ describe('標準見積Excelの取込・検算', () => {
       ['box', 'hotel-single', 'ホテル・単身者用'],
       ['box', 'water-kit', '水回りキット'],
     ]);
+  });
+
+  it('BOXとFlatの旧Excelでオプション扱いの造作工事を内外装工事へ正規化する', () => {
+    const box = parseStandardEstimateWorkbook([
+      legacyCarpentryWorkbookSheet('BOX（ホテル単身者）'),
+    ]).templates[0];
+    const flat = parseStandardEstimateWorkbook([
+      legacyCarpentryWorkbookSheet('フラット (物置事務所)', true),
+    ]).templates[0];
+
+    for (const template of [box, flat]) {
+      const carpentry = template.lines.find((line) => line.name.includes('室内造作'))!;
+      expect(carpentry.section_code).toBe('interior_exterior');
+      expect(carpentry.group_label).toBe('造作工事');
+
+      const interior = template.sections.find((row) => row.code === 'interior_exterior')!;
+      const option = template.sections.find((row) => row.code === 'option')!;
+      expect(interior.line_subtotal).toBe(5000);
+      expect(interior.expense_amount).toBe(750);
+      expect(interior.total).toBe(5750);
+      expect(option.line_subtotal).toBe(0);
+      expect(option.expense_amount).toBe(0);
+      expect(option.total).toBe(0);
+      expect(template.subtotal_raw).toBe(7300);
+    }
   });
 
   it('Flatは2つ目の本体価格計をWingと同じ内外装工事として正規化する', () => {

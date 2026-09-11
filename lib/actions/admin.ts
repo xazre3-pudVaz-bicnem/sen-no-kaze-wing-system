@@ -26,6 +26,7 @@ import {
 } from '@/lib/validation';
 import { pruneToScope } from '@/lib/domain/rules';
 import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
+import { BASE_FLOORPLAN_NOTE, isDedicatedBaseFloorplanRule } from '@/lib/domain/preview-rule-meta';
 
 export interface AdminFormState {
   ok: boolean;
@@ -235,6 +236,31 @@ export async function deleteOptionAction(formData: FormData): Promise<void> {
 
 export async function savePreviewRuleAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
+  const id = nullableId(formData.get('id'));
+  const view = String(formData.get('view') ?? '');
+  const previewKeys = [...new Set(formData.getAll('preview_keys').map(String).filter(Boolean))].sort();
+  const store = await getStore();
+
+  // 本体専用平面図の内部識別値は、通常の補足入力から変更させない。
+  // 既存ルールの編集では送信値を信用せず、保存済みルールを見て保護対象か判定する。
+  let existingDedicatedBase = false;
+  if (id) {
+    const models = await store.listModels({ includeDraft: true });
+    for (const model of models) {
+      const bundle = await store.getCatalogBundle(model.id, { includeDraft: true });
+      const existing = bundle?.previewRules.find((rule) => rule.id === id);
+      if (existing) {
+        existingDedicatedBase = isDedicatedBaseFloorplanRule(existing);
+        break;
+      }
+    }
+  }
+  const registeringDedicatedBase =
+    formData.get('internal_note') === BASE_FLOORPLAN_NOTE &&
+    view === 'floorplan' &&
+    previewKeys.length === 0;
+  const protectedBaseNote = existingDedicatedBase || registeringDedicatedBase;
+
   let url: string;
   try {
     url = await resolveImageUrl(formData, 'preview');
@@ -242,20 +268,19 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
     return errState(e);
   }
   const parsed = previewRuleSchema.safeParse({
-    id: nullableId(formData.get('id')),
+    id,
     base_model_id: formData.get('base_model_id'),
-    view: formData.get('view'),
+    view,
     kind: formData.get('kind'),
-    preview_keys: [...new Set(formData.getAll('preview_keys').map(String).filter(Boolean))].sort(),
+    preview_keys: previewKeys,
     url,
     alt: formData.get('alt'),
-    note: formData.get('note'),
+    note: protectedBaseNote ? BASE_FLOORPLAN_NOTE : formData.get('note'),
     z_index: formData.get('z_index') || 0,
     status: formData.get('status') || 'published',
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   try {
-    const store = await getStore();
     await store.upsertPreviewRule(parsed.data);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);

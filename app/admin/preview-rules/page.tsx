@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { deleteProductImageAction, deletePreviewRuleAction } from '@/lib/actions/admin';
 import { getStore } from '@/lib/data/store';
 import { findMissingPreviewCombos, previewKeyLabels } from '@/lib/domain/preview';
-import { buildStandardFloorplanSlots, isDedicatedBaseFloorplanRule } from '@/lib/domain/floorplan-admin';
+import { buildStandardFloorplanSlots } from '@/lib/domain/floorplan-admin';
+import { isDedicatedBaseFloorplanRule, previewRuleDisplayNote } from '@/lib/domain/preview-rule-meta';
 import { VIEW_LABELS, type PreviewImageRule, type ProductImage, type ViewKey } from '@/lib/domain/types';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -30,7 +31,7 @@ function PreviewCard({
       </div>
       <div className="space-y-2 p-3 text-xs">
         <p className="font-semibold">{rule.preview_keys.length ? rule.preview_keys.map(keyLabel).join(' + ') : '標準状態'}</p>
-        {rule.note && <p className="line-clamp-2 text-muted">{rule.note}</p>}
+        {previewRuleDisplayNote(rule) && <p className="line-clamp-2 text-muted">{previewRuleDisplayNote(rule)}</p>}
         <div className="flex gap-3">
           <Link href={`/admin/preview-rules/${rule.id}`} className="font-semibold underline">画像を変更</Link>
           <form action={deletePreviewRuleAction}>

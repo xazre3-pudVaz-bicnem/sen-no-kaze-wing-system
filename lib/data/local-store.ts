@@ -845,8 +845,8 @@ export class LocalStore implements DataStore {
           recipient_id: dealerId,
           audience: 'dealer',
           kind: 'quote_assigned',
-          title: `別途工事の入力をお願いします：${q.quote_no}`,
-          body: `${q.customer_name} 様の見積です。下のリンクを開くと、そのまま別途工事とフリー商品を入力できます。`,
+          title: `案件見積の確認をお願いします：${q.quote_no}`,
+          body: `${q.customer_name} 様の見積です。本体は閲覧のみで、オプション・別途工事等を編集できます。`,
           // メールから 1 回で入力表まで飛べるようにする
           link: `/admin/quotes/${q.id}?from=mail#quote-editor`,
         });
@@ -963,7 +963,7 @@ export class LocalStore implements DataStore {
         audience: 'customer',
         kind: 'quote_revised',
         title: `確定見積が届きました：${next.quote_no}`,
-        body: `代理店が別途工事を確認し、第${next.revision}版の確定見積を発行しました。`,
+        body: `担当代理店が案件内容を確認し、第${next.revision}版の確定見積を発行しました。`,
         link: `/mypage/quotes/${next.id}`,
       });
       parent.status = 'superseded';

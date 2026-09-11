@@ -18,11 +18,11 @@ create table if not exists public.estimate_templates (
   source_sheet_name text not null,
   source_sha256 text not null,
   tax_rate numeric not null default 0.10,
-  subtotal_raw integer not null default 0,
-  adjustment integer not null default 0,
-  subtotal integer not null default 0,
-  tax integer not null default 0,
-  total integer not null default 0,
+  subtotal_raw numeric not null default 0,
+  adjustment numeric not null default 0,
+  subtotal numeric not null default 0,
+  tax numeric not null default 0,
+  total numeric not null default 0,
   imported_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (base_model_id, spec_code)
@@ -33,11 +33,11 @@ create table if not exists public.estimate_template_sections (
   template_id uuid not null references public.estimate_templates(id) on delete cascade,
   code text not null check (code in ('base', 'interior_exterior', 'option', 'sitework')),
   label text not null,
-  line_subtotal integer not null default 0,
+  line_subtotal numeric not null default 0,
   expense_label text,
   expense_rate numeric,
-  expense_amount integer not null default 0,
-  total integer not null default 0,
+  expense_amount numeric not null default 0,
+  total numeric not null default 0,
   sort_order integer not null default 0,
   unique (template_id, code)
 );
@@ -51,8 +51,8 @@ create table if not exists public.estimate_template_lines (
   name text not null,
   quantity numeric,
   unit text,
-  unit_price integer,
-  amount integer not null default 0,
+  unit_price numeric,
+  amount numeric not null default 0,
   remark text,
   sort_order integer not null default 0
 );
@@ -85,6 +85,38 @@ create policy estimate_template_lines_write on public.estimate_template_lines fo
 grant select on public.estimate_templates, public.estimate_template_sections, public.estimate_template_lines to anon, authenticated;
 grant all on public.estimate_templates, public.estimate_template_sections, public.estimate_template_lines to authenticated, service_role;
 
+
+-- Excel取込済みの標準見積では、本体明細の単独編集を禁止する。
+-- replace_estimate_templates RPC の中だけ transaction-local flag で解除する。
+create or replace function public.prevent_locked_base_breakdown_edit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_model uuid := coalesce(new.base_model_id, old.base_model_id);
+  v_spec text := coalesce(new.spec_code, old.spec_code);
+begin
+  if current_setting('wing.estimate_template_import', true) = '1' then
+    return coalesce(new, old);
+  end if;
+  if exists (
+    select 1 from public.estimate_templates
+     where base_model_id = v_model and spec_code = v_spec
+  ) then
+    raise exception 'LOCKED: Excel取込済みの標準見積です。Excelを修正して再取込してください'
+      using errcode = 'P0001';
+  end if;
+  return coalesce(new, old);
+end;
+$;
+
+drop trigger if exists base_breakdown_template_lock on public.base_breakdown_items;
+create trigger base_breakdown_template_lock
+before insert or update or delete on public.base_breakdown_items
+for each row execute function public.prevent_locked_base_breakdown_edit();
+
 -- Excelの解析結果を一括で置き換える。1回のRPC全体が1トランザクションなので途中状態を残さない。
 create or replace function public.replace_estimate_templates(p_templates jsonb)
 returns void
@@ -98,11 +130,12 @@ declare
   v_model uuid;
   v_spec text;
   v_count integer;
-  v_base_lines integer;
-  v_section_lines integer;
-  v_section_total integer;
+  v_base_lines numeric;
+  v_section_lines numeric;
+  v_section_total numeric;
   s record;
 begin
+  perform set_config('wing.estimate_template_import', '1', true);
   if not public.can_edit_catalog() then
     raise exception 'FORBIDDEN: 標準見積を更新する権限がありません' using errcode = '42501';
   end if;
@@ -131,11 +164,11 @@ begin
     values (
       v_model, v_spec, t ->> 'name', t ->> 'source_file_name', t ->> 'source_sheet_name', t ->> 'source_sha256',
       coalesce((t ->> 'tax_rate')::numeric, 0.10),
-      coalesce((t ->> 'subtotal_raw')::integer, 0),
-      coalesce((t ->> 'adjustment')::integer, 0),
-      coalesce((t ->> 'subtotal')::integer, 0),
-      coalesce((t ->> 'tax')::integer, 0),
-      coalesce((t ->> 'total')::integer, 0),
+      coalesce((t ->> 'subtotal_raw')::numeric, 0),
+      coalesce((t ->> 'adjustment')::numeric, 0),
+      coalesce((t ->> 'subtotal')::numeric, 0),
+      coalesce((t ->> 'tax')::numeric, 0),
+      coalesce((t ->> 'total')::numeric, 0),
       now(), now()
     )
     returning id into v_template_id;
@@ -156,11 +189,11 @@ begin
     from jsonb_to_recordset(coalesce(t -> 'sections', '[]'::jsonb)) as x(
       code text,
       label text,
-      line_subtotal integer,
+      line_subtotal numeric,
       expense_label text,
       expense_rate numeric,
-      expense_amount integer,
-      total integer,
+      expense_amount numeric,
+      total numeric,
       sort_order integer
     );
 
@@ -183,8 +216,8 @@ begin
       name text,
       quantity numeric,
       unit text,
-      unit_price integer,
-      amount integer,
+      unit_price numeric,
+      amount numeric,
       remark text,
       sort_order integer
     );
@@ -222,7 +255,7 @@ begin
       raise exception 'VALIDATION: 標準見積の4分類が揃っていません（%）', v_spec using errcode = 'P0001';
     end if;
 
-    select coalesce(sum(amount), 0)::integer into v_base_lines
+    select coalesce(sum(amount), 0)::numeric into v_base_lines
       from public.base_breakdown_items
      where base_model_id = v_model and spec_code = v_spec;
 
@@ -234,7 +267,7 @@ begin
       if s.code = 'base' then
         v_section_lines := v_base_lines;
       else
-        select coalesce(sum(amount), 0)::integer into v_section_lines
+        select coalesce(sum(amount), 0)::numeric into v_section_lines
           from public.estimate_template_lines
          where template_id = v_template_id and section_code = s.code;
       end if;
@@ -246,19 +279,20 @@ begin
       end if;
     end loop;
 
-    select coalesce(sum(total), 0)::integer into v_section_total
+    select coalesce(sum(total), 0)::numeric into v_section_total
       from public.estimate_template_sections
      where template_id = v_template_id;
-    if v_section_total <> (t ->> 'subtotal_raw')::integer then
+    if v_section_total <> (t ->> 'subtotal_raw')::numeric then
       raise exception 'VALIDATION: 4分類合計と小計が一致しません（%）', v_spec using errcode = 'P0001';
     end if;
-    if (t ->> 'subtotal_raw')::integer + (t ->> 'adjustment')::integer <> (t ->> 'subtotal')::integer then
+    if (t ->> 'subtotal_raw')::numeric + (t ->> 'adjustment')::numeric <> (t ->> 'subtotal')::numeric then
       raise exception 'VALIDATION: 値引き等調整額の検算が一致しません（%）', v_spec using errcode = 'P0001';
     end if;
-    if floor((t ->> 'subtotal')::numeric * (t ->> 'tax_rate')::numeric)::integer <> (t ->> 'tax')::integer then
+    -- Excel記載の税額が正本。1円未満の丸め差は許容し、大きな不整合だけ止める。
+    if abs((t ->> 'subtotal')::numeric * (t ->> 'tax_rate')::numeric - (t ->> 'tax')::numeric) >= 1 then
       raise exception 'VALIDATION: 消費税の検算が一致しません（%）', v_spec using errcode = 'P0001';
     end if;
-    if (t ->> 'subtotal')::integer + (t ->> 'tax')::integer <> (t ->> 'total')::integer then
+    if (t ->> 'subtotal')::numeric + (t ->> 'tax')::numeric <> (t ->> 'total')::numeric then
       raise exception 'VALIDATION: 合計金額の検算が一致しません（%）', v_spec using errcode = 'P0001';
     end if;
   end loop;

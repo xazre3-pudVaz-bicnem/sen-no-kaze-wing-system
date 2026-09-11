@@ -890,6 +890,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           specName={specName}
           finishLevel={finishLevel}
           pricing={pricing}
+          standardEstimate={standardEstimatePricing}
           categories={bundle.categories}
           options={bundle.options}
           readOnly={readOnly}

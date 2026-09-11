@@ -3,12 +3,15 @@ import { buildStandardFloorplanSlots } from '@/lib/domain/floorplan-admin';
 import {
   BASE_FLOORPLAN_NOTE,
   enforceDedicatedBaseFloorplanFields,
+  enforcePresetFloorplanFields,
   findDedicatedBaseFloorplanRule,
   isDedicatedBaseFloorplanRule,
+  presetFloorplanInternalNote,
   previewRuleDisplayNote,
 } from '@/lib/domain/preview-rule-meta';
 import type { CatalogBundle, PreviewImageRule } from '@/lib/domain/types';
 import { MODEL_BOX_ID, MODEL_WING01_ID, seedCatalog } from '@/lib/seed/catalog';
+import { previewRuleSchema } from '@/lib/validation';
 
 const wingModel = seedCatalog.models.find((model) => model.id === MODEL_WING01_ID)!;
 const wingOptions = seedCatalog.options.filter(
@@ -106,6 +109,77 @@ describe('本体専用平面図の管理', () => {
       preview_keys: [],
       note: BASE_FLOORPLAN_NOTE,
     });
+  });
+
+  it('補足が空欄でも preview rule の入力チェックを通る', () => {
+    const parsed = previewRuleSchema.safeParse({
+      id: null,
+      base_model_id: MODEL_WING01_ID,
+      view: 'floorplan',
+      kind: 'composite',
+      preview_keys: [],
+      url: '/images/plan/office.jpg',
+      alt: '',
+      note: null,
+      z_index: 0,
+      status: 'published',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('空キーの事務所presetは旧fallbackではなく専用マーカーの平面図へ紐付く', () => {
+    const officeRule: PreviewImageRule = {
+      id: '99999999-0000-4000-8000-000000000002',
+      base_model_id: MODEL_WING01_ID,
+      view: 'floorplan',
+      kind: 'composite',
+      preview_keys: [],
+      url: '/images/plan/wing-office.jpg',
+      alt: 'Wing 事務所・店舗用平面図',
+      note: presetFloorplanInternalNote('office'),
+      z_index: 0,
+      status: 'published',
+    };
+    const slots = buildStandardFloorplanSlots({ ...wingBundle, previewRules: [...wingRules, officeRule] });
+    const office = slots.find((slot) => slot.code === 'office');
+
+    expect(office?.rule?.id).toBe(officeRule.id);
+    expect(office?.rule?.url).toContain('wing-office.jpg');
+  });
+
+  it('事務所preset専用ルール編集時は識別条件が固定される', () => {
+    const existing: PreviewImageRule = {
+      id: '99999999-0000-4000-8000-000000000003',
+      base_model_id: MODEL_WING01_ID,
+      view: 'floorplan',
+      kind: 'composite',
+      preview_keys: [],
+      url: '/images/plan/wing-office.jpg',
+      alt: 'Wing 事務所・店舗用平面図',
+      note: presetFloorplanInternalNote('office'),
+      z_index: 0,
+      status: 'published',
+    };
+    const protectedFields = enforcePresetFloorplanFields(
+      existing,
+      {
+        base_model_id: '20000000-0000-4000-8000-000000000099',
+        view: 'exterior',
+        kind: 'layer',
+        preview_keys: ['aircon'],
+        note: '変更しようとした値',
+      },
+      null
+    );
+
+    expect(protectedFields).toEqual({
+      base_model_id: MODEL_WING01_ID,
+      view: 'floorplan',
+      kind: 'composite',
+      preview_keys: [],
+      note: presetFloorplanInternalNote('office'),
+    });
+    expect(previewRuleDisplayNote(existing)).toBeNull();
   });
 
   it('hotel / residence のpresetがそれぞれ対応する平面図へ紐付く', () => {

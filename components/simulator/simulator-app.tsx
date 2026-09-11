@@ -525,12 +525,6 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                   ホーム
                 </Link>
               </li>
-              <li className="flex items-center gap-1.5">
-                <span aria-hidden="true">/</span>
-                <Link href="/products" className="hover:text-ink hover:underline">
-                  商品選択
-                </Link>
-              </li>
               <li className="flex items-center gap-1.5 text-ink-soft">
                 <span aria-hidden="true">/</span>
                 <span aria-hidden="true">【</span>
@@ -591,11 +585,16 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
               {(models.length > 1 || fireproofCat) && (
                 <div className="flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
                   {models.length > 1 && (
-                    <label className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
-                      <span className="whitespace-nowrap font-semibold text-ink-soft">
+                    <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
+                      <Link
+                        href="/products"
+                        title="商品選択ページへ"
+                        className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-forest underline decoration-forest/40 underline-offset-4 transition hover:text-ink"
+                      >
                         <span className="sm:hidden">本体</span>
                         <span className="hidden sm:inline">本体を変える</span>
-                      </span>
+                        <ArrowRight className="size-3" aria-hidden="true" />
+                      </Link>
                       <select
                         value={model.slug}
                         onChange={(e) => router.push(`/simulator/${e.target.value}`)}
@@ -609,7 +608,7 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
                           </option>
                         ))}
                       </select>
-                    </label>
+                    </div>
                   )}
                   {fireproofCat && (
                     <label

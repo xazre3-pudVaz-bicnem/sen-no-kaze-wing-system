@@ -80,7 +80,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
 
   return (
     <>
-      <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }, { name: '見積シミュレーター', path: `/simulator/${model.slug}` }])} />
+      <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: `${model.name} 見積シミュレーター`, path: `/simulator/${model.slug}` }])} />
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
           bundle={bundle}

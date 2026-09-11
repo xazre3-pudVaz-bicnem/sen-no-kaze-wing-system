@@ -143,6 +143,7 @@ export function QuoteSheet({
     'sash',
     'entrance-door',
     'service-door',
+    'carpentry',
   ]);
   const otherConstructionCategoryCodes = new Set(['other-construction', 'other_construction']);
   const isInteriorExterior = (l: PricingResult['lines'][number]) => interiorExteriorCategoryCodes.has(l.category_code);

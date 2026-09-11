@@ -184,6 +184,73 @@ export interface BaseBreakdownItem {
   sort_order: number;
 }
 
+
+/** 標準見積Excelの4分類。base の明細本体は base_breakdown_items に保持し、二重登録しない。 */
+export type EstimateSectionCode = 'base' | 'interior_exterior' | 'option' | 'sitework';
+
+export interface EstimateTemplate {
+  id: string;
+  base_model_id: string;
+  /** base / hotel / residence / office など。防火は別段階で扱う */
+  spec_code: string;
+  name: string;
+  source_file_name: string;
+  source_sheet_name: string;
+  source_sha256: string;
+  tax_rate: number;
+  /** 4分類の合計（調整前） */
+  subtotal_raw: number;
+  /** 千円未満切捨て等、Excelに記載された調整額 */
+  adjustment: number;
+  /** 税抜請負額 */
+  subtotal: number;
+  tax: number;
+  total: number;
+  imported_at: string;
+  updated_at: string;
+}
+
+export interface EstimateTemplateSection {
+  id: string;
+  template_id: string;
+  code: EstimateSectionCode;
+  label: string;
+  /** 明細行だけの合計。base は base_breakdown_items、その他は estimate_template_lines を集計した値 */
+  line_subtotal: number;
+  expense_label: string | null;
+  expense_rate: number | null;
+  expense_amount: number;
+  total: number;
+  sort_order: number;
+}
+
+/**
+ * 標準見積の「本体以外」の明細。
+ * base 明細は既存 base_breakdown_items を唯一の正本とし、このテーブルへ複製しない。
+ */
+export interface EstimateTemplateLine {
+  id: string;
+  template_id: string;
+  section_code: Exclude<EstimateSectionCode, 'base'>;
+  group_label: string | null;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  amount: number;
+  remark: string | null;
+  sort_order: number;
+}
+
+export interface EstimateTemplateBundle {
+  template: EstimateTemplate;
+  sections: EstimateTemplateSection[];
+  /** base 以外だけ */
+  lines: EstimateTemplateLine[];
+  /** base だけ */
+  base_breakdown_items: BaseBreakdownItem[];
+}
+
 export interface ProductOption {
   id: string;
   base_model_id: string | null; // null = 全モデル共通

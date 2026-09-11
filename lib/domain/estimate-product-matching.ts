@@ -1,6 +1,4 @@
-import type { EstimateSectionCode, OptionCategory, ProductOption } from './types';
-
-export type EstimateLinkPolicy = 'required' | 'optional' | 'none';
+import type { EstimateLinkPolicy, EstimateSectionCode, OptionCategory, ProductOption } from './types';
 
 export interface EstimateLineMatchSource {
   section_code: EstimateSectionCode;

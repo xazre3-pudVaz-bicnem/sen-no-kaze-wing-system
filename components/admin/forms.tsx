@@ -28,7 +28,7 @@ import {
   type ViewKey,
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
-import { BASE_FLOORPLAN_NOTE, isDedicatedBaseFloorplanRule } from '@/lib/domain/preview-rule-meta';
+import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker } from '@/lib/domain/preview-rule-meta';
 
 const initial: AdminFormState = { ok: false };
 
@@ -317,7 +317,7 @@ export function PreviewRuleForm({
   const e = state.fieldErrors ?? {};
   const selectedKeys = new Set(rule?.preview_keys ?? defaults?.keys ?? []);
   const selectedKeyLabels = previewKeys.filter((k) => selectedKeys.has(k.key)).map((k) => k.label);
-  const internalNote = rule && isDedicatedBaseFloorplanRule(rule) ? BASE_FLOORPLAN_NOTE : defaults?.internalNote;
+  const internalNote = rule && hasBaseFloorplanInternalMarker(rule) ? BASE_FLOORPLAN_NOTE : defaults?.internalNote;
   const hasProtectedInternalNote = internalNote === BASE_FLOORPLAN_NOTE;
 
   return (

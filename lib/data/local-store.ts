@@ -455,7 +455,7 @@ export class LocalStore implements DataStore {
       return { configuration, items: db.configurationItems.filter((i) => i.configuration_id === id) };
     });
   }
-  private recalc(db: LocalDb, cfg: Configuration) {
+  static recalculateInMemory(db: LocalDb, cfg: Configuration) {
     const model = db.models.find((m) => m.id === cfg.base_model_id);
     if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');
     const savedExteriorFaces = (cfg as Configuration & { exterior_faces?: unknown }).exterior_faces;
@@ -569,6 +569,9 @@ export class LocalStore implements DataStore {
       updated_at: nowIso(),
     });
     return { pricing, model, standardPricing };
+  }
+  private recalc(db: LocalDb, cfg: Configuration) {
+    return LocalStore.recalculateInMemory(db, cfg);
   }
   async saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     return this.mutate((db) => {

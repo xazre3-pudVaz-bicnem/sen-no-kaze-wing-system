@@ -1,12 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { QuoteTable } from '@/components/mypage/quote-table';
 import { saveExteriorFaces, getExteriorFaces } from '@/lib/data/exterior-faces';
 import { LocalStore } from '@/lib/data/local-store';
-import { computePricing } from '@/lib/domain/pricing';
+import { computePricing, formatYen } from '@/lib/domain/pricing';
+import { computeStandardEstimatePricing } from '@/lib/domain/standard-estimate-pricing';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { OptionVariantChoice, OptionVariantGroup } from '@/lib/domain/types';
+import type { EstimateTemplateImportInput } from '@/lib/data/store';
+import { renderQuotePdf } from '@/lib/pdf/quote-pdf';
 import { MODEL_WING01_ID, seedCategories, seedModels, seedOptions, seedVariantChoices, seedVariantGroups } from '@/lib/seed/catalog';
 
 const model = seedModels.find((row) => row.id === MODEL_WING01_ID)!;
@@ -177,4 +183,137 @@ describe.sequential('ローカル保存から見積生成までの外壁4面価�
       expected.lines.filter((line) => line.category_code === 'exterior-wall').reduce((sum, line) => sum + line.amount, 0)
     );
   });
+
+  it('標準見積でも外壁4面保存後から見積表示・PDFまでExcel基準の金額を維持する', async () => {
+    const actor = { id: 'local-standard-face-user', email: 'standard-face@example.com', role: 'customer' as const, full_name: '標準見積テスト' };
+    const store = new LocalStore();
+    const preset = model.presets.find((row) => row.code === 'hotel')!;
+    const baselineOptions = preset.option_codes
+      .map((code) => seedOptions.find((row) => row.code === code))
+      .filter((option): option is (typeof seedOptions)[number] => Boolean(option));
+    const baselineByCategory = new Map<string, string[]>();
+    for (const option of baselineOptions) {
+      const category = seedCategories.find((row) => row.id === option.category_id);
+      if (category?.selection_mode === 'single') baselineByCategory.set(option.category_id, [option.id]);
+      else baselineByCategory.set(option.category_id, [...(baselineByCategory.get(option.category_id) ?? []), option.id]);
+    }
+    const baselineOptionIds = [...baselineByCategory.values()].flat();
+    const templateInput: EstimateTemplateImportInput = {
+      base_model_id: model.id,
+      spec_code: 'hotel',
+      name: 'ホテル仕様',
+      source_file_name: 'standard.xlsx',
+      source_sheet_name: 'ホテル仕様',
+      source_sha256: 'standard-face-test',
+      tax_rate: 0.1,
+      subtotal_raw: 1_100_000,
+      adjustment: 0,
+      subtotal: 1_100_000,
+      tax: 110_000,
+      total: 1_210_000,
+      sections: [
+        { code: 'base', label: '本体', line_subtotal: 800_000, expense_label: '本体諸費用', expense_rate: 0.15, expense_amount: 120_000, total: 920_000, sort_order: 1 },
+        { code: 'interior_exterior', label: '内外装工事', line_subtotal: 100_000, expense_label: '内外装工事経費', expense_rate: 0.15, expense_amount: 15_000, total: 115_000, sort_order: 2 },
+        { code: 'option', label: 'オプション', line_subtotal: 50_000, expense_label: 'オプション諸費用', expense_rate: 0.15, expense_amount: 7_500, total: 57_500, sort_order: 3 },
+        { code: 'sitework', label: '別途', line_subtotal: 7_500, expense_label: null, expense_rate: null, expense_amount: 0, total: 7_500, sort_order: 4 },
+      ],
+      base_breakdown_items: [
+        { section: '本体', name: '本体一式', quantity: 1, unit: '式', unit_price: 800_000, amount: 800_000, remark: null, sort_order: 1 },
+      ],
+      lines: [
+        { section_code: 'interior_exterior', group_label: null, name: '内外装工事一式', quantity: 1, unit: '式', unit_price: 100_000, amount: 100_000, remark: null, sort_order: 1 },
+        { section_code: 'option', group_label: null, name: 'オプション一式', quantity: 1, unit: '式', unit_price: 50_000, amount: 50_000, remark: null, sort_order: 2 },
+        { section_code: 'sitework', group_label: null, name: '別途工事一式', quantity: 1, unit: '式', unit_price: 7_500, amount: 7_500, remark: null, sort_order: 3 },
+      ],
+      baseline_option_ids: baselineOptionIds,
+    };
+    await store.replaceEstimateTemplates([templateInput]);
+
+    const configuration = await store.saveConfiguration(actor, {
+      id: null,
+      base_model_id: model.id,
+      name: '標準見積の外壁4面価格テスト',
+      option_ids: baselineOptionIds,
+      preview_image_url: null,
+      notes: null,
+      finish_level: 'full',
+      spec_code: 'hotel',
+      variant_choice_ids: [],
+    });
+    const selectedFaces = faces(standardWall.id);
+    selectedFaces[0] = { face_code: 'front', option_id: paidWall.id, variant_choice_ids: [] };
+    await saveExteriorFaces(configuration.id, selectedFaces);
+
+    const reloaded = await new LocalStore().getConfiguration(configuration.id, actor);
+    const bundle = await new LocalStore().getCatalogBundle(model.id);
+    const template = await new LocalStore().getEstimateTemplateBundle(model.id, 'hotel');
+    expect(reloaded).not.toBeNull();
+    expect(bundle).not.toBeNull();
+    expect(template).not.toBeNull();
+    const expected = computeStandardEstimatePricing(
+      bundle!,
+      template!,
+      reloaded!.items.map((item) => item.option_id),
+      reloaded!.items.flatMap((item) => item.variant_choice_ids ?? []),
+      selectedFaces,
+      'full'
+    );
+
+    const expectedPricing = expected.pricing;
+    expect(reloaded!.configuration).toMatchObject({
+      base_price: expectedPricing.base_price,
+      base_expense: expectedPricing.base_expense,
+      option_subtotal: expectedPricing.option_subtotal,
+      option_expense: expectedPricing.option_expense,
+      installation_subtotal: expectedPricing.installation_subtotal,
+      adjustment: expectedPricing.adjustment,
+      subtotal: expectedPricing.subtotal,
+      tax: expectedPricing.tax,
+      total: expectedPricing.total,
+    });
+
+    const quote = await new LocalStore().createQuoteFromConfiguration(actor, configuration.id, {
+      full_name: actor.full_name,
+      company_name: null,
+      email: actor.email,
+      phone: '000-0000-0000',
+      address: 'テスト住所',
+      site_address: null,
+    }, null);
+    const detail = await new LocalStore().getQuote(quote.id, actor);
+    expect(detail).not.toBeNull();
+    expect(quote).toMatchObject({
+      base_price: expectedPricing.base_price,
+      base_expense: expectedPricing.base_expense,
+      option_subtotal: expectedPricing.option_subtotal,
+      option_expense: expectedPricing.option_expense,
+      installation_subtotal: expectedPricing.installation_subtotal,
+      adjustment: expectedPricing.adjustment,
+      subtotal: expectedPricing.subtotal,
+      tax: expectedPricing.tax,
+      total: expectedPricing.total,
+    });
+    const itemSubtotal = detail!.items.reduce((sum, item) => sum + item.amount, 0);
+    const itemSummary = detail!.items.map((item) => ({ kind: item.kind, name: item.name, amount: item.amount }));
+    expect(itemSubtotal, JSON.stringify(itemSummary)).toBe(expectedPricing.subtotal_raw);
+    expect([...new Set(detail!.items.map((item) => item.kind))]).toEqual(expect.arrayContaining([
+      'base',
+      'base_expense',
+      'interior_exterior',
+      'interior_exterior_expense',
+      'option',
+      'option_expense',
+      'installation',
+    ]));
+
+    const html = renderToStaticMarkup(createElement(QuoteTable, { quote, items: detail!.items }));
+    expect(html).toContain('本体価格');
+    expect(html).toContain('内外装工事');
+    expect(html).toContain('オプション価格');
+    expect(html).toContain('別途工事');
+    expect(html).toContain(formatYen(expectedPricing.total));
+
+    const pdf = await renderQuotePdf(quote, detail!.items);
+    expect(Buffer.from(pdf.subarray(0, 5)).toString()).toBe('%PDF-');
+  }, 60_000);
 });

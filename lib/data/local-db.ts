@@ -232,12 +232,21 @@ function ensureExteriorFaceQuoteSnapshots(db: LocalDb) {
     const existingFaceRows = db.quoteItems.filter(
       (item) => item.quote_id === quote.id && item.name.startsWith('外壁仕様（')
     );
-    if (existingFaceRows.length === 4) continue;
 
     const configuration = db.configurations.find((row) => row.id === quote.configuration_id) as
       | (Configuration & { exterior_faces?: unknown })
       | undefined;
     if (!configuration || !Array.isArray(configuration.exterior_faces)) continue;
+    const usesStandardEstimate = db.estimateTemplates.some(
+      (template) =>
+        template.base_model_id === configuration.base_model_id &&
+        template.spec_code === (configuration.spec_code ?? '')
+    );
+    const hasCurrentFaceRows =
+      existingFaceRows.length === 4 &&
+      (!usesStandardEstimate ||
+        existingFaceRows.every((item) => item.kind === 'interior_exterior' && item.amount === 0));
+    if (hasCurrentFaceRows) continue;
     const rawFaces = configuration.exterior_faces as StoredExteriorFace[];
 
     const resolved = EXTERIOR_FACE_ORDER.map((face, index) => {
@@ -266,7 +275,7 @@ function ensureExteriorFaceQuoteSnapshots(db: LocalDb) {
         variantLabel,
         priceOnRequest,
         unitPrice,
-        sortOrder: 11 + index,
+        sortOrder: (usesStandardEstimate ? 1800 : 11) + index,
       };
     });
 
@@ -285,14 +294,18 @@ function ensureExteriorFaceQuoteSnapshots(db: LocalDb) {
       db.quoteItems.push({
         id: randomUUID(),
         quote_id: quote.id,
-        kind: 'option',
+        kind: usesStandardEstimate ? 'interior_exterior' : 'option',
         name: `外壁仕様（${row.face.label}）`,
         description: row.variantLabel ? `${row.option.name} ／ ${row.variantLabel}` : row.option.name,
         unit: '面',
-        remark: row.priceOnRequest ? '別途見積・見積発行時点の面別外壁仕様' : '見積発行時点の面別外壁仕様',
-        unit_price: row.unitPrice,
+        remark: usesStandardEstimate
+          ? '価格は選択商品の変更差額に反映・見積発行時点の面別外壁仕様'
+          : row.priceOnRequest
+            ? '別途見積・見積発行時点の面別外壁仕様'
+            : '見積発行時点の面別外壁仕様',
+        unit_price: usesStandardEstimate ? 0 : row.unitPrice,
         quantity: 1,
-        amount: row.priceOnRequest ? 0 : row.unitPrice,
+        amount: usesStandardEstimate || row.priceOnRequest ? 0 : row.unitPrice,
         image_url: row.option.image_url,
         sort_order: row.sortOrder,
       });

@@ -505,6 +505,7 @@ declare
   v_int_exp numeric := 0;
   v_opt_exp numeric := 0;
   v_sort integer := 0;
+  v_has_faces boolean := false;
   s record;
 begin
   if v_uid is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
@@ -527,6 +528,9 @@ begin
   select customer_no into v_customer_no from public.profiles where id = v_uid;
   v_dealer := case when public.current_role_rank() between 1 and 2 then v_uid else null end;
   v_rate := coalesce(v_model.expense_rate, 0.15);
+  v_has_faces :=
+    jsonb_typeof(cfg.exterior_faces) = 'array'
+    and jsonb_array_length(cfg.exterior_faces) = 4;
 
   insert into public.quote_requests(configuration_id, user_id, status, message, contact)
   values(cfg.id, v_uid, 'new', p_message, coalesce(p_contact, '{}'::jsonb))
@@ -614,7 +618,53 @@ begin
       join public.option_variant_groups vg on vg.id = vc.group_id
       where vc.id = any(ci.variant_choice_ids)
     ) v on true
-    where ci.configuration_id = cfg.id;
+    where ci.configuration_id = cfg.id
+      and not (v_has_faces and cat.code = 'exterior-wall');
+
+    -- 従来計算では4面それぞれの価格行が合計の正本になる。
+    if v_has_faces then
+      insert into public.quote_items(
+        quote_id, kind, name, description, unit_price, quantity, unit, amount, image_url, remark, sort_order
+      )
+      select
+        v_quote,
+        'option',
+        '外壁仕様（' || case f.face_code
+          when 'front' then '正面'
+          when 'right' then '右側面'
+          when 'back' then '背面'
+          when 'left' then '左側面'
+          else f.face_code end || '）',
+        o.name || case when coalesce(v.label, '') = '' then '' else ' ／ ' || v.label end,
+        (case when o.price_on_request then 0 else o.price end) + coalesce(v.extra, 0),
+        1,
+        '面',
+        (case when o.price_on_request then 0 else o.price end) + coalesce(v.extra, 0),
+        o.image_url,
+        case
+          when o.price_on_request or coalesce(v.has_price_on_request, false)
+            then '別途見積項目あり・見積発行時点の面別外壁仕様'
+          else '見積発行時点の面別外壁仕様'
+        end,
+        10 + case f.face_code when 'front' then 1 when 'right' then 2 when 'back' then 3 when 'left' then 4 else 9 end
+      from (
+        select
+          value ->> 'face_code' as face_code,
+          (value ->> 'option_id')::uuid as option_id,
+          coalesce(value -> 'variant_choice_ids', '[]'::jsonb) as variant_choice_ids
+        from jsonb_array_elements(cfg.exterior_faces)
+      ) f
+      join public.options o on o.id = f.option_id
+      left join lateral (
+        select
+          string_agg(vg.name || '：' || vc.name, '／' order by vg.sort_order, vc.sort_order) as label,
+          coalesce(sum(case when vc.price_on_request then 0 else vc.extra_price end), 0)::integer as extra,
+          coalesce(bool_or(vc.price_on_request), false) as has_price_on_request
+        from jsonb_array_elements_text(f.variant_choice_ids) j(choice_id)
+        join public.option_variant_choices vc on vc.id = j.choice_id::uuid
+        join public.option_variant_groups vg on vg.id = vc.group_id and vg.option_id = o.id
+      ) v on true;
+    end if;
 
     insert into public.quote_items(
       quote_id, kind, name, description, unit, unit_price, quantity, amount, sort_order
@@ -694,6 +744,44 @@ begin
         '商品マスターとの差額', '式',
         round(v_delta_int)::integer, 1, round(v_delta_int)::integer, 1900
       );
+    end if;
+
+    -- 標準見積では外壁価格は変更差額へ集約済み。4面は0円の仕様スナップショットとして残す。
+    if v_has_faces then
+      insert into public.quote_items(
+        quote_id, kind, name, description, unit_price, quantity, unit, amount, image_url, remark, sort_order
+      )
+      select
+        v_quote,
+        'interior_exterior',
+        '外壁仕様（' || case f.face_code
+          when 'front' then '正面'
+          when 'right' then '右側面'
+          when 'back' then '背面'
+          when 'left' then '左側面'
+          else f.face_code end || '）',
+        o.name || case when coalesce(v.label, '') = '' then '' else ' ／ ' || v.label end,
+        0,
+        1,
+        '面',
+        0,
+        o.image_url,
+        '価格は選択商品の変更差額に反映・見積発行時点の面別外壁仕様',
+        1800 + case f.face_code when 'front' then 1 when 'right' then 2 when 'back' then 3 when 'left' then 4 else 9 end
+      from (
+        select
+          value ->> 'face_code' as face_code,
+          (value ->> 'option_id')::uuid as option_id,
+          coalesce(value -> 'variant_choice_ids', '[]'::jsonb) as variant_choice_ids
+        from jsonb_array_elements(cfg.exterior_faces)
+      ) f
+      join public.options o on o.id = f.option_id
+      left join lateral (
+        select string_agg(vg.name || '：' || vc.name, '／' order by vg.sort_order, vc.sort_order) as label
+        from jsonb_array_elements_text(f.variant_choice_ids) j(choice_id)
+        join public.option_variant_choices vc on vc.id = j.choice_id::uuid
+        join public.option_variant_groups vg on vg.id = vc.group_id and vg.option_id = o.id
+      ) v on true;
     end if;
 
     insert into public.quote_items(

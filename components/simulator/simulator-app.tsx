@@ -290,9 +290,9 @@ export function SimulatorApp({ bundle, models, elevations, initial, loadError, r
   const previews = useMemo(
     () =>
       Object.fromEntries(
-        VIEW_KEYS.map((v) => [v, resolvePreview(bundle.previewRules, v, selectedPreviewKeys(bundle.options, selected, v))])
+        VIEW_KEYS.map((v) => [v, resolvePreview(bundle.previewRules, v, selectedPreviewKeys(bundle.options, selected, v), specCode)])
       ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
-    [bundle, selected]
+    [bundle, selected, specCode]
   );
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 

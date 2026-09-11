@@ -210,9 +210,6 @@ export function QuoteSheet({
             {expandedSections.base && <tr className="bg-white align-top">
               <td className={td.name}>
                 {modelName} 本体一式
-                <span className="block text-[0.7rem] text-muted">
-                  躯体・金物・断熱・屋根外壁・サッシ建具（工場生産分・諸費用込み）。明細は担当代理店・本部が管理します
-                </span>
               </td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>
@@ -250,7 +247,6 @@ export function QuoteSheet({
                       className="group inline-flex items-start gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
                       data-testid={`quote-line-${l.code}`}
                     >
-                      <span className="text-xs text-muted">{cat?.name}</span>
                       <span>
                         {l.name}
                         {l.variants.length > 0 && (
@@ -295,7 +291,6 @@ export function QuoteSheet({
                       className="group inline-flex items-center gap-1.5 text-left hover:text-brown disabled:hover:text-ink"
                       data-testid={`quote-line-${l.code}`}
                     >
-                      <span className="text-xs text-muted">{cat?.name}</span>
                       <span>
                         {l.name}
                         {l.variants.length > 0 && (

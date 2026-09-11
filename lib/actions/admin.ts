@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError } from '@/lib/data/store';
@@ -240,7 +240,7 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
   const store = await getStore();
 
   // 既存ルールの編集では、保存済みデータを基準に本体専用条件を保護する。
-  let existingRule = null;
+  let existingRule: PreviewImageRule | null = null;
   if (id) {
     const models = await store.listModels({ includeDraft: true });
     for (const model of models) {

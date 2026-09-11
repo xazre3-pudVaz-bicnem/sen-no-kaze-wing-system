@@ -1,5 +1,5 @@
 import type { PreviewImageRule, ProductOption, ViewKey } from './types';
-import { previewRuleDisplayNote } from './preview-rule-meta';
+import { isDedicatedBaseFloorplanRule, isPresetFloorplanRule, previewRuleDisplayNote } from './preview-rule-meta';
 
 export interface PreviewLayer {
   url: string;
@@ -44,11 +44,29 @@ export function selectedPreviewKeys(options: ProductOption[], selectedIds: strin
  *  4. 何もなければ none（UI はプレースホルダーを表示）
  * 勝手に別仕様の画像を「正しい完成図」として見せないため、exact 以外は approximate=true を返す。
  */
-export function resolvePreview(rules: PreviewImageRule[], view: ViewKey, selectedKeys: string[]): PreviewResolution {
+export function resolvePreview(rules: PreviewImageRule[], view: ViewKey, selectedKeys: string[], specCode?: string | null): PreviewResolution {
   const keys = sortedUnique(selectedKeys);
   const active = rules.filter((r) => r.view === view && r.status === 'published');
   const composites = active.filter((r) => r.kind === 'composite');
   const layers = active.filter((r) => r.kind === 'layer');
+
+  if (view === 'floorplan' && specCode) {
+    const specRule =
+      specCode === 'base'
+        ? composites.find(isDedicatedBaseFloorplanRule)
+        : composites.find((rule) => isPresetFloorplanRule(rule, specCode));
+    if (specRule) {
+      return {
+        view,
+        kind: 'exact',
+        layers: [{ url: specRule.url, alt: specRule.alt, z_index: 0 }],
+        missing_keys: [],
+        extra_keys: [],
+        note: previewRuleDisplayNote(specRule),
+        approximate: false,
+      };
+    }
+  }
 
   const exact = composites.find((r) => sameSet(sortedUnique(r.preview_keys), keys));
   if (exact) {

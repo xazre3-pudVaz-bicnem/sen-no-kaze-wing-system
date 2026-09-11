@@ -23,9 +23,8 @@ export default async function ProductsPage() {
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }])} />
       <Container className="pt-10 sm:pt-14">
         <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '商品一覧' }]} />
-        <Reveal className="max-w-2xl pt-12 pb-8 sm:pt-16 sm:pb-10">
+        <Reveal className="max-w-2xl pt-12 pb-4 sm:pt-16 sm:pb-6">
           <p className="label-en text-forest">Products</p>
-          <h1 className="mt-4 text-4xl sm:text-5xl">ベースモデル一覧</h1>
         </Reveal>
       </Container>
       {models.length === 0 ? (

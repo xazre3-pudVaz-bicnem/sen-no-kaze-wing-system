@@ -401,7 +401,7 @@ export function QuoteSheet({
           </tbody>
 
           {/* ---- その他の工事（従来計算時だけ表示） ---- */}
-          {!standardEstimate && <tbody className="divide-y divide-line/70">
+          <tbody className="divide-y divide-line/70">
             <SectionRow
               label={(
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">

@@ -6,6 +6,7 @@ import { baseTotalOf, formatManYen, formatYen } from '@/lib/domain/pricing';
 import { IMAGE_KIND_LABELS, type ProductImageKind } from '@/lib/domain/types';
 import { breadcrumbJsonLd, buildMetadata, productJsonLd } from '@/lib/seo';
 import { PRICE_DISCLAIMER } from '@/lib/site';
+import { publicSpecs } from '@/lib/domain/plan-display';
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
@@ -40,6 +41,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const bundle = await getPublicBundleBySlug(slug);
   if (!bundle) notFound();
   const model = bundle.model;
+  const displaySpecs = publicSpecs(model.specs);
 
   const hero = bundle.images.find((i) => i.kind === 'hero') ?? bundle.images.find((i) => i.kind === 'exterior') ?? null;
   const galleryKinds: ProductImageKind[] = ['exterior', 'interior', 'floorplan', 'transport'];
@@ -80,7 +82,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
               <p className="font-serif text-5xl">{formatManYen(baseTotalOf(model))}〜</p>
             </div>
             <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
-              {model.specs.slice(0, 3).map((s) => (
+              {displaySpecs.slice(0, 3).map((s) => (
                 <div key={s.label}>
                   <dt className="text-muted">{s.label}</dt>
                   <dd>{s.value}</dd>
@@ -150,7 +152,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           <Reveal>
             <h2 className="text-3xl">サイズ・仕様</h2>
             <dl className="mt-6 divide-y divide-line border-y border-line">
-              {model.specs.map((s) => (
+              {displaySpecs.map((s) => (
                 <div key={s.label} className="grid grid-cols-[9rem_1fr] gap-4 py-3 text-sm sm:grid-cols-[11rem_1fr]">
                   <dt className="text-muted">{s.label}</dt>
                   <dd>{s.value}</dd>

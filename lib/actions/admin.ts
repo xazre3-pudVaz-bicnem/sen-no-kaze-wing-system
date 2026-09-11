@@ -26,7 +26,7 @@ import {
 } from '@/lib/validation';
 import { pruneToScope } from '@/lib/domain/rules';
 import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
-import { BASE_FLOORPLAN_NOTE, isDedicatedBaseFloorplanRule } from '@/lib/domain/preview-rule-meta';
+import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker } from '@/lib/domain/preview-rule-meta';
 
 export interface AdminFormState {
   ok: boolean;
@@ -250,7 +250,7 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
       const bundle = await store.getCatalogBundle(model.id, { includeDraft: true });
       const existing = bundle?.previewRules.find((rule) => rule.id === id);
       if (existing) {
-        existingDedicatedBase = isDedicatedBaseFloorplanRule(existing);
+        existingDedicatedBase = hasBaseFloorplanInternalMarker(existing);
         break;
       }
     }

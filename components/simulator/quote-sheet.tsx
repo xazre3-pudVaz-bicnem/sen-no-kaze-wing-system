@@ -27,7 +27,7 @@ const td = {
   unit: 'w-10 px-1.5 py-1.5 whitespace-nowrap text-muted sm:w-12 sm:px-2',
   price: 'w-24 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-28 sm:px-2',
   amount: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32 sm:px-3',
-  remark: 'hidden w-32 px-3 py-1.5 text-[0.7rem] leading-snug text-muted lg:table-cell',
+  remark: 'w-20 px-1.5 py-1.5 text-[0.68rem] leading-snug text-muted sm:w-24 sm:px-2 lg:w-32 lg:px-3 lg:text-[0.7rem]',
 };
 
 const th = {
@@ -36,7 +36,7 @@ const th = {
   unit: 'w-10 px-1.5 py-2 text-left font-semibold whitespace-nowrap sm:w-12 sm:px-2',
   price: 'w-24 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-28 sm:px-2',
   amount: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32 sm:px-3',
-  remark: 'hidden w-32 px-3 py-2 text-left font-semibold lg:table-cell',
+  remark: 'w-20 px-1.5 py-2 text-left font-semibold sm:w-24 sm:px-2 lg:w-32 lg:px-3',
 };
 
 /** 工事区分の見出し行（１．金物関係費用 など） */
@@ -93,7 +93,7 @@ function SubtotalRow({ label, amount, amountColSpan = 1, testId }: { label: stri
     <tr className="border-y border-line bg-sand/70 font-semibold">
       <td colSpan={4} className="px-3 py-2 text-sm sm:px-4">{label}</td>
       <td colSpan={amountColSpan} className="px-3 py-2 text-right text-sm tabular-nums sm:px-4" data-testid={testId}>{amount}</td>
-      {amountColSpan === 1 && <td className="hidden lg:table-cell"></td>}
+      {amountColSpan === 1 && <td></td>}
     </tr>
   );
 }
@@ -205,14 +205,14 @@ export function QuoteSheet({
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full min-w-[30rem] table-fixed text-[0.78rem] sm:min-w-[42rem] sm:text-sm">
+        <table className="w-full min-w-[34rem] table-fixed text-[0.78rem] sm:min-w-[42rem] sm:text-sm">
           <colgroup>
             <col />
             <col className="w-12 sm:w-16" />
             <col className="w-10 sm:w-12" />
             <col className="w-24 sm:w-28" />
             <col className="w-28 sm:w-32" />
-            <col className="hidden w-32 lg:table-column" />
+            <col className="w-20 sm:w-24 lg:w-32" />
           </colgroup>
           <thead className="bg-sand text-[0.7rem] text-muted sm:text-xs">
             <tr>
@@ -450,22 +450,22 @@ export function QuoteSheet({
             <tr className="text-sm">
               <td colSpan={4} className="px-3 pt-4 pb-1 sm:px-4">小計</td>
               <td className="px-3 pt-4 pb-1 text-right tabular-nums sm:px-4">{formatYen(pricing.subtotal_raw)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="text-sm text-ink-soft">
               <td colSpan={4} className="px-3 py-1 sm:px-4">値引き等調整額（千円未満切捨て）</td>
               <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.adjustment)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="text-sm">
               <td colSpan={4} className="px-3 py-1 sm:px-4">税抜請負額</td>
               <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.subtotal)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="text-sm text-ink-soft">
               <td colSpan={4} className="px-3 py-1 sm:px-4">消費税（{Math.round(pricing.tax_rate * 100)}%）</td>
               <td className="px-3 py-1 text-right tabular-nums sm:px-4">{formatYen(pricing.tax)}</td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
             <tr className="border-t border-line bg-ivory">
               <td colSpan={4} className="px-3 py-3 font-serif text-lg sm:px-4 sm:text-xl">合計（税込）</td>
@@ -474,7 +474,7 @@ export function QuoteSheet({
                   {formatYen(pricing.total)}
                 </span>
               </td>
-              <td className="hidden lg:table-cell"></td>
+              <td></td>
             </tr>
           </tfoot>
         </table>

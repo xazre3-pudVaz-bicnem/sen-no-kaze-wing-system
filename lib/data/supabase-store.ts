@@ -250,6 +250,7 @@ export class SupabaseStore implements DataStore {
       sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
       lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
       base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
+      baseline_option_ids: template.baseline_option_ids ?? [],
     };
   }
 

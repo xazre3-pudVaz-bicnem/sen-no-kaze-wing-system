@@ -29,7 +29,15 @@ function keySpecs(model: BaseModel) {
  * Wing / BOX / フラット を独立した大きな章として見せる。
  * PC: 画像 62% ＋ 情報 38%、章ごとに左右反転。SP: 画像 → 情報。
  */
-export function ProductChapters({ items, headingLevel = 3 }: { items: ProductChapterData[]; headingLevel?: 2 | 3 }) {
+export function ProductChapters({
+  items,
+  headingLevel = 3,
+  hideFirstImage = false,
+}: {
+  items: ProductChapterData[];
+  headingLevel?: 2 | 3;
+  hideFirstImage?: boolean;
+}) {
   const H = headingLevel === 2 ? 'h2' : 'h3';
   return (
     <div>
@@ -37,18 +45,30 @@ export function ProductChapters({ items, headingLevel = 3 }: { items: ProductCha
         const flip = i % 2 === 1;
         const tone = tones[i % tones.length];
         const dark = tone !== 'ivory';
+        const hideImage = hideFirstImage && i === 0;
         return (
-          <article key={model.id} id={`model-${model.slug}`} className={cn('scroll-mt-16 lg:grid lg:grid-cols-[62fr_38fr]', toneClass[tone])}>
-            <Reveal variant="image" className={cn('relative', flip && 'lg:order-2')}>
-              <div className="relative aspect-[3/2] w-full lg:aspect-auto lg:h-full lg:min-h-[72vh]">
-                {image ? (
-                  <SmartImage src={image.url} alt={image.alt} fill sizes="(min-width: 1024px) 62vw, 100vw" className="object-cover object-center" />
-                ) : (
-                  <div className="flex h-full items-center justify-center bg-sand text-muted">画像準備中</div>
-                )}
-              </div>
-            </Reveal>
-            <div className={cn('flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-14 lg:py-20', flip && 'lg:order-1')}>
+          <article
+            key={model.id}
+            id={`model-${model.slug}`}
+            className={cn('scroll-mt-16', !hideImage && 'lg:grid lg:grid-cols-[62fr_38fr]', toneClass[tone])}
+          >
+            {!hideImage && (
+              <Reveal variant="image" className={cn('relative', flip && 'lg:order-2')}>
+                <div className="relative aspect-[3/2] w-full lg:aspect-auto lg:h-full lg:min-h-[72vh]">
+                  {image ? (
+                    <SmartImage src={image.url} alt={image.alt} fill sizes="(min-width: 1024px) 62vw, 100vw" className="object-cover object-center" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center bg-sand text-muted">画像準備中</div>
+                  )}
+                </div>
+              </Reveal>
+            )}
+            <div
+              className={cn(
+                hideImage ? 'container-x py-12 sm:py-16 lg:py-20' : 'flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-14 lg:py-20',
+                !hideImage && flip && 'lg:order-1',
+              )}
+            >
               <Reveal>
                 <p className={cn('label-en', dark ? 'text-gold' : 'text-forest')}>Model {String(i + 1).padStart(2, '0')}</p>
                 <H className={cn('mt-3 text-4xl sm:text-5xl', dark && 'text-white')}>{model.name}</H>

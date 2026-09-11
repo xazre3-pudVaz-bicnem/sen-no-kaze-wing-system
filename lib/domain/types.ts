@@ -197,6 +197,8 @@ export interface EstimateTemplate {
   source_file_name: string;
   source_sheet_name: string;
   source_sha256: string;
+  /** 標準見積に含まれる商品マスターの標準選択。差額計算の基準。 */
+  baseline_option_ids: string[];
   tax_rate: number;
   /** 4分類の合計（調整前） */
   subtotal_raw: number;

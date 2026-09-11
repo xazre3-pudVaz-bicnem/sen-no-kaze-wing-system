@@ -4,6 +4,7 @@ import type {
   BaseBreakdownItem,
   BaseModel,
   EstimateTemplate,
+  EstimateTemplateBundle,
   CatalogBundle,
   Configuration,
   ConfigurationItem,
@@ -222,6 +223,34 @@ export class SupabaseStore implements DataStore {
       mapPgError(error);
     }
     return (data ?? []) as EstimateTemplate[];
+  }
+
+  async getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null> {
+    const db = await this.db();
+    const templateResult = await db
+      .from('estimate_templates')
+      .select('*')
+      .eq('base_model_id', modelId)
+      .eq('spec_code', specCode)
+      .maybeSingle();
+    if (templateResult.error) {
+      if (isMissingRelation(templateResult.error)) return null;
+      mapPgError(templateResult.error);
+    }
+    const template = templateResult.data as EstimateTemplate | null;
+    if (!template) return null;
+    const [sections, lines, baseRows] = await Promise.all([
+      db.from('estimate_template_sections').select('*').eq('template_id', template.id).order('sort_order'),
+      db.from('estimate_template_lines').select('*').eq('template_id', template.id).order('sort_order'),
+      db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).eq('spec_code', specCode).order('sort_order'),
+    ]);
+    for (const result of [sections, lines, baseRows]) if (result.error) mapPgError(result.error);
+    return {
+      template,
+      sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
+      lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
+      base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
+    };
   }
 
   async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {

@@ -95,12 +95,21 @@ security definer
 set search_path = public
 as $
 declare
-  v_model uuid := coalesce(new.base_model_id, old.base_model_id);
-  v_spec text := coalesce(new.spec_code, old.spec_code);
+  v_model uuid;
+  v_spec text;
 begin
-  if current_setting('wing.estimate_template_import', true) = '1' then
-    return coalesce(new, old);
+  if tg_op = 'DELETE' then
+    v_model := old.base_model_id;
+    v_spec := old.spec_code;
+  else
+    v_model := new.base_model_id;
+    v_spec := new.spec_code;
   end if;
+
+  if current_setting('wing.estimate_template_import', true) = '1' then
+    if tg_op = 'DELETE' then return old; else return new; end if;
+  end if;
+
   if exists (
     select 1 from public.estimate_templates
      where base_model_id = v_model and spec_code = v_spec
@@ -108,7 +117,8 @@ begin
     raise exception 'LOCKED: Excel取込済みの標準見積です。Excelを修正して再取込してください'
       using errcode = 'P0001';
   end if;
-  return coalesce(new, old);
+
+  if tg_op = 'DELETE' then return old; else return new; end if;
 end;
 $;
 
@@ -242,8 +252,8 @@ begin
       name text,
       quantity numeric,
       unit text,
-      unit_price integer,
-      amount integer,
+      unit_price numeric,
+      amount numeric,
       remark text,
       sort_order integer
     );

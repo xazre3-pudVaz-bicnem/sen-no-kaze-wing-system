@@ -1051,7 +1051,10 @@ export class LocalStore implements DataStore {
         if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
           throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
-        if (it.unit_price < 0 || it.quantity <= 0) throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
+        const isStandardDelta = it.name === '選択商品の変更差額';
+        if ((!isStandardDelta && it.unit_price < 0) || it.quantity <= 0) {
+          throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
+        }
       }
 
       // 本体内訳は 17.6㎡ のような小数の数量を持つ
@@ -1062,10 +1065,14 @@ export class LocalStore implements DataStore {
       // 代理店の本体は親見積の値を固定で継承。総代理店・本部だけ入力値で置換できる。
       const basePrice = canEditBase ? sumOf('base') : parent.base_price;
       const baseExpense = canEditBase ? sumOf('base_expense') : parent.base_expense;
-      // オプションは代理店以上が編集できるため、入力された案件明細をそのまま採用する。
-      const optionSubtotal = sumOf('option');
-      const optionExpense = sumOf('option_expense');
+      // 内外装工事・オプションは代理店以上が案件内容に合わせて編集できる。
+      const interiorSubtotal = sumOf('interior_exterior');
+      const interiorExpense = sumOf('interior_exterior_expense');
+      const optionLines = sumOf('option');
+      const optionExpenseLines = sumOf('option_expense');
       const baseTotal = basePrice + baseExpense;
+      const optionSubtotal = interiorSubtotal + optionLines;
+      const optionExpense = interiorExpense + optionExpenseLines;
       const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
       const subtotal = Math.floor(subRaw / ROUNDING_UNIT) * ROUNDING_UNIT;

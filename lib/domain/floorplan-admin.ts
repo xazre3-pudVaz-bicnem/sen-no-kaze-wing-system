@@ -1,12 +1,7 @@
 import { buildPresetSelection } from './preset';
 import { selectedPreviewKeys } from './preview';
-import type { CatalogBundle, PreviewImageRule } from './types';
-
-/**
- * 管理画面の「本体専用平面図」を既存 fallback と区別するための既存フィールド上の印。
- * DB スキーマは増やさず、正式な見積テンプレート管理へ接続するまでの管理用メタデータとして使う。
- */
-export const BASE_FLOORPLAN_NOTE = '本体専用平面図';
+import type { CatalogBundle } from './types';
+import { isDedicatedBaseFloorplanRule } from './preview-rule-meta';
 
 const normalizeKeys = (keys: string[]) => [...new Set(keys)].sort();
 
@@ -14,14 +9,6 @@ export function samePreviewKeys(a: string[], b: string[]): boolean {
   const aa = normalizeKeys(a);
   const bb = normalizeKeys(b);
   return aa.length === bb.length && aa.every((key, index) => key === bb[index]);
-}
-
-export function isDedicatedBaseFloorplanRule(rule: PreviewImageRule): boolean {
-  return (
-    rule.view === 'floorplan' &&
-    rule.preview_keys.length === 0 &&
-    rule.note?.trim() === BASE_FLOORPLAN_NOTE
-  );
 }
 
 export interface StandardFloorplanSlot {

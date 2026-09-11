@@ -23,19 +23,19 @@ interface Props {
 /** 表の列（項目／数量／単位／単価／金額／備考）を揃えるための共通セル */
 const td = {
   name: 'px-3 py-1.5 leading-snug sm:px-4',
-  qty: 'w-16 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-20',
-  unit: 'w-14 px-2 py-1.5 whitespace-nowrap text-muted sm:w-16',
-  price: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32',
-  amount: 'w-32 px-3 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-36',
+  qty: 'w-12 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2',
+  unit: 'w-10 px-1.5 py-1.5 whitespace-nowrap text-muted sm:w-12 sm:px-2',
+  price: 'w-24 px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-28 sm:px-2',
+  amount: 'w-28 px-2 py-1.5 text-right tabular-nums whitespace-nowrap sm:w-32 sm:px-3',
   remark: 'hidden w-32 px-3 py-1.5 text-[0.7rem] leading-snug text-muted lg:table-cell',
 };
 
 const th = {
   name: 'px-3 py-2 text-left font-semibold sm:px-4',
-  qty: 'w-16 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-20',
-  unit: 'w-14 px-2 py-2 text-left font-semibold whitespace-nowrap sm:w-16',
-  price: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32',
-  amount: 'w-32 px-3 py-2 text-right font-semibold whitespace-nowrap sm:w-36',
+  qty: 'w-12 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-16 sm:px-2',
+  unit: 'w-10 px-1.5 py-2 text-left font-semibold whitespace-nowrap sm:w-12 sm:px-2',
+  price: 'w-24 px-1.5 py-2 text-right font-semibold whitespace-nowrap sm:w-28 sm:px-2',
+  amount: 'w-28 px-2 py-2 text-right font-semibold whitespace-nowrap sm:w-32 sm:px-3',
   remark: 'hidden w-32 px-3 py-2 text-left font-semibold lg:table-cell',
 };
 
@@ -205,13 +205,13 @@ export function QuoteSheet({
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full min-w-[39rem] table-fixed text-[0.78rem] sm:min-w-[46rem] sm:text-sm">
+        <table className="w-full min-w-[30rem] table-fixed text-[0.78rem] sm:min-w-[42rem] sm:text-sm">
           <colgroup>
             <col />
-            <col className="w-16 sm:w-20" />
-            <col className="w-14 sm:w-16" />
+            <col className="w-12 sm:w-16" />
+            <col className="w-10 sm:w-12" />
+            <col className="w-24 sm:w-28" />
             <col className="w-28 sm:w-32" />
-            <col className="w-32 sm:w-36" />
             <col className="hidden w-32 lg:table-column" />
           </colgroup>
           <thead className="bg-sand text-[0.7rem] text-muted sm:text-xs">

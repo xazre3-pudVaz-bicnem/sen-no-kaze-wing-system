@@ -28,7 +28,7 @@ import {
   type ViewKey,
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
-import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker } from '@/lib/domain/preview-rule-meta';
+import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
 
 const initial: AdminFormState = { ok: false };
 
@@ -311,22 +311,26 @@ export function PreviewRuleForm({
   rule: PreviewImageRule | null;
   models: BaseModel[];
   previewKeys: { key: string; label: string }[];
-  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[]; alt?: string; internalNote?: string };
+  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[]; alt?: string; internalNote?: string; presetCode?: string };
 }) {
   const [state, action, pending] = useActionState(savePreviewRuleAction, initial);
   const e = state.fieldErrors ?? {};
   const selectedKeys = new Set(rule?.preview_keys ?? defaults?.keys ?? []);
   const selectedKeyLabels = previewKeys.filter((k) => selectedKeys.has(k.key)).map((k) => k.label);
   const internalNote = rule && hasBaseFloorplanInternalMarker(rule) ? BASE_FLOORPLAN_NOTE : defaults?.internalNote;
+  const protectedPresetCode = (rule ? presetFloorplanCode(rule) : null) ?? defaults?.presetCode ?? null;
   const hasProtectedInternalNote = internalNote === BASE_FLOORPLAN_NOTE;
+  const hasProtectedPreset = Boolean(protectedPresetCode);
+  const hasProtectedFloorplanIdentity = hasProtectedInternalNote || hasProtectedPreset;
   const protectedModelId = rule?.base_model_id ?? defaults?.base_model_id ?? models[0]?.id ?? '';
 
   return (
     <form action={action} className="card space-y-5 p-6" noValidate>
       <input type="hidden" name="id" value={rule?.id ?? ''} />
-      {hasProtectedInternalNote && (
+      {hasProtectedFloorplanIdentity && (
         <>
-          <input type="hidden" name="internal_note" value={BASE_FLOORPLAN_NOTE} />
+          {hasProtectedInternalNote && <input type="hidden" name="internal_note" value={BASE_FLOORPLAN_NOTE} />}
+          {protectedPresetCode && <input type="hidden" name="preset_code" value={protectedPresetCode} />}
           <input type="hidden" name="base_model_id" value={protectedModelId} />
           <input type="hidden" name="view" value="floorplan" />
           <input type="hidden" name="kind" value="composite" />
@@ -348,9 +352,11 @@ export function PreviewRuleForm({
         <Field label="代替テキスト" htmlFor="pr-alt" errors={e.alt}>
           <Input id="pr-alt" name="alt" defaultValue={rule?.alt ?? defaults?.alt ?? ''} />
         </Field>
-        {hasProtectedInternalNote ? (
+        {hasProtectedFloorplanIdentity ? (
           <div className="rounded-lg border border-line bg-ivory/60 px-3 py-2 text-xs text-muted">
-            本体専用平面図の識別情報は内部で固定されています。通常の補足欄からは変更できません。
+            {hasProtectedInternalNote
+              ? '本体専用平面図の識別情報は内部で固定されています。通常の補足欄からは変更できません。'
+              : 'この標準仕様専用平面図の識別情報は内部で固定されています。通常は変更不要です。'}
           </div>
         ) : (
           <Field label="補足" htmlFor="pr-note" hint="必要な場合だけ画面に小さく表示します" errors={e.note}>
@@ -374,7 +380,7 @@ export function PreviewRuleForm({
               id="pr-model"
               name="base_model_id"
               defaultValue={protectedModelId}
-              disabled={hasProtectedInternalNote}
+              disabled={hasProtectedFloorplanIdentity}
             >
               {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </Select>
@@ -383,7 +389,7 @@ export function PreviewRuleForm({
             <Select
               id="pr-view"
               name="view"
-              defaultValue={hasProtectedInternalNote ? 'floorplan' : (rule?.view ?? defaults?.view ?? 'exterior')}
+              defaultValue={hasProtectedFloorplanIdentity ? 'floorplan' : (rule?.view ?? defaults?.view ?? 'exterior')}
               disabled={hasProtectedInternalNote}
             >
               {VIEW_KEYS.map((v) => <option key={v} value={v}>{VIEW_LABELS[v]}</option>)}
@@ -393,7 +399,7 @@ export function PreviewRuleForm({
             <Select
               id="pr-kind"
               name="kind"
-              defaultValue={hasProtectedInternalNote ? 'composite' : (rule?.kind ?? 'composite')}
+              defaultValue={hasProtectedFloorplanIdentity ? 'composite' : (rule?.kind ?? 'composite')}
               disabled={hasProtectedInternalNote}
             >
               <option value="composite">完成画像</option>
@@ -409,8 +415,12 @@ export function PreviewRuleForm({
         </div>
         <div className="mt-5">
           <p className="label">対応するプレビューキー（画像に写っている設備）</p>
-          {hasProtectedInternalNote ? (
-            <p className="mt-2 text-xs text-muted">本体専用平面図はプレビューキーなし（空配列）で固定されています。</p>
+          {hasProtectedFloorplanIdentity ? (
+            <p className="mt-2 text-xs text-muted">
+              {hasProtectedInternalNote
+                ? '本体専用平面図はプレビューキーなし（空配列）で固定されています。'
+                : 'この標準仕様専用平面図はプレビューキーなし（空配列）で固定されています。'}
+            </p>
           ) : (
             <>
               <p className="mb-2 text-xs text-muted">何も選ばなければ標準状態です。レイヤー方式では通常1つだけ選びます。</p>

@@ -1,7 +1,7 @@
 import { buildPresetSelection } from './preset';
 import { selectedPreviewKeys } from './preview';
 import type { CatalogBundle, PreviewImageRule } from './types';
-import { isDedicatedBaseFloorplanRule } from './preview-rule-meta';
+import { isDedicatedBaseFloorplanRule, isPresetFloorplanRule } from './preview-rule-meta';
 
 const normalizeKeys = (keys: string[]) => [...new Set(keys)].sort();
 
@@ -39,12 +39,11 @@ export function buildStandardFloorplanSlots(bundle: CatalogBundle): StandardFloo
     const selectedIds = buildPresetSelection(ctx, preset);
     const keys = selectedPreviewKeys(bundle.options, selectedIds, 'floorplan');
 
-    // 空キーは「どの設備も平面図に影響しない」という意味にしかならず、
-    // preset 専用画像・本体専用画像・fallback を区別できない。
-    // そのため空キーの既存ルールは自動紐付けしない。
+    // 空キーの標準仕様は旧 fallback と区別できないため、
+    // 内部マーカーが一致する preset 専用ルールだけを紐付ける。
     const rule =
       keys.length === 0
-        ? null
+        ? floorplans.find((candidate) => isPresetFloorplanRule(candidate, preset.code)) ?? null
         : floorplans.find(
             (candidate) =>
               !isDedicatedBaseFloorplanRule(candidate) &&

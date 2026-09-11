@@ -23,6 +23,7 @@ import type {
   Profile,
   RoleCode,
   Quote,
+  QuoteItem,
   QuoteContact,
   QuoteDocument,
   QuoteRequest,
@@ -35,7 +36,6 @@ import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
 import {
   computeStandardEstimatePricing,
-  INTERIOR_EXTERIOR_CATEGORY_CODES,
   type StandardEstimatePricingResult,
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';

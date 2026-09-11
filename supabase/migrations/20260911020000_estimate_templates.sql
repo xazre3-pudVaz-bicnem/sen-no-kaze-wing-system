@@ -67,23 +67,19 @@ alter table public.estimate_template_lines enable row level security;
 drop policy if exists estimate_templates_read on public.estimate_templates;
 create policy estimate_templates_read on public.estimate_templates for select using (true);
 drop policy if exists estimate_templates_write on public.estimate_templates;
-create policy estimate_templates_write on public.estimate_templates for all
-  using (public.can_edit_catalog()) with check (public.can_edit_catalog());
 
 drop policy if exists estimate_template_sections_read on public.estimate_template_sections;
 create policy estimate_template_sections_read on public.estimate_template_sections for select using (true);
 drop policy if exists estimate_template_sections_write on public.estimate_template_sections;
-create policy estimate_template_sections_write on public.estimate_template_sections for all
-  using (public.can_edit_catalog()) with check (public.can_edit_catalog());
 
 drop policy if exists estimate_template_lines_read on public.estimate_template_lines;
 create policy estimate_template_lines_read on public.estimate_template_lines for select using (true);
 drop policy if exists estimate_template_lines_write on public.estimate_template_lines;
-create policy estimate_template_lines_write on public.estimate_template_lines for all
-  using (public.can_edit_catalog()) with check (public.can_edit_catalog());
 
+-- authenticated からの直接書き込みは禁止。更新は検算付き replace_estimate_templates RPC だけ。
 grant select on public.estimate_templates, public.estimate_template_sections, public.estimate_template_lines to anon, authenticated;
-grant all on public.estimate_templates, public.estimate_template_sections, public.estimate_template_lines to authenticated, service_role;
+revoke insert, update, delete on public.estimate_templates, public.estimate_template_sections, public.estimate_template_lines from authenticated;
+grant all on public.estimate_templates, public.estimate_template_sections, public.estimate_template_lines to service_role;
 
 
 -- Excel取込済みの標準見積では、本体明細の単独編集を禁止する。

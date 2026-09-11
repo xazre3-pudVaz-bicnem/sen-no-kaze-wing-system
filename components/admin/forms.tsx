@@ -22,11 +22,13 @@ import {
   type OptionDependency,
   type PreviewImageRule,
   type ProductOption,
+  type ProductImageKind,
   type Quote,
   type QuoteRequest,
   type ViewKey,
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
+import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker } from '@/lib/domain/preview-rule-meta';
 
 const initial: AdminFormState = { ok: false };
 
@@ -87,25 +89,50 @@ export function ModelForm({ model }: { model: BaseModel | null }) {
 
 /* ---------- 商品画像 ---------- */
 
-export function ProductImageForm({ modelId }: { modelId: string }) {
+export function ProductImageForm({
+  modelId,
+  allowedKinds,
+  title = '画像を追加',
+}: {
+  modelId: string;
+  allowedKinds?: ProductImageKind[];
+  title?: string;
+}) {
   const [state, action, pending] = useActionState(addProductImageAction, initial);
   const e = state.fieldErrors ?? {};
+  const kinds: ProductImageKind[] = allowedKinds ?? ['hero', 'exterior', 'interior', 'floorplan', 'elevation', 'transport', 'case'];
+  const idPrefix = `${modelId}-${kinds.join('-')}`;
+  const kindLabel = (kind: ProductImageKind) =>
+    kind === 'hero'
+      ? 'メイン'
+      : kind === 'exterior'
+        ? '外観'
+        : kind === 'interior'
+          ? '室内'
+          : kind === 'floorplan'
+            ? '平面図（商品紹介用）'
+            : kind === 'elevation'
+              ? '立面図'
+              : kind === 'transport'
+                ? '輸送・設置'
+                : '施工事例';
+
   return (
     <form action={action} className="card space-y-4 p-6" noValidate>
       <input type="hidden" name="base_model_id" value={modelId} />
-      <p className="font-semibold">画像を追加</p>
+      <p className="font-semibold">{title}</p>
       <Status state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="種類" htmlFor="img-kind" required errors={e.kind}>
-          <Select id="img-kind" name="kind" defaultValue="exterior">
-            <option value="hero">メイン</option><option value="exterior">外観</option><option value="interior">室内</option><option value="floorplan">平面図</option><option value="elevation">立面図</option><option value="transport">輸送・設置</option><option value="case">施工事例</option>
+        <Field label="種類" htmlFor={`img-kind-${idPrefix}`} required errors={e.kind}>
+          <Select id={`img-kind-${idPrefix}`} name="kind" defaultValue={kinds[0] ?? 'exterior'}>
+            {kinds.map((kind) => <option key={kind} value={kind}>{kindLabel(kind)}</option>)}
           </Select>
         </Field>
-        <Field label="表示順" htmlFor="img-sort" errors={e.sort_order}><Input id="img-sort" name="sort_order" type="number" defaultValue={0} /></Field>
-        <Field label="画像ファイル" htmlFor="img-file" hint="JPEG/PNG/WebP、10MBまで"><Input id="img-file" name="file" type="file" accept="image/*" className="py-2" /></Field>
-        <Field label="または画像URL" htmlFor="img-url" errors={e.url}><Input id="img-url" name="url" placeholder="/images/... または https://..." /></Field>
-        <Field label="代替テキスト" htmlFor="img-alt" errors={e.alt}><Input id="img-alt" name="alt" /></Field>
-        <Field label="キャプション" htmlFor="img-caption" hint="立面図はここが面のラベルになります（例：正面（南））" errors={e.caption}><Input id="img-caption" name="caption" /></Field>
+        <Field label="表示順" htmlFor={`img-sort-${idPrefix}`} errors={e.sort_order}><Input id={`img-sort-${idPrefix}`} name="sort_order" type="number" defaultValue={0} /></Field>
+        <Field label="画像ファイル" htmlFor={`img-file-${idPrefix}`} hint="JPEG/PNG/WebP/AVIF、10MBまで"><Input id={`img-file-${idPrefix}`} name="file" type="file" accept="image/*" className="py-2" /></Field>
+        <Field label="または画像URL" htmlFor={`img-url-${idPrefix}`} errors={e.url}><Input id={`img-url-${idPrefix}`} name="url" placeholder="/images/... または https://..." /></Field>
+        <Field label="代替テキスト" htmlFor={`img-alt-${idPrefix}`} errors={e.alt}><Input id={`img-alt-${idPrefix}`} name="alt" /></Field>
+        <Field label="キャプション" htmlFor={`img-caption-${idPrefix}`} hint="立面図は面の名称（例：正面（南））、施工事例は写真説明を入力"><Input id={`img-caption-${idPrefix}`} name="caption" /></Field>
       </div>
       <SubmitButton pending={pending} label="追加する" />
     </form>
@@ -284,55 +311,120 @@ export function PreviewRuleForm({
   rule: PreviewImageRule | null;
   models: BaseModel[];
   previewKeys: { key: string; label: string }[];
-  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[] };
+  defaults?: { base_model_id?: string; view?: ViewKey; keys?: string[]; alt?: string; internalNote?: string };
 }) {
   const [state, action, pending] = useActionState(savePreviewRuleAction, initial);
   const e = state.fieldErrors ?? {};
   const selectedKeys = new Set(rule?.preview_keys ?? defaults?.keys ?? []);
+  const selectedKeyLabels = previewKeys.filter((k) => selectedKeys.has(k.key)).map((k) => k.label);
+  const internalNote = rule && hasBaseFloorplanInternalMarker(rule) ? BASE_FLOORPLAN_NOTE : defaults?.internalNote;
+  const hasProtectedInternalNote = internalNote === BASE_FLOORPLAN_NOTE;
+  const protectedModelId = rule?.base_model_id ?? defaults?.base_model_id ?? models[0]?.id ?? '';
+
   return (
     <form action={action} className="card space-y-5 p-6" noValidate>
       <input type="hidden" name="id" value={rule?.id ?? ''} />
+      {hasProtectedInternalNote && (
+        <>
+          <input type="hidden" name="internal_note" value={BASE_FLOORPLAN_NOTE} />
+          <input type="hidden" name="base_model_id" value={protectedModelId} />
+          <input type="hidden" name="view" value="floorplan" />
+          <input type="hidden" name="kind" value="composite" />
+        </>
+      )}
       <Status state={state} />
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="ベースコンテナ" htmlFor="pr-model" required errors={e.base_model_id}>
-          <Select id="pr-model" name="base_model_id" defaultValue={rule?.base_model_id ?? defaults?.base_model_id ?? models[0]?.id}>
-            {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </Select>
-        </Field>
-        <Field label="ビュー" htmlFor="pr-view" required errors={e.view}>
-          <Select id="pr-view" name="view" defaultValue={rule?.view ?? defaults?.view ?? 'exterior'}>
-            {VIEW_KEYS.map((v) => <option key={v} value={v}>{VIEW_LABELS[v]}</option>)}
-          </Select>
-        </Field>
-        <Field label="方式" htmlFor="pr-kind" required hint="完成画像: キー集合が完全一致で表示／レイヤー: ベース層＋キーごとの透過PNGを重ねる" errors={e.kind}>
-          <Select id="pr-kind" name="kind" defaultValue={rule?.kind ?? 'composite'}>
-            <option value="composite">完成画像（composite）</option>
-            <option value="layer">レイヤー（layer）</option>
-          </Select>
-        </Field>
-        <Field label="重ね順（レイヤー用）" htmlFor="pr-z" errors={e.z_index}><Input id="pr-z" name="z_index" type="number" defaultValue={rule?.z_index ?? 0} /></Field>
-      </div>
+
       <div>
-        <p className="label">対応するプレビューキー（写っている設備）</p>
-        <p className="mb-2 text-xs text-muted">何も選ばなければ「標準状態（ベース）」の画像になります。レイヤー方式では1つだけ選びます。</p>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {previewKeys.map((k) => (
-            <Checkbox key={k.key} name="preview_keys" value={k.key} defaultChecked={selectedKeys.has(k.key)} label={<>{k.label} <span className="text-xs text-muted">({k.key})</span></>} />
-          ))}
-        </div>
+        <p className="font-semibold">{rule ? '画像を変更' : '画像を登録'}</p>
+        <p className="mt-1 text-xs text-muted">
+          {selectedKeyLabels.length > 0 ? `対応条件：${selectedKeyLabels.join(' + ')}` : '対応条件：標準状態'}
+        </p>
       </div>
+
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="画像ファイル" htmlFor="pr-file" hint="レイヤーは位置の揃った透過PNG"><Input id="pr-file" name="file" type="file" accept="image/*" className="py-2" /></Field>
-        <Field label="または画像URL" htmlFor="pr-url" errors={e.url}><Input id="pr-url" name="url" defaultValue={rule?.url ?? ''} placeholder="/images/... または https://..." data-testid="preview-rule-url" /></Field>
-        <Field label="代替テキスト" htmlFor="pr-alt" errors={e.alt}><Input id="pr-alt" name="alt" defaultValue={rule?.alt ?? ''} /></Field>
-        <Field label="補足（画面に小さく表示）" htmlFor="pr-note" errors={e.note}><Input id="pr-note" name="note" defaultValue={rule?.note ?? ''} /></Field>
+        <Field label="新しい画像ファイル" htmlFor="pr-file" hint={rule ? 'ファイルを選ぶと現在の画像を差し替えます。JPEG/PNG/WebP/AVIF、10MBまで' : 'JPEG/PNG/WebP/AVIF、10MBまで'}>
+          <Input id="pr-file" name="file" type="file" accept="image/*" className="py-2" />
+        </Field>
+        <Field label="代替テキスト" htmlFor="pr-alt" errors={e.alt}>
+          <Input id="pr-alt" name="alt" defaultValue={rule?.alt ?? defaults?.alt ?? ''} />
+        </Field>
+        {hasProtectedInternalNote ? (
+          <div className="rounded-lg border border-line bg-ivory/60 px-3 py-2 text-xs text-muted">
+            本体専用平面図の識別情報は内部で固定されています。通常の補足欄からは変更できません。
+          </div>
+        ) : (
+          <Field label="補足" htmlFor="pr-note" hint="必要な場合だけ画面に小さく表示します" errors={e.note}>
+            <Input id="pr-note" name="note" defaultValue={rule?.note ?? ''} />
+          </Field>
+        )}
         <Field label="公開状態" htmlFor="pr-status" errors={e.status}>
           <Select id="pr-status" name="status" defaultValue={rule?.status ?? 'published'}>
-            <option value="published">公開</option><option value="draft">非公開</option>
+            <option value="published">公開</option>
+            <option value="draft">非公開</option>
           </Select>
         </Field>
       </div>
-      <SubmitButton pending={pending} />
+
+      <details className="rounded-xl border border-line bg-ivory/50 p-4">
+        <summary className="cursor-pointer text-sm font-semibold">詳細設定</summary>
+        <p className="mt-2 text-xs text-muted">通常の画像差し替えでは変更不要です。表示条件やレイヤー方式を調整するときだけ使用します。</p>
+        <div className="mt-4 grid gap-5 sm:grid-cols-2">
+          <Field label="ベースコンテナ" htmlFor="pr-model" required errors={e.base_model_id}>
+            <Select
+              id="pr-model"
+              name="base_model_id"
+              defaultValue={protectedModelId}
+              disabled={hasProtectedInternalNote}
+            >
+              {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="ビュー" htmlFor="pr-view" required errors={e.view}>
+            <Select
+              id="pr-view"
+              name="view"
+              defaultValue={hasProtectedInternalNote ? 'floorplan' : (rule?.view ?? defaults?.view ?? 'exterior')}
+              disabled={hasProtectedInternalNote}
+            >
+              {VIEW_KEYS.map((v) => <option key={v} value={v}>{VIEW_LABELS[v]}</option>)}
+            </Select>
+          </Field>
+          <Field label="方式" htmlFor="pr-kind" required hint="完成画像は通常こちら。レイヤーは透過PNGを重ねる場合に使用" errors={e.kind}>
+            <Select
+              id="pr-kind"
+              name="kind"
+              defaultValue={hasProtectedInternalNote ? 'composite' : (rule?.kind ?? 'composite')}
+              disabled={hasProtectedInternalNote}
+            >
+              <option value="composite">完成画像</option>
+              <option value="layer">レイヤー</option>
+            </Select>
+          </Field>
+          <Field label="重ね順（レイヤー用）" htmlFor="pr-z" errors={e.z_index}>
+            <Input id="pr-z" name="z_index" type="number" defaultValue={rule?.z_index ?? 0} />
+          </Field>
+          <Field label="画像URL" htmlFor="pr-url" hint="ファイルを選ばない場合に使用します" errors={e.url}>
+            <Input id="pr-url" name="url" defaultValue={rule?.url ?? ''} placeholder="/images/... または https://..." data-testid="preview-rule-url" />
+          </Field>
+        </div>
+        <div className="mt-5">
+          <p className="label">対応するプレビューキー（画像に写っている設備）</p>
+          {hasProtectedInternalNote ? (
+            <p className="mt-2 text-xs text-muted">本体専用平面図はプレビューキーなし（空配列）で固定されています。</p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-muted">何も選ばなければ標準状態です。レイヤー方式では通常1つだけ選びます。</p>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {previewKeys.map((k) => (
+                  <Checkbox key={k.key} name="preview_keys" value={k.key} defaultChecked={selectedKeys.has(k.key)} label={<>{k.label} <span className="text-xs text-muted">({k.key})</span></>} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </details>
+
+      <SubmitButton pending={pending} label={rule ? '画像を変更する' : '登録する'} />
     </form>
   );
 }

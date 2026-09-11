@@ -1,4 +1,5 @@
 import type { PreviewImageRule, ProductOption, ViewKey } from './types';
+import { previewRuleDisplayNote } from './preview-rule-meta';
 
 export interface PreviewLayer {
   url: string;
@@ -57,7 +58,7 @@ export function resolvePreview(rules: PreviewImageRule[], view: ViewKey, selecte
       layers: [{ url: exact.url, alt: exact.alt, z_index: 0 }],
       missing_keys: [],
       extra_keys: [],
-      note: exact.note,
+      note: previewRuleDisplayNote(exact),
       approximate: false,
     };
   }
@@ -99,7 +100,7 @@ export function resolvePreview(rules: PreviewImageRule[], view: ViewKey, selecte
     layers: [{ url: chosen.url, alt: chosen.alt, z_index: 0 }],
     missing_keys: keys.filter((k) => !chosenKeys.has(k)),
     extra_keys: [...chosenKeys].filter((k) => !keys.includes(k)),
-    note: chosen.note,
+    note: previewRuleDisplayNote(chosen),
     approximate: true,
   };
 }

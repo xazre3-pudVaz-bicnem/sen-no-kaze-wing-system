@@ -20,8 +20,8 @@ export default async function EditPreviewRulePage({ params }: { params: Promise<
   if (!rule) notFound();
   const keys = [...previewKeyLabels(options).entries()].map(([key, label]) => ({ key, label }));
   return (
-    <AdminPage title="画像ルールを編集">
-      <BackLink href="/admin/preview-rules" label="一覧へ戻る" />
+    <AdminPage title="シミュレーター画像を変更">
+      <BackLink href="/admin/preview-rules" label="シミュレーター画像へ戻る" />
       <PreviewRuleForm rule={rule} models={models} previewKeys={keys} />
     </AdminPage>
   );

@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError } from '@/lib/data/store';
@@ -26,6 +26,7 @@ import {
 } from '@/lib/validation';
 import { pruneToScope } from '@/lib/domain/rules';
 import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
+import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields } from '@/lib/domain/preview-rule-meta';
 
 export interface AdminFormState {
   ok: boolean;
@@ -235,6 +236,35 @@ export async function deleteOptionAction(formData: FormData): Promise<void> {
 
 export async function savePreviewRuleAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
+  const id = nullableId(formData.get('id'));
+  const store = await getStore();
+
+  // 既存ルールの編集では、保存済みデータを基準に本体専用条件を保護する。
+  let existingRule: PreviewImageRule | null = null;
+  if (id) {
+    const models = await store.listModels({ includeDraft: true });
+    for (const model of models) {
+      const bundle = await store.getCatalogBundle(model.id, { includeDraft: true });
+      const found = bundle?.previewRules.find((rule) => rule.id === id);
+      if (found) {
+        existingRule = found;
+        break;
+      }
+    }
+  }
+
+  const protectedFields = enforceDedicatedBaseFloorplanFields(
+    existingRule,
+    {
+      base_model_id: String(formData.get('base_model_id') ?? ''),
+      view: String(formData.get('view') ?? ''),
+      kind: String(formData.get('kind') ?? ''),
+      preview_keys: [...new Set(formData.getAll('preview_keys').map(String).filter(Boolean))].sort(),
+      note: String(formData.get('note') ?? '').trim() || null,
+    },
+    formData.get('internal_note') === BASE_FLOORPLAN_NOTE
+  );
+
   let url: string;
   try {
     url = await resolveImageUrl(formData, 'preview');
@@ -242,20 +272,15 @@ export async function savePreviewRuleAction(_prev: AdminFormState, formData: For
     return errState(e);
   }
   const parsed = previewRuleSchema.safeParse({
-    id: nullableId(formData.get('id')),
-    base_model_id: formData.get('base_model_id'),
-    view: formData.get('view'),
-    kind: formData.get('kind'),
-    preview_keys: [...new Set(formData.getAll('preview_keys').map(String).filter(Boolean))].sort(),
+    id,
+    ...protectedFields,
     url,
     alt: formData.get('alt'),
-    note: formData.get('note'),
     z_index: formData.get('z_index') || 0,
     status: formData.get('status') || 'published',
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   try {
-    const store = await getStore();
     await store.upsertPreviewRule(parsed.data);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);

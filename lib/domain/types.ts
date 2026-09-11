@@ -249,6 +249,8 @@ export interface EstimateTemplateBundle {
   lines: EstimateTemplateLine[];
   /** base だけ */
   base_breakdown_items: BaseBreakdownItem[];
+  /** 標準見積に含まれる商品マスターの標準選択。差額計算の基準に使う。 */
+  baseline_option_ids: string[];
 }
 
 export interface ProductOption {

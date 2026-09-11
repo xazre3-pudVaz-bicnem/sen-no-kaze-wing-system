@@ -114,6 +114,29 @@ describe('標準見積Excelの取込・検算', () => {
     expect(template.total).toBe(7700);
   });
 
+  it('15%由来の小数金額を切り捨てずExcel記載値のまま保持する', () => {
+    const sheet = workbookSheet();
+    // 本体明細 1,001円 × 15% = 150.15円。Excel記載値をそのまま正本にする。
+    sheet.rows[14][20] = '1001';
+    sheet.rows[14][21] = '1001';
+    sheet.rows[15][21] = '150.15';
+    sheet.rows[16][21] = '1151.15';
+    sheet.rows[25][21] = '7301.15';
+    sheet.rows[26][21] = '-301.15';
+    sheet.rows[26][22] = '7000';
+
+    const template = parseStandardEstimateWorkbook([sheet]).templates[0];
+    const base = template.sections.find((row) => row.code === 'base')!;
+
+    expect(base.line_subtotal).toBe(1001);
+    expect(base.expense_amount).toBe(150.15);
+    expect(base.total).toBe(1151.15);
+    expect(template.subtotal_raw).toBe(7301.15);
+    expect(template.adjustment).toBe(-301.15);
+    expect(template.subtotal).toBe(7000);
+    expect(template.total).toBe(7700);
+  });
+
   it('防火シートは今回の対象外として読み飛ばす', () => {
     const parsed = parseStandardEstimateWorkbook([
       workbookSheet(),

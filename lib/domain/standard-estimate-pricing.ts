@@ -1,5 +1,6 @@
 import { computePricing, DEFAULT_EXPENSE_RATE, ROUNDING_UNIT } from './pricing';
 import { defaultVariantIdsFor } from './preset';
+import { estimateBaselineOptionCodes } from './estimate-template';
 import { makeDefaultExteriorFaces, type ExteriorFaceSelection } from './exterior-wall';
 import type {
   CatalogBundle,
@@ -84,9 +85,18 @@ export function computeStandardEstimatePricing(
     exteriorFaces
   );
 
-  const baselineOptionIds = template.baseline_option_ids.filter((id) =>
+  const savedBaselineIds = template.baseline_option_ids.filter((id) =>
     bundle.options.some((option) => option.id === id)
   );
+  const fallbackBaselineCodes =
+    savedBaselineIds.length === 0
+      ? estimateBaselineOptionCodes(model, template.template.spec_code)
+      : [];
+  const optionByCode = new Map(bundle.options.map((option) => [option.code, option.id]));
+  const baselineOptionIds =
+    savedBaselineIds.length > 0
+      ? savedBaselineIds
+      : fallbackBaselineCodes.map((code) => optionByCode.get(code)).filter((id): id is string => Boolean(id));
   const baselineVariantIds = defaultVariantIdsFor(
     bundle.variantGroups,
     bundle.variantChoices,
@@ -114,7 +124,6 @@ export function computeStandardEstimatePricing(
     baselineFaces
   );
 
-  const sectionMap = new Map(template.sections.map((section) => [section.code, section]));
   const sectionPricings: StandardEstimateSectionPricing[] = template.sections.map((section) => {
     if (section.code === 'base') {
       return {

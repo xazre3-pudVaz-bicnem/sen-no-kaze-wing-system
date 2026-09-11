@@ -802,13 +802,15 @@ export async function importEstimateTemplatesAction(
   const bySlug = new Map(models.map((model) => [model.slug, model]));
   const bundleCache = new Map<string, Awaited<ReturnType<typeof store.getCatalogBundle>>>();
   const inputs: EstimateImportDraftInput[] = [];
-  const matchingByTemplate = new Map<string, EstimateTemplateImportState['preview'] extends infer P
-    ? P extends { templates: (infer T)[] }
-      ? T extends { matching: infer M }
-        ? M
-        : never
-      : never
-    : never>();
+  type MatchingSummary = {
+    total: number;
+    required: number;
+    auto: number;
+    needsReview: number;
+    optional: number;
+    none: number;
+  };
+  const matchingByTemplate = new Map<string, MatchingSummary>();
 
   for (const template of parsed.templates) {
     const model = bySlug.get(template.model_slug);

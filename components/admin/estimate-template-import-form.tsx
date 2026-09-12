@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react';
 import {
@@ -12,8 +13,8 @@ import { formatYen } from '@/lib/domain/pricing';
 const initial: EstimateTemplateImportState = { ok: false };
 
 /**
- * 実物の分類表見積Excelを、価格の正本となる標準見積テンプレートとして取り込む。
- * まず検算結果を表示し、確認後に一括登録する。
+ * 標準見積Excelは、まず検算して「照合作業用バージョン」として保存する。
+ * 商品照合が完了するまで現在のシミュレーター標準見積は変更しない。
  */
 export function EstimateTemplateImportForm() {
   const [file, setFile] = useState<File | null>(null);
@@ -41,9 +42,8 @@ export function EstimateTemplateImportForm() {
       <div>
         <h2 className="font-semibold">標準見積Excelの取込</h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-soft">
-          実物の分類表見積書を、本体／内外装工事／オプション／別途の4分類のまま取り込みます。
-          Wingに加えて、BOXの「本体のみ／ホテル・単身者用／水回りキット」に対応します。
-          本体明細は既存の本体内訳マスターへ、残り3分類は標準見積テンプレートへ保存し、商品マスターの価格から標準見積を作り直しません。
+          Excelの4分類と金額を検算したあと、商品マスターとの照合作業用バージョンとして保存します。
+          この段階では現在のシミュレーター価格は変わりません。必須商品の照合完了後に「この見積を有効にする」で切り替えます。
         </p>
       </div>
 
@@ -51,7 +51,7 @@ export function EstimateTemplateImportForm() {
         label="分類表見積Excel（.xlsx）"
         htmlFor="estimate-template-sheet"
         required
-        hint="最初に「内容を確認する」で4分類と合計金額を検算します。防火シートは今回は取り込みません。"
+        hint="最初に「内容を確認する」で4分類・合計金額・商品照合候補を確認します。防火シートは今回は取り込みません。"
       >
         <input
           id="estimate-template-sheet"
@@ -89,7 +89,7 @@ export function EstimateTemplateImportForm() {
             onClick={() => submit('apply')}
             data-testid="estimate-template-apply"
           >
-            {pending ? '登録中…' : '検算済みの内容で登録する'}
+            {pending ? '取込中…' : '商品照合用に取り込む'}
           </Button>
         )}
       </div>
@@ -99,7 +99,7 @@ export function EstimateTemplateImportForm() {
       {state.preview && (
         <div className="space-y-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[62rem] text-sm">
+            <table className="w-full min-w-[76rem] text-sm">
               <thead className="bg-sand/60 text-left text-xs text-muted">
                 <tr>
                   <th className="px-3 py-2 font-semibold">本体</th>
@@ -110,6 +110,7 @@ export function EstimateTemplateImportForm() {
                   <th className="px-3 py-2 text-right font-semibold">オプション</th>
                   <th className="px-3 py-2 text-right font-semibold">別途</th>
                   <th className="px-3 py-2 text-right font-semibold">税込合計</th>
+                  <th className="px-3 py-2 font-semibold">商品照合</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -123,11 +124,24 @@ export function EstimateTemplateImportForm() {
                     <td className="px-3 py-2 text-right tabular-nums">{formatYen(row.option)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatYen(row.sitework)}</td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatYen(row.total)}</td>
+                    <td className="px-3 py-2 text-xs">
+                      <span className="font-semibold text-forest">自動 {row.matching.auto}</span>
+                      <span className="mx-1 text-muted">／</span>
+                      <span className={row.matching.needsReview > 0 ? 'font-semibold text-danger' : 'text-muted'}>
+                        要確認 {row.matching.needsReview}
+                      </span>
+                      <span className="mx-1 text-muted">／</span>
+                      <span className="text-muted">不要 {row.matching.none}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <Alert tone="info">
+            自動一致はメーカー＋型番など確度の高い場合だけです。要確認の商品は、取込後の照合画面で登録済み商品から選択します。
+          </Alert>
 
           {state.preview.ignoredSheets.some((name) => name.startsWith('【防火】')) && (
             <Alert tone="info">
@@ -157,8 +171,15 @@ export function EstimateTemplateImportForm() {
       )}
 
       {state.applied && (
-        <Alert tone="success">
-          標準見積 {state.applied.templates} 件を登録しました。シミュレーターの仕様切替にはまだ接続していません。
+        <Alert tone="success" title={`照合作業用に ${state.applied.imports} 件取り込みました`}>
+          <p>まだシミュレーターには反映されていません。各標準見積の商品照合を確認してください。</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {state.applied.importIds.map((id, index) => (
+              <Link key={id} href={`/admin/base-breakdown/imports/${id}`} className="btn-secondary btn-sm">
+                {state.applied?.names[index] ?? '標準見積'}の照合を確認
+              </Link>
+            ))}
+          </div>
         </Alert>
       )}
     </section>

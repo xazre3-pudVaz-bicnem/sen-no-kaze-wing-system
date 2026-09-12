@@ -30,6 +30,9 @@ import type {
   EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
+  EstimateImport,
+  EstimateImportBundle,
+  EstimateLinkPolicy,
 } from '@/lib/domain/types';
 
 export interface SessionUser {
@@ -154,6 +157,57 @@ export interface EstimateTemplateImportInput {
   baseline_option_ids: string[];
 }
 
+
+export interface EstimateImportDraftLineInput {
+  section_code: 'base' | 'interior_exterior' | 'option' | 'sitework';
+  group_label: string | null;
+  source_row: number | null;
+  original_name: string;
+  normalized_name: string;
+  category_id: string | null;
+  manufacturer_text: string | null;
+  model_text: string | null;
+  size_text: string | null;
+  quantity: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  amount: number;
+  remark: string | null;
+  link_policy: EstimateLinkPolicy;
+  line_fingerprint: string;
+  fingerprint_ordinal: number;
+  sort_order: number;
+  /** 厳格一致した場合だけ指定する。未指定は照合画面で人が確認する。 */
+  auto_option_id: string | null;
+  auto_match_reason: string | null;
+}
+
+export interface EstimateImportDraftInput {
+  base_model_id: string;
+  spec_code: string;
+  name: string;
+  source_file_name: string;
+  source_sheet_name: string;
+  source_sha256: string;
+  tax_rate: number;
+  subtotal_raw: number;
+  adjustment: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+  template_payload: EstimateTemplateImportInput;
+  lines: EstimateImportDraftLineInput[];
+}
+
+export interface EstimateImportLineReviewInput {
+  line_id: string;
+  category_id: string | null;
+  link_policy: EstimateLinkPolicy;
+  option_id: string | null;
+  save_rule: boolean;
+  rule_scope: 'global' | 'model' | 'spec';
+}
+
 /**
  * データアクセス層のインターフェース。
  * - SupabaseStore: 本番（RLS ＋ security definer RPC）
@@ -230,6 +284,16 @@ export interface DataStore {
   getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null>;
   /** 解析・検算済みの標準見積を一括置換する。base 明細も同じ transaction で更新する。 */
   replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void>;
+
+  // ---- 標準見積Excelの取込・商品照合（有効化前の作業領域） ----
+  listEstimateImports(modelId?: string, specCode?: string): Promise<EstimateImport[]>;
+  getEstimateImportBundle(id: string): Promise<EstimateImportBundle | null>;
+  /** Excelを照合作業用の新バージョンとして保存する。本番標準見積はまだ変更しない。 */
+  createEstimateImports(items: EstimateImportDraftInput[]): Promise<EstimateImport[]>;
+  /** 1明細のカテゴリ・必須度・商品リンクを確認する。 */
+  updateEstimateImportLineReview(input: EstimateImportLineReviewInput): Promise<void>;
+  /** 必須照合が完了した取込だけを、既存の標準見積へ反映する。 */
+  activateEstimateImport(id: string): Promise<void>;
 
   // ---- 商品のバリエーション ----
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;

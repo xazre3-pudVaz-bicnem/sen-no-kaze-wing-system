@@ -170,9 +170,21 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
   );
   const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
-  const exteriorWallOptions = bundle.options
+  const allExteriorWallOptions = bundle.options
     .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
+  const legacyExteriorCodes = new Set(['exterior-galnote', 'exterior-wood']);
+  const currentExteriorCodes = new Set([
+    'exterior-nichiha-st-u18',
+    'exterior-nichiha-ns-premium18',
+    'exterior-nichiha-m-flat-premium18',
+    'exterior-wood-accent-100',
+    'exterior-current-gl-bare',
+  ]);
+  const hasCurrentExteriorCatalog = allExteriorWallOptions.some((option) => currentExteriorCodes.has(option.code));
+  const exteriorWallOptions = hasCurrentExteriorCatalog
+    ? allExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
+    : allExteriorWallOptions;
 
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
@@ -513,7 +525,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     const front = nextFaces.find((f) => f.face_code === 'front') ?? nextFaces[0];
     setExteriorFaces(nextFaces);
     if (front && exteriorWallCat) {
-      const wallIds = new Set(exteriorWallOptions.map((o) => o.id));
+      const wallIds = new Set(allExteriorWallOptions.map((o) => o.id));
       setSelected((prev) => [...prev.filter((id) => !wallIds.has(id)), front.option_id]);
       const wallGroupIds = new Set(bundle.variantGroups.filter((g) => wallIds.has(g.option_id)).map((g) => g.id));
       setVariantIds((prev) => [

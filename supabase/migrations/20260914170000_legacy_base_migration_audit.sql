@@ -457,6 +457,7 @@ as $sig$
       coalesce(
         jsonb_agg(
           jsonb_build_object(
+            'section', lower(btrim(m.legacy_section)),
             'name', lower(btrim(m.legacy_name)),
             'quantity', m.legacy_quantity,
             'unit', lower(btrim(coalesce(m.legacy_unit, ''))),
@@ -466,6 +467,7 @@ as $sig$
             'target_group_label', lower(btrim(coalesce(m.target_group_label, '')))
           )
           order by
+            lower(btrim(m.legacy_section)),
             lower(btrim(m.legacy_name)),
             m.legacy_quantity,
             lower(btrim(coalesce(m.legacy_unit, ''))),

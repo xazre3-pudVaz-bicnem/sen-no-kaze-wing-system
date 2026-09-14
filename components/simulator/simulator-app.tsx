@@ -16,6 +16,7 @@ import {
 } from '@/lib/domain/estimate-template';
 import {
   computeStandardEstimatePricing,
+  exteriorFacesForEstimateBaseline,
   type StandardEstimatePricingResult,
 } from '@/lib/domain/standard-estimate-pricing';
 import {
@@ -191,6 +192,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const exteriorWallOptions = bundle.options
     .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
+  const initialEstimateTemplate = estimateTemplateByCode.get(defaultSpecCode) ?? null;
+  const initialBaselineFaces = initialEstimateTemplate
+    ? exteriorFacesForEstimateBaseline(bundle, initialEstimateTemplate, initialVariants)
+    : [];
 
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
@@ -198,7 +203,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const [variantIds, setVariantIds] = useState<string[]>(initialVariants);
   const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() =>
     normalizeExteriorFaces(
-      initial?.exterior_faces,
+      initial?.exterior_faces ?? initialBaselineFaces,
       exteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
@@ -394,9 +399,15 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   );
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 
-  const resetExteriorFaces = (optionIds: string[], nextVariantIds: string[]) => {
+  const resetExteriorFaces = (
+    optionIds: string[],
+    nextVariantIds: string[],
+    template: EstimateTemplateBundle | null = null
+  ) => {
     setExteriorFaces(
-      makeDefaultExteriorFaces(exteriorWallOptions, bundle.variantGroups, bundle.variantChoices, optionIds, nextVariantIds)
+      template
+        ? exteriorFacesForEstimateBaseline(bundle, template, nextVariantIds)
+        : makeDefaultExteriorFaces(exteriorWallOptions, bundle.variantGroups, bundle.variantChoices, optionIds, nextVariantIds)
     );
   };
 
@@ -413,7 +424,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     if (template) setFinishLevel(nextLevel);
     setSelected(nextSel);
     setVariantIds(nextVariants);
-    resetExteriorFaces(nextSel, nextVariants);
+    resetExteriorFaces(nextSel, nextVariants, template ?? null);
     setDirty(true);
     const label =
       template?.template.name ??

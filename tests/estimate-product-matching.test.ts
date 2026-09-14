@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProductOption } from '@/lib/domain/types';
 import {
   defaultEstimateLinkPolicy,
-  estimateLineFingerprint,
+  estimateLineFingerprintV2,
   findExactEstimateProductMatch,
   inferEstimateCategoryCode,
   rankEstimateProductCandidates,
@@ -52,7 +52,7 @@ describe('標準見積の商品マスター照合', () => {
   });
 
   it('カテゴリの手動修正をしても同じExcel行のfingerprintは維持する', () => {
-    expect(estimateLineFingerprint(baseLine, 'ub')).toBe(estimateLineFingerprint(baseLine, 'washbasin'));
+    expect(estimateLineFingerprintV2(baseLine)).toBe(estimateLineFingerprintV2(baseLine));
   });
 
   it('メーカー＋型番が一意に完全一致した場合だけ自動確定する', () => {
@@ -82,6 +82,7 @@ describe('標準見積の商品マスター照合', () => {
       options,
       categoryId: 'ub-cat',
       baseModelId: 'wing',
+      specCode: 'residence',
     });
     expect(exact?.option.id).toBe('1');
     expect(exact?.reason).toBe('メーカー＋型番完全一致');
@@ -92,6 +93,7 @@ describe('標準見積の商品マスター照合', () => {
         options,
         categoryId: 'ub-cat',
         baseModelId: 'wing',
+        specCode: 'residence',
       })
     ).toBeNull();
   });
@@ -119,6 +121,7 @@ describe('標準見積の商品マスター照合', () => {
       options,
       categoryId: 'ub-cat',
       baseModelId: 'wing',
+      specCode: 'residence',
     });
     expect(candidates[0]?.option.id).toBe('1');
     expect(candidates[0]?.reasons).toContain('メーカー一致');

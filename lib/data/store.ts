@@ -32,7 +32,9 @@ import type {
   EstimateTemplateSection,
   EstimateImport,
   EstimateImportBundle,
+  EstimateImportSection,
   EstimateLinkPolicy,
+  EstimateTemplateBaselineItem,
 } from '@/lib/domain/types';
 
 export interface SessionUser {
@@ -155,6 +157,8 @@ export interface EstimateTemplateImportInput {
   lines: Omit<EstimateTemplateLine, 'id' | 'template_id'>[];
   /** この標準見積で標準選択されている商品ID。差額計算の基準。 */
   baseline_option_ids: string[];
+  /** baselineの正規化済み構成。未指定は従来互換IDから生成する。 */
+  baseline_items?: Omit<EstimateTemplateBaselineItem, 'id' | 'template_id'>[];
 }
 
 
@@ -174,8 +178,10 @@ export interface EstimateImportDraftLineInput {
   amount: number;
   remark: string | null;
   link_policy: EstimateLinkPolicy;
-  line_fingerprint: string;
+  line_fingerprint_v2: string;
+  rule_match_key_v2: string;
   fingerprint_ordinal: number;
+  source_row_json: Record<string, string>;
   sort_order: number;
   /** 厳格一致した場合だけ指定する。未指定は照合画面で人が確認する。 */
   auto_option_id: string | null;
@@ -196,6 +202,7 @@ export interface EstimateImportDraftInput {
   tax: number;
   total: number;
   template_payload: EstimateTemplateImportInput;
+  sections: Omit<EstimateImportSection, 'id' | 'import_id'>[];
   lines: EstimateImportDraftLineInput[];
 }
 

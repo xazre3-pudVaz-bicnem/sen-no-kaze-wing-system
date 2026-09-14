@@ -8,7 +8,6 @@ import {
 } from '@/lib/actions/admin';
 import type {
   EstimateImportBundle,
-  EstimateImportLine,
   EstimateLinkPolicy,
   OptionCategory,
   ProductOption,
@@ -50,11 +49,18 @@ export function EstimateImportReview({
   categories,
   options,
   modelName,
+  activationSummary,
 }: {
   bundle: EstimateImportBundle;
   categories: OptionCategory[];
   options: ProductOption[];
   modelName: string;
+  activationSummary: {
+    currentTotal: number | null;
+    currentVersion: number | null;
+    latestVersion: number;
+    changedLinks: { lineName: string; optionName: string }[];
+  };
 }) {
   const [onlyReview, setOnlyReview] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,26 +68,42 @@ export function EstimateImportReview({
   const [policy, setPolicy] = useState<EstimateLinkPolicy>('none');
   const [optionId, setOptionId] = useState('');
   const [query, setQuery] = useState('');
+  const [confirmActivation, setConfirmActivation] = useState(false);
 
   const optionById = useMemo(() => new Map(options.map((option) => [option.id, option])), [options]);
   const categoryById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const editing = bundle.lines.find((line) => line.id === editingId) ?? null;
 
+  const isEligibleLink = (line: EstimateImportBundle['lines'][number]) => {
+    const option = line.product_link ? optionById.get(line.product_link.option_id) : null;
+    const category = option ? categoryById.get(option.category_id) : null;
+    return Boolean(
+      option &&
+      category &&
+      option.status === 'published' &&
+      category.status === 'published' &&
+      option.category_id === line.category_id &&
+      (!option.base_model_id || option.base_model_id === bundle.import.base_model_id) &&
+      (option.spec_codes.length === 0 || option.spec_codes.includes(bundle.import.spec_code))
+    );
+  };
   const unresolvedRequired = bundle.lines.filter(
-    (line) => line.link_policy === 'required' && !line.product_link
+    (line) => line.link_policy === 'required' && !isEligibleLink(line)
   ).length;
-  const automatic = bundle.lines.filter((line) => line.product_link?.match_type === 'automatic').length;
+  const automatic = bundle.lines.filter(
+    (line) => isEligibleLink(line) && line.product_link?.match_type === 'automatic'
+  ).length;
   const confirmed = bundle.lines.filter(
-    (line) => line.product_link && line.product_link.match_type !== 'automatic'
+    (line) => isEligibleLink(line) && line.product_link?.match_type !== 'automatic'
   ).length;
   const noLinkNeeded = bundle.lines.filter((line) => line.link_policy === 'none').length;
   const optionalUnresolved = bundle.lines.filter(
-    (line) => line.link_policy === 'optional' && !line.product_link
+    (line) => line.link_policy === 'optional' && !isEligibleLink(line)
   ).length;
 
   const visibleLines = bundle.lines.filter((line) => {
     if (!onlyReview) return true;
-    return line.link_policy !== 'none' && !line.product_link;
+    return line.link_policy !== 'none' && !isEligibleLink(line);
   });
 
   const openEditor = (line: EstimateImportBundle['lines'][number]) => {
@@ -96,6 +118,7 @@ export function EstimateImportReview({
     (option) =>
       (!categoryId || option.category_id === categoryId) &&
       (!option.base_model_id || option.base_model_id === bundle.import.base_model_id) &&
+      (option.spec_codes.length === 0 || option.spec_codes.includes(bundle.import.spec_code)) &&
       option.status === 'published'
   );
   const sourceText = editing
@@ -113,6 +136,7 @@ export function EstimateImportReview({
         options,
         categoryId: categoryId || null,
         baseModelId: bundle.import.base_model_id,
+        specCode: bundle.import.spec_code,
         limit: 5,
       })
     : [];
@@ -200,14 +224,54 @@ export function EstimateImportReview({
             このバージョンは過去版です。現在の標準見積には使用されていません。
           </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
-            <p className="text-sm font-semibold text-forest">すべての必須商品を確認しました。</p>
-            <form action={activateEstimateImportAction}>
-              <input type="hidden" name="import_id" value={bundle.import.id} />
-              <button type="submit" className="btn-primary btn-sm">
-                この見積を有効にする
-              </button>
-            </form>
+          <div className="space-y-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-forest">すべての必須商品を確認しました。</p>
+              {!confirmActivation && (
+                <button type="button" className="btn-primary btn-sm" onClick={() => setConfirmActivation(true)}>
+                  有効化内容を確認
+                </button>
+              )}
+            </div>
+            {confirmActivation && (
+              <div className="space-y-3 border-t border-green-200 pt-3 text-sm">
+                {bundle.import.version < activationSummary.latestVersion && (
+                  <p className="font-semibold text-danger">最新版ではありません。ロールバックとしてこの旧版を有効化します。</p>
+                )}
+                <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <div><dt className="text-xs text-muted">対象モデル</dt><dd>{modelName}</dd></div>
+                  <div><dt className="text-xs text-muted">対象仕様</dt><dd>{bundle.import.spec_code}</dd></div>
+                  <div><dt className="text-xs text-muted">バージョン</dt><dd>v{bundle.import.version}</dd></div>
+                  <div><dt className="text-xs text-muted">現在有効な金額</dt><dd>{activationSummary.currentTotal === null ? '未登録' : `${formatYen(activationSummary.currentTotal)}（v${activationSummary.currentVersion}）`}</dd></div>
+                  <div><dt className="text-xs text-muted">新しい金額</dt><dd>{formatYen(bundle.import.total)}</dd></div>
+                  <div><dt className="text-xs text-muted">差額</dt><dd>{formatYen(bundle.import.total - (activationSummary.currentTotal ?? 0))}</dd></div>
+                  <div><dt className="text-xs text-muted">商品リンク</dt><dd>{bundle.lines.filter((line) => isEligibleLink(line)).length}件</dd></div>
+                  <div><dt className="text-xs text-muted">変更リンク</dt><dd>{activationSummary.changedLinks.length}件</dd></div>
+                  <div><dt className="text-xs text-muted">未解決</dt><dd>{unresolvedRequired}件</dd></div>
+                </dl>
+                {activationSummary.changedLinks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted">変更された商品リンク</p>
+                    <ul className="mt-1 space-y-1">
+                      {activationSummary.changedLinks.map((link, index) => (
+                        <li key={`${link.lineName}:${index}`}>{link.lineName} → {link.optionName}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => setConfirmActivation(false)}>
+                    戻る
+                  </button>
+                  <form action={activateEstimateImportAction}>
+                    <input type="hidden" name="import_id" value={bundle.import.id} />
+                    <button type="submit" className="btn-primary btn-sm">
+                      この内容で有効にする
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {optionalUnresolved > 0 && (

@@ -32,7 +32,6 @@ const CATEGORY_RULES: { code: string; keywords: string[] }[] = [
   { code: 'smartlock', keywords: ['スマートキー', 'スマートロック'] },
   { code: 'carpentry', keywords: ['室内造作', '造作工事'] },
   { code: 'insulation', keywords: ['断熱仕様', '断熱材', 'スタイロフォーム', 'グラスウール'] },
-  { code: 'fireproof', keywords: ['防火仕様', '防火構造'] },
   { code: 'sitework', keywords: ['運送費', '運搬費', '現場設置', '確認申請', '設計監理', '給排水', '電気設備工事', '基礎工事', '廃材処分', '現場諸費用'] },
 ];
 
@@ -57,7 +56,6 @@ const OPTIONAL_CATEGORY_CODES = new Set([
   'smartlock',
   'carpentry',
   'insulation',
-  'fireproof',
 ]);
 
 export function normalizeEstimateMatchText(value: string | null | undefined): string {
@@ -88,17 +86,41 @@ export function defaultEstimateLinkPolicy(categoryCode: string | null, sectionCo
   return 'none';
 }
 
-export function estimateLineFingerprint(
-  line: Pick<EstimateLineMatchSource, 'section_code' | 'group_label' | 'name' | 'unit'>,
-  categoryCode: string | null
+export function estimateLineFingerprintV2(
+  line: Pick<EstimateLineMatchSource, 'section_code' | 'group_label' | 'name' | 'unit'> & {
+    manufacturer_text?: string | null;
+    model_text?: string | null;
+    size_text?: string | null;
+  }
 ): string {
-  void categoryCode;
   return [
-    'v1',
+    'v2',
     line.section_code,
     normalizeEstimateMatchText(line.group_label),
     normalizeEstimateMatchText(line.name),
+    normalizeEstimateMatchText(line.manufacturer_text),
+    normalizeEstimateMatchText(line.model_text),
+    normalizeEstimateMatchText(line.size_text),
     normalizeEstimateMatchText(line.unit),
+  ].join('|');
+}
+
+export function estimateRuleMatchKeyV2(args: {
+  categoryId: string | null;
+  normalizedName: string;
+  manufacturerText: string | null;
+  modelText: string | null;
+  sizeText: string | null;
+  unit: string | null;
+}): string {
+  return [
+    'v2',
+    args.categoryId ?? '',
+    normalizeEstimateMatchText(args.manufacturerText),
+    normalizeEstimateMatchText(args.modelText),
+    normalizeEstimateMatchText(args.sizeText),
+    normalizeEstimateMatchText(args.normalizedName),
+    normalizeEstimateMatchText(args.unit),
   ].join('|');
 }
 
@@ -128,14 +150,23 @@ export function extractEstimateProductHints(sourceText: string, options: Product
 function compatibleOptions(
   options: ProductOption[],
   categoryId: string | null,
-  baseModelId: string
+  baseModelId: string,
+  specCode: string
 ): ProductOption[] {
   return options.filter(
     (option) =>
       option.status === 'published' &&
       (!categoryId || option.category_id === categoryId) &&
-      (!option.base_model_id || option.base_model_id === baseModelId)
+      (!option.base_model_id || option.base_model_id === baseModelId) &&
+      (option.spec_codes.length === 0 || option.spec_codes.includes(specCode))
   );
+}
+
+function modelTokens(value: string): string[] {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .toUpperCase()
+    .match(/[A-Z0-9]+(?:[-_/][A-Z0-9]+)*/g) ?? [];
 }
 
 export function findExactEstimateProductMatch(args: {
@@ -143,13 +174,14 @@ export function findExactEstimateProductMatch(args: {
   options: ProductOption[];
   categoryId: string | null;
   baseModelId: string;
+  specCode: string;
 }): { option: ProductOption; reason: string } | null {
   const source = normalizeEstimateMatchText(args.sourceText);
-  const matches = compatibleOptions(args.options, args.categoryId, args.baseModelId).filter((option) => {
-    if (!option.model_no) return false;
-    const model = normalizeEstimateMatchText(option.model_no);
-    if (model.length < 4 || !source.includes(model)) return false;
-    if (!option.manufacturer) return true;
+  const sourceModels = new Set(modelTokens(args.sourceText));
+  const matches = compatibleOptions(args.options, args.categoryId, args.baseModelId, args.specCode).filter((option) => {
+    if (!option.manufacturer || !option.model_no) return false;
+    const models = modelTokens(option.model_no);
+    if (models.length !== 1 || !sourceModels.has(models[0])) return false;
     return source.includes(normalizeEstimateMatchText(option.manufacturer));
   });
   if (matches.length !== 1) return null;
@@ -171,11 +203,12 @@ export function rankEstimateProductCandidates(args: {
   options: ProductOption[];
   categoryId: string | null;
   baseModelId: string;
+  specCode: string;
   limit?: number;
 }): EstimateProductCandidate[] {
   const sourceNormalized = normalizeEstimateMatchText(args.sourceText);
   const sourceTokens = tokenSet(args.sourceText);
-  const ranked = compatibleOptions(args.options, args.categoryId, args.baseModelId)
+  const ranked = compatibleOptions(args.options, args.categoryId, args.baseModelId, args.specCode)
     .map((option) => {
       let score = 0;
       const reasons: string[] = [];

@@ -13,6 +13,7 @@ import type {
   EstimateImportBundle,
   EstimateImportLine,
   EstimateProductLink,
+  EstimateTemplateBaselineItem,
   ProductMatchRule,
   CatalogBundle,
   Configuration,
@@ -46,6 +47,7 @@ import {
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
 import { ROUNDING_UNIT } from '@/lib/domain/pricing';
+import { estimateRuleMatchKeyV2 } from '@/lib/domain/estimate-product-matching';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
 import {
@@ -80,6 +82,25 @@ import {
 const nowIso = () => new Date().toISOString();
 
 export class LocalStore implements DataStore {
+  private optionEligibleForEstimate(
+    db: LocalDb,
+    optionId: string,
+    modelId: string,
+    specCode: string,
+    categoryId: string | null
+  ): boolean {
+    const option = db.options.find((row) => row.id === optionId);
+    if (!option || option.status !== 'published') return false;
+    const category = db.categories.find((row) => row.id === option.category_id);
+    return Boolean(
+      category &&
+      category.status === 'published' &&
+      (!categoryId || option.category_id === categoryId) &&
+      (!option.base_model_id || option.base_model_id === modelId) &&
+      (option.spec_codes.length === 0 || option.spec_codes.includes(specCode))
+    );
+  }
+
   private refreshEstimateImportStatus(db: LocalDb, importId: string) {
     const estimateImport = db.estimateImports.find((row) => row.id === importId);
     if (!estimateImport || !['review', 'ready'].includes(estimateImport.status)) return;
@@ -88,8 +109,16 @@ export class LocalStore implements DataStore {
     );
     const unresolved = required.some(
       (line) =>
-        !db.estimateProductLinks.some(
-          (link) => link.import_line_id === line.id && link.status === 'confirmed'
+        !db.estimateProductLinks.some((link) =>
+          link.import_line_id === line.id &&
+          link.status === 'confirmed' &&
+          this.optionEligibleForEstimate(
+            db,
+            link.option_id,
+            estimateImport.base_model_id,
+            estimateImport.spec_code,
+            line.category_id
+          )
         )
     );
     estimateImport.status = unresolved ? 'review' : 'ready';
@@ -234,19 +263,22 @@ export class LocalStore implements DataStore {
           .filter((row) => row.base_model_id === modelId && row.spec_code === specCode)
           .sort((a, b) => a.sort_order - b.sort_order),
         baseline_option_ids: template.baseline_option_ids ?? [],
+        baseline_items: db.estimateTemplateBaselineItems
+          .filter((row) => row.template_id === template.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
       };
     });
   }
 
-  async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
-    this.mutate((db) => {
-      for (const input of items) {
+  private replaceEstimateTemplatesInDb(db: LocalDb, items: EstimateTemplateImportInput[]): void {
+    for (const input of items) {
         const old = db.estimateTemplates.find(
           (row) => row.base_model_id === input.base_model_id && row.spec_code === input.spec_code
         );
         if (old) {
           db.estimateTemplateSections = db.estimateTemplateSections.filter((row) => row.template_id !== old.id);
           db.estimateTemplateLines = db.estimateTemplateLines.filter((row) => row.template_id !== old.id);
+          db.estimateTemplateBaselineItems = db.estimateTemplateBaselineItems.filter((row) => row.template_id !== old.id);
           db.estimateTemplates = db.estimateTemplates.filter((row) => row.id !== old.id);
         }
         db.baseBreakdownItems = db.baseBreakdownItems.filter(
@@ -288,6 +320,38 @@ export class LocalStore implements DataStore {
           base_model_id: input.base_model_id,
           spec_code: input.spec_code,
         }));
+        const compatibilityBaselineItems = input.baseline_option_ids.flatMap((optionId, index) => {
+          const option = db.options.find((row) => row.id === optionId);
+          if (!option) return [];
+          const category = db.categories.find((row) => row.id === option.category_id);
+          const sectionCode: EstimateTemplateBaselineItem['section_code'] = option.is_installation || category?.code === 'free-product'
+            ? 'sitework'
+            : category && ['floor', 'flooring', 'wall-ceiling', 'interior-door', 'exterior-wall', 'roof', 'sash', 'entrance-door', 'service-door', 'carpentry'].includes(category.code)
+              ? 'interior_exterior'
+              : 'option';
+          if (category?.code === 'exterior-wall') {
+            return ['front', 'right', 'rear', 'left'].map((slot, slotIndex) => ({
+              option_id: optionId,
+              category_id: option.category_id,
+              quantity: 1,
+              slot_key: slot,
+              section_code: sectionCode,
+              source_import_line_id: null,
+              sort_order: index * 4 + slotIndex + 1,
+            }));
+          }
+          return [{
+            option_id: optionId,
+            category_id: option.category_id,
+            quantity: 1,
+            slot_key: `${category?.code ?? 'legacy'}:${index + 1}`,
+            section_code: sectionCode,
+            source_import_line_id: null,
+            sort_order: index + 1,
+          }];
+        });
+        const baselineItems: EstimateTemplateBaselineItem[] = (input.baseline_items ?? compatibilityBaselineItems)
+          .map((row) => ({ ...row, id: randomUUID(), template_id: template.id }));
 
         const sectionByCode = new Map(sections.map((row) => [row.code, row]));
         if (sections.length !== 4 || sectionByCode.size !== 4) {
@@ -318,14 +382,18 @@ export class LocalStore implements DataStore {
         db.estimateTemplateSections.push(...sections);
         db.estimateTemplateLines.push(...lines);
         db.baseBreakdownItems.push(...baseRows);
+        db.estimateTemplateBaselineItems.push(...baselineItems);
         this.pushAudit(db, null, {
           action: 'update',
           entity: 'estimate_template',
           entity_id: input.base_model_id,
           summary: `標準見積をExcelから更新（${input.name}・${input.spec_code}）`,
         });
-      }
-    });
+    }
+  }
+
+  async replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void> {
+    this.mutate((db) => this.replaceEstimateTemplatesInDb(db, items));
   }
 
 
@@ -344,6 +412,9 @@ export class LocalStore implements DataStore {
       const links = new Map(db.estimateProductLinks.map((link) => [link.import_line_id, link]));
       return {
         import: estimateImport,
+        sections: db.estimateImportSections
+          .filter((section) => section.import_id === id)
+          .sort((a, b) => a.sort_order - b.sort_order),
         lines: db.estimateImportLines
           .filter((line) => line.import_id === id)
           .sort((a, b) => a.sort_order - b.sort_order)
@@ -398,6 +469,20 @@ export class LocalStore implements DataStore {
         };
         db.estimateImports.push(estimateImport);
 
+        for (const row of input.sections) {
+          db.estimateImportSections.push({
+            ...row,
+            id: randomUUID(),
+            import_id: estimateImport.id,
+          });
+        }
+
+        const duplicateRuleKeys = new Set(
+          input.lines
+            .map((row) => row.rule_match_key_v2)
+            .filter((key, index, all) => all.indexOf(key) !== index)
+        );
+
         for (const row of input.lines) {
           const line: EstimateImportLine = {
             id: randomUUID(),
@@ -417,8 +502,10 @@ export class LocalStore implements DataStore {
             amount: row.amount,
             remark: row.remark,
             link_policy: row.link_policy,
-            line_fingerprint: row.line_fingerprint,
+            line_fingerprint_v2: row.line_fingerprint_v2,
+            rule_match_key_v2: row.rule_match_key_v2,
             fingerprint_ordinal: row.fingerprint_ordinal,
+            source_row_json: row.source_row_json,
             sort_order: row.sort_order,
             created_at: now,
           };
@@ -427,11 +514,11 @@ export class LocalStore implements DataStore {
           let optionId = row.auto_option_id;
           let matchType: EstimateProductLink['match_type'] = 'automatic';
           let matchReason = row.auto_match_reason;
-          if (!optionId) {
+          if (!optionId && !duplicateRuleKeys.has(row.rule_match_key_v2)) {
             const rule = db.productMatchRules
               .filter(
                 (candidate) =>
-                  candidate.match_key === row.line_fingerprint &&
+                  candidate.rule_match_key_v2 === row.rule_match_key_v2 &&
                   (!candidate.category_id || candidate.category_id === row.category_id) &&
                   (candidate.scope === 'global' ||
                     (candidate.scope === 'model' && candidate.base_model_id === input.base_model_id) ||
@@ -450,12 +537,15 @@ export class LocalStore implements DataStore {
             }
           }
           if (optionId) {
-            const option = db.options.find(
-              (candidate) =>
-                candidate.id === optionId &&
-                (!row.category_id || candidate.category_id === row.category_id) &&
-                (!candidate.base_model_id || candidate.base_model_id === input.base_model_id)
-            );
+            const option = this.optionEligibleForEstimate(
+              db,
+              optionId,
+              input.base_model_id,
+              input.spec_code,
+              row.category_id
+            )
+              ? db.options.find((candidate) => candidate.id === optionId)
+              : null;
             if (option) {
               db.estimateProductLinks.push({
                 id: randomUUID(),
@@ -492,15 +582,26 @@ export class LocalStore implements DataStore {
 
       line.category_id = input.category_id;
       line.link_policy = input.link_policy;
+      line.rule_match_key_v2 = estimateRuleMatchKeyV2({
+        categoryId: input.category_id,
+        normalizedName: line.normalized_name,
+        manufacturerText: line.manufacturer_text,
+        modelText: line.model_text,
+        sizeText: line.size_text,
+        unit: line.unit,
+      });
       db.estimateProductLinks = db.estimateProductLinks.filter((link) => link.import_line_id !== line.id);
 
       if (input.link_policy !== 'none' && input.option_id) {
-        const option = db.options.find(
-          (candidate) =>
-            candidate.id === input.option_id &&
-            (!input.category_id || candidate.category_id === input.category_id) &&
-            (!candidate.base_model_id || candidate.base_model_id === estimateImport.base_model_id)
-        );
+        const option = this.optionEligibleForEstimate(
+          db,
+          input.option_id,
+          estimateImport.base_model_id,
+          estimateImport.spec_code,
+          input.category_id
+        )
+          ? db.options.find((candidate) => candidate.id === input.option_id)
+          : null;
         if (!option) throw new StoreError('VALIDATION', '選択した商品はこの明細のカテゴリ・本体に対応していません');
         const now = nowIso();
         db.estimateProductLinks.push({
@@ -521,7 +622,7 @@ export class LocalStore implements DataStore {
             (rule) =>
               !(
                 rule.scope === input.rule_scope &&
-                rule.match_key === line.line_fingerprint &&
+                rule.rule_match_key_v2 === line.rule_match_key_v2 &&
                 rule.category_id === input.category_id &&
                 (input.rule_scope === 'global' ||
                   (input.rule_scope === 'model' &&
@@ -538,7 +639,7 @@ export class LocalStore implements DataStore {
             base_model_id: input.rule_scope === 'global' ? null : estimateImport.base_model_id,
             spec_code: input.rule_scope === 'spec' ? estimateImport.spec_code : null,
             category_id: input.category_id,
-            match_key: line.line_fingerprint,
+            rule_match_key_v2: line.rule_match_key_v2,
             option_id: option.id,
             created_by: null,
             created_at: now,
@@ -553,36 +654,160 @@ export class LocalStore implements DataStore {
   }
 
   async activateEstimateImport(id: string): Promise<void> {
-    const bundle = await this.getEstimateImportBundle(id);
-    if (!bundle) throw new StoreError('NOT_FOUND', '取込データが見つかりません');
-    if (!['review', 'ready'].includes(bundle.import.status)) {
-      throw new StoreError('LOCKED', 'この取込は有効化できません');
-    }
-    const unresolved = bundle.lines.some((line) => line.link_policy === 'required' && !line.product_link);
-    if (unresolved) throw new StoreError('VALIDATION', '必須商品に未照合があります。商品照合を完了してください');
-
-    const payload = bundle.import.template_payload as unknown as EstimateTemplateImportInput;
-    const linkedOptions = bundle.lines
-      .filter((line) => line.link_policy !== 'none' && line.product_link)
-      .map((line) => line.product_link!.option_id);
-    const linkedCategoryIds = new Set(
-      linkedOptions
-        .map((optionId) => this.read((db) => db.options.find((option) => option.id === optionId)?.category_id ?? null))
-        .filter((categoryId): categoryId is string => Boolean(categoryId))
-    );
-    const fallback = (payload.baseline_option_ids ?? []).filter((optionId) => {
-      const categoryId = this.read((db) => db.options.find((option) => option.id === optionId)?.category_id ?? null);
-      return !categoryId || !linkedCategoryIds.has(categoryId);
-    });
-    const baseline_option_ids = [...new Set([...fallback, ...linkedOptions])];
-
-    await this.replaceEstimateTemplates([{ ...payload, baseline_option_ids }]);
     this.mutate((db) => {
+      const estimateImport = db.estimateImports.find((row) => row.id === id);
+      if (!estimateImport) throw new StoreError('NOT_FOUND', '取込データが見つかりません');
+      if (!['review', 'ready'].includes(estimateImport.status)) {
+        throw new StoreError('LOCKED', 'この取込は有効化できません');
+      }
+      const sections = db.estimateImportSections
+        .filter((row) => row.import_id === id)
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const lines = db.estimateImportLines
+        .filter((row) => row.import_id === id)
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const linkByLine = new Map(
+        db.estimateProductLinks
+          .filter((row) => row.status === 'confirmed')
+          .map((row) => [row.import_line_id, row])
+      );
+
+      const linkedLines = lines.flatMap((line) => {
+        const link = linkByLine.get(line.id);
+        if (line.link_policy === 'required' && !link) {
+          throw new StoreError('VALIDATION', '必須商品に未照合があります。商品照合を完了してください');
+        }
+        if (!link || line.link_policy === 'none') return [];
+        if (!line.category_id || !this.optionEligibleForEstimate(
+          db,
+          link.option_id,
+          estimateImport.base_model_id,
+          estimateImport.spec_code,
+          line.category_id
+        )) {
+          throw new StoreError('VALIDATION', `${line.original_name}: 照合商品が現在のモデル・仕様・カテゴリに適合しません`);
+        }
+        const option = db.options.find((row) => row.id === link.option_id)!;
+        const category = db.categories.find((row) => row.id === line.category_id)!;
+        return [{ line, option, category }];
+      });
+
+      const baselineItems: Omit<EstimateTemplateBaselineItem, 'id' | 'template_id'>[] = [];
+      const byCategory = new Map<string, typeof linkedLines>();
+      for (const item of linkedLines) {
+        const current = byCategory.get(item.category.id) ?? [];
+        current.push(item);
+        byCategory.set(item.category.id, current);
+      }
+      let baselineSort = 0;
+      for (const categoryLines of byCategory.values()) {
+        const category = categoryLines[0].category;
+        const optionIds = [...new Set(categoryLines.map((row) => row.option.id))];
+        if (category.selection_mode === 'single' && optionIds.length > 1) {
+          throw new StoreError('VALIDATION', `${category.name}: singleカテゴリに複数の商品が照合されています`);
+        }
+        if (category.code === 'exterior-wall') {
+          if (optionIds.length !== 1) {
+            throw new StoreError('VALIDATION', '外壁baselineは1商品を4面へ割り当ててください');
+          }
+          const source = categoryLines[0];
+          for (const slot of ['front', 'right', 'rear', 'left']) {
+            baselineItems.push({
+              option_id: source.option.id,
+              category_id: category.id,
+              quantity: 1,
+              slot_key: slot,
+              section_code: source.line.section_code,
+              source_import_line_id: source.line.id,
+              sort_order: ++baselineSort,
+            });
+          }
+          continue;
+        }
+
+        if (category.selection_mode === 'single') {
+          const source = categoryLines[0];
+          const quantity = categoryLines.reduce((sum, row) => sum + (row.line.quantity ?? 1), 0);
+          if (!(quantity > 0)) throw new StoreError('VALIDATION', `${category.name}: baseline数量が不正です`);
+          baselineItems.push({
+            option_id: source.option.id,
+            category_id: category.id,
+            quantity,
+            slot_key: category.code,
+            section_code: source.line.section_code,
+            source_import_line_id: source.line.id,
+            sort_order: ++baselineSort,
+          });
+          continue;
+        }
+
+        for (const [index, source] of categoryLines.entries()) {
+          const quantity = source.line.quantity ?? 1;
+          if (!(quantity > 0)) throw new StoreError('VALIDATION', `${category.name}: baseline数量が不正です`);
+          baselineItems.push({
+            option_id: source.option.id,
+            category_id: category.id,
+            quantity,
+            slot_key: `${category.code}:${index + 1}`,
+            section_code: source.line.section_code,
+            source_import_line_id: source.line.id,
+            sort_order: ++baselineSort,
+          });
+        }
+      }
+
+      const templateInput: EstimateTemplateImportInput = {
+        base_model_id: estimateImport.base_model_id,
+        spec_code: estimateImport.spec_code,
+        name: estimateImport.name,
+        source_file_name: estimateImport.source_file_name,
+        source_sheet_name: estimateImport.source_sheet_name,
+        source_sha256: estimateImport.source_sha256,
+        tax_rate: estimateImport.tax_rate,
+        subtotal_raw: estimateImport.subtotal_raw,
+        adjustment: estimateImport.adjustment,
+        subtotal: estimateImport.subtotal,
+        tax: estimateImport.tax,
+        total: estimateImport.total,
+        sections: sections.map(({ id: _id, import_id: _importId, section_code, ...row }) => ({
+          ...row,
+          code: section_code,
+        })),
+        base_breakdown_items: lines
+          .filter((line) => line.section_code === 'base')
+          .map((line) => ({
+            section: line.group_label ?? '本体工事',
+            name: line.original_name,
+            quantity: line.quantity ?? 1,
+            unit: line.unit,
+            unit_price: line.unit_price ?? line.amount,
+            amount: line.amount,
+            remark: line.remark,
+            sort_order: line.sort_order,
+          })),
+        lines: lines
+          .filter((line): line is typeof line & { section_code: Exclude<typeof line.section_code, 'base'> } => line.section_code !== 'base')
+          .map((line) => ({
+            section_code: line.section_code,
+            group_label: line.group_label,
+            name: line.original_name,
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_price: line.unit_price,
+            amount: line.amount,
+            remark: line.remark,
+            sort_order: line.sort_order,
+          })),
+        baseline_option_ids: [...new Set(baselineItems.map((row) => row.option_id))],
+        baseline_items: baselineItems,
+      };
+
+      this.replaceEstimateTemplatesInDb(db, [templateInput]);
       for (const row of db.estimateImports) {
         if (
           row.id !== id &&
-          row.base_model_id === bundle.import.base_model_id &&
-          row.spec_code === bundle.import.spec_code &&
+          row.base_model_id === estimateImport.base_model_id &&
+          row.spec_code === estimateImport.spec_code &&
           row.status === 'activated'
         ) {
           row.status = 'superseded';
@@ -814,11 +1039,14 @@ export class LocalStore implements DataStore {
           )
           .sort((a, b) => a.sort_order - b.sort_order),
         baseline_option_ids: estimateTemplate.baseline_option_ids ?? [],
+        baseline_items: db.estimateTemplateBaselineItems
+          .filter((row) => row.template_id === estimateTemplate.id)
+          .sort((a, b) => a.sort_order - b.sort_order),
       };
       standardPricing = computeStandardEstimatePricing(
         bundle,
         templateBundle,
-        items.map((item) => item.option_id),
+        items.map((item) => ({ option_id: item.option_id, quantity: item.quantity })),
         items.flatMap((item) => item.variant_choice_ids ?? []),
         exteriorFaces,
         cfg.finish_level

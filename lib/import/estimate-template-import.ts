@@ -64,6 +64,7 @@ export interface ParsedEstimateLine {
   section_code: Exclude<EstimateSectionCode, 'base'>;
   /** Excel原本の1始まり行番号。再取込時の監査・差分表示に使う。 */
   source_row: number;
+  source_row_json: Record<string, string>;
   group_label: string | null;
   name: string;
   quantity: number | null;
@@ -77,6 +78,7 @@ export interface ParsedEstimateLine {
 export interface ParsedBaseBreakdownItem {
   /** Excel原本の1始まり行番号。再取込時の監査・差分表示に使う。 */
   source_row: number;
+  source_row_json: Record<string, string>;
   section: string;
   name: string;
   quantity: number;
@@ -136,6 +138,28 @@ const C = {
   amount: 21, // V
   remark: 22, // W
 } as const;
+
+const SOURCE_COLUMNS = {
+  B: C.leftSection,
+  C: C.leftGroup,
+  E: C.leftName,
+  F: C.leftSubName,
+  L: C.leftRemark,
+  M: C.section,
+  N: C.group,
+  P: C.name,
+  S: C.quantity,
+  T: C.unit,
+  U: C.unitPrice,
+  V: C.amount,
+  W: C.remark,
+} as const;
+
+function sourceRowJson(row: string[]): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(SOURCE_COLUMNS).map(([column, index]) => [column, String(row[index] ?? '')])
+  );
+}
 
 function cell(row: string[], index: number): string {
   return String(row[index] ?? '').trim();
@@ -269,8 +293,9 @@ function parseSection(
     if (!name) continue;
     const quantity = numberValue(row, C.quantity);
     const unitPriceRaw = numberValue(row, C.unitPrice);
-    const item = {
-      group_label: currentGroup || null,
+      const item = {
+        source_row_json: sourceRowJson(row),
+        group_label: currentGroup || null,
       name,
       quantity,
       unit: text(row, C.unit) || null,
@@ -291,8 +316,9 @@ function parseSection(
           `${def.label}: 本体明細「${name}」に1円未満の単価・金額があります。Excel記載値を保持できないため登録を中止しました`
         );
       }
-      baseItems.push({
-        source_row: i + 1,
+        baseItems.push({
+          source_row: i + 1,
+          source_row_json: item.source_row_json,
         section: currentGroup || def.label,
         name,
         quantity,

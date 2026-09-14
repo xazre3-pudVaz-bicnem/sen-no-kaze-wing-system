@@ -256,6 +256,20 @@ export interface EstimateTemplateBundle {
   base_breakdown_items: BaseBreakdownItem[];
   /** 標準見積に含まれる商品マスターの標準選択。差額計算の基準に使う。 */
   baseline_option_ids: string[];
+  /** 標準状態の商品・数量・位置・差額所属区分の正本。 */
+  baseline_items: EstimateTemplateBaselineItem[];
+}
+
+export interface EstimateTemplateBaselineItem {
+  id: string;
+  template_id: string;
+  option_id: string;
+  category_id: string;
+  quantity: number;
+  slot_key: string;
+  section_code: EstimateSectionCode;
+  source_import_line_id: string | null;
+  sort_order: number;
 }
 
 
@@ -305,8 +319,12 @@ export interface EstimateImportLine {
   amount: number;
   remark: string | null;
   link_policy: EstimateLinkPolicy;
-  line_fingerprint: string;
+  /** Excel上の同一行を追跡するためのキー。商品決定には使用しない。 */
+  line_fingerprint_v2: string;
+  /** 保存済み照合ルールの再利用だけに使用するキー。 */
+  rule_match_key_v2: string;
   fingerprint_ordinal: number;
+  source_row_json: Record<string, string>;
   sort_order: number;
   created_at: string;
 }
@@ -330,7 +348,7 @@ export interface ProductMatchRule {
   base_model_id: string | null;
   spec_code: string | null;
   category_id: string | null;
-  match_key: string;
+  rule_match_key_v2: string;
   option_id: string;
   created_by: string | null;
   created_at: string;
@@ -339,7 +357,21 @@ export interface ProductMatchRule {
 
 export interface EstimateImportBundle {
   import: EstimateImport;
+  sections: EstimateImportSection[];
   lines: (EstimateImportLine & { product_link: EstimateProductLink | null })[];
+}
+
+export interface EstimateImportSection {
+  id: string;
+  import_id: string;
+  section_code: EstimateSectionCode;
+  label: string;
+  line_subtotal: number;
+  expense_label: string | null;
+  expense_rate: number | null;
+  expense_amount: number;
+  total: number;
+  sort_order: number;
 }
 
 export interface ProductOption {

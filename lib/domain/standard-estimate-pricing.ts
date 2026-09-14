@@ -1,13 +1,20 @@
-import { computePricing, DEFAULT_EXPENSE_RATE, ROUNDING_UNIT } from './pricing';
+import { computePricing, DEFAULT_EXPENSE_RATE, ROUNDING_UNIT, type SelectionInput } from './pricing';
 import { defaultVariantIdsFor } from './preset';
 import { estimateBaselineOptionCodes } from './estimate-template';
-import { makeDefaultExteriorFaces, type ExteriorFaceSelection } from './exterior-wall';
+import {
+  EXTERIOR_FACES,
+  defaultVariantIdsForExteriorOption,
+  makeDefaultExteriorFaces,
+  type ExteriorFaceSelection,
+} from './exterior-wall';
 import type {
   CatalogBundle,
   EstimateSectionCode,
+  EstimateTemplateBaselineItem,
   EstimateTemplateBundle,
   FinishLevel,
   PricingResult,
+  ProductOption,
 } from './types';
 
 export const INTERIOR_EXTERIOR_CATEGORY_CODES = new Set([
@@ -41,20 +48,132 @@ export interface StandardEstimatePricingResult {
   has_changes: boolean;
 }
 
-function sectionCodeForLine(
-  line: PricingResult['lines'][number]
-): Exclude<EstimateSectionCode, 'base'> {
-  if (line.is_installation || line.is_free_product) return 'sitework';
-  return INTERIOR_EXTERIOR_CATEGORY_CODES.has(line.category_code) ? 'interior_exterior' : 'option';
+type StandardSelectionInput = string | SelectionInput;
+type BaselineItem = Pick<
+  EstimateTemplateBaselineItem,
+  'option_id' | 'category_id' | 'quantity' | 'slot_key' | 'section_code' | 'sort_order'
+>;
+
+export function defaultEstimateSectionForOption(
+  bundle: Pick<CatalogBundle, 'categories'>,
+  option: ProductOption
+): EstimateSectionCode {
+  const category = bundle.categories.find((row) => row.id === option.category_id);
+  if (option.is_installation || category?.code === 'free-product') return 'sitework';
+  return category && INTERIOR_EXTERIOR_CATEGORY_CODES.has(category.code)
+    ? 'interior_exterior'
+    : 'option';
 }
 
-function lineSubtotalBySection(
-  lines: PricingResult['lines'],
-  code: Exclude<EstimateSectionCode, 'base'>
+function compatibilityBaselineItems(
+  bundle: CatalogBundle,
+  template: EstimateTemplateBundle
+): BaselineItem[] {
+  const savedBaselineIds = template.baseline_option_ids.filter((id) =>
+    bundle.options.some((option) => option.id === id)
+  );
+  const fallbackBaselineCodes = savedBaselineIds.length === 0
+    ? estimateBaselineOptionCodes(bundle.model, template.template.spec_code)
+    : [];
+  const optionByCode = new Map(bundle.options.map((option) => [option.code, option.id]));
+  const optionIds = savedBaselineIds.length > 0
+    ? savedBaselineIds
+    : fallbackBaselineCodes.map((code) => optionByCode.get(code)).filter((id): id is string => Boolean(id));
+
+  let sortOrder = 0;
+  return optionIds.flatMap((optionId) => {
+    const option = bundle.options.find((row) => row.id === optionId);
+    if (!option) return [];
+    const category = bundle.categories.find((row) => row.id === option.category_id);
+    const sectionCode = defaultEstimateSectionForOption(bundle, option);
+    if (category?.code === 'exterior-wall') {
+      return ['front', 'right', 'rear', 'left'].map((slotKey) => ({
+        option_id: option.id,
+        category_id: option.category_id,
+        quantity: 1,
+        slot_key: slotKey,
+        section_code: sectionCode,
+        sort_order: ++sortOrder,
+      }));
+    }
+    return [{
+      option_id: option.id,
+      category_id: option.category_id,
+      quantity: 1,
+      slot_key: `${category?.code ?? 'legacy'}:${sortOrder + 1}`,
+      section_code: sectionCode,
+      sort_order: ++sortOrder,
+    }];
+  });
+}
+
+function normalizedBaselineItems(bundle: CatalogBundle, template: EstimateTemplateBundle): BaselineItem[] {
+  const stored = template.baseline_items.filter((item) =>
+    bundle.options.some((option) => option.id === item.option_id && option.category_id === item.category_id)
+  );
+  return stored.length > 0 ? stored : compatibilityBaselineItems(bundle, template);
+}
+
+function addAmount(
+  totals: Map<EstimateSectionCode, number>,
+  sectionCode: EstimateSectionCode,
+  amount: number
+): void {
+  totals.set(sectionCode, (totals.get(sectionCode) ?? 0) + amount);
+}
+
+function optionUnitPrice(
+  bundle: CatalogBundle,
+  option: ProductOption,
+  variantChoiceIds: string[]
 ): number {
-  return lines
-    .filter((line) => sectionCodeForLine(line) === code)
-    .reduce((sum, line) => sum + line.amount, 0);
+  const groupIds = new Set(
+    bundle.variantGroups.filter((group) => group.option_id === option.id).map((group) => group.id)
+  );
+  const variantExtra = bundle.variantChoices
+    .filter((choice) => variantChoiceIds.includes(choice.id) && groupIds.has(choice.group_id))
+    .reduce((sum, choice) => sum + (choice.price_on_request ? 0 : choice.extra_price), 0);
+  return (option.price_on_request ? 0 : option.price) + variantExtra;
+}
+
+export function exteriorFacesForEstimateBaseline(
+  bundle: CatalogBundle,
+  template: EstimateTemplateBundle,
+  selectedVariantIds: string[] = []
+): ExteriorFaceSelection[] {
+  const baselineItems = normalizedBaselineItems(bundle, template);
+  const exteriorCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
+  const exteriorOptions = bundle.options
+    .filter((option) => option.category_id === exteriorCategory?.id && option.status === 'published')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const slotByFace = new Map(
+    baselineItems
+      .filter((item) => item.category_id === exteriorCategory?.id)
+      .map((item) => [item.slot_key === 'rear' ? 'back' : item.slot_key, item])
+  );
+  if (EXTERIOR_FACES.every((face) => slotByFace.has(face.code))) {
+    return EXTERIOR_FACES.map((face) => {
+      const item = slotByFace.get(face.code)!;
+      return {
+        face_code: face.code,
+        option_id: item.option_id,
+        variant_choice_ids: defaultVariantIdsForExteriorOption(
+          item.option_id,
+          bundle.variantGroups,
+          bundle.variantChoices,
+          selectedVariantIds
+        ),
+      };
+    });
+  }
+  const ids = [...new Set(baselineItems.map((item) => item.option_id))];
+  return makeDefaultExteriorFaces(
+    exteriorOptions,
+    bundle.variantGroups,
+    bundle.variantChoices,
+    ids,
+    selectedVariantIds
+  );
 }
 
 function expenseFor(amount: number, rate: number): number {
@@ -62,89 +181,102 @@ function expenseFor(amount: number, rate: number): number {
 }
 
 /**
- * Excel標準見積を価格の正本とし、商品選択の変更分だけ商品マスター価格で差額反映する。
- * 標準状態ならtemplate.total等をそのまま返すため、Excel値を再計算で変えない。
+ * Excel標準見積を価格の正本とし、baselineの商品構成と現在選択の価格差だけを反映する。
  */
 export function computeStandardEstimatePricing(
   bundle: CatalogBundle,
   template: EstimateTemplateBundle,
-  selectedOptionIds: string[],
+  selectedOptions: StandardSelectionInput[],
   variantChoiceIds: string[],
   exteriorFaces: ExteriorFaceSelection[],
   finishLevel: FinishLevel
 ): StandardEstimatePricingResult {
   const model = bundle.model;
+  const baselineItems = normalizedBaselineItems(bundle, template);
+  const baselineByCategory = new Map<string, BaselineItem[]>();
+  for (const item of baselineItems) {
+    const rows = baselineByCategory.get(item.category_id) ?? [];
+    rows.push(item);
+    baselineByCategory.set(item.category_id, rows);
+  }
+
+  const normalizedSelections = selectedOptions.map((selection) =>
+    typeof selection === 'string' ? { option_id: selection } : selection
+  );
+  const selectedCountByCategory = new Map<string, number>();
+  for (const selection of normalizedSelections) {
+    const option = bundle.options.find((row) => row.id === selection.option_id);
+    if (option) selectedCountByCategory.set(option.category_id, (selectedCountByCategory.get(option.category_id) ?? 0) + 1);
+  }
+  const currentSelections = normalizedSelections.map((selection) => {
+    if (selection.quantity !== undefined) return selection;
+    const option = bundle.options.find((row) => row.id === selection.option_id);
+    if (!option) return selection;
+    const categoryBaseline = baselineByCategory.get(option.category_id) ?? [];
+    const sameOptionQuantity = categoryBaseline
+      .filter((item) => item.option_id === option.id)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    if (sameOptionQuantity > 0) return { ...selection, quantity: sameOptionQuantity };
+    const category = bundle.categories.find((row) => row.id === option.category_id);
+    if (category?.selection_mode === 'single' && selectedCountByCategory.get(option.category_id) === 1) {
+      const baselineQuantity = categoryBaseline.reduce((sum, item) => sum + item.quantity, 0);
+      if (baselineQuantity > 0) return { ...selection, quantity: baselineQuantity };
+    }
+    return { ...selection, quantity: 1 };
+  });
+
+  const effectiveExteriorFaces = exteriorFaces.length > 0
+    ? exteriorFaces
+    : exteriorFacesForEstimateBaseline(bundle, template, variantChoiceIds);
   const current = computePricing(
     model,
     bundle.options,
     bundle.categories,
-    selectedOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+    currentSelections.map((selection) => ({ ...selection, variant_choice_ids: variantChoiceIds })),
     template.template.tax_rate,
     { groups: bundle.variantGroups, choices: bundle.variantChoices },
     0,
-    exteriorFaces
+    effectiveExteriorFaces
   );
 
-  const savedBaselineIds = template.baseline_option_ids.filter((id) =>
-    bundle.options.some((option) => option.id === id)
-  );
-  const fallbackBaselineCodes =
-    savedBaselineIds.length === 0
-      ? estimateBaselineOptionCodes(model, template.template.spec_code)
-      : [];
-  const optionByCode = new Map(bundle.options.map((option) => [option.code, option.id]));
-  const baselineOptionIds =
-    savedBaselineIds.length > 0
-      ? savedBaselineIds
-      : fallbackBaselineCodes.map((code) => optionByCode.get(code)).filter((id): id is string => Boolean(id));
   const baselineVariantIds = defaultVariantIdsFor(
     bundle.variantGroups,
     bundle.variantChoices,
-    baselineOptionIds
+    [...new Set(baselineItems.map((item) => item.option_id))]
   );
-  const exteriorCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
-  const exteriorOptions = bundle.options
-    .filter((option) => option.category_id === exteriorCategory?.id && option.status === 'published')
-    .sort((a, b) => a.sort_order - b.sort_order);
-  const baselineFaces = makeDefaultExteriorFaces(
-    exteriorOptions,
-    bundle.variantGroups,
-    bundle.variantChoices,
-    baselineOptionIds,
-    baselineVariantIds
-  );
-  const baseline = computePricing(
-    model,
-    bundle.options,
-    bundle.categories,
-    baselineOptionIds.map((option_id) => ({ option_id, variant_choice_ids: baselineVariantIds })),
-    template.template.tax_rate,
-    { groups: bundle.variantGroups, choices: bundle.variantChoices },
-    0,
-    baselineFaces
-  );
+  const baselineTotals = new Map<EstimateSectionCode, number>();
+  for (const item of baselineItems) {
+    const option = bundle.options.find((row) => row.id === item.option_id);
+    if (!option) continue;
+    addAmount(baselineTotals, item.section_code, optionUnitPrice(bundle, option, baselineVariantIds) * item.quantity);
+  }
+
+  const currentTotals = new Map<EstimateSectionCode, number>();
+  for (const line of current.lines) {
+    const option = bundle.options.find((row) => row.id === line.option_id);
+    if (!option) continue;
+    const categoryBaseline = baselineByCategory.get(option.category_id) ?? [];
+    const faceMatch = line.code.match(/__face_(front|right|back|left)$/);
+    const slotKey = faceMatch?.[1] === 'back' ? 'rear' : faceMatch?.[1];
+    const slotBaseline = slotKey
+      ? categoryBaseline.find((item) => item.slot_key === slotKey)
+      : null;
+    const exactBaseline = categoryBaseline.find((item) => item.option_id === option.id);
+    const sections = [...new Set(categoryBaseline.map((item) => item.section_code))];
+    const sectionCode = slotBaseline?.section_code
+      ?? exactBaseline?.section_code
+      ?? (sections.length === 1 ? sections[0] : defaultEstimateSectionForOption(bundle, option));
+    addAmount(currentTotals, sectionCode, line.amount);
+  }
 
   const sectionPricings: StandardEstimateSectionPricing[] = template.sections.map((section) => {
-    if (section.code === 'base') {
-      return {
-        code: section.code,
-        label: section.label,
-        line_subtotal: section.line_subtotal,
-        expense_amount: section.expense_amount,
-        total: section.total,
-        delta_line: 0,
-        delta_expense: 0,
-      };
-    }
-
-    const currentMaster = lineSubtotalBySection(current.lines, section.code);
-    const baselineMaster = lineSubtotalBySection(baseline.lines, section.code);
+    const currentMaster = currentTotals.get(section.code) ?? 0;
+    const baselineMaster = baselineTotals.get(section.code) ?? 0;
     const deltaLine = currentMaster - baselineMaster;
     const rate = section.expense_rate ?? model.expense_rate ?? DEFAULT_EXPENSE_RATE;
-    const deltaExpense =
-      section.code === 'sitework'
-        ? 0
-        : expenseFor(currentMaster, rate) - expenseFor(baselineMaster, rate);
+    const deltaExpense = section.code === 'sitework'
+      ? 0
+      : expenseFor(currentMaster, rate) - expenseFor(baselineMaster, rate);
 
     return {
       code: section.code,
@@ -181,8 +313,6 @@ export function computeStandardEstimatePricing(
     expense_rate: model.expense_rate ?? DEFAULT_EXPENSE_RATE,
     base_expense: base?.expense_amount ?? 0,
     base_total: base?.total ?? 0,
-    // 標準見積の明細はtemplate.linesが正本。ここには現在の商品選択を残し、
-    // 既存UIの画像・別途見積判定などに利用する。
     lines: current.lines,
     option_subtotal: (interior?.line_subtotal ?? 0) + (option?.line_subtotal ?? 0),
     option_expense: (interior?.expense_amount ?? 0) + (option?.expense_amount ?? 0),
@@ -198,9 +328,6 @@ export function computeStandardEstimatePricing(
     has_price_on_request: current.has_price_on_request,
   };
 
-  // finishLevelは標準テンプレート選択時のUI状態と保存値に使う。
-  // 価格はExcelテンプレートが正本なので、ここでは計算を枝分かれさせない。
   void finishLevel;
-
   return { pricing, sections: sectionPricings, template, has_changes: hasChanges };
 }

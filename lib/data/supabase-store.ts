@@ -245,18 +245,20 @@ export class SupabaseStore implements DataStore {
     }
     const template = templateResult.data as EstimateTemplate | null;
     if (!template) return null;
-    const [sections, lines, baseRows] = await Promise.all([
+    const [sections, lines, baseRows, baselineItems] = await Promise.all([
       db.from('estimate_template_sections').select('*').eq('template_id', template.id).order('sort_order'),
       db.from('estimate_template_lines').select('*').eq('template_id', template.id).order('sort_order'),
       db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).eq('spec_code', specCode).order('sort_order'),
+      db.from('estimate_template_baseline_items').select('*').eq('template_id', template.id).order('sort_order'),
     ]);
-    for (const result of [sections, lines, baseRows]) if (result.error) mapPgError(result.error);
+    for (const result of [sections, lines, baseRows, baselineItems]) if (result.error) mapPgError(result.error);
     return {
       template,
       sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
       lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
       base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
       baseline_option_ids: template.baseline_option_ids ?? [],
+      baseline_items: (baselineItems.data ?? []) as EstimateTemplateBundle['baseline_items'],
     };
   }
 
@@ -290,7 +292,11 @@ export class SupabaseStore implements DataStore {
     const estimateImport = importResult.data as EstimateImport | null;
     if (!estimateImport) return null;
 
-    const lineResult = await db.from('estimate_import_lines').select('*').eq('import_id', id).order('sort_order');
+    const [sectionResult, lineResult] = await Promise.all([
+      db.from('estimate_import_sections').select('*').eq('import_id', id).order('sort_order'),
+      db.from('estimate_import_lines').select('*').eq('import_id', id).order('sort_order'),
+    ]);
+    if (sectionResult.error) mapPgError(sectionResult.error);
     if (lineResult.error) mapPgError(lineResult.error);
     const lines = (lineResult.data ?? []) as EstimateImportLine[];
     const lineIds = lines.map((line) => line.id);
@@ -303,6 +309,7 @@ export class SupabaseStore implements DataStore {
 
     return {
       import: estimateImport,
+      sections: (sectionResult.data ?? []) as EstimateImportBundle['sections'],
       lines: lines.map((line) => ({
         ...line,
         product_link: linkByLine.get(line.id) ?? null,

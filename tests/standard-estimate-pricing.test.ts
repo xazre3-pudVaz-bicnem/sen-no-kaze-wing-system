@@ -106,6 +106,17 @@ const template: EstimateTemplateBundle = {
   lines: [],
   base_breakdown_items: [],
   baseline_option_ids: [standardInterior.id],
+  baseline_items: [{
+    id: '83000000-0000-4000-8000-000000000001',
+    template_id: '81000000-0000-4000-8000-000000000001',
+    option_id: standardInterior.id,
+    category_id: standardInterior.category_id,
+    quantity: 1,
+    slot_key: 'wall-ceiling',
+    section_code: 'interior_exterior',
+    source_import_line_id: null,
+    sort_order: 1,
+  }],
 };
 
 describe('Excel標準見積を基準にしたシミュレーター計算', () => {
@@ -165,6 +176,20 @@ describe('Excel標準見積を基準にしたシミュレーター計算', () =>
         baseline_option_ids: [standardInterior.id, carpentry.id],
       },
       baseline_option_ids: [standardInterior.id, carpentry.id],
+      baseline_items: [
+        ...template.baseline_items,
+        {
+          id: '83000000-0000-4000-8000-000000000002',
+          template_id: template.template.id,
+          option_id: carpentry.id,
+          category_id: carpentry.category_id,
+          quantity: 1,
+          slot_key: 'carpentry',
+          section_code: 'interior_exterior',
+          source_import_line_id: null,
+          sort_order: 2,
+        },
+      ],
     };
 
     const result = computeStandardEstimatePricing(
@@ -179,5 +204,103 @@ describe('Excel標準見積を基準にしたシミュレーター計算', () =>
 
     expect(interior.delta_line).toBe(0);
     expect(result.has_changes).toBe(false);
+  });
+
+  it('baselineのsection_codeを差額の所属区分として維持する', () => {
+    const optionSectionTemplate: EstimateTemplateBundle = {
+      ...template,
+      baseline_items: template.baseline_items.map((item) => ({ ...item, section_code: 'option' })),
+    };
+    const result = computeStandardEstimatePricing(
+      bundle,
+      optionSectionTemplate,
+      [hotelInterior.id],
+      [],
+      [],
+      'full'
+    );
+
+    expect(result.sections.find((row) => row.code === 'interior_exterior')?.delta_line).toBe(0);
+    expect(result.sections.find((row) => row.code === 'option')?.delta_line)
+      .toBe(hotelInterior.price - standardInterior.price);
+  });
+
+  it('quantity=2のbaselineは標準状態で差額0になる', () => {
+    const quantityTemplate: EstimateTemplateBundle = {
+      ...template,
+      baseline_items: template.baseline_items.map((item) => ({ ...item, quantity: 2 })),
+    };
+    const result = computeStandardEstimatePricing(
+      bundle,
+      quantityTemplate,
+      [standardInterior.id],
+      [],
+      [],
+      'full'
+    );
+
+    expect(result.sections.every((section) => section.delta_line === 0 && section.delta_expense === 0)).toBe(true);
+    expect(result.has_changes).toBe(false);
+  });
+
+  it('外壁4slotが標準なら差額0、1面だけ変更すると1面分だけ差額になる', () => {
+    const standardExterior = seedOptions.find((row) => row.code === 'exterior-galnote')!;
+    const changedExterior = seedOptions.find((row) => row.code === 'exterior-wood')!;
+    const slots = ['front', 'right', 'rear', 'left'];
+    const exteriorTemplate: EstimateTemplateBundle = {
+      ...template,
+      template: { ...template.template, baseline_option_ids: [standardExterior.id] },
+      baseline_option_ids: [standardExterior.id],
+      baseline_items: slots.map((slot, index) => ({
+        id: `83000000-0000-4000-8000-00000000001${index}`,
+        template_id: template.template.id,
+        option_id: standardExterior.id,
+        category_id: standardExterior.category_id,
+        quantity: 1,
+        slot_key: slot,
+        section_code: 'interior_exterior',
+        source_import_line_id: null,
+        sort_order: index + 1,
+      })),
+    };
+    const standardFaces = [
+      { face_code: 'front' as const, option_id: standardExterior.id, variant_choice_ids: [] },
+      { face_code: 'right' as const, option_id: standardExterior.id, variant_choice_ids: [] },
+      { face_code: 'back' as const, option_id: standardExterior.id, variant_choice_ids: [] },
+      { face_code: 'left' as const, option_id: standardExterior.id, variant_choice_ids: [] },
+    ];
+    const standardResult = computeStandardEstimatePricing(
+      bundle, exteriorTemplate, [standardExterior.id], [], standardFaces, 'full'
+    );
+    const changedResult = computeStandardEstimatePricing(
+      bundle,
+      exteriorTemplate,
+      [changedExterior.id],
+      [],
+      standardFaces.map((face) => face.face_code === 'right' ? { ...face, option_id: changedExterior.id } : face),
+      'full'
+    );
+
+    expect(standardResult.has_changes).toBe(false);
+    expect(changedResult.sections.find((row) => row.code === 'interior_exterior')?.delta_line)
+      .toBe(changedExterior.price - standardExterior.price);
+  });
+
+  it('商品マスター価格を変更してもbaselineと現選択が同じならExcel標準額は変わらない', () => {
+    const repricedBundle: CatalogBundle = {
+      ...bundle,
+      options: bundle.options.map((option) => option.id === standardInterior.id ? { ...option, price: option.price + 99999 } : option),
+    };
+    const result = computeStandardEstimatePricing(
+      repricedBundle,
+      template,
+      [standardInterior.id],
+      [],
+      [],
+      'full'
+    );
+
+    expect(result.has_changes).toBe(false);
+    expect(result.pricing.total).toBe(template.template.total);
   });
 });

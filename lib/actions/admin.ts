@@ -39,7 +39,8 @@ import { withPlanDisplaySize } from '@/lib/domain/plan-display';
 import {
   categoryIdForCode,
   defaultEstimateLinkPolicy,
-  estimateLineFingerprint,
+  estimateLineFingerprintV2,
+  estimateRuleMatchKeyV2,
   estimateLineSourceText,
   extractEstimateProductHints,
   findExactEstimateProductMatch,
@@ -833,8 +834,8 @@ export async function importEstimateTemplatesAction(
     }
     const baselineOptionIds = baselineCodes.map((code) => optionByCode.get(code)!).filter(Boolean);
 
-    const baseRows = template.base_breakdown_items.map(({ source_row: _sourceRow, ...row }) => row);
-    const estimateLines = template.lines.map(({ source_row: _sourceRow, ...row }) => row);
+    const baseRows = template.base_breakdown_items.map(({ source_row: _sourceRow, source_row_json: _sourceRowJson, ...row }) => row);
+    const estimateLines = template.lines.map(({ source_row: _sourceRow, source_row_json: _sourceRowJson, ...row }) => row);
     const templatePayload: EstimateTemplateImportInput = {
       base_model_id: model.id,
       spec_code: template.spec_code,
@@ -859,6 +860,7 @@ export async function importEstimateTemplatesAction(
         section_code: 'base' as const,
         group_label: row.section,
         source_row: row.source_row,
+        source_row_json: row.source_row_json,
         name: row.name,
         quantity: row.quantity,
         unit: row.unit,
@@ -870,6 +872,7 @@ export async function importEstimateTemplatesAction(
         section_code: row.section_code,
         group_label: row.group_label,
         source_row: row.source_row,
+        source_row_json: row.source_row_json,
         name: row.name,
         quantity: row.quantity,
         unit: row.unit,
@@ -906,10 +909,24 @@ export async function importEstimateTemplatesAction(
               options: bundle!.options,
               categoryId,
               baseModelId: model.id,
+              specCode: template.spec_code,
             });
-      const fingerprint = estimateLineFingerprint(matchSource, categoryCode);
-      const ordinal = (fingerprintCounts.get(fingerprint) ?? 0) + 1;
-      fingerprintCounts.set(fingerprint, ordinal);
+      const lineFingerprint = estimateLineFingerprintV2({
+        ...matchSource,
+        manufacturer_text: hints.manufacturer,
+        model_text: hints.model,
+        size_text: hints.size,
+      });
+      const ruleMatchKey = estimateRuleMatchKeyV2({
+        categoryId,
+        normalizedName: normalizeEstimateMatchText(row.name),
+        manufacturerText: hints.manufacturer,
+        modelText: hints.model,
+        sizeText: hints.size,
+        unit: row.unit,
+      });
+      const ordinal = (fingerprintCounts.get(lineFingerprint) ?? 0) + 1;
+      fingerprintCounts.set(lineFingerprint, ordinal);
 
       if (linkPolicy === 'required') required += 1;
       else if (linkPolicy === 'optional') optional += 1;
@@ -920,6 +937,7 @@ export async function importEstimateTemplatesAction(
         section_code: row.section_code,
         group_label: row.group_label,
         source_row: row.source_row,
+        source_row_json: row.source_row_json,
         original_name: row.name,
         normalized_name: normalizeEstimateMatchText(row.name),
         category_id: categoryId,
@@ -932,7 +950,8 @@ export async function importEstimateTemplatesAction(
         amount: row.amount,
         remark: row.remark,
         link_policy: linkPolicy,
-        line_fingerprint: fingerprint,
+        line_fingerprint_v2: lineFingerprint,
+        rule_match_key_v2: ruleMatchKey,
         fingerprint_ordinal: ordinal,
         sort_order: index + 1,
         auto_option_id: exact?.option.id ?? null,
@@ -963,6 +982,16 @@ export async function importEstimateTemplatesAction(
       tax: template.tax,
       total: template.total,
       template_payload: templatePayload,
+      sections: template.sections.map((section) => ({
+        section_code: section.code,
+        label: section.label,
+        line_subtotal: section.line_subtotal,
+        expense_label: section.expense_label,
+        expense_rate: section.expense_rate,
+        expense_amount: section.expense_amount,
+        total: section.total,
+        sort_order: section.sort_order,
+      })),
       lines: draftLines,
     });
   }

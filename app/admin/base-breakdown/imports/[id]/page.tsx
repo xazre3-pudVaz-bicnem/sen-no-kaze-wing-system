@@ -19,11 +19,31 @@ export default async function EstimateImportReviewPage({
   const bundle = await store.getEstimateImportBundle(id);
   if (!bundle) notFound();
 
-  const [model, categories, options] = await Promise.all([
+  const [model, categories, options, history, templates] = await Promise.all([
     store.getModelById(bundle.import.base_model_id, { includeDraft: true }),
     store.listCategories(),
     store.listOptions(),
+    store.listEstimateImports(bundle.import.base_model_id, bundle.import.spec_code),
+    store.listEstimateTemplates(bundle.import.base_model_id),
   ]);
+  const activeImport = history.find((row) => row.status === 'activated') ?? null;
+  const activeBundle = activeImport ? await store.getEstimateImportBundle(activeImport.id) : null;
+  const activeByLine = new Map(
+    (activeBundle?.lines ?? []).map((line) => [
+      `${line.line_fingerprint_v2}:${line.fingerprint_ordinal}`,
+      line.product_link?.option_id ?? null,
+    ])
+  );
+  const changedLinks = bundle.lines
+    .filter((line) => line.product_link)
+    .filter((line) => activeByLine.get(`${line.line_fingerprint_v2}:${line.fingerprint_ordinal}`) !== line.product_link?.option_id)
+    .map((line) => ({
+      lineName: line.original_name,
+      optionName: options.find((option) => option.id === line.product_link?.option_id)?.name ?? '不明な商品',
+    }));
+  const activeTemplate = templates.find(
+    (row) => row.base_model_id === bundle.import.base_model_id && row.spec_code === bundle.import.spec_code
+  );
 
   return (
     <AdminPage
@@ -39,6 +59,12 @@ export default async function EstimateImportReviewPage({
         categories={categories}
         options={options}
         modelName={model?.name ?? bundle.import.base_model_id}
+        activationSummary={{
+          currentTotal: activeTemplate?.total ?? null,
+          currentVersion: activeImport?.version ?? null,
+          latestVersion: Math.max(...history.map((row) => row.version)),
+          changedLinks,
+        }}
       />
     </AdminPage>
   );

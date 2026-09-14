@@ -86,29 +86,26 @@ function SubtotalRow({
   return (
     <tr className="border-y border-line bg-sand/70 font-semibold">
       <td className="px-2 py-2 text-sm sm:px-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div className="flex items-center gap-2">
-            {collapsible && (
-              <button
-                type="button"
-                onClick={onToggle}
-                aria-expanded={expanded}
-                aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
-                className="inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
-              >
-                {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
-              </button>
-            )}
-            <span>{label}</span>
-          </div>
-          {action}
+        <div className="flex items-center gap-2">
+          {collapsible && (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={expanded}
+              aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
+              className="inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
+            >
+              {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
+            </button>
+          )}
+          <span>{label}</span>
         </div>
       </td>
       <td className="w-10 px-1 py-2 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2">1</td>
       <td className="w-8 px-1 py-2 whitespace-nowrap sm:w-12 sm:px-2">式</td>
       <td className="w-20 px-1 py-2 sm:w-28 sm:px-2"></td>
       <td className="w-24 px-1.5 py-2 text-right text-sm tabular-nums whitespace-nowrap sm:w-32 sm:px-3" data-testid={testId}>{amount}</td>
-      <td className="w-16 px-1 py-2 sm:w-24 sm:px-2 lg:w-32 lg:px-3"></td>
+      <td className="w-16 px-1 py-2 text-center sm:w-24 sm:px-2 lg:w-32 lg:px-3">{action}</td>
     </tr>
   );
 }
@@ -526,11 +523,11 @@ export function QuoteSheet({
               action={showDealerFinder ? (
                 <Link
                   href="/dealers"
-                  className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2 py-0.5 text-[0.65rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-2.5 sm:py-1 sm:text-[0.7rem]"
+                  className="inline-flex items-center justify-center gap-1 rounded-full border border-brown px-1.5 py-0.5 text-[0.6rem] font-semibold leading-tight tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-2.5 sm:py-1 sm:text-[0.7rem]"
                   data-testid="nearby-dealers-subtotal-link"
                 >
                   代理店を探す
-                  <ArrowRight className="size-3" aria-hidden="true" />
+                  <ArrowRight className="hidden size-3 sm:block" aria-hidden="true" />
                 </Link>
               ) : undefined}
             />

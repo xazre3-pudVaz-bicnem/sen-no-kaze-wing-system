@@ -129,14 +129,6 @@ as $$
   );
 $$;
 
-revoke all on function public.organization_member_role_rank(text) from public;
-revoke all on function public.current_organization_member_rank(uuid) from public;
-revoke all on function public.can_create_base_master_for_org(uuid) from public;
-grant execute on function public.organization_member_role_rank(text),
-                          public.current_organization_member_rank(uuid),
-                          public.can_create_base_master_for_org(uuid)
-to authenticated, service_role;
-
 -- ---------- 本体の論理マスター ----------
 create table if not exists public.base_masters (
   id uuid primary key default gen_random_uuid(),
@@ -461,16 +453,6 @@ as $$
   );
 $$;
 
-revoke all on function public.enforce_base_master_owner_type() from public;
-revoke all on function public.validate_base_master_revision_refs() from public;
-revoke all on function public.can_edit_base_master(uuid) from public;
-revoke all on function public.can_view_owned_base_master(uuid) from public;
-revoke all on function public.can_use_base_master(uuid) from public;
-grant execute on function public.can_edit_base_master(uuid),
-                          public.can_view_owned_base_master(uuid),
-                          public.can_use_base_master(uuid)
-to authenticated, service_role;
-
 -- ---------- 公開済みRevisionの不変性 ----------
 -- 明細はdraft Revisionだけ編集できる。published/supersededの内容を後から書き換えない。
 create or replace function public.prevent_non_draft_base_master_line_write()
@@ -581,9 +563,53 @@ create trigger base_master_revisions_immutable
 before update or delete on public.base_master_revisions
 for each row execute function public.prevent_published_base_master_revision_mutation();
 
-revoke all on function public.prevent_base_master_identity_change_after_publish() from public;
-revoke all on function public.prevent_non_draft_base_master_line_write() from public;
-revoke all on function public.prevent_published_base_master_revision_mutation() from public;
+-- current_published_revision_id はトランザクション完了時にも必ず published を指す。
+-- 将来のPublish RPCでは、
+--   旧版 published -> superseded
+--   新版 draft -> published
+--   current_published_revision_id -> 新版
+-- を同一transactionで行うため、検査はDEFERRABLE INITIALLY DEFERREDとする。
+create or replace function public.validate_base_master_current_pointer_at_commit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+declare
+  v_master_id uuid;
+begin
+  if tg_op = 'DELETE' then
+    v_master_id := old.base_master_id;
+  else
+    v_master_id := new.base_master_id;
+  end if;
+
+  if exists (
+    select 1
+      from public.base_masters b
+      left join public.base_master_revisions r
+        on r.id = b.current_published_revision_id
+     where b.id = v_master_id
+       and b.current_published_revision_id is not null
+       and (
+         r.id is null
+         or r.base_master_id <> b.id
+         or r.status <> 'published'
+       )
+  ) then
+    raise exception 'VALIDATION: 現在公開版ポインタはtransaction完了時にpublished Revisionを指している必要があります'
+      using errcode = 'P0001';
+  end if;
+
+  return null;
+end;
+$;
+
+drop trigger if exists base_master_current_pointer_consistency on public.base_master_revisions;
+create constraint trigger base_master_current_pointer_consistency
+after insert or update or delete on public.base_master_revisions
+deferrable initially deferred
+for each row execute function public.validate_base_master_current_pointer_at_commit();
 
 -- ---------- RLS / grants ----------
 alter table public.organizations enable row level security;
@@ -640,7 +666,15 @@ for select using (
 );
 
 -- 第1段階ではauthenticatedからの直接書込みを許可しない。
--- 後続PRで所有権検証付きDraft/Publish RPCを追加する。
+-- 0006_api_grants.sql の default privileges は新規table/functionへ広い権限を自動付与するため、
+-- ここで明示的に最小権限へ戻す。
+revoke all privileges on table public.organizations,
+                                public.organization_memberships,
+                                public.base_masters,
+                                public.base_master_revisions,
+                                public.base_master_revision_lines
+from public, anon, authenticated;
+
 grant select on public.organizations,
                 public.organization_memberships,
                 public.base_masters,
@@ -648,18 +682,43 @@ grant select on public.organizations,
                 public.base_master_revision_lines
 to authenticated;
 
-revoke insert, update, delete on public.organizations,
-                                public.organization_memberships,
-                                public.base_masters,
-                                public.base_master_revisions,
-                                public.base_master_revision_lines
-from authenticated;
+grant all privileges on table public.organizations,
+                               public.organization_memberships,
+                               public.base_masters,
+                               public.base_master_revisions,
+                               public.base_master_revision_lines
+to service_role;
 
-grant all on public.organizations,
-             public.organization_memberships,
-             public.base_masters,
-             public.base_master_revisions,
-             public.base_master_revision_lines
+-- 新規関数もdefaultでPUBLIC/anon/authenticatedへEXECUTEが付き得るため全て剥がし、
+-- RLSや将来の管理UIから直接必要な判定関数だけauthenticatedへ再付与する。
+revoke all on function public.organization_member_role_rank(text) from public, anon, authenticated;
+revoke all on function public.current_organization_member_rank(uuid) from public, anon, authenticated;
+revoke all on function public.can_create_base_master_for_org(uuid) from public, anon, authenticated;
+revoke all on function public.enforce_base_master_owner_type() from public, anon, authenticated;
+revoke all on function public.prevent_base_master_identity_change_after_publish() from public, anon, authenticated;
+revoke all on function public.validate_base_master_revision_refs() from public, anon, authenticated;
+revoke all on function public.can_edit_base_master(uuid) from public, anon, authenticated;
+revoke all on function public.can_view_owned_base_master(uuid) from public, anon, authenticated;
+revoke all on function public.can_use_base_master(uuid) from public, anon, authenticated;
+revoke all on function public.prevent_non_draft_base_master_line_write() from public, anon, authenticated;
+revoke all on function public.prevent_published_base_master_revision_mutation() from public, anon, authenticated;
+revoke all on function public.validate_base_master_current_pointer_at_commit() from public, anon, authenticated;
+
+grant execute on function public.current_organization_member_rank(uuid),
+                          public.can_create_base_master_for_org(uuid),
+                          public.can_edit_base_master(uuid),
+                          public.can_view_owned_base_master(uuid),
+                          public.can_use_base_master(uuid)
+to authenticated, service_role;
+
+-- service_roleはmigration/管理処理用として新規関数を実行可能にする。
+grant execute on function public.organization_member_role_rank(text),
+                          public.enforce_base_master_owner_type(),
+                          public.prevent_base_master_identity_change_after_publish(),
+                          public.validate_base_master_revision_refs(),
+                          public.prevent_non_draft_base_master_line_write(),
+                          public.prevent_published_base_master_revision_mutation(),
+                          public.validate_base_master_current_pointer_at_commit()
 to service_role;
 
 comment on table public.organizations is

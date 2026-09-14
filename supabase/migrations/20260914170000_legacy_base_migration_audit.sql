@@ -352,59 +352,94 @@ returns table (
 language plpgsql
 immutable
 set search_path = public
-as $$
+as $classifier$
 declare
-  v_section text := lower(btrim(coalesce(p_section, '')));
-  v_name text := lower(btrim(coalesce(p_name, '')));
+  v_section text := regexp_replace(lower(btrim(coalesce(p_section, ''))), '\s+', '', 'g');
+  v_name text := regexp_replace(lower(btrim(coalesce(p_name, ''))), '\s+', '', 'g');
 begin
-  -- 明確な本体項目。
-  if v_name like '%天井ラワンベニア%'
-     or v_name like '%スタイロフォーム%'
-     or v_name like '%グラスウール%'
-     or v_name like '%断熱材%'
-     or v_name like '%osb%'
-     or v_name like '%構造用合板%'
-     or v_name like '%204材%'
-     or v_name like '%屋根タルキ%'
-     or v_name like '%本体組立%'
-     or v_name like '%単管パイプ%'
-     or v_name like '%タルキ止めクランプ%'
-     or v_name like '%ステンレス長ビス%'
-     or v_name like '%床用補強金物%'
+  -- 自動確定は、既知の旧明細で検証済みの section + name 完全一致だけに限定する。
+  -- 部分一致・単語一致では自動承認しない。
+  if (
+       v_section = '１．金物関係費用'
+       and v_name in (
+         '・単管パイプ2.5m',
+         '・単管パイプ3m',
+         '・単管パイプ1m',
+         '・タルキ止めクランプ',
+         '・ステンレス長ビス',
+         '・床用補強金物'
+       )
+     )
+     or (
+       v_section = '２．プレカット'
+       and v_name in (
+         '・204材l=6f',
+         '・204材l=8f',
+         '・204材l=12f',
+         '・204材l=16f',
+         '・本体組立費'
+       )
+     )
+     or (
+       v_section in ('３．構造用面材等', '３．外部面材等')
+       and v_name in (
+         '・osb合板9×910×2,420',
+         '・osb合板9×910×1,820',
+         '・天井ラワンべニア4㎜',
+         '・天井ラワンベニア4㎜',
+         '・天井ラワンべニア',
+         '・天井ラワンベニア'
+       )
+     )
+     or (
+       v_section in ('４．断熱材', '５．断熱材')
+       and v_name in (
+         '・壁用スタイロフォーム90㎜',
+         '・天井用スタイロフォーム90㎜',
+         '・壁グラスウール90㎜',
+         '・天井グラスウール90㎜',
+         '・壁グラスウール91㎜',
+         '・天井グラスウール92㎜',
+         '・床用ミラフォーム90㎜'
+       )
+     )
   then
     return query select
       'base'::text,
       'automatic'::text,
       'approved'::text,
-      '本体として安全に判定できる明示ホワイトリスト'::text;
+      '検証済みの旧section＋品名と完全一致した本体ホワイトリスト'::text;
     return;
   end if;
 
-  -- 明確な仕上・サッシ・外部建具。構造材の「屋根タルキ」は上で本体に固定する。
-  if v_name like '%角スパン%'
-     or v_name like '%外壁材%'
-     or v_name like '%サッシ%'
-     or v_name like '%玄関ドア%'
-     or v_name like '%勝手口ドア%'
-     or v_name like '%fix窓%'
-     or v_name like '%引違い窓%'
+  if (
+       v_section = '５．屋根外壁工事'
+       and v_name = '・外壁角スパンガルバ鋼板'
+     )
+     or (
+       v_section in ('５．サッシ木製建具工事', '６．サッシ木製建具工事')
+       and v_name in (
+         '・サッシ玄関ドア',
+         '引違、押出、縦辷り窓',
+         '引違'
+       )
+     )
   then
     return query select
       'interior_exterior'::text,
       'automatic'::text,
       'approved'::text,
-      '内外装として安全に判定できる明示ホワイトリスト'::text;
+      '検証済みの旧section＋品名と完全一致した内外装ホワイトリスト'::text;
     return;
   end if;
 
-  -- 不明な項目は必ず人間確認へ落とす。
   return query select
     'review'::text,
     'human'::text,
     'pending'::text,
-    '自動判定対象外。名称だけで本体/内外装を決めない'::text;
+    '自動判定対象外。section・品名・備考を人間が確認する'::text;
 end;
-$$;
+$classifier$;
 
 create or replace function public.legacy_base_spec_body_signature(
   p_batch_id uuid,

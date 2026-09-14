@@ -67,7 +67,6 @@ function SectionRow({
 function SubtotalRow({
   label,
   amount,
-  amountColSpan = 1,
   testId,
   expanded,
   onToggle,
@@ -75,7 +74,6 @@ function SubtotalRow({
 }: {
   label: string;
   amount: ReactNode;
-  amountColSpan?: 1 | 2;
   testId?: string;
   expanded?: boolean;
   onToggle?: () => void;
@@ -85,7 +83,7 @@ function SubtotalRow({
 
   return (
     <tr className="border-y border-line bg-sand/70 font-semibold">
-      <td colSpan={4} className="px-3 py-2 text-sm sm:px-4">
+      <td className="px-2 py-2 text-sm sm:px-4">
         <div className="flex items-center gap-2">
           {collapsible && (
             <button
@@ -101,8 +99,11 @@ function SubtotalRow({
           <span>{label}</span>
         </div>
       </td>
-      <td colSpan={amountColSpan} className="px-3 py-2 text-right text-sm tabular-nums sm:px-4" data-testid={testId}>{amount}</td>
-      {amountColSpan === 1 && <td></td>}
+      <td className="w-10 px-1 py-2 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2">1</td>
+      <td className="w-8 px-1 py-2 whitespace-nowrap sm:w-12 sm:px-2">式</td>
+      <td className="w-20 px-1 py-2 sm:w-28 sm:px-2"></td>
+      <td className="w-24 px-1.5 py-2 text-right text-sm tabular-nums whitespace-nowrap sm:w-32 sm:px-3" data-testid={testId}>{amount}</td>
+      <td className="w-16 px-1 py-2 sm:w-24 sm:px-2 lg:w-32 lg:px-3"></td>
     </tr>
   );
 }
@@ -285,10 +286,12 @@ export function QuoteSheet({
 
           {/* ---- 本体（エンドユーザーには計のみ。明細は本部・総代理店・代理店の管理画面で見る） ---- */}
           <tbody className="divide-y divide-line/70" data-testid="base-breakdown">
-            <SectionRow
-              label={<><span>本体</span><span className="sr-only">本体価格</span></>}
-              tone="ivory"
-            />
+            {expandedSections.base && (
+              <SectionRow
+                label={<><span>本体</span><span className="sr-only">本体価格</span></>}
+                tone="ivory"
+              />
+            )}
             {expandedSections.base && <tr className="bg-white align-top">
               <td className={td.name}>
                 {modelName} 本体一式
@@ -310,15 +313,17 @@ export function QuoteSheet({
 
           {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
           <tbody className="divide-y divide-line/70">
-            <SectionRow
-              label={(
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span>【内外装工事】</span>
-                  <span className="font-normal tracking-normal text-muted">※選択した商品には施工費も含んだ金額になります</span>
-                </span>
-              )}
-              tone="ivory"
-            />
+            {expandedSections.interiorExterior && (
+              <SectionRow
+                label={(
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span>【内外装工事】</span>
+                    <span className="font-normal tracking-normal text-muted">※選択した商品には施工費も含んだ金額になります</span>
+                  </span>
+                )}
+                tone="ivory"
+              />
+            )}
             {expandedSections.interiorExterior && standardEstimate && standardLineRows('interior_exterior')}
             {expandedSections.interiorExterior && !standardEstimate && displayInteriorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
@@ -368,10 +373,12 @@ export function QuoteSheet({
 
           {/* ---- オプション（クリックで変更） ---- */}
           <tbody className="divide-y divide-line/60">
-            <SectionRow
-              label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`}
-              tone="ivory"
-            />
+            {expandedSections.options && (
+              <SectionRow
+                label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`}
+                tone="ivory"
+              />
+            )}
             {expandedSections.options && standardEstimate && standardLineRows('option')}
             {expandedSections.options && !standardEstimate && optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
@@ -424,15 +431,17 @@ export function QuoteSheet({
 
           {/* ---- その他の工事（従来計算時だけ表示） ---- */}
           {!standardEstimate && <tbody className="divide-y divide-line/70">
-            <SectionRow
-              label={(
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span>【その他の工事】</span>
-                  <span className="font-normal tracking-normal text-muted">※選択した商品には施工費も含まれます</span>
-                </span>
-              )}
-              tone="ivory"
-            />
+            {expandedSections.otherConstruction && (
+              <SectionRow
+                label={(
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span>【その他の工事】</span>
+                    <span className="font-normal tracking-normal text-muted">※選択した商品には施工費も含まれます</span>
+                  </span>
+                )}
+                tone="ivory"
+              />
+            )}
             {expandedSections.otherConstruction && otherConstructionLines.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
@@ -454,25 +463,27 @@ export function QuoteSheet({
 
           {/* ---- 別途工事（現地確認後に代理店が見積） ---- */}
           <tbody className="divide-y divide-line/60">
-            <SectionRow
-              label={
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span>【別途工事】</span>
-                  <span className="font-normal tracking-normal text-muted">※ 主に現場施工になりますので、お近くの代理店にお問合せ下さい</span>
-                </span>
-              }
-              tone="ivory"
-              action={showDealerFinder ? (
-                <Link
-                  href="/dealers"
-                  className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
-                  data-testid="nearby-dealers-heading-link"
-                >
-                  近くの代理店を探す。
-                  <ArrowRight className="size-3" aria-hidden="true" />
-                </Link>
-              ) : undefined}
-            />
+            {expandedSections.sitework && (
+              <SectionRow
+                label={
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span>【別途工事】</span>
+                    <span className="font-normal tracking-normal text-muted">※ 主に現場施工になりますので、お近くの代理店にお問合せ下さい</span>
+                  </span>
+                }
+                tone="ivory"
+                action={showDealerFinder ? (
+                  <Link
+                    href="/dealers"
+                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
+                    data-testid="nearby-dealers-heading-link"
+                  >
+                    近くの代理店を探す。
+                    <ArrowRight className="size-3" aria-hidden="true" />
+                  </Link>
+                ) : undefined}
+              />
+            )}
             {expandedSections.sitework && standardEstimate && standardLineRows('sitework')}
             {expandedSections.sitework && !standardEstimate && sitework.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
@@ -502,10 +513,12 @@ export function QuoteSheet({
           {/* ---- フリー商品（代理店・工務店の取扱商品／諸費用なし） ---- */}
           {!standardEstimate && freeLines.length > 0 && (
             <tbody className="divide-y divide-line/60">
-              <SectionRow
-                label="フリー商品（代理店・工務店の取扱商品／諸費用なし）"
-                tone="ivory"
-              />
+              {expandedSections.freeProducts && (
+                <SectionRow
+                  label="フリー商品（代理店・工務店の取扱商品／諸費用なし）"
+                  tone="ivory"
+                />
+              )}
               {expandedSections.freeProducts && freeLines.map((l) => (
                 <tr key={l.code} className="bg-white text-xs">
                   <td className={td.name} data-testid={`quote-line-${l.code}`}>{l.name}</td>

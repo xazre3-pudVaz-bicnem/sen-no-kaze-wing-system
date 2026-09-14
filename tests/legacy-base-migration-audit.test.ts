@@ -61,6 +61,12 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(occurrences.length).toBeGreaterThanOrEqual(4);
   });
 
+  it('バッチ作成・レビュー更新・確定をDBロックで直列化する', () => {
+    expect(migration).toContain('pg_advisory_xact_lock(2147483001)');
+    expect((migration.match(/for update;/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect((migration.match(/lock table public\.base_breakdown_items/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
   it('二重計上の完全一致は名称と金額だけでなく数量・単位・単価・備考まで比較する', () => {
     expect(migration).toContain('m.legacy_quantity::numeric = l.quantity');
     expect(migration).toContain("coalesce(lower(btrim(m.legacy_unit)), '') = coalesce(lower(btrim(l.unit)), '')");

@@ -39,7 +39,7 @@ export function VariantPicker({
   const picked = new Set(selected);
 
   return (
-    <div className="space-y-4 border-t border-line pt-4" data-testid="variant-picker">
+    <div className="space-y-3 border-t border-line pt-3" data-testid="variant-picker">
       {groups.map((g) => {
         const list = choices.filter((c) => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
         if (list.length === 0) return null;
@@ -49,9 +49,9 @@ export function VariantPicker({
         const allPriceOnRequest = list.length > 0 && list.every((choice) => choice.price_on_request);
 
         return (
-          <section key={g.id} data-testid={`variant-group-${g.code}`}>
+          <section key={g.id} className="border-b border-line/70 pb-3 last:border-b-0 last:pb-0" data-testid={`variant-group-${g.code}`}>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h3 className="text-xs font-semibold text-ink">{g.name}</h3>
+              <h3 className="text-[0.72rem] font-semibold text-ink">{g.name}</h3>
               {fixed ? (
                 <span className="text-[0.68rem] text-muted">変更不可</span>
               ) : current ? (
@@ -139,7 +139,7 @@ export function VariantPicker({
                       )}
 
                       <span className={cn('block', withImage && 'px-2 py-1.5')}>
-                        <span className="block text-xs leading-snug font-medium text-ink">{c.name}</span>
+                        <span className="block break-words text-xs font-medium leading-[1.35] text-ink">{c.name}</span>
                         <span className="mt-0.5 flex flex-wrap items-center gap-1">
                           {c.kind !== 'option' && (
                             <span className="rounded bg-sand px-1 text-[0.58rem] text-muted">

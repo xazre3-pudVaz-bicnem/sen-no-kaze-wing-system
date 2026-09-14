@@ -122,7 +122,8 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain('p_expected_version integer');
     expect(migration).toContain('decision_version = decision_version + 1');
     expect(migration).toContain('decision_version = p_expected_version');
-    expect(actions).toContain('expected_version: z.coerce.number().int().min(0)');
+    expect(actions).toContain("const decisionVersionSchema = z.string().regex(/^\\d+$/).transform(Number)");
+    expect(actions).toContain('expected_version: decisionVersionSchema');
     expect(page).toContain('name="expected_version"');
   });
 

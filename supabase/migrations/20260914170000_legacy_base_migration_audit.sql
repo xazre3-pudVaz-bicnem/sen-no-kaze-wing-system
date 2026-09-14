@@ -611,10 +611,7 @@ begin
          join public.estimate_template_lines l
            on l.template_id = t.id
           and l.id = d.candidate_template_line_id
-          and l.section_code = case
-            when m.target_classification = 'option' then 'option'
-            else 'interior_exterior'
-          end
+          and l.section_code = m.target_classification
         where m.id = d.mapping_id
           and m.migration_batch_id = p_batch_id
           and m.review_status = 'approved'

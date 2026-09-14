@@ -43,10 +43,12 @@ export async function createLegacyBaseMigrationBatchAction(formData: FormData): 
   redirect(migrationUrl(String(data), 'created'));
 }
 
+const decisionVersionSchema = z.string().regex(/^\d+$/).transform(Number);
+
 const mappingSchema = z.object({
   batch_id: z.uuid(),
   mapping_id: z.uuid(),
-  expected_version: z.coerce.number().int().min(0),
+  expected_version: decisionVersionSchema,
   target_classification: z.enum(['base', 'interior_exterior', 'option', 'sitework', 'review']),
   target_group_label: z.string().trim().max(120).optional(),
   note: z.string().trim().max(500).optional(),
@@ -87,7 +89,7 @@ const specSchema = z.object({
   batch_id: z.uuid(),
   base_model_id: z.uuid(),
   legacy_spec_code: z.string().trim().min(1).max(80),
-  expected_version: z.coerce.number().int().min(0),
+  expected_version: decisionVersionSchema,
   proposed_group_key: z.string().trim().min(1).max(120),
   reason: z.string().trim().max(500).optional(),
 });
@@ -126,7 +128,7 @@ export async function setLegacyBaseSpecMappingAction(formData: FormData): Promis
 const duplicateSchema = z.object({
   batch_id: z.uuid(),
   check_id: z.uuid(),
-  expected_version: z.coerce.number().int().min(0),
+  expected_version: decisionVersionSchema,
   resolution: z.enum(['use_legacy', 'use_existing', 'keep_both', 'not_duplicate']),
 });
 

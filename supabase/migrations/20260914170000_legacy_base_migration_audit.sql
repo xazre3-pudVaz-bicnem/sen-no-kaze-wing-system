@@ -286,7 +286,34 @@ as $$
     ),
     'hex'
   );
-$$;
+$;
+
+create or replace function public.assert_legacy_base_migration_source_current(p_batch_id uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public
+as $
+declare
+  v_expected_hash text;
+begin
+  select source_snapshot_hash into v_expected_hash
+    from public.legacy_base_migration_batches
+   where id = p_batch_id;
+
+  if not found then
+    raise exception 'NOT_FOUND: 移行バッチが見つかりません'
+      using errcode = 'P0002';
+  end if;
+
+  v_current_hash := public.legacy_base_migration_source_hash();
+  if v_current_hash <> v_expected_hash then
+    raise exception 'STALE: 移行元データがレビュー開始後に変更されています。新しいバッチを作成してください'
+      using errcode = 'P0001';
+  end if;
+end;
+$;
 
 -- ---------- 安全側のホワイトリスト分類 ----------
 -- 名称に「屋根」が含まれるだけで内外装へ移す等の広いキーワード判定は禁止する。
@@ -314,11 +341,15 @@ begin
      or v_name like '%スタイロフォーム%'
      or v_name like '%グラスウール%'
      or v_name like '%断熱材%'
-     or v_name like '%osb構造用合板%'
+     or v_name like '%osb%'
      or v_name like '%構造用合板%'
+     or v_name like '%204材%'
      or v_name like '%屋根タルキ%'
      or v_name like '%本体組立%'
-     or (v_name like '%金物%' and v_name not like '%建具%')
+     or v_name like '%単管パイプ%'
+     or v_name like '%タルキ止めクランプ%'
+     or v_name like '%ステンレス長ビス%'
+     or v_name like '%床用補強金物%'
   then
     return query select
       'base'::text,
@@ -331,7 +362,6 @@ begin
   -- 明確な仕上・サッシ・外部建具。構造材の「屋根タルキ」は上で本体に固定する。
   if v_name like '%角スパン%'
      or v_name like '%外壁材%'
-     or v_name like '%ガルバリウム%'
      or v_name like '%サッシ%'
      or v_name like '%玄関ドア%'
      or v_name like '%勝手口ドア%'
@@ -368,6 +398,8 @@ begin
       using errcode = '42501';
   end if;
 
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
+
   if not exists (
     select 1
       from public.legacy_base_migration_batches b
@@ -400,7 +432,12 @@ begin
     case
       when regexp_replace(lower(btrim(m.legacy_name)), '\s+', '', 'g')
            = regexp_replace(lower(btrim(l.name)), '\s+', '', 'g')
+       and m.legacy_quantity::numeric = l.quantity
+       and coalesce(lower(btrim(m.legacy_unit)), '') = coalesce(lower(btrim(l.unit)), '')
+       and m.legacy_unit_price::numeric = l.unit_price
        and m.legacy_amount::numeric = l.amount
+       and coalesce(regexp_replace(lower(btrim(m.legacy_remark)), '\s+', '', 'g'), '')
+           = coalesce(regexp_replace(lower(btrim(l.remark)), '\s+', '', 'g'), '')
         then 'exact'
       else 'candidate'
     end,
@@ -707,6 +744,8 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
+
   update public.legacy_base_breakdown_mappings
      set target_classification = p_target_classification,
          decision_type = 'human',
@@ -764,6 +803,8 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
+
   update public.legacy_base_spec_mappings
      set proposed_group_key = v_group,
          decision_status = 'approved',
@@ -816,6 +857,8 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
+
   update public.legacy_estimate_duplicate_checks
      set resolution = p_resolution,
          resolved_by = v_uid,
@@ -866,12 +909,7 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ確定できます' using errcode = 'P0001';
   end if;
 
-  v_current_hash := public.legacy_base_migration_source_hash();
-  if v_current_hash <> v_batch.source_snapshot_hash then
-    raise exception 'STALE: 移行元データがレビュー開始後に変更されています。新しいバッチを作成してください'
-      using errcode = 'P0001';
-  end if;
-
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
   perform public.refresh_legacy_estimate_duplicate_checks(p_batch_id);
 
   if exists (
@@ -1059,6 +1097,7 @@ to service_role;
 revoke all on function public.can_view_legacy_base_migration() from public, anon, authenticated;
 revoke all on function public.can_manage_legacy_base_migration() from public, anon, authenticated;
 revoke all on function public.legacy_base_migration_source_hash() from public, anon, authenticated;
+revoke all on function public.assert_legacy_base_migration_source_current(uuid) from public, anon, authenticated;
 revoke all on function public.classify_legacy_base_breakdown_item(text, text, text) from public, anon, authenticated;
 revoke all on function public.refresh_legacy_estimate_duplicate_checks(uuid) from public, anon, authenticated;
 revoke all on function public.create_legacy_base_migration_batch(text) from public, anon, authenticated;
@@ -1079,6 +1118,7 @@ grant execute on function public.can_view_legacy_base_migration(),
 to authenticated, service_role;
 
 grant execute on function public.legacy_base_migration_source_hash(),
+                          public.assert_legacy_base_migration_source_current(uuid),
                           public.classify_legacy_base_breakdown_item(text, text, text),
                           public.refresh_legacy_estimate_duplicate_checks(uuid)
 to service_role;

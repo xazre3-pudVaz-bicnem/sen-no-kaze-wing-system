@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Alert, Button, Input } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
@@ -70,6 +70,13 @@ export function BaseMasterLinesEditor({
   onDirty: () => void;
 }) {
   const [sections, setSections] = useState<Section[]>(() => makeSections(lines));
+  const lineIdentity = lines.map((line) => `${line.id}:${line.line_key}`).join('|');
+
+  useEffect(() => {
+    setSections(makeSections(lines));
+    // 保存後にDB採番されたline_keyをクライアント状態へ取り込む。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineIdentity]);
 
   const payload = useMemo(
     () =>

@@ -107,6 +107,9 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
   const filter = sp.filter === 'all' ? 'all' : 'pending';
   const visibleMappings = filter === 'all' ? mappings : pendingMappings;
   const mappingMap = new Map(mappings.map((row) => [String(row.id), row]));
+  const snapshotMap = new Map(
+    snapshots.map((row) => [`${String(row.base_model_id)}::${String(row.legacy_spec_code)}`, row])
+  );
   const readiness = assessLegacyBaseMigrationReadiness({ mappings, specs, duplicates, snapshots });
   const ready = Boolean(selected) && readiness.canAttemptFinalize;
 
@@ -215,15 +218,17 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               <p className="mt-1 text-xs text-muted">同じグループキーにまとめるには、本体に残す明細の工事区分・品名・数量・単位・単価・金額・備考と本体諸費用条件が一致している必要があります。</p>
             </div>
             <Table minWidth="56rem">
-              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>グループキー</Th><Th>理由</Th><Th>状態</Th><Th></Th></tr></thead>
+              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>取込元</Th><Th>グループキー</Th><Th>理由</Th><Th>状態</Th><Th></Th></tr></thead>
               <tbody className="divide-y divide-line">
-                {specs.map((row) => (
+                {specs.map((row) => {
+                  const snapshot = snapshotMap.get(`${String(row.base_model_id)}::${String(row.legacy_spec_code)}`);
+                  return (
                   <tr key={String(row.id)}>
                     <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
                     <Td className="font-semibold">{String(row.legacy_spec_code)}</Td>
                     <Td className="text-xs text-muted">
-                      <p>{row.source_sheet_name ? String(row.source_sheet_name) : '標準見積なし'}</p>
-                      <p>基準商品 {Array.isArray(row.legacy_baseline_option_ids) ? row.legacy_baseline_option_ids.length : 0}件</p>
+                      <p>{snapshot?.source_sheet_name ? String(snapshot.source_sheet_name) : '標準見積なし'}</p>
+                      <p>基準商品 {Array.isArray(snapshot?.legacy_baseline_option_ids) ? snapshot.legacy_baseline_option_ids.length : 0}件</p>
                     </Td>
                     <Td>{row.proposed_group_key ? String(row.proposed_group_key) : '—'}</Td>
                     <Td className="text-xs text-muted">{row.reason ? String(row.reason) : '—'}</Td>
@@ -242,7 +247,8 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                       )}
                     </Td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </Table>
           </section>
@@ -308,6 +314,10 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                   <tr key={String(row.id)}>
                     <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
                     <Td className="font-semibold">{String(row.legacy_spec_code)}</Td>
+                    <Td className="text-xs text-muted">
+                      <p>{row.source_sheet_name ? String(row.source_sheet_name) : '標準見積なし'}</p>
+                      <p>基準商品 {Array.isArray(row.legacy_baseline_option_ids) ? row.legacy_baseline_option_ids.length : 0}件</p>
+                    </Td>
                     <Td>
                       <p className="font-semibold">{formatYen(Number(row.legacy_base_total ?? row.legacy_base_line_total ?? 0))}</p>
                       <p className="text-xs text-muted">明細 {formatYen(Number(row.legacy_base_line_total ?? 0))} ／ 諸費用率 {row.legacy_base_expense_rate == null ? '—' : String(row.legacy_base_expense_rate)} ／ 諸費用 {row.legacy_base_expense == null ? '—' : formatYen(Number(row.legacy_base_expense))}</p>

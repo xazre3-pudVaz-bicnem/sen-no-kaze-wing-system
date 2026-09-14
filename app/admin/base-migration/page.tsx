@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { formatYen } from '@/lib/domain/pricing';
+import { assessLegacyBaseMigrationReadiness } from '@/lib/domain/legacy-base-migration';
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import {
@@ -106,7 +107,8 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
   const filter = sp.filter === 'all' ? 'all' : 'pending';
   const visibleMappings = filter === 'all' ? mappings : pendingMappings;
   const mappingMap = new Map(mappings.map((row) => [String(row.id), row]));
-  const ready = Boolean(selected) && pendingMappings.length === 0 && pendingSpecs.length === 0 && pendingDuplicates.length === 0 && snapshots.length > 0;
+  const readiness = assessLegacyBaseMigrationReadiness({ mappings, specs, duplicates, snapshots });
+  const ready = Boolean(selected) && readiness.canAttemptFinalize;
 
   return (
     <AdminPage
@@ -331,7 +333,15 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
           {canManage && selected.status === 'reviewing' && (
             <section className="card space-y-3 p-5">
               <h2 className="font-semibold">レビュー完了</h2>
-              <p className="text-sm">明細未確認 {pendingMappings.length}件 ／ 仕様未確認 {pendingSpecs.length}件 ／ 重複未解決 {pendingDuplicates.length}件</p>
+              <p className="text-sm">明細未確認 {readiness.pendingMappings}件 ／ 仕様未確認 {readiness.pendingSpecs}件 ／ 重複未解決 {readiness.pendingDuplicates}件</p>
+              <div className="grid gap-1 text-xs text-muted sm:grid-cols-2 lg:grid-cols-3">
+                <p>本体行0件の仕様：{readiness.zeroBaseSpecs}</p>
+                <p>BOM不一致グループ：{readiness.incompatibleBodyGroups}</p>
+                <p>本体諸費用不一致：{readiness.incompatibleExpenseGroups}</p>
+                <p>金額snapshot不足：{readiness.incompleteSnapshots}</p>
+                <p>単価×数量の不一致：{readiness.amountMismatches}</p>
+                <p>整数円で保存不可：{readiness.nonIntegerBaseTotals}</p>
+              </div>
               <form action={finalizeLegacyBaseMigrationReviewAction}>
                 <input type="hidden" name="batch_id" value={String(selected.id)} />
                 <Button type="submit" disabled={!ready}>DB最終検証を実行して「移行準備完了」にする</Button>

@@ -40,6 +40,8 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect((migration.match(/\$classifier\$/g) ?? []).length).toBe(2);
     expect((migration.match(/\$sig\$/g) ?? []).length).toBe(2);
     expect((migration.match(/\$locksrc\$/g) ?? []).length).toBe(2);
+    expect((migration.match(/\$specmap\$/g) ?? []).length).toBe(2);
+    expect((migration.match(/\$dupresolve\$/g) ?? []).length).toBe(2);
   });
 
   it('自動分類はsection＋品名の完全一致だけに限定する', () => {

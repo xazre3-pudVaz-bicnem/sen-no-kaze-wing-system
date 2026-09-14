@@ -43,6 +43,19 @@ describe('resolvePreview', () => {
     expect(r.missing_keys).toEqual([]);
   });
 
+  it('仕様ボタン直後は商品キーが不完全でも仕様の標準平面図を優先する', () => {
+    const r = resolvePreview(
+      wingRules,
+      'floorplan',
+      ['aircon'],
+      'hotel',
+      ['aircon', 'bath', 'toilet', 'washbasin']
+    );
+    expect(r.kind).toBe('exact');
+    expect(r.layers[0].url).toContain('wing-hotel');
+    expect(r.approximate).toBe(false);
+  });
+
   it('事務所仕様は空キーの旧fallbackより office専用平面図を優先する', () => {
     const officeRule = {
       id: '99999999-0000-4000-8000-000000000010',

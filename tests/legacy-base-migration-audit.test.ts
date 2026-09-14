@@ -48,6 +48,7 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain('旧仕様から新本体への対応が未確認です');
     expect(migration).toContain('未解決の二重計上候補があります');
     expect(migration).toContain('金額スナップショットが移行元仕様数と一致しません');
+    expect(migration).toContain('旧標準見積の内部金額に不整合があります');
   });
 
   it('authenticatedの直接writeを禁止し、HQ用RPCだけで更新する', () => {
@@ -83,5 +84,11 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(actions).toContain('mapping_id: z.uuid()');
     expect(actions).toContain('base_model_id: z.uuid()');
     expect(actions).toContain('check_id: z.uuid()');
+  });
+
+  it('画面入口はlegacy profile roleではなくDBの組織権限判定を主とする', () => {
+    expect(actions).toContain("requireStaff('/admin/base-migration')");
+    expect(actions).not.toContain("requireCatalogEditor('/admin/base-migration')");
+    expect(migration).toContain('can_manage_legacy_base_migration');
   });
 });

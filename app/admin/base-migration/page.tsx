@@ -147,7 +147,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
             </div>
             <div>
               <p className="text-xs text-muted">元データSHA-256</p>
-              <p className="mt-1 font-mono text-xs">{selected.source_snapshot_hash ? String(selected.source_snapshot_hash) : '—'}</p>
+              <p className="mt-1 break-all font-mono text-xs">{selected.source_snapshot_hash ? String(selected.source_snapshot_hash) : '—'}</p>
             </div>
           </section>
 
@@ -209,7 +209,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
             <div>
               <h2 className="font-semibold">旧仕様 → 新本体グループ</h2>
               <p className="text-sm text-muted">hotel / residence / office を用途名のまま分けず、本体明細の実差で決めます。</p>
-              <p className="mt-1 text-xs text-muted">同じグループキーにまとめるには、本体に残す明細の品名・数量・単位・単価・金額・備考が一致している必要があります。</p>
+              <p className="mt-1 text-xs text-muted">同じグループキーにまとめるには、本体に残す明細の工事区分・品名・数量・単位・単価・金額・備考と本体諸費用条件が一致している必要があります。</p>
             </div>
             <Table minWidth="56rem">
               <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>グループキー</Th><Th>理由</Th><Th>状態</Th><Th></Th></tr></thead>
@@ -251,9 +251,21 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                     return (
                     <tr key={String(row.id)}>
                       <Td>{row.match_type === 'exact' ? <Badge tone="warn">完全一致</Badge> : '候補'}</Td>
-                      <Td className="font-semibold">{source ? String(source.legacy_name) : '—'}</Td>
+                      <Td>
+                        <p className="font-semibold">{source ? String(source.legacy_name) : '—'}</p>
+                        {source && (
+                          <p className="mt-1 text-xs text-muted">
+                            {String(source.legacy_section)} ／ 数量 {String(source.legacy_quantity)} {source.legacy_unit ? String(source.legacy_unit) : ''} ／ 単価 {formatYen(Number(source.legacy_unit_price))} ／ {source.legacy_remark ? String(source.legacy_remark) : '備考なし'}
+                          </p>
+                        )}
+                      </Td>
                       <Td right>{source ? formatYen(Number(source.legacy_amount)) : '—'}</Td>
-                      <Td className="font-semibold">{String(row.candidate_name)}</Td>
+                      <Td>
+                        <p className="font-semibold">{String(row.candidate_name)}</p>
+                        <p className="mt-1 text-xs text-muted">
+                          {String(row.candidate_section_code)}{row.candidate_group_label ? `／${String(row.candidate_group_label)}` : ''} ／ 数量 {row.candidate_quantity == null ? '—' : String(row.candidate_quantity)} {row.candidate_unit ? String(row.candidate_unit) : ''} ／ 単価 {row.candidate_unit_price == null ? '—' : formatYen(Number(row.candidate_unit_price))} ／ {row.candidate_remark ? String(row.candidate_remark) : '備考なし'}
+                        </p>
+                      </Td>
                       <Td right>{formatYen(Number(row.candidate_amount))}</Td>
                       <Td>
                         {editable ? (
@@ -283,16 +295,28 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
           <section className="space-y-3">
             <div><h2 className="font-semibold">移行前の金額基準</h2><p className="text-sm text-muted">後続PRで新構造と1円単位で比較する基準です。</p></div>
             <Table minWidth="82rem">
-              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th right>旧本体</Th><Th right>旧内外装</Th><Th right>旧オプション</Th><Th right>旧別途</Th><Th right>調整前</Th><Th right>調整</Th><Th right>税</Th><Th right>税込合計</Th></tr></thead>
+              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>旧本体</Th><Th>旧内外装</Th><Th>旧オプション</Th><Th>旧別途</Th><Th right>調整前</Th><Th right>調整</Th><Th right>税</Th><Th right>税込合計</Th></tr></thead>
               <tbody className="divide-y divide-line">
                 {snapshots.map((row) => (
                   <tr key={String(row.id)}>
                     <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
                     <Td className="font-semibold">{String(row.legacy_spec_code)}</Td>
-                    <Td right>{formatYen(Number(row.legacy_base_total ?? row.legacy_base_line_total ?? 0))}</Td>
-                    <Td right>{row.legacy_interior_total == null ? '—' : formatYen(Number(row.legacy_interior_total))}</Td>
-                    <Td right>{row.legacy_option_total == null ? '—' : formatYen(Number(row.legacy_option_total))}</Td>
-                    <Td right>{row.legacy_sitework_total == null ? '—' : formatYen(Number(row.legacy_sitework_total))}</Td>
+                    <Td>
+                      <p className="font-semibold">{formatYen(Number(row.legacy_base_total ?? row.legacy_base_line_total ?? 0))}</p>
+                      <p className="text-xs text-muted">明細 {formatYen(Number(row.legacy_base_line_total ?? 0))} ／ 諸費用率 {row.legacy_base_expense_rate == null ? '—' : String(row.legacy_base_expense_rate)} ／ 諸費用 {row.legacy_base_expense == null ? '—' : formatYen(Number(row.legacy_base_expense))}</p>
+                    </Td>
+                    <Td>
+                      <p className="font-semibold">{row.legacy_interior_total == null ? '—' : formatYen(Number(row.legacy_interior_total))}</p>
+                      <p className="text-xs text-muted">明細 {row.legacy_interior_line_total == null ? '—' : formatYen(Number(row.legacy_interior_line_total))} ／ 諸費用率 {row.legacy_interior_expense_rate == null ? '—' : String(row.legacy_interior_expense_rate)} ／ 諸費用 {row.legacy_interior_expense == null ? '—' : formatYen(Number(row.legacy_interior_expense))}</p>
+                    </Td>
+                    <Td>
+                      <p className="font-semibold">{row.legacy_option_total == null ? '—' : formatYen(Number(row.legacy_option_total))}</p>
+                      <p className="text-xs text-muted">明細 {row.legacy_option_line_total == null ? '—' : formatYen(Number(row.legacy_option_line_total))} ／ 諸費用率 {row.legacy_option_expense_rate == null ? '—' : String(row.legacy_option_expense_rate)} ／ 諸費用 {row.legacy_option_expense == null ? '—' : formatYen(Number(row.legacy_option_expense))}</p>
+                    </Td>
+                    <Td>
+                      <p className="font-semibold">{row.legacy_sitework_total == null ? '—' : formatYen(Number(row.legacy_sitework_total))}</p>
+                      <p className="text-xs text-muted">明細 {row.legacy_sitework_line_total == null ? '—' : formatYen(Number(row.legacy_sitework_line_total))} ／ 諸費用率 {row.legacy_sitework_expense_rate == null ? '—' : String(row.legacy_sitework_expense_rate)} ／ 諸費用 {row.legacy_sitework_expense == null ? '—' : formatYen(Number(row.legacy_sitework_expense))}</p>
+                    </Td>
                     <Td right>{row.subtotal_raw == null ? '—' : formatYen(Number(row.subtotal_raw))}</Td>
                     <Td right>{row.adjustment == null ? '—' : formatYen(Number(row.adjustment))}</Td>
                     <Td right>{row.tax == null ? '—' : formatYen(Number(row.tax))}</Td>
@@ -309,9 +333,11 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               <p className="text-sm">明細未確認 {pendingMappings.length}件 ／ 仕様未確認 {pendingSpecs.length}件 ／ 重複未解決 {pendingDuplicates.length}件</p>
               <form action={finalizeLegacyBaseMigrationReviewAction}>
                 <input type="hidden" name="batch_id" value={String(selected.id)} />
-                <Button type="submit" disabled={!ready}>レビューを確定して「移行準備完了」にする</Button>
+                <Button type="submit" disabled={!ready}>DB最終検証を実行して「移行準備完了」にする</Button>
               </form>
-              {!ready && <p className="text-xs text-muted">すべての確認を終えるまで確定できません。</p>}
+              {!ready
+                ? <p className="text-xs text-muted">すべての確認を終えるまで最終検証できません。</p>
+                : <p className="text-xs text-muted">実行時にDB側で元データSTALE、BOM・諸費用互換性、金額snapshot、単価×数量、旧見積内部整合を再検証します。</p>}
             </section>
           )}
         </>

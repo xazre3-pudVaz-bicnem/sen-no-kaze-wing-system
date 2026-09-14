@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, Minus, Pencil, Plus } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import type { StandardEstimatePricingResult } from '@/lib/domain/standard-estimate-pricing';
@@ -129,16 +129,31 @@ export function QuoteSheet({
   onPickCategory,
   showDealerFinder = false,
 }: Props) {
-  const [expandedSections, setExpandedSections] = useState({
-    base: true,
-    interiorExterior: true,
-    options: true,
-    otherConstruction: true,
-    sitework: true,
-    freeProducts: true,
-  });
+  const isMobile = useSyncExternalStore(
+    (onStoreChange) => {
+      const media = window.matchMedia('(max-width: 639px)');
+      media.addEventListener('change', onStoreChange);
+      return () => media.removeEventListener('change', onStoreChange);
+    },
+    () => window.matchMedia('(max-width: 639px)').matches,
+    () => false
+  );
+  const [sectionOverrides, setSectionOverrides] = useState<
+    Partial<Record<'base' | 'interiorExterior' | 'options' | 'otherConstruction' | 'sitework' | 'freeProducts', boolean>>
+  >({});
+  const expandedSections = {
+    base: sectionOverrides.base ?? !isMobile,
+    interiorExterior: sectionOverrides.interiorExterior ?? !isMobile,
+    options: sectionOverrides.options ?? !isMobile,
+    otherConstruction: sectionOverrides.otherConstruction ?? !isMobile,
+    sitework: sectionOverrides.sitework ?? !isMobile,
+    freeProducts: sectionOverrides.freeProducts ?? !isMobile,
+  };
   const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
+    setSectionOverrides((current) => ({
+      ...current,
+      [section]: !(current[section] ?? !isMobile),
+    }));
   };
   const byOption = new Map(options.map((o) => [o.id, o]));
   // 防火仕様は上部の選択UIで扱うため、見積書の表示分類からは除外する。

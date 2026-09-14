@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ImageOff } from 'lucide-react';
+import { Check, ChevronDown, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -169,9 +169,21 @@ export function ProductDetail({
           )}
 
           {selectedSpecs.length > 0 && (
-            <section className="mt-4 rounded-lg border border-line bg-white" data-testid="product-detail-summary">
-              <h4 className="border-b border-line px-3 py-2 text-xs font-semibold text-ink">今回の選択内容</h4>
-              <dl className="divide-y divide-line text-xs">
+            <details
+              className="group mt-4 rounded-lg border border-line bg-white"
+              data-testid="product-detail-summary"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs [&::-webkit-details-marker]:hidden">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="font-semibold text-ink">今回の選択内容</span>
+                  <span className="shrink-0 text-muted">{selectedSpecs.length}項目</span>
+                </span>
+                <ChevronDown
+                  className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <dl className="divide-y divide-line border-t border-line text-xs">
                 {selectedSpecs.map(({ group, choice }) => (
                   <div key={group.id} className="grid grid-cols-[6.5rem_1fr] gap-2 px-3 py-2">
                     <dt className="text-muted">{group.name}</dt>
@@ -190,7 +202,7 @@ export function ProductDetail({
                   </div>
                 ))}
               </dl>
-            </section>
+            </details>
           )}
         </section>
       </div>

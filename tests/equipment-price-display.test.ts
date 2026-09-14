@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { equipmentCategoryPriceState } from '@/lib/domain/equipment-price-display';
+import {
+  equipmentCategoryPriceBreakdown,
+  equipmentCategoryPriceState,
+} from '@/lib/domain/equipment-price-display';
 import type { OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 
 const option = (id: string, price: number, priceOnRequest = false): ProductOption => ({
@@ -68,6 +71,18 @@ const upgradeChoice: OptionVariantChoice = {
   sort_order: 2,
 };
 
+const upgradeGroup: OptionVariantGroup = {
+  ...group,
+  id: 'variant-group-upgrade',
+  option_id: 'ub-upgrade',
+};
+
+const upgradedProductChoice: OptionVariantChoice = {
+  ...upgradeChoice,
+  id: 'variant-upgrade-product',
+  group_id: upgradeGroup.id,
+};
+
 const options = [
   option('ub-standard', 570000),
   option('ub-upgrade', 650000),
@@ -133,6 +148,27 @@ describe('設備カードの標準・差額表示', () => {
         variantChoices: [standardChoice, upgradeChoice],
       })
     ).toEqual({ kind: 'delta', delta: 50000 });
+  });
+
+  it('商品差額と仕様差額を分けて返す', () => {
+    expect(
+      equipmentCategoryPriceBreakdown({
+        categoryId: 'ub-category',
+        options,
+        selectedIds: ['ub-upgrade'],
+        baselineIds: ['ub-standard'],
+        selectedVariantIds: ['variant-upgrade-product'],
+        baselineVariantIds: ['variant-standard'],
+        variantGroups: [group, upgradeGroup],
+        variantChoices: [standardChoice, upgradeChoice, upgradedProductChoice],
+      })
+    ).toMatchObject({
+      state: { kind: 'delta', delta: 130000 },
+      productDelta: 80000,
+      variantDelta: 50000,
+      productPriceOnRequest: false,
+      variantPriceOnRequest: false,
+    });
   });
 
   it('価格未確定商品へ変更した場合は別途見積にする', () => {

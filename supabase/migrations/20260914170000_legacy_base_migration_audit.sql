@@ -386,6 +386,53 @@ begin
 end;
 $$;
 
+create or replace function public.legacy_base_spec_body_signature(
+  p_batch_id uuid,
+  p_base_model_id uuid,
+  p_spec_code text
+)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $sig$
+  select encode(
+    digest(
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'name', lower(btrim(m.legacy_name)),
+            'quantity', m.legacy_quantity,
+            'unit', lower(btrim(coalesce(m.legacy_unit, ''))),
+            'unit_price', m.legacy_unit_price,
+            'amount', m.legacy_amount,
+            'remark', lower(btrim(coalesce(m.legacy_remark, ''))),
+            'target_group_label', lower(btrim(coalesce(m.target_group_label, '')))
+          )
+          order by
+            lower(btrim(m.legacy_name)),
+            m.legacy_quantity,
+            lower(btrim(coalesce(m.legacy_unit, ''))),
+            m.legacy_unit_price,
+            m.legacy_amount,
+            lower(btrim(coalesce(m.legacy_remark, ''))),
+            lower(btrim(coalesce(m.target_group_label, '')))
+        ),
+        '[]'::jsonb
+      )::text,
+      'sha256'
+    ),
+    'hex'
+  )
+  from public.legacy_base_breakdown_mappings m
+ where m.migration_batch_id = p_batch_id
+   and m.base_model_id = p_base_model_id
+   and m.legacy_spec_code = p_spec_code
+   and m.review_status = 'approved'
+   and m.target_classification = 'base';
+$sig$;
+
 -- ---------- 二重計上候補を再構築 ----------
 create or replace function public.refresh_legacy_estimate_duplicate_checks(p_batch_id uuid)
 returns void
@@ -953,6 +1000,42 @@ begin
 
   if exists (
     select 1
+      from public.legacy_base_spec_mappings s
+     where s.migration_batch_id = p_batch_id
+       and not exists (
+         select 1
+           from public.legacy_base_breakdown_mappings m
+          where m.migration_batch_id = s.migration_batch_id
+            and m.base_model_id = s.base_model_id
+            and m.legacy_spec_code = s.legacy_spec_code
+            and m.review_status = 'approved'
+            and m.target_classification = 'base'
+       )
+  ) then
+    raise exception 'VALIDATION: 本体に残る明細が0件の旧仕様があります'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+      from public.legacy_base_spec_mappings a
+      join public.legacy_base_spec_mappings b
+        on b.migration_batch_id = a.migration_batch_id
+       and b.base_model_id = a.base_model_id
+       and b.proposed_group_key = a.proposed_group_key
+       and b.id::text > a.id::text
+     where a.migration_batch_id = p_batch_id
+       and a.decision_status = 'approved'
+       and b.decision_status = 'approved'
+       and public.legacy_base_spec_body_signature(a.migration_batch_id, a.base_model_id, a.legacy_spec_code)
+           <> public.legacy_base_spec_body_signature(b.migration_batch_id, b.base_model_id, b.legacy_spec_code)
+  ) then
+    raise exception 'VALIDATION: 同じ新本体グループに、内容の異なる本体明細をまとめることはできません'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
       from public.legacy_estimate_duplicate_checks d
      where d.migration_batch_id = p_batch_id
        and d.resolution = 'pending'
@@ -1118,6 +1201,7 @@ revoke all on function public.can_manage_legacy_base_migration() from public, an
 revoke all on function public.legacy_base_migration_source_hash() from public, anon, authenticated;
 revoke all on function public.assert_legacy_base_migration_source_current(uuid) from public, anon, authenticated;
 revoke all on function public.classify_legacy_base_breakdown_item(text, text, text) from public, anon, authenticated;
+revoke all on function public.legacy_base_spec_body_signature(uuid, uuid, text) from public, anon, authenticated;
 revoke all on function public.refresh_legacy_estimate_duplicate_checks(uuid) from public, anon, authenticated;
 revoke all on function public.create_legacy_base_migration_batch(text) from public, anon, authenticated;
 revoke all on function public.set_legacy_base_mapping_decision(uuid, uuid, text, text, text) from public, anon, authenticated;
@@ -1139,6 +1223,7 @@ to authenticated, service_role;
 grant execute on function public.legacy_base_migration_source_hash(),
                           public.assert_legacy_base_migration_source_current(uuid),
                           public.classify_legacy_base_breakdown_item(text, text, text),
+                          public.legacy_base_spec_body_signature(uuid, uuid, text),
                           public.refresh_legacy_estimate_duplicate_checks(uuid)
 to service_role;
 

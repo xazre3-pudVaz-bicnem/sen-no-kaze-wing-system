@@ -13,12 +13,15 @@ function validSnapshot(spec = 'hotel') {
     legacy_base_expense: 150,
     legacy_base_total: 1150,
     legacy_interior_line_total: 200,
+    legacy_interior_expense_rate: 0.15,
     legacy_interior_expense: 30,
     legacy_interior_total: 230,
     legacy_option_line_total: 300,
+    legacy_option_expense_rate: 0.15,
     legacy_option_expense: 45,
     legacy_option_total: 345,
     legacy_sitework_line_total: 400,
+    legacy_sitework_expense_rate: 0.15,
     legacy_sitework_expense: 60,
     legacy_sitework_total: 460,
     subtotal_raw: 2185,
@@ -135,6 +138,18 @@ describe('移行監査ready判定', () => {
     });
 
     expect(result.incompatibleExpenseGroups).toBe(1);
+    expect(result.canAttemptFinalize).toBe(false);
+  });
+
+  it('specに対応するsnapshot行そのものが無ければreadyを止める', () => {
+    const result = assessLegacyBaseMigrationReadiness({
+      mappings: [baseMapping('hotel'), baseMapping('residence')],
+      specs: [approvedSpec('hotel', 'body-a'), approvedSpec('residence', 'body-b')],
+      duplicates: [],
+      snapshots: [validSnapshot('hotel')],
+    });
+
+    expect(result.incompleteSnapshots).toBe(1);
     expect(result.canAttemptFinalize).toBe(false);
   });
 

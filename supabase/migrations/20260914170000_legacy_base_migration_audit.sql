@@ -194,7 +194,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
+as $hashfn$
   select encode(
     digest(
       jsonb_build_object(
@@ -286,7 +286,7 @@ as $$
     ),
     'hex'
   );
-$;
+$hashfn$;
 
 create or replace function public.assert_legacy_base_migration_source_current(p_batch_id uuid)
 returns void
@@ -294,7 +294,7 @@ language plpgsql
 stable
 security definer
 set search_path = public
-as $
+as $assertfn$
 declare
   v_expected_hash text;
   v_current_hash text;
@@ -314,7 +314,7 @@ begin
       using errcode = 'P0001';
   end if;
 end;
-$;
+$assertfn$;
 
 -- ---------- 安全側のホワイトリスト分類 ----------
 -- 名称に「屋根」が含まれるだけで内外装へ移す等の広いキーワード判定は禁止する。

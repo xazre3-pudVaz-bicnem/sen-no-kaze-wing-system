@@ -383,15 +383,15 @@ export function OptionPickerDialog({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white text-center text-[0.68rem]">
                 <div className="min-w-[6.5rem] px-2.5 py-1.5">
-                  <dt className="text-muted">商品差額</dt>
+                  <dt className="text-muted">商品追加額</dt>
                   <dd className="mt-0.5 font-semibold text-ink">{productPriceDetailLabel}</dd>
                 </div>
                 <div className="min-w-[6.5rem] border-x border-line px-2.5 py-1.5">
-                  <dt className="text-muted">仕様差額</dt>
+                  <dt className="text-muted">仕様追加額</dt>
                   <dd className="mt-0.5 font-semibold text-ink">{variantPriceDetailLabel}</dd>
                 </div>
                 <div className="min-w-[7rem] bg-ivory/55 px-2.5 py-1.5">
-                  <dt className="font-semibold text-brown">標準との差額</dt>
+                  <dt className="font-semibold text-brown">合計追加額</dt>
                   <dd className="mt-0.5 text-sm font-bold text-brown">{totalPriceDetailLabel}</dd>
                 </div>
               </dl>

@@ -39,7 +39,7 @@ export function VariantPicker({
   const picked = new Set(selected);
 
   return (
-    <div className="space-y-4 border-t border-line pt-4" data-testid="variant-picker">
+    <div className="space-y-3 border-t border-line pt-3" data-testid="variant-picker">
       {groups.map((g) => {
         const list = choices.filter((c) => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
         if (list.length === 0) return null;
@@ -49,9 +49,9 @@ export function VariantPicker({
         const allPriceOnRequest = list.length > 0 && list.every((choice) => choice.price_on_request);
 
         return (
-          <section key={g.id} data-testid={`variant-group-${g.code}`}>
+          <section key={g.id} className="border-b border-line/70 pb-3 last:border-b-0 last:pb-0" data-testid={`variant-group-${g.code}`}>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h3 className="text-xs font-semibold text-ink">{g.name}</h3>
+              <h3 className="text-[0.72rem] font-semibold text-ink">{g.name}</h3>
               {fixed ? (
                 <span className="text-[0.68rem] text-muted">変更不可</span>
               ) : current ? (
@@ -72,7 +72,7 @@ export function VariantPicker({
                 'mt-2 gap-2',
                 withImage
                   ? 'grid grid-cols-3 sm:grid-cols-4'
-                  : 'grid grid-cols-2 xl:grid-cols-3'
+                  : 'grid grid-cols-1 sm:grid-cols-2'
               )}
             >
               {list.map((c) => {
@@ -97,10 +97,12 @@ export function VariantPicker({
                         'relative h-full w-full rounded-lg border text-left transition disabled:cursor-not-allowed disabled:opacity-70',
                         withImage
                           ? 'overflow-hidden'
-                          : 'min-h-11 px-2.5 py-2 text-center',
+                          : 'min-h-10 py-2 pr-2.5 pl-8',
                         on
-                          ? 'border-brown bg-ivory/70 ring-2 ring-brown/50'
-                          : 'border-line bg-white hover:border-ink/40'
+                          ? withImage
+                            ? 'border-brown bg-ivory/70 ring-2 ring-brown/50'
+                            : 'border-brown bg-ivory/55'
+                          : 'border-line bg-white hover:border-ink/40 hover:bg-sand/20'
                       )}
                     >
                       {withImage && (
@@ -115,26 +117,30 @@ export function VariantPicker({
                         </span>
                       )}
 
-                      {on && (
+                      {withImage ? (
+                        on && (
+                          <span
+                            className="absolute top-1 left-1 inline-flex size-5 items-center justify-center rounded-full bg-brown text-white"
+                            aria-hidden="true"
+                          >
+                            <Check className="size-2.5" />
+                          </span>
+                        )
+                      ) : (
                         <span
                           className={cn(
-                            'absolute inline-flex items-center justify-center rounded-full bg-brown text-white',
-                            withImage ? 'top-1 left-1 size-5' : 'top-1.5 right-1.5 size-4'
+                            'absolute left-2.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-full border bg-white',
+                            on ? 'border-brown' : 'border-line'
                           )}
                           aria-hidden="true"
                         >
-                          <Check className="size-2.5" />
+                          {on && <span className="size-2 rounded-full bg-brown" />}
                         </span>
                       )}
 
                       <span className={cn('block', withImage && 'px-2 py-1.5')}>
-                        <span className="block text-xs leading-snug font-medium text-ink">{c.name}</span>
-                        <span
-                          className={cn(
-                            'mt-0.5 flex flex-wrap items-center gap-1',
-                            !withImage && 'justify-center'
-                          )}
-                        >
+                        <span className="block break-words text-xs font-medium leading-[1.35] text-ink">{c.name}</span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-1">
                           {c.kind !== 'option' && (
                             <span className="rounded bg-sand px-1 text-[0.58rem] text-muted">
                               {VARIANT_KIND_LABELS[c.kind]}

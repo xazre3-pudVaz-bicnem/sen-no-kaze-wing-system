@@ -56,16 +56,25 @@ begin
   end if;
 
   if p_cloned_from_revision_id is not null then
-    select r.*, b.*
-      into v_source, v_source_master
-      from public.base_master_revisions r
-      join public.base_masters b on b.id = r.base_master_id
-     where r.id = p_cloned_from_revision_id
-       and r.status in ('published', 'superseded')
-     for share of r, b;
+    select *
+      into v_source
+      from public.base_master_revisions
+     where id = p_cloned_from_revision_id
+       and status in ('published', 'superseded')
+     for share;
 
     if not found then
       raise exception 'VALIDATION: 複製元の公開済み本体Revisionが見つかりません' using errcode = 'P0001';
+    end if;
+
+    select *
+      into v_source_master
+      from public.base_masters
+     where id = v_source.base_master_id
+     for share;
+
+    if not found then
+      raise exception 'VALIDATION: 複製元の本体が見つかりません' using errcode = 'P0001';
     end if;
 
     if v_source_master.base_model_id <> p_base_model_id then

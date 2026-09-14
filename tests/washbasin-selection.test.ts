@@ -4,6 +4,7 @@ import {
   WASHBASIN_STANDARD_SET_ID,
   isWashbasinDisplayOptionSelected,
   legacyWashbasinOptions,
+  normalizeWashbasinSelection,
   washbasinDisplayOptions,
   washbasinSelectionIdsForOption,
 } from '@/lib/domain/washbasin-selection';
@@ -24,6 +25,9 @@ describe('洗面の商品選択', () => {
       name: '標準洗面セット',
       price: 159225,
       price_on_request: false,
+      manufacturer: null,
+      model_no: null,
+      size_note: null,
     });
   });
 
@@ -37,6 +41,29 @@ describe('洗面の商品選択', () => {
     expect(
       isWashbasinDisplayOptionSelected(standardSet!, baselineIds, washbasinOptions)
     ).toBe(true);
+  });
+
+  it('旧保存データで標準セットと洗面化粧台が混在していたら洗面化粧台1商品へ補正する', () => {
+    const alternative = washbasinOptions.find((option) => option.code === 'wash-lixil-esta-w600');
+    expect(alternative).toBeDefined();
+
+    expect(
+      normalizeWashbasinSelection(
+        washbasinOptions,
+        [...baselineIds, alternative!.id],
+        baselineIds
+      )
+    ).toEqual([alternative!.id]);
+  });
+
+  it('旧保存データで標準セットが片方だけ残っていたら2商品セットへ補正する', () => {
+    expect(
+      normalizeWashbasinSelection(
+        washbasinOptions,
+        [baselineIds[0]],
+        baselineIds
+      )
+    ).toEqual(baselineIds);
   });
 
   it('洗面化粧台を選ぶ場合はその1商品のみを選択対象にする', () => {

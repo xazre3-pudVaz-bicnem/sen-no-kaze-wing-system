@@ -314,10 +314,11 @@ begin
      or v_name like '%スタイロフォーム%'
      or v_name like '%グラスウール%'
      or v_name like '%断熱材%'
-     or v_name like '%osb%'
+     or v_name like '%osb構造用合板%'
+     or v_name like '%構造用合板%'
      or v_name like '%屋根タルキ%'
      or v_name like '%本体組立%'
-     or (v_section like '%金物%' and v_name not like '%建具%')
+     or (v_name like '%金物%' and v_name not like '%建具%')
   then
     return query select
       'base'::text,

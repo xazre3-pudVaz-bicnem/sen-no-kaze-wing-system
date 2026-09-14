@@ -17,6 +17,7 @@ interface Props {
   getPriceLabel: (option: ProductOption) => string;
   getAttributes?: (category: OptionCategory, option: ProductOption) => ProductListAttribute[];
   onOpenProduct: (option: ProductOption) => void;
+  getDisabledReason?: (option: ProductOption) => string | null;
   emptyMessage?: string;
 }
 
@@ -34,6 +35,7 @@ export function ProductList({
   getPriceLabel,
   getAttributes = defaultProductListAttributes,
   onOpenProduct,
+  getDisabledReason,
   emptyMessage = '現在選択できる商品はありません',
 }: Props) {
   const selected = new Set(selectedIds);
@@ -50,6 +52,7 @@ export function ProductList({
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="product-list">
       {options.map((option) => {
         const checked = selected.has(option.id);
+        const disabledReason = checked ? null : getDisabledReason?.(option) ?? null;
         const attributes = getAttributes(category, option).filter(
           (item) => item.label.trim().length > 0 && item.value.trim().length > 0
         );
@@ -61,14 +64,16 @@ export function ProductList({
                 'group relative flex h-full min-h-full flex-col overflow-hidden rounded-xl border bg-white transition',
                 checked
                   ? 'border-brown ring-2 ring-brown/35 shadow-soft'
-                  : 'border-line hover:border-ink/40 hover:shadow-soft'
+                  : 'border-line hover:border-ink/40 hover:shadow-soft',
+                disabledReason && 'opacity-60'
               )}
               data-testid={`product-card-${option.code}`}
             >
               <button
                 type="button"
-                className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2"
+                className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                 onClick={() => onOpenProduct(option)}
+                disabled={Boolean(disabledReason)}
                 aria-label={`${option.name}の詳細を見る`}
                 data-testid={`product-card-open-${option.code}`}
               >
@@ -120,13 +125,15 @@ export function ProductList({
 
                   <div className="mt-auto pt-4">
                     <p className="text-sm font-semibold text-ink">{getPriceLabel(option)}</p>
+                    {disabledReason && <p className="mt-1 text-xs text-warn">{disabledReason}</p>}
                     <button
                       type="button"
-                      className="pointer-events-auto relative z-30 mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-brown px-3 py-2 text-xs font-semibold text-brown transition hover:bg-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2"
+                      className="pointer-events-auto relative z-30 mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-brown px-3 py-2 text-xs font-semibold text-brown transition hover:bg-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-line disabled:text-muted disabled:hover:bg-transparent"
                       onClick={(event) => {
                         event.stopPropagation();
                         onOpenProduct(option);
                       }}
+                      disabled={Boolean(disabledReason)}
                       data-testid={`product-card-detail-${option.code}`}
                     >
                       詳しく見る

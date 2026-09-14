@@ -38,6 +38,7 @@ import {
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
+import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
@@ -168,12 +169,18 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     validInitialSpecCode && initial?.finish_level
       ? initial.finish_level
       : finishLevelForEstimateSpec(defaultSpecCode);
-  const initialSelection = pruneToScope(
-    ctx,
-    (validInitialSpecCode ? initial?.option_ids : null) ??
-      specSelections.find((row) => row.code === defaultSpecCode)?.ids ??
-      defaults,
-    initialLevel
+  const initialBaselineIds =
+    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? [];
+  const initialSelection = normalizeWashbasinSelection(
+    bundle.options,
+    pruneToScope(
+      ctx,
+      (validInitialSpecCode ? initial?.option_ids : null) ??
+        initialBaselineIds ??
+        defaults,
+      initialLevel
+    ),
+    initialBaselineIds
   );
   const initialVariants = pruneHiddenVariantChoices(
     bundle.variantGroups,
@@ -275,10 +282,14 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           );
           const standardIds =
             specSelections.find((row) => row.code === restoredSpec)?.ids ?? [];
-          let restoredSelection = pruneToScope(
-            ctx,
-            draft.selected.filter((id) => allowedOptionIds.has(id)),
-            restoredLevel
+          let restoredSelection = normalizeWashbasinSelection(
+            bundle.options,
+            pruneToScope(
+              ctx,
+              draft.selected.filter((id) => allowedOptionIds.has(id)),
+              restoredLevel
+            ),
+            standardIds
           );
 
           // 旧下書きに複数選択が残っていても、現在1択のカテゴリーは1商品へ正規化する。

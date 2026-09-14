@@ -189,6 +189,24 @@ create table if not exists public.legacy_migration_financial_snapshots (
   unique (migration_batch_id, base_model_id, legacy_spec_code)
 );
 
+-- ---------- 旧見積正本の読取ロック ----------
+-- 既存Excel取込は estimate_templates から更新を始めるため、
+-- 監査側も同じ先頭順序でロックし、deadlockを避ける。
+create or replace function public.lock_legacy_estimate_source()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $locksrc$
+begin
+  lock table public.estimate_templates,
+             public.estimate_template_sections,
+             public.estimate_template_lines,
+             public.base_breakdown_items
+    in share mode;
+end;
+$locksrc$;
+
 -- ---------- 移行元全体の決定論的SHA-256 ----------
 create or replace function public.legacy_base_migration_source_hash()
 returns text
@@ -448,8 +466,6 @@ begin
       using errcode = '42501';
   end if;
 
-  perform public.assert_legacy_base_migration_source_current(p_batch_id);
-
   perform 1
     from public.legacy_base_migration_batches b
    where b.id = p_batch_id
@@ -459,6 +475,9 @@ begin
     raise exception 'LOCKED: 更新可能な移行バッチではありません'
       using errcode = 'P0001';
   end if;
+
+  perform public.lock_legacy_estimate_source();
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
 
   -- 現在も候補である組合せはupsertで既存resolutionを保持する。
   insert into public.legacy_estimate_duplicate_checks (
@@ -595,11 +614,7 @@ begin
   end if;
 
   perform pg_advisory_xact_lock(2147483001);
-  lock table public.base_breakdown_items,
-             public.estimate_templates,
-             public.estimate_template_sections,
-             public.estimate_template_lines
-    in share mode;
+  perform public.lock_legacy_estimate_source();
 
   v_hash := public.legacy_base_migration_source_hash();
 
@@ -808,6 +823,7 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
+  perform public.lock_legacy_estimate_source();
   perform public.assert_legacy_base_migration_source_current(p_batch_id);
 
   update public.legacy_base_breakdown_mappings
@@ -869,6 +885,7 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
+  perform public.lock_legacy_estimate_source();
   perform public.assert_legacy_base_migration_source_current(p_batch_id);
 
   update public.legacy_base_spec_mappings
@@ -925,6 +942,7 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
+  perform public.lock_legacy_estimate_source();
   perform public.assert_legacy_base_migration_source_current(p_batch_id);
 
   update public.legacy_estimate_duplicate_checks
@@ -976,11 +994,7 @@ begin
     raise exception 'LOCKED: レビュー中のバッチだけ確定できます' using errcode = 'P0001';
   end if;
 
-  lock table public.base_breakdown_items,
-             public.estimate_templates,
-             public.estimate_template_sections,
-             public.estimate_template_lines
-    in share mode;
+  perform public.lock_legacy_estimate_source();
 
   perform public.assert_legacy_base_migration_source_current(p_batch_id);
   perform public.refresh_legacy_estimate_duplicate_checks(p_batch_id);
@@ -1206,6 +1220,7 @@ to service_role;
 
 revoke all on function public.can_view_legacy_base_migration() from public, anon, authenticated;
 revoke all on function public.can_manage_legacy_base_migration() from public, anon, authenticated;
+revoke all on function public.lock_legacy_estimate_source() from public, anon, authenticated;
 revoke all on function public.legacy_base_migration_source_hash() from public, anon, authenticated;
 revoke all on function public.assert_legacy_base_migration_source_current(uuid) from public, anon, authenticated;
 revoke all on function public.classify_legacy_base_breakdown_item(text, text, text) from public, anon, authenticated;
@@ -1228,7 +1243,8 @@ grant execute on function public.can_view_legacy_base_migration(),
                           public.cancel_legacy_base_migration_batch(uuid)
 to authenticated, service_role;
 
-grant execute on function public.legacy_base_migration_source_hash(),
+grant execute on function public.lock_legacy_estimate_source(),
+                          public.legacy_base_migration_source_hash(),
                           public.assert_legacy_base_migration_source_current(uuid),
                           public.classify_legacy_base_breakdown_item(text, text, text),
                           public.legacy_base_spec_body_signature(uuid, uuid, text),

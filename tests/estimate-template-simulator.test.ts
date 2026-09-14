@@ -7,6 +7,7 @@ import {
 import { seedModels } from '@/lib/seed/catalog';
 
 describe('シミュレーターの標準見積仕様', () => {
+  // BOXはExcelの仕様体系を正本とする。
   it('本体のみはshell、用途別標準見積はfullで開始する', () => {
     expect(finishLevelForEstimateSpec('base')).toBe('shell');
     expect(finishLevelForEstimateSpec('hotel')).toBe('full');

@@ -68,9 +68,10 @@ export function estimateBaselineOptionCodes(
 ): string[] {
   if (specCode === BASE_ESTIMATE_SPEC_CODE) return [];
 
-  const preset = model.presets?.find((row) => row.code === specCode);
-  if (preset) return [...preset.option_codes];
-
+  // BOX は実物Excelの標準見積を正本とし、preset全体ではなく
+  // 商品変更差額に必要な設備・内装だけを基準選択にする。
+  // BOX の preset コード自体が hotel-single / water-kit になっても、
+  // ここでは従来どおり curated baseline を優先する。
   if (model.slug === 'box') {
     if (specCode === 'hotel-single') {
       return [
@@ -93,6 +94,9 @@ export function estimateBaselineOptionCodes(
       ];
     }
   }
+
+  const preset = model.presets?.find((row) => row.code === specCode);
+  if (preset) return [...preset.option_codes];
 
   return [];
 }

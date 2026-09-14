@@ -71,6 +71,7 @@ function SubtotalRow({
   expanded,
   onToggle,
   toggleLabel = '明細',
+  action,
 }: {
   label: string;
   amount: ReactNode;
@@ -78,25 +79,29 @@ function SubtotalRow({
   expanded?: boolean;
   onToggle?: () => void;
   toggleLabel?: string;
+  action?: ReactNode;
 }) {
   const collapsible = typeof expanded === 'boolean' && Boolean(onToggle);
 
   return (
     <tr className="border-y border-line bg-sand/70 font-semibold">
       <td className="px-2 py-2 text-sm sm:px-4">
-        <div className="flex items-center gap-2">
-          {collapsible && (
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-expanded={expanded}
-              aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
-              className="inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
-            >
-              {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
-            </button>
-          )}
-          <span>{label}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="flex items-center gap-2">
+            {collapsible && (
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-expanded={expanded}
+                aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
+                className="inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
+              >
+                {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
+              </button>
+            )}
+            <span>{label}</span>
+          </div>
+          {action}
         </div>
       </td>
       <td className="w-10 px-1 py-2 text-right tabular-nums whitespace-nowrap sm:w-16 sm:px-2">1</td>
@@ -279,7 +284,7 @@ export function QuoteSheet({
             御見積書
           </h2>
           <p className="text-xs text-muted sm:text-sm" data-testid="quote-scope">
-            {modelName}（{specName}）／{standardEstimate ? 'Excel標準見積を基準' : `注文範囲：${levelInfo.name}`}／概算・税込
+            {modelName}（{specName}）／{standardEstimate ? 'Excel標準見積を基準' : `注文範囲：${levelInfo.name}`}／概算見積
           </p>
         </div>
       </div>
@@ -493,16 +498,6 @@ export function QuoteSheet({
                   </span>
                 }
                 tone="ivory"
-                action={showDealerFinder ? (
-                  <Link
-                    href="/dealers"
-                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2.5 py-1 text-[0.68rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-3 sm:text-xs"
-                    data-testid="nearby-dealers-heading-link"
-                  >
-                    近くの代理店を探す。
-                    <ArrowRight className="size-3" aria-hidden="true" />
-                  </Link>
-                ) : undefined}
               />
             )}
             {siteworkHasDetails && expandedSections.sitework && standardEstimate && standardLineRows('sitework')}
@@ -523,11 +518,21 @@ export function QuoteSheet({
                   ? formatYen(standardSection('sitework')!.total)
                   : siteworkTotal > 0
                     ? formatYen(siteworkTotal)
-                    : '−'
+                    : '別途見積'
               }
               expanded={siteworkHasDetails ? expandedSections.sitework : undefined}
               onToggle={siteworkHasDetails ? () => toggleSection('sitework') : undefined}
               toggleLabel="別途工事の明細"
+              action={showDealerFinder ? (
+                <Link
+                  href="/dealers"
+                  className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-brown px-2 py-0.5 text-[0.65rem] font-semibold tracking-normal text-brown transition hover:bg-brown hover:text-white sm:px-2.5 sm:py-1 sm:text-[0.7rem]"
+                  data-testid="nearby-dealers-subtotal-link"
+                >
+                  代理店を探す
+                  <ArrowRight className="size-3" aria-hidden="true" />
+                </Link>
+              ) : undefined}
             />
           </tbody>
 

@@ -11,6 +11,10 @@ export interface EstimateTemplateChoice {
   preset: ModelPreset | null;
 }
 
+export interface SimulatorEstimateChoice extends EstimateTemplateChoice {
+  template: EstimateTemplateBundle | null;
+}
+
 const BASE_CHOICE: EstimateTemplateChoice = {
   code: BASE_ESTIMATE_SPEC_CODE,
   name: '本体のみ',
@@ -55,6 +59,49 @@ export function estimateTemplatesFor(
       preset,
     })),
   ];
+}
+
+/**
+ * シミュレーターに表示する仕様ボタン。
+ *
+ * - 既知の標準仕様（本体のみ + preset）を先に並べる
+ * - 管理画面から追加された estimate_templates の未知仕様も末尾へ自動追加する
+ * - 同じ spec_code がある場合は、管理画面で登録した標準見積名を表示名として優先する
+ */
+export function simulatorEstimateChoices(
+  model: Pick<BaseModel, 'slug' | 'presets'>,
+  templates: EstimateTemplateBundle[]
+): SimulatorEstimateChoice[] {
+  const canonical = estimateTemplatesFor(model);
+  const canonicalByCode = new Map(canonical.map((choice) => [choice.code, choice]));
+  const templateByCode = new Map(templates.map((template) => [template.template.spec_code, template]));
+
+  const codes = [
+    ...canonical.map((choice) => choice.code),
+    ...templates
+      .map((template) => template.template.spec_code)
+      .filter((code) => !canonicalByCode.has(code))
+      .sort((a, b) => a.localeCompare(b)),
+  ];
+
+  return codes.map((code) => {
+    const canonicalChoice = canonicalByCode.get(code) ?? null;
+    const template = templateByCode.get(code) ?? null;
+    const preset =
+      model.presets?.find((row) => row.code === code) ??
+      canonicalChoice?.preset ??
+      null;
+
+    return {
+      code,
+      name: template?.template.name ?? canonicalChoice?.name ?? code,
+      description: template
+        ? `Excel標準見積：${template.template.source_sheet_name}`
+        : canonicalChoice?.description ?? '管理画面で追加された標準見積仕様です。',
+      preset,
+      template,
+    };
+  });
 }
 
 
@@ -108,14 +155,14 @@ export function estimateBaselineOptionCodes(
  * 依存関係と必須カテゴリーを同じルールで補完することで、
  * UI の「標準状態」と差額計算側の「基準状態」を必ず一致させる。
  */
-export function buildEstimateBaselineSelection(
+export function buildEstimateSpecSelection(
   ctx: RuleContext,
   model: Pick<BaseModel, 'slug' | 'presets'>,
-  template: Pick<EstimateTemplateBundle, 'template' | 'baseline_option_ids'>
+  specCode: string,
+  savedBaselineIds: string[] = []
 ): string[] {
-  const specCode = template.template.spec_code;
   const level = finishLevelForEstimateSpec(specCode);
-  const validSavedIds = template.baseline_option_ids.filter((id) =>
+  const validSavedIds = savedBaselineIds.filter((id) =>
     ctx.options.some((option) => option.id === id && option.status === 'published')
   );
   const optionByCode = new Map(ctx.options.map((option) => [option.code, option.id]));
@@ -147,6 +194,19 @@ export function buildEstimateBaselineSelection(
   }
 
   return [...new Set(pruneToScope(ctx, cur, level))];
+}
+
+export function buildEstimateBaselineSelection(
+  ctx: RuleContext,
+  model: Pick<BaseModel, 'slug' | 'presets'>,
+  template: Pick<EstimateTemplateBundle, 'template' | 'baseline_option_ids'>
+): string[] {
+  return buildEstimateSpecSelection(
+    ctx,
+    model,
+    template.template.spec_code,
+    template.baseline_option_ids
+  );
 }
 
 /** 標準見積の選択に合わせた注文範囲。 */

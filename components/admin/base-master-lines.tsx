@@ -7,6 +7,7 @@ import { formatYen } from '@/lib/domain/pricing';
 
 export interface BaseMasterRevisionLine {
   id: string;
+  revision_id: string;
   line_key: string;
   section: string;
   name: string;

@@ -30,6 +30,7 @@ describe('旧本体内訳の移行監査基盤', () => {
   it('危険な広域キーワード判定を避け、屋根タルキは本体に固定する', () => {
     expect(migration).toContain("v_name like '%屋根タルキ%'");
     expect(migration).not.toContain("v_name like '%屋根%'");
+    expect(migration).not.toContain("v_section like '%金物%'");
     expect(migration).toContain("'review'::text");
     expect(migration).toContain('自動判定対象外。名称だけで本体/内外装を決めない');
   });

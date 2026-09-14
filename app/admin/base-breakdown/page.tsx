@@ -57,6 +57,12 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
       title="標準見積・本体内訳"
       lead="実物の分類表見積Excelを価格の正本として管理します。本体明細は本体内訳マスター、内外装工事・オプション・別途は標準見積テンプレートとして保持します。"
     >
+      <Alert tone="info">
+        新しい本体マスターへ移す前の分類確認は
+        <Link href="/admin/base-migration" className="mx-1 font-semibold underline underline-offset-4">旧本体内訳の移行監査</Link>
+        で行います。この監査だけでは旧データやシミュレーターは変更されません。
+      </Alert>
+
       <EstimateTemplateImportForm />
 
       {sp.saved && <Alert tone="success">保存しました。新しく作られる見積から反映されます。</Alert>}

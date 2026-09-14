@@ -33,6 +33,7 @@ function targetLabel(target: string) {
     base: '本体',
     interior_exterior: '内外装工事',
     option: 'オプション',
+    sitework: '別途',
     review: '要確認',
   }[target] ?? target;
 }

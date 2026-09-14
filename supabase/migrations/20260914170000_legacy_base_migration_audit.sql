@@ -297,6 +297,7 @@ set search_path = public
 as $
 declare
   v_expected_hash text;
+  v_current_hash text;
 begin
   select source_snapshot_hash into v_expected_hash
     from public.legacy_base_migration_batches
@@ -885,7 +886,6 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_batch public.legacy_base_migration_batches;
-  v_current_hash text;
   v_source_specs integer;
   v_snapshot_specs integer;
 begin

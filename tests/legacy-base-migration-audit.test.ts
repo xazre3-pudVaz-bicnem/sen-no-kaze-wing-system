@@ -6,6 +6,10 @@ const migration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260914170000_legacy_base_migration_audit.sql'),
   'utf8'
 );
+const estimateImportMigration = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260911020000_estimate_templates.sql'),
+  'utf8'
+);
 const actions = readFileSync(join(process.cwd(), 'lib/actions/base-migration.ts'), 'utf8');
 const page = readFileSync(join(process.cwd(), 'app/admin/base-migration/page.tsx'), 'utf8');
 const adminLayout = readFileSync(join(process.cwd(), 'app/admin/layout.tsx'), 'utf8');
@@ -51,6 +55,9 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain("'・204材l=12f'");
     expect(migration).toContain("'・天井ラワンべニア4㎜'");
     expect(migration).toContain("'・床用ミラフォーム90㎜'");
+    expect(migration).toContain("v_remark = '屋根タルキ'");
+    expect(migration).not.toContain("'・大型丁番＋ステンレス長ビス'");
+    expect(migration).not.toContain("'・ジャッキベース'");
     expect(migration).toContain("'review'::text");
     expect(migration).toContain('section・品名・備考を人間が確認する');
   });
@@ -85,6 +92,10 @@ describe('旧本体内訳の移行監査基盤', () => {
   });
 
   it('旧正本ロックはExcel取込と同じestimate_templates先頭順序にする', () => {
+    const importTemplateDelete = estimateImportMigration.indexOf('delete from public.estimate_templates');
+    const importBaseDelete = estimateImportMigration.indexOf('delete from public.base_breakdown_items');
+    expect(importTemplateDelete).toBeGreaterThanOrEqual(0);
+    expect(importBaseDelete).toBeGreaterThan(importTemplateDelete);
     expect(migration).toMatch(
       /lock table public\.estimate_templates,[\s\S]*?public\.estimate_template_sections,[\s\S]*?public\.estimate_template_lines,[\s\S]*?public\.base_breakdown_items[\s\S]*?in share mode;/
     );

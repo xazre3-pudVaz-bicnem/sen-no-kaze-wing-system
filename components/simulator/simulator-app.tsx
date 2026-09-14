@@ -808,14 +808,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
                 <div className="flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
                   {models.length > 1 && (
                     <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
-                      <Link
-                        href="/products"
-                        title="商品選択ページへ"
-                        className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-forest underline decoration-forest/40 underline-offset-4 transition hover:text-ink"
-                      >
+                      <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-ink-soft">
                         <span className="sm:hidden">本体</span>
                         <span className="hidden sm:inline">本体を変える</span>
-                      </Link>
+                      </span>
                       <select
                         value={model.slug}
                         onChange={(e) => router.push(`/simulator/${e.target.value}`)}

@@ -206,6 +206,27 @@ export function QuoteSheet({
     standardEstimate?.sections.find((section) => section.code === code) ?? null;
   const standardLines = (code: 'interior_exterior' | 'option' | 'sitework') =>
     standardEstimate?.template.lines.filter((line) => line.section_code === code) ?? [];
+  const standardSectionHasDetails = (code: 'interior_exterior' | 'option' | 'sitework') => {
+    const section = standardSection(code);
+    if (!section) return false;
+    return (
+      standardLines(code).length > 0 ||
+      section.delta_line !== 0 ||
+      (code !== 'sitework' && section.expense_amount !== 0)
+    );
+  };
+  const interiorExteriorHasDetails = standardEstimate
+    ? standardSectionHasDetails('interior_exterior')
+    : displayInteriorExteriorLines.length > 0;
+  const optionHasDetails = standardEstimate
+    ? standardSectionHasDetails('option')
+    : optionLines.length > 0 || pricing.option_expense !== 0;
+  const otherConstructionHasDetails = otherConstructionLines.length > 0;
+  const siteworkHasDetails = standardEstimate
+    ? standardSectionHasDetails('sitework')
+    : sitework.length > 0;
+  const freeProductsHasDetails = freeLines.length > 0;
+
   const standardLineRows = (code: 'interior_exterior' | 'option' | 'sitework') => {
     const section = standardSection(code);
     if (!section) return null;
@@ -313,7 +334,7 @@ export function QuoteSheet({
 
           {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
           <tbody className="divide-y divide-line/70">
-            {expandedSections.interiorExterior && (
+            {interiorExteriorHasDetails && expandedSections.interiorExterior && (
               <SectionRow
                 label={(
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -324,8 +345,8 @@ export function QuoteSheet({
                 tone="ivory"
               />
             )}
-            {expandedSections.interiorExterior && standardEstimate && standardLineRows('interior_exterior')}
-            {expandedSections.interiorExterior && !standardEstimate && displayInteriorExteriorLines.map((l) => {
+            {interiorExteriorHasDetails && expandedSections.interiorExterior && standardEstimate && standardLineRows('interior_exterior')}
+            {interiorExteriorHasDetails && expandedSections.interiorExterior && !standardEstimate && displayInteriorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace =
                 l.category_code === 'exterior-wall' && (l.code.includes('__face_') || l.code.endsWith('__all_faces'));
@@ -365,22 +386,22 @@ export function QuoteSheet({
                   ? formatYen(standardSection('interior_exterior')!.total)
                   : collapsedSectionSummary(interiorExteriorLines)
               }
-              expanded={expandedSections.interiorExterior}
-              onToggle={() => toggleSection('interiorExterior')}
+              expanded={interiorExteriorHasDetails ? expandedSections.interiorExterior : undefined}
+              onToggle={interiorExteriorHasDetails ? () => toggleSection('interiorExterior') : undefined}
               toggleLabel="内外装工事の明細"
             />
           </tbody>
 
           {/* ---- オプション（クリックで変更） ---- */}
           <tbody className="divide-y divide-line/60">
-            {expandedSections.options && (
+            {optionHasDetails && expandedSections.options && (
               <SectionRow
                 label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`}
                 tone="ivory"
               />
             )}
-            {expandedSections.options && standardEstimate && standardLineRows('option')}
-            {expandedSections.options && !standardEstimate && optionLines.map((l) => {
+            {optionHasDetails && expandedSections.options && standardEstimate && standardLineRows('option')}
+            {optionHasDetails && expandedSections.options && !standardEstimate && optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');
               return (
@@ -412,7 +433,7 @@ export function QuoteSheet({
                 </tr>
               );
             })}
-            {expandedSections.options && !standardEstimate && <tr className="bg-white text-xs text-ink-soft">
+            {optionHasDetails && expandedSections.options && !standardEstimate && <tr className="bg-white text-xs text-ink-soft">
               <td className={td.name}>オプション諸費用（交通費、労災、安全管理費等）</td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>
@@ -423,15 +444,15 @@ export function QuoteSheet({
             <SubtotalRow
               label="【オプション価格計】"
               amount={formatYen(standardSection('option')?.total ?? pricing.option_total)}
-              expanded={expandedSections.options}
-              onToggle={() => toggleSection('options')}
+              expanded={optionHasDetails ? expandedSections.options : undefined}
+              onToggle={optionHasDetails ? () => toggleSection('options') : undefined}
               toggleLabel="オプションの明細"
             />
           </tbody>
 
           {/* ---- その他の工事（従来計算時だけ表示） ---- */}
           {!standardEstimate && <tbody className="divide-y divide-line/70">
-            {expandedSections.otherConstruction && (
+            {otherConstructionHasDetails && expandedSections.otherConstruction && (
               <SectionRow
                 label={(
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -442,7 +463,7 @@ export function QuoteSheet({
                 tone="ivory"
               />
             )}
-            {expandedSections.otherConstruction && otherConstructionLines.map((l) => (
+            {otherConstructionHasDetails && expandedSections.otherConstruction && otherConstructionLines.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{formatQty(l.quantity)}</td>
@@ -455,15 +476,15 @@ export function QuoteSheet({
             <SubtotalRow
               label="【その他工事計】"
               amount={collapsedSectionSummary(otherConstructionLines)}
-              expanded={expandedSections.otherConstruction}
-              onToggle={() => toggleSection('otherConstruction')}
+              expanded={otherConstructionHasDetails ? expandedSections.otherConstruction : undefined}
+              onToggle={otherConstructionHasDetails ? () => toggleSection('otherConstruction') : undefined}
               toggleLabel="その他の工事の明細"
             />
           </tbody>}
 
           {/* ---- 別途工事（現地確認後に代理店が見積） ---- */}
           <tbody className="divide-y divide-line/60">
-            {expandedSections.sitework && (
+            {siteworkHasDetails && expandedSections.sitework && (
               <SectionRow
                 label={
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -484,8 +505,8 @@ export function QuoteSheet({
                 ) : undefined}
               />
             )}
-            {expandedSections.sitework && standardEstimate && standardLineRows('sitework')}
-            {expandedSections.sitework && !standardEstimate && sitework.map((l) => (
+            {siteworkHasDetails && expandedSections.sitework && standardEstimate && standardLineRows('sitework')}
+            {siteworkHasDetails && expandedSections.sitework && !standardEstimate && sitework.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
                 <td className={td.name}>{l.name}</td>
                 <td className={td.qty}>{l.quantity}</td>
@@ -504,14 +525,14 @@ export function QuoteSheet({
                     ? formatYen(siteworkTotal)
                     : '−'
               }
-              expanded={expandedSections.sitework}
-              onToggle={() => toggleSection('sitework')}
+              expanded={siteworkHasDetails ? expandedSections.sitework : undefined}
+              onToggle={siteworkHasDetails ? () => toggleSection('sitework') : undefined}
               toggleLabel="別途工事の明細"
             />
           </tbody>
 
           {/* ---- フリー商品（代理店・工務店の取扱商品／諸費用なし） ---- */}
-          {!standardEstimate && freeLines.length > 0 && (
+          {!standardEstimate && freeProductsHasDetails && (
             <tbody className="divide-y divide-line/60">
               {expandedSections.freeProducts && (
                 <SectionRow

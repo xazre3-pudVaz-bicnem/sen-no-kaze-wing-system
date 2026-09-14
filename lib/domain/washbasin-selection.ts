@@ -36,9 +36,9 @@ export function washbasinStandardSetOption(
     price: members.reduce((sum, option) => sum + option.price, 0),
     price_on_request: members.some((option) => option.price_on_request),
     image_url: basin.image_url ?? faucet.image_url,
-    manufacturer: basin.manufacturer ?? faucet.manufacturer,
-    model_no: `${basin.model_no ?? basin.code} ＋ ${faucet.model_no ?? faucet.code}`,
-    size_note: basin.size_note ?? faucet.size_note,
+    manufacturer: null,
+    model_no: null,
+    size_note: null,
     list_price: null,
     highlight: isBaseline ? '標準' : null,
     preview_key: basin.preview_key ?? faucet.preview_key,
@@ -70,4 +70,38 @@ export function isWashbasinDisplayOptionSelected(
   actualOptions: ProductOption[]
 ): boolean {
   return washbasinSelectionIdsForOption(option, actualOptions).every((id) => selectedIds.includes(id));
+}
+
+
+export function normalizeWashbasinSelection(
+  options: ProductOption[],
+  selectedIds: string[],
+  baselineIds: string[] = []
+): string[] {
+  const members = legacyWashbasinOptions(options);
+  if (members.length !== LEGACY_WASHBASIN_CODES.length) return selectedIds;
+
+  const categoryId = members[0].category_id;
+  const categoryOptions = options
+    .filter((option) => option.category_id === categoryId)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const categoryIds = new Set(categoryOptions.map((option) => option.id));
+  const selectedInCategory = categoryOptions.filter((option) => selectedIds.includes(option.id));
+
+  if (selectedInCategory.length === 0) return selectedIds;
+
+  const alternatives = selectedInCategory.filter((option) => !isLegacyWashbasinOption(option));
+  let normalizedCategoryIds: string[];
+
+  if (alternatives.length > 0) {
+    const baselineAlternative = alternatives.find((option) => baselineIds.includes(option.id));
+    normalizedCategoryIds = [(baselineAlternative ?? alternatives[0]).id];
+  } else {
+    normalizedCategoryIds = members.map((option) => option.id);
+  }
+
+  return [
+    ...selectedIds.filter((id) => !categoryIds.has(id)),
+    ...normalizedCategoryIds,
+  ];
 }

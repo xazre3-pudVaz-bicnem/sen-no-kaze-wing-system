@@ -919,7 +919,7 @@ returns public.legacy_base_spec_mappings
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $specmap$
 declare
   v_uid uuid := auth.uid();
   v_row public.legacy_base_spec_mappings;
@@ -977,8 +977,7 @@ begin
 
   return v_row;
 end;
-$;
-
+$specmap$;
 -- ---------- 重複候補の解決 ----------
 create or replace function public.resolve_legacy_estimate_duplicate(
   p_batch_id uuid,
@@ -990,7 +989,7 @@ returns public.legacy_estimate_duplicate_checks
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $dupresolve$
 declare
   v_uid uuid := auth.uid();
   v_row public.legacy_estimate_duplicate_checks;
@@ -1040,8 +1039,7 @@ begin
 
   return v_row;
 end;
-$;
-
+$dupresolve$;
 -- ---------- レビュー完了（まだ移行はしない） ----------
 create or replace function public.finalize_legacy_base_migration_review(p_batch_id uuid)
 returns public.legacy_base_migration_batches

@@ -433,7 +433,7 @@ export function QuoteSheet({
                 </tr>
               );
             })}
-            {optionHasDetails && expandedSections.options && !standardEstimate && pricing.option_expense !== 0 && <tr className="bg-white text-xs text-ink-soft">
+            {optionHasDetails && expandedSections.options && !standardEstimate && <tr className="bg-white text-xs text-ink-soft">
               <td className={td.name}>オプション諸費用（交通費、労災、安全管理費等）</td>
               <td className={td.qty}>1</td>
               <td className={td.unit}>式</td>

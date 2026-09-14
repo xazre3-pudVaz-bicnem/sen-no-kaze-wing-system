@@ -128,6 +128,7 @@ export default async function BaseMastersPage({
             const revisions = revisionsByMaster.get(master.id) ?? [];
             const current = revisions.find((revision) => revision.id === master.current_published_revision_id) ?? null;
             const draft = revisions.find((revision) => revision.status === 'draft') ?? null;
+            const canManage = master.status === 'active' && editableOrgIds.has(master.owner_organization_id);
             return (
               <tr key={master.id}>
                 <Td className="font-semibold">{master.name}</Td>
@@ -145,7 +146,9 @@ export default async function BaseMastersPage({
                   {draft ? <Badge tone="warn">v{draft.version}編集中</Badge> : <span className="text-muted">なし</span>}
                 </Td>
                 <Td right>
-                  <Link href={`/admin/base-masters/${master.id}`} className="btn-secondary btn-sm">管理</Link>
+                  <Link href={`/admin/base-masters/${master.id}`} className="btn-secondary btn-sm">
+                    {canManage ? '管理' : '参照'}
+                  </Link>
                 </Td>
               </tr>
             );

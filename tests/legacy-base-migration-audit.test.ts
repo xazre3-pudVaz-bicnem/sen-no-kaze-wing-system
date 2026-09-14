@@ -7,6 +7,7 @@ const migration = readFileSync(
   'utf8'
 );
 const actions = readFileSync(join(process.cwd(), 'lib/actions/base-migration.ts'), 'utf8');
+const page = readFileSync(join(process.cwd(), 'app/admin/base-migration/page.tsx'), 'utf8');
 
 describe('旧本体内訳の移行監査基盤', () => {
   it('監査PRでは旧正本や新本体へ移行書込みをしない', () => {
@@ -31,6 +32,9 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain("v_name like '%屋根タルキ%'");
     expect(migration).not.toContain("v_name like '%屋根%'");
     expect(migration).not.toContain("v_section like '%金物%'");
+    expect(migration).not.toContain("v_name like '%金物%'");
+    expect(migration).not.toContain("v_name like '%ガルバリウム%'");
+    expect(migration).toContain("v_name like '%204材%'");
     expect(migration).toContain("'review'::text");
     expect(migration).toContain('自動判定対象外。名称だけで本体/内外装を決めない');
   });
@@ -49,6 +53,20 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain('未解決の二重計上候補があります');
     expect(migration).toContain('金額スナップショットが移行元仕様数と一致しません');
     expect(migration).toContain('旧標準見積の内部金額に不整合があります');
+    expect(migration).toContain('assert_legacy_base_migration_source_current');
+  });
+
+  it('レビュー中に移行元が変わった場合は各更新RPCも停止する', () => {
+    const occurrences = migration.match(/perform public\.assert_legacy_base_migration_source_current\(p_batch_id\);/g) ?? [];
+    expect(occurrences.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('二重計上の完全一致は名称と金額だけでなく数量・単位・単価・備考まで比較する', () => {
+    expect(migration).toContain('m.legacy_quantity::numeric = l.quantity');
+    expect(migration).toContain("coalesce(lower(btrim(m.legacy_unit)), '') = coalesce(lower(btrim(l.unit)), '')");
+    expect(migration).toContain('m.legacy_unit_price::numeric = l.unit_price');
+    expect(migration).toContain('m.legacy_amount::numeric = l.amount');
+    expect(migration).toContain('m.legacy_remark');
   });
 
   it('authenticatedの直接writeを禁止し、HQ用RPCだけで更新する', () => {
@@ -90,5 +108,11 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(actions).toContain("requireStaff('/admin/base-migration')");
     expect(actions).not.toContain("requireCatalogEditor('/admin/base-migration')");
     expect(migration).toContain('can_manage_legacy_base_migration');
+  });
+
+  it('参照専用ユーザーは分類selectを操作できず、重複解決は明示選択を必須にする', () => {
+    expect(page).toContain('disabled={!editable}');
+    expect(page).toContain('defaultValue={row.resolution === \'pending\' ? \'\' : String(row.resolution)} required');
+    expect(page).toContain('<option value="" disabled>解決方法を選択</option>');
   });
 });

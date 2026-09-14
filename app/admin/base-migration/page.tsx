@@ -170,6 +170,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               <form key={String(row.id)} action={setLegacyBaseMappingDecisionAction} className="card grid gap-3 p-4 lg:grid-cols-[10rem_10rem_1fr_8rem_12rem_1fr_auto] lg:items-center">
                 <input type="hidden" name="batch_id" value={String(selected.id)} />
                 <input type="hidden" name="mapping_id" value={String(row.id)} />
+                <input type="hidden" name="target_group_label" value={row.target_group_label ? String(row.target_group_label) : ''} />
                 <div><p className="text-xs text-muted">モデル／旧仕様</p><p className="font-semibold">{modelMap.get(String(row.base_model_id)) ?? '—'}／{String(row.legacy_spec_code)}</p></div>
                 <div><p className="text-xs text-muted">旧工事区分</p><p>{String(row.legacy_section)}</p></div>
                 <div>

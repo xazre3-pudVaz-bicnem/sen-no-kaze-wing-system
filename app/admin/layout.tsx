@@ -14,15 +14,17 @@ export const metadata: Metadata = {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get('x-wing-pathname') ?? '';
-  const user = pathname === '/admin/base-migration'
+  const migrationRoute = pathname === '/admin/base-migration';
+  const user = migrationRoute
     ? await requireUser('/admin/base-migration')
     : await requireStaff();
+  const migrationOnly = migrationRoute && user.role === 'customer';
   return (
     <div className="min-h-dvh bg-sand/40 lg:grid lg:grid-cols-[15rem_1fr]">
       <div className="lg:col-span-2"><DemoBanner /></div>
       <aside className="border-b border-line bg-white lg:border-r lg:border-b-0">
         <div className="flex items-center justify-between px-5 py-4 lg:block lg:py-6">
-          <Link href="/admin" className="flex items-baseline gap-2">
+          <Link href={migrationOnly ? '/admin/base-migration' : '/admin'} className="flex items-baseline gap-2">
             <span className="font-serif text-xl tracking-[0.08em]">Wing</span>
             <span className="text-xs text-muted">管理画面</span>
           </Link>
@@ -31,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="ml-1 rounded bg-sand px-1.5 py-0.5 text-[0.65rem]">{ROLE_LABELS[user.role]}</span>
           </p>
         </div>
-        <AdminNav role={user.role} />
+        <AdminNav role={user.role} migrationOnly={migrationOnly} />
         <div className="hidden px-5 py-4 lg:block">
           <Link href="/" className="block text-sm text-ink-soft hover:text-ink">← 公開サイトを見る</Link>
           <form action={signOutAction} className="mt-2">

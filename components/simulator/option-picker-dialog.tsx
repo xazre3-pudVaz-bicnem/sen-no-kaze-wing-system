@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
+import {
+  equipmentCategoryPriceBreakdown,
+  type EquipmentCategoryPriceState,
+} from '@/lib/domain/equipment-price-display';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import { Button } from '@/components/ui';
@@ -22,18 +26,29 @@ function defaultVariants(groups: OptionVariantGroup[], choices: OptionVariantCho
   return out;
 }
 
-function additionalPriceLabel(value: number): string {
-  return value === 0 ? '0円' : `+${formatYen(value)}`;
+function deltaPriceLabel(value: number, priceOnRequest = false): string {
+  if (priceOnRequest) return '別途見積';
+  if (value === 0) return '0円';
+  return value > 0 ? `+${formatYen(value)}` : formatYen(value);
+}
+
+function totalPriceLabel(state: EquipmentCategoryPriceState): string {
+  if (state.kind === 'standard') return '標準';
+  if (state.kind === 'price-on-request') return '別途見積';
+  if (state.kind === 'no-change') return '追加費用なし';
+  return state.delta > 0 ? `+${formatYen(state.delta)}` : formatYen(state.delta);
 }
 
 interface Props {
   category: OptionCategory;
   options: ProductOption[];
   selectedIds: string[];
+  baselineSelectedIds: string[];
   blocked: Map<string, string>;
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   selectedVariantIds: string[];
+  baselineVariantIds: string[];
   onClose: () => void;
   onApply: (nextSelectedInCategory: string[], variantIds: string[]) => void;
 }
@@ -48,10 +63,12 @@ export function OptionPickerDialog({
   category,
   options,
   selectedIds,
+  baselineSelectedIds,
   blocked,
   variantGroups,
   variantChoices,
   selectedVariantIds,
+  baselineVariantIds,
   onClose,
   onApply,
 }: Props) {
@@ -63,7 +80,10 @@ export function OptionPickerDialog({
     () => options.filter((option) => selectedIds.includes(option.id)).map((option) => option.id),
     [options, selectedIds]
   );
-  const isSingleSelection = category.code === 'boiler' || category.selection_mode === 'single';
+  const isSingleSelection =
+    category.code === 'boiler' ||
+    category.code === 'aircon' ||
+    category.selection_mode === 'single';
   const categoryDisplayName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
 
@@ -80,30 +100,80 @@ export function OptionPickerDialog({
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
 
+  const categoryVariantIds = (source: string[]) => {
+    const categoryOptionIds = new Set(options.map((option) => option.id));
+    const categoryGroupIds = new Set(
+      variantGroups.filter((group) => categoryOptionIds.has(group.option_id)).map((group) => group.id)
+    );
+    return source.filter((choiceId) => {
+      const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
+      return Boolean(groupId && categoryGroupIds.has(groupId));
+    });
+  };
+
+  const optionVariantIds = (option: ProductOption) => {
+    const groups = variantGroups
+      .filter((group) => group.option_id === option.id)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const groupIds = new Set(groups.map((group) => group.id));
+    const currentForProduct = selectedVariantIds.filter((choiceId) => {
+      const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
+      return Boolean(groupId && groupIds.has(groupId));
+    });
+    return pruneHiddenVariantChoices(
+      groups,
+      variantChoices,
+      defaultVariants(groups, variantChoices, currentForProduct)
+    );
+  };
+
+  const nextSelectedForOption = (option: ProductOption) =>
+    isSingleSelection
+      ? [option.id]
+      : selectedInCategory.includes(option.id)
+        ? selectedInCategory
+        : [...selectedInCategory, option.id];
+
+  const nextVariantsForOption = (option: ProductOption, optionVariants: string[]) => {
+    const detailGroupIds = new Set(
+      variantGroups.filter((group) => group.option_id === option.id).map((group) => group.id)
+    );
+    const preserved = isSingleSelection
+      ? []
+      : categoryVariantIds(selectedVariantIds).filter((choiceId) => {
+          const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
+          return !groupId || !detailGroupIds.has(groupId);
+        });
+    return [...preserved, ...optionVariants];
+  };
+
+  const priceBreakdown = (option: ProductOption, optionVariants: string[]) =>
+    equipmentCategoryPriceBreakdown({
+      categoryId: category.id,
+      options,
+      selectedIds: nextSelectedForOption(option),
+      baselineIds: baselineSelectedIds,
+      selectedVariantIds: nextVariantsForOption(option, optionVariants),
+      baselineVariantIds,
+      variantGroups,
+      variantChoices,
+    });
+
   const priceLabel = (option: ProductOption) =>
-    option.price_on_request ? '別途見積' : option.price === 0 ? '追加費用なし' : `+${formatYen(option.price)}`;
+    totalPriceLabel(priceBreakdown(option, optionVariantIds(option)).state);
 
-  const pickedDetailChoices = detailOption
-    ? draftVariantIds
-        .map((choiceId) => variantChoices.find((choice) => choice.id === choiceId))
-        .filter((choice): choice is OptionVariantChoice =>
-          Boolean(choice && detailGroups.some((group) => group.id === choice.group_id))
-        )
-    : [];
-
-  const productPriceOnRequest = Boolean(detailOption?.price_on_request);
-  const variantPriceOnRequest = pickedDetailChoices.some((choice) => choice.price_on_request);
-  const productAdditional = detailOption && !detailOption.price_on_request ? detailOption.price : 0;
-  const variantAdditional = pickedDetailChoices.reduce(
-    (sum, choice) => sum + (choice.price_on_request ? 0 : choice.extra_price),
-    0
-  );
-  const totalPriceOnRequest = productPriceOnRequest || variantPriceOnRequest;
-  const totalAdditional = productAdditional + variantAdditional;
-
-  const productPriceDetailLabel = productPriceOnRequest ? '別途見積' : additionalPriceLabel(productAdditional);
-  const variantPriceDetailLabel = variantPriceOnRequest ? '別途見積' : additionalPriceLabel(variantAdditional);
-  const totalPriceDetailLabel = totalPriceOnRequest ? '別途見積' : additionalPriceLabel(totalAdditional);
+  const detailBreakdown = detailOption
+    ? priceBreakdown(detailOption, draftVariantIds)
+    : null;
+  const productPriceDetailLabel = detailBreakdown
+    ? deltaPriceLabel(detailBreakdown.productDelta, detailBreakdown.productPriceOnRequest)
+    : '0円';
+  const variantPriceDetailLabel = detailBreakdown
+    ? deltaPriceLabel(detailBreakdown.variantDelta, detailBreakdown.variantPriceOnRequest)
+    : '0円';
+  const totalPriceDetailLabel = detailBreakdown
+    ? totalPriceLabel(detailBreakdown.state)
+    : '0円';
 
   const openDetail = (option: ProductOption) => {
     const groups = variantGroups
@@ -141,16 +211,7 @@ export function OptionPickerDialog({
     });
   };
 
-  const currentCategoryVariantIds = () => {
-    const categoryOptionIds = new Set(options.map((option) => option.id));
-    const categoryGroupIds = new Set(
-      variantGroups.filter((group) => categoryOptionIds.has(group.option_id)).map((group) => group.id)
-    );
-    return selectedVariantIds.filter((choiceId) => {
-      const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
-      return Boolean(groupId && categoryGroupIds.has(groupId));
-    });
-  };
+  const currentCategoryVariantIds = () => categoryVariantIds(selectedVariantIds);
 
   const applyDetail = () => {
     if (!detailOption) return;
@@ -289,15 +350,15 @@ export function OptionPickerDialog({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white text-center text-[0.68rem]">
                 <div className="min-w-[6.5rem] px-2.5 py-1.5">
-                  <dt className="text-muted">商品追加金額</dt>
+                  <dt className="text-muted">商品差額</dt>
                   <dd className="mt-0.5 font-semibold text-ink">{productPriceDetailLabel}</dd>
                 </div>
                 <div className="min-w-[6.5rem] border-x border-line px-2.5 py-1.5">
-                  <dt className="text-muted">仕様追加金額</dt>
+                  <dt className="text-muted">仕様差額</dt>
                   <dd className="mt-0.5 font-semibold text-ink">{variantPriceDetailLabel}</dd>
                 </div>
                 <div className="min-w-[7rem] bg-ivory/55 px-2.5 py-1.5">
-                  <dt className="font-semibold text-brown">合計追加金額</dt>
+                  <dt className="font-semibold text-brown">標準との差額</dt>
                   <dd className="mt-0.5 text-sm font-bold text-brown">{totalPriceDetailLabel}</dd>
                 </div>
               </dl>

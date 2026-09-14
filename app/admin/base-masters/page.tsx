@@ -105,6 +105,9 @@ export default async function BaseMastersPage({
       lead="Wing・BOXなどの商品モデルの下に、会社ごとの本体製造明細と価格を版管理します。"
     >
       {sp.discarded && <Alert tone="success">Draftを破棄しました。</Alert>}
+      <Alert tone="info">
+        既存の標準見積・旧本体内訳はまだこの新本体マスターへ自動移行していません。現在は新しく登録した本体だけを管理します。
+      </Alert>
 
       <Table minWidth="64rem">
         <thead className="bg-sand/60">

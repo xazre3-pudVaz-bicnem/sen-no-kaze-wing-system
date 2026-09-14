@@ -71,6 +71,18 @@ const upgradeChoice: OptionVariantChoice = {
   sort_order: 2,
 };
 
+const upgradeGroup: OptionVariantGroup = {
+  ...group,
+  id: 'variant-group-upgrade',
+  option_id: 'ub-upgrade',
+};
+
+const upgradedProductChoice: OptionVariantChoice = {
+  ...upgradeChoice,
+  id: 'variant-upgrade-product',
+  group_id: upgradeGroup.id,
+};
+
 const options = [
   option('ub-standard', 570000),
   option('ub-upgrade', 650000),
@@ -145,10 +157,10 @@ describe('設備カードの標準・差額表示', () => {
         options,
         selectedIds: ['ub-upgrade'],
         baselineIds: ['ub-standard'],
-        selectedVariantIds: ['variant-upgrade'],
+        selectedVariantIds: ['variant-upgrade-product'],
         baselineVariantIds: ['variant-standard'],
-        variantGroups: [group],
-        variantChoices: [standardChoice, upgradeChoice],
+        variantGroups: [group, upgradeGroup],
+        variantChoices: [standardChoice, upgradeChoice, upgradedProductChoice],
       })
     ).toMatchObject({
       state: { kind: 'delta', delta: 130000 },

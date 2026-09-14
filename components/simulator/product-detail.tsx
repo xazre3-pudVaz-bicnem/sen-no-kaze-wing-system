@@ -175,7 +175,12 @@ export function ProductDetail({
                     <dt className="text-muted">{group.name}</dt>
                     <dd className="min-w-0 break-words font-medium text-ink">
                       {choice.name}
-                      {choice.price_on_request && <span className="ml-2 text-warn">別途見積</span>}
+                      {choice.price_on_request &&
+                        !choices
+                          .filter((item) => item.group_id === group.id)
+                          .every((item) => item.price_on_request) && (
+                          <span className="ml-2 text-warn">別途見積</span>
+                        )}
                       {!choice.price_on_request && choice.extra_price > 0 && (
                         <span className="ml-2 text-ink-soft">+{formatYen(choice.extra_price)}</span>
                       )}

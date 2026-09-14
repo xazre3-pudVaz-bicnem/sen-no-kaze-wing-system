@@ -49,7 +49,7 @@ export function ProductList({
   }
 
   return (
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="product-list">
+    <ul className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" data-testid="product-list">
       {options.map((option) => {
         const checked = selected.has(option.id);
         const disabledReason = checked ? null : getDisabledReason?.(option) ?? null;
@@ -61,7 +61,7 @@ export function ProductList({
           <li key={option.id}>
             <article
               className={cn(
-                'group relative flex h-full min-h-full flex-col overflow-hidden rounded-xl border bg-white transition',
+                'group relative flex h-full min-h-full flex-col overflow-hidden rounded-lg border bg-white transition',
                 checked
                   ? 'border-brown ring-2 ring-brown/35 shadow-soft'
                   : 'border-line hover:border-ink/40 hover:shadow-soft',
@@ -71,7 +71,7 @@ export function ProductList({
             >
               <button
                 type="button"
-                className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed"
+                className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                 onClick={() => onOpenProduct(option)}
                 disabled={Boolean(disabledReason)}
                 aria-label={`${option.name}の詳細を見る`}
@@ -81,41 +81,41 @@ export function ProductList({
               </button>
 
               <div className="pointer-events-none relative z-20 flex h-full flex-col">
-                <div className="relative aspect-[4/3] bg-sand">
+                <div className="relative aspect-[3/2] bg-sand">
                   {option.image_url ? (
                     <SmartImage
                       src={option.image_url}
                       alt={option.name}
                       fill
-                      sizes="(min-width: 1024px) 18rem, (min-width: 640px) 45vw, 92vw"
+                      sizes="(min-width: 1024px) 13rem, (min-width: 768px) 30vw, (min-width: 480px) 45vw, 92vw"
                       className="object-cover"
                     />
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted">
-                      <ImageOff className="size-7" aria-hidden="true" />
+                    <div className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
+                      <ImageOff className="size-5" aria-hidden="true" />
                       <span>画像なし</span>
                     </div>
                   )}
 
                   {checked && (
-                    <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-brown px-2 py-1 text-xs font-semibold text-white">
-                      <Check className="size-3.5" aria-hidden="true" />
+                    <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 text-[0.65rem] font-semibold text-white">
+                      <Check className="size-3" aria-hidden="true" />
                       選択中
                     </span>
                   )}
                 </div>
 
-                <div className="flex flex-1 flex-col p-4">
+                <div className="flex flex-1 flex-col p-2.5 sm:p-3">
                   {option.manufacturer && (
-                    <span className="mb-1 text-xs text-muted">{option.manufacturer}</span>
+                    <span className="mb-0.5 text-[0.65rem] text-muted">{option.manufacturer}</span>
                   )}
 
-                  <h3 className="text-sm leading-snug font-semibold text-ink">{option.name}</h3>
+                  <h3 className="text-xs leading-snug font-semibold text-ink sm:text-[0.82rem]">{option.name}</h3>
 
                   {attributes.length > 0 && (
-                    <dl className="mt-3 grid gap-1.5 text-xs">
+                    <dl className="mt-2 grid gap-1 text-[0.65rem] sm:text-[0.7rem]">
                       {attributes.map((item) => (
-                        <div key={`${item.label}-${item.value}`} className="grid grid-cols-[5.5rem_1fr] gap-2">
+                        <div key={`${item.label}-${item.value}`} className="grid grid-cols-[4rem_1fr] gap-1.5">
                           <dt className="text-muted">{item.label}</dt>
                           <dd className="min-w-0 break-words text-ink-soft">{item.value}</dd>
                         </div>
@@ -123,12 +123,12 @@ export function ProductList({
                     </dl>
                   )}
 
-                  <div className="mt-auto pt-4">
-                    <p className="text-sm font-semibold text-ink">{getPriceLabel(option)}</p>
-                    {disabledReason && <p className="mt-1 text-xs text-warn">{disabledReason}</p>}
+                  <div className="mt-auto pt-2.5">
+                    <p className="text-xs font-semibold text-ink sm:text-[0.82rem]">{getPriceLabel(option)}</p>
+                    {disabledReason && <p className="mt-1 text-[0.65rem] leading-snug text-warn">{disabledReason}</p>}
                     <button
                       type="button"
-                      className="pointer-events-auto relative z-30 mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-brown px-3 py-2 text-xs font-semibold text-brown transition hover:bg-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-line disabled:text-muted disabled:hover:bg-transparent"
+                      className="pointer-events-auto relative z-30 mt-2 inline-flex min-h-8 w-full items-center justify-center rounded-md border border-brown px-2.5 py-1.5 text-[0.7rem] font-semibold text-brown transition hover:bg-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-line disabled:text-muted disabled:hover:bg-transparent"
                       onClick={(event) => {
                         event.stopPropagation();
                         onOpenProduct(option);

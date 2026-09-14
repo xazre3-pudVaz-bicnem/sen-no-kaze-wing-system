@@ -401,12 +401,12 @@ begin
 
   perform public.assert_legacy_base_migration_source_current(p_batch_id);
 
-  if not exists (
-    select 1
-      from public.legacy_base_migration_batches b
-     where b.id = p_batch_id
-       and b.status in ('draft', 'reviewing', 'ready')
-  ) then
+  perform 1
+    from public.legacy_base_migration_batches b
+   where b.id = p_batch_id
+     and b.status in ('draft', 'reviewing', 'ready')
+   for update;
+  if not found then
     raise exception 'LOCKED: 更新可能な移行バッチではありません'
       using errcode = 'P0001';
   end if;
@@ -547,6 +547,13 @@ begin
     raise exception 'FORBIDDEN: 移行監査を作成する権限がありません'
       using errcode = '42501';
   end if;
+
+  perform pg_advisory_xact_lock(2147483001);
+  lock table public.base_breakdown_items,
+             public.estimate_templates,
+             public.estimate_template_sections,
+             public.estimate_template_lines
+    in share mode;
 
   v_hash := public.legacy_base_migration_source_hash();
 
@@ -738,10 +745,12 @@ begin
   if p_target_classification not in ('base', 'interior_exterior', 'option', 'review') then
     raise exception 'VALIDATION: 移行先分類が不正です' using errcode = 'P0001';
   end if;
-  if not exists (
-    select 1 from public.legacy_base_migration_batches
-     where id = p_batch_id and status in ('draft', 'reviewing')
-  ) then
+  perform 1
+    from public.legacy_base_migration_batches
+   where id = p_batch_id
+     and status in ('draft', 'reviewing')
+   for update;
+  if not found then
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
@@ -797,10 +806,12 @@ begin
     raise exception 'VALIDATION: 新本体のグループキーを入力してください'
       using errcode = 'P0001';
   end if;
-  if not exists (
-    select 1 from public.legacy_base_migration_batches
-     where id = p_batch_id and status in ('draft', 'reviewing')
-  ) then
+  perform 1
+    from public.legacy_base_migration_batches
+   where id = p_batch_id
+     and status in ('draft', 'reviewing')
+   for update;
+  if not found then
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
@@ -851,10 +862,12 @@ begin
   if p_resolution not in ('use_legacy', 'use_existing', 'keep_both', 'not_duplicate') then
     raise exception 'VALIDATION: 重複候補の解決方法が不正です' using errcode = 'P0001';
   end if;
-  if not exists (
-    select 1 from public.legacy_base_migration_batches
-     where id = p_batch_id and status in ('draft', 'reviewing')
-  ) then
+  perform 1
+    from public.legacy_base_migration_batches
+   where id = p_batch_id
+     and status in ('draft', 'reviewing')
+   for update;
+  if not found then
     raise exception 'LOCKED: レビュー中のバッチだけ変更できます' using errcode = 'P0001';
   end if;
 
@@ -908,6 +921,12 @@ begin
   if v_batch.status not in ('draft', 'reviewing') then
     raise exception 'LOCKED: レビュー中のバッチだけ確定できます' using errcode = 'P0001';
   end if;
+
+  lock table public.base_breakdown_items,
+             public.estimate_templates,
+             public.estimate_template_sections,
+             public.estimate_template_lines
+    in share mode;
 
   perform public.assert_legacy_base_migration_source_current(p_batch_id);
   perform public.refresh_legacy_estimate_duplicate_checks(p_batch_id);

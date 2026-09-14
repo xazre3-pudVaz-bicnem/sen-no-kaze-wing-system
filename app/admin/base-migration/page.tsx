@@ -178,7 +178,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                   <p className="text-xs text-muted">{String(row.legacy_quantity)} {row.legacy_unit ? String(row.legacy_unit) : ''} ／ {row.legacy_remark ? String(row.legacy_remark) : '備考なし'}</p>
                 </div>
                 <div className="text-right font-semibold">{formatYen(Number(row.legacy_amount))}</div>
-                <Select name="target_classification" defaultValue={String(row.target_classification)}>
+                <Select name="target_classification" defaultValue={String(row.target_classification)} disabled={!editable}>
                   <option value="base">本体</option>
                   <option value="interior_exterior">内外装工事</option>
                   <option value="option">オプション</option>
@@ -237,7 +237,8 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                           <form action={resolveLegacyEstimateDuplicateAction} className="flex gap-2">
                             <input type="hidden" name="batch_id" value={String(selected.id)} />
                             <input type="hidden" name="check_id" value={String(row.id)} />
-                            <Select name="resolution" defaultValue={row.resolution === 'pending' ? 'not_duplicate' : String(row.resolution)}>
+                            <Select name="resolution" defaultValue={row.resolution === 'pending' ? '' : String(row.resolution)} required>
+                              <option value="" disabled>解決方法を選択</option>
                               <option value="not_duplicate">重複ではない</option>
                               <option value="use_legacy">旧本体行を採用</option>
                               <option value="use_existing">既存行を採用</option>

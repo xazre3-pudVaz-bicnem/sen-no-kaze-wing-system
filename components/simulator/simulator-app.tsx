@@ -861,6 +861,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
           <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 lg:flex-row lg:items-end lg:justify-between lg:gap-x-6">
             <div className="w-full min-w-0 lg:flex-1">
+              <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
+                仕様を選ぶ
+              </p>
               <div className="flex flex-wrap items-center gap-1.5">
                 {!usesManagedEstimateChoices && (
                   <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />

@@ -111,16 +111,41 @@ export function EquipmentBoard({
       variantGroups,
       variantChoices,
     });
-    const priceLabel =
-      priceState.kind === 'standard'
-        ? '標準'
-        : priceState.kind === 'price-on-request'
-          ? '別途見積'
-          : priceState.kind === 'no-change'
-            ? '追加費用なし'
-            : priceState.delta > 0
-              ? `+${formatYen(priceState.delta)}`
-              : formatYen(priceState.delta);
+    const selectedVariantPriceOnRequest = selectedVariantIds.some((choiceId) => {
+      const choice = variantChoices.find((row) => row.id === choiceId);
+      if (!choice?.price_on_request) return false;
+      const group = variantGroups.find((row) => row.id === choice.group_id);
+      return Boolean(group && chosen.some((option) => option.id === group.option_id));
+    });
+    const currentPriceOnRequest = chosen.some((option) => option.price_on_request) || selectedVariantPriceOnRequest;
+
+    const state =
+      !main
+        ? 'unselected'
+        : currentPriceOnRequest || priceState.kind === 'price-on-request'
+          ? 'price-on-request'
+          : priceState.kind === 'standard'
+            ? 'standard'
+            : 'changed';
+
+    const deltaLabel =
+      priceState.kind === 'delta'
+        ? priceState.delta > 0
+          ? `+${formatYen(priceState.delta)}`
+          : formatYen(priceState.delta)
+        : priceState.kind === 'no-change'
+          ? '追加費用なし'
+          : null;
+
+    const badge =
+      state === 'standard'
+        ? { label: '標準', className: 'border-gold/45 bg-sand/70 text-brown' }
+        : state === 'changed'
+          ? { label: '変更済', className: 'border-brown/35 bg-ivory text-brown' }
+          : state === 'price-on-request'
+            ? { label: '別途見積', className: 'border-line bg-white text-ink-soft' }
+            : null;
+
     return (
       <li key={cat.id} className="bg-white">
         <button
@@ -128,7 +153,10 @@ export function EquipmentBoard({
           disabled={readOnly}
           onClick={() => onPickCategory(cat.id)}
           title={main?.description ?? cat.description ?? undefined}
-          className="group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed"
+          className={cn(
+            'group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed',
+            state === 'changed' && 'bg-ivory/35'
+          )}
           data-testid={`equip-${cat.code}`}
         >
           <span className="block min-h-24 w-full p-1.5 sm:p-2">
@@ -153,13 +181,27 @@ export function EquipmentBoard({
               <span className="truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
               {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
             </span>
+            {badge && (
+              <span
+                className={cn(
+                  'mt-0.5 mb-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold leading-none',
+                  badge.className
+                )}
+                data-testid={`equip-state-${cat.code}`}
+              >
+                {badge.label}
+              </span>
+            )}
             <span className={cn('block text-xs leading-snug font-semibold', !main && 'text-muted')}>
               {main ? main.name : '選択なし'}
               {extraCount > 0 && <span className="ml-1 font-normal text-[0.65rem] text-muted">ほか {extraCount} 点</span>}
             </span>
-            {main && (
-              <span className="block text-[0.7rem] text-ink-soft" data-testid={`equip-price-${cat.code}`}>
-                {priceLabel}
+            {state === 'changed' && deltaLabel && (
+              <span
+                className="mt-0.5 block text-[0.72rem] font-semibold text-brown"
+                data-testid={`equip-price-${cat.code}`}
+              >
+                {deltaLabel}
               </span>
             )}
           </span>

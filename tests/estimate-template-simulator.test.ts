@@ -6,7 +6,7 @@ import {
   simulatorEstimateChoices,
 } from '@/lib/domain/estimate-template';
 import type { EstimateTemplateBundle } from '@/lib/domain/types';
-import { seedModels } from '@/lib/seed/catalog';
+import { seedCategories, seedModels } from '@/lib/seed/catalog';
 
 function estimateBundle(
   baseModelId: string,
@@ -99,6 +99,10 @@ describe('シミュレーターの標準見積仕様', () => {
       ['base', 'Flat 本体のみ'],
       ['office', 'オフィス標準仕様'],
     ]);
+  });
+
+  it('エアコンは1機種だけ選ぶカテゴリーとして扱う', () => {
+    expect(seedCategories.find((category) => category.code === 'aircon')?.selection_mode).toBe('single');
   });
 
   it('Flatは本体のみと事務所・店舗用を標準見積候補にする', () => {

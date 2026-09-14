@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 const foundationSql = read('supabase/migrations/20260914112000_base_master_foundation.sql');
 const rpcSql = read('supabase/migrations/20260914143000_base_master_draft_publish.sql');
 const actions = read('lib/actions/base-masters.ts');
+const revisionForm = read('components/admin/base-master-revision-form.tsx');
 
 describe('本体マスターRPC契約', () => {
   it('Server Actionは新本体テーブルへ直接writeせずRPCを使う', () => {
@@ -25,6 +26,15 @@ describe('本体マスターRPC契約', () => {
     );
   });
 
+  it('FormDataの主要UUIDをServer Actionでも検証する', () => {
+    expect(actions).toContain('base_model_id: z.uuid()');
+    expect(actions).toContain('owner_organization_id: z.uuid()');
+    expect(actions).toContain('revision_id: z.uuid()');
+    expect(actions).toContain('master_id: z.uuid()');
+    expect(actions).toContain('z.uuid().safeParse(masterId)');
+    expect(actions).toContain('z.uuid().safeParse(revisionId)');
+  });
+
   it('stable line_keyはupsertし、省略された行だけ削除する', () => {
     expect(rpcSql).toMatch(/on conflict \(revision_id, line_key\) do update/i);
     expect(rpcSql).toMatch(/not \(line_key = any\(v_seen\)\)/i);
@@ -35,6 +45,11 @@ describe('本体マスターRPC契約', () => {
     expect(rpcSql).toMatch(/set status = 'superseded'/i);
     expect(rpcSql).toMatch(/set status = 'published',[\s\S]*?published_by = v_uid/i);
     expect(rpcSql).toMatch(/set current_published_revision_id = v_revision\.id/i);
+  });
+
+  it('Publish UIは不可逆操作の確認ダイアログを通す', () => {
+    expect(revisionForm).toContain('window.confirm');
+    expect(revisionForm).toContain('公開後はこのRevisionを直接編集できません');
   });
 
   it('変更系RPCは本体編集権限をDBで再確認する', () => {

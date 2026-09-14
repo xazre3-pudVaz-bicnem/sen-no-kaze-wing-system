@@ -9,6 +9,12 @@ import {
 } from '@/lib/domain/equipment-price-display';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
+import {
+  isWashbasinDisplayOptionSelected,
+  legacyWashbasinOptions,
+  washbasinDisplayOptions,
+  washbasinSelectionIdsForOption,
+} from '@/lib/domain/washbasin-selection';
 import { Button } from '@/components/ui';
 import { ProductDetail } from './product-detail';
 import { ProductList } from './product-list';
@@ -80,14 +86,29 @@ export function OptionPickerDialog({
     () => options.filter((option) => selectedIds.includes(option.id)).map((option) => option.id),
     [options, selectedIds]
   );
+  const isWashbasinCategory = category.code === 'washbasin';
+  const displayOptions = useMemo(
+    () => (isWashbasinCategory ? washbasinDisplayOptions(options, baselineSelectedIds) : options),
+    [baselineSelectedIds, isWashbasinCategory, options]
+  );
+  const displaySelectedIds = useMemo(
+    () =>
+      isWashbasinCategory
+        ? displayOptions
+            .filter((option) => isWashbasinDisplayOptionSelected(option, selectedInCategory, options))
+            .map((option) => option.id)
+        : selectedInCategory,
+    [displayOptions, isWashbasinCategory, options, selectedInCategory]
+  );
   const isSingleSelection =
     category.code === 'boiler' ||
     category.code === 'aircon' ||
+    isWashbasinCategory ||
     category.selection_mode === 'single';
   const categoryDisplayName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
 
-  const detailOption = options.find((option) => option.id === detailOptionId) ?? null;
+  const detailOption = displayOptions.find((option) => option.id === detailOptionId) ?? null;
   const detailGroups = detailOption
     ? variantGroups.filter((group) => group.option_id === detailOption.id).sort((a, b) => a.sort_order - b.sort_order)
     : [];
@@ -127,9 +148,12 @@ export function OptionPickerDialog({
     );
   };
 
+  const selectionIdsForOption = (option: ProductOption) =>
+    isWashbasinCategory ? washbasinSelectionIdsForOption(option, options) : [option.id];
+
   const nextSelectedForOption = (option: ProductOption) =>
     isSingleSelection
-      ? [option.id]
+      ? selectionIdsForOption(option)
       : selectedInCategory.includes(option.id)
         ? selectedInCategory
         : [...selectedInCategory, option.id];
@@ -216,11 +240,7 @@ export function OptionPickerDialog({
   const applyDetail = () => {
     if (!detailOption) return;
 
-    const nextSelected = isSingleSelection
-      ? [detailOption.id]
-      : selectedInCategory.includes(detailOption.id)
-        ? selectedInCategory
-        : [...selectedInCategory, detailOption.id];
+    const nextSelected = nextSelectedForOption(detailOption);
 
     const detailGroupIds = new Set(detailGroups.map((group) => group.id));
     const preservedVariants = isSingleSelection
@@ -242,8 +262,9 @@ export function OptionPickerDialog({
       return !groupId || !detailGroupIds.has(groupId);
     });
 
+    const idsToRemove = new Set(selectionIdsForOption(detailOption));
     onApply(
-      selectedInCategory.filter((id) => id !== detailOption.id),
+      selectedInCategory.filter((id) => !idsToRemove.has(id)),
       nextVariants
     );
   };
@@ -255,10 +276,14 @@ export function OptionPickerDialog({
     );
   });
 
-  const isCurrentlySelected = detailOption ? selectedInCategory.includes(detailOption.id) : false;
+  const isCurrentlySelected = detailOption
+    ? isWashbasinCategory
+      ? isWashbasinDisplayOptionSelected(detailOption, selectedInCategory, options)
+      : selectedInCategory.includes(detailOption.id)
+    : false;
   const canRemove =
     Boolean(detailOption && isCurrentlySelected) &&
-    (!category.is_required || selectedInCategory.length > 1);
+    (!category.is_required || displaySelectedIds.length > 1);
 
   return (
     <dialog
@@ -316,12 +341,20 @@ export function OptionPickerDialog({
         ) : (
           <ProductList
             category={category}
-            options={options}
-            selectedIds={selectedInCategory}
+            options={displayOptions}
+            selectedIds={displaySelectedIds}
             getPriceLabel={priceLabel}
-            getDisabledReason={(option) =>
-              selectedInCategory.includes(option.id) ? null : blocked.get(option.id) ?? null
-            }
+            getDisabledReason={(option) => {
+              if (displaySelectedIds.includes(option.id)) return null;
+              if (isWashbasinCategory) {
+                const memberReason = legacyWashbasinOptions(options)
+                  .filter((member) => selectionIdsForOption(option).includes(member.id))
+                  .map((member) => blocked.get(member.id))
+                  .find((reason): reason is string => Boolean(reason));
+                if (memberReason) return memberReason;
+              }
+              return blocked.get(option.id) ?? null;
+            }}
             onOpenProduct={openDetail}
           />
         )}

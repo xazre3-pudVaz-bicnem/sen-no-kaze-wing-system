@@ -46,6 +46,7 @@ export function VariantPicker({
         const withImage = showImages && list.some((c) => c.image_url);
         const fixed = list.length === 1 && list[0].kind === 'fixed';
         const current = list.find((c) => picked.has(c.id));
+        const allPriceOnRequest = list.length > 0 && list.every((choice) => choice.price_on_request);
 
         return (
           <section key={g.id} data-testid={`variant-group-${g.code}`}>
@@ -57,6 +58,11 @@ export function VariantPicker({
                 showCurrentValue && <span className="text-[0.68rem] text-muted">{current.name}</span>
               ) : (
                 <span className="text-[0.68rem] text-muted">選んでください</span>
+              )}
+              {allPriceOnRequest && (
+                <span className="rounded-full border border-line bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-warn">
+                  価格は別途見積
+                </span>
               )}
             </div>
             {g.note && <p className="mt-0.5 text-[0.68rem] leading-relaxed text-muted">{g.note}</p>}
@@ -71,11 +77,13 @@ export function VariantPicker({
             >
               {list.map((c) => {
                 const on = picked.has(c.id);
-                const extra = c.price_on_request
-                  ? '別途見積'
-                  : c.extra_price > 0
-                    ? `+${formatYen(c.extra_price)}`
-                    : null;
+                const extra = allPriceOnRequest
+                  ? null
+                  : c.price_on_request
+                    ? '別途見積'
+                    : c.extra_price > 0
+                      ? `+${formatYen(c.extra_price)}`
+                      : null;
 
                 return (
                   <li key={c.id}>

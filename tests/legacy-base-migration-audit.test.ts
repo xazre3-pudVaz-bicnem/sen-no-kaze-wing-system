@@ -120,11 +120,11 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(actions).toContain('check_id: z.uuid()');
   });
 
-  it('画面入口はlegacy profile roleではなくDBの組織権限判定を主とする', () => {
-    expect(actions).toContain("requireUser('/admin/base-migration')");
+  it('adminのstaff境界の内側で、移行操作はDBのHQ組織権限を必須にする', () => {
+    expect(actions).toContain("requireStaff('/admin/base-migration')");
     expect(actions).not.toContain("requireCatalogEditor('/admin/base-migration')");
-    expect(actions).not.toContain("requireStaff('/admin/base-migration')");
     expect(migration).toContain('can_manage_legacy_base_migration');
+    expect(migration).toContain("o.organization_type = 'headquarters'");
   });
 
   it('参照専用ユーザーは分類selectを操作できず、重複解決は明示選択を必須にする', () => {

@@ -53,6 +53,9 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain('未解決の二重計上候補があります');
     expect(migration).toContain('金額スナップショットが移行元仕様数と一致しません');
     expect(migration).toContain('旧標準見積の内部金額に不整合があります');
+    expect(migration).toContain('本体に残る明細が0件の旧仕様があります');
+    expect(migration).toContain('同じ新本体グループに、内容の異なる本体明細をまとめることはできません');
+    expect(migration).toContain('legacy_base_spec_body_signature');
     expect(migration).toContain('assert_legacy_base_migration_source_current');
   });
 

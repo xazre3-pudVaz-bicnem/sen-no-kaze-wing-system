@@ -182,6 +182,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               <form key={String(row.id)} action={setLegacyBaseMappingDecisionAction} className="card grid gap-3 p-4 lg:grid-cols-[10rem_10rem_1fr_8rem_12rem_1fr_auto] lg:items-center">
                 <input type="hidden" name="batch_id" value={String(selected.id)} />
                 <input type="hidden" name="mapping_id" value={String(row.id)} />
+                <input type="hidden" name="expected_version" value={String(row.decision_version ?? 0)} />
                 <input type="hidden" name="target_group_label" value={row.target_group_label ? String(row.target_group_label) : ''} />
                 <div><p className="text-xs text-muted">モデル／旧仕様</p><p className="font-semibold">{modelMap.get(String(row.base_model_id)) ?? '—'}／{String(row.legacy_spec_code)}</p></div>
                 <div><p className="text-xs text-muted">旧工事区分</p><p>{String(row.legacy_section)}</p></div>
@@ -226,6 +227,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                           <input type="hidden" name="batch_id" value={String(selected.id)} />
                           <input type="hidden" name="base_model_id" value={String(row.base_model_id)} />
                           <input type="hidden" name="legacy_spec_code" value={String(row.legacy_spec_code)} />
+                          <input type="hidden" name="expected_version" value={String(row.decision_version ?? 0)} />
                           <Input name="proposed_group_key" defaultValue={row.proposed_group_key ? String(row.proposed_group_key) : ''} placeholder="例：wing-standard" required />
                           <Input name="reason" defaultValue={row.reason ? String(row.reason) : ''} placeholder="理由" />
                           <Button type="submit" variant="secondary">確認</Button>
@@ -258,6 +260,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                           <form action={resolveLegacyEstimateDuplicateAction} className="flex gap-2">
                             <input type="hidden" name="batch_id" value={String(selected.id)} />
                             <input type="hidden" name="check_id" value={String(row.id)} />
+                            <input type="hidden" name="expected_version" value={String(row.decision_version ?? 0)} />
                             <Select name="resolution" defaultValue={row.resolution === 'pending' ? '' : String(row.resolution)} required>
                               <option value="" disabled>解決方法を選択</option>
                               <option value="not_duplicate">重複ではない</option>

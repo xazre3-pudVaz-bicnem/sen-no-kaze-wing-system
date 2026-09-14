@@ -115,6 +115,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     () => new Map(estimateTemplates.map((row) => [row.template.spec_code, row])),
     [estimateTemplates]
   );
+  const canonicalEstimateChoices = useMemo(() => estimateTemplatesFor(model), [model]);
   const standardEstimateChoices = useMemo(() => {
     const order = estimateTemplatesFor(model);
     const orderMap = new Map(order.map((choice, index) => [choice.code, index]));

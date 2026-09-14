@@ -8,9 +8,9 @@ import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-conf
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
-import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
+import { baseBreakdownTotal, buildPresetSelection, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
 import {
-  estimateBaselineOptionCodes,
+  buildEstimateBaselineSelection,
   estimateTemplatesFor,
   finishLevelForEstimateSpec,
 } from '@/lib/domain/estimate-template';
@@ -89,6 +89,12 @@ interface Draft {
 
 const storageKey = (slug: string) => `wing:sim:${slug}`;
 
+const sameSelection = (a: string[], b: string[]) => {
+  const aa = [...new Set(a)].sort();
+  const bb = [...new Set(b)].sort();
+  return aa.length === bb.length && aa.every((id, index) => id === bb[index]);
+};
+
 /** 選ばれている商品ごとに、標準の選択肢を選ぶ（表示条件つきの項目は条件を満たすときだけ） */
 function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[] {
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
@@ -125,43 +131,18 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
    * 標準価格はExcelが正本で、ここは商品変更差額・画像・設備選択の初期状態だけに使う。
    */
   const specSelections = useMemo(() => {
-    const byCode = new Map(bundle.options.map((option) => [option.code, option.id]));
-    const build = (code: string, optionIds: string[]) => {
-      let cur = [...new Set(optionIds.filter((id) => bundle.options.some((option) => option.id === id)))];
-      for (const oid of defaults) {
-        if (cur.includes(oid)) continue;
-        const option = bundle.options.find((item) => item.id === oid);
-        const category = bundle.categories.find((item) => item.id === option?.category_id);
-        const hasCategory = cur.some(
-          (id) => bundle.options.find((item) => item.id === id)?.category_id === category?.id
-        );
-        if (option?.is_required || (category?.is_required && !hasCategory)) {
-          const result = toggleOption(ctx, cur, oid);
-          if (!result.rejected) cur = result.next;
-        }
-      }
-      return { code, ids: [...new Set(cur)] };
-    };
-
     if (usesStandardEstimates) {
-      return standardEstimateChoices.map((template) => {
-        const saved = template.baseline_option_ids.filter((id) => bundle.options.some((option) => option.id === id));
-        const fallbackCodes =
-          saved.length > 0 ? [] : estimateBaselineOptionCodes(model, template.template.spec_code);
-        const ids = saved.length > 0
-          ? saved
-          : fallbackCodes.map((code) => byCode.get(code)).filter((id): id is string => Boolean(id));
-        return build(template.template.spec_code, ids);
-      });
+      return standardEstimateChoices.map((template) => ({
+        code: template.template.spec_code,
+        ids: buildEstimateBaselineSelection(ctx, model, template),
+      }));
     }
 
-    return (model.presets ?? []).map((preset) =>
-      build(
-        preset.code,
-        preset.option_codes.map((code) => byCode.get(code)).filter((id): id is string => Boolean(id))
-      )
-    );
-  }, [bundle, ctx, defaults, model, standardEstimateChoices, usesStandardEstimates]);
+    return (model.presets ?? []).map((preset) => ({
+      code: preset.code,
+      ids: buildPresetSelection(ctx, preset, defaults),
+    }));
+  }, [ctx, defaults, model, standardEstimateChoices, usesStandardEstimates]);
 
   const preferredPresetCode = model.presets?.[0]?.code;
   const managedDefaultSpecCode =
@@ -246,8 +227,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
       if (!initial && draft) {
         const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
-        if (draft.finishLevel) setFinishLevel(draft.finishLevel);
-        if (draft.spec) setSpecCode(draft.spec);
+        const draftTemplate = draft.spec ? estimateTemplateByCode.get(draft.spec) : null;
+        if (draftTemplate && draft.spec) setFinishLevel(finishLevelForEstimateSpec(draft.spec));
+        else if (draft.finishLevel) setFinishLevel(draft.finishLevel);
+        if (draft.spec && specSelections.some((row) => row.code === draft.spec)) setSpecCode(draft.spec);
         if (draft.variantIds?.length) setVariantIds(draft.variantIds);
         if (draft.exteriorFaces?.length) {
           setExteriorFaces(
@@ -385,12 +368,31 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
   const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
+  const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
+  const atStandardSpecSelection = sameSelection(
+    selected,
+    pruneToScope(ctx, activeSpecSelection, finishLevel)
+  );
+  const preferredFloorplanKeys = useMemo<string[] | undefined>(() => {
+    if (!atStandardSpecSelection || !activePreset) return undefined;
+    const presetSelection = buildPresetSelection(ctx, activePreset, defaults);
+    return selectedPreviewKeys(bundle.options, presetSelection, 'floorplan');
+  }, [activePreset, atStandardSpecSelection, bundle.options, ctx, defaults]);
   const previews = useMemo(
     () =>
       Object.fromEntries(
-        VIEW_KEYS.map((v) => [v, resolvePreview(bundle.previewRules, v, selectedPreviewKeys(bundle.options, selected, v), specCode)])
+        VIEW_KEYS.map((v) => [
+          v,
+          resolvePreview(
+            bundle.previewRules,
+            v,
+            selectedPreviewKeys(bundle.options, selected, v),
+            specCode,
+            v === 'floorplan' ? preferredFloorplanKeys : undefined
+          ),
+        ])
       ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
-    [bundle, selected, specCode]
+    [bundle, preferredFloorplanKeys, selected, specCode]
   );
   const thumbnailUrl = previews.exterior.layers[0]?.url ?? previews.interior.layers[0]?.url ?? null;
 
@@ -402,7 +404,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
   // ---- 操作 ----
   const applyPreset = (code: string) => {
-    if (readOnly) return;
+    if (!hydrated || readOnly) return;
     const selection = specSelections.find((row) => row.code === code);
     if (!selection) return;
     const template = estimateTemplateByCode.get(code);
@@ -773,7 +775,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
                         key={choice.code}
                         type="button"
                         onClick={() => applyPreset(choice.code)}
-                        disabled={readOnly}
+                        disabled={!hydrated || readOnly}
                         aria-pressed={specCode === choice.code}
                         title={choice.description}
                         className={cn(
@@ -940,6 +942,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       )}
       {exteriorFacePicker && exteriorWallCat && (
         <ExteriorWallFacesDialog
+          category={exteriorWallCat}
           options={exteriorWallOptions}
           variantGroups={bundle.variantGroups}
           variantChoices={bundle.variantChoices}

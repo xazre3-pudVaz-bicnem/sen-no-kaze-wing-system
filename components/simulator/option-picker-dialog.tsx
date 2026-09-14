@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import { Button } from '@/components/ui';
 import { ProductDetail } from './product-detail';
 import { ProductList } from './product-list';
+import { cn } from '@/lib/utils';
 
 /** 選択項目ごとに、現在値 → 標準 → 固定 → 先頭の順で初期値を選ぶ */
 function defaultVariants(groups: OptionVariantGroup[], choices: OptionVariantChoice[], current: string[]): string[] {
@@ -19,6 +20,10 @@ function defaultVariants(groups: OptionVariantGroup[], choices: OptionVariantCho
     out.push((already ?? list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
   }
   return out;
+}
+
+function additionalPriceLabel(value: number): string {
+  return value === 0 ? '0円' : `+${formatYen(value)}`;
 }
 
 interface Props {
@@ -36,9 +41,8 @@ interface Props {
 /**
  * 商品一覧 → 商品詳細・仕様選択 → プラン反映を1つのモーダル内で行う。
  *
+ * 詳細画面は「左＝見る、右＝選ぶ、下＝確認・反映」に役割を分ける。
  * 一覧・詳細とも、枠外クリック / × / Esc で閉じる。
- * 一覧で商品を開いただけではプランを変更せず、
- * 詳細の「この内容に変更する」で初めて onApply を呼ぶ。
  */
 export function OptionPickerDialog({
   category,
@@ -60,7 +64,9 @@ export function OptionPickerDialog({
     [options, selectedIds]
   );
   const isSingleSelection = category.code === 'boiler' || category.selection_mode === 'single';
-  const categoryDisplayName = category.code === 'boiler' ? '給湯器' : category.name;
+  const categoryDisplayName =
+    category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
+
   const detailOption = options.find((option) => option.id === detailOptionId) ?? null;
   const detailGroups = detailOption
     ? variantGroups.filter((group) => group.option_id === detailOption.id).sort((a, b) => a.sort_order - b.sort_order)
@@ -77,15 +83,27 @@ export function OptionPickerDialog({
   const priceLabel = (option: ProductOption) =>
     option.price_on_request ? '別途見積' : option.price === 0 ? '追加費用なし' : `+${formatYen(option.price)}`;
 
-  const detailPriceLabel = (() => {
-    if (!detailOption) return '';
-    const pickedChoices = draftVariantIds
-      .map((choiceId) => variantChoices.find((choice) => choice.id === choiceId))
-      .filter((choice): choice is OptionVariantChoice => Boolean(choice));
-    if (detailOption.price_on_request || pickedChoices.some((choice) => choice.price_on_request)) return '別途見積';
-    const total = detailOption.price + pickedChoices.reduce((sum, choice) => sum + choice.extra_price, 0);
-    return total === 0 ? '追加費用なし' : `+${formatYen(total)}`;
-  })();
+  const pickedDetailChoices = detailOption
+    ? draftVariantIds
+        .map((choiceId) => variantChoices.find((choice) => choice.id === choiceId))
+        .filter((choice): choice is OptionVariantChoice =>
+          Boolean(choice && detailGroups.some((group) => group.id === choice.group_id))
+        )
+    : [];
+
+  const productPriceOnRequest = Boolean(detailOption?.price_on_request);
+  const variantPriceOnRequest = pickedDetailChoices.some((choice) => choice.price_on_request);
+  const productAdditional = detailOption && !detailOption.price_on_request ? detailOption.price : 0;
+  const variantAdditional = pickedDetailChoices.reduce(
+    (sum, choice) => sum + (choice.price_on_request ? 0 : choice.extra_price),
+    0
+  );
+  const totalPriceOnRequest = productPriceOnRequest || variantPriceOnRequest;
+  const totalAdditional = productAdditional + variantAdditional;
+
+  const productPriceDetailLabel = productPriceOnRequest ? '別途見積' : additionalPriceLabel(productAdditional);
+  const variantPriceDetailLabel = variantPriceOnRequest ? '別途見積' : additionalPriceLabel(variantAdditional);
+  const totalPriceDetailLabel = totalPriceOnRequest ? '別途見積' : additionalPriceLabel(totalAdditional);
 
   const openDetail = (option: ProductOption) => {
     const groups = variantGroups
@@ -99,6 +117,11 @@ export function OptionPickerDialog({
     const defaults = defaultVariants(groups, variantChoices, currentForProduct);
     setDraftVariantIds(pruneHiddenVariantChoices(groups, variantChoices, defaults));
     setDetailOptionId(option.id);
+  };
+
+  const backToList = () => {
+    setDetailOptionId(null);
+    setDraftVariantIds([]);
   };
 
   const chooseVariant = (choiceId: string, groupId: string) => {
@@ -187,7 +210,10 @@ export function OptionPickerDialog({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="m-auto w-[min(96vw,60rem)] rounded-xl p-0 shadow-lift backdrop:bg-ink/40"
+      className={cn(
+        'm-auto rounded-xl p-0 shadow-lift backdrop:bg-ink/40',
+        detailOption ? 'w-[min(96vw,72rem)]' : 'w-[min(96vw,60rem)]'
+      )}
       aria-labelledby="picker-title"
       data-testid="option-picker"
     >
@@ -208,7 +234,14 @@ export function OptionPickerDialog({
         </button>
       </div>
 
-      <div className="max-h-[76vh] overflow-y-auto px-4 py-3 sm:px-5">
+      <div
+        className={cn(
+          'px-4 py-3 sm:px-5',
+          detailOption
+            ? 'max-h-[68vh] overflow-y-auto lg:h-[64vh] lg:max-h-[42rem] lg:overflow-hidden'
+            : 'max-h-[74vh] overflow-y-auto'
+        )}
+      >
         {detailOption ? (
           <ProductDetail
             category={category}
@@ -217,15 +250,7 @@ export function OptionPickerDialog({
             choices={variantChoices}
             selectedVariantIds={draftVariantIds}
             isCurrentlySelected={isCurrentlySelected}
-            priceLabel={detailPriceLabel}
             onVariantChange={chooseVariant}
-            onBack={() => {
-              setDetailOptionId(null);
-              setDraftVariantIds([]);
-            }}
-            onApply={applyDetail}
-            onRemove={canRemove ? removeDetail : undefined}
-            applyDisabled={requiredVariantMissing}
           />
         ) : (
           <ProductList
@@ -241,7 +266,49 @@ export function OptionPickerDialog({
         )}
       </div>
 
-      {!detailOption && (
+      {detailOption ? (
+        <div className="border-t border-line bg-white px-4 py-3 sm:px-5" data-testid="product-detail-footer">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={backToList}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-brown hover:underline"
+                data-testid="product-detail-back"
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                一覧へ戻る
+              </button>
+              {canRemove && (
+                <button type="button" onClick={removeDetail} className="text-xs font-semibold text-warn hover:underline">
+                  選択から外す
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <dl className="grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white text-center text-[0.68rem]">
+                <div className="min-w-[6.5rem] px-2.5 py-1.5">
+                  <dt className="text-muted">商品追加金額</dt>
+                  <dd className="mt-0.5 font-semibold text-ink">{productPriceDetailLabel}</dd>
+                </div>
+                <div className="min-w-[6.5rem] border-x border-line px-2.5 py-1.5">
+                  <dt className="text-muted">仕様追加金額</dt>
+                  <dd className="mt-0.5 font-semibold text-ink">{variantPriceDetailLabel}</dd>
+                </div>
+                <div className="min-w-[7rem] bg-ivory/55 px-2.5 py-1.5">
+                  <dt className="font-semibold text-brown">合計追加金額</dt>
+                  <dd className="mt-0.5 text-sm font-bold text-brown">{totalPriceDetailLabel}</dd>
+                </div>
+              </dl>
+
+              <Button type="button" onClick={applyDetail} disabled={requiredVariantMissing} data-testid="product-detail-apply">
+                この内容に変更する
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
         <div className="flex justify-end border-t border-line px-5 py-3">
           <Button type="button" variant="ghost" onClick={onClose}>
             キャンセル

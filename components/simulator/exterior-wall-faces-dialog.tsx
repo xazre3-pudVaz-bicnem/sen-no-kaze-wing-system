@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, ImageOff, X } from 'lucide-react';
+import { Copy, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   EXTERIOR_FACES,
@@ -11,14 +11,15 @@ import {
   type ExteriorFaceCode,
   type ExteriorFaceSelection,
 } from '@/lib/domain/exterior-wall';
-import type { OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
+import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { visibleVariantGroups } from '@/lib/domain/preset';
-import { SmartImage } from '@/components/ui/smart-image';
 import { Button } from '@/components/ui';
+import { ProductList } from './product-list';
 import { VariantPicker } from './variant-picker';
 import { cn } from '@/lib/utils';
 
 interface Props {
+  category: OptionCategory;
   options: ProductOption[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function ExteriorWallFacesDialog({
+  category,
   options,
   variantGroups,
   variantChoices,
@@ -106,7 +108,14 @@ export function ExteriorWallFacesDialog({
     <dialog
       ref={ref}
       onClose={onClose}
-      className="m-auto w-[min(96vw,68rem)] rounded-2xl p-0 shadow-lift backdrop:bg-ink/40"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      className="m-auto w-[min(96vw,68rem)] rounded-xl p-0 shadow-lift backdrop:bg-ink/40"
       aria-labelledby="exterior-face-title"
       data-testid="exterior-wall-faces-dialog"
     >
@@ -152,52 +161,23 @@ export function ExteriorWallFacesDialog({
           </Button>
         </div>
 
-        {options.length > 0 ? (
-          <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {options.map((o) => {
-              const selected = activeOption?.id === o.id;
-              const price = o.price_on_request ? '別途見積' : o.price === 0 ? '追加費用なし' : `+${formatYen(o.price)}`;
-              return (
-                <li key={o.id}>
-                  <button
-                    type="button"
-                    onClick={() => chooseProduct(o.id)}
-                    aria-pressed={selected}
-                    className={cn(
-                      'flex h-full w-full flex-col overflow-hidden rounded-lg border text-left transition',
-                      selected ? 'border-brown bg-ivory/70 ring-2 ring-brown/50' : 'border-line hover:border-ink/40'
-                    )}
-                    data-testid={`exterior-face-product-${o.code}`}
-                  >
-                    <span className="relative block aspect-[4/3] bg-sand">
-                      {o.image_url ? (
-                        <SmartImage src={o.image_url} alt={o.name} fill sizes="(min-width: 1024px) 14rem, 45vw" className="object-cover" />
-                      ) : (
-                        <span className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
-                          <ImageOff className="size-5" aria-hidden="true" />
-                          商品画像 準備中
-                        </span>
-                      )}
-                      {selected && (
-                        <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 text-[0.65rem] font-semibold text-white">
-                          <Check className="size-3" aria-hidden="true" />
-                          選択中
-                        </span>
-                      )}
-                    </span>
-                    <span className="flex flex-1 flex-col p-2">
-                      {o.manufacturer && <span className="text-[0.6rem] text-muted">{o.manufacturer}</span>}
-                      <span className="text-xs leading-snug font-semibold">{o.name}</span>
-                      <span className="mt-auto pt-1.5 text-xs text-ink-soft">{price}</span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="mt-4 rounded-lg bg-sand p-4 text-sm text-muted">外壁商品がまだ登録されていません。</p>
-        )}
+        <div className="mt-3">
+          <ProductList
+            category={category}
+            options={options}
+            selectedIds={activeOption ? [activeOption.id] : []}
+            getPriceLabel={(option) =>
+              option.price_on_request
+                ? '別途見積'
+                : option.price === 0
+                  ? '追加費用なし'
+                  : `+${formatYen(option.price)}`
+            }
+            onOpenProduct={(option) => chooseProduct(option.id)}
+            emptyMessage="現在選択できる外壁商品はありません"
+            actionLabel="選ぶ"
+          />
+        </div>
 
         {activeOption && activeGroups.length > 0 && (
           <VariantPicker

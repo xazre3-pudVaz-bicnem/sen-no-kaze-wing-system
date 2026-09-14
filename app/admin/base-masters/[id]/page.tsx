@@ -219,7 +219,7 @@ export default async function BaseMasterDetailPage({
       {readonlyRevisions.map((revision) => {
         const lines = linesByRevision.get(revision.id) ?? [];
         return (
-          <section key={revision.id} id="revision-lines" className="card overflow-x-auto">
+          <section key={revision.id} id={`revision-${revision.id}`} className="card overflow-x-auto">
             <div className="border-b border-line px-5 py-4">
               <h2 className="font-semibold">{readOnlyRevisionTitle(revision)}</h2>
               <p className="mt-1 text-xs text-muted">
@@ -278,7 +278,7 @@ export default async function BaseMasterDetailPage({
                       <span className="text-xs text-muted">編集中</span>
                     ) : (
                       <Link
-                        href={`/admin/base-masters/${master.id}?revision=${revision.id}#revision-lines`}
+                        href={`/admin/base-masters/${master.id}?revision=${revision.id}#revision-${revision.id}`}
                         className="text-sm underline-offset-4 hover:underline"
                       >
                         {isShown ? '表示中' : '明細を見る'}

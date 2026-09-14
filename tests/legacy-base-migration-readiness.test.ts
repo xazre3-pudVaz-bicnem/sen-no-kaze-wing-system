@@ -76,6 +76,24 @@ describe('移行監査ready判定', () => {
     expect(result.canAttemptFinalize).toBe(true);
   });
 
+  it('expense_rateがnullでもexpense_amountが保存されていればsnapshot不足にしない', () => {
+    const snapshot = validSnapshot();
+    snapshot.legacy_base_expense_rate = null as unknown as number;
+    snapshot.legacy_interior_expense_rate = null as unknown as number;
+    snapshot.legacy_option_expense_rate = null as unknown as number;
+    snapshot.legacy_sitework_expense_rate = null as unknown as number;
+
+    const result = assessLegacyBaseMigrationReadiness({
+      mappings: [baseMapping()],
+      specs: [approvedSpec()],
+      duplicates: [],
+      snapshots: [snapshot],
+    });
+
+    expect(result.incompleteSnapshots).toBe(0);
+    expect(result.canAttemptFinalize).toBe(true);
+  });
+
   it('siteworkの未解決duplicateもreadyを止める', () => {
     const result = assessLegacyBaseMigrationReadiness({
       mappings: [baseMapping()],

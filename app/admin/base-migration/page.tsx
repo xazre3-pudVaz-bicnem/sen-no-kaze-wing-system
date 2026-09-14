@@ -193,7 +193,11 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
           </section>
 
           <section className="space-y-3">
-            <div><h2 className="font-semibold">旧仕様 → 新本体グループ</h2><p className="text-sm text-muted">hotel / residence / office を用途名のまま分けず、本体明細の実差で決めます。</p></div>
+            <div>
+              <h2 className="font-semibold">旧仕様 → 新本体グループ</h2>
+              <p className="text-sm text-muted">hotel / residence / office を用途名のまま分けず、本体明細の実差で決めます。</p>
+              <p className="mt-1 text-xs text-muted">同じグループキーにまとめるには、本体に残す明細の品名・数量・単位・単価・金額・備考が一致している必要があります。</p>
+            </div>
             <Table minWidth="56rem">
               <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>グループキー</Th><Th>理由</Th><Th>状態</Th><Th></Th></tr></thead>
               <tbody className="divide-y divide-line">

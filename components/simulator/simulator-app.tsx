@@ -117,7 +117,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   );
   const canonicalEstimateChoices = useMemo(() => estimateTemplatesFor(model), [model]);
   const standardEstimateChoices = useMemo(() => {
-    const order = estimateTemplatesFor(model);
+    const order = canonicalEstimateChoices;
     const orderMap = new Map(order.map((choice, index) => [choice.code, index]));
     return [...estimateTemplates].sort(
       (a, b) =>
@@ -125,7 +125,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           (orderMap.get(b.template.spec_code) ?? 99) ||
         a.template.spec_code.localeCompare(b.template.spec_code)
     );
-  }, [estimateTemplates, model]);
+  }, [canonicalEstimateChoices, estimateTemplates]);
   const usesStandardEstimates = standardEstimateChoices.length > 0;
 
   /**

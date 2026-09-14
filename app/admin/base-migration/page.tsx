@@ -104,6 +104,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
   const editable = Boolean(canManage) && selected?.status === 'reviewing';
   const filter = sp.filter === 'all' ? 'all' : 'pending';
   const visibleMappings = filter === 'all' ? mappings : pendingMappings;
+  const mappingMap = new Map(mappings.map((row) => [String(row.id), row]));
   const ready = Boolean(selected) && pendingMappings.length === 0 && pendingSpecs.length === 0 && pendingDuplicates.length === 0 && snapshots.length > 0;
 
   return (
@@ -225,11 +226,15 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
             <div><h2 className="font-semibold">二重計上候補</h2><p className="text-sm text-muted">移動先の既存標準見積に同等行がないか確認します。</p></div>
             {duplicates.length === 0 ? <Alert tone="success">現在の分類では重複候補はありません。</Alert> : (
               <Table minWidth="52rem">
-                <thead className="bg-sand/60"><tr><Th>一致</Th><Th>既存標準見積行</Th><Th right>金額</Th><Th>解決</Th></tr></thead>
+                <thead className="bg-sand/60"><tr><Th>一致</Th><Th>旧本体行</Th><Th right>旧金額</Th><Th>既存標準見積行</Th><Th right>既存金額</Th><Th>解決</Th></tr></thead>
                 <tbody className="divide-y divide-line">
-                  {duplicates.map((row) => (
+                  {duplicates.map((row) => {
+                    const source = mappingMap.get(String(row.mapping_id));
+                    return (
                     <tr key={String(row.id)}>
                       <Td>{row.match_type === 'exact' ? <Badge tone="warn">完全一致</Badge> : '候補'}</Td>
+                      <Td className="font-semibold">{source ? String(source.legacy_name) : '—'}</Td>
+                      <Td right>{source ? formatYen(Number(source.legacy_amount)) : '—'}</Td>
                       <Td className="font-semibold">{String(row.candidate_name)}</Td>
                       <Td right>{formatYen(Number(row.candidate_amount))}</Td>
                       <Td>
@@ -249,7 +254,8 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                         ) : String(row.resolution)}
                       </Td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </Table>
             )}
@@ -257,14 +263,17 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
 
           <section className="space-y-3">
             <div><h2 className="font-semibold">移行前の金額基準</h2><p className="text-sm text-muted">後続PRで新構造と1円単位で比較する基準です。</p></div>
-            <Table minWidth="62rem">
-              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th right>旧本体</Th><Th right>調整前</Th><Th right>調整</Th><Th right>税</Th><Th right>税込合計</Th></tr></thead>
+            <Table minWidth="82rem">
+              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th right>旧本体</Th><Th right>旧内外装</Th><Th right>旧オプション</Th><Th right>旧別途</Th><Th right>調整前</Th><Th right>調整</Th><Th right>税</Th><Th right>税込合計</Th></tr></thead>
               <tbody className="divide-y divide-line">
                 {snapshots.map((row) => (
                   <tr key={String(row.id)}>
                     <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
                     <Td className="font-semibold">{String(row.legacy_spec_code)}</Td>
                     <Td right>{formatYen(Number(row.legacy_base_total ?? row.legacy_base_line_total ?? 0))}</Td>
+                    <Td right>{row.legacy_interior_total == null ? '—' : formatYen(Number(row.legacy_interior_total))}</Td>
+                    <Td right>{row.legacy_option_total == null ? '—' : formatYen(Number(row.legacy_option_total))}</Td>
+                    <Td right>{row.legacy_sitework_total == null ? '—' : formatYen(Number(row.legacy_sitework_total))}</Td>
                     <Td right>{row.subtotal_raw == null ? '—' : formatYen(Number(row.subtotal_raw))}</Td>
                     <Td right>{row.adjustment == null ? '—' : formatYen(Number(row.adjustment))}</Td>
                     <Td right>{row.tax == null ? '—' : formatYen(Number(row.tax))}</Td>

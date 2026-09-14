@@ -156,6 +156,7 @@ export default async function BaseMasterDetailPage({
 
       {editable && draft && (
         <BaseMasterDraftEditor
+          key={draft.id + ':' + (sp.saved ?? 'initial')}
           master={{
             id: master.id,
             name: master.name,

@@ -917,7 +917,7 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_row public.legacy_base_spec_mappings;
-  v_group text := nullif(btrim(coalesce(p_proposed_group_key, '')), '');
+  v_group text := lower(nullif(btrim(coalesce(p_proposed_group_key, '')), ''));
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -1415,7 +1415,7 @@ to service_role;
 comment on table public.legacy_base_migration_batches is
   '旧本体内訳から新設計へ移す前の監査バッチ。readyでも実移行はまだ行わない。';
 comment on table public.legacy_base_breakdown_mappings is
-  '旧base_breakdown_itemsを行単位で固定し、本体/内外装/オプション/要確認の判断履歴を保持する。';
+  '旧base_breakdown_itemsを行単位で固定し、本体/内外装/オプション/別途/要確認の判断履歴を保持する。';
 comment on table public.legacy_base_spec_mappings is
   '旧hotel/residence/office等を用途名ではなく実際の本体仕様差でまとめる判断を保持する。';
 comment on table public.legacy_estimate_duplicate_checks is

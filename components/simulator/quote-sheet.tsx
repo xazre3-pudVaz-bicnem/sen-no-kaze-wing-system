@@ -41,59 +41,66 @@ const th = {
   remark: 'w-16 px-1 py-2 text-left font-semibold sm:w-24 sm:px-2 lg:w-32 lg:px-3',
 };
 
-/** 工事区分の見出し行（１．金物関係費用 など） */
+/** 工事区分の見出し行。開閉操作は各区分の「計」行に集約する。 */
 function SectionRow({
   label,
   tone = 'sand',
   action,
-  expanded,
-  onToggle,
-  summary,
-  toggleLabel = '明細',
 }: {
   label: ReactNode;
   tone?: 'sand' | 'ivory';
   action?: ReactNode;
-  expanded?: boolean;
-  onToggle?: () => void;
-  summary?: ReactNode;
-  toggleLabel?: string;
 }) {
-  const collapsible = typeof expanded === 'boolean' && Boolean(onToggle);
-
   return (
     <tr className={tone === 'sand' ? 'border-y border-line bg-sand/60' : 'border-y border-line bg-ivory'}>
       <td colSpan={6} className="px-3 py-2 text-xs font-semibold tracking-wide text-ink-soft sm:px-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-2">
-            {collapsible && (
-              <button
-                type="button"
-                onClick={onToggle}
-                aria-expanded={expanded}
-                aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
-                className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
-              >
-                {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
-              </button>
-            )}
-            <span className="min-w-0">{label}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {summary !== undefined && <span className="whitespace-nowrap text-xs font-semibold tabular-nums text-ink">{summary}</span>}
-            {action}
-          </div>
+          <span className="min-w-0">{label}</span>
+          {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
         </div>
       </td>
     </tr>
   );
 }
 
-/** 【本体価格計】のような小計行。明細と区別できるよう色を変える（先方指示） */
-function SubtotalRow({ label, amount, amountColSpan = 1, testId }: { label: string; amount: ReactNode; amountColSpan?: 1 | 2; testId?: string }) {
+/** 【本体価格計】のような小計行。＋／−で直前の明細を開閉する。 */
+function SubtotalRow({
+  label,
+  amount,
+  amountColSpan = 1,
+  testId,
+  expanded,
+  onToggle,
+  toggleLabel = '明細',
+}: {
+  label: string;
+  amount: ReactNode;
+  amountColSpan?: 1 | 2;
+  testId?: string;
+  expanded?: boolean;
+  onToggle?: () => void;
+  toggleLabel?: string;
+}) {
+  const collapsible = typeof expanded === 'boolean' && Boolean(onToggle);
+
   return (
     <tr className="border-y border-line bg-sand/70 font-semibold">
-      <td colSpan={4} className="px-3 py-2 text-sm sm:px-4">{label}</td>
+      <td colSpan={4} className="px-3 py-2 text-sm sm:px-4">
+        <div className="flex items-center gap-2">
+          {collapsible && (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={expanded}
+              aria-label={`${toggleLabel}を${expanded ? '閉じる' : '開く'}`}
+              className="inline-flex size-5 shrink-0 items-center justify-center border border-ink/35 bg-white text-ink-soft transition hover:border-brown hover:text-brown focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/30"
+            >
+              {expanded ? <Minus className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
+            </button>
+          )}
+          <span>{label}</span>
+        </div>
+      </td>
       <td colSpan={amountColSpan} className="px-3 py-2 text-right text-sm tabular-nums sm:px-4" data-testid={testId}>{amount}</td>
       {amountColSpan === 1 && <td></td>}
     </tr>
@@ -281,10 +288,6 @@ export function QuoteSheet({
             <SectionRow
               label={<><span>本体</span><span className="sr-only">本体価格</span></>}
               tone="ivory"
-              expanded={expandedSections.base}
-              onToggle={() => toggleSection('base')}
-              toggleLabel="本体の明細"
-              summary={expandedSections.base ? undefined : formatYen(pricing.base_total)}
             />
             {expandedSections.base && <tr className="bg-white align-top">
               <td className={td.name}>
@@ -296,6 +299,13 @@ export function QuoteSheet({
               <td className={td.amount}>{formatYen(pricing.base_total)}</td>
               <td className={td.remark}></td>
             </tr>}
+            <SubtotalRow
+              label="【本体価格計】"
+              amount={formatYen(pricing.base_total)}
+              expanded={expandedSections.base}
+              onToggle={() => toggleSection('base')}
+              toggleLabel="本体の明細"
+            />
           </tbody>
 
           {/* ---- 内外装工事（表示上の区分。価格計算は既存の pricing を使用） ---- */}
@@ -308,16 +318,6 @@ export function QuoteSheet({
                 </span>
               )}
               tone="ivory"
-              expanded={expandedSections.interiorExterior}
-              onToggle={() => toggleSection('interiorExterior')}
-              toggleLabel="内外装工事の明細"
-              summary={
-                expandedSections.interiorExterior
-                  ? undefined
-                  : standardSection('interior_exterior')
-                    ? formatYen(standardSection('interior_exterior')!.total)
-                    : collapsedSectionSummary(interiorExteriorLines)
-              }
             />
             {expandedSections.interiorExterior && standardEstimate && standardLineRows('interior_exterior')}
             {expandedSections.interiorExterior && !standardEstimate && displayInteriorExteriorLines.map((l) => {
@@ -353,12 +353,17 @@ export function QuoteSheet({
                 </tr>
               );
             })}
-            {expandedSections.interiorExterior && standardEstimate && (
-              <SubtotalRow
-                label="【内外装価格計】"
-                amount={formatYen(standardSection('interior_exterior')?.total ?? 0)}
-              />
-            )}
+            <SubtotalRow
+              label="【内外装価格計】"
+              amount={
+                standardSection('interior_exterior')
+                  ? formatYen(standardSection('interior_exterior')!.total)
+                  : collapsedSectionSummary(interiorExteriorLines)
+              }
+              expanded={expandedSections.interiorExterior}
+              onToggle={() => toggleSection('interiorExterior')}
+              toggleLabel="内外装工事の明細"
+            />
           </tbody>
 
           {/* ---- オプション（クリックで変更） ---- */}
@@ -366,16 +371,6 @@ export function QuoteSheet({
             <SectionRow
               label={`オプション${readOnly ? '' : '（項目をクリックすると変更できます）'}`}
               tone="ivory"
-              expanded={expandedSections.options}
-              onToggle={() => toggleSection('options')}
-              toggleLabel="オプションの明細"
-              summary={
-                expandedSections.options
-                  ? undefined
-                  : standardSection('option')
-                    ? formatYen(standardSection('option')!.total)
-                    : formatYen(pricing.option_total)
-              }
             />
             {expandedSections.options && standardEstimate && standardLineRows('option')}
             {expandedSections.options && !standardEstimate && optionLines.map((l) => {
@@ -418,12 +413,13 @@ export function QuoteSheet({
               <td className={td.amount}>{formatYen(pricing.option_expense)}</td>
               <td className={td.remark}>{Math.round(pricing.expense_rate * 100)}%</td>
             </tr>}
-            {expandedSections.options && (
-              <SubtotalRow
-                label="【オプション価格計】"
-                amount={formatYen(standardSection('option')?.total ?? pricing.option_total)}
-              />
-            )}
+            <SubtotalRow
+              label="【オプション価格計】"
+              amount={formatYen(standardSection('option')?.total ?? pricing.option_total)}
+              expanded={expandedSections.options}
+              onToggle={() => toggleSection('options')}
+              toggleLabel="オプションの明細"
+            />
           </tbody>
 
           {/* ---- その他の工事（従来計算時だけ表示） ---- */}
@@ -436,10 +432,6 @@ export function QuoteSheet({
                 </span>
               )}
               tone="ivory"
-              expanded={expandedSections.otherConstruction}
-              onToggle={() => toggleSection('otherConstruction')}
-              toggleLabel="その他の工事の明細"
-              summary={expandedSections.otherConstruction ? undefined : collapsedSectionSummary(otherConstructionLines)}
             />
             {expandedSections.otherConstruction && otherConstructionLines.map((l) => (
               <tr key={l.code} className="bg-white text-xs align-top">
@@ -451,6 +443,13 @@ export function QuoteSheet({
                 <td className={td.remark}></td>
               </tr>
             ))}
+            <SubtotalRow
+              label="【その他工事計】"
+              amount={collapsedSectionSummary(otherConstructionLines)}
+              expanded={expandedSections.otherConstruction}
+              onToggle={() => toggleSection('otherConstruction')}
+              toggleLabel="その他の工事の明細"
+            />
           </tbody>}
 
           {/* ---- 別途工事（現地確認後に代理店が見積） ---- */}
@@ -463,18 +462,6 @@ export function QuoteSheet({
                 </span>
               }
               tone="ivory"
-              expanded={expandedSections.sitework}
-              onToggle={() => toggleSection('sitework')}
-              toggleLabel="別途工事の明細"
-              summary={
-                expandedSections.sitework
-                  ? undefined
-                  : standardSection('sitework')
-                    ? formatYen(standardSection('sitework')!.total)
-                    : siteworkTotal > 0
-                      ? formatYen(siteworkTotal)
-                      : '−'
-              }
               action={showDealerFinder ? (
                 <Link
                   href="/dealers"
@@ -497,18 +484,19 @@ export function QuoteSheet({
                 <td className={td.remark}></td>
               </tr>
             ))}
-            {expandedSections.sitework && (
-              <SubtotalRow
-                label="【別途工事計】"
-                amount={
-                  standardSection('sitework')
-                    ? formatYen(standardSection('sitework')!.total)
-                    : siteworkTotal > 0
-                      ? formatYen(siteworkTotal)
-                      : '−'
-                }
-              />
-            )}
+            <SubtotalRow
+              label="【別途工事計】"
+              amount={
+                standardSection('sitework')
+                  ? formatYen(standardSection('sitework')!.total)
+                  : siteworkTotal > 0
+                    ? formatYen(siteworkTotal)
+                    : '−'
+              }
+              expanded={expandedSections.sitework}
+              onToggle={() => toggleSection('sitework')}
+              toggleLabel="別途工事の明細"
+            />
           </tbody>
 
           {/* ---- フリー商品（代理店・工務店の取扱商品／諸費用なし） ---- */}
@@ -517,10 +505,6 @@ export function QuoteSheet({
               <SectionRow
                 label="フリー商品（代理店・工務店の取扱商品／諸費用なし）"
                 tone="ivory"
-                expanded={expandedSections.freeProducts}
-                onToggle={() => toggleSection('freeProducts')}
-                toggleLabel="フリー商品の明細"
-                summary={expandedSections.freeProducts ? undefined : formatYen(freeTotal)}
               />
               {expandedSections.freeProducts && freeLines.map((l) => (
                 <tr key={l.code} className="bg-white text-xs">
@@ -532,7 +516,13 @@ export function QuoteSheet({
                   <td className={td.remark}></td>
                 </tr>
               ))}
-              {expandedSections.freeProducts && <SubtotalRow label="【フリー商品計】" amount={formatYen(freeTotal)} />}
+              <SubtotalRow
+                label="【フリー商品計】"
+                amount={formatYen(freeTotal)}
+                expanded={expandedSections.freeProducts}
+                onToggle={() => toggleSection('freeProducts')}
+                toggleLabel="フリー商品の明細"
+              />
             </tbody>
           )}
 

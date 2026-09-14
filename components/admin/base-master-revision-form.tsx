@@ -120,7 +120,15 @@ export function BaseMasterDraftEditor({
           </form>
           <form action={discardAction}>
             <input type="hidden" name="revision_id" value={revision.id} />
-            <Button type="submit" variant="ghost" className="text-danger" disabled={discarding}>
+            <Button
+              type="submit"
+              variant="ghost"
+              className="text-danger"
+              disabled={discarding}
+              onClick={(event) => {
+                if (!window.confirm('このDraftを破棄します。よろしいですか？')) event.preventDefault();
+              }}
+            >
               {discarding && <Spinner />}
               Draftを破棄
             </Button>

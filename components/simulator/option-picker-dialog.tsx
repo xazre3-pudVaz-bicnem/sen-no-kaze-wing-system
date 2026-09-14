@@ -124,13 +124,13 @@ export function OptionPickerDialog({
     <dialog
       ref={ref}
       onClose={onClose}
-      className="m-auto w-[min(94vw,56rem)] rounded-2xl p-0 shadow-lift backdrop:bg-ink/40"
+      className="m-auto w-[min(96vw,56rem)] rounded-xl p-0 shadow-lift backdrop:bg-ink/40"
       aria-labelledby="picker-title"
       data-testid="option-picker"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
+      <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
         <div>
-          <h2 id="picker-title" className="text-xl">{category.name}を選ぶ</h2>
+          <h2 id="picker-title" className="text-lg">{category.name}を選ぶ</h2>
           <p className="text-xs text-muted">
             {single ? '1つ選択' : '複数選択可'}
             {category.description ? `・${category.description}` : ''}
@@ -142,7 +142,7 @@ export function OptionPickerDialog({
       </div>
 
       {/* 本文はスクロール 1 本。商品一覧 → 色・仕様の順にそのまま下へ流れる */}
-      <div className="max-h-[72vh] overflow-y-auto px-5 py-4">
+      <div className="max-h-[74vh] overflow-y-auto px-4 py-3 sm:px-5">
         {!browsing && pickedOptions.length > 0 ? (
           /* 選択済み：参考例（Housetec）の「ポップUP画面」のように、選択中の商品を大きな写真で見せる */
           <div className="space-y-3">
@@ -209,7 +209,7 @@ export function OptionPickerDialog({
         )}
       </div>
 
-      <div className="flex flex-col-reverse gap-2 border-t border-line px-6 py-4 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-2 border-t border-line px-5 py-3 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" onClick={onClose}>
           キャンセル
         </Button>

@@ -93,7 +93,7 @@ create table if not exists public.legacy_base_breakdown_mappings (
   legacy_sort_order integer not null,
   legacy_updated_at timestamptz,
   target_classification text not null default 'review'
-    check (target_classification in ('base', 'interior_exterior', 'option', 'review')),
+    check (target_classification in ('base', 'interior_exterior', 'option', 'sitework', 'review')),
   decision_type text not null default 'human'
     check (decision_type in ('automatic', 'explicit', 'human')),
   decision_reason text,
@@ -507,13 +507,10 @@ begin
    and t.spec_code = m.legacy_spec_code
   join public.estimate_template_lines l
     on l.template_id = t.id
-   and l.section_code = case
-     when m.target_classification = 'option' then 'option'
-     else 'interior_exterior'
-   end
+   and l.section_code = m.target_classification
   where m.migration_batch_id = p_batch_id
     and m.review_status = 'approved'
-    and m.target_classification in ('interior_exterior', 'option')
+    and m.target_classification in ('interior_exterior', 'option', 'sitework')
     and (
       regexp_replace(lower(btrim(m.legacy_name)), '\s+', '', 'g')
         = regexp_replace(lower(btrim(l.name)), '\s+', '', 'g')
@@ -559,7 +556,7 @@ begin
         where m.id = d.mapping_id
           and m.migration_batch_id = p_batch_id
           and m.review_status = 'approved'
-          and m.target_classification in ('interior_exterior', 'option')
+          and m.target_classification in ('interior_exterior', 'option', 'sitework')
           and (
             regexp_replace(lower(btrim(m.legacy_name)), '\s+', '', 'g')
               = regexp_replace(lower(btrim(l.name)), '\s+', '', 'g')
@@ -801,7 +798,7 @@ begin
     raise exception 'FORBIDDEN: 移行監査を更新する権限がありません'
       using errcode = '42501';
   end if;
-  if p_target_classification not in ('base', 'interior_exterior', 'option', 'review') then
+  if p_target_classification not in ('base', 'interior_exterior', 'option', 'sitework', 'review') then
     raise exception 'VALIDATION: 移行先分類が不正です' using errcode = 'P0001';
   end if;
   perform 1

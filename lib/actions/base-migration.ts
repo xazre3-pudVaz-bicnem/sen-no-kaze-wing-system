@@ -46,7 +46,7 @@ export async function createLegacyBaseMigrationBatchAction(formData: FormData): 
 const mappingSchema = z.object({
   batch_id: z.uuid(),
   mapping_id: z.uuid(),
-  target_classification: z.enum(['base', 'interior_exterior', 'option', 'review']),
+  target_classification: z.enum(['base', 'interior_exterior', 'option', 'sitework', 'review']),
   target_group_label: z.string().trim().max(120).optional(),
   note: z.string().trim().max(500).optional(),
 });

@@ -40,8 +40,8 @@ interface Props {
 
 /**
  * 見積項目をクリックしたときに開く商品選択ポップアップ。
- * スクロールは全体で 1 本（商品一覧と色・仕様の選択が同じ流れで並ぶ）。
- * 1 つ選ぶカテゴリーでは、選んだら選択中の商品だけを出し、そのまま下で色・仕様を選べる。
+ * 開いた直後は、選択済み商品があっても必ず共通商品一覧を表示する。
+ * 商品カードまたは「詳しく見る」を押したら、その商品を選択対象として詳細・仕様選択へ進む。
  * 「他の商品から選ぶ」でいつでも一覧に戻れる。
  */
 export function OptionPickerDialog({
@@ -58,8 +58,8 @@ export function OptionPickerDialog({
   const ref = useRef<HTMLDialogElement>(null);
   const [picked, setPicked] = useState<string[]>(options.filter((o) => selectedIds.includes(o.id)).map((o) => o.id));
   const single = category.selection_mode === 'single';
-  /** 商品一覧を出すか。選択済みの商品があるときは「選択中の商品＋色選び」だけを出す（1つ選択・複数選択とも） */
-  const [browsing, setBrowsing] = useState(() => picked.length === 0);
+  /** 商品選択ポップアップは、現在の選択有無にかかわらず必ず一覧から開始する */
+  const [browsing, setBrowsing] = useState(true);
 
   /** 選ばれている商品の選択項目。表示条件（壁プラン→壁色など）を満たすものだけ出す */
   const pickedGroups = variantGroups.filter((g) => picked.includes(g.option_id)).sort((a, b) => a.sort_order - b.sort_order);
@@ -89,10 +89,16 @@ export function OptionPickerDialog({
 
   const chooseProduct = (id: string) => {
     const wasPicked = picked.includes(id);
-    toggle(id);
-    // 商品を替えたら、その商品の標準の選択肢に入れ替える
+
+    // 「詳しく見る」は選択解除ではなく詳細表示の入口。
+    // 未選択の商品だけ選択対象へ加え、すでに選択中の商品はそのまま保持する。
+    if (!wasPicked) toggle(id);
+
+    // 商品を替えたら、その商品の標準の選択肢に入れ替える。
+    // すでに選択中の商品では現在の仕様を優先して保持する。
     const groups = variantGroups.filter((g) => g.option_id === id);
     setVariants((cur) => {
+      if (wasPicked) return cur;
       const keep = cur.filter((cid) => {
         const g = variantChoices.find((c) => c.id === cid)?.group_id;
         return g && variantGroups.find((x) => x.id === g)?.option_id !== id;
@@ -100,8 +106,9 @@ export function OptionPickerDialog({
       const next = [...keep, ...defaultVariants(groups, variantChoices, cur)];
       return pruneHiddenVariantChoices(variantGroups, variantChoices, next);
     });
-    // 選んだら一覧をたたんで「選択中の商品＋色・仕様選び」へ（スクロールを 1 本にする）
-    if (!wasPicked) setBrowsing(false);
+
+    // カード全体／「詳しく見る」のどちらからでも詳細・仕様選択へ進む。
+    setBrowsing(false);
   };
 
   useEffect(() => {
@@ -163,7 +170,7 @@ export function OptionPickerDialog({
                       {o.size_note && <span className="block text-[0.7rem] text-muted">{o.size_note}</span>}
                       <span className="mt-0.5 block text-xs text-ink-soft">{priceLabel(o)}</span>
                     </span>
-                    {!single && (
+                    {(!single || !category.is_required) && (
                       <button
                         type="button"
                         onClick={() => toggle(o.id)}

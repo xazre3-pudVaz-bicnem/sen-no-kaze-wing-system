@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowRight, Minus, Pencil, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
-import { FINISH_LEVEL_INFO, type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
+import { type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import type { StandardEstimatePricingResult } from '@/lib/domain/standard-estimate-pricing';
 import { cn } from '@/lib/utils';
 
@@ -129,7 +129,6 @@ export function QuoteSheet({
   onPickCategory,
   showDealerFinder = false,
 }: Props) {
-  const levelInfo = FINISH_LEVEL_INFO[finishLevel];
   const [expandedSections, setExpandedSections] = useState({
     base: true,
     interiorExterior: true,
@@ -598,18 +597,17 @@ export function QuoteSheet({
       </div>
 
       <div className="space-y-2 border-t border-line px-4 py-4 text-xs leading-relaxed text-ink-soft sm:px-6">
-        {standardEstimate ? (
-          <p>
-            <strong className="font-semibold">標準見積：{specName}</strong>
-            — Excel標準見積を基準に、商品を変更した場合だけ差額を反映しています。
-          </p>
-        ) : (
-          <p>
-            <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong>
-            — {levelInfo.lead}
-          </p>
-        )}
-        <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
+        <p>
+          <strong className="font-semibold">選択中の仕様について</strong>
+          {' — '}
+          {finishLevel === 'shell'
+            ? '選択した本体仕様を反映した概算見積です。'
+            : '選択した仕様に含まれる本体・内外装工事・設備・オプション等を反映した概算見積です。'}
+          {standardEstimate && ' 標準見積を基準に、商品変更分は差額を反映しています。'}
+        </p>
+        <p>
+          運搬・設置・基礎・電気・給排水など、設置場所によって内容や金額が変わる工事は別途お見積りとなります。詳しくは現地の代理店・工務店へお問い合わせください。
+        </p>
         <Link href="/dealers" className={cn('inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4')} data-testid="dealers-link">
           代理店・工務店を探す／お問い合わせ
           <ArrowRight className="size-3.5" aria-hidden="true" />

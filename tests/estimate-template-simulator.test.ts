@@ -4,7 +4,7 @@ import {
   estimateTemplatesFor,
   finishLevelForEstimateSpec,
 } from '@/lib/domain/estimate-template';
-import { seedModels } from '@/lib/seed/catalog';
+import { seedModels, seedOptions } from '@/lib/seed/catalog';
 
 describe('シミュレーターの標準見積仕様', () => {
   // BOXはExcelの仕様体系を正本とする。

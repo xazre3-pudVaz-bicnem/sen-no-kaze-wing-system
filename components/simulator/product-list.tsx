@@ -19,6 +19,7 @@ interface Props {
   onOpenProduct: (option: ProductOption) => void;
   getDisabledReason?: (option: ProductOption) => string | null;
   emptyMessage?: string;
+  actionLabel?: string;
 }
 
 /**
@@ -37,6 +38,7 @@ export function ProductList({
   onOpenProduct,
   getDisabledReason,
   emptyMessage = '現在選択できる商品はありません',
+  actionLabel = '詳しく見る',
 }: Props) {
   const selected = new Set(selectedIds);
 
@@ -77,10 +79,10 @@ export function ProductList({
                 className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-offset-2 disabled:cursor-not-allowed"
                 onClick={() => onOpenProduct(option)}
                 disabled={Boolean(disabledReason)}
-                aria-label={`${option.name}の詳細を見る`}
+                aria-label={`${option.name}を${actionLabel}`}
                 data-testid={`product-card-open-${option.code}`}
               >
-                <span className="sr-only">{option.name}の詳細を見る</span>
+                <span className="sr-only">{option.name}を{actionLabel}</span>
               </button>
 
               <div className="pointer-events-none relative z-20 flex h-full flex-col">
@@ -139,7 +141,7 @@ export function ProductList({
                       disabled={Boolean(disabledReason)}
                       data-testid={`product-card-detail-${option.code}`}
                     >
-                      詳しく見る
+                      {actionLabel}
                     </button>
                   </div>
                 </div>

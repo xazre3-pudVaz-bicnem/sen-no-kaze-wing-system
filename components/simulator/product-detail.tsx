@@ -151,9 +151,11 @@ export function ProductDetail({
 
           {editableGroups.length > 0 && (
             <div className="mt-4">
-              <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
-                <p className="text-[0.65rem] text-muted">色・柄は商品画像やメーカー資料でご確認ください</p>
+                <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
+                  色・柄は商品画像やメーカー資料でご確認ください
+                </p>
               </div>
               <VariantPicker
                 groups={editableGroups}

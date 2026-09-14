@@ -375,7 +375,7 @@ export const seedCategories: OptionCategory[] = [
   cat(C.kitchen, 'kitchen', 'キッチン', G.equipment, 2, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.washbasin, 'washbasin', '洗面', G.equipment, 3, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.toilet, 'toilet', 'トイレ', G.equipment, 4, { finish_level: 'equipment', selection_mode: 'multi' }),
-  cat(C.boiler, 'boiler', '給湯', G.equipment, 5, { finish_level: 'equipment', selection_mode: 'multi' }),
+  cat(C.boiler, 'boiler', '給湯器', G.equipment, 5, { finish_level: 'equipment', description: '給湯器。いずれか1つ' }),
   cat(C.aircon, 'aircon', '空調', G.equipment, 6, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.lighting, 'lighting', '照明器具', G.lighting, 1, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.furniture, 'furniture', '家具', G.furniture, 1, { finish_level: 'equipment', selection_mode: 'multi' }),

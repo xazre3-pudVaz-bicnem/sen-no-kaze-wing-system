@@ -59,6 +59,8 @@ export function OptionPickerDialog({
     () => options.filter((option) => selectedIds.includes(option.id)).map((option) => option.id),
     [options, selectedIds]
   );
+  const isSingleSelection = category.code === 'boiler' || category.selection_mode === 'single';
+  const categoryDisplayName = category.code === 'boiler' ? '給湯器' : category.name;
   const detailOption = options.find((option) => option.id === detailOptionId) ?? null;
   const detailGroups = detailOption
     ? variantGroups.filter((group) => group.option_id === detailOption.id).sort((a, b) => a.sort_order - b.sort_order)
@@ -74,6 +76,16 @@ export function OptionPickerDialog({
 
   const priceLabel = (option: ProductOption) =>
     option.price_on_request ? '別途見積' : option.price === 0 ? '追加費用なし' : `+${formatYen(option.price)}`;
+
+  const detailPriceLabel = (() => {
+    if (!detailOption) return '';
+    const pickedChoices = draftVariantIds
+      .map((choiceId) => variantChoices.find((choice) => choice.id === choiceId))
+      .filter((choice): choice is OptionVariantChoice => Boolean(choice));
+    if (detailOption.price_on_request || pickedChoices.some((choice) => choice.price_on_request)) return '別途見積';
+    const total = detailOption.price + pickedChoices.reduce((sum, choice) => sum + choice.extra_price, 0);
+    return total === 0 ? '追加費用なし' : `+${formatYen(total)}`;
+  })();
 
   const openDetail = (option: ProductOption) => {
     const groups = variantGroups
@@ -120,14 +132,14 @@ export function OptionPickerDialog({
   const applyDetail = () => {
     if (!detailOption) return;
 
-    const nextSelected = category.selection_mode === 'single'
+    const nextSelected = isSingleSelection
       ? [detailOption.id]
       : selectedInCategory.includes(detailOption.id)
         ? selectedInCategory
         : [...selectedInCategory, detailOption.id];
 
     const detailGroupIds = new Set(detailGroups.map((group) => group.id));
-    const preservedVariants = category.selection_mode === 'single'
+    const preservedVariants = isSingleSelection
       ? []
       : currentCategoryVariantIds().filter((choiceId) => {
           const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
@@ -182,11 +194,11 @@ export function OptionPickerDialog({
       <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
         <div>
           <h2 id="picker-title" className="text-lg">
-            {detailOption ? `${category.name} 商品詳細` : `${category.name}を選ぶ`}
+            {detailOption ? `${categoryDisplayName} 商品詳細` : `${categoryDisplayName}を選ぶ`}
           </h2>
           {!detailOption && (
             <p className="text-xs text-muted">
-              {category.selection_mode === 'single' ? '1つ選択' : '複数選択可'}
+              {isSingleSelection ? '1つ選択' : '複数選択可'}
               {category.description ? `・${category.description}` : ''}
             </p>
           )}
@@ -205,7 +217,7 @@ export function OptionPickerDialog({
             choices={variantChoices}
             selectedVariantIds={draftVariantIds}
             isCurrentlySelected={isCurrentlySelected}
-            priceLabel={priceLabel(detailOption)}
+            priceLabel={detailPriceLabel}
             onVariantChange={chooseVariant}
             onBack={() => {
               setDetailOptionId(null);

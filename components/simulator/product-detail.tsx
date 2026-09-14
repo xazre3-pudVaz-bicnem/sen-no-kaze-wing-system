@@ -26,6 +26,7 @@ interface Props {
  * 14カテゴリで共通利用する商品詳細。
  *
  * 左に商品画像、右に基本情報・仕様選択・追加金額をまとめる。
+ * 固定仕様は選択カードにせず、必要な場合だけ簡潔なテキストで表示する。
  * メーカー資料は商品マスター側の資料URLを持つ段階で、この左側にタブ追加する想定。
  */
 export function ProductDetail({
@@ -43,11 +44,25 @@ export function ProductDetail({
   applyDisabled = false,
 }: Props) {
   const basicInfo = [
-    { label: 'メーカー', value: option.manufacturer },
     { label: 'シリーズ・型番', value: option.model_no },
     { label: sizeLabel(category.code), value: option.size_note },
     { label: '区分', value: option.highlight },
   ].filter((item): item is { label: string; value: string } => Boolean(item.value?.trim()));
+
+  const fixedSpecs = groups
+    .map((group) => {
+      const list = choices.filter((choice) => choice.group_id === group.id);
+      const choice = list.length === 1 && list[0].kind === 'fixed' ? list[0] : null;
+      return choice && choice.name.trim() !== option.name.trim() ? { group, choice } : null;
+    })
+    .filter(
+      (item): item is { group: OptionVariantGroup; choice: OptionVariantChoice } => Boolean(item)
+    );
+
+  const editableGroups = groups.filter((group) => {
+    const list = choices.filter((choice) => choice.group_id === group.id);
+    return !(list.length === 1 && list[0].kind === 'fixed');
+  });
 
   return (
     <div data-testid="product-detail">
@@ -61,7 +76,7 @@ export function ProductDetail({
         一覧へ戻る
       </button>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(19rem,0.85fr)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(19rem,0.92fr)]">
         <section className="min-w-0">
           <div className="mb-2 flex items-center justify-between gap-3">
             <span className="text-xs font-semibold text-ink">商品画像</span>
@@ -73,13 +88,13 @@ export function ProductDetail({
             )}
           </div>
 
-          <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-sand">
+          <div className="relative aspect-[3/2] overflow-hidden rounded-lg border border-line bg-sand">
             {option.image_url ? (
               <SmartImage
                 src={option.image_url}
                 alt={option.name}
                 fill
-                sizes="(min-width: 1024px) 34rem, 90vw"
+                sizes="(min-width: 1024px) 32rem, 90vw"
                 className="object-contain"
               />
             ) : (
@@ -97,7 +112,7 @@ export function ProductDetail({
           )}
         </section>
 
-        <section className="min-w-0">
+        <section className="min-w-0 lg:flex lg:flex-col">
           <div className="border-b border-line pb-3">
             {option.manufacturer && <p className="text-xs text-muted">{option.manufacturer}</p>}
             <h3 className="mt-0.5 text-lg font-semibold leading-snug text-ink">{option.name}</h3>
@@ -118,30 +133,51 @@ export function ProductDetail({
             )}
           </div>
 
-          {groups.length > 0 ? (
-            <VariantPicker groups={groups} choices={choices} selected={selectedVariantIds} onChange={onVariantChange} />
-          ) : (
-            <div className="border-b border-line py-4">
-              <p className="text-xs text-muted">この商品に選択する仕様はありません。</p>
-            </div>
+          {fixedSpecs.length > 0 && (
+            <dl className="mt-3 grid gap-1.5 rounded-lg bg-ivory/55 px-3 py-2.5 text-xs">
+              {fixedSpecs.map(({ group, choice }) => (
+                <div key={group.id} className="grid grid-cols-[5.5rem_1fr] gap-2">
+                  <dt className="text-muted">{group.name}</dt>
+                  <dd className="min-w-0 break-words text-ink-soft">
+                    {choice.name}
+                    {choice.price_on_request
+                      ? '（別途見積）'
+                      : choice.extra_price > 0
+                        ? `（+${formatYen(choice.extra_price)}）`
+                        : ''}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           )}
 
-          <div className="mt-4 rounded-lg border border-line bg-white p-3">
-            <p className="text-[0.68rem] text-muted">追加金額</p>
-            <p className="mt-0.5 text-base font-semibold text-ink">{priceLabel}</p>
-          </div>
+          {editableGroups.length > 0 && (
+            <VariantPicker
+              groups={editableGroups}
+              choices={choices}
+              selected={selectedVariantIds}
+              onChange={onVariantChange}
+            />
+          )}
 
-          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              {isCurrentlySelected && onRemove && (
-                <button type="button" onClick={onRemove} className="text-xs font-semibold text-warn hover:underline">
-                  選択から外す
-                </button>
-              )}
+          <div className="sticky bottom-0 z-10 mt-4 border-t border-line bg-white/95 pt-3 pb-1 backdrop-blur lg:mt-auto">
+            <div className="rounded-lg border border-line bg-white p-3">
+              <p className="text-[0.68rem] text-muted">追加金額</p>
+              <p className="mt-0.5 text-base font-semibold text-ink">{priceLabel}</p>
             </div>
-            <Button type="button" onClick={onApply} disabled={applyDisabled} data-testid="product-detail-apply">
-              この内容に変更する
-            </Button>
+
+            <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                {isCurrentlySelected && onRemove && (
+                  <button type="button" onClick={onRemove} className="text-xs font-semibold text-warn hover:underline">
+                    選択から外す
+                  </button>
+                )}
+              </div>
+              <Button type="button" onClick={onApply} disabled={applyDisabled} data-testid="product-detail-apply">
+                この内容に変更する
+              </Button>
+            </div>
           </div>
         </section>
       </div>
@@ -154,7 +190,7 @@ function sizeLabel(categoryCode: string): string {
     ub: 'サイズ',
     washbasin: '間口',
     kitchen: '間口',
-    boiler: '号数',
+    boiler: 'サイズ・設置',
     aircon: '適用畳数',
     sash: 'サイズ・呼称',
     furniture: '寸法',

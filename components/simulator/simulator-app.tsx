@@ -951,7 +951,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         <section aria-label="プランボード" className="space-y-4 lg:space-y-0">
           <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
             <div className="min-w-0">
-              <PlanBoard plan={previews.floorplan} specName={planDisplayName} planSize={planSize} readOnly={readOnly} />
+              <PlanBoard plan={previews.floorplan} specName={planDisplayName} planSize={planSize} modelSlug={model.slug} readOnly={readOnly} />
             </div>
 
             <div className="min-w-0">

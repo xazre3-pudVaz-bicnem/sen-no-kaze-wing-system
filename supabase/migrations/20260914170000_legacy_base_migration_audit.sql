@@ -233,6 +233,7 @@ as $hashfn$
               'amount', b.amount,
               'remark', b.remark,
               'sort_order', b.sort_order,
+              'created_at', b.created_at,
               'updated_at', b.updated_at
             )
             order by b.base_model_id::text, b.spec_code, b.sort_order, b.id::text
@@ -250,12 +251,14 @@ as $hashfn$
               'source_file_name', t.source_file_name,
               'source_sheet_name', t.source_sheet_name,
               'source_sha256', t.source_sha256,
+              'baseline_option_ids', t.baseline_option_ids,
               'tax_rate', t.tax_rate,
               'subtotal_raw', t.subtotal_raw,
               'adjustment', t.adjustment,
               'subtotal', t.subtotal,
               'tax', t.tax,
               'total', t.total,
+              'imported_at', t.imported_at,
               'updated_at', t.updated_at
             )
             order by t.base_model_id::text, t.spec_code, t.id::text

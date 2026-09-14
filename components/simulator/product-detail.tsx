@@ -50,15 +50,15 @@ export function ProductDetail({
 
   const editableGroups = groups.filter((group) => {
     const list = choices.filter((choice) => choice.group_id === group.id);
-    return !(list.length === 1 && list[0].kind === 'fixed');
+    return list.length > 1;
   });
 
   const selectedSpecs = groups
     .map((group) => {
       const list = choices.filter((choice) => choice.group_id === group.id);
+      if (list.length <= 1) return null;
       const choice = list.find((item) => selectedVariantIds.includes(item.id));
       if (!choice) return null;
-      if (list.length === 1 && choice.kind === 'fixed' && choice.name.trim() === option.name.trim()) return null;
       return { group, choice };
     })
     .filter(
@@ -161,6 +161,7 @@ export function ProductDetail({
                 selected={selectedVariantIds}
                 onChange={onVariantChange}
                 showImages={false}
+                showCurrentValue={false}
               />
             </div>
           )}

@@ -126,7 +126,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
         <div className="flex flex-wrap gap-2">
           {batches.map((batch) => (
             <Link key={String(batch.id)} href={`/admin/base-migration?batch=${batch.id}`} className={batch.id === selected?.id ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}>
-              {statusLabel(String(batch.status))}
+              {batch.created_at ? new Date(String(batch.created_at)).toLocaleDateString('ja-JP') : '—'}・{statusLabel(String(batch.status))}
             </Link>
           ))}
         </div>
@@ -140,6 +140,17 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
 
       {selected && (
         <>
+          <section className="card grid gap-3 p-4 text-sm sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted">監査メモ</p>
+              <p className="mt-1">{selected.source_description ? String(selected.source_description) : '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">元データSHA-256</p>
+              <p className="mt-1 font-mono text-xs">{selected.source_snapshot_hash ? String(selected.source_snapshot_hash) : '—'}</p>
+            </div>
+          </section>
+
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
               ['状態', statusLabel(String(selected.status))],

@@ -364,51 +364,46 @@ as $classifier$
 declare
   v_section text := regexp_replace(lower(btrim(coalesce(p_section, ''))), '\s+', '', 'g');
   v_name text := regexp_replace(lower(btrim(coalesce(p_name, ''))), '\s+', '', 'g');
+  v_remark text := regexp_replace(lower(btrim(coalesce(p_remark, ''))), '\s+', '', 'g');
 begin
-  -- 自動確定は、既知の旧明細で検証済みの section + name 完全一致だけに限定する。
-  -- 部分一致・単語一致では自動承認しない。
+  -- 自動確定は、既知seedで検証済みの section + name + remark 完全一致だけに限定する。
+  -- 同じ品名でも備考が未知ならreviewへ落とす。
   if (
        v_section = '１．金物関係費用'
-       and v_name in (
-         '・単管パイプ2.5m',
-         '・単管パイプ3m',
-         '・単管パイプ1m',
-         '・タルキ止めクランプ',
-         '・ステンレス長ビス',
-         '・床用補強金物'
+       and (
+         (v_name in ('・単管パイプ2.5m', '・単管パイプ3m', '・単管パイプ1m', '・タルキ止めクランプ', '・床用補強金物') and v_remark = '')
+         or (v_name = '・ステンレス長ビス' and v_remark = 'alc用皿頭6×65')
        )
      )
      or (
        v_section = '２．プレカット'
-       and v_name in (
-         '・204材l=6f',
-         '・204材l=8f',
-         '・204材l=12f',
-         '・204材l=16f',
-         '・本体組立費'
+       and (
+         (v_name = '・204材l=6f' and v_remark = '床天井根太')
+         or (v_name = '・204材l=8f' and v_remark = '壁用')
+         or (v_name = '・204材l=12f' and v_remark in ('上下枠根太破風', '屋根タルキ'))
+         or (v_name = '・204材l=16f' and v_remark = '同上')
+         or (v_name = '・本体組立費' and v_remark = '')
        )
      )
      or (
        v_section in ('３．構造用面材等', '３．外部面材等')
-       and v_name in (
-         '・osb合板9×910×2,420',
-         '・osb合板9×910×1,820',
-         '・天井ラワンべニア4㎜',
-         '・天井ラワンベニア4㎜',
-         '・天井ラワンべニア',
-         '・天井ラワンベニア'
+       and (
+         (v_name in ('・osb合板9×910×2,420', '・osb合板9×910×1,820') and v_remark = '')
+         or (v_name in ('・天井ラワンべニア4㎜', '・天井ラワンベニア4㎜', '・天井ラワンべニア', '・天井ラワンベニア') and v_remark = '910×1,820')
        )
      )
      or (
        v_section in ('４．断熱材', '５．断熱材')
-       and v_name in (
-         '・壁用スタイロフォーム90㎜',
-         '・天井用スタイロフォーム90㎜',
-         '・壁グラスウール90㎜',
-         '・天井グラスウール90㎜',
-         '・壁グラスウール91㎜',
-         '・天井グラスウール92㎜',
-         '・床用ミラフォーム90㎜'
+       and (
+         (v_name = '・床用ミラフォーム90㎜' and v_remark in ('', '発砲5,273円'))
+         or (v_name in (
+           '・壁用スタイロフォーム90㎜',
+           '・天井用スタイロフォーム90㎜',
+           '・壁グラスウール90㎜',
+           '・天井グラスウール90㎜',
+           '・壁グラスウール91㎜',
+           '・天井グラスウール92㎜'
+         ) and v_remark = '')
        )
      )
   then
@@ -416,28 +411,26 @@ begin
       'base'::text,
       'automatic'::text,
       'approved'::text,
-      '検証済みの旧section＋品名と完全一致した本体ホワイトリスト'::text;
+      '検証済みの旧section＋品名＋備考と完全一致した本体ホワイトリスト'::text;
     return;
   end if;
 
   if (
        v_section = '５．屋根外壁工事'
        and v_name = '・外壁角スパンガルバ鋼板'
+       and v_remark = 'l=2,300㎜'
      )
      or (
        v_section in ('５．サッシ木製建具工事', '６．サッシ木製建具工事')
-       and v_name in (
-         '・サッシ玄関ドア',
-         '引違、押出、縦辷り窓',
-         '引違'
-       )
+       and v_name in ('引違、押出、縦辷り窓', '引違')
+       and v_remark = ''
      )
   then
     return query select
       'interior_exterior'::text,
       'automatic'::text,
       'approved'::text,
-      '検証済みの旧section＋品名と完全一致した内外装ホワイトリスト'::text;
+      '検証済みの旧section＋品名＋備考と完全一致した内外装ホワイトリスト'::text;
     return;
   end if;
 

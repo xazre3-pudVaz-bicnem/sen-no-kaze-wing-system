@@ -103,6 +103,7 @@ export function computePricing(
       extra_price: c.price_on_request ? 0 : c.extra_price,
     }));
     const variantExtra = variantLines.reduce((sum, v) => sum + v.extra_price, 0);
+    const priceOnRequest = opt.price_on_request || picked.some((choice) => choice.price_on_request);
     const unit = (opt.price_on_request ? 0 : opt.price) + variantExtra;
     // フリー商品は代理店の自社商品のため、技術の杜の諸費用（15%）は乗せない
     const isFree = code === FREE_PRODUCT_CATEGORY_CODE;
@@ -118,7 +119,7 @@ export function computePricing(
       is_installation: opt.is_installation || isFree,
       is_free_product: isFree,
       variants: variantLines,
-      price_on_request: opt.price_on_request,
+      price_on_request: priceOnRequest,
       image_url: opt.image_url,
     });
   }

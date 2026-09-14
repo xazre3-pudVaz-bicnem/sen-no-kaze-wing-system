@@ -59,7 +59,7 @@ export const QUOTE_VALID_DAYS = 30;
 
 /** 画面に表示する価格注記 */
 export const PRICE_DISCLAIMER =
-  '表示価格は工場生産分（本体・オプション・諸費用）の概算価格です。消費税は見積書下部で加算しています。運送費・現地工事費等の別途工事は設置場所確認後に確定します。';
+  '表示価格は、選択した本体・内外装工事・設備・オプション等を反映した概算価格です。消費税は見積書内で加算しています。運搬・設置・基礎・電気・給排水などの別途工事は、設置場所の確認後に確定します。';
 
 export function getSiteUrl(): string | null {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();

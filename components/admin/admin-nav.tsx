@@ -26,9 +26,11 @@ const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 
   { href: '/admin/manual', label: '操作マニュアル' },
 ];
 
-export function AdminNav({ role }: { role: RoleCode }) {
+export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migrationOnly?: boolean }) {
   const pathname = usePathname();
-  const visible = items.filter((it) => (it.need === 'catalog' ? canEditCatalog(role) : it.need === 'admin' ? role === 'admin' : true));
+  const visible = migrationOnly
+    ? [{ href: '/admin/base-migration', label: '旧本体移行監査', exact: true }]
+    : items.filter((it) => (it.need === 'catalog' ? canEditCatalog(role) : it.need === 'admin' ? role === 'admin' : true));
   return (
     <nav aria-label="管理メニュー" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:px-3 lg:pb-0 [scrollbar-width:none]">
       {visible.map((it) => {

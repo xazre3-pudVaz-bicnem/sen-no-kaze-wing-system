@@ -56,6 +56,9 @@ export function ProductList({
         const attributes = getAttributes(category, option).filter(
           (item) => item.label.trim().length > 0 && item.value.trim().length > 0
         );
+        const containImage = ['ub', 'toilet', 'washbasin', 'kitchen', 'boiler', 'aircon', 'lighting'].includes(
+          category.code
+        );
 
         return (
           <li key={option.id}>
@@ -88,7 +91,7 @@ export function ProductList({
                       alt={option.name}
                       fill
                       sizes="(min-width: 1024px) 13rem, (min-width: 768px) 30vw, (min-width: 480px) 45vw, 92vw"
-                      className="object-cover"
+                      className={containImage ? 'object-contain' : 'object-cover'}
                     />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
@@ -163,7 +166,7 @@ export function defaultProductListAttributes(
     ub: 'サイズ',
     washbasin: '間口',
     kitchen: '間口',
-    boiler: '号数',
+    boiler: 'サイズ・設置',
     aircon: '適用畳数',
     sash: 'サイズ・呼称',
     furniture: '寸法',

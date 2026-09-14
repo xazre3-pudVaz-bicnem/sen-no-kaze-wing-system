@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireStaff } from '@/lib/auth/session';
+import { headers } from 'next/headers';
+import { requireStaff, requireUser } from '@/lib/auth/session';
 import { signOutAction } from '@/lib/actions/auth';
 import { AdminNav } from '@/components/admin/admin-nav';
 import { DemoBanner } from '@/components/layout/demo-banner';
@@ -12,7 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireStaff();
+  const pathname = (await headers()).get('x-wing-pathname') ?? '';
+  const user = pathname === '/admin/base-migration'
+    ? await requireUser('/admin/base-migration')
+    : await requireStaff();
   return (
     <div className="min-h-dvh bg-sand/40 lg:grid lg:grid-cols-[15rem_1fr]">
       <div className="lg:col-span-2"><DemoBanner /></div>

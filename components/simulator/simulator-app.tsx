@@ -11,7 +11,6 @@ import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, togg
 import { baseBreakdownTotal, buildPresetSelection, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
 import {
   buildEstimateBaselineSelection,
-  estimateBaselineOptionCodes,
   estimateTemplatesFor,
   finishLevelForEstimateSpec,
 } from '@/lib/domain/estimate-template';

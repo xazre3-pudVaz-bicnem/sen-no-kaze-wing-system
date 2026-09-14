@@ -99,6 +99,7 @@ create table if not exists public.legacy_base_breakdown_mappings (
   target_base_master_id uuid references public.base_masters(id) on delete set null,
   review_status text not null default 'pending'
     check (review_status in ('pending', 'approved', 'rejected')),
+  decision_version integer not null default 0 check (decision_version >= 0),
   reviewed_by uuid references public.profiles(id) on delete set null,
   reviewed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -120,6 +121,7 @@ create table if not exists public.legacy_base_spec_mappings (
   target_base_master_id uuid references public.base_masters(id) on delete set null,
   decision_status text not null default 'pending'
     check (decision_status in ('pending', 'approved', 'rejected')),
+  decision_version integer not null default 0 check (decision_version >= 0),
   reason text,
   reviewed_by uuid references public.profiles(id) on delete set null,
   reviewed_at timestamptz,
@@ -144,6 +146,7 @@ create table if not exists public.legacy_estimate_duplicate_checks (
   candidate_remark text,
   resolution text not null default 'pending'
     check (resolution in ('pending', 'use_legacy', 'use_existing', 'keep_both', 'not_duplicate')),
+  decision_version integer not null default 0 check (decision_version >= 0),
   resolved_by uuid references public.profiles(id) on delete set null,
   resolved_at timestamptz,
   created_at timestamptz not null default now(),
@@ -831,6 +834,7 @@ $$;
 create or replace function public.set_legacy_base_mapping_decision(
   p_batch_id uuid,
   p_mapping_id uuid,
+  p_expected_version integer,
   p_target_classification text,
   p_target_group_label text default null,
   p_note text default null
@@ -873,12 +877,21 @@ begin
          target_group_label = nullif(btrim(coalesce(p_target_group_label, '')), ''),
          review_status = case when p_target_classification = 'review' then 'pending' else 'approved' end,
          reviewed_by = case when p_target_classification = 'review' then null else v_uid end,
-         reviewed_at = case when p_target_classification = 'review' then null else now() end
+         reviewed_at = case when p_target_classification = 'review' then null else now() end,
+         decision_version = decision_version + 1
    where id = p_mapping_id
      and migration_batch_id = p_batch_id
+     and decision_version = p_expected_version
   returning * into v_row;
 
   if not found then
+    if exists (
+      select 1 from public.legacy_base_breakdown_mappings
+       where id = p_mapping_id and migration_batch_id = p_batch_id
+    ) then
+      raise exception 'CONFLICT: この分類判断は他のユーザーに更新されました。画面を再読込してください'
+        using errcode = '40001';
+    end if;
     raise exception 'NOT_FOUND: 移行判定行が見つかりません' using errcode = 'P0002';
   end if;
 
@@ -892,6 +905,7 @@ create or replace function public.set_legacy_base_spec_mapping(
   p_batch_id uuid,
   p_base_model_id uuid,
   p_legacy_spec_code text,
+  p_expected_version integer,
   p_proposed_group_key text,
   p_reason text default null
 )
@@ -933,25 +947,37 @@ begin
          decision_status = 'approved',
          reason = nullif(btrim(coalesce(p_reason, '')), ''),
          reviewed_by = v_uid,
-         reviewed_at = now()
+         reviewed_at = now(),
+         decision_version = decision_version + 1
    where migration_batch_id = p_batch_id
      and base_model_id = p_base_model_id
      and legacy_spec_code = p_legacy_spec_code
+     and decision_version = p_expected_version
   returning * into v_row;
 
   if not found then
+    if exists (
+      select 1 from public.legacy_base_spec_mappings
+       where migration_batch_id = p_batch_id
+         and base_model_id = p_base_model_id
+         and legacy_spec_code = p_legacy_spec_code
+    ) then
+      raise exception 'CONFLICT: この仕様対応は他のユーザーに更新されました。画面を再読込してください'
+        using errcode = '40001';
+    end if;
     raise exception 'NOT_FOUND: 旧仕様の移行判断が見つかりません'
       using errcode = 'P0002';
   end if;
 
   return v_row;
 end;
-$$;
+$;
 
 -- ---------- 重複候補の解決 ----------
 create or replace function public.resolve_legacy_estimate_duplicate(
   p_batch_id uuid,
   p_check_id uuid,
+  p_expected_version integer,
   p_resolution text
 )
 returns public.legacy_estimate_duplicate_checks
@@ -988,18 +1014,27 @@ begin
   update public.legacy_estimate_duplicate_checks
      set resolution = p_resolution,
          resolved_by = v_uid,
-         resolved_at = now()
+         resolved_at = now(),
+         decision_version = decision_version + 1
    where id = p_check_id
      and migration_batch_id = p_batch_id
+     and decision_version = p_expected_version
   returning * into v_row;
 
   if not found then
+    if exists (
+      select 1 from public.legacy_estimate_duplicate_checks
+       where id = p_check_id and migration_batch_id = p_batch_id
+    ) then
+      raise exception 'CONFLICT: この重複判断は他のユーザーに更新されました。画面を再読込してください'
+        using errcode = '40001';
+    end if;
     raise exception 'NOT_FOUND: 重複候補が見つかりません' using errcode = 'P0002';
   end if;
 
   return v_row;
 end;
-$$;
+$;
 
 -- ---------- レビュー完了（まだ移行はしない） ----------
 create or replace function public.finalize_legacy_base_migration_review(p_batch_id uuid)
@@ -1353,18 +1388,18 @@ revoke all on function public.classify_legacy_base_breakdown_item(text, text, te
 revoke all on function public.legacy_base_spec_body_signature(uuid, uuid, text) from public, anon, authenticated;
 revoke all on function public.refresh_legacy_estimate_duplicate_checks(uuid) from public, anon, authenticated;
 revoke all on function public.create_legacy_base_migration_batch(text) from public, anon, authenticated;
-revoke all on function public.set_legacy_base_mapping_decision(uuid, uuid, text, text, text) from public, anon, authenticated;
-revoke all on function public.set_legacy_base_spec_mapping(uuid, uuid, text, text, text) from public, anon, authenticated;
-revoke all on function public.resolve_legacy_estimate_duplicate(uuid, uuid, text) from public, anon, authenticated;
+revoke all on function public.set_legacy_base_mapping_decision(uuid, uuid, integer, text, text, text) from public, anon, authenticated;
+revoke all on function public.set_legacy_base_spec_mapping(uuid, uuid, text, integer, text, text) from public, anon, authenticated;
+revoke all on function public.resolve_legacy_estimate_duplicate(uuid, uuid, integer, text) from public, anon, authenticated;
 revoke all on function public.finalize_legacy_base_migration_review(uuid) from public, anon, authenticated;
 revoke all on function public.cancel_legacy_base_migration_batch(uuid) from public, anon, authenticated;
 
 grant execute on function public.can_view_legacy_base_migration(),
                           public.can_manage_legacy_base_migration(),
                           public.create_legacy_base_migration_batch(text),
-                          public.set_legacy_base_mapping_decision(uuid, uuid, text, text, text),
-                          public.set_legacy_base_spec_mapping(uuid, uuid, text, text, text),
-                          public.resolve_legacy_estimate_duplicate(uuid, uuid, text),
+                          public.set_legacy_base_mapping_decision(uuid, uuid, integer, text, text, text),
+                          public.set_legacy_base_spec_mapping(uuid, uuid, text, integer, text, text),
+                          public.resolve_legacy_estimate_duplicate(uuid, uuid, integer, text),
                           public.finalize_legacy_base_migration_review(uuid),
                           public.cancel_legacy_base_migration_batch(uuid)
 to authenticated, service_role;

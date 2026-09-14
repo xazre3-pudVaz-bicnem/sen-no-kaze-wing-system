@@ -920,6 +920,54 @@ begin
       using errcode = 'P0001';
   end if;
 
+  -- 移行前に、旧標準見積そのものが現在も内部整合していることを再確認する。
+  if exists (
+    select 1
+      from public.estimate_templates t
+     where (
+       select count(*)
+         from public.estimate_template_sections s
+        where s.template_id = t.id
+     ) <> 4
+        or exists (
+          select 1
+            from public.estimate_template_sections s
+           where s.template_id = t.id
+             and (
+               (
+                 s.code = 'base'
+                 and s.line_subtotal <> coalesce((
+                   select sum(b.amount)::numeric
+                     from public.base_breakdown_items b
+                    where b.base_model_id = t.base_model_id
+                      and b.spec_code = t.spec_code
+                 ), 0)
+               )
+               or
+               (
+                 s.code <> 'base'
+                 and s.line_subtotal <> coalesce((
+                   select sum(l.amount)::numeric
+                     from public.estimate_template_lines l
+                    where l.template_id = t.id
+                      and l.section_code = s.code
+                 ), 0)
+               )
+               or s.total <> s.line_subtotal + s.expense_amount
+             )
+        )
+        or t.subtotal_raw <> coalesce((
+          select sum(s.total)::numeric
+            from public.estimate_template_sections s
+           where s.template_id = t.id
+        ), 0)
+        or t.subtotal <> t.subtotal_raw + t.adjustment
+        or t.total <> t.subtotal + t.tax
+  ) then
+    raise exception 'VALIDATION: 旧標準見積の内部金額に不整合があります。移行前に旧データを確認してください'
+      using errcode = 'P0001';
+  end if;
+
   update public.legacy_base_migration_batches
      set status = 'ready',
          reviewed_by = v_uid,

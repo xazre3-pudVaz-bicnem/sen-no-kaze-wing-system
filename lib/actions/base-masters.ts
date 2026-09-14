@@ -165,7 +165,7 @@ export async function saveBaseMasterDraftAction(
 
   revalidatePath('/admin/base-masters');
   revalidatePath(`/admin/base-masters/${parsed.data.master_id}`);
-  redirect(`/admin/base-masters/${parsed.data.master_id}?saved=1`);
+  redirect(`/admin/base-masters/${parsed.data.master_id}?saved=${Date.now()}`);
 }
 
 export async function publishBaseMasterDraftAction(

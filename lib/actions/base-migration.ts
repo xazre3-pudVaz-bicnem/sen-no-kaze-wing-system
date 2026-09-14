@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { requireUser } from '@/lib/auth/session';
+import { requireStaff } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 
@@ -27,7 +27,7 @@ function migrationUrl(batchId?: string, extra?: string) {
 }
 
 export async function createLegacyBaseMigrationBatchAction(formData: FormData): Promise<void> {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   ensureAvailable();
 
   const description = z.string().trim().max(300).catch('').parse(formData.get('description') ?? '');
@@ -52,7 +52,7 @@ const mappingSchema = z.object({
 });
 
 export async function setLegacyBaseMappingDecisionAction(formData: FormData): Promise<void> {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   ensureAvailable();
 
   const parsed = mappingSchema.safeParse({
@@ -89,7 +89,7 @@ const specSchema = z.object({
 });
 
 export async function setLegacyBaseSpecMappingAction(formData: FormData): Promise<void> {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   ensureAvailable();
 
   const parsed = specSchema.safeParse({
@@ -124,7 +124,7 @@ const duplicateSchema = z.object({
 });
 
 export async function resolveLegacyEstimateDuplicateAction(formData: FormData): Promise<void> {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   ensureAvailable();
 
   const parsed = duplicateSchema.safeParse({
@@ -149,7 +149,7 @@ export async function resolveLegacyEstimateDuplicateAction(formData: FormData): 
 }
 
 export async function finalizeLegacyBaseMigrationReviewAction(formData: FormData): Promise<void> {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   ensureAvailable();
 
   const parsed = z.uuid().safeParse(formData.get('batch_id'));
@@ -168,7 +168,7 @@ export async function finalizeLegacyBaseMigrationReviewAction(formData: FormData
 }
 
 export async function cancelLegacyBaseMigrationBatchAction(formData: FormData): Promise<void> {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   ensureAvailable();
 
   const parsed = z.uuid().safeParse(formData.get('batch_id'));

@@ -1102,6 +1102,7 @@ begin
            where s.template_id = t.id
         ), 0)
         or t.subtotal <> t.subtotal_raw + t.adjustment
+        or abs(t.subtotal * t.tax_rate - t.tax) >= 1
         or t.total <> t.subtotal + t.tax
   ) then
     raise exception 'VALIDATION: 旧標準見積の内部金額に不整合があります。移行前に旧データを確認してください'

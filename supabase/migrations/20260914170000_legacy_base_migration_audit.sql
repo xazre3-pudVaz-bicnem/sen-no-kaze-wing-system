@@ -163,6 +163,7 @@ create table if not exists public.legacy_migration_financial_snapshots (
   base_model_id uuid not null references public.base_models(id) on delete restrict,
   legacy_spec_code text not null,
   legacy_template_id uuid,
+  legacy_baseline_option_ids uuid[] not null default '{}',
   legacy_base_line_total numeric not null default 0,
   legacy_base_expense_rate numeric,
   legacy_base_expense numeric,
@@ -188,6 +189,7 @@ create table if not exists public.legacy_migration_financial_snapshots (
   source_file_name text,
   source_sheet_name text,
   source_sha256 text,
+  source_imported_at timestamptz,
   created_at timestamptz not null default now(),
   unique (migration_batch_id, base_model_id, legacy_spec_code)
 );
@@ -750,6 +752,7 @@ begin
     base_model_id,
     legacy_spec_code,
     legacy_template_id,
+    legacy_baseline_option_ids,
     legacy_base_line_total,
     legacy_base_expense_rate,
     legacy_base_expense,
@@ -774,13 +777,15 @@ begin
     total,
     source_file_name,
     source_sheet_name,
-    source_sha256
+    source_sha256,
+    source_imported_at
   )
   select
     v_batch_id,
     src.base_model_id,
     src.spec_code,
     t.id,
+    coalesce(t.baseline_option_ids, '{}'),
     coalesce((
       select sum(b.amount)::numeric
         from public.base_breakdown_items b
@@ -810,7 +815,8 @@ begin
     t.total,
     t.source_file_name,
     t.source_sheet_name,
-    t.source_sha256
+    t.source_sha256,
+    t.imported_at
   from (
     select base_model_id, spec_code from public.base_breakdown_items
     union

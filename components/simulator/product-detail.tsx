@@ -1,10 +1,9 @@
 'use client';
 
-import { ArrowLeft, Check, ImageOff } from 'lucide-react';
+import { Check, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
-import { Button } from '@/components/ui';
 import { VariantPicker } from './variant-picker';
 
 interface Props {
@@ -14,20 +13,15 @@ interface Props {
   choices: OptionVariantChoice[];
   selectedVariantIds: string[];
   isCurrentlySelected: boolean;
-  priceLabel: string;
   onVariantChange: (choiceId: string, groupId: string) => void;
-  onBack: () => void;
-  onApply: () => void;
-  onRemove?: () => void;
-  applyDisabled?: boolean;
 }
 
 /**
- * 14カテゴリで共通利用する商品詳細。
+ * 共通商品詳細の本文。
  *
- * 左に商品画像、右に基本情報・仕様選択・追加金額をまとめる。
- * 固定仕様は選択カードにせず、必要な場合だけ簡潔なテキストで表示する。
- * メーカー資料は商品マスター側の資料URLを持つ段階で、この左側にタブ追加する想定。
+ * 左側は「見る場所」＝商品画像・説明。
+ * 右側は「選ぶ場所」＝基本情報・文字カードの仕様選択・今回の選択内容。
+ * 金額と確定ボタンは親ダイアログの固定フッターに置く。
  */
 export function ProductDetail({
   category,
@@ -36,12 +30,7 @@ export function ProductDetail({
   choices,
   selectedVariantIds,
   isCurrentlySelected,
-  priceLabel,
   onVariantChange,
-  onBack,
-  onApply,
-  onRemove,
-  applyDisabled = false,
 }: Props) {
   const basicInfo = [
     { label: 'シリーズ・型番', value: option.model_no },
@@ -64,28 +53,24 @@ export function ProductDetail({
     return !(list.length === 1 && list[0].kind === 'fixed');
   });
 
-  return (
-    <div data-testid="product-detail">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-3 inline-flex items-center gap-1 text-xs font-semibold text-brown hover:underline"
-        data-testid="product-detail-back"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        一覧へ戻る
-      </button>
+  const selectedSpecs = groups
+    .map((group) => {
+      const list = choices.filter((choice) => choice.group_id === group.id);
+      const choice = list.find((item) => selectedVariantIds.includes(item.id));
+      if (!choice) return null;
+      if (list.length === 1 && choice.kind === 'fixed' && choice.name.trim() === option.name.trim()) return null;
+      return { group, choice };
+    })
+    .filter(
+      (item): item is { group: OptionVariantGroup; choice: OptionVariantChoice } => Boolean(item)
+    );
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(19rem,0.92fr)]">
-        <section className="min-w-0">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="text-xs font-semibold text-ink">商品画像</span>
-            {isCurrentlySelected && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-brown px-2 py-1 text-[0.68rem] font-semibold text-white">
-                <Check className="size-3" aria-hidden="true" />
-                現在選択中
-              </span>
-            )}
+  return (
+    <div className="h-full min-h-0" data-testid="product-detail">
+      <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(21rem,0.92fr)]">
+        <section className="min-w-0 lg:self-start">
+          <div className="mb-2 rounded-lg border border-line bg-white px-3 py-2 text-center text-xs font-semibold text-brown">
+            商品画像
           </div>
 
           <div className="relative aspect-[3/2] overflow-hidden rounded-lg border border-line bg-sand">
@@ -94,7 +79,7 @@ export function ProductDetail({
                 src={option.image_url}
                 alt={option.name}
                 fill
-                sizes="(min-width: 1024px) 32rem, 90vw"
+                sizes="(min-width: 1024px) 36rem, 90vw"
                 className="object-contain"
               />
             ) : (
@@ -112,10 +97,20 @@ export function ProductDetail({
           )}
         </section>
 
-        <section className="min-w-0 lg:flex lg:flex-col">
+        <section className="min-h-0 min-w-0 lg:overflow-y-auto lg:pr-2">
           <div className="border-b border-line pb-3">
-            {option.manufacturer && <p className="text-xs text-muted">{option.manufacturer}</p>}
-            <h3 className="mt-0.5 text-lg font-semibold leading-snug text-ink">{option.name}</h3>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                {option.manufacturer && <p className="text-xs font-semibold text-brown">{option.manufacturer}</p>}
+                <h3 className="mt-0.5 text-lg font-semibold leading-snug text-ink">{option.name}</h3>
+              </div>
+              {isCurrentlySelected && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brown px-2 py-1 text-[0.68rem] font-semibold text-white">
+                  <Check className="size-3" aria-hidden="true" />
+                  現在選択中
+                </span>
+              )}
+            </div>
 
             {basicInfo.length > 0 && (
               <dl className="mt-3 grid gap-1.5 rounded-lg bg-sand/45 p-3 text-xs">
@@ -134,51 +129,61 @@ export function ProductDetail({
           </div>
 
           {fixedSpecs.length > 0 && (
-            <dl className="mt-3 grid gap-1.5 rounded-lg bg-ivory/55 px-3 py-2.5 text-xs">
-              {fixedSpecs.map(({ group, choice }) => (
-                <div key={group.id} className="grid grid-cols-[5.5rem_1fr] gap-2">
-                  <dt className="text-muted">{group.name}</dt>
-                  <dd className="min-w-0 break-words text-ink-soft">
-                    {choice.name}
-                    {choice.price_on_request
-                      ? '（別途見積）'
-                      : choice.extra_price > 0
-                        ? `（+${formatYen(choice.extra_price)}）`
-                        : ''}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            <div className="mt-3">
+              <p className="mb-1.5 text-xs font-semibold text-ink">標準仕様</p>
+              <dl className="grid gap-1.5 rounded-lg bg-ivory/55 px-3 py-2.5 text-xs">
+                {fixedSpecs.map(({ group, choice }) => (
+                  <div key={group.id} className="grid grid-cols-[5.5rem_1fr] gap-2">
+                    <dt className="text-muted">{group.name}</dt>
+                    <dd className="min-w-0 break-words text-ink-soft">
+                      {choice.name}
+                      {choice.price_on_request
+                        ? '（別途見積）'
+                        : choice.extra_price > 0
+                          ? `（+${formatYen(choice.extra_price)}）`
+                          : ''}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           )}
 
           {editableGroups.length > 0 && (
-            <VariantPicker
-              groups={editableGroups}
-              choices={choices}
-              selected={selectedVariantIds}
-              onChange={onVariantChange}
-            />
+            <div className="mt-4">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
+                <p className="text-[0.65rem] text-muted">色・柄は商品画像やメーカー資料でご確認ください</p>
+              </div>
+              <VariantPicker
+                groups={editableGroups}
+                choices={choices}
+                selected={selectedVariantIds}
+                onChange={onVariantChange}
+                showImages={false}
+              />
+            </div>
           )}
 
-          <div className="sticky bottom-0 z-10 mt-4 border-t border-line bg-white/95 pt-3 pb-1 backdrop-blur lg:mt-auto">
-            <div className="rounded-lg border border-line bg-white p-3">
-              <p className="text-[0.68rem] text-muted">追加金額</p>
-              <p className="mt-0.5 text-base font-semibold text-ink">{priceLabel}</p>
-            </div>
-
-            <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                {isCurrentlySelected && onRemove && (
-                  <button type="button" onClick={onRemove} className="text-xs font-semibold text-warn hover:underline">
-                    選択から外す
-                  </button>
-                )}
-              </div>
-              <Button type="button" onClick={onApply} disabled={applyDisabled} data-testid="product-detail-apply">
-                この内容に変更する
-              </Button>
-            </div>
-          </div>
+          {selectedSpecs.length > 0 && (
+            <section className="mt-4 rounded-lg border border-line bg-white" data-testid="product-detail-summary">
+              <h4 className="border-b border-line px-3 py-2 text-xs font-semibold text-ink">今回の選択内容</h4>
+              <dl className="divide-y divide-line text-xs">
+                {selectedSpecs.map(({ group, choice }) => (
+                  <div key={group.id} className="grid grid-cols-[6.5rem_1fr] gap-2 px-3 py-2">
+                    <dt className="text-muted">{group.name}</dt>
+                    <dd className="min-w-0 break-words font-medium text-ink">
+                      {choice.name}
+                      {choice.price_on_request && <span className="ml-2 text-warn">別途見積</span>}
+                      {!choice.price_on_request && choice.extra_price > 0 && (
+                        <span className="ml-2 text-ink-soft">+{formatYen(choice.extra_price)}</span>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
         </section>
       </div>
     </div>

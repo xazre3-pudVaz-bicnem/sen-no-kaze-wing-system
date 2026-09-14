@@ -73,6 +73,7 @@ export function BaseMasterLinesEditor({
   const lineIdentity = lines.map((line) => `${line.id}:${line.line_key}`).join('|');
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSections(makeSections(lines));
     // 保存後にDB採番されたline_keyをクライアント状態へ取り込む。
     // eslint-disable-next-line react-hooks/exhaustive-deps

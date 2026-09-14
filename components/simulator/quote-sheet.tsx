@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, Minus, Pencil, Plus } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { type FinishLevel, type OptionCategory, type PricingResult, type ProductOption } from '@/lib/domain/types';
 import type { StandardEstimatePricingResult } from '@/lib/domain/standard-estimate-pricing';
@@ -137,6 +137,19 @@ export function QuoteSheet({
     sitework: true,
     freeProducts: true,
   });
+
+  useEffect(() => {
+    if (!window.matchMedia('(max-width: 639px)').matches) return;
+    setExpandedSections({
+      base: false,
+      interiorExterior: false,
+      options: false,
+      otherConstruction: false,
+      sitework: false,
+      freeProducts: false,
+    });
+  }, []);
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((current) => ({ ...current, [section]: !current[section] }));
   };

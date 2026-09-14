@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireUser } from '@/lib/auth/session';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { formatYen } from '@/lib/domain/pricing';
@@ -38,7 +38,7 @@ function targetLabel(target: string) {
 }
 
 export default async function BaseMigrationPage({ searchParams }: { searchParams: Search }) {
-  await requireUser('/admin/base-migration');
+  await requireStaff('/admin/base-migration');
   const sp = await searchParams;
 
   if (isLocalMode()) {

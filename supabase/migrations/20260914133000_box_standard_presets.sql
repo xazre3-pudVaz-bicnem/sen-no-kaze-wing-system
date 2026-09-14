@@ -57,6 +57,7 @@ set presets = jsonb_build_array(
       'sw-site-expense'
     ]::text[])
   )
+)
 where slug = 'box';
 
 -- preset コードを変更したため、BOXで選択可能にする商品側の適用仕様も追加する。

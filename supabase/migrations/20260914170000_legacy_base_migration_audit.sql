@@ -1097,6 +1097,35 @@ begin
 
   if exists (
     select 1
+      from public.legacy_base_spec_mappings a
+      join public.legacy_base_spec_mappings b
+        on b.migration_batch_id = a.migration_batch_id
+       and b.base_model_id = a.base_model_id
+       and b.proposed_group_key = a.proposed_group_key
+       and b.id::text > a.id::text
+      join public.legacy_migration_financial_snapshots fa
+        on fa.migration_batch_id = a.migration_batch_id
+       and fa.base_model_id = a.base_model_id
+       and fa.legacy_spec_code = a.legacy_spec_code
+      join public.legacy_migration_financial_snapshots fb
+        on fb.migration_batch_id = b.migration_batch_id
+       and fb.base_model_id = b.base_model_id
+       and fb.legacy_spec_code = b.legacy_spec_code
+     where a.migration_batch_id = p_batch_id
+       and a.decision_status = 'approved'
+       and b.decision_status = 'approved'
+       and (
+         fa.legacy_base_expense_rate is distinct from fb.legacy_base_expense_rate
+         or fa.legacy_base_expense is distinct from fb.legacy_base_expense
+         or fa.legacy_base_total is distinct from fb.legacy_base_total
+       )
+  ) then
+    raise exception 'VALIDATION: 同じ新本体グループに、本体諸費用条件の異なる旧仕様をまとめることはできません'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
       from public.legacy_estimate_duplicate_checks d
      where d.migration_batch_id = p_batch_id
        and d.resolution = 'pending'
@@ -1118,6 +1147,63 @@ begin
 
   if v_snapshot_specs <> v_source_specs then
     raise exception 'VALIDATION: 金額スナップショットが移行元仕様数と一致しません'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+      from public.legacy_migration_financial_snapshots s
+     where s.migration_batch_id = p_batch_id
+       and (
+         s.legacy_template_id is null
+         or s.legacy_base_expense is null
+         or s.legacy_base_total is null
+         or s.legacy_interior_line_total is null
+         or s.legacy_interior_expense is null
+         or s.legacy_interior_total is null
+         or s.legacy_option_line_total is null
+         or s.legacy_option_expense is null
+         or s.legacy_option_total is null
+         or s.legacy_sitework_line_total is null
+         or s.legacy_sitework_expense is null
+         or s.legacy_sitework_total is null
+         or s.subtotal_raw is null
+         or s.adjustment is null
+         or s.subtotal is null
+         or s.tax_rate is null
+         or s.tax is null
+         or s.total is null
+         or s.source_file_name is null
+         or s.source_sheet_name is null
+         or s.source_sha256 is null
+       )
+  ) then
+    raise exception 'VALIDATION: 標準見積または移行前金額が不足している旧仕様があります'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+      from public.legacy_migration_financial_snapshots s
+     where s.migration_batch_id = p_batch_id
+       and (
+         s.legacy_base_expense <> round(s.legacy_base_expense)
+         or s.legacy_base_total <> round(s.legacy_base_total)
+       )
+  ) then
+    raise exception 'VALIDATION: 新本体Revisionで1円単位に完全保存できない旧本体諸費用があります'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+      from public.legacy_base_breakdown_mappings m
+     where m.migration_batch_id = p_batch_id
+       and m.review_status = 'approved'
+       and m.target_classification = 'base'
+       and m.legacy_amount::numeric <> round(m.legacy_unit_price::numeric * m.legacy_quantity)
+  ) then
+    raise exception 'VALIDATION: 本体に残す旧明細の金額が単価×数量の再計算結果と一致しません'
       using errcode = 'P0001';
   end if;
 

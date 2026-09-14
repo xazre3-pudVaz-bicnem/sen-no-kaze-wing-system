@@ -196,7 +196,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if exists (
     select 1
@@ -214,7 +214,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 -- ---------- 本体Revision ----------
 create table if not exists public.base_master_revisions (
@@ -360,7 +360,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists base_masters_revision_refs on public.base_masters;
 create trigger base_masters_revision_refs
@@ -375,7 +375,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $
+as $$
   select exists (
     select 1
       from public.base_masters b
@@ -383,7 +383,7 @@ as $
        and b.status = 'active'
        and public.can_create_base_master_for_org(b.owner_organization_id)
   );
-$;
+$$;
 
 
 -- 所有組織のメンバー（viewer含む）またはシステム管理者は、
@@ -394,7 +394,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $
+as $$
   select public.is_admin()
          or exists (
            select 1
@@ -404,7 +404,7 @@ as $
               and o.status = 'active'
               and public.current_organization_member_rank(o.id) >= 0
          );
-$;
+$$;
 
 -- 本体を「利用できるか」の判定は必ずこの関数へ集約する。
 -- 初期ルール:
@@ -574,7 +574,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_master_id uuid;
 begin
@@ -603,7 +603,7 @@ begin
 
   return null;
 end;
-$;
+$$;
 
 drop trigger if exists base_master_current_pointer_consistency on public.base_master_revisions;
 create constraint trigger base_master_current_pointer_consistency

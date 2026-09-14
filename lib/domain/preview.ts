@@ -1,5 +1,5 @@
 import type { PreviewImageRule, ProductOption, ViewKey } from './types';
-import { isDedicatedBaseFloorplanRule, isPresetFloorplanRule, previewRuleDisplayNote } from './preview-rule-meta';
+import { isDedicatedBaseFloorplanRule, isPresetFloorplanRule, presetFloorplanCode, previewRuleDisplayNote } from './preview-rule-meta';
 
 export interface PreviewLayer {
   url: string;
@@ -44,7 +44,13 @@ export function selectedPreviewKeys(options: ProductOption[], selectedIds: strin
  *  4. 何もなければ none（UI はプレースホルダーを表示）
  * 勝手に別仕様の画像を「正しい完成図」として見せないため、exact 以外は approximate=true を返す。
  */
-export function resolvePreview(rules: PreviewImageRule[], view: ViewKey, selectedKeys: string[], specCode?: string | null): PreviewResolution {
+export function resolvePreview(
+  rules: PreviewImageRule[],
+  view: ViewKey,
+  selectedKeys: string[],
+  specCode?: string | null,
+  preferredFloorplanKeys?: string[]
+): PreviewResolution {
   const keys = sortedUnique(selectedKeys);
   const active = rules.filter((r) => r.view === view && r.status === 'published');
   const composites = active.filter((r) => r.kind === 'composite');
@@ -65,6 +71,29 @@ export function resolvePreview(rules: PreviewImageRule[], view: ViewKey, selecte
         note: previewRuleDisplayNote(specRule),
         approximate: false,
       };
+    }
+
+    // 旧データではホテル／住宅の平面図に spec 専用マーカーがない。
+    // 仕様ボタン直後の標準状態だけは、その仕様の既知キーで平面図を直接解決する。
+    if (preferredFloorplanKeys !== undefined) {
+      const preferredKeys = sortedUnique(preferredFloorplanKeys);
+      const preferredRule = composites.find((rule) => {
+        if (isDedicatedBaseFloorplanRule(rule)) return false;
+        const markedCode = presetFloorplanCode(rule);
+        if (markedCode && markedCode !== specCode) return false;
+        return sameSet(sortedUnique(rule.preview_keys), preferredKeys);
+      });
+      if (preferredRule) {
+        return {
+          view,
+          kind: 'exact',
+          layers: [{ url: preferredRule.url, alt: preferredRule.alt, z_index: 0 }],
+          missing_keys: [],
+          extra_keys: [],
+          note: previewRuleDisplayNote(preferredRule),
+          approximate: false,
+        };
+      }
     }
   }
 

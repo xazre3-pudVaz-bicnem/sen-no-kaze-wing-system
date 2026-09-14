@@ -113,7 +113,15 @@ export function BaseMasterDraftEditor({
           <form action={publishAction}>
             <input type="hidden" name="revision_id" value={revision.id} />
             <input type="hidden" name="master_id" value={master.id} />
-            <Button type="submit" disabled={publishing || dirty || lines.length === 0}>
+            <Button
+              type="submit"
+              disabled={publishing || dirty || lines.length === 0}
+              onClick={(event) => {
+                if (!window.confirm(`Draft v${revision.version}を公開します。公開後はこのRevisionを直接編集できません。よろしいですか？`)) {
+                  event.preventDefault();
+                }
+              }}
+            >
               {publishing && <Spinner />}
               このDraftを公開
             </Button>

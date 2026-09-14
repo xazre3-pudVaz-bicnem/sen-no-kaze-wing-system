@@ -30,15 +30,19 @@ function bodySignature(rows: AuditRow[]) {
 
 const REQUIRED_SNAPSHOT_FIELDS = [
   'legacy_template_id',
+  'legacy_base_expense_rate',
   'legacy_base_expense',
   'legacy_base_total',
   'legacy_interior_line_total',
+  'legacy_interior_expense_rate',
   'legacy_interior_expense',
   'legacy_interior_total',
   'legacy_option_line_total',
+  'legacy_option_expense_rate',
   'legacy_option_expense',
   'legacy_option_total',
   'legacy_sitework_line_total',
+  'legacy_sitework_expense_rate',
   'legacy_sitework_expense',
   'legacy_sitework_total',
   'subtotal_raw',
@@ -127,9 +131,11 @@ export function assessLegacyBaseMigrationReadiness(input: {
     if (expenseSignatures.size > 1) incompatibleExpenseGroups += 1;
   }
 
-  const incompleteSnapshots = snapshots.filter((row) =>
+  const existingIncompleteSnapshots = snapshots.filter((row) =>
     REQUIRED_SNAPSHOT_FIELDS.some((field) => row[field] === null || row[field] === undefined)
   ).length;
+  const missingSnapshotSpecs = specs.filter((spec) => !snapshotBySpec.has(specKey(spec))).length;
+  const incompleteSnapshots = existingIncompleteSnapshots + missingSnapshotSpecs;
 
   const amountMismatches = mappings.filter((row) => {
     if (row.review_status !== 'approved' || row.target_classification !== 'base') return false;

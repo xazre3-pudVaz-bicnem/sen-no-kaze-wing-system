@@ -170,14 +170,13 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       ? initial.finish_level
       : finishLevelForEstimateSpec(defaultSpecCode);
   const initialBaselineIds =
-    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? [];
+    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaults;
   const initialSelection = normalizeWashbasinSelection(
     bundle.options,
     pruneToScope(
       ctx,
       (validInitialSpecCode ? initial?.option_ids : null) ??
-        initialBaselineIds ??
-        defaults,
+        initialBaselineIds,
       initialLevel
     ),
     initialBaselineIds

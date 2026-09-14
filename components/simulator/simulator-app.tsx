@@ -401,6 +401,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
+  const baselineVariantIds = useMemo(
+    () => defaultVariantIds(bundle, activeSpecSelection),
+    [activeSpecSelection, bundle]
+  );
   const atStandardSpecSelection = sameSelection(
     selected,
     pruneToScope(ctx, activeSpecSelection, finishLevel)
@@ -895,7 +899,18 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       </div>
 
       <div className="container-x space-y-4 pt-3 pb-2">
-        <EquipmentBoard categories={specCategories} options={scopedOptions} selected={selected} readOnly={readOnly} onPickCategory={openPicker} />
+        <EquipmentBoard
+          categories={specCategories}
+          options={scopedOptions}
+          selected={selected}
+          baselineSelected={activeSpecSelection}
+          selectedVariantIds={variantIds}
+          baselineVariantIds={baselineVariantIds}
+          variantGroups={bundle.variantGroups}
+          variantChoices={bundle.variantChoices}
+          readOnly={readOnly}
+          onPickCategory={openPicker}
+        />
 
         {issues.length > 0 && (
           <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">

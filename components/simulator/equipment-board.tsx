@@ -2,7 +2,13 @@
 
 import { Pencil } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
-import type { OptionCategory, ProductOption } from '@/lib/domain/types';
+import { equipmentCategoryPriceState } from '@/lib/domain/equipment-price-display';
+import type {
+  OptionCategory,
+  OptionVariantChoice,
+  OptionVariantGroup,
+  ProductOption,
+} from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +16,11 @@ interface Props {
   categories: OptionCategory[];
   options: ProductOption[];
   selected: string[];
+  baselineSelected: string[];
+  selectedVariantIds: string[];
+  baselineVariantIds: string[];
+  variantGroups: OptionVariantGroup[];
+  variantChoices: OptionVariantChoice[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
 }
@@ -65,7 +76,18 @@ function isOtherProductCategory(category: OptionCategory): boolean {
  * 内外装工事は、既存の内部建具・サッシカテゴリーだけを表示する。
  * オプションとその他の商品は別のレスポンシブ単位として分ける。
  */
-export function EquipmentBoard({ categories, options, selected, readOnly, onPickCategory }: Props) {
+export function EquipmentBoard({
+  categories,
+  options,
+  selected,
+  baselineSelected,
+  selectedVariantIds,
+  baselineVariantIds,
+  variantGroups,
+  variantChoices,
+  readOnly,
+  onPickCategory,
+}: Props) {
   const selectedSet = new Set(selected);
   const shown = categories.filter((c) => c.code !== 'sitework' && options.some((o) => o.category_id === c.id));
   const interiorExteriorCats = sortCategoriesForDisplay(shown.filter(isInteriorExteriorCategory), INTERIOR_EXTERIOR_CATEGORY_ORDER);
@@ -79,6 +101,26 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
     const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
     const main = chosen[0] ?? null;
     const extraCount = chosen.length - 1;
+    const priceState = equipmentCategoryPriceState({
+      categoryId: cat.id,
+      options,
+      selectedIds: selected,
+      baselineIds: baselineSelected,
+      selectedVariantIds,
+      baselineVariantIds,
+      variantGroups,
+      variantChoices,
+    });
+    const priceLabel =
+      priceState.kind === 'standard'
+        ? '標準'
+        : priceState.kind === 'price-on-request'
+          ? '別途見積'
+          : priceState.kind === 'no-change'
+            ? '追加費用なし'
+            : priceState.delta > 0
+              ? `+${formatYen(priceState.delta)}`
+              : formatYen(priceState.delta);
     return (
       <li key={cat.id} className="bg-white">
         <button
@@ -116,8 +158,8 @@ export function EquipmentBoard({ categories, options, selected, readOnly, onPick
               {extraCount > 0 && <span className="ml-1 font-normal text-[0.65rem] text-muted">ほか {extraCount} 点</span>}
             </span>
             {main && (
-              <span className="block text-[0.7rem] text-ink-soft">
-                {main.price_on_request ? '別途見積' : main.price === 0 ? '標準' : `+${formatYen(main.price)}`}
+              <span className="block text-[0.7rem] text-ink-soft" data-testid={`equip-price-${cat.code}`}>
+                {priceLabel}
               </span>
             )}
           </span>

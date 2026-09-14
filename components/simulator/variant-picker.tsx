@@ -17,6 +17,8 @@ interface Props {
    * 商品詳細の右側では false にし、画像確認は商品画像／メーカー資料へ集約する。
    */
   showImages?: boolean;
+  /** 選択中の値をグループ見出し横へ表示するか */
+  showCurrentValue?: boolean;
 }
 
 /**
@@ -25,7 +27,14 @@ interface Props {
  * デフォルトでは画像付き選択肢を画像カードで表示する。
  * 商品詳細では showImages=false として、比較しやすい文字カードに統一する。
  */
-export function VariantPicker({ groups, choices, selected, onChange, showImages = true }: Props) {
+export function VariantPicker({
+  groups,
+  choices,
+  selected,
+  onChange,
+  showImages = true,
+  showCurrentValue = true,
+}: Props) {
   if (groups.length === 0) return null;
   const picked = new Set(selected);
 
@@ -45,7 +54,7 @@ export function VariantPicker({ groups, choices, selected, onChange, showImages 
               {fixed ? (
                 <span className="text-[0.68rem] text-muted">変更不可</span>
               ) : current ? (
-                <span className="text-[0.68rem] text-muted">{current.name}</span>
+                showCurrentValue && <span className="text-[0.68rem] text-muted">{current.name}</span>
               ) : (
                 <span className="text-[0.68rem] text-muted">選んでください</span>
               )}

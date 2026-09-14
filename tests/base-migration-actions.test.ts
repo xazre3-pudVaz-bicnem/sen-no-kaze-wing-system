@@ -58,6 +58,18 @@ describe('旧本体移行監査Server Action', () => {
     });
   });
 
+  it('expected_versionが欠けてもRPCへ到達しない', async () => {
+    const form = new FormData();
+    form.set('batch_id', batchId);
+    form.set('mapping_id', mappingId);
+    form.set('target_classification', 'base');
+
+    await expect(setLegacyBaseMappingDecisionAction(form))
+      .rejects.toThrow('REDIRECT:/admin/base-migration?error=');
+
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
   it('expected_versionが不正ならRPCへ到達しない', async () => {
     const form = new FormData();
     form.set('batch_id', batchId);

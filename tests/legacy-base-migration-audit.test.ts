@@ -28,6 +28,12 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain("'estimate_template_lines'");
   });
 
+  it('移行監査用SQL関数の明示タグが開閉で一致する', () => {
+    expect((migration.match(/\\$hashfn\\$/g) ?? []).length).toBe(2);
+    expect((migration.match(/\\$assertfn\\$/g) ?? []).length).toBe(2);
+    expect((migration.match(/\\$sig\\$/g) ?? []).length).toBe(2);
+  });
+
   it('危険な広域キーワード判定を避け、屋根タルキは本体に固定する', () => {
     expect(migration).toContain("v_name like '%屋根タルキ%'");
     expect(migration).not.toContain("v_name like '%屋根%'");

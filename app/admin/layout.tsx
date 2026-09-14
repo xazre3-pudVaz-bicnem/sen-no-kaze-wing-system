@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get('x-wing-pathname') ?? '';
-  const migrationRoute = pathname === '/admin/base-migration';
+  const migrationRoute = pathname === '/admin/base-migration' || pathname.startsWith('/admin/base-migration/');
   const user = migrationRoute
     ? await requireUser('/admin/base-migration')
     : await requireStaff();

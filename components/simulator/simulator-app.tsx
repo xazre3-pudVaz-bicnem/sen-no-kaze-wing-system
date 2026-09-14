@@ -252,31 +252,94 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       const raw = window.localStorage.getItem(storageKey(model.slug));
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
       if (!initial && draft) {
-        const validDraftSpec =
-          !draft.spec || specSelections.some((row) => row.code === draft.spec);
-        const valid = draft.selected.filter((sid) => bundle.options.some((o) => o.id === sid));
-        if (validDraftSpec && draft.spec) {
-          setSpecCode(draft.spec);
-          setFinishLevel(finishLevelForEstimateSpec(draft.spec));
-        } else if (validDraftSpec && draft.finishLevel) {
-          setFinishLevel(draft.finishLevel);
-        }
-        if (validDraftSpec && draft.variantIds?.length) setVariantIds(draft.variantIds);
-        if (validDraftSpec && draft.exteriorFaces?.length) {
+        const hasInvalidSpec =
+          Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
+        const restoredSpec =
+          !hasInvalidSpec && draft.spec
+            ? draft.spec
+            : defaultSpecCode;
+
+        if (!hasInvalidSpec) {
+          const restoredLevel = finishLevelForEstimateSpec(restoredSpec);
+          const restoredChoice = simulatorSpecChoices.find((row) => row.code === restoredSpec) ?? null;
+          const restoredTemplate = estimateTemplateByCode.get(restoredSpec) ?? null;
+          const allowedOptionIds = new Set(
+            (restoredTemplate || !restoredChoice?.preset
+              ? bundle.options
+              : bundle.options.filter(
+                  (option) =>
+                    option.spec_codes.length === 0 ||
+                    option.spec_codes.includes(restoredSpec)
+                )
+            ).map((option) => option.id)
+          );
+          const standardIds =
+            specSelections.find((row) => row.code === restoredSpec)?.ids ?? [];
+          let restoredSelection = pruneToScope(
+            ctx,
+            draft.selected.filter((id) => allowedOptionIds.has(id)),
+            restoredLevel
+          );
+
+          // 旧下書きに複数選択が残っていても、現在1択のカテゴリーは1商品へ正規化する。
+          for (const category of bundle.categories.filter(
+            (row) => row.selection_mode === 'single' || row.code === 'aircon'
+          )) {
+            const categoryOptionIds = new Set(
+              bundle.options
+                .filter((option) => option.category_id === category.id)
+                .map((option) => option.id)
+            );
+            const chosen = restoredSelection.filter((id) => categoryOptionIds.has(id));
+            if (chosen.length <= 1) continue;
+            const standardChoice = standardIds.find((id) => categoryOptionIds.has(id));
+            const keep = standardChoice ?? chosen[0];
+            restoredSelection = [
+              ...restoredSelection.filter((id) => !categoryOptionIds.has(id)),
+              keep,
+            ];
+          }
+
+          if (restoredSelection.length === 0 && standardIds.length > 0) {
+            restoredSelection = pruneToScope(ctx, standardIds, restoredLevel);
+          }
+
+          const selectedGroupIds = new Set(
+            bundle.variantGroups
+              .filter((group) => restoredSelection.includes(group.option_id))
+              .map((group) => group.id)
+          );
+          const restoredVariantIds = pruneHiddenVariantChoices(
+            bundle.variantGroups,
+            bundle.variantChoices,
+            (draft.variantIds ?? []).filter((choiceId) => {
+              const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
+              return Boolean(groupId && selectedGroupIds.has(groupId));
+            })
+          );
+          const normalizedVariantIds =
+            restoredVariantIds.length > 0
+              ? restoredVariantIds
+              : defaultVariantIds(bundle, restoredSelection);
+
+          setSpecCode(restoredSpec);
+          setFinishLevel(restoredLevel);
+          setSelected(restoredSelection);
+          setVariantIds(normalizedVariantIds);
           setExteriorFaces(
             normalizeExteriorFaces(
               draft.exteriorFaces,
               exteriorWallOptions,
               bundle.variantGroups,
               bundle.variantChoices,
-              valid,
-              draft.variantIds ?? []
+              restoredSelection,
+              normalizedVariantIds
             )
           );
         }
-        if (validDraftSpec && valid.length) setSelected(valid);
+
         if (draft.name) setName(draft.name);
-        if (draft.configId) setConfigId(draft.configId);
+        if (draft.configId && !hasInvalidSpec) setConfigId(draft.configId);
         if (resume && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);
@@ -963,10 +1026,12 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           category={bundle.categories.find((c) => c.id === picker)!}
           options={scopedOptions.filter((o) => o.category_id === picker)}
           selectedIds={selected}
+          baselineSelectedIds={activeSpecSelection}
           blocked={blocked}
           variantGroups={bundle.variantGroups}
           variantChoices={bundle.variantChoices}
           selectedVariantIds={variantIds}
+          baselineVariantIds={baselineVariantIds}
           onClose={() => setPicker(null)}
           onApply={(next, nextVariants) => applyPicker(picker, next, nextVariants)}
         />

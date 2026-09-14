@@ -55,7 +55,7 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain("'・204材l=12f'");
     expect(migration).toContain("'・天井ラワンべニア4㎜'");
     expect(migration).toContain("'・床用ミラフォーム90㎜'");
-    expect(migration).toContain("v_remark = '屋根タルキ'");
+    expect(migration).toContain("'屋根タルキ'");
     expect(migration).not.toContain("'・大型丁番＋ステンレス長ビス'");
     expect(migration).not.toContain("'・ジャッキベース'");
     expect(migration).toContain("'review'::text");

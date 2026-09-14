@@ -194,6 +194,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                   <option value="base">本体</option>
                   <option value="interior_exterior">内外装工事</option>
                   <option value="option">オプション</option>
+                  <option value="sitework">別途</option>
                   <option value="review">要確認</option>
                 </Select>
                 <Input name="note" defaultValue={row.decision_type === 'human' && row.decision_reason ? String(row.decision_reason) : ''} placeholder="判断理由" disabled={!editable} />

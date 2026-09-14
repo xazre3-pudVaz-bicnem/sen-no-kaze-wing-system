@@ -14,8 +14,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.is_admin()
-         or exists (
+  select exists (
            select 1
              from public.organization_memberships m
              join public.organizations o on o.id = m.organization_id
@@ -34,8 +33,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.is_admin()
-         or exists (
+  select exists (
            select 1
              from public.organization_memberships m
              join public.organizations o on o.id = m.organization_id

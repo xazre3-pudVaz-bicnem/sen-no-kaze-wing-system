@@ -942,6 +942,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       )}
       {exteriorFacePicker && exteriorWallCat && (
         <ExteriorWallFacesDialog
+          category={exteriorWallCat}
           options={exteriorWallOptions}
           variantGroups={bundle.variantGroups}
           variantChoices={bundle.variantChoices}

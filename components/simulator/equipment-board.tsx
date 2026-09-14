@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
+import { CirclePlus, Pencil } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import { equipmentCategoryPriceState } from '@/lib/domain/equipment-price-display';
 import type {
@@ -101,6 +101,33 @@ export function EquipmentBoard({
     const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
     const main = chosen[0] ?? null;
     const extraCount = chosen.length - 1;
+
+    if (!main) {
+      return (
+        <li key={cat.id} className="bg-white">
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => onPickCategory(cat.id)}
+            title={cat.description ?? undefined}
+            className="group flex min-h-20 w-full items-center gap-3 p-3 text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed sm:p-4"
+            data-testid={`equip-${cat.code}`}
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded border border-line bg-ivory text-muted sm:size-11">
+              <CirclePlus className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[0.65rem] font-semibold text-muted">{cat.name}</span>
+              <span className="mt-0.5 block text-xs font-semibold text-muted">選択なし</span>
+            </span>
+            {!readOnly && (
+              <Pencil className="size-3.5 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
+            )}
+          </button>
+        </li>
+      );
+    }
+
     const priceState = equipmentCategoryPriceState({
       categoryId: cat.id,
       options,
@@ -120,13 +147,11 @@ export function EquipmentBoard({
     const currentPriceOnRequest = chosen.some((option) => option.price_on_request) || selectedVariantPriceOnRequest;
 
     const state =
-      !main
-        ? 'unselected'
-        : currentPriceOnRequest || priceState.kind === 'price-on-request'
-          ? 'price-on-request'
-          : priceState.kind === 'standard'
-            ? 'standard'
-            : 'changed';
+      currentPriceOnRequest || priceState.kind === 'price-on-request'
+        ? 'price-on-request'
+        : priceState.kind === 'standard'
+          ? 'standard'
+          : 'changed';
 
     const deltaLabel =
       priceState.kind === 'delta'

@@ -317,10 +317,20 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
               return Boolean(groupId && selectedGroupIds.has(groupId));
             })
           );
-          const normalizedVariantIds =
-            restoredVariantIds.length > 0
-              ? restoredVariantIds
-              : defaultVariantIds(bundle, restoredSelection);
+          const restoredVariantGroupIds = new Set(
+            restoredVariantIds
+              .map((choiceId) => bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id)
+              .filter((groupId): groupId is string => Boolean(groupId))
+          );
+          const fallbackVariantIds = defaultVariantIds(bundle, restoredSelection).filter((choiceId) => {
+            const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
+            return !groupId || !restoredVariantGroupIds.has(groupId);
+          });
+          const normalizedVariantIds = pruneHiddenVariantChoices(
+            bundle.variantGroups,
+            bundle.variantChoices,
+            [...restoredVariantIds, ...fallbackVariantIds]
+          );
 
           setSpecCode(restoredSpec);
           setFinishLevel(restoredLevel);

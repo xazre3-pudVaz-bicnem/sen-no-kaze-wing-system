@@ -163,22 +163,16 @@ export const seedModels: BaseModel[] = [
     expense_rate: 0.15,
     presets: [
       {
-        code: 'hotel',
-        name: 'ホテル仕様',
-        description: 'シャワーユニット 1116 を組み込んだ客室仕様。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-unit-1116', 'gas-boiler-16', 'aircon', 'smart-key', 'lighting-downlight', ...SITEWORK_CODES],
+        code: 'hotel-single',
+        name: 'ホテル・単身者用',
+        description: 'BOX（ホテル単身者）の標準見積に対応する構成です。',
+        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-unit-1116', 'mini-kitchen', 'folding-bed', ...SITEWORK_CODES],
       },
       {
-        code: 'residence',
-        name: '住宅仕様',
-        description: 'シャワートイレユニットとミニキッチンを備えた単身者向け構成。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'shower-toilet-unit-1116', 'mini-kitchen', 'gas-boiler-16', 'aircon', 'smart-key', 'coat-rack', 'lighting-downlight', ...SITEWORK_CODES],
-      },
-      {
-        code: 'office',
-        name: '事務所・店舗用',
-        description: '水まわり設備なしの一室空間。',
-        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'lighting-downlight', 'office-supplies', ...SITEWORK_CODES],
+        code: 'water-kit',
+        name: '水回りキット',
+        description: 'BOX（水回りキット）の標準見積に対応する構成です。',
+        option_codes: [...COMMON_BASE, 'interior-standard-box', 'carpentry-box', 'ub-1216', 'toilet-washlet', 'mini-kitchen', 'gas-boiler-16', 'aircon', ...SITEWORK_CODES],
       },
     ],
     status: 'published',
@@ -550,16 +544,16 @@ export const seedOptions: ProductOption[] = [
   opt({ id: O.doorGlass, category_id: C.interiorDoor, code: 'door-glass', name: '玄関ドアをガラス框ドアへ変更', description: '採光の取れるガラス框ドアへ変更。', price: 160000, selection_type: 'radio', sort_order: 2 }),
 
   // ---- 設備機器：浴室 ----
-  opt({ id: O.ub1216, category_id: C.ub, code: 'ub-1216', name: 'ユニットバス 1216（浴槽付）', description: '浴槽付きのユニットバス 1216 サイズ。トイレ・洗面は別途選択。', price: 570000, selection_type: 'radio', image_url: '/images/equipment/unit-bath.png', preview_key: 'bath', affects_views: ['floorplan', 'water'], spec_codes: ['hotel', 'residence'], sort_order: 1 }),
+  opt({ id: O.ub1216, category_id: C.ub, code: 'ub-1216', name: 'ユニットバス 1216（浴槽付）', description: '浴槽付きのユニットバス 1216 サイズ。トイレ・洗面は別途選択。', price: 570000, selection_type: 'radio', image_url: '/images/equipment/unit-bath.png', preview_key: 'bath', affects_views: ['floorplan', 'water'], spec_codes: ['hotel', 'residence', 'water-kit'], sort_order: 1 }),
   opt({ id: O.ub3point, category_id: C.ub, code: 'ub-3point-1216', name: '3点ユニットバス 1216（浴槽・トイレ・洗面一体）', description: '浴槽・トイレ・洗面器が一体になった 3点ユニット。洗面器の追加は不要です。', price: 510000, selection_type: 'radio', image_url: '/images/interior/unit-bath-3point.jpg', preview_key: 'ub3', affects_views: ['floorplan', 'water'], spec_codes: ['hotel', 'residence'], sort_order: 2 }),
-  opt({ id: O.showerUnit, category_id: C.ub, code: 'shower-unit-1116', name: 'シャワーユニット 1116', description: '浴槽なしのシャワーユニット。BOX のホテル仕様で採用。', price: 810000, selection_type: 'radio', preview_key: 'shower', affects_views: ['floorplan', 'water'], spec_codes: ['hotel', 'residence'], sort_order: 3 }),
+  opt({ id: O.showerUnit, category_id: C.ub, code: 'shower-unit-1116', name: 'シャワーユニット 1116', description: '浴槽なしのシャワーユニット。BOX のホテル仕様で採用。', price: 810000, selection_type: 'radio', preview_key: 'shower', affects_views: ['floorplan', 'water'], spec_codes: ['hotel', 'residence', 'hotel-single'], sort_order: 3 }),
   opt({ id: O.showerToiletUnit, category_id: C.ub, code: 'shower-toilet-unit-1116', name: 'シャワートイレユニット 1116', description: 'シャワーとトイレが一体になったコンパクトユニット。', price: 510000, selection_type: 'radio', preview_key: 'shower', affects_views: ['floorplan', 'water'], spec_codes: ['hotel', 'residence'], sort_order: 4 }),
 
   // ---- 設備機器：トイレ・洗面・キッチン・給湯・空調 ----
   opt({ id: O.toiletWashlet, category_id: C.toilet, code: 'toilet-washlet', name: 'トイレ（温水洗浄便座ウォッシュレット）', description: '温水洗浄便座付きトイレ。', price: 225000, image_url: '/images/equipment/toilet.png', preview_key: 'toilet', affects_views: ['floorplan'], sort_order: 1 }),
   opt({ id: O.washbasinKb, category_id: C.washbasin, code: 'washbasin-kb', name: '洗面器 KB-PR012-03-G141', description: 'ボウル型洗面器（toolbox）。', price: 69225, preview_key: 'washbasin', affects_views: ['floorplan', 'water'], sort_order: 1 }),
   opt({ id: O.faucetKb, category_id: C.washbasin, code: 'faucet-kb', name: '混合水栓 KB-TP006-01-G141', description: '洗面器用の混合水栓（toolbox）。洗面器と合わせて選択します。', price: 90000, sort_order: 2 }),
-  opt({ id: O.miniKitchen, category_id: C.kitchen, code: 'mini-kitchen', name: 'ミニキッチン', description: 'シンク・コンロ付きのコンパクトキッチン。', price: 187500, image_url: '/images/interior/wing-room-kitchen.jpg', preview_key: 'kitchen', affects_views: ['interior', 'floorplan'], spec_codes: ['residence', 'office'], sort_order: 1 }),
+  opt({ id: O.miniKitchen, category_id: C.kitchen, code: 'mini-kitchen', name: 'ミニキッチン', description: 'シンク・コンロ付きのコンパクトキッチン。', price: 187500, image_url: '/images/interior/wing-room-kitchen.jpg', preview_key: 'kitchen', affects_views: ['interior', 'floorplan'], spec_codes: ['residence', 'office', 'hotel-single', 'water-kit'], sort_order: 1 }),
   opt({ id: O.gasBoiler, category_id: C.boiler, code: 'gas-boiler-16', name: 'ガス給湯器 16号', description: 'ユニットバス・シャワー・キッチンの給湯に必要です。', price: 270000, sort_order: 1 }),
   opt({ id: O.aircon, category_id: C.aircon, code: 'aircon', name: 'エアコン', description: '壁掛け式ルームエアコン 1台（室外機・リモコン付き）。', price: 375000, image_url: '/images/equipment/aircon.png', preview_key: 'aircon', affects_views: ['interior', 'floorplan'], sort_order: 1 }),
 
@@ -569,7 +563,7 @@ export const seedOptions: ProductOption[] = [
   opt({ id: O.lightingExtra, category_id: C.lighting, code: 'lighting-extra', name: '照明器具の指定・持ち込み', description: 'ご希望の器具がある場合はご相談ください。', price: 0, price_on_request: true, sort_order: 3 }),
 
   // ---- 家具・家電 ----
-  opt({ id: O.foldingBed, category_id: C.furniture, code: 'folding-bed', name: '折り畳み式ベッド 1200×2000', description: null, price: 120000, spec_codes: ['hotel', 'residence'], sort_order: 1 }),
+  opt({ id: O.foldingBed, category_id: C.furniture, code: 'folding-bed', name: '折り畳み式ベッド 1200×2000', description: null, price: 120000, spec_codes: ['hotel', 'residence', 'hotel-single'], sort_order: 1 }),
   opt({ id: O.shoeBox, category_id: C.furniture, code: 'shoe-box', name: '家具下足箱', description: '玄関の下足箱（造作家具）。', price: 112500, sort_order: 2 }),
   opt({ id: O.coatRack, category_id: C.furniture, code: 'coat-rack', name: '洋服掛け 15×15', description: null, price: 64500, spec_codes: ['hotel', 'residence'], sort_order: 3 }),
   opt({ id: O.hangerPipe, category_id: C.furniture, code: 'hanger-pipe', name: 'ハンガーパイプ（取付金物共）', description: 'クローゼット用ハンガーパイプ。', price: 0, sort_order: 4 }),

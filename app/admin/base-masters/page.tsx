@@ -3,7 +3,6 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { formatYen } from '@/lib/domain/pricing';
-import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { BaseMasterCreateForm } from '@/components/admin/base-master-form';

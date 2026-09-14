@@ -1,4 +1,5 @@
-import type { BaseModel, ModelPreset } from './types';
+import { defaultSelection, pruneToScope, toggleOption, type RuleContext } from './rules';
+import type { BaseModel, EstimateTemplateBundle, ModelPreset } from './types';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
 export const BASE_ESTIMATE_SPEC_CODE = 'base';
@@ -94,6 +95,54 @@ export function estimateBaselineOptionCodes(
   }
 
   return [];
+}
+
+/**
+ * 標準見積の基準商品を、シミュレーターで実際に使う選択状態へ正規化する。
+ *
+ * DB の baseline_option_ids が一部だけ古い／不足している場合でも、
+ * 依存関係と必須カテゴリーを同じルールで補完することで、
+ * UI の「標準状態」と差額計算側の「基準状態」を必ず一致させる。
+ */
+export function buildEstimateBaselineSelection(
+  ctx: RuleContext,
+  model: Pick<BaseModel, 'slug' | 'presets'>,
+  template: Pick<EstimateTemplateBundle, 'template' | 'baseline_option_ids'>
+): string[] {
+  const specCode = template.template.spec_code;
+  const level = finishLevelForEstimateSpec(specCode);
+  const validSavedIds = template.baseline_option_ids.filter((id) =>
+    ctx.options.some((option) => option.id === id && option.status === 'published')
+  );
+  const optionByCode = new Map(ctx.options.map((option) => [option.code, option.id]));
+  const sourceIds =
+    validSavedIds.length > 0
+      ? validSavedIds
+      : estimateBaselineOptionCodes(model, specCode)
+          .map((code) => optionByCode.get(code))
+          .filter((id): id is string => Boolean(id));
+
+  let cur: string[] = [];
+  for (const optionId of sourceIds) {
+    const result = toggleOption(ctx, cur, optionId);
+    if (!result.rejected) cur = result.next;
+  }
+
+  // 必須カテゴリー・必須商品だけを補う。任意カテゴリーの is_default は勝手に追加しない。
+  for (const optionId of defaultSelection(ctx, level)) {
+    if (cur.includes(optionId)) continue;
+    const option = ctx.options.find((row) => row.id === optionId);
+    const category = ctx.categories.find((row) => row.id === option?.category_id);
+    const hasCategory = cur.some(
+      (id) => ctx.options.find((row) => row.id === id)?.category_id === category?.id
+    );
+    if (option?.is_required || (category?.is_required && !hasCategory)) {
+      const result = toggleOption(ctx, cur, optionId);
+      if (!result.rejected) cur = result.next;
+    }
+  }
+
+  return [...new Set(pruneToScope(ctx, cur, level))];
 }
 
 /** 標準見積の選択に合わせた注文範囲。 */

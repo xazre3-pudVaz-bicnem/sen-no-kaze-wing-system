@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { buildEstimateBaselineSelection } from '@/lib/domain/estimate-template';
+import { toggleOption } from '@/lib/domain/rules';
 import { computeStandardEstimatePricing } from '@/lib/domain/standard-estimate-pricing';
 import type { CatalogBundle, EstimateTemplateBundle } from '@/lib/domain/types';
 import {
@@ -32,6 +34,13 @@ const bundle: CatalogBundle = {
   variantGroups: seedVariantGroups,
   variantChoices: seedVariantChoices,
   baseBreakdowns: seedBaseBreakdownItems.filter((row) => row.base_model_id === model.id),
+};
+
+const ctx = {
+  options: bundle.options,
+  categories: bundle.categories,
+  dependencies: bundle.dependencies,
+  conflicts: bundle.conflicts,
 };
 
 const template: EstimateTemplateBundle = {
@@ -110,10 +119,14 @@ const template: EstimateTemplateBundle = {
 
 describe('Excel標準見積を基準にしたシミュレーター計算', () => {
   it('標準商品のままならExcel記載の調整額・税・税込合計をそのまま返す', () => {
+    const baselineSelection = buildEstimateBaselineSelection(ctx, model, template);
+    // baseline_option_ids が一部だけでも、UI と差額計算で同じ必須構成へ補完される。
+    expect(baselineSelection.length).toBeGreaterThan(template.baseline_option_ids.length);
+
     const result = computeStandardEstimatePricing(
       bundle,
       template,
-      [standardInterior.id],
+      baselineSelection,
       [],
       [],
       'full'
@@ -128,10 +141,14 @@ describe('Excel標準見積を基準にしたシミュレーター計算', () =>
   });
 
   it('同カテゴリーの商品を変更すると商品マスターの差額と対応経費だけを標準見積へ反映する', () => {
+    const baselineSelection = buildEstimateBaselineSelection(ctx, model, template);
+    const changed = toggleOption(ctx, baselineSelection, hotelInterior.id);
+    expect(changed.rejected).toBe(false);
+
     const result = computeStandardEstimatePricing(
       bundle,
       template,
-      [hotelInterior.id],
+      changed.next,
       [],
       [],
       'full'
@@ -167,10 +184,11 @@ describe('Excel標準見積を基準にしたシミュレーター計算', () =>
       baseline_option_ids: [standardInterior.id, carpentry.id],
     };
 
+    const baselineSelection = buildEstimateBaselineSelection(ctx, model, withCarpentry);
     const result = computeStandardEstimatePricing(
       bundle,
       withCarpentry,
-      [standardInterior.id, carpentry.id],
+      baselineSelection,
       [],
       [],
       'full'

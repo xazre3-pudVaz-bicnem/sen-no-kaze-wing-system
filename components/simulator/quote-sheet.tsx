@@ -281,7 +281,7 @@ export function QuoteSheet({
             御見積書
           </h2>
           <p className="text-xs text-muted sm:text-sm" data-testid="quote-scope">
-            {modelName}（{specName}）／{standardEstimate ? 'Excel標準見積を基準' : `注文範囲：${levelInfo.name}`}／概算見積
+            {modelName}（{specName}）／概算見積
           </p>
         </div>
       </div>

@@ -15,7 +15,7 @@ function ensureAvailable() {
 
 function errorMessage(error: { message?: string | null } | null) {
   return (error?.message ?? '処理に失敗しました。')
-    .replace(/^(VALIDATION|FORBIDDEN|LOCKED|NOT_FOUND|STALE):\s*/i, '');
+    .replace(/^(VALIDATION|FORBIDDEN|LOCKED|NOT_FOUND|STALE|CONFLICT):\s*/i, '');
 }
 
 function migrationUrl(batchId?: string, extra?: string) {
@@ -46,6 +46,7 @@ export async function createLegacyBaseMigrationBatchAction(formData: FormData): 
 const mappingSchema = z.object({
   batch_id: z.uuid(),
   mapping_id: z.uuid(),
+  expected_version: z.coerce.number().int().min(0),
   target_classification: z.enum(['base', 'interior_exterior', 'option', 'sitework', 'review']),
   target_group_label: z.string().trim().max(120).optional(),
   note: z.string().trim().max(500).optional(),
@@ -58,6 +59,7 @@ export async function setLegacyBaseMappingDecisionAction(formData: FormData): Pr
   const parsed = mappingSchema.safeParse({
     batch_id: formData.get('batch_id'),
     mapping_id: formData.get('mapping_id'),
+    expected_version: formData.get('expected_version'),
     target_classification: formData.get('target_classification'),
     target_group_label: formData.get('target_group_label') ?? '',
     note: formData.get('note') ?? '',
@@ -68,6 +70,7 @@ export async function setLegacyBaseMappingDecisionAction(formData: FormData): Pr
   const { error } = await supabase.rpc('set_legacy_base_mapping_decision', {
     p_batch_id: parsed.data.batch_id,
     p_mapping_id: parsed.data.mapping_id,
+    p_expected_version: parsed.data.expected_version,
     p_target_classification: parsed.data.target_classification,
     p_target_group_label: parsed.data.target_group_label || null,
     p_note: parsed.data.note || null,
@@ -84,6 +87,7 @@ const specSchema = z.object({
   batch_id: z.uuid(),
   base_model_id: z.uuid(),
   legacy_spec_code: z.string().trim().min(1).max(80),
+  expected_version: z.coerce.number().int().min(0),
   proposed_group_key: z.string().trim().min(1).max(120),
   reason: z.string().trim().max(500).optional(),
 });
@@ -96,6 +100,7 @@ export async function setLegacyBaseSpecMappingAction(formData: FormData): Promis
     batch_id: formData.get('batch_id'),
     base_model_id: formData.get('base_model_id'),
     legacy_spec_code: formData.get('legacy_spec_code'),
+    expected_version: formData.get('expected_version'),
     proposed_group_key: formData.get('proposed_group_key'),
     reason: formData.get('reason') ?? '',
   });
@@ -106,6 +111,7 @@ export async function setLegacyBaseSpecMappingAction(formData: FormData): Promis
     p_batch_id: parsed.data.batch_id,
     p_base_model_id: parsed.data.base_model_id,
     p_legacy_spec_code: parsed.data.legacy_spec_code,
+    p_expected_version: parsed.data.expected_version,
     p_proposed_group_key: parsed.data.proposed_group_key,
     p_reason: parsed.data.reason || null,
   });
@@ -120,6 +126,7 @@ export async function setLegacyBaseSpecMappingAction(formData: FormData): Promis
 const duplicateSchema = z.object({
   batch_id: z.uuid(),
   check_id: z.uuid(),
+  expected_version: z.coerce.number().int().min(0),
   resolution: z.enum(['use_legacy', 'use_existing', 'keep_both', 'not_duplicate']),
 });
 
@@ -130,6 +137,7 @@ export async function resolveLegacyEstimateDuplicateAction(formData: FormData): 
   const parsed = duplicateSchema.safeParse({
     batch_id: formData.get('batch_id'),
     check_id: formData.get('check_id'),
+    expected_version: formData.get('expected_version'),
     resolution: formData.get('resolution'),
   });
   if (!parsed.success) redirect('/admin/base-migration?error=重複候補の入力内容が不正です');
@@ -138,6 +146,7 @@ export async function resolveLegacyEstimateDuplicateAction(formData: FormData): 
   const { error } = await supabase.rpc('resolve_legacy_estimate_duplicate', {
     p_batch_id: parsed.data.batch_id,
     p_check_id: parsed.data.check_id,
+    p_expected_version: parsed.data.expected_version,
     p_resolution: parsed.data.resolution,
   });
   if (error) {

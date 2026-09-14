@@ -32,7 +32,9 @@ describe('旧本体内訳の移行監査基盤', () => {
     expect(migration).toContain("'imported_at'");
   });
 
-  it('移行監査用SQL関数の明示タグが開閉で一致する', () => {
+  it('移行監査用SQL関数のdollar quoteが開閉で一致する', () => {
+    expect((migration.match(/\$\$/g) ?? []).length % 2).toBe(0);
+    expect(migration).not.toContain('\n$;\n');
     expect((migration.match(/\$hashfn\$/g) ?? []).length).toBe(2);
     expect((migration.match(/\$assertfn\$/g) ?? []).length).toBe(2);
     expect((migration.match(/\$classifier\$/g) ?? []).length).toBe(2);

@@ -9,6 +9,11 @@ import type {
   EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
+  EstimateImport,
+  EstimateImportBundle,
+  EstimateImportLine,
+  EstimateProductLink,
+  ProductMatchRule,
   CatalogBundle,
   Configuration,
   FinishLevel,
@@ -68,11 +73,28 @@ import {
   type DealerRevisionInput,
   type DealerRevisionItem,
   type EstimateTemplateImportInput,
+  type EstimateImportDraftInput,
+  type EstimateImportLineReviewInput,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
 
 export class LocalStore implements DataStore {
+  private refreshEstimateImportStatus(db: LocalDb, importId: string) {
+    const estimateImport = db.estimateImports.find((row) => row.id === importId);
+    if (!estimateImport || !['review', 'ready'].includes(estimateImport.status)) return;
+    const required = db.estimateImportLines.filter(
+      (line) => line.import_id === importId && line.link_policy === 'required'
+    );
+    const unresolved = required.some(
+      (line) =>
+        !db.estimateProductLinks.some(
+          (link) => link.import_line_id === line.id && link.status === 'confirmed'
+        )
+    );
+    estimateImport.status = unresolved ? 'review' : 'ready';
+  }
+
   private mutate<T>(fn: (db: LocalDb) => T): T {
     const db = loadDb();
     const result = fn(db);
@@ -302,6 +324,274 @@ export class LocalStore implements DataStore {
           entity_id: input.base_model_id,
           summary: `標準見積をExcelから更新（${input.name}・${input.spec_code}）`,
         });
+      }
+    });
+  }
+
+
+  async listEstimateImports(modelId?: string, specCode?: string): Promise<EstimateImport[]> {
+    return this.read((db) =>
+      db.estimateImports
+        .filter((row) => (!modelId || row.base_model_id === modelId) && (!specCode || row.spec_code === specCode))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    );
+  }
+
+  async getEstimateImportBundle(id: string): Promise<EstimateImportBundle | null> {
+    return this.read((db) => {
+      const estimateImport = db.estimateImports.find((row) => row.id === id);
+      if (!estimateImport) return null;
+      const links = new Map(db.estimateProductLinks.map((link) => [link.import_line_id, link]));
+      return {
+        import: estimateImport,
+        lines: db.estimateImportLines
+          .filter((line) => line.import_id === id)
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((line) => ({ ...line, product_link: links.get(line.id) ?? null })),
+      };
+    });
+  }
+
+  async createEstimateImports(items: EstimateImportDraftInput[]): Promise<EstimateImport[]> {
+    return this.mutate((db) => {
+      const created: EstimateImport[] = [];
+      for (const input of items) {
+        if (
+          db.estimateImports.some(
+            (row) =>
+              row.base_model_id === input.base_model_id &&
+              row.spec_code === input.spec_code &&
+              row.source_sha256 === input.source_sha256
+          )
+        ) {
+          throw new StoreError('VALIDATION', `同じExcelは既に取り込まれています（${input.name}）`);
+        }
+        const version =
+          Math.max(
+            0,
+            ...db.estimateImports
+              .filter((row) => row.base_model_id === input.base_model_id && row.spec_code === input.spec_code)
+              .map((row) => row.version)
+          ) + 1;
+        const now = nowIso();
+        const estimateImport: EstimateImport = {
+          id: randomUUID(),
+          base_model_id: input.base_model_id,
+          spec_code: input.spec_code,
+          name: input.name,
+          version,
+          source_file_name: input.source_file_name,
+          source_sheet_name: input.source_sheet_name,
+          source_sha256: input.source_sha256,
+          status: 'review',
+          tax_rate: input.tax_rate,
+          subtotal_raw: input.subtotal_raw,
+          adjustment: input.adjustment,
+          subtotal: input.subtotal,
+          tax: input.tax,
+          total: input.total,
+          template_payload: input.template_payload as unknown as Record<string, unknown>,
+          imported_by: null,
+          created_at: now,
+          activated_by: null,
+          activated_at: null,
+        };
+        db.estimateImports.push(estimateImport);
+
+        for (const row of input.lines) {
+          const line: EstimateImportLine = {
+            id: randomUUID(),
+            import_id: estimateImport.id,
+            section_code: row.section_code,
+            group_label: row.group_label,
+            source_row: row.source_row,
+            original_name: row.original_name,
+            normalized_name: row.normalized_name,
+            category_id: row.category_id,
+            manufacturer_text: row.manufacturer_text,
+            model_text: row.model_text,
+            size_text: row.size_text,
+            quantity: row.quantity,
+            unit: row.unit,
+            unit_price: row.unit_price,
+            amount: row.amount,
+            remark: row.remark,
+            link_policy: row.link_policy,
+            line_fingerprint: row.line_fingerprint,
+            fingerprint_ordinal: row.fingerprint_ordinal,
+            sort_order: row.sort_order,
+            created_at: now,
+          };
+          db.estimateImportLines.push(line);
+
+          let optionId = row.auto_option_id;
+          let matchType: EstimateProductLink['match_type'] = 'automatic';
+          let matchReason = row.auto_match_reason;
+          if (!optionId) {
+            const rule = db.productMatchRules
+              .filter(
+                (candidate) =>
+                  candidate.match_key === row.line_fingerprint &&
+                  (!candidate.category_id || candidate.category_id === row.category_id) &&
+                  (candidate.scope === 'global' ||
+                    (candidate.scope === 'model' && candidate.base_model_id === input.base_model_id) ||
+                    (candidate.scope === 'spec' &&
+                      candidate.base_model_id === input.base_model_id &&
+                      candidate.spec_code === input.spec_code))
+              )
+              .sort((a, b) => {
+                const rank = { spec: 1, model: 2, global: 3 } as const;
+                return rank[a.scope] - rank[b.scope] || b.updated_at.localeCompare(a.updated_at);
+              })[0];
+            if (rule) {
+              optionId = rule.option_id;
+              matchType = 'saved_rule';
+              matchReason = '前回の確認済み照合を再利用';
+            }
+          }
+          if (optionId) {
+            const option = db.options.find(
+              (candidate) =>
+                candidate.id === optionId &&
+                (!row.category_id || candidate.category_id === row.category_id) &&
+                (!candidate.base_model_id || candidate.base_model_id === input.base_model_id)
+            );
+            if (option) {
+              db.estimateProductLinks.push({
+                id: randomUUID(),
+                import_line_id: line.id,
+                option_id: option.id,
+                match_type: matchType,
+                match_reason: matchReason ?? null,
+                confidence: 1,
+                status: 'confirmed',
+                confirmed_by: null,
+                confirmed_at: now,
+                created_at: now,
+              });
+            }
+          }
+        }
+
+        this.refreshEstimateImportStatus(db, estimateImport.id);
+        created.push(estimateImport);
+      }
+      return created;
+    });
+  }
+
+  async updateEstimateImportLineReview(input: EstimateImportLineReviewInput): Promise<void> {
+    this.mutate((db) => {
+      const line = db.estimateImportLines.find((row) => row.id === input.line_id);
+      if (!line) throw new StoreError('NOT_FOUND', '見積明細が見つかりません');
+      const estimateImport = db.estimateImports.find((row) => row.id === line.import_id);
+      if (!estimateImport) throw new StoreError('NOT_FOUND', '取込データが見つかりません');
+      if (!['review', 'ready'].includes(estimateImport.status)) {
+        throw new StoreError('LOCKED', '有効化済みの取込は変更できません');
+      }
+
+      line.category_id = input.category_id;
+      line.link_policy = input.link_policy;
+      db.estimateProductLinks = db.estimateProductLinks.filter((link) => link.import_line_id !== line.id);
+
+      if (input.link_policy !== 'none' && input.option_id) {
+        const option = db.options.find(
+          (candidate) =>
+            candidate.id === input.option_id &&
+            (!input.category_id || candidate.category_id === input.category_id) &&
+            (!candidate.base_model_id || candidate.base_model_id === estimateImport.base_model_id)
+        );
+        if (!option) throw new StoreError('VALIDATION', '選択した商品はこの明細のカテゴリ・本体に対応していません');
+        const now = nowIso();
+        db.estimateProductLinks.push({
+          id: randomUUID(),
+          import_line_id: line.id,
+          option_id: option.id,
+          match_type: 'manual',
+          match_reason: '管理画面で確認',
+          confidence: 1,
+          status: 'confirmed',
+          confirmed_by: null,
+          confirmed_at: now,
+          created_at: now,
+        });
+
+        if (input.save_rule) {
+          db.productMatchRules = db.productMatchRules.filter(
+            (rule) =>
+              !(
+                rule.scope === input.rule_scope &&
+                rule.match_key === line.line_fingerprint &&
+                rule.category_id === input.category_id &&
+                (input.rule_scope === 'global' ||
+                  (input.rule_scope === 'model' &&
+                    rule.base_model_id === estimateImport.base_model_id &&
+                    rule.spec_code === null) ||
+                  (input.rule_scope === 'spec' &&
+                    rule.base_model_id === estimateImport.base_model_id &&
+                    rule.spec_code === estimateImport.spec_code))
+              )
+          );
+          const rule: ProductMatchRule = {
+            id: randomUUID(),
+            scope: input.rule_scope,
+            base_model_id: input.rule_scope === 'global' ? null : estimateImport.base_model_id,
+            spec_code: input.rule_scope === 'spec' ? estimateImport.spec_code : null,
+            category_id: input.category_id,
+            match_key: line.line_fingerprint,
+            option_id: option.id,
+            created_by: null,
+            created_at: now,
+            updated_at: now,
+          };
+          db.productMatchRules.push(rule);
+        }
+      }
+
+      this.refreshEstimateImportStatus(db, estimateImport.id);
+    });
+  }
+
+  async activateEstimateImport(id: string): Promise<void> {
+    const bundle = await this.getEstimateImportBundle(id);
+    if (!bundle) throw new StoreError('NOT_FOUND', '取込データが見つかりません');
+    if (!['review', 'ready'].includes(bundle.import.status)) {
+      throw new StoreError('LOCKED', 'この取込は有効化できません');
+    }
+    const unresolved = bundle.lines.some((line) => line.link_policy === 'required' && !line.product_link);
+    if (unresolved) throw new StoreError('VALIDATION', '必須商品に未照合があります。商品照合を完了してください');
+
+    const payload = bundle.import.template_payload as unknown as EstimateTemplateImportInput;
+    const linkedOptions = bundle.lines
+      .filter((line) => line.link_policy !== 'none' && line.product_link)
+      .map((line) => line.product_link!.option_id);
+    const linkedCategoryIds = new Set(
+      linkedOptions
+        .map((optionId) => this.read((db) => db.options.find((option) => option.id === optionId)?.category_id ?? null))
+        .filter((categoryId): categoryId is string => Boolean(categoryId))
+    );
+    const fallback = (payload.baseline_option_ids ?? []).filter((optionId) => {
+      const categoryId = this.read((db) => db.options.find((option) => option.id === optionId)?.category_id ?? null);
+      return !categoryId || !linkedCategoryIds.has(categoryId);
+    });
+    const baseline_option_ids = [...new Set([...fallback, ...linkedOptions])];
+
+    await this.replaceEstimateTemplates([{ ...payload, baseline_option_ids }]);
+    this.mutate((db) => {
+      for (const row of db.estimateImports) {
+        if (
+          row.id !== id &&
+          row.base_model_id === bundle.import.base_model_id &&
+          row.spec_code === bundle.import.spec_code &&
+          row.status === 'activated'
+        ) {
+          row.status = 'superseded';
+        }
+      }
+      const current = db.estimateImports.find((row) => row.id === id);
+      if (current) {
+        current.status = 'activated';
+        current.activated_at = nowIso();
       }
     });
   }

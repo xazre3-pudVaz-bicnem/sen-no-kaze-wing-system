@@ -62,6 +62,8 @@ export const STANDARD_ESTIMATE_SHEETS: StandardEstimateSheetDef[] = [
 
 export interface ParsedEstimateLine {
   section_code: Exclude<EstimateSectionCode, 'base'>;
+  /** Excel原本の1始まり行番号。再取込時の監査・差分表示に使う。 */
+  source_row: number;
   group_label: string | null;
   name: string;
   quantity: number | null;
@@ -73,6 +75,8 @@ export interface ParsedEstimateLine {
 }
 
 export interface ParsedBaseBreakdownItem {
+  /** Excel原本の1始まり行番号。再取込時の監査・差分表示に使う。 */
+  source_row: number;
   section: string;
   name: string;
   quantity: number;
@@ -288,6 +292,7 @@ function parseSection(
         );
       }
       baseItems.push({
+        source_row: i + 1,
         section: currentGroup || def.label,
         name,
         quantity,
@@ -298,7 +303,7 @@ function parseSection(
         sort_order: item.sort_order,
       });
     } else {
-      lines.push({ ...item, section_code: def.code });
+      lines.push({ ...item, source_row: i + 1, section_code: def.code });
     }
   }
 

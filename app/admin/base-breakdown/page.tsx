@@ -18,10 +18,11 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
   await requireCatalogEditor();
   const sp = await searchParams;
   const store = await getStore();
-  const [models, allItems, allTemplates] = await Promise.all([
+  const [models, allItems, allTemplates, allImports] = await Promise.all([
     store.listModels({ includeDraft: true }),
     store.listBaseBreakdownItems(),
     store.listEstimateTemplates(),
+    store.listEstimateImports(),
   ]);
 
   const model = models.find((m) => m.id === sp.model) ?? models[0];
@@ -51,6 +52,9 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
   const items = allItems.filter((row) => row.base_model_id === model?.id && row.spec_code === specCode);
   const rate = model?.expense_rate ?? 0.15;
   const baseLines = items.reduce((sum, row) => sum + row.amount, 0);
+  const importHistory = allImports
+    .filter((row) => row.base_model_id === model?.id && row.spec_code === specCode)
+    .sort((a, b) => b.version - a.version);
 
   return (
     <AdminPage
@@ -90,9 +94,72 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
         ))}
       </div>
 
+      {model && importHistory.length > 0 && (
+        <section className="card overflow-hidden">
+          <div className="border-b border-line px-5 py-4">
+            <h2 className="font-semibold">Excel取込履歴</h2>
+            <p className="mt-1 text-xs text-muted">
+              取込とシミュレーターへの有効化は別処理です。照合中の新しいExcelがあっても、現在有効な標準見積はそのまま使われます。
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[48rem] text-sm">
+              <thead className="bg-sand/60 text-left text-xs text-muted">
+                <tr>
+                  <th className="px-4 py-2">版</th>
+                  <th className="px-4 py-2">Excel</th>
+                  <th className="px-4 py-2">状態</th>
+                  <th className="px-4 py-2 text-right">税込合計</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {importHistory.map((row) => (
+                  <tr key={row.id}>
+                    <td className="px-4 py-3 font-semibold">v{row.version}</td>
+                    <td className="px-4 py-3">
+                      <p>{row.source_file_name}</p>
+                      <p className="text-xs text-muted">{row.source_sheet_name}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-1 text-xs font-semibold',
+                          row.status === 'activated'
+                            ? 'bg-green-50 text-forest'
+                            : row.status === 'ready'
+                              ? 'bg-blue-50 text-blue-800'
+                              : row.status === 'review'
+                                ? 'bg-amber-50 text-amber-800'
+                                : 'bg-sand text-muted'
+                        )}
+                      >
+                        {row.status === 'activated'
+                          ? '有効'
+                          : row.status === 'ready'
+                            ? '照合完了'
+                            : row.status === 'review'
+                              ? '要確認'
+                              : '過去版'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatYen(row.total)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Link href={`/admin/base-breakdown/imports/${row.id}`} className="btn-secondary btn-sm">
+                        {row.status === 'review' || row.status === 'ready' ? '照合を確認' : '内容を見る'}
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {model && imported.length === 0 && (
         <Alert tone="warn">
-          この本体には標準見積Excelがまだ登録されていません。上の「標準見積Excelの取込」で、まず検算してから登録してください。
+          この本体には有効な標準見積Excelがまだありません。上の「標準見積Excelの取込」で検算・商品照合を行い、確認後に有効化してください。
         </Alert>
       )}
 
@@ -133,8 +200,8 @@ export default async function BaseBreakdownPage({ searchParams }: { searchParams
             totalOverride={baseSection?.total}
           />
           <Alert tone="info">
-            標準見積はExcel原本を正本として固定します。標準見積そのものは直接編集せず、変更時はExcelを修正して再取込します。
-            案件ごとの見積は標準見積をコピーした後、代理店以上が管理画面で編集できる設計です。
+            現在有効な標準見積はExcel原本を正本として固定します。変更時は新しいExcelを別バージョンとして取り込み、
+            商品照合を確認してから有効化します。案件ごとの見積は標準見積をコピーした後、代理店以上が管理画面で編集できます。
           </Alert>
         </>
       )}

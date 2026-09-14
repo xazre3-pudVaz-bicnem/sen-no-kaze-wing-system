@@ -124,7 +124,10 @@ describe('旧本体移行監査Server Action', () => {
     form.set('target_classification', 'base');
 
     await expect(setLegacyBaseMappingDecisionAction(form))
-      .rejects.toThrow(/画面を再読込してください/);
+      .rejects.toThrow(`REDIRECT:/admin/base-migration?batch=${batchId}&error=`);
+
+    const lastUrl = String(mocks.redirect.mock.calls.at(-1)?.[0] ?? '');
+    expect(decodeURIComponent(lastUrl)).toContain('画面を再読込してください');
   });
 
   it('未ログインならRPCへ到達しない', async () => {

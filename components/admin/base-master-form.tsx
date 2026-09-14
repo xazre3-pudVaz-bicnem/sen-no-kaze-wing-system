@@ -12,7 +12,8 @@ const initial: BaseMasterActionState = { ok: false };
 
 export function BaseMasterActionStatus({ state }: { state: BaseMasterActionState }) {
   if (state.error) return <Alert tone="danger">{state.error}</Alert>;
-  if (state.fieldErrors?._form?.[0]) return <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>;
+  const firstFieldError = Object.values(state.fieldErrors ?? {}).flat().find(Boolean);
+  if (firstFieldError) return <Alert tone="danger">{firstFieldError}</Alert>;
   if (state.ok && state.message) return <Alert tone="success">{state.message}</Alert>;
   return null;
 }

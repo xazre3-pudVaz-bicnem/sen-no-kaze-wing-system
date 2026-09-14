@@ -105,8 +105,9 @@ describe('旧本体内訳の移行監査基盤', () => {
   });
 
   it('画面入口はlegacy profile roleではなくDBの組織権限判定を主とする', () => {
-    expect(actions).toContain("requireStaff('/admin/base-migration')");
+    expect(actions).toContain("requireUser('/admin/base-migration')");
     expect(actions).not.toContain("requireCatalogEditor('/admin/base-migration')");
+    expect(actions).not.toContain("requireStaff('/admin/base-migration')");
     expect(migration).toContain('can_manage_legacy_base_migration');
   });
 

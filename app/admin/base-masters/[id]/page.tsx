@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
+import { resolveBaseMasterDetailView } from '@/lib/domain/base-master-detail';
 import { formatYen } from '@/lib/domain/pricing';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
@@ -20,6 +22,12 @@ function revisionLabel(status: string) {
   if (status === 'published') return '公開中';
   if (status === 'draft') return 'Draft';
   return '旧版';
+}
+
+function readOnlyRevisionTitle(revision: BaseMasterRevisionView) {
+  if (revision.status === 'draft') return `Draft v${revision.version}（参照のみ）`;
+  if (revision.status === 'published') return `公開版 v${revision.version}`;
+  return `旧版 v${revision.version}`;
 }
 
 export default async function BaseMasterDetailPage({
@@ -63,7 +71,8 @@ export default async function BaseMasterDetailPage({
     { data: model },
     { data: owner },
     { data: revisions, error: revisionError },
-    { data: canEdit },
+    { data: canEdit, error: canEditError },
+    { data: canViewOwned, error: canViewOwnedError },
   ] = await Promise.all([
     supabase.from('base_models').select('id, name, slug').eq('id', master.base_model_id).maybeSingle(),
     supabase.from('organizations').select('id, name, organization_type').eq('id', master.owner_organization_id).maybeSingle(),
@@ -73,13 +82,15 @@ export default async function BaseMasterDetailPage({
       .eq('base_master_id', master.id)
       .order('version', { ascending: false }),
     supabase.rpc('can_edit_base_master', { p_base_master_id: master.id }),
+    supabase.rpc('can_view_owned_base_master', { p_base_master_id: master.id }),
   ]);
 
-  if (revisionError) {
+  const loadError = revisionError || canEditError || canViewOwnedError;
+  if (loadError) {
     return (
       <AdminPage title={master.name}>
         <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
-        <Alert tone="danger">{revisionError.message}</Alert>
+        <Alert tone="danger">{loadError.message}</Alert>
       </AdminPage>
     );
   }
@@ -90,15 +101,30 @@ export default async function BaseMasterDetailPage({
     revisionRows.find((revision) => revision.id === master.current_published_revision_id) ??
     revisionRows.find((revision) => revision.status === 'published') ??
     null;
-  const active = draft ?? current ?? revisionRows[0] ?? null;
 
-  let lines: BaseMasterRevisionLine[] = [];
-  if (active) {
+  const detailView = resolveBaseMasterDetailView({
+    canEdit: Boolean(canEdit),
+    canViewOwned: Boolean(canViewOwned),
+    draftId: draft?.id ?? null,
+    currentId: current?.id ?? null,
+    requestedRevisionId: sp.revision ?? null,
+    visibleRevisionIds: revisionRows.map((revision) => revision.id),
+  });
+
+  const lineRevisionIds = [
+    ...(detailView.editableRevisionId ? [detailView.editableRevisionId] : []),
+    ...detailView.readOnlyRevisionIds,
+  ];
+  const uniqueLineRevisionIds = [...new Set(lineRevisionIds)];
+
+  const linesByRevision = new Map<string, BaseMasterRevisionLine[]>();
+  if (uniqueLineRevisionIds.length > 0) {
     const { data, error } = await supabase
       .from('base_master_revision_lines')
       .select('id, revision_id, line_key, section, name, quantity, unit, unit_price, amount, remark, sort_order')
-      .eq('revision_id', active.id)
+      .in('revision_id', uniqueLineRevisionIds)
       .order('sort_order');
+
     if (error) {
       return (
         <AdminPage title={master.name}>
@@ -107,17 +133,26 @@ export default async function BaseMasterDetailPage({
         </AdminPage>
       );
     }
-    lines = (data ?? []).map((line) => ({
-      ...line,
-      quantity: Number(line.quantity),
-      unit_price: Number(line.unit_price),
-      amount: Number(line.amount),
-      sort_order: Number(line.sort_order),
-    })) as BaseMasterRevisionLine[];
+
+    for (const raw of data ?? []) {
+      const line = {
+        ...raw,
+        quantity: Number(raw.quantity),
+        unit_price: Number(raw.unit_price),
+        amount: Number(raw.amount),
+        sort_order: Number(raw.sort_order),
+      } as BaseMasterRevisionLine;
+      const rows = linesByRevision.get(line.revision_id) ?? [];
+      rows.push(line);
+      linesByRevision.set(line.revision_id, rows);
+    }
   }
 
-  const editable = Boolean(canEdit);
+  const editable = detailView.accessKind === 'editor';
   const identityLocked = revisionRows.some((revision) => revision.status === 'published' || revision.status === 'superseded');
+  const readonlyRevisions = detailView.readOnlyRevisionIds
+    .map((revisionId) => revisionRows.find((revision) => revision.id === revisionId))
+    .filter((revision): revision is BaseMasterRevisionView => Boolean(revision));
 
   return (
     <AdminPage
@@ -150,11 +185,14 @@ export default async function BaseMasterDetailPage({
         </div>
       </section>
 
-      {!editable && (
-        <Alert tone="info">この本体は参照できますが、所有組織の本体ではないため編集・公開はできません。</Alert>
+      {detailView.accessKind === 'owner_viewer' && (
+        <Alert tone="info">この本体は所有組織の参照権限です。Draftと公開版を確認できますが、編集・公開はできません。</Alert>
+      )}
+      {detailView.accessKind === 'shared_viewer' && (
+        <Alert tone="info">この本体は利用できますが、編集・公開はできません。Draftは表示されません。</Alert>
       )}
 
-      {editable && draft && (
+      {editable && draft && detailView.editableRevisionId === draft.id && (
         <BaseMasterDraftEditor
           key={draft.id + ':' + (sp.saved ?? 'initial')}
           master={{
@@ -163,7 +201,7 @@ export default async function BaseMasterDetailPage({
             fire_spec_code: master.fire_spec_code as 'non_fire' | 'fire',
           }}
           revision={draft}
-          lines={lines}
+          lines={linesByRevision.get(draft.id) ?? []}
           identityLocked={identityLocked}
         />
       )}
@@ -178,54 +216,79 @@ export default async function BaseMasterDetailPage({
         </section>
       )}
 
-      {!draft && active && lines.length > 0 && (
-        <section className="card overflow-x-auto">
-          <div className="border-b border-line px-5 py-4">
-            <h2 className="font-semibold">公開版の本体明細</h2>
-            <p className="mt-1 text-xs text-muted">v{active.version}・{lines.length}行</p>
-          </div>
-          <table className="w-full min-w-[48rem] text-sm">
-            <thead className="bg-sand/60 text-left text-xs text-muted">
-              <tr><Th>工事区分</Th><Th>品名</Th><Th right>数量</Th><Th>単位</Th><Th right>単価</Th><Th right>金額</Th><Th>備考</Th></tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {lines.map((line) => (
-                <tr key={line.id}>
-                  <Td>{line.section}</Td>
-                  <Td className="font-medium">{line.name}</Td>
-                  <Td right>{line.quantity}</Td>
-                  <Td>{line.unit ?? ''}</Td>
-                  <Td right>{formatYen(line.unit_price)}</Td>
-                  <Td right>{formatYen(line.amount)}</Td>
-                  <Td className="text-xs text-muted">{line.remark ?? ''}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+      {readonlyRevisions.map((revision) => {
+        const lines = linesByRevision.get(revision.id) ?? [];
+        return (
+          <section key={revision.id} id="revision-lines" className="card overflow-x-auto">
+            <div className="border-b border-line px-5 py-4">
+              <h2 className="font-semibold">{readOnlyRevisionTitle(revision)}</h2>
+              <p className="mt-1 text-xs text-muted">
+                {lines.length}行・明細合計 {formatYen(revision.line_subtotal)}・本体価格計 {formatYen(revision.total)}
+              </p>
+            </div>
+            {lines.length > 0 ? (
+              <table className="w-full min-w-[48rem] text-sm">
+                <thead className="bg-sand/60 text-left text-xs text-muted">
+                  <tr><Th>工事区分</Th><Th>品名</Th><Th right>数量</Th><Th>単位</Th><Th right>単価</Th><Th right>金額</Th><Th>備考</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {lines.map((line) => (
+                    <tr key={line.id}>
+                      <Td>{line.section}</Td>
+                      <Td className="font-medium">{line.name}</Td>
+                      <Td right>{line.quantity}</Td>
+                      <Td>{line.unit ?? ''}</Td>
+                      <Td right>{formatYen(line.unit_price)}</Td>
+                      <Td right>{formatYen(line.amount)}</Td>
+                      <Td className="text-xs text-muted">{line.remark ?? ''}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="px-5 py-6 text-sm text-muted">このRevisionには明細がありません。</p>
+            )}
+          </section>
+        );
+      })}
 
       <section className="space-y-3">
         <div>
           <h2 className="font-semibold">Revision履歴</h2>
-          <p className="mt-1 text-sm text-muted">公開済みの版は内容を固定して残します。</p>
+          <p className="mt-1 text-sm text-muted">公開済みの版は内容を固定して残します。各版の明細も参照できます。</p>
         </div>
-        <Table minWidth="48rem">
+        <Table minWidth="54rem">
           <thead className="bg-sand/60">
-            <tr><Th>版</Th><Th>状態</Th><Th right>明細合計</Th><Th right>諸費用</Th><Th right>本体価格計</Th><Th>公開日</Th></tr>
+            <tr><Th>版</Th><Th>状態</Th><Th right>明細合計</Th><Th right>諸費用</Th><Th right>本体価格計</Th><Th>公開日</Th><Th></Th></tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {revisionRows.map((revision) => (
-              <tr key={revision.id}>
-                <Td className="font-semibold">v{revision.version}</Td>
-                <Td><Badge tone={revisionTone(revision.status)}>{revisionLabel(revision.status)}</Badge></Td>
-                <Td right>{formatYen(revision.line_subtotal)}</Td>
-                <Td right>{formatYen(revision.expense_amount)}</Td>
-                <Td right>{formatYen(revision.total)}</Td>
-                <Td>{revision.published_at ? formatDate(revision.published_at) : '—'}</Td>
-              </tr>
-            ))}
-            {revisionRows.length === 0 && <tr><Td colSpan={6} className="py-8 text-center text-muted">Revisionがありません。</Td></tr>}
+            {revisionRows.map((revision) => {
+              const isEditing = editable && draft?.id === revision.id;
+              const isShown = detailView.readOnlyRevisionIds.includes(revision.id);
+              return (
+                <tr key={revision.id}>
+                  <Td className="font-semibold">v{revision.version}</Td>
+                  <Td><Badge tone={revisionTone(revision.status)}>{revisionLabel(revision.status)}</Badge></Td>
+                  <Td right>{formatYen(revision.line_subtotal)}</Td>
+                  <Td right>{formatYen(revision.expense_amount)}</Td>
+                  <Td right>{formatYen(revision.total)}</Td>
+                  <Td>{revision.published_at ? formatDate(revision.published_at) : '—'}</Td>
+                  <Td right>
+                    {isEditing ? (
+                      <span className="text-xs text-muted">編集中</span>
+                    ) : (
+                      <Link
+                        href={`/admin/base-masters/${master.id}?revision=${revision.id}#revision-lines`}
+                        className="text-sm underline-offset-4 hover:underline"
+                      >
+                        {isShown ? '表示中' : '明細を見る'}
+                      </Link>
+                    )}
+                  </Td>
+                </tr>
+              );
+            })}
+            {revisionRows.length === 0 && <tr><Td colSpan={7} className="py-8 text-center text-muted">Revisionがありません。</Td></tr>}
           </tbody>
         </Table>
       </section>

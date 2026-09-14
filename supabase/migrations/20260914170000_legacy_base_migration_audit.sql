@@ -1217,6 +1217,7 @@ begin
          or s.source_file_name is null
          or s.source_sheet_name is null
          or s.source_sha256 is null
+         or s.source_imported_at is null
        )
   ) then
     raise exception 'VALIDATION: 標準見積または移行前金額が不足している旧仕様があります'

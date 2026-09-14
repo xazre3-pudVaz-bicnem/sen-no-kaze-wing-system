@@ -195,6 +195,35 @@ create trigger base_masters_owner_type
 before insert or update of owner_organization_id on public.base_masters
 for each row execute function public.enforce_base_master_owner_type();
 
+
+-- 公開履歴ができた後は「何の本体か」を表す識別情報を変更しない。
+-- 名称変更・アーカイブ・公開版ポインタ更新は許可するが、
+-- 商品モデル / 所有組織 / 防火区分 / 複製元の付け替えは履歴の意味を壊すため禁止する。
+create or replace function public.prevent_base_master_identity_change_after_publish()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if exists (
+    select 1
+      from public.base_master_revisions r
+     where r.base_master_id = old.id
+       and r.status in ('published', 'superseded')
+  ) and (
+    new.base_model_id is distinct from old.base_model_id
+    or new.owner_organization_id is distinct from old.owner_organization_id
+    or new.fire_spec_code is distinct from old.fire_spec_code
+    or new.cloned_from_revision_id is distinct from old.cloned_from_revision_id
+  ) then
+    raise exception 'LOCKED: 公開履歴のある本体は商品モデル・所有組織・防火区分・複製元を変更できません'
+      using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$;
+
 -- ---------- 本体Revision ----------
 create table if not exists public.base_master_revisions (
   id uuid primary key default gen_random_uuid(),
@@ -222,8 +251,8 @@ create table if not exists public.base_master_revisions (
   check (expense_method <> 'none' or expense_amount = 0),
   check (total = line_subtotal + expense_amount),
   check (
-    (status = 'published' and published_at is not null)
-    or status <> 'published'
+    (status = 'draft' and published_at is null)
+    or (status in ('published', 'superseded') and published_at is not null)
   )
 );
 
@@ -273,6 +302,13 @@ alter table public.base_masters
   add column if not exists current_published_revision_id uuid,
   add column if not exists cloned_from_revision_id uuid;
 
+
+drop trigger if exists base_masters_identity_immutable on public.base_masters;
+create trigger base_masters_identity_immutable
+before update of base_model_id, owner_organization_id, fire_spec_code, cloned_from_revision_id
+on public.base_masters
+for each row execute function public.prevent_base_master_identity_change_after_publish();
+
 do $$
 begin
   if not exists (
@@ -316,13 +352,28 @@ begin
     raise exception 'VALIDATION: 現在公開版は同じ本体のpublished Revisionを指定してください'
       using errcode = 'P0001';
   end if;
+
+  if new.cloned_from_revision_id is not null
+     and not exists (
+       select 1
+         from public.base_master_revisions r
+         join public.base_masters source_master on source_master.id = r.base_master_id
+        where r.id = new.cloned_from_revision_id
+          and r.status in ('published', 'superseded')
+          and source_master.base_model_id = new.base_model_id
+     ) then
+    raise exception 'VALIDATION: 複製元は同じ商品モデルの公開済み本体Revisionを指定してください'
+      using errcode = 'P0001';
+  end if;
+
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists base_masters_revision_refs on public.base_masters;
 create trigger base_masters_revision_refs
-before insert or update of current_published_revision_id on public.base_masters
+before insert or update of current_published_revision_id, cloned_from_revision_id, base_model_id
+on public.base_masters
 for each row execute function public.validate_base_master_revision_refs();
 
 -- ---------- 本体アクセス判定 ----------
@@ -332,7 +383,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
+as $
   select exists (
     select 1
       from public.base_masters b
@@ -340,7 +391,28 @@ as $$
        and b.status = 'active'
        and public.can_create_base_master_for_org(b.owner_organization_id)
   );
-$$;
+$;
+
+
+-- 所有組織のメンバー（viewer含む）またはシステム管理者は、
+-- archivedを含めて本体とその履歴を閲覧できる。
+create or replace function public.can_view_owned_base_master(p_base_master_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $
+  select public.is_admin()
+         or exists (
+           select 1
+             from public.base_masters b
+             join public.organizations o on o.id = b.owner_organization_id
+            where b.id = p_base_master_id
+              and o.status = 'active'
+              and public.current_organization_member_rank(o.id) >= 0
+         );
+$;
 
 -- 本体を「利用できるか」の判定は必ずこの関数へ集約する。
 -- 初期ルール:
@@ -392,8 +464,10 @@ $$;
 revoke all on function public.enforce_base_master_owner_type() from public;
 revoke all on function public.validate_base_master_revision_refs() from public;
 revoke all on function public.can_edit_base_master(uuid) from public;
+revoke all on function public.can_view_owned_base_master(uuid) from public;
 revoke all on function public.can_use_base_master(uuid) from public;
 grant execute on function public.can_edit_base_master(uuid),
+                          public.can_view_owned_base_master(uuid),
                           public.can_use_base_master(uuid)
 to authenticated, service_role;
 
@@ -406,26 +480,44 @@ security definer
 set search_path = public
 as $$
 declare
-  v_revision_id uuid;
-  v_status text;
+  v_old_status text;
+  v_new_status text;
 begin
-  if tg_op = 'DELETE' then
-    v_revision_id := old.revision_id;
-  else
-    v_revision_id := new.revision_id;
+  if tg_op in ('UPDATE', 'DELETE') then
+    select status into v_old_status
+      from public.base_master_revisions
+     where id = old.revision_id;
+
+    -- FK cascadeでdraft Revision自体を削除する場合、親行は既に見えない。
+    -- 親RevisionのDELETEは別triggerでpublished/supersededを拒否しているため、
+    -- 親が見つからないDELETEは許可してよい。
+    if tg_op = 'DELETE' and v_old_status is null then
+      return old;
+    end if;
+
+    if v_old_status is null then
+      raise exception 'VALIDATION: 変更元の本体Revisionが見つかりません'
+        using errcode = 'P0001';
+    end if;
+    if v_old_status <> 'draft' then
+      raise exception 'LOCKED: 公開済み本体Revisionの明細は変更できません'
+        using errcode = 'P0001';
+    end if;
   end if;
 
-  select status into v_status
-    from public.base_master_revisions
-   where id = v_revision_id;
+  if tg_op in ('INSERT', 'UPDATE') then
+    select status into v_new_status
+      from public.base_master_revisions
+     where id = new.revision_id;
 
-  if v_status is null then
-    raise exception 'VALIDATION: 本体Revisionが見つかりません'
-      using errcode = 'P0001';
-  end if;
-  if v_status <> 'draft' then
-    raise exception 'LOCKED: 公開済み本体Revisionの明細は変更できません'
-      using errcode = 'P0001';
+    if v_new_status is null then
+      raise exception 'VALIDATION: 変更先の本体Revisionが見つかりません'
+        using errcode = 'P0001';
+    end if;
+    if v_new_status <> 'draft' then
+      raise exception 'LOCKED: 公開済み本体Revisionの明細は変更できません'
+        using errcode = 'P0001';
+    end if;
   end if;
 
   if tg_op = 'DELETE' then return old; else return new; end if;
@@ -454,11 +546,16 @@ begin
   end if;
 
   if old.status = 'draft' then
+    if new.status = 'superseded' then
+      raise exception 'VALIDATION: draft Revisionを直接supersededにはできません'
+        using errcode = 'P0001';
+    end if;
     return new;
   end if;
 
   if old.status = 'published'
      and new.status = 'superseded'
+     and new.id is not distinct from old.id
      and new.base_master_id is not distinct from old.base_master_id
      and new.version is not distinct from old.version
      and new.expense_method is not distinct from old.expense_method
@@ -469,6 +566,7 @@ begin
      and new.created_by is not distinct from old.created_by
      and new.published_by is not distinct from old.published_by
      and new.published_at is not distinct from old.published_at
+     and new.created_at is not distinct from old.created_at
   then
     return new;
   end if;
@@ -483,6 +581,7 @@ create trigger base_master_revisions_immutable
 before update or delete on public.base_master_revisions
 for each row execute function public.prevent_published_base_master_revision_mutation();
 
+revoke all on function public.prevent_base_master_identity_change_after_publish() from public;
 revoke all on function public.prevent_non_draft_base_master_line_write() from public;
 revoke all on function public.prevent_published_base_master_revision_mutation() from public;
 
@@ -515,14 +614,14 @@ for select using (
 drop policy if exists base_masters_read on public.base_masters;
 create policy base_masters_read on public.base_masters
 for select using (
-  public.can_edit_base_master(id)
+  public.can_view_owned_base_master(id)
   or public.can_use_base_master(id)
 );
 
 drop policy if exists base_master_revisions_read on public.base_master_revisions;
 create policy base_master_revisions_read on public.base_master_revisions
 for select using (
-  public.can_edit_base_master(base_master_id)
+  public.can_view_owned_base_master(base_master_id)
   or (status <> 'draft' and public.can_use_base_master(base_master_id))
 );
 
@@ -534,7 +633,7 @@ for select using (
       from public.base_master_revisions r
      where r.id = revision_id
        and (
-         public.can_edit_base_master(r.base_master_id)
+         public.can_view_owned_base_master(r.base_master_id)
          or (r.status <> 'draft' and public.can_use_base_master(r.base_master_id))
        )
   )

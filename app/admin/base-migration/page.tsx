@@ -221,6 +221,10 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                   <tr key={String(row.id)}>
                     <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
                     <Td className="font-semibold">{String(row.legacy_spec_code)}</Td>
+                    <Td className="text-xs text-muted">
+                      <p>{row.source_sheet_name ? String(row.source_sheet_name) : '標準見積なし'}</p>
+                      <p>基準商品 {Array.isArray(row.legacy_baseline_option_ids) ? row.legacy_baseline_option_ids.length : 0}件</p>
+                    </Td>
                     <Td>{row.proposed_group_key ? String(row.proposed_group_key) : '—'}</Td>
                     <Td className="text-xs text-muted">{row.reason ? String(row.reason) : '—'}</Td>
                     <Td>{row.decision_status === 'approved' ? <Badge tone="success">確認済み</Badge> : <Badge tone="warn">要確認</Badge>}</Td>
@@ -298,7 +302,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
           <section className="space-y-3">
             <div><h2 className="font-semibold">移行前の金額基準</h2><p className="text-sm text-muted">後続PRで新構造と1円単位で比較する基準です。</p></div>
             <Table minWidth="82rem">
-              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>旧本体</Th><Th>旧内外装</Th><Th>旧オプション</Th><Th>旧別途</Th><Th right>調整前</Th><Th right>調整</Th><Th right>税</Th><Th right>税込合計</Th></tr></thead>
+              <thead className="bg-sand/60"><tr><Th>モデル</Th><Th>旧仕様</Th><Th>取込元</Th><Th>旧本体</Th><Th>旧内外装</Th><Th>旧オプション</Th><Th>旧別途</Th><Th right>調整前</Th><Th right>調整</Th><Th right>税</Th><Th right>税込合計</Th></tr></thead>
               <tbody className="divide-y divide-line">
                 {snapshots.map((row) => (
                   <tr key={String(row.id)}>

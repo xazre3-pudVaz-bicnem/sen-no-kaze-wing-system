@@ -121,7 +121,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
 /**
  * 公開ページ用。管理画面で内容を更新すると revalidateTag(CATALOG_TAG) で破棄される。
  */
-export const getPublicCatalog = unstable_cache(fetchPublicCatalog, ['public-catalog-v2-independent-insulation'], {
+export const getPublicCatalog = unstable_cache(fetchPublicCatalog, ['public-catalog-v3-current-options'], {
   tags: [CATALOG_TAG],
   revalidate: 300,
 });

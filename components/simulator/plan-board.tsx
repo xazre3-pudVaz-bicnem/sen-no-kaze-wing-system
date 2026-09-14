@@ -25,6 +25,7 @@ interface Props {
   plan: PreviewResolution;
   specName: string;
   planSize: string | null;
+  modelSlug: string;
   readOnly: boolean;
 }
 
@@ -32,7 +33,7 @@ interface Props {
  * 平面図。
  * 平面図のクリック領域（preview_hotspots）は先方の要望でいったん外している。
  */
-export function PlanBoard({ plan, specName, planSize, readOnly }: Props) {
+export function PlanBoard({ plan, specName, planSize, modelSlug, readOnly }: Props) {
   void readOnly;
   const planImage = plan.layers[0];
   const displayPlanUrl = planImage?.url ?? '';
@@ -52,7 +53,7 @@ export function PlanBoard({ plan, specName, planSize, readOnly }: Props) {
         )}
       </figcaption>
       <div
-        className="relative aspect-[4/3] bg-white px-2 pb-2"
+        className={modelSlug === 'flat' ? 'relative aspect-[2/1] bg-white px-2 pb-2 sm:aspect-[16/7] lg:aspect-[4/3]' : 'relative aspect-[4/3] bg-white px-2 pb-2'}
         data-testid="plan-image"
         data-plan-src={planImage?.url ?? ''}
         data-plan-display-src={displayPlanUrl}

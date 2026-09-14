@@ -7,6 +7,7 @@ import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOp
 import { pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Button } from '@/components/ui';
+import { ProductList } from './product-list';
 import { VariantPicker } from './variant-picker';
 import { cn } from '@/lib/utils';
 
@@ -185,59 +186,14 @@ export function OptionPickerDialog({
             </div>
           </div>
         ) : (
-          /* 一覧：カードは小さめ（4 列）でスクロール量を抑える */
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {options.map((o) => {
-              const checked = picked.includes(o.id);
-              const reason = !checked ? blocked.get(o.id) : null;
-              return (
-                <li key={o.id}>
-                  <button
-                    type="button"
-                    onClick={() => !reason && chooseProduct(o.id)}
-                    aria-pressed={checked}
-                    disabled={Boolean(reason)}
-                    className={cn(
-                      'flex h-full w-full flex-col overflow-hidden rounded-lg border text-left transition',
-                      checked ? 'border-brown bg-ivory/70 ring-2 ring-brown/50 shadow-soft' : 'border-line hover:border-ink/40',
-                      reason && 'cursor-not-allowed opacity-60'
-                    )}
-                    data-testid={`pick-${o.code}`}
-                  >
-                    <span className="relative block aspect-[4/3] bg-sand">
-                      {o.image_url ? (
-                        <SmartImage src={o.image_url} alt={o.name} fill sizes="(min-width: 1024px) 13rem, 45vw" className="object-cover" />
-                      ) : (
-                        <span className="flex h-full flex-col items-center justify-center gap-1 text-[0.65rem] text-muted">
-                          <ImageOff className="size-5" aria-hidden="true" />
-                          商品画像 準備中
-                        </span>
-                      )}
-                      {checked && (
-                        <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-brown px-1.5 py-0.5 text-[0.65rem] font-semibold text-white">
-                          <Check className="size-3" aria-hidden="true" />
-                          選択中
-                        </span>
-                      )}
-                    </span>
-                    <span className="flex flex-1 flex-col p-2">
-                      {(o.manufacturer || o.highlight) && (
-                        <span className="mb-0.5 flex flex-wrap items-center gap-1 text-[0.6rem]">
-                          {o.manufacturer && <span className="text-muted">{o.manufacturer}</span>}
-                          {o.highlight && <span className="rounded-full bg-sand px-1.5 py-0.5 text-forest">{o.highlight}</span>}
-                        </span>
-                      )}
-                      <span className="text-xs leading-snug font-semibold">{o.name}</span>
-                      {o.size_note && <span className="mt-0.5 text-[0.65rem] text-muted">{o.size_note}</span>}
-                      <span className="mt-auto pt-1.5 text-xs">{priceLabel(o)}</span>
-                      {o.list_price ? <span className="text-[0.6rem] text-muted">メーカー参考価格 {formatYen(o.list_price)}</span> : null}
-                      {reason && <span className="mt-1 text-[0.65rem] text-warn">{reason}</span>}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <ProductList
+            category={category}
+            options={options}
+            selectedIds={picked}
+            getPriceLabel={priceLabel}
+            getDisabledReason={(option) => (picked.includes(option.id) ? null : blocked.get(option.id) ?? null)}
+            onOpenProduct={(option) => chooseProduct(option.id)}
+          />
         )}
 
         {/* 色・仕様（サイズ）の選択。同じスクロールの中でそのまま下に続く */}

@@ -246,6 +246,20 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
+  const selectedExteriorOption = allExteriorWallOptions.some((option) => selected.includes(option.id));
+  // 旧ConfigurationのDB正本は exterior_faces=[] のまま維持する。
+  // ただし画面表示では、保存済みの従来1商品外壁を4面同一として復元する。
+  const displayedExteriorFaces =
+    exteriorFaces.length === 0 && selectedExteriorOption
+      ? normalizeExteriorFaces(
+          [],
+          allExteriorWallOptions,
+          bundle.variantGroups,
+          bundle.variantChoices,
+          selected,
+          variantIds
+        )
+      : exteriorFaces;
   const activeEstimateTemplate = estimateTemplateByCode.get(specCode) ?? null;
   const activeChoice = simulatorSpecChoices.find((choice) => choice.code === specCode) ?? null;
   const activePreset = activeChoice?.preset ?? model.presets?.find((preset) => preset.code === specCode) ?? null;
@@ -494,7 +508,49 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     return out;
   }, [ctx, model, bundle, specSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
 
-  const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
+  const independentInsulationCategoryIds = useMemo(
+    () =>
+      new Set(
+        bundle.categories
+          .filter((category) =>
+            ['insulation-floor', 'insulation-wall', 'insulation-ceiling'].includes(category.code)
+          )
+          .map((category) => category.id)
+      ),
+    [bundle.categories]
+  );
+  const legacyReadOnlyWithoutIndependentInsulation =
+    readOnly &&
+    Boolean(initial) &&
+    !initial!.option_ids.some((id) => {
+      const option = bundle.options.find((row) => row.id === id);
+      return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
+    });
+  const issues = useMemo(() => {
+    const currentIssues = validateSelection(ctx, selected, finishLevel);
+    if (!legacyReadOnlyWithoutIndependentInsulation) return currentIssues;
+
+    // migration前に確定した正式履歴には、新設した独立断熱required不足を警告表示しない。
+    // DBや選択内容は補完せず、表示上だけ過去履歴の意味を維持する。
+    return currentIssues.filter(
+      (issue) =>
+        !(
+          issue.type === 'required' &&
+          issue.option_ids.length > 0 &&
+          issue.option_ids.every((id) => {
+            const option = bundle.options.find((row) => row.id === id);
+            return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
+          })
+        )
+    );
+  }, [
+    bundle.options,
+    ctx,
+    finishLevel,
+    independentInsulationCategoryIds,
+    legacyReadOnlyWithoutIndependentInsulation,
+    selected,
+  ]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
   const baselineVariantIds = useMemo(
@@ -985,7 +1041,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
               categories={bundle.categories}
               options={bundle.options}
               variantChoices={bundle.variantChoices}
-              exteriorFaces={exteriorFaces}
+              exteriorFaces={displayedExteriorFaces}
               readOnly={readOnly}
               onPickExteriorFace={openExteriorFace}
             />

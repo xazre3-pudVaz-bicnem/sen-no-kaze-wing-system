@@ -94,6 +94,14 @@ describe('本番migration前のConfiguration互換', () => {
     expect(simulatorSource).toContain('{displayIssues.length > 0 && (');
   });
 
+  it('旧外壁を変更せずApplyしても4面方式へ変換しない', () => {
+    expect(simulatorSource).toContain('const sameExteriorFaces =');
+    expect(simulatorSource).toContain('if (exteriorFaces.length === 0 && selectedExteriorOption)');
+    expect(simulatorSource).toContain('if (sameExteriorFaces(nextFaces, legacyDisplayedFaces))');
+    expect(simulatorSource).toContain("pushToast('外壁の変更はありません', 'info')");
+    expect(simulatorSource).toContain('return;');
+  });
+
   it('保存済みexterior_faces=[]は明示変更まで[]を維持する', () => {
     expect(simulatorSource).toContain('if (initial.exterior_faces.length === 0) return [];');
     expect(simulatorSource).toContain('外壁を明示変更するまで [] を維持');

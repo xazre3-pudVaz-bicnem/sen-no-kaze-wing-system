@@ -20,7 +20,10 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   category: OptionCategory;
+  /** 現在値の復元に使う全商品。保存済みlegacy商品も含める。 */
   options: ProductOption[];
+  /** 新たに選択できる商品。未指定時は options と同じ。 */
+  selectableOptions?: ProductOption[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   selectedOptionIds: string[];
@@ -34,6 +37,7 @@ interface Props {
 export function ExteriorWallFacesDialog({
   category,
   options,
+  selectableOptions,
   variantGroups,
   variantChoices,
   selectedOptionIds,
@@ -44,6 +48,7 @@ export function ExteriorWallFacesDialog({
   onApply,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const availableOptions = selectableOptions ?? options;
   const normalized = useMemo(
     () => normalizeExteriorFaces(current, options, variantGroups, variantChoices, selectedOptionIds, selectedVariantIds),
     [current, options, variantGroups, variantChoices, selectedOptionIds, selectedVariantIds]
@@ -164,7 +169,7 @@ export function ExteriorWallFacesDialog({
         <div className="mt-3">
           <ProductList
             category={category}
-            options={options}
+            options={availableOptions}
             selectedIds={activeOption ? [activeOption.id] : []}
             getPriceLabel={(option) =>
               option.price_on_request

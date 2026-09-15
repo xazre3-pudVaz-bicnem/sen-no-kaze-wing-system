@@ -50,10 +50,36 @@ describe('本番migration前のConfiguration互換', () => {
     expect(exteriorSql).not.toMatch(/insert\s+into\s+public\.configuration_snapshots/i);
   });
 
+  it('正式履歴を複製したWing Draftへ不足している独立断熱だけを補完する', () => {
+    expect(exteriorSql).toContain("v_model_slug = 'wing-01'");
+    expect(exteriorSql).toContain("v_effective_spec not in ('hotel', 'residence', 'office')");
+    expect(exteriorSql).toContain("o.code = 'insulation-upgrade-wing'");
+    expect(exteriorSql).toContain("'insulation-floor'::text, 'insulation-floor-mirafoam-90'::text");
+    expect(exteriorSql).toContain("'insulation-wall'::text");
+    expect(exteriorSql).toContain("'insulation-ceiling'::text");
+    expect(exteriorSql).toContain('existing_category.code = w.category_code');
+    expect(exteriorSql).toContain('return public.recalculate_configuration(v_id)');
+  });
+
   it('spec未設定の旧Configurationでも保存済みoption_idsを初期選択として維持する', () => {
     expect(simulatorSource).toContain('const preserveLegacyInitialSelection =');
     expect(simulatorSource).toContain('Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);');
     expect(simulatorSource).toContain('? (initial?.option_ids ?? initialBaselineIds)');
+  });
+
+  it('旧外壁のDB正本は空4面のまま、表示だけ保存済み1商品から4面復元する', () => {
+    expect(simulatorSource).toContain('const displayedExteriorFaces =');
+    expect(simulatorSource).toContain('exteriorFaces.length === 0 && selectedExteriorOption');
+    expect(simulatorSource).toContain('exteriorFaces={displayedExteriorFaces}');
+    expect(simulatorSource).toContain('current={exteriorFaces}');
+  });
+
+  it('旧正式履歴だけ新設した独立断熱required不足を表示上抑制する', () => {
+    expect(simulatorSource).toContain('const legacyReadOnlyWithoutIndependentInsulation =');
+    expect(simulatorSource).toContain("['insulation-floor', 'insulation-wall', 'insulation-ceiling']");
+    expect(simulatorSource).toContain('if (!legacyReadOnlyWithoutIndependentInsulation) return currentIssues;');
+    expect(simulatorSource).toContain("issue.type === 'required'");
+    expect(simulatorSource).toContain('independentInsulationCategoryIds.has(option.category_id)');
   });
 
   it('保存済みexterior_faces=[]は明示変更まで[]を維持する', () => {

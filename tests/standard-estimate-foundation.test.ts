@@ -44,6 +44,8 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(block).toContain('base_master_id uuid not null');
     expect(migration).toContain("if v_owner_type <> 'headquarters' then");
     expect(migration).toContain('v_base_model_id is distinct from new.base_model_id');
+    expect(migration).toContain('prevent_referenced_base_master_model_change');
+    expect(migration).toContain('base_masters_standard_estimate_model_guard');
     expect(migration).toContain('prevent_standard_estimate_master_identity_change_after_publish');
     for (const column of ['owner_organization_id', 'base_model_id', 'base_master_id', 'spec_code']) {
       expect(migration).toContain('new.' + column + ' is distinct from old.' + column);

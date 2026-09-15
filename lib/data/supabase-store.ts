@@ -574,7 +574,27 @@ export class SupabaseStore implements DataStore {
   async upsertCategory(input: CategoryInput) {
     return this.upsert<OptionCategory>('option_categories', input);
   }
-  async upsertVariantGroup(input: OptionVariantGroup) {
+  async getOptionVariants(optionId: string) {
+    const db = await this.db();
+    const groupsResult = await db
+      .from('option_variant_groups')
+      .select('*')
+      .eq('option_id', optionId)
+      .order('sort_order')
+      .order('id');
+    if (groupsResult.error) mapPgError(groupsResult.error);
+    const groups = (groupsResult.data ?? []) as OptionVariantGroup[];
+    if (!groups.length) return { groups: [], choices: [] };
+    const choicesResult = await db
+      .from('option_variant_choices')
+      .select('*')
+      .in('group_id', groups.map((group) => group.id))
+      .order('sort_order')
+      .order('id');
+    if (choicesResult.error) mapPgError(choicesResult.error);
+    return { groups, choices: (choicesResult.data ?? []) as OptionVariantChoice[] };
+  }
+    async upsertVariantGroup(input: OptionVariantGroup) {
     return this.upsert<OptionVariantGroup>('option_variant_groups', input as unknown as Record<string, unknown> & { id?: string | null });
   }
   async upsertVariantChoice(input: OptionVariantChoice) {

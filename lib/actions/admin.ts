@@ -1,6 +1,6 @@
 'use server';
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/session';
@@ -14,6 +14,8 @@ import {
   modelSchema,
   optionSchema,
   optionImageSchema,
+  variantGroupSchema,
+  variantChoiceSchema,
   previewRuleSchema,
   productImageSchema,
   quoteStatusSchema,
@@ -250,6 +252,207 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   }
   if (createdId) redirect(`/admin/options/${createdId}?saved=1`);
   return { ok: true, message: '保存しました' };
+}
+
+export async function saveVariantGroupAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireCatalogEditor();
+  const parsed = variantGroupSchema.safeParse({
+    id: nullableId(formData.get('id')),
+    option_id: formData.get('option_id'),
+    code: formData.get('code'),
+    name: formData.get('name'),
+    note: formData.get('note'),
+    depends_on_group_code: formData.get('depends_on_group_code'),
+    depends_on_choice_codes: formData.getAll('depends_on_choice_codes').map(String).filter(Boolean),
+    sort_order: formData.get('sort_order') || 0,
+    is_required: formData.get('is_required'),
+    status: formData.get('status') || 'published',
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+
+  try {
+    const store = await getStore();
+    const option = await store.getOption(parsed.data.option_id);
+    if (!option) return { ok: false, error: '商品が見つかりません。' };
+    const variants = await store.getOptionVariants(option.id);
+    const existing = parsed.data.id ? variants.groups.find((group) => group.id === parsed.data.id) : null;
+    if (parsed.data.id && !existing) return { ok: false, error: '選択項目が見つかりません。' };
+    if (existing && existing.code !== parsed.data.code) {
+      return { ok: false, fieldErrors: { code: ['登録後のコードは変更できません。表示名を変更してください。'] } };
+    }
+    if (variants.groups.some((group) => group.code === parsed.data.code && group.id !== parsed.data.id)) {
+      return { ok: false, fieldErrors: { code: ['この商品では同じ選択項目コードが既に使われています。'] } };
+    }
+
+    const dependencyCode = parsed.data.depends_on_group_code;
+    if (dependencyCode) {
+      const parent = variants.groups.find((group) => group.code === dependencyCode && group.id !== parsed.data.id);
+      if (!parent) return { ok: false, fieldErrors: { depends_on_group_code: ['同じ商品の別の選択項目を指定してください。'] } };
+      if (parsed.data.depends_on_choice_codes.length === 0) {
+        return { ok: false, fieldErrors: { depends_on_choice_codes: ['表示する条件となる選択肢を1つ以上選んでください。'] } };
+      }
+      const parentChoices = variants.choices.filter((choice) => choice.group_id === parent.id);
+      const validCodes = new Set(parentChoices.map((choice) => choice.code));
+      if (parsed.data.depends_on_choice_codes.some((code) => !validCodes.has(code))) {
+        return { ok: false, fieldErrors: { depends_on_choice_codes: ['表示条件に指定した選択肢が見つかりません。'] } };
+      }
+      if (parsed.data.status === 'published') {
+        if (parent.status !== 'published') {
+          return { ok: false, fieldErrors: { depends_on_group_code: ['公開する選択項目は、公開中の選択項目だけを表示条件にできます。'] } };
+        }
+        const unpublished = parentChoices.some(
+          (choice) => parsed.data.depends_on_choice_codes.includes(choice.code) && choice.status !== 'published'
+        );
+        if (unpublished) {
+          return { ok: false, fieldErrors: { depends_on_choice_codes: ['公開する選択項目の表示条件には、公開中の選択肢だけを指定してください。'] } };
+        }
+      }
+    }
+
+    if (existing && parsed.data.status === 'draft') {
+      const publishedChild = variants.groups.find(
+        (group) => group.id !== existing.id && group.status === 'published' && group.depends_on_group_code === existing.code
+      );
+      if (publishedChild) {
+        return { ok: false, error: `「${publishedChild.name}」の表示条件に使われているため、先にその選択項目の表示条件を解除または非公開にしてください。` };
+      }
+    }
+
+    await store.upsertVariantGroup({
+      id: parsed.data.id ?? randomUUID(),
+      option_id: option.id,
+      code: parsed.data.code,
+      name: parsed.data.name,
+      note: parsed.data.note,
+      depends_on_group_code: dependencyCode,
+      depends_on_choice_codes: dependencyCode ? parsed.data.depends_on_choice_codes : [],
+      sort_order: parsed.data.sort_order,
+      is_required: parsed.data.is_required,
+      status: parsed.data.status,
+    });
+    revalidatePath(`/admin/options/${option.id}`);
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: parsed.data.id ? '選択項目を更新しました。' : '選択項目を追加しました。' };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+export async function saveVariantChoiceAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireCatalogEditor();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  const groupId = String(formData.get('group_id') ?? '').trim();
+  if (!optionId || !groupId) return { ok: false, error: '商品または選択項目が指定されていません。' };
+
+  let uploadedUrl: string | null = null;
+  try {
+    const store = await getStore();
+    const option = await store.getOption(optionId);
+    if (!option) return { ok: false, error: '商品が見つかりません。' };
+    const variants = await store.getOptionVariants(optionId);
+    const group = variants.groups.find((row) => row.id === groupId);
+    if (!group) return { ok: false, error: '選択項目が見つかりません。' };
+
+    const id = nullableId(formData.get('id'));
+    const existing = id ? variants.choices.find((choice) => choice.id === id && choice.group_id === group.id) : null;
+    if (id && !existing) return { ok: false, error: '選択肢が見つかりません。' };
+
+    const file = formData.get('image_file');
+    const imageUrlField = String(formData.get('image_url') ?? existing?.image_url ?? '').trim();
+    if (file instanceof File && file.size > 0) {
+      const fd = new FormData();
+      fd.set('file', file);
+      fd.set('url', imageUrlField);
+      uploadedUrl = await resolveImageUrl(fd, 'variant-choices');
+    }
+
+    const parsed = variantChoiceSchema.safeParse({
+      id,
+      option_id: optionId,
+      group_id: groupId,
+      code: formData.get('code'),
+      name: formData.get('name'),
+      kind: formData.get('kind') || 'option',
+      extra_price: formData.get('extra_price') || 0,
+      price_on_request: formData.get('price_on_request'),
+      image_url: uploadedUrl ?? imageUrlField,
+      note: formData.get('note'),
+      sort_order: formData.get('sort_order') || 0,
+      status: formData.get('status') || 'published',
+    });
+    if (!parsed.success) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+    }
+    if (existing && existing.code !== parsed.data.code) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: { code: ['登録後のコードは変更できません。表示名を変更してください。'] } };
+    }
+
+    const groupChoices = variants.choices.filter((choice) => choice.group_id === group.id);
+    if (groupChoices.some((choice) => choice.code === parsed.data.code && choice.id !== id)) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: { code: ['この選択項目では同じ選択肢コードが既に使われています。'] } };
+    }
+    if (parsed.data.kind === 'standard' && groupChoices.some((choice) => choice.id !== id && choice.kind === 'standard')) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: { kind: ['標準の選択肢は1項目につき1つだけです。先に現在の標準を変更してください。'] } };
+    }
+    if (parsed.data.kind === 'fixed' && groupChoices.some((choice) => choice.id !== id)) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。'] } };
+    }
+    if (parsed.data.kind !== 'fixed' && groupChoices.some((choice) => choice.id !== id && choice.kind === 'fixed')) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: { kind: ['固定の選択肢があるため、先にその固定設定を変更してください。'] } };
+    }
+    if (!id && groupChoices.some((choice) => choice.kind === 'fixed')) {
+      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, error: '固定の選択肢があるため、この選択項目へ別の選択肢は追加できません。' };
+    }
+
+    if (existing && parsed.data.status === 'draft') {
+      const publishedChild = variants.groups.find(
+        (child) =>
+          child.status === 'published' &&
+          child.depends_on_group_code === group.code &&
+          (child.depends_on_choice_codes ?? []).includes(existing.code)
+      );
+      if (publishedChild) {
+        if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+        return { ok: false, error: `「${publishedChild.name}」の表示条件に使われているため、先にその表示条件を変更してください。` };
+      }
+    }
+
+    await store.upsertVariantChoice({
+      id: parsed.data.id ?? randomUUID(),
+      group_id: group.id,
+      code: parsed.data.code,
+      name: parsed.data.name,
+      kind: parsed.data.kind,
+      extra_price: parsed.data.extra_price,
+      price_on_request: parsed.data.price_on_request,
+      image_url: parsed.data.image_url,
+      note: parsed.data.note,
+      sort_order: parsed.data.sort_order,
+      status: parsed.data.status,
+    });
+    revalidatePath(`/admin/options/${optionId}`);
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: parsed.data.id ? '選択肢を更新しました。' : '選択肢を追加しました。' };
+  } catch (e) {
+    if (uploadedUrl) {
+      try {
+        const store = await getStore();
+        await store.deleteUploadedImage(uploadedUrl);
+      } catch {
+        // 元のエラーを優先する
+      }
+    }
+    return errState(e);
+  }
 }
 
 export async function addOptionImageAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {

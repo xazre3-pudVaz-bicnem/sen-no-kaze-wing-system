@@ -1246,7 +1246,19 @@ export class LocalStore implements DataStore {
       return c;
     });
   }
-  async upsertVariantGroup(input: OptionVariantGroup) {
+  async getOptionVariants(optionId: string) {
+    return this.read((db) => {
+      const groups = db.variantGroups
+        .filter((group) => group.option_id === optionId)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+      const groupIds = new Set(groups.map((group) => group.id));
+      const choices = db.variantChoices
+        .filter((choice) => groupIds.has(choice.group_id))
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+      return { groups, choices };
+    });
+  }
+    async upsertVariantGroup(input: OptionVariantGroup) {
     return this.mutate((db) => {
       const i = db.variantGroups.findIndex((g) => g.id === input.id);
       if (i >= 0) db.variantGroups[i] = { ...db.variantGroups[i], ...input };

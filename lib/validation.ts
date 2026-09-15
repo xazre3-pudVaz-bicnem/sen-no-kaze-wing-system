@@ -165,6 +165,37 @@ export const optionSchema = z.object({
   highlight: optional(40).nullable(),
 });
 
+export const variantGroupSchema = z.object({
+  id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  option_id: z.uuid(),
+  code: trimmed(60).min(1, '選択項目コードを入力してください').regex(/^[a-z0-9-]+$/, 'コードは英小文字・数字・ハイフン'),
+  name: trimmed(60).min(1, '選択項目名を入力してください'),
+  note: optional(300).nullable(),
+  depends_on_group_code: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.string().regex(/^[a-z0-9-]+$/, '表示条件の項目コードが正しくありません').nullable()
+  ),
+  depends_on_choice_codes: z.array(z.string().regex(/^[a-z0-9-]+$/)).max(100),
+  sort_order: intFromForm,
+  is_required: boolFromForm,
+  status: statusSchema,
+});
+
+export const variantChoiceSchema = z.object({
+  id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  option_id: z.uuid(),
+  group_id: z.uuid(),
+  code: trimmed(60).min(1, '選択肢コードを入力してください').regex(/^[a-z0-9-]+$/, 'コードは英小文字・数字・ハイフン'),
+  name: trimmed(80).min(1, '選択肢名を入力してください'),
+  kind: z.enum(['standard', 'option', 'fixed']),
+  extra_price: z.coerce.number().int().min(0).max(100_000_000),
+  price_on_request: boolFromForm,
+  image_url: optional(1000).nullable(),
+  note: optional(300).nullable(),
+  sort_order: intFromForm,
+  status: statusSchema,
+});
+
 export const optionImageSchema = z.object({
   id: z.uuid().nullable(),
   option_id: z.uuid(),

@@ -78,15 +78,61 @@ begin
       using errcode = 'P0001';
   end if;
 
+  -- 公開前でも既にRevisionがある場合、Masterだけを別Base Masterへ付け替えて
+  -- pin済みBase Revisionとの整合を壊すことは許可しない。
+  if tg_op = 'UPDATE'
+     and new.base_master_id is distinct from old.base_master_id
+     and exists (
+       select 1
+         from public.standard_estimate_revisions r
+         join public.base_master_revisions br on br.id = r.base_master_revision_id
+        where r.standard_estimate_master_id = old.id
+          and br.base_master_id is distinct from new.base_master_id
+     )
+  then
+    raise exception 'VALIDATION: Revision作成済みの標準見積は別の本体Masterへ付け替えできません'
+      using errcode = 'P0001';
+  end if;
+
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists standard_estimate_masters_refs on public.standard_estimate_masters;
 create trigger standard_estimate_masters_refs
 before insert or update of owner_organization_id, base_model_id, base_master_id
 on public.standard_estimate_masters
 for each row execute function public.validate_standard_estimate_master_refs();
+
+-- base_model_idをStandard Estimate Masterにも保持するため、参照元Base Master側の変更でも
+-- 常に両者が一致するよう逆向きに保護する。
+create or replace function public.prevent_referenced_base_master_model_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $
+begin
+  if new.base_model_id is distinct from old.base_model_id
+     and exists (
+       select 1
+         from public.standard_estimate_masters m
+        where m.base_master_id = old.id
+          and m.base_model_id is distinct from new.base_model_id
+     )
+  then
+    raise exception 'LOCKED: Standard Estimateから参照中の本体Masterの商品モデルは変更できません'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists base_masters_standard_estimate_model_guard on public.base_masters;
+create trigger base_masters_standard_estimate_model_guard
+before update of base_model_id on public.base_masters
+for each row execute function public.prevent_referenced_base_master_model_change();
 
 -- ---------- Standard Estimate Revision ----------
 create table if not exists public.standard_estimate_revisions (
@@ -795,29 +841,29 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
-  select exists (
-    select 1
-      from public.standard_estimate_masters m
-      join public.organizations owner_org on owner_org.id = m.owner_organization_id
-     where m.id = p_standard_estimate_master_id
-       and owner_org.status = 'active'
-       and owner_org.organization_type = 'headquarters'
-       and (
-         public.is_admin()
-         or public.current_organization_member_rank(owner_org.id) >= 1
-         or (
-           public.is_active_standard_estimate_staff()
-           and exists (
-             select 1
-               from public.standard_estimate_revisions r
-              where r.standard_estimate_master_id = m.id
-                and r.status in ('published', 'superseded')
-           )
-         )
-       )
-  );
-$$;
+as $
+  select public.is_admin()
+         or exists (
+           select 1
+             from public.standard_estimate_masters m
+             join public.organizations owner_org on owner_org.id = m.owner_organization_id
+            where m.id = p_standard_estimate_master_id
+              and owner_org.status = 'active'
+              and owner_org.organization_type = 'headquarters'
+              and (
+                public.current_organization_member_rank(owner_org.id) >= 1
+                or (
+                  public.is_active_standard_estimate_staff()
+                  and exists (
+                    select 1
+                      from public.standard_estimate_revisions r
+                     where r.standard_estimate_master_id = m.id
+                       and r.status in ('published', 'superseded')
+                  )
+                )
+              )
+         );
+$;
 
 create or replace function public.can_view_standard_estimate_revision(p_standard_estimate_revision_id uuid)
 returns boolean
@@ -825,25 +871,25 @@ language sql
 stable
 security definer
 set search_path = public
-as $$
-  select exists (
-    select 1
-      from public.standard_estimate_revisions r
-      join public.standard_estimate_masters m on m.id = r.standard_estimate_master_id
-      join public.organizations owner_org on owner_org.id = m.owner_organization_id
-     where r.id = p_standard_estimate_revision_id
-       and owner_org.status = 'active'
-       and owner_org.organization_type = 'headquarters'
-       and (
-         public.is_admin()
-         or public.current_organization_member_rank(owner_org.id) >= 1
-         or (
-           r.status in ('published', 'superseded')
-           and public.is_active_standard_estimate_staff()
-         )
-       )
-  );
-$$;
+as $
+  select public.is_admin()
+         or exists (
+           select 1
+             from public.standard_estimate_revisions r
+             join public.standard_estimate_masters m on m.id = r.standard_estimate_master_id
+             join public.organizations owner_org on owner_org.id = m.owner_organization_id
+            where r.id = p_standard_estimate_revision_id
+              and owner_org.status = 'active'
+              and owner_org.organization_type = 'headquarters'
+              and (
+                public.current_organization_member_rank(owner_org.id) >= 1
+                or (
+                  r.status in ('published', 'superseded')
+                  and public.is_active_standard_estimate_staff()
+                )
+              )
+         );
+$;
 
 -- ---------- RLS ----------
 alter table public.standard_estimate_masters enable row level security;
@@ -931,6 +977,7 @@ grant all privileges on table public.standard_estimate_masters,
 to service_role;
 
 revoke all on function public.validate_standard_estimate_master_refs() from public, anon, authenticated;
+revoke all on function public.prevent_referenced_base_master_model_change() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_base_revision_ref() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_baseline_item_refs() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_baseline_variant_refs() from public, anon, authenticated;
@@ -953,6 +1000,7 @@ grant execute on function public.can_create_standard_estimate_master_for_org(uui
 to authenticated, service_role;
 
 grant execute on function public.validate_standard_estimate_master_refs(),
+                          public.prevent_referenced_base_master_model_change(),
                           public.validate_standard_estimate_base_revision_ref(),
                           public.validate_standard_estimate_baseline_item_refs(),
                           public.validate_standard_estimate_baseline_variant_refs(),

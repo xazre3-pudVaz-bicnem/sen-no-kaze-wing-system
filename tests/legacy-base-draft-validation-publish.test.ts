@@ -28,7 +28,7 @@ describe('旧本体移行Draftの検算・防火区分確認・Publish', () => {
     expect(migration).toContain("v_batch.status <> 'migrated'");
     expect(migration).toContain("v_revision.status <> 'draft'");
     expect(migration).toContain('v_master.current_published_revision_id is not null');
-    expect(migration).toContain("p_fire_spec_code not in ('non_fire', 'fire')");
+    expect(migration).toContain("p_fire_spec_code is null or p_fire_spec_code not in ('non_fire', 'fire')");
     expect(migration).toContain("nullif(btrim(coalesce(p_review_note, '')), '') is null");
     expect(migration).toContain('v_output.fire_spec_review_version <> p_expected_review_version');
     expect(migration).toContain('CONFLICT: 防火区分は他のユーザーによって更新されています。画面を再読込してください');
@@ -68,6 +68,7 @@ describe('旧本体移行Draftの検算・防火区分確認・Publish', () => {
     expect(migration).toContain('o.representative_legacy_spec_code');
     expect(migration).toContain("m.review_status = 'approved'");
     expect(migration).toContain("m.target_classification = 'base'");
+    expect(migration).toContain('l.legacy_item_id is distinct from m.legacy_item_id');
   });
 
   it('明細7項目を完全一致させ、amount・subtotal・諸費用・totalを1円単位で検算する', () => {
@@ -122,6 +123,11 @@ describe('旧本体移行Draftの検算・防火区分確認・Publish', () => {
     expect(migration).toContain("set status = 'completed'");
     expect(migration).toContain('completed_by = v_uid');
     expect(migration).toContain('completed_at = now()');
+    const publishLoop = migration.indexOf('for v_output in');
+    const completedUpdate = migration.indexOf("set status = 'completed'");
+    expect(publishLoop).toBeGreaterThan(-1);
+    expect(completedUpdate).toBeGreaterThan(publishLoop);
+    expect(migration.slice(publishLoop, completedUpdate)).not.toMatch(/exception\s+when/i);
   });
 
   it('migration Publishは監査済み金額との差異を修正せず停止し、Publish後の値も再検査する', () => {
@@ -167,7 +173,7 @@ describe('旧本体移行Draftの検算・防火区分確認・Publish', () => {
     expect(detail).toContain('migrationDraftLocked');
     expect(detail).toContain('旧本体移行Draft');
     expect(detail).toContain('明細・金額・諸費用を直接変更できません');
-    expect(detail).toContain('移行監査・参照のみ');
+    expect(detail).toContain('readOnlyRevisionIds');
     expect(detail).toContain('旧本体移行監査を開く');
     expect(detail).toContain('!migrationDraftLocked && detailView.editableRevisionId === draft.id');
   });

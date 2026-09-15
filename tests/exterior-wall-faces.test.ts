@@ -60,6 +60,21 @@ describe('外壁4面', () => {
     expect(faces.every((f) => f.variant_choice_ids[0] === 'black')).toBe(true);
   });
 
+  it('保存済みlegacy外壁は現行候補があっても復元時に置換しない', () => {
+    const legacy = option('exterior-galnote');
+    const current = option('exterior-current-gl-bare');
+    const saved = EXTERIOR_FACES.map((face) => ({
+      face_code: face.code,
+      option_id: legacy.id,
+      variant_choice_ids: [] as string[],
+    }));
+
+    const faces = normalizeExteriorFaces(saved, [legacy, current], [], [], [legacy.id], []);
+
+    expect(faces).toEqual(saved);
+    expect(faces.every((face) => face.option_id === legacy.id)).toBe(true);
+  });
+
   it('4面の別商品指定を保持する', () => {
     const options = [option('wall-a'), option('wall-b')];
     const input = [

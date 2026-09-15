@@ -289,7 +289,7 @@ export async function addOptionImageAction(_prev: AdminFormState, formData: Form
     }
 
     await store.upsertOptionImage(parsed.data);
-    revalidatePath('/admin/options/[id]', 'page');
+    revalidatePath(`/admin/options/${optionId}`);
     updateTag(CATALOG_TAG);
     return { ok: true, message: 'サブ画像を追加しました。' };
   } catch (e) {
@@ -325,7 +325,7 @@ export async function updateOptionImageAction(_prev: AdminFormState, formData: F
     });
     if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
     await store.upsertOptionImage(parsed.data);
-    revalidatePath('/admin/options/[id]', 'page');
+    revalidatePath(`/admin/options/${optionId}`);
     updateTag(CATALOG_TAG);
     return { ok: true, message: 'サブ画像の表示設定を更新しました。' };
   } catch (e) {
@@ -351,7 +351,7 @@ export async function deleteOptionImageAction(formData: FormData): Promise<void>
       console.warn('[wing] option image storage cleanup failed', error);
     }
   }
-  revalidatePath('/admin/options/[id]', 'page');
+  revalidatePath(`/admin/options/${optionId}`);
   updateTag(CATALOG_TAG);
 }
 
@@ -381,7 +381,7 @@ export async function uploadOptionManufacturerDocumentAction(
 
     uploadedUrl = await store.uploadProductDocument(
       { bytes: new Uint8Array(await file.arrayBuffer()), contentType: 'application/pdf', fileName: file.name },
-      `options/${optionId}`
+      `option-${optionId}`
     );
     await store.setOptionManufacturerDocument(optionId, uploadedUrl);
 
@@ -393,7 +393,7 @@ export async function uploadOptionManufacturerDocumentAction(
       }
     }
 
-    revalidatePath('/admin/options/[id]', 'page');
+    revalidatePath(`/admin/options/${optionId}`);
     updateTag(CATALOG_TAG);
     return { ok: true, message: 'メーカー資料PDFを登録しました。' };
   } catch (e) {
@@ -424,7 +424,7 @@ export async function deleteOptionManufacturerDocumentAction(formData: FormData)
       console.warn('[wing] product document storage cleanup failed', error);
     }
   }
-  revalidatePath('/admin/options/[id]', 'page');
+  revalidatePath(`/admin/options/${optionId}`);
   updateTag(CATALOG_TAG);
 }
 

@@ -21,7 +21,7 @@ alter table public.configurations
 
 -- 既存Draftは、利用者が変更していない外壁商品をそのまま4面へ展開する。
 -- quote_requested / closed は正式履歴として変更しない。
-do $
+do $migration$
 begin
   if exists (
     select 1
@@ -39,7 +39,7 @@ begin
       using errcode = 'P0001';
   end if;
 end
-$;
+$migration$;
 
 with legacy_wall as (
   select

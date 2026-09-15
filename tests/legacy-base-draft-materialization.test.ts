@@ -83,9 +83,12 @@ describe('監査済み旧本体から新本体Draft作成', () => {
     expect(migration).toContain('for update;');
   });
 
-  it('防火区分はPublish前の明示確認対象として記録する', () => {
+  it('防火区分はPublish前の明示確認対象として記録し、未確認DraftのPublishをDBで拒否する', () => {
     expect(migration).toContain("initial_fire_spec_code text not null default 'non_fire'");
     expect(migration).toContain('fire_spec_review_required boolean not null default true');
+    expect(migration).toContain('prevent_unreviewed_legacy_base_migration_publish');
+    expect(migration).toContain("new.status = 'published'");
+    expect(migration).toContain('旧本体移行Draftは防火区分の確認が完了するまでPublishできません');
     expect(page).toContain('防火区分はDraft段階ではnon_fireを仮置きし、Publish前に明示確認します。');
   });
 

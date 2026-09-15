@@ -7,9 +7,12 @@ import { assessLegacyBaseMigrationReadiness } from '@/lib/domain/legacy-base-mig
 import { Alert, Badge, Button, Input, Select } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import {
+  confirmLegacyBaseMigrationFireSpecAction,
   createLegacyBaseMigrationBatchAction,
+  finalizeLegacyBaseDraftValidationAction,
   finalizeLegacyBaseMigrationReviewAction,
   materializeLegacyBaseDraftsAction,
+  publishLegacyBaseMigrationBatchAction,
   resolveLegacyEstimateDuplicateAction,
   setLegacyBaseMappingDecisionAction,
   setLegacyBaseSpecMappingAction,
@@ -139,6 +142,11 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
   }
   const readiness = assessLegacyBaseMigrationReadiness({ mappings, specs, duplicates, snapshots });
   const ready = Boolean(selected) && readiness.canAttemptFinalize;
+  const selectedStatus = selected ? String(selected.status) : '';
+  const confirmedFireCount = draftOutputs.filter(
+    (row) => row.fire_spec_review_required === false && ['non_fire', 'fire'].includes(String(row.confirmed_fire_spec_code))
+  ).length;
+  const allFireReviewed = draftOutputs.length > 0 && confirmedFireCount === draftOutputs.length;
 
   return (
     <AdminPage
@@ -150,6 +158,9 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
       {sp.saved && <Alert tone="success">判定を保存しました。</Alert>}
       {sp.ready && <Alert tone="success">レビュー完了です。readyバッチから新本体Draftを作成できます。</Alert>}
       {sp.drafted && <Alert tone="success">新本体Draftを作成しました。Publish・Simulator・Quoteはまだ切り替えていません。</Alert>}
+      {sp.fire_confirmed && <Alert tone="success">防火区分を確認しました。</Alert>}
+      {sp.validated && <Alert tone="success">移行Draftの最終検算が完了しました。</Alert>}
+      {sp.completed && <Alert tone="success">検算済み新本体を一括Publishしました。</Alert>}
 
       <Alert tone="info">
         旧 base_breakdown_items / estimate_templates は変更しません。ready後は監査済みの本体行だけを新本体Draftへコピーします。
@@ -377,16 +388,16 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               <div>
                 <h2 className="font-semibold">新本体Draft検算</h2>
                 <p className="text-sm text-muted">
-                  「旧本体明細」は移行前の本体区分全体、「新本体明細」は監査で本体に残した行だけの合計です。内外装工事・オプション・別途へ移した分は差額として残ります。
+                  旧監査値と新本体Draftを比較し、防火区分を明示確認します。移行Draftの明細・金額・諸費用はここから直接変更しません。
                 </p>
               </div>
-              <Table minWidth="78rem">
+              <Table minWidth="104rem">
                 <thead className="bg-sand/60">
                   <tr>
                     <Th>モデル</Th><Th>新本体グループ</Th><Th>代表旧仕様</Th>
                     <Th right>旧本体明細</Th><Th right>新本体明細</Th><Th right>本体から除外</Th>
                     <Th right>旧諸費用</Th><Th right>新諸費用</Th><Th right>新Draft計</Th>
-                    <Th>追跡</Th><Th>防火区分</Th><Th></Th>
+                    <Th>追跡</Th><Th>防火区分</Th><Th>検算状態</Th><Th>操作</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -394,6 +405,14 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                     const legacyLineTotal = Number(row.legacy_base_section_line_total ?? 0);
                     const targetLineTotal = Number(row.target_line_subtotal ?? 0);
                     const movedOut = legacyLineTotal - targetLineTotal;
+                    const fireReviewed =
+                      row.fire_spec_review_required === false &&
+                      ['non_fire', 'fire'].includes(String(row.confirmed_fire_spec_code));
+                    const fireLabel = String(row.confirmed_fire_spec_code) === 'fire' ? '防火' : '非防火';
+                    const validationLabel =
+                      selectedStatus === 'completed' ? 'Publish済み' :
+                      selectedStatus === 'validated' ? '最終検算済み' :
+                      fireReviewed ? '防火確認済み' : '防火確認待ち';
                     return (
                       <tr key={String(row.id)}>
                         <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
@@ -405,10 +424,43 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
                         <Td right>{formatYen(Number(row.legacy_base_expense ?? 0))}</Td>
                         <Td right>{formatYen(Number(row.target_expense_amount ?? 0))}</Td>
                         <Td right className="font-semibold">{formatYen(Number(row.target_total ?? 0))}</Td>
-                        <Td>{lineCountByOutput.get(String(row.id)) ?? 0}行</Td>
-                        <Td>{row.fire_spec_review_required ? <Badge tone="warn">要確認</Badge> : <Badge tone="success">確認済み</Badge>}</Td>
+                        <Td>{lineCountByOutput.get(String(row.id)) ?? 0}件</Td>
+                        <Td className="min-w-72">
+                          {selectedStatus === 'migrated' && canManage && !fireReviewed ? (
+                            <form action={confirmLegacyBaseMigrationFireSpecAction} className="space-y-2">
+                              <input type="hidden" name="batch_id" value={String(selected.id)} />
+                              <input type="hidden" name="draft_output_id" value={String(row.id)} />
+                              <input type="hidden" name="expected_review_version" value={String(row.fire_spec_review_version ?? 0)} />
+                              <Select
+                                name="fire_spec_code"
+                                defaultValue={String(row.confirmed_fire_spec_code ?? row.initial_fire_spec_code ?? 'non_fire')}
+                              >
+                                <option value="non_fire">非防火</option>
+                                <option value="fire">防火</option>
+                              </Select>
+                              <Input name="review_note" required placeholder="確認根拠" />
+                              <Button type="submit" variant="secondary">防火区分を確認</Button>
+                            </form>
+                          ) : fireReviewed ? (
+                            <div className="space-y-1 text-xs">
+                              <Badge tone="success">✓ {fireLabel}</Badge>
+                              <p>確認者：{row.fire_spec_reviewed_by ? String(row.fire_spec_reviewed_by) : '—'}</p>
+                              <p>確認日時：{row.fire_spec_reviewed_at ? new Date(String(row.fire_spec_reviewed_at)).toLocaleString('ja-JP') : '—'}</p>
+                              <p className="max-w-72 whitespace-normal">確認根拠：{String(row.fire_spec_review_note ?? '—')}</p>
+                            </div>
+                          ) : (
+                            <Badge tone="warn">要確認</Badge>
+                          )}
+                        </Td>
                         <Td>
-                          <Link className="text-sm underline" href={`/admin/base-masters/${String(row.base_master_id)}`}>Draftを開く</Link>
+                          <Badge tone={selectedStatus === 'completed' || selectedStatus === 'validated' || fireReviewed ? 'success' : 'warn'}>
+                            {validationLabel}
+                          </Badge>
+                        </Td>
+                        <Td>
+                          <Link className="text-sm underline" href={'/admin/base-masters/' + String(row.base_master_id)}>
+                            Draftを開く
+                          </Link>
                         </Td>
                       </tr>
                     );
@@ -418,7 +470,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
             </section>
           )}
 
-          {canManage && ['ready', 'migrated'].includes(String(selected.status)) && (
+          {canManage && selectedStatus === 'ready' && (
             <section className="card space-y-3 p-5">
               <h2 className="font-semibold">新本体Draft作成</h2>
               <p className="text-sm">
@@ -433,12 +485,65 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               <form action={materializeLegacyBaseDraftsAction}>
                 <input type="hidden" name="batch_id" value={String(selected.id)} />
                 <Button type="submit">
-                  {selected.status === 'ready' ? '監査済みデータから新本体Draftを作成' : 'Draft作成結果を再検証'}
+                  監査済みデータから新本体Draftを作成
                 </Button>
               </form>
               <p className="text-xs text-muted">
                 DB側でready状態・STALE・group互換性を再確認し、途中で失敗した場合は同一RPC transaction全体がrollbackされます。
               </p>
+            </section>
+          )}
+
+          {selectedStatus === 'migrated' && (
+            <section className="card space-y-3 p-5">
+              <h2 className="font-semibold">移行Draftの最終検算</h2>
+              <p className="text-sm">
+                防火区分確認済み {confirmedFireCount} / {draftOutputs.length}件
+              </p>
+              <div className="grid gap-1 text-xs text-muted sm:grid-cols-2">
+                <p>provenance：旧行→新line / 新line→旧行をDBで再検算します。</p>
+                <p>金額：明細・小計・諸費用・totalを1円単位で再検算します。</p>
+              </div>
+              {canManage && (
+                <form action={finalizeLegacyBaseDraftValidationAction}>
+                  <input type="hidden" name="batch_id" value={String(selected.id)} />
+                  <Button type="submit" disabled={!allFireReviewed}>移行Draftを最終検算</Button>
+                </form>
+              )}
+              {!allFireReviewed && <p className="text-xs text-muted">全本体の防火区分を確認すると最終検算できます。</p>}
+            </section>
+          )}
+
+          {selectedStatus === 'validated' && (
+            <section className="card space-y-3 p-5">
+              <h2 className="font-semibold">✓ 最終検算済み</h2>
+              <div className="grid gap-1 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <p>本体Draft　{draftOutputs.length}件</p>
+                <p>provenance　OK</p>
+                <p>1円検算　OK</p>
+                <p>諸費用　OK</p>
+                <p>防火区分　全件確認済み</p>
+              </div>
+              <p className="text-sm text-muted">Simulator・Quote・標準見積はまだ変更されません。</p>
+              {canManage && (
+                <form action={publishLegacyBaseMigrationBatchAction}>
+                  <input type="hidden" name="batch_id" value={String(selected.id)} />
+                  <Button type="submit">検算済み新本体をPublish</Button>
+                </form>
+              )}
+            </section>
+          )}
+
+          {selectedStatus === 'completed' && (
+            <section className="card space-y-3 p-5">
+              <h2 className="font-semibold">✓ 新本体Publish完了</h2>
+              <div className="grid gap-1 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <p>{draftOutputs.length}本体 Published</p>
+                <p>防火区分確定</p>
+                <p>金額検算 OK</p>
+                <p>旧行追跡保持</p>
+              </div>
+              <p className="text-sm text-muted">Simulator・Quote・標準見積は旧方式のままです。</p>
             </section>
           )}
 

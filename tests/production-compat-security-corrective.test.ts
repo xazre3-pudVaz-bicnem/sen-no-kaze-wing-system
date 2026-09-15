@@ -11,6 +11,7 @@ const migration = fs.readFileSync(migrationPath, 'utf8');
 const simulator = fs.readFileSync(path.join(root, 'components/simulator/simulator-app.tsx'), 'utf8');
 const exteriorDialog = fs.readFileSync(path.join(root, 'components/simulator/exterior-wall-faces-dialog.tsx'), 'utf8');
 const adminQuote = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/page.tsx'), 'utf8');
+const localStore = fs.readFileSync(path.join(root, 'lib/data/local-store.ts'), 'utf8');
 const quoteResponseMigration = fs.readFileSync(
   path.join(root, 'supabase/migrations/0012_notifications_audit.sql'),
   'utf8'
@@ -187,6 +188,7 @@ describe('production compatibility / security corrective migration', () => {
       'public.estimate_baseline_master_section_total(uuid, text)',
       'public.recalculate_configuration(uuid)',
       'public.create_quote_from_configuration(uuid, jsonb, text)',
+      'public.respond_to_quote(uuid, text)',
     ]) {
       expect(securitySection).toContain(`alter function ${signature} set search_path = '';`);
     }
@@ -213,6 +215,7 @@ describe('production compatibility / security corrective migration', () => {
       'public.recalculate_configuration(uuid)',
       'public.create_quote_from_configuration(uuid, jsonb, text)',
       'public.create_quote_revision(uuid, jsonb, text)',
+      'public.respond_to_quote(uuid, text)',
     ]) {
       expect(migration).toContain(
         `revoke execute on function ${signature}\n  from public, anon, authenticated, service_role;`
@@ -244,5 +247,6 @@ describe('production compatibility / security corrective migration', () => {
     expect(adminQuote).toContain(
       "const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);"
     );
+    expect(localStore).toContain("if (parent.status !== 'issued') {");
   });
 });

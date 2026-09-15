@@ -54,6 +54,7 @@ describe('本番migration前のConfiguration互換', () => {
     expect(exteriorSql).toContain("v_model_slug = 'wing-01'");
     expect(exteriorSql).toContain("v_effective_spec not in ('hotel', 'residence', 'office')");
     expect(exteriorSql).toContain("o.code = 'insulation-upgrade-wing'");
+    expect(exteriorSql).toContain("case when v_model_slug = 'wing-01' then v_effective_spec else src.spec_code end");
     expect(exteriorSql).toContain("'insulation-floor'::text, 'insulation-floor-mirafoam-90'::text");
     expect(exteriorSql).toContain("'insulation-wall'::text");
     expect(exteriorSql).toContain("'insulation-ceiling'::text");

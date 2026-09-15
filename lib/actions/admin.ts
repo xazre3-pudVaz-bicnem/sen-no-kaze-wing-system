@@ -7,12 +7,13 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput } from '@/lib/data/store';
+import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput, type SessionUser } from '@/lib/data/store';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
   modelSchema,
   optionSchema,
+  optionImageSchema,
   previewRuleSchema,
   productImageSchema,
   quoteStatusSchema,
@@ -40,6 +41,7 @@ export interface AdminFormState {
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_PRODUCT_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
 function errState(e: unknown): AdminFormState {
   if (e instanceof StoreError) return { ok: false, error: e.message };
@@ -75,6 +77,19 @@ const nullableId = (v: FormDataEntryValue | null) => {
   const s = String(v ?? '').trim();
   return s ? s : null;
 };
+
+async function editableOptionContext(actor: SessionUser, optionId: string) {
+  const store = await getStore();
+  const option = await store.getOption(optionId);
+  if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
+  if (canEditCatalog(actor.role)) return { store, option };
+
+  const category = (await store.listCategories()).find((row) => row.id === option.category_id);
+  if (actor.role !== 'customer' && option.owner_id === actor.id && category?.code === FREE_PRODUCT_CATEGORY_CODE) {
+    return { store, option };
+  }
+  throw new StoreError('FORBIDDEN', 'この商品のメディアは編集できません。');
+}
 
 export async function saveModelAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
@@ -235,6 +250,182 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   }
   if (createdId) redirect(`/admin/options/${createdId}?saved=1`);
   return { ok: true, message: '保存しました' };
+}
+
+export async function addOptionImageAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  if (!optionId) return { ok: false, error: '商品が指定されていません。' };
+
+  let uploadedUrl: string | null = null;
+  try {
+    const { store, option } = await editableOptionContext(actor, optionId);
+    const file = formData.get('file');
+    if (!(file instanceof File) || file.size === 0) {
+      return { ok: false, fieldErrors: { file: ['サブ画像を選択してください。'] } };
+    }
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      return { ok: false, fieldErrors: { file: ['JPEG / PNG / WebP / AVIF のみアップロードできます。'] } };
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      return { ok: false, fieldErrors: { file: ['画像は 10MB 以下にしてください。'] } };
+    }
+
+    uploadedUrl = await store.uploadImage(
+      { bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type, fileName: file.name },
+      'option-gallery'
+    );
+    const parsed = optionImageSchema.safeParse({
+      id: null,
+      option_id: optionId,
+      url: uploadedUrl,
+      alt: String(formData.get('alt') ?? '').trim() || option.name,
+      caption: nullableId(formData.get('caption')),
+      sort_order: formData.get('sort_order') || option.gallery_images?.length || 0,
+    });
+    if (!parsed.success) {
+      await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+    }
+
+    await store.upsertOptionImage(parsed.data);
+    revalidatePath('/admin/options/[id]', 'page');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: 'サブ画像を追加しました。' };
+  } catch (e) {
+    if (uploadedUrl) {
+      try {
+        const store = await getStore();
+        await store.deleteUploadedImage(uploadedUrl);
+      } catch {
+        // 元のエラーを優先する
+      }
+    }
+    return errState(e);
+  }
+}
+
+export async function updateOptionImageAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  const imageId = String(formData.get('id') ?? '').trim();
+  if (!optionId || !imageId) return { ok: false, error: '商品画像が指定されていません。' };
+
+  try {
+    const { store, option } = await editableOptionContext(actor, optionId);
+    const existing = option.gallery_images?.find((row) => row.id === imageId);
+    if (!existing) return { ok: false, error: '商品画像が見つかりません。' };
+    const parsed = optionImageSchema.safeParse({
+      id: imageId,
+      option_id: optionId,
+      url: existing.url,
+      alt: String(formData.get('alt') ?? '').trim() || option.name,
+      caption: nullableId(formData.get('caption')),
+      sort_order: formData.get('sort_order') || 0,
+    });
+    if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+    await store.upsertOptionImage(parsed.data);
+    revalidatePath('/admin/options/[id]', 'page');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: 'サブ画像の表示設定を更新しました。' };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+export async function deleteOptionImageAction(formData: FormData): Promise<void> {
+  const actor = await requireStaff();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  const imageId = String(formData.get('id') ?? '').trim();
+  if (!optionId || !imageId) throw new StoreError('VALIDATION', '商品画像が指定されていません。');
+
+  const { store, option } = await editableOptionContext(actor, optionId);
+  const existing = option.gallery_images?.find((row) => row.id === imageId);
+  if (!existing) throw new StoreError('NOT_FOUND', '商品画像が見つかりません。');
+
+  const deleted = await store.deleteOptionImage(imageId);
+  if (deleted) {
+    try {
+      await store.deleteUploadedImage(deleted.url);
+    } catch (error) {
+      console.warn('[wing] option image storage cleanup failed', error);
+    }
+  }
+  revalidatePath('/admin/options/[id]', 'page');
+  updateTag(CATALOG_TAG);
+}
+
+export async function uploadOptionManufacturerDocumentAction(
+  _prev: AdminFormState,
+  formData: FormData
+): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  if (!optionId) return { ok: false, error: '商品が指定されていません。' };
+
+  let uploadedUrl: string | null = null;
+  try {
+    const { store, option } = await editableOptionContext(actor, optionId);
+    const file = formData.get('file');
+    if (!(file instanceof File) || file.size === 0) {
+      return { ok: false, fieldErrors: { file: ['メーカー資料PDFを選択してください。'] } };
+    }
+    const isPdfName = file.name.toLowerCase().endsWith('.pdf');
+    const isPdfType = !file.type || file.type === 'application/pdf';
+    if (!isPdfName || !isPdfType) {
+      return { ok: false, fieldErrors: { file: ['PDFファイルのみアップロードできます。'] } };
+    }
+    if (file.size > MAX_PRODUCT_DOCUMENT_BYTES) {
+      return { ok: false, fieldErrors: { file: ['メーカー資料PDFは 20MB 以下にしてください。'] } };
+    }
+
+    uploadedUrl = await store.uploadProductDocument(
+      { bytes: new Uint8Array(await file.arrayBuffer()), contentType: 'application/pdf', fileName: file.name },
+      `options/${optionId}`
+    );
+    await store.setOptionManufacturerDocument(optionId, uploadedUrl);
+
+    if (option.manufacturer_document_url && option.manufacturer_document_url !== uploadedUrl) {
+      try {
+        await store.deleteUploadedProductDocument(option.manufacturer_document_url);
+      } catch (error) {
+        console.warn('[wing] old product document cleanup failed', error);
+      }
+    }
+
+    revalidatePath('/admin/options/[id]', 'page');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: 'メーカー資料PDFを登録しました。' };
+  } catch (e) {
+    if (uploadedUrl) {
+      try {
+        const store = await getStore();
+        await store.deleteUploadedProductDocument(uploadedUrl);
+      } catch {
+        // 元のエラーを優先する
+      }
+    }
+    return errState(e);
+  }
+}
+
+export async function deleteOptionManufacturerDocumentAction(formData: FormData): Promise<void> {
+  const actor = await requireStaff();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  if (!optionId) throw new StoreError('VALIDATION', '商品が指定されていません。');
+
+  const { store, option } = await editableOptionContext(actor, optionId);
+  const currentUrl = option.manufacturer_document_url ?? null;
+  await store.setOptionManufacturerDocument(optionId, null);
+  if (currentUrl) {
+    try {
+      await store.deleteUploadedProductDocument(currentUrl);
+    } catch (error) {
+      console.warn('[wing] product document storage cleanup failed', error);
+    }
+  }
+  revalidatePath('/admin/options/[id]', 'page');
+  updateTag(CATALOG_TAG);
 }
 
 export async function deleteOptionAction(formData: FormData): Promise<void> {

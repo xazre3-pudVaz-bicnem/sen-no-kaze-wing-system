@@ -460,8 +460,11 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
       <input type="hidden" name="id" value={option?.id ?? ''} />
       <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
       <Status state={state} />
-      <div className="card space-y-5 p-6">
-        <p className="font-semibold">基本情報</p>
+      <section id="product-identification" className="card space-y-5 p-6 scroll-mt-6">
+        <div>
+          <p className="font-semibold">1. 商品特定</p>
+          <p className="mt-1 text-xs text-muted">商品名、カテゴリー、対象モデル、メーカー・型番を登録します。</p>
+        </div>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="名称" htmlFor="name" required errors={e.name}><Input id="name" name="name" defaultValue={option?.name} required data-testid="option-name" /></Field>
           <Field label="コード" htmlFor="code" required hint="英小文字・数字・ハイフン（一意）" errors={e.code}><Input id="code" name="code" defaultValue={option?.code} required /></Field>
@@ -482,41 +485,35 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
           <Field label="シリーズ・型番" htmlFor="model_no" errors={e.model_no}>
             <Input id="model_no" name="model_no" defaultValue={option?.model_no ?? ''} placeholder="例：サザナ HTシリーズ" />
           </Field>
+        </div>
+      </section>
+
+      <section id="product-details" className="card space-y-5 p-6 scroll-mt-6">
+        <div>
+          <p className="font-semibold">2. 商品の詳細</p>
+          <p className="mt-1 text-xs text-muted">お客様に見せる仕様・説明と、管理上の公開状態・表示順を設定します。</p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
           <Field label="サイズ・仕様" htmlFor="size_note" errors={e.size_note}>
             <Input id="size_note" name="size_note" defaultValue={option?.size_note ?? ''} placeholder="例：1616サイズ" />
           </Field>
           <Field label="位置づけ" htmlFor="highlight" hint="任意。標準候補／おすすめ候補など" errors={e.highlight}>
             <Input id="highlight" name="highlight" defaultValue={option?.highlight ?? ''} />
           </Field>
-          <Field label="メーカー参考価格（税別・表示のみ）" htmlFor="list_price" errors={e.list_price}>
-            <Input id="list_price" name="list_price" type="number" min={0} step={1} defaultValue={option?.list_price ?? ''} />
-          </Field>
-          <Field label="価格（税別・円）" htmlFor="price" required errors={e.price}><Input id="price" name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" /></Field>
-          <Field label="表示順" htmlFor="sort_order" errors={e.sort_order}><Input id="sort_order" name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} /></Field>
-          <Field label="選択方式（表示）" htmlFor="selection_type" errors={e.selection_type}>
-            <Select id="selection_type" name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>
-              <option value="checkbox">チェックボックス</option><option value="radio">ラジオボタン</option>
-            </Select>
-          </Field>
           <Field label="公開状態" htmlFor="status" required errors={e.status}>
             <Select id="status" name="status" defaultValue={option?.status ?? 'published'}>
               <option value="published">公開</option><option value="draft">非公開</option>
             </Select>
           </Field>
+          <Field label="表示順" htmlFor="sort_order" errors={e.sort_order}><Input id="sort_order" name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} /></Field>
         </div>
         <Field label="説明" htmlFor="description" errors={e.description}><Textarea id="description" name="description" defaultValue={option?.description ?? ''} className="min-h-24" /></Field>
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-          <Checkbox name="is_default" defaultChecked={option?.is_default} label="初期状態で選択（おすすめ構成）" />
-          <Checkbox name="is_required" defaultChecked={option?.is_required} label="必須（解除不可）" />
-          <Checkbox name="is_installation" defaultChecked={option?.is_installation} label="設置関連費用として集計" />
-          <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
-        </div>
-      </div>
+      </section>
 
-      <div className="card space-y-5 p-6">
+      <section id="customer-materials-main" className="card space-y-5 p-6 scroll-mt-6">
         <div>
-          <p className="font-semibold">メイン画像・プレビュー</p>
-          <p className="mt-1 text-xs text-muted">メイン画像は商品詳細と見積書の商品画像に利用します。サブ画像とメーカー資料は保存後、この画面下部で管理します。</p>
+          <p className="font-semibold">3. お客様資料</p>
+          <p className="mt-1 text-xs text-muted">メイン画像とシミュレーター表示を設定します。サブ画像とメーカー資料PDFは保存後、この画面下部で追加できます。</p>
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="メイン画像（ファイル）" htmlFor="image_file"><Input id="image_file" name="image_file" type="file" accept="image/*" className="py-2" /></Field>
@@ -528,6 +525,20 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
               {VIEW_KEYS.map((v) => <Checkbox key={v} name="affects_views" value={v} defaultChecked={option?.affects_views.includes(v)} label={VIEW_LABELS[v]} />)}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="customer-selection" className="card space-y-5 p-6 scroll-mt-6">
+        <div>
+          <p className="font-semibold">4. お客様選択</p>
+          <p className="mt-1 text-xs text-muted">選び方、標準・必須設定、対象仕様、前提条件・同時選択不可を設定します。</p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="選択方式（表示）" htmlFor="selection_type" errors={e.selection_type}>
+            <Select id="selection_type" name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>
+              <option value="checkbox">チェックボックス</option><option value="radio">ラジオボタン</option>
+            </Select>
+          </Field>
           <div>
             <p className="label">対応する仕様</p>
             <p className="mb-2 text-xs text-muted">すべて未選択なら全仕様で表示されます。</p>
@@ -538,34 +549,55 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
             </div>
           </div>
         </div>
-      </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          <Checkbox name="is_default" defaultChecked={option?.is_default} label="初期状態で選択（おすすめ構成）" />
+          <Checkbox name="is_required" defaultChecked={option?.is_required} label="必須（解除不可）" />
+          <Checkbox name="is_installation" defaultChecked={option?.is_installation} label="設置関連費用として集計" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-xl border border-line bg-ivory/40 p-4 space-y-3">
+            <p className="font-semibold">選択に必要な前提オプション</p>
+            <p className="text-xs text-muted">選択時に自動追加され、前提を先に外すことはできなくなります。</p>
+            <ul className="max-h-72 space-y-2 overflow-y-auto">
+              {others.map((o) => (
+                <li key={o.id} className="space-y-1">
+                  <Checkbox name="requires" value={o.id} defaultChecked={depMap.has(o.id)} label={o.name} />
+                  <Input name={`requires_message_${o.id}`} defaultValue={depMap.get(o.id)?.message ?? ''} placeholder="表示メッセージ（任意）" className="min-h-9 text-xs" />
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-line bg-ivory/40 p-4 space-y-3">
+            <p className="font-semibold">同時に選択できないオプション</p>
+            <p className="text-xs text-muted">相手が選択中のとき、このオプションは理由付きで選べなくなります。</p>
+            <ul className="max-h-72 space-y-2 overflow-y-auto">
+              {others.map((o) => (
+                <li key={o.id} className="space-y-1">
+                  <Checkbox name="conflicts" value={o.id} defaultChecked={confMap.has(o.id)} label={o.name} />
+                  <Input name={`conflicts_message_${o.id}`} defaultValue={confMap.get(o.id)?.message ?? ''} placeholder="表示メッセージ（任意）" className="min-h-9 text-xs" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card space-y-3 p-6">
-          <p className="font-semibold">選択に必要な前提オプション</p>
-          <p className="text-xs text-muted">選択時に自動追加され、前提を先に外すことはできなくなります。</p>
-          <ul className="max-h-72 space-y-2 overflow-y-auto">
-            {others.map((o) => (
-              <li key={o.id} className="space-y-1">
-                <Checkbox name="requires" value={o.id} defaultChecked={depMap.has(o.id)} label={o.name} />
-                <Input name={`requires_message_${o.id}`} defaultValue={depMap.get(o.id)?.message ?? ''} placeholder="表示メッセージ（任意）" className="min-h-9 text-xs" />
-              </li>
-            ))}
-          </ul>
+      <section id="price-settings" className="card space-y-5 p-6 scroll-mt-6">
+        <div>
+          <p className="font-semibold">5. 価格設定</p>
+          <p className="mt-1 text-xs text-muted">メーカー参考価格と、お客様見積に使う追加金額を管理します。</p>
         </div>
-        <div className="card space-y-3 p-6">
-          <p className="font-semibold">同時に選択できないオプション</p>
-          <p className="text-xs text-muted">相手が選択中のとき、このオプションは理由付きで選べなくなります。</p>
-          <ul className="max-h-72 space-y-2 overflow-y-auto">
-            {others.map((o) => (
-              <li key={o.id} className="space-y-1">
-                <Checkbox name="conflicts" value={o.id} defaultChecked={confMap.has(o.id)} label={o.name} />
-                <Input name={`conflicts_message_${o.id}`} defaultValue={confMap.get(o.id)?.message ?? ''} placeholder="表示メッセージ（任意）" className="min-h-9 text-xs" />
-              </li>
-            ))}
-          </ul>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="メーカー参考価格（税別・表示のみ）" htmlFor="list_price" errors={e.list_price}>
+            <Input id="list_price" name="list_price" type="number" min={0} step={1} defaultValue={option?.list_price ?? ''} />
+          </Field>
+          <Field label="追加金額（税別・円）" htmlFor="price" required hint="標準との差額ではなく、この商品を選んだときの追加金額" errors={e.price}>
+            <Input id="price" name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
+          </Field>
         </div>
-      </div>
+        <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
+      </section>
+
       <SubmitButton pending={pending} />
     </form>
   );

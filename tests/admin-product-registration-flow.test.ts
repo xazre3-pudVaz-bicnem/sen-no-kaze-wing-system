@@ -33,6 +33,16 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('通常は変更不要');
   });
 
+
+  it('編集画面は3領域をタブで切り替え、1つだけ表示する', () => {
+    expect(editPage).toContain("requestedTab === 'customer' || requestedTab === 'sales'");
+    expect(editPage).toContain("href={\`?tab=\${key}\`}");
+    expect(editPage).toContain("tab === 'product'");
+    expect(editPage).toContain("tab === 'customer'");
+    expect(editPage).toContain("tab === 'sales'");
+    expect(editPage).toContain("aria-current={active ? 'page' : undefined}");
+  });
+
   it('既存の商品保存フィールドを維持する', () => {
     for (const name of [
       'name',

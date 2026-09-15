@@ -36,6 +36,36 @@ export default async function EditOptionPage({ params, searchParams }: { params:
     >
       <BackLink href="/admin/options" label="一覧へ戻る" />
       <FlashMessages sp={sp} />
+      <section className="card p-4 sm:p-5" aria-label="商品登録フロー">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="font-semibold">商品登録フロー</h2>
+            <p className="mt-1 text-xs text-muted">現在の画面で1〜5まで設定できます。6・7は後続工程で整備します。</p>
+          </div>
+          <span className="text-xs text-muted">保存しながら順番に確認できます</span>
+        </div>
+        <ol className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+          {[
+            ['1', '商品特定', '#product-identification'],
+            ['2', '商品の詳細', '#product-details'],
+            ['3', 'お客様資料', '#customer-materials-main'],
+            ['4', 'お客様選択', '#customer-selection'],
+            ['5', '価格設定', '#price-settings'],
+          ].map(([no, label, href]) => (
+            <li key={no}>
+              <a href={href} className="block rounded-lg border border-line bg-white px-3 py-2 text-sm hover:border-brown">
+                <span className="mr-1 text-xs text-muted">{no}.</span>{label}
+              </a>
+            </li>
+          ))}
+          <li className="rounded-lg border border-dashed border-line px-3 py-2 text-sm text-muted">
+            <span className="mr-1 text-xs">6.</span>発注内容確認
+          </li>
+          <li className="rounded-lg border border-dashed border-line px-3 py-2 text-sm text-muted">
+            <span className="mr-1 text-xs">7.</span>お客様画面最終確認
+          </li>
+        </ol>
+      </section>
       <OptionForm option={option} categories={categories} models={models} allOptions={options} dependencies={deps} conflicts={confs} />
       <OptionMediaManager option={option} />
     </AdminPage>

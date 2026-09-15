@@ -228,7 +228,7 @@ export async function confirmLegacyBaseMigrationFireSpecAction(formData: FormDat
     p_review_note: parsed.data.review_note,
   });
   if (error) {
-    redirect(\`\${migrationUrl(parsed.data.batch_id)}&error=\${encodeURIComponent(errorMessage(error))}\`);
+    redirect(`${migrationUrl(parsed.data.batch_id)}&error=${encodeURIComponent(errorMessage(error))}`);
   }
 
   revalidatePath('/admin/base-migration');
@@ -248,7 +248,7 @@ export async function finalizeLegacyBaseDraftValidationAction(formData: FormData
     p_batch_id: parsed.data,
   });
   if (error) {
-    redirect(\`\${migrationUrl(parsed.data)}&error=\${encodeURIComponent(errorMessage(error))}\`);
+    redirect(`${migrationUrl(parsed.data)}&error=${encodeURIComponent(errorMessage(error))}`);
   }
 
   revalidatePath('/admin/base-migration');
@@ -268,7 +268,7 @@ export async function publishLegacyBaseMigrationBatchAction(formData: FormData):
     p_batch_id: parsed.data,
   });
   if (error) {
-    redirect(\`\${migrationUrl(parsed.data)}&error=\${encodeURIComponent(errorMessage(error))}\`);
+    redirect(`${migrationUrl(parsed.data)}&error=${encodeURIComponent(errorMessage(error))}`);
   }
 
   revalidatePath('/admin/base-migration');

@@ -57,6 +57,7 @@ import {
   type EstimateTemplateImportInput,
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
+import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -733,22 +734,41 @@ export class SupabaseStore implements DataStore {
     if (up.error) throw new StoreError('INTERNAL', up.error.message);
     return admin.storage.from('product-images').getPublicUrl(storagePath).data.publicUrl;
   }
-  async uploadProductDocument(file: UploadInput, folder: string) {
+  async uploadOptionImage(file: UploadInput, optionId: string) {
     const admin = createAdminClient();
-    const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'documents';
-    const storagePath = `${safeFolder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.pdf`;
+    const ext = (file.fileName.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const storagePath = `${optionMediaPrefix(optionId, 'gallery')}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    const up = await admin.storage.from('product-images').upload(storagePath, file.bytes, { contentType: file.contentType, upsert: false });
+    if (up.error) throw new StoreError('INTERNAL', up.error.message);
+    return admin.storage.from('product-images').getPublicUrl(storagePath).data.publicUrl;
+  }
+  async deleteUploadedOptionImage(url: string, optionId: string) {
+    let storagePath: string;
+    try {
+      storagePath = assertOwnedPublicStoragePath(url, 'product-images', optionId, 'gallery');
+    } catch (error) {
+      throw new StoreError('FORBIDDEN', error instanceof Error ? error.message : '商品画像の削除先が正しくありません');
+    }
+    const admin = createAdminClient();
+    const { error } = await admin.storage.from('product-images').remove([storagePath]);
+    if (error) throw new StoreError('INTERNAL', error.message);
+  }
+  async uploadProductDocument(file: UploadInput, optionId: string) {
+    const admin = createAdminClient();
+    const storagePath = `${optionMediaPrefix(optionId, 'manufacturer')}${Date.now()}-${Math.random().toString(36).slice(2, 10)}.pdf`;
     const up = await admin.storage
       .from('product-documents')
       .upload(storagePath, file.bytes, { contentType: 'application/pdf', upsert: false });
     if (up.error) throw new StoreError('INTERNAL', up.error.message);
     return admin.storage.from('product-documents').getPublicUrl(storagePath).data.publicUrl;
   }
-  async deleteUploadedProductDocument(url: string) {
-    const marker = '/storage/v1/object/public/product-documents/';
-    const at = url.indexOf(marker);
-    if (at < 0) return;
-    const storagePath = decodeURIComponent(url.slice(at + marker.length));
-    if (!storagePath) return;
+  async deleteUploadedProductDocument(url: string, optionId: string) {
+    let storagePath: string;
+    try {
+      storagePath = assertOwnedPublicStoragePath(url, 'product-documents', optionId, 'manufacturer');
+    } catch (error) {
+      throw new StoreError('FORBIDDEN', error instanceof Error ? error.message : 'メーカー資料の削除先が正しくありません');
+    }
     const admin = createAdminClient();
     const { error } = await admin.storage.from('product-documents').remove([storagePath]);
     if (error) throw new StoreError('INTERNAL', error.message);

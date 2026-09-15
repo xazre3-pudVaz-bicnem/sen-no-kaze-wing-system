@@ -18,6 +18,7 @@ vi.mock('@/lib/data/store', () => ({ isLocalMode: mocks.isLocalMode }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }));
 
 import {
+  materializeLegacyBaseDraftsAction,
   resolveLegacyEstimateDuplicateAction,
   setLegacyBaseMappingDecisionAction,
   setLegacyBaseSpecMappingAction,
@@ -121,6 +122,19 @@ describe('旧本体移行監査Server Action', () => {
       p_expected_version: 4,
       p_resolution: 'use_existing',
     });
+  });
+
+  it('readyバッチから新本体Draft作成RPCを呼ぶ', async () => {
+    const form = new FormData();
+    form.set('batch_id', batchId);
+
+    await expect(materializeLegacyBaseDraftsAction(form))
+      .rejects.toThrow(`REDIRECT:/admin/base-migration?batch=${batchId}&drafted=1`);
+
+    expect(mocks.rpc).toHaveBeenCalledWith('materialize_legacy_base_migration_drafts', {
+      p_batch_id: batchId,
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/admin/base-masters');
   });
 
   it('DBのCONFLICTメッセージを利用者へ返す', async () => {

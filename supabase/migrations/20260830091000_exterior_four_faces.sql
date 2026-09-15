@@ -149,7 +149,7 @@ begin
     src.preview_image_url,
     src.notes,
     src.finish_level,
-    src.spec_code,
+    case when v_model_slug = 'wing-01' then v_effective_spec else src.spec_code end,
     src.exterior_faces
   ) returning id into v_id;
 

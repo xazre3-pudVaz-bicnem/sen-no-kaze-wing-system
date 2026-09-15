@@ -202,24 +202,33 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const exteriorWallOptions = hasCurrentExteriorCatalog
     ? allExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
     : allExteriorWallOptions;
-  // 保存済みConfigurationは旧外壁商品も復元対象にする。
-  // 新規作成・仕様変更時だけ current の商品候補へ限定する。
-  const initialExteriorWallOptions = initial ? allExteriorWallOptions : exteriorWallOptions;
-
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
   const [variantIds, setVariantIds] = useState<string[]>(initialVariants);
-  const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() =>
-    normalizeExteriorFaces(
-      initial?.exterior_faces,
-      initialExteriorWallOptions,
+  const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() => {
+    // 保存済み旧Configurationの exterior_faces=[] は従来1商品方式を表す互換状態。
+    // 外壁を明示変更するまで [] を維持し、価格や保存内容を4面方式へ自動変換しない。
+    if (initial) {
+      if (initial.exterior_faces.length === 0) return [];
+      return normalizeExteriorFaces(
+        initial.exterior_faces,
+        allExteriorWallOptions,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        initialSelection,
+        initialVariants
+      );
+    }
+    return normalizeExteriorFaces(
+      undefined,
+      exteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
       initialSelection,
       initialVariants
-    )
-  );
+    );
+  });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);

@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 const migration = read('supabase/migrations/20260915012500_standard_estimate_foundation.sql');
 const exteriorFacesMigration = read('supabase/migrations/20260830091000_exterior_four_faces.sql');
+const legacyEstimateMigration = read('supabase/migrations/20260911020000_estimate_templates.sql');
+const standardEstimatePricing = read('lib/domain/standard-estimate-pricing.ts');
 
 function tableBlock(table: string): string {
   const startMarker = 'create table if not exists public.' + table + ' (';
@@ -119,6 +121,10 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(block).toContain("source_kind = 'ui' and tax = floor(subtotal::numeric * tax_rate)::integer");
     expect(block).toContain("source_kind = 'legacy_excel'");
     expect(block).toContain('abs(subtotal::numeric * tax_rate - tax::numeric) < 1');
+    expect(standardEstimatePricing).toContain('Math.floor(subtotal * template.template.tax_rate)');
+    expect(legacyEstimateMigration).toContain(
+      "abs((t ->> 'subtotal')::numeric * (t ->> 'tax_rate')::numeric - (t ->> 'tax')::numeric) >= 1"
+    );
     expect(block).toContain('check (total = subtotal + tax)');
     expect(block).toContain('standard_adjustment_amount = 0');
     expect(block).toContain('standard_adjustment_reason');

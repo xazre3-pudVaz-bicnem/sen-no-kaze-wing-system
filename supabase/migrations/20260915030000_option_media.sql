@@ -23,6 +23,30 @@ create table if not exists public.option_images (
 create index if not exists option_images_option_sort_idx
   on public.option_images(option_id, sort_order, id);
 
+-- DBを直接操作されても、別optionのStorage URLを紐付けられないようにする。
+alter table public.option_images
+  drop constraint if exists option_images_owned_storage_url_check;
+alter table public.option_images
+  add constraint option_images_owned_storage_url_check
+  check (
+    position(
+      '/storage/v1/object/public/product-images/option-' || option_id::text || '/gallery/'
+      in url
+    ) > 0
+  );
+
+alter table public.options
+  drop constraint if exists options_manufacturer_document_owned_url_check;
+alter table public.options
+  add constraint options_manufacturer_document_owned_url_check
+  check (
+    manufacturer_document_url is null
+    or position(
+      '/storage/v1/object/public/product-documents/option-' || id::text || '/manufacturer/'
+      in manufacturer_document_url
+    ) > 0
+  );
+
 alter table public.option_images enable row level security;
 
 grant select on public.option_images to anon, authenticated;

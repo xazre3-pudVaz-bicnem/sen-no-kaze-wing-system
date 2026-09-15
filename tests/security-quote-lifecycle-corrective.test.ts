@@ -32,9 +32,12 @@ const compatibilityTest = fs.readFileSync(
 function functionBody(source: string, functionName: string): string {
   const start = source.indexOf(`create or replace function public.${functionName}`);
   expect(start, `${functionName} definition`).toBeGreaterThanOrEqual(0);
-  const end = source.indexOf('\n$$;', start);
-  expect(end, `${functionName} terminator`).toBeGreaterThan(start);
-  return source.slice(start, end + 4);
+  const tail = source.slice(start);
+  const terminator = tail.match(/\n(?:end;?\s*)?\$\$;/);
+  expect(terminator?.index, `${functionName} terminator`).toBeTypeOf('number');
+  const end = start + (terminator?.index ?? -1) + (terminator?.[0].length ?? 0);
+  expect(end, `${functionName} terminator position`).toBeGreaterThan(start);
+  return source.slice(start, end);
 }
 
 const sourceBodies = new Map<string, string>([

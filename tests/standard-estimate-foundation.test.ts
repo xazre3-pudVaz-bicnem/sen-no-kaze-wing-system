@@ -7,10 +7,13 @@ const migration = read('supabase/migrations/20260915012500_standard_estimate_fou
 const exteriorFacesMigration = read('supabase/migrations/20260830091000_exterior_four_faces.sql');
 
 function tableBlock(table: string): string {
-  const pattern = 'create table if not exists public\\\\.' + table + ' \\\\(([\\\\s\\\\S]*?)\\\\n\\\\);';
-  const match = migration.match(new RegExp(pattern, 'i'));
-  expect(match, table + ' definition').not.toBeNull();
-  return match?.[1] ?? '';
+  const startMarker = 'create table if not exists public.' + table + ' (';
+  const start = migration.indexOf(startMarker);
+  expect(start, table + ' definition start').toBeGreaterThanOrEqual(0);
+  const bodyStart = start + startMarker.length;
+  const end = migration.indexOf('\n);', bodyStart);
+  expect(end, table + ' definition end').toBeGreaterThan(bodyStart);
+  return migration.slice(bodyStart, end);
 }
 
 describe('Standard Estimate Master / Revision DB基盤契約', () => {
@@ -216,7 +219,10 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
       'configurations',
       'configuration_items',
     ]) {
-      const pattern = '(?:alter\\\\s+table|update|delete\\\\s+from|insert\\\\s+into|truncate\\\\s+table)\\\\s+public\\\\.' + table + '\\\\b';
+      const pattern =
+        '(?:alter\\s+table|update|delete\\s+from|insert\\s+into|truncate\\s+table)\\s+public\\.' +
+        table +
+        '\\b';
       expect(migration).not.toMatch(new RegExp(pattern, 'i'));
     }
     expect(migration).not.toContain('recalculate_configuration');

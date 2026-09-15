@@ -42,11 +42,11 @@ declare
 begin
   with expected(option_code, category_code, required_spec_codes) as (
     values
-      ('insulation-floor-mirafoam-90', '{}'::text[], 'insulation-floor'),
-      ('insulation-wall-styrofoam-90-hotel-base', array['hotel']::text[], 'insulation-wall'),
-      ('insulation-wall-glasswool-90-standard', array['residence','office']::text[], 'insulation-wall'),
-      ('insulation-ceiling-styrofoam-90-hotel-base', array['hotel']::text[], 'insulation-ceiling'),
-      ('insulation-ceiling-glasswool-90-standard', array['residence','office']::text[], 'insulation-ceiling')
+      ('insulation-floor-mirafoam-90', 'insulation-floor', '{}'::text[]),
+      ('insulation-wall-styrofoam-90-hotel-base', 'insulation-wall', array['hotel']::text[]),
+      ('insulation-wall-glasswool-90-standard', 'insulation-wall', array['residence','office']::text[]),
+      ('insulation-ceiling-styrofoam-90-hotel-base', 'insulation-ceiling', array['hotel']::text[]),
+      ('insulation-ceiling-glasswool-90-standard', 'insulation-ceiling', array['residence','office']::text[])
   ),
   invalid as (
     select e.option_code
@@ -305,6 +305,7 @@ alter function public.configuration_master_section_total(uuid, text) set search_
 alter function public.estimate_baseline_master_section_total(uuid, text) set search_path = '';
 alter function public.recalculate_configuration(uuid) set search_path = '';
 alter function public.create_quote_from_configuration(uuid, jsonb, text) set search_path = '';
+alter function public.respond_to_quote(uuid, text) set search_path = '';
 
 -- -----------------------------------------------------------------
 -- 4. Quote Revision lifecycle: issued のみ改訂可能
@@ -517,6 +518,8 @@ revoke execute on function public.create_quote_from_configuration(uuid, jsonb, t
   from public, anon, authenticated, service_role;
 revoke execute on function public.create_quote_revision(uuid, jsonb, text)
   from public, anon, authenticated, service_role;
+revoke execute on function public.respond_to_quote(uuid, text)
+  from public, anon, authenticated, service_role;
 
 -- internal helper はregrantしない:
 --   replace_estimate_templates
@@ -526,5 +529,6 @@ grant execute on function public.replace_estimate_templates_with_baselines(jsonb
 grant execute on function public.recalculate_configuration(uuid) to authenticated;
 grant execute on function public.create_quote_from_configuration(uuid, jsonb, text) to authenticated;
 grant execute on function public.create_quote_revision(uuid, jsonb, text) to authenticated;
+grant execute on function public.respond_to_quote(uuid, text) to authenticated;
 
 commit;

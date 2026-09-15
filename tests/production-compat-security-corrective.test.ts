@@ -39,7 +39,7 @@ describe('production compatibility / security corrective migration', () => {
   it('現在mainの最新migrationより後ろのforward-only migrationとして追加されている', () => {
     expect(path.basename(migrationPath)).toBe('20260915062400_production_compat_security_corrective.sql');
     expect(fs.existsSync(path.join(root, 'supabase/migrations/20260915030000_option_media.sql'))).toBe(true);
-    expect('20260915062400').toBeGreaterThan('20260915030000');
+    expect(Number('20260915062400')).toBeGreaterThan(Number('20260915030000'));
   });
 
   it('Wing Draftだけを対象にrequired断熱を不足categoryだけ補完する', () => {

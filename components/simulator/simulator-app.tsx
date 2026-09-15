@@ -39,6 +39,8 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
+import { PREFECTURES } from '@/lib/domain/address';
+import { MUNICIPALITIES_BY_PREFECTURE } from '@/lib/domain/municipalities';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
@@ -90,6 +92,13 @@ interface Draft {
 }
 
 const storageKey = (slug: string) => `wing:sim:${slug}`;
+const installationLocationStorageKey = 'wing:sim:installation-location';
+const INSTALLATION_LOCATION_UNDECIDED = '__undecided__';
+
+interface InstallationLocationDraft {
+  prefecture: string;
+  municipality: string;
+}
 
 const sameSelection = (a: string[], b: string[]) => {
   const aa = [...new Set(a)].sort();
@@ -239,6 +248,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     );
   });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
+  const [installationPrefecture, setInstallationPrefecture] = useState('');
+  const [installationMunicipality, setInstallationMunicipality] = useState('');
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
@@ -278,6 +289,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     '';
   const planDisplayName = customerPlanName(activePreset, specName);
   const planSize = planDisplaySizeFromSpecs(model.specs);
+  const installationMunicipalities =
+    installationPrefecture && installationPrefecture !== INSTALLATION_LOCATION_UNDECIDED
+      ? (MUNICIPALITIES_BY_PREFECTURE[installationPrefecture] ?? [])
+      : [];
 
   const pushToast = useCallback((message: string, tone: Toast['tone'] = 'info') => {
     const tid = `${Date.now()}-${Math.random()}`;
@@ -405,6 +420,26 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     } catch {
       /* ignore */
     }
+
+    try {
+      const rawLocation = window.localStorage.getItem(installationLocationStorageKey);
+      const location: InstallationLocationDraft | null = rawLocation ? JSON.parse(rawLocation) : null;
+      if (location?.prefecture === INSTALLATION_LOCATION_UNDECIDED) {
+        setInstallationPrefecture(INSTALLATION_LOCATION_UNDECIDED);
+        setInstallationMunicipality('');
+      } else if (location?.prefecture && PREFECTURES.includes(location.prefecture)) {
+        const municipalities = MUNICIPALITIES_BY_PREFECTURE[location.prefecture] ?? [];
+        setInstallationPrefecture(location.prefecture);
+        setInstallationMunicipality(
+          location.municipality && municipalities.includes(location.municipality)
+            ? location.municipality
+            : ''
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -433,6 +468,15 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   useEffect(() => {
     if (hydrated) persistDraft();
   }, [hydrated, persistDraft]);
+
+  useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    const location: InstallationLocationDraft = {
+      prefecture: installationPrefecture,
+      municipality: installationMunicipality,
+    };
+    window.localStorage.setItem(installationLocationStorageKey, JSON.stringify(location));
+  }, [hydrated, installationMunicipality, installationPrefecture]);
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {
@@ -988,6 +1032,61 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
                   </button>
                 ))}
               </div>
+
+              <div
+                className="mt-3 rounded-lg border border-line bg-white/70 px-3 py-2.5 sm:px-4"
+                data-testid="installation-location-picker"
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+                  <div className="shrink-0 pt-0.5 sm:w-24">
+                    <p className="text-[0.78rem] font-semibold text-ink">設置予定地</p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <select
+                        value={installationPrefecture}
+                        onChange={(e) => {
+                          setInstallationPrefecture(e.target.value);
+                          setInstallationMunicipality('');
+                        }}
+                        className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-[0.86rem] text-ink"
+                        aria-label="設置予定地の都道府県"
+                        data-testid="installation-prefecture-select"
+                      >
+                        <option value="">都道府県を選択</option>
+                        <option value={INSTALLATION_LOCATION_UNDECIDED}>設置予定地は未定</option>
+                        {PREFECTURES.map((prefecture) => (
+                          <option key={prefecture} value={prefecture}>
+                            {prefecture}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={installationMunicipality}
+                        onChange={(e) => setInstallationMunicipality(e.target.value)}
+                        disabled={
+                          !installationPrefecture ||
+                          installationPrefecture === INSTALLATION_LOCATION_UNDECIDED
+                        }
+                        className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-[0.86rem] text-ink disabled:cursor-not-allowed disabled:bg-paper disabled:text-muted"
+                        aria-label="設置予定地の市区町村"
+                        data-testid="installation-municipality-select"
+                      >
+                        <option value="">市区町村を選択</option>
+                        {installationMunicipalities.map((municipality) => (
+                          <option key={municipality} value={municipality}>
+                            {municipality}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="mt-1.5 text-[0.72rem] leading-relaxed text-muted">
+                      設置地域に応じて必要な仕様をご案内します。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
             </div>
 

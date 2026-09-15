@@ -52,12 +52,16 @@ describe('本番migration前のConfiguration互換', () => {
 
   it('正式履歴を複製したWing Draftへ不足している独立断熱だけを補完する', () => {
     expect(exteriorSql).toContain("v_model_slug = 'wing-01'");
+    expect(exteriorSql).toContain("count(distinct cat.code) = 3");
+    expect(exteriorSql).toContain("cat.code in ('insulation-floor', 'insulation-wall', 'insulation-ceiling')");
+    expect(exteriorSql).toContain("not v_has_complete_independent_insulation");
     expect(exteriorSql).toContain("v_effective_spec not in ('hotel', 'residence', 'office')");
     expect(exteriorSql).toContain("o.code = 'insulation-upgrade-wing'");
     expect(exteriorSql).toContain("case when v_model_slug = 'wing-01' then v_effective_spec else src.spec_code end");
     expect(exteriorSql).toContain("'insulation-floor'::text, 'insulation-floor-mirafoam-90'::text");
     expect(exteriorSql).toContain("'insulation-wall'::text");
     expect(exteriorSql).toContain("'insulation-ceiling'::text");
+    expect(exteriorSql).toContain("if v_model_slug = 'wing-01' and not v_has_complete_independent_insulation then");
     expect(exteriorSql).toContain('existing_category.code = w.category_code');
     expect(exteriorSql).toContain('return public.recalculate_configuration(v_id)');
     expect(exteriorSql).toMatch(

@@ -63,6 +63,39 @@ create index if not exists legacy_base_migration_draft_outputs_batch_idx
 create index if not exists legacy_base_migration_line_links_output_idx
   on public.legacy_base_migration_line_links(draft_output_id, mapping_id);
 
+-- ---------- Publish安全ガード ----------
+-- このPRでは移行Draftを公開しない。既存の汎用Publish RPCからも誤公開できないよう、
+-- 後続Publish工程で防火区分確認を完了するまでDB側で拒否する。
+create or replace function public.prevent_unreviewed_legacy_base_migration_publish()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $publish_guard$
+begin
+  if old.status = 'draft'
+     and new.status = 'published'
+     and exists (
+       select 1
+         from public.legacy_base_migration_draft_outputs o
+        where o.revision_id = old.id
+          and o.fire_spec_review_required = true
+     )
+  then
+    raise exception 'LOCKED: 旧本体移行Draftは防火区分の確認が完了するまでPublishできません'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$publish_guard$;
+
+drop trigger if exists legacy_base_migration_publish_guard
+  on public.base_master_revisions;
+create trigger legacy_base_migration_publish_guard
+before update of status on public.base_master_revisions
+for each row execute function public.prevent_unreviewed_legacy_base_migration_publish();
+
 create or replace function public.legacy_base_migration_line_signature(
   p_section text,
   p_name text,
@@ -825,6 +858,8 @@ grant all privileges on table public.legacy_base_migration_draft_outputs,
                                public.legacy_base_migration_line_links
 to service_role;
 
+revoke all on function public.prevent_unreviewed_legacy_base_migration_publish()
+  from public, anon, authenticated;
 revoke all on function public.legacy_base_migration_line_signature(text, text, numeric, text, integer, integer, text, text)
   from public, anon, authenticated;
 revoke all on function public.validate_legacy_base_draft_materialization(uuid)

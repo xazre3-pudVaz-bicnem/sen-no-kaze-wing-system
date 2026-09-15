@@ -210,7 +210,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() =>
     normalizeExteriorFaces(
       initial?.exterior_faces,
-      exteriorWallOptions,
+      allExteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
       initialSelection,
@@ -349,7 +349,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           setExteriorFaces(
             normalizeExteriorFaces(
               draft.exteriorFaces,
-              exteriorWallOptions,
+              allExteriorWallOptions,
               bundle.variantGroups,
               bundle.variantChoices,
               restoredSelection,
@@ -1059,6 +1059,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         <ExteriorWallFacesDialog
           category={exteriorWallCat}
           options={exteriorWallOptions}
+          restorableOptions={allExteriorWallOptions}
           variantGroups={bundle.variantGroups}
           variantChoices={bundle.variantChoices}
           selectedOptionIds={selected}

@@ -42,6 +42,10 @@ export function ProductDetail({
   const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
   const galleryImages = [
     ...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),
+    ...(option.gallery_images ?? []).map((image) => ({
+      url: image.url,
+      label: image.caption?.trim() || image.alt?.trim() || '商品画像',
+    })),
     ...choices
       .filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))
       .map((choice) => ({

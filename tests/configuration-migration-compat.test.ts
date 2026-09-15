@@ -53,7 +53,7 @@ describe('本番migration前のConfiguration互換', () => {
   it('spec未設定の旧Configurationでも保存済みoption_idsを初期選択として維持する', () => {
     expect(simulatorSource).toContain('const preserveLegacyInitialSelection =');
     expect(simulatorSource).toContain('Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);');
-    expect(simulatorSource).toContain('? initial!.option_ids');
+    expect(simulatorSource).toContain('? (initial?.option_ids ?? initialBaselineIds)');
   });
 
   it('保存済みexterior_faces=[]は明示変更まで[]を維持する', () => {

@@ -18,11 +18,20 @@ describe('商品メディア migration', () => {
     expect(sql).not.toMatch(/drop\s+column\s+(if\s+exists\s+)?image_url/i);
   });
 
-  it('option_imagesは公開商品を読め、編集権限または所有者だけが書ける', () => {
+  it('options_adminはdealerの直接API更新を自分のfree-productだけに限定する', () => {
+    expect(sql).toContain('drop policy if exists options_admin on public.options');
+    expect(sql).toContain('create policy options_admin on public.options');
+    expect(sql).toContain('and owner_id = auth.uid()');
+    expect(sql).toContain("and c.code = 'free-product'");
+    expect(sql).toMatch(/with check[\s\S]*owner_id = auth\.uid\(\)[\s\S]*c\.code = 'free-product'/);
+  });
+
+  it('option_imagesは公開商品を読め、dealer writeは自分のfree-productだけに限定する', () => {
     expect(sql).toContain('alter table public.option_images enable row level security');
     expect(sql).toMatch(/o\.status\s*=\s*'published'/);
     expect(sql).toContain('public.can_edit_catalog()');
-    expect(sql).toContain('public.is_dealer() and o.owner_id = auth.uid()');
+    expect(sql).toMatch(/option_images_write[\s\S]*o\.owner_id = auth\.uid\(\)[\s\S]*c\.id = o\.category_id[\s\S]*c\.code = 'free-product'/);
+    expect(sql).toMatch(/with check[\s\S]*o\.owner_id = auth\.uid\(\)[\s\S]*c\.code = 'free-product'/);
   });
 
   it('メーカー資料はPDF専用の公開bucketとし、直接write policyを作らない', () => {

@@ -526,13 +526,16 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       const option = bundle.options.find((row) => row.id === id);
       return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
     });
-  const issues = useMemo(() => {
-    const currentIssues = validateSelection(ctx, selected, finishLevel);
-    if (!legacyReadOnlyWithoutIndependentInsulation) return currentIssues;
+  const validationIssues = useMemo(
+    () => validateSelection(ctx, selected, finishLevel),
+    [ctx, selected, finishLevel]
+  );
+  const displayIssues = useMemo(() => {
+    if (!legacyReadOnlyWithoutIndependentInsulation) return validationIssues;
 
     // migration前に確定した正式履歴には、新設した独立断熱required不足を警告表示しない。
-    // DBや選択内容は補完せず、表示上だけ過去履歴の意味を維持する。
-    return currentIssues.filter(
+    // DBや選択内容は補完せず、見積依頼などの検証条件も緩めず、表示だけ過去履歴の意味を維持する。
+    return validationIssues.filter(
       (issue) =>
         !(
           issue.type === 'required' &&
@@ -545,11 +548,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     );
   }, [
     bundle.options,
-    ctx,
-    finishLevel,
     independentInsulationCategoryIds,
     legacyReadOnlyWithoutIndependentInsulation,
-    selected,
+    validationIssues,
   ]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
@@ -781,8 +782,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     setDialog('save');
   };
   const handleQuoteClick = () => {
-    if (issues.length) {
-      pushToast(issues[0].message, 'warn');
+    if (validationIssues.length) {
+      pushToast(validationIssues[0].message, 'warn');
       return;
     }
     if (!user) return requireLogin('quote');
@@ -1063,9 +1064,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           onPickCategory={openPicker}
         />
 
-        {issues.length > 0 && (
+        {displayIssues.length > 0 && (
           <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">
-            {issues.map((i, idx) => (
+            {displayIssues.map((i, idx) => (
               <li key={idx}>{i.message}</li>
             ))}
           </ul>

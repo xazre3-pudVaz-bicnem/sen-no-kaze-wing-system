@@ -50,6 +50,12 @@ describe('本番migration前のConfiguration互換', () => {
     expect(exteriorSql).not.toMatch(/insert\s+into\s+public\.configuration_snapshots/i);
   });
 
+  it('spec未設定の旧Configurationでも保存済みoption_idsを初期選択として維持する', () => {
+    expect(simulatorSource).toContain('const preserveLegacyInitialSelection =');
+    expect(simulatorSource).toContain('Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);');
+    expect(simulatorSource).toContain('? initial!.option_ids');
+  });
+
   it('保存済みexterior_faces=[]は明示変更まで[]を維持する', () => {
     expect(simulatorSource).toContain('if (initial.exterior_faces.length === 0) return [];');
     expect(simulatorSource).toContain('外壁を明示変更するまで [] を維持');

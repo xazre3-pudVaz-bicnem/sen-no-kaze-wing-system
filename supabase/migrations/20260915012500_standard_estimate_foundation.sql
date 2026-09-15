@@ -459,7 +459,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if exists (
     select 1
@@ -477,7 +477,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists standard_estimate_masters_identity_immutable
 on public.standard_estimate_masters;
@@ -725,7 +725,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_master_id uuid;
   v_current_revision_id uuid;
@@ -770,7 +770,7 @@ begin
 
   return null;
 end;
-$;
+$$;
 
 drop trigger if exists standard_estimate_current_pointer_consistency
 on public.standard_estimate_revisions;

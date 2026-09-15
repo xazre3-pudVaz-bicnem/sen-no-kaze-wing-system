@@ -20,7 +20,10 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   category: OptionCategory;
+  /** 新規選択候補。legacy商品はここから除外する。 */
   options: ProductOption[];
+  /** 保存済み値の復元・表示用。legacy商品を含める。 */
+  restorableOptions: ProductOption[];
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   selectedOptionIds: string[];
@@ -34,6 +37,7 @@ interface Props {
 export function ExteriorWallFacesDialog({
   category,
   options,
+  restorableOptions,
   variantGroups,
   variantChoices,
   selectedOptionIds,
@@ -45,8 +49,8 @@ export function ExteriorWallFacesDialog({
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const normalized = useMemo(
-    () => normalizeExteriorFaces(current, options, variantGroups, variantChoices, selectedOptionIds, selectedVariantIds),
-    [current, options, variantGroups, variantChoices, selectedOptionIds, selectedVariantIds]
+    () => normalizeExteriorFaces(current, restorableOptions, variantGroups, variantChoices, selectedOptionIds, selectedVariantIds),
+    [current, restorableOptions, variantGroups, variantChoices, selectedOptionIds, selectedVariantIds]
   );
   const [faces, setFaces] = useState<ExteriorFaceSelection[]>(normalized);
   const [activeFace, setActiveFace] = useState<ExteriorFaceCode>(initialFace);
@@ -57,7 +61,10 @@ export function ExteriorWallFacesDialog({
   }, []);
 
   const active = faces.find((f) => f.face_code === activeFace);
-  const activeOption = options.find((o) => o.id === active?.option_id) ?? options[0];
+  const activeOption =
+    restorableOptions.find((o) => o.id === active?.option_id) ??
+    options[0] ??
+    restorableOptions[0];
   const activeGroups = activeOption
     ? visibleVariantGroups(
         variantGroups.filter((g) => g.option_id === activeOption.id),
@@ -96,7 +103,7 @@ export function ExteriorWallFacesDialog({
 
   const summary = (face: ExteriorFaceCode) => {
     const row = faces.find((f) => f.face_code === face);
-    const option = options.find((o) => o.id === row?.option_id);
+    const option = restorableOptions.find((o) => o.id === row?.option_id);
     if (!option) return '未選択';
     const variants = (row?.variant_choice_ids ?? [])
       .map((id) => variantChoices.find((c) => c.id === id)?.name)

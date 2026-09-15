@@ -44,26 +44,22 @@ describe('本番migration前のConfiguration互換', () => {
     expect(insulationSql).toContain('MIGRATION_BLOCKED: Wing Draftに断熱標準を自動判定できないspec_code');
   });
 
-  it('旧外壁はDraftだけ既存1商品を4面へ複製し正式履歴は変更しない', () => {
-    expect(exteriorSql).toContain("cfg.status = 'draft'");
-    expect(exteriorSql).toContain("cat.code = 'exterior-wall'");
-    expect(exteriorSql).toContain("cfg.exterior_faces = '[]'::jsonb");
-    for (const face of ['front', 'right', 'back', 'left']) {
-      expect(exteriorSql).toContain(`'face_code', '${face}'`);
-    }
-    expect(exteriorSql).not.toMatch(/cfg\.status\s+in\s*\([^)]*(quote_requested|closed)/i);
+  it('外壁migrationは既存Configurationを4面へ自動変換しない', () => {
+    expect(exteriorSql).toContain("add column if not exists exterior_faces jsonb not null default '[]'::jsonb");
+    expect(exteriorSql).not.toMatch(/update\s+public\.configurations[\s\S]*set\s+exterior_faces/i);
+    expect(exteriorSql).not.toMatch(/insert\s+into\s+public\.configuration_snapshots/i);
   });
 
-  it('複数旧外壁があるDraftは勝手に1つへ決めずmigrationを停止する', () => {
-    expect(exteriorSql).toContain('having count(*) > 1');
-    expect(exteriorSql).toContain('MIGRATION_BLOCKED: 1つのDraftに複数の旧外壁商品');
+  it('保存済みexterior_faces=[]は明示変更まで[]を維持する', () => {
+    expect(simulatorSource).toContain('if (initial.exterior_faces.length === 0) return [];');
+    expect(simulatorSource).toContain('外壁を明示変更するまで [] を維持');
   });
 
-  it('保存済みConfigurationはlegacy外壁を復元し、新規選択候補だけcurrentへ限定する', () => {
-    expect(simulatorSource).toContain('const initialExteriorWallOptions = initial ? allExteriorWallOptions : exteriorWallOptions;');
+  it('保存済みlegacy外壁は復元可能だが、新規選択候補はcurrentだけに限定する', () => {
     expect(simulatorSource).toContain('options={allExteriorWallOptions}');
     expect(simulatorSource).toContain('selectableOptions={exteriorWallOptions}');
     expect(dialogSource).toContain('const availableOptions = selectableOptions ?? options;');
+    expect(dialogSource).toContain('normalizeExteriorFaces(current, options');
     expect(dialogSource).toContain('options={availableOptions}');
   });
 });

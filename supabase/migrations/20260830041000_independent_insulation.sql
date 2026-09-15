@@ -3,7 +3,7 @@
 
 -- 既存Draftに旧有料断熱が選ばれている場合は、0円標準断熱へ自動変換せず停止する。
 -- spec_code が空の旧Draftは、現行シミュレーターと同じく先頭presetを有効仕様として扱う。
-do $
+do $migration$
 begin
   if exists (
     select 1
@@ -33,7 +33,7 @@ begin
       using errcode = 'P0001';
   end if;
 end
-$;
+$migration$;
 
 -- 旧「断熱仕様（3部位一括）」は互換用に残すが、お客様向け公開対象から外す。
 update public.option_categories

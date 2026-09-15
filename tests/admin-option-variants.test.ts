@@ -68,7 +68,7 @@ describe('管理画面の色・仕様管理', () => {
   it('商品編集画面から色・仕様管理へ接続する', () => {
     expect(editPage).toContain('OptionVariantManager');
     expect(editPage).toContain('store.getOptionVariants(id)');
-    expect(manager).toContain('4. お客様選択（色・仕様）');
+    expect(manager).toContain('2. お客様表示・選択');
     expect(manager).toContain('追加金額（税別・円）');
     expect(manager).toContain('表示条件（必要な場合だけ）');
   });

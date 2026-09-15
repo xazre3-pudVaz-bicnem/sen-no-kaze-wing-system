@@ -129,7 +129,7 @@ begin
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
   end if;
 
-  if p_mode not in ('regular', 'migration') then
+  if p_mode is null or p_mode not in ('regular', 'migration') then
     raise exception 'VALIDATION: Publish modeが不正です' using errcode = 'P0001';
   end if;
 
@@ -451,6 +451,7 @@ begin
          or o.migration_batch_id <> p_batch_id
          or m.review_status <> 'approved'
          or m.target_classification <> 'base'
+         or l.legacy_item_id is distinct from m.legacy_item_id
          or s.id is null
          or s.decision_status <> 'approved'
          or s.proposed_group_key is distinct from o.proposed_group_key
@@ -740,7 +741,7 @@ begin
     raise exception 'VALIDATION: 防火確認versionが不正です' using errcode = 'P0001';
   end if;
 
-  if p_fire_spec_code not in ('non_fire', 'fire') then
+  if p_fire_spec_code is null or p_fire_spec_code not in ('non_fire', 'fire') then
     raise exception 'VALIDATION: 防火区分が不正です' using errcode = 'P0001';
   end if;
 

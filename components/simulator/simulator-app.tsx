@@ -522,7 +522,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const legacyReadOnlyWithoutIndependentInsulation =
     readOnly &&
     Boolean(initial) &&
-    !initial!.option_ids.some((id) => {
+    !(initial?.option_ids ?? []).some((id) => {
       const option = bundle.options.find((row) => row.id === id);
       return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
     });

@@ -1,6 +1,40 @@
 -- Wing の断熱を「床・壁・天井」の独立選択に分離する。
 -- 現在の本体内訳に含まれる標準材は 0 円、標準からの変更で価格差が未確定の候補は別途見積とする。
 
+-- 既存Draftに旧有料断熱が選ばれている場合は、0円標準断熱へ自動変換せず停止する。
+-- spec_code が空の旧Draftは、現行シミュレーターと同じく先頭presetを有効仕様として扱う。
+do $migration$
+begin
+  if exists (
+    select 1
+    from public.configurations cfg
+    join public.base_models b on b.id = cfg.base_model_id
+    join public.configuration_items ci on ci.configuration_id = cfg.id
+    join public.options o on o.id = ci.option_id
+    where b.slug = 'wing-01'
+      and cfg.status = 'draft'
+      and o.code = 'insulation-upgrade-wing'
+  ) then
+    raise exception
+      'MIGRATION_BLOCKED: Wing Draftに旧有料断熱 insulation-upgrade-wing が選択されています。手動確認後に移行してください'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
+    from public.configurations cfg
+    join public.base_models b on b.id = cfg.base_model_id
+    where b.slug = 'wing-01'
+      and cfg.status = 'draft'
+      and coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code', '') not in ('hotel', 'residence', 'office')
+  ) then
+    raise exception
+      'MIGRATION_BLOCKED: Wing Draftに断熱標準を自動判定できないspec_codeがあります'
+      using errcode = 'P0001';
+  end if;
+end
+$migration$;
+
 -- 旧「断熱仕様（3部位一括）」は互換用に残すが、お客様向け公開対象から外す。
 update public.option_categories
 set status = 'draft'
@@ -75,6 +109,57 @@ on conflict (id) do update set
   size_note = excluded.size_note,
   highlight = excluded.highlight,
   updated_at = now();
+
+-- 既存Wing Draftだけに、現在の仕様に対応する標準0円断熱3項目を補完する。
+-- quote_requested / closed と既存snapshot・金額は変更しない。
+with draft_specs as (
+  select
+    cfg.id as configuration_id,
+    coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code', '') as effective_spec
+  from public.configurations cfg
+  join public.base_models b on b.id = cfg.base_model_id
+  where b.slug = 'wing-01'
+    and cfg.status = 'draft'
+),
+wanted as (
+  select configuration_id, 'insulation-floor-mirafoam-90'::text as option_code
+  from draft_specs
+  union all
+  select
+    configuration_id,
+    case
+      when effective_spec = 'hotel' then 'insulation-wall-styrofoam-90-hotel-base'
+      else 'insulation-wall-glasswool-90-standard'
+    end
+  from draft_specs
+  union all
+  select
+    configuration_id,
+    case
+      when effective_spec = 'hotel' then 'insulation-ceiling-styrofoam-90-hotel-base'
+      else 'insulation-ceiling-glasswool-90-standard'
+    end
+  from draft_specs
+)
+insert into public.configuration_items (
+  configuration_id,
+  option_id,
+  quantity,
+  variant_choice_ids
+)
+select
+  w.configuration_id,
+  o.id,
+  1,
+  '{}'::uuid[]
+from wanted w
+join public.options o on o.code = w.option_code
+where not exists (
+  select 1
+  from public.configuration_items ci
+  where ci.configuration_id = w.configuration_id
+    and ci.option_id = o.id
+);
 
 -- Wing のプリセットに、各仕様の標準断熱3項目を追加する。
 update public.base_models b

@@ -97,6 +97,14 @@ const sameSelection = (a: string[], b: string[]) => {
   return aa.length === bb.length && aa.every((id, index) => id === bb[index]);
 };
 
+const sameExteriorFaces = (a: ExteriorFaceSelection[], b: ExteriorFaceSelection[]) => {
+  const key = (face: ExteriorFaceSelection) =>
+    `${face.face_code}:${face.option_id}:${[...face.variant_choice_ids].sort().join(',')}`;
+  const aa = a.map(key).sort();
+  const bb = b.map(key).sort();
+  return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
+};
+
 /** 選ばれている商品ごとに、標準の選択肢を選ぶ（表示条件つきの項目は条件を満たすときだけ） */
 function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[] {
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
@@ -166,17 +174,18 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     simulatorSpecChoices[0]?.code ??
     'base';
   const initialLevel: FinishLevel =
-    validInitialSpecCode && initial?.finish_level
-      ? initial.finish_level
-      : finishLevelForEstimateSpec(defaultSpecCode);
+    initial?.finish_level ?? finishLevelForEstimateSpec(defaultSpecCode);
   const initialBaselineIds =
     specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaults;
+  const preserveLegacyInitialSelection =
+    Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);
   const initialSelection = normalizeWashbasinSelection(
     bundle.options,
     pruneToScope(
       ctx,
-      (validInitialSpecCode ? initial?.option_ids : null) ??
-        initialBaselineIds,
+      preserveLegacyInitialSelection
+        ? (initial?.option_ids ?? initialBaselineIds)
+        : initialBaselineIds,
       initialLevel
     ),
     initialBaselineIds
@@ -202,21 +211,33 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const exteriorWallOptions = hasCurrentExteriorCatalog
     ? allExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
     : allExteriorWallOptions;
-
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
   const [variantIds, setVariantIds] = useState<string[]>(initialVariants);
-  const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() =>
-    normalizeExteriorFaces(
-      initial?.exterior_faces,
+  const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() => {
+    // 保存済み旧Configurationの exterior_faces=[] は従来1商品方式を表す互換状態。
+    // 外壁を明示変更するまで [] を維持し、価格や保存内容を4面方式へ自動変換しない。
+    if (initial) {
+      if (initial.exterior_faces.length === 0) return [];
+      return normalizeExteriorFaces(
+        initial.exterior_faces,
+        allExteriorWallOptions,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        initialSelection,
+        initialVariants
+      );
+    }
+    return normalizeExteriorFaces(
+      undefined,
       exteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
       initialSelection,
       initialVariants
-    )
-  );
+    );
+  });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
@@ -233,6 +254,20 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
+  const selectedExteriorOption = allExteriorWallOptions.some((option) => selected.includes(option.id));
+  // 旧ConfigurationのDB正本は exterior_faces=[] のまま維持する。
+  // ただし画面表示では、保存済みの従来1商品外壁を4面同一として復元する。
+  const displayedExteriorFaces =
+    exteriorFaces.length === 0 && selectedExteriorOption
+      ? normalizeExteriorFaces(
+          [],
+          allExteriorWallOptions,
+          bundle.variantGroups,
+          bundle.variantChoices,
+          selected,
+          variantIds
+        )
+      : exteriorFaces;
   const activeEstimateTemplate = estimateTemplateByCode.get(specCode) ?? null;
   const activeChoice = simulatorSpecChoices.find((choice) => choice.code === specCode) ?? null;
   const activePreset = activeChoice?.preset ?? model.presets?.find((preset) => preset.code === specCode) ?? null;
@@ -481,7 +516,50 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     return out;
   }, [ctx, model, bundle, specSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
 
-  const issues = useMemo(() => validateSelection(ctx, selected, finishLevel), [ctx, selected, finishLevel]);
+  const independentInsulationCategoryIds = useMemo(
+    () =>
+      new Set(
+        bundle.categories
+          .filter((category) =>
+            ['insulation-floor', 'insulation-wall', 'insulation-ceiling'].includes(category.code)
+          )
+          .map((category) => category.id)
+      ),
+    [bundle.categories]
+  );
+  const legacyReadOnlyWithoutIndependentInsulation =
+    readOnly &&
+    Boolean(initial) &&
+    !(initial?.option_ids ?? []).some((id) => {
+      const option = bundle.options.find((row) => row.id === id);
+      return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
+    });
+  const validationIssues = useMemo(
+    () => validateSelection(ctx, selected, finishLevel),
+    [ctx, selected, finishLevel]
+  );
+  const displayIssues = useMemo(() => {
+    if (!legacyReadOnlyWithoutIndependentInsulation) return validationIssues;
+
+    // migration前に確定した正式履歴には、新設した独立断熱required不足を警告表示しない。
+    // DBや選択内容は補完せず、見積依頼などの検証条件も緩めず、表示だけ過去履歴の意味を維持する。
+    return validationIssues.filter(
+      (issue) =>
+        !(
+          issue.type === 'required' &&
+          issue.option_ids.length > 0 &&
+          issue.option_ids.every((id) => {
+            const option = bundle.options.find((row) => row.id === id);
+            return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
+          })
+        )
+    );
+  }, [
+    bundle.options,
+    independentInsulationCategoryIds,
+    legacyReadOnlyWithoutIndependentInsulation,
+    validationIssues,
+  ]);
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
   const baselineVariantIds = useMemo(
@@ -624,6 +702,24 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   };
 
   const applyExteriorFaces = (nextFaces: ExteriorFaceSelection[]) => {
+    // 旧1商品方式(exterior_faces=[])を表示用に4面展開しただけなら、ApplyしてもDB正本を4面化しない。
+    // 旧有料外壁を「変更なし」で4面課金へ変換する事故を防ぐ。
+    if (exteriorFaces.length === 0 && selectedExteriorOption) {
+      const legacyDisplayedFaces = normalizeExteriorFaces(
+        [],
+        allExteriorWallOptions,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        selected,
+        variantIds
+      );
+      if (sameExteriorFaces(nextFaces, legacyDisplayedFaces)) {
+        setExteriorFacePicker(null);
+        pushToast('外壁の変更はありません', 'info');
+        return;
+      }
+    }
+
     const front = nextFaces.find((f) => f.face_code === 'front') ?? nextFaces[0];
     setExteriorFaces(nextFaces);
     if (front && exteriorWallCat) {
@@ -712,8 +808,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     setDialog('save');
   };
   const handleQuoteClick = () => {
-    if (issues.length) {
-      pushToast(issues[0].message, 'warn');
+    if (validationIssues.length) {
+      pushToast(validationIssues[0].message, 'warn');
       return;
     }
     if (!user) return requireLogin('quote');
@@ -972,7 +1068,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
               categories={bundle.categories}
               options={bundle.options}
               variantChoices={bundle.variantChoices}
-              exteriorFaces={exteriorFaces}
+              exteriorFaces={displayedExteriorFaces}
               readOnly={readOnly}
               onPickExteriorFace={openExteriorFace}
             />
@@ -994,9 +1090,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           onPickCategory={openPicker}
         />
 
-        {issues.length > 0 && (
+        {displayIssues.length > 0 && (
           <ul className="space-y-1 rounded-lg bg-warn/10 px-4 py-3 text-xs text-warn" role="alert">
-            {issues.map((i, idx) => (
+            {displayIssues.map((i, idx) => (
               <li key={idx}>{i.message}</li>
             ))}
           </ul>
@@ -1058,7 +1154,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       {exteriorFacePicker && exteriorWallCat && (
         <ExteriorWallFacesDialog
           category={exteriorWallCat}
-          options={exteriorWallOptions}
+          options={allExteriorWallOptions}
+          selectableOptions={exteriorWallOptions}
           variantGroups={bundle.variantGroups}
           variantChoices={bundle.variantChoices}
           selectedOptionIds={selected}

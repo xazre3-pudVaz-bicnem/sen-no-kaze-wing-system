@@ -96,7 +96,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists standard_estimate_masters_refs on public.standard_estimate_masters;
 create trigger standard_estimate_masters_refs
@@ -111,7 +111,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $
+as $$
 begin
   if new.base_model_id is distinct from old.base_model_id
      and exists (
@@ -127,7 +127,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists base_masters_standard_estimate_model_guard on public.base_masters;
 create trigger base_masters_standard_estimate_model_guard
@@ -841,7 +841,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $
+as $$
   select public.is_admin()
          or exists (
            select 1
@@ -863,7 +863,7 @@ as $
                 )
               )
          );
-$;
+$$;
 
 create or replace function public.can_view_standard_estimate_revision(p_standard_estimate_revision_id uuid)
 returns boolean
@@ -871,7 +871,7 @@ language sql
 stable
 security definer
 set search_path = public
-as $
+as $$
   select public.is_admin()
          or exists (
            select 1
@@ -889,7 +889,7 @@ as $
                 )
               )
          );
-$;
+$$;
 
 -- ---------- RLS ----------
 alter table public.standard_estimate_masters enable row level security;

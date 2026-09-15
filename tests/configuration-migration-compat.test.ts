@@ -81,9 +81,13 @@ describe('本番migration前のConfiguration互換', () => {
   it('旧正式履歴だけ新設した独立断熱required不足を表示上抑制する', () => {
     expect(simulatorSource).toContain('const legacyReadOnlyWithoutIndependentInsulation =');
     expect(simulatorSource).toContain("['insulation-floor', 'insulation-wall', 'insulation-ceiling']");
-    expect(simulatorSource).toContain('if (!legacyReadOnlyWithoutIndependentInsulation) return currentIssues;');
+    expect(simulatorSource).toContain('const validationIssues = useMemo(');
+    expect(simulatorSource).toContain('const displayIssues = useMemo(');
+    expect(simulatorSource).toContain('if (!legacyReadOnlyWithoutIndependentInsulation) return validationIssues;');
     expect(simulatorSource).toContain("issue.type === 'required'");
     expect(simulatorSource).toContain('independentInsulationCategoryIds.has(option.category_id)');
+    expect(simulatorSource).toContain('if (validationIssues.length)');
+    expect(simulatorSource).toContain('{displayIssues.length > 0 && (');
   });
 
   it('保存済みexterior_faces=[]は明示変更まで[]を維持する', () => {

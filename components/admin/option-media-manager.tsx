@@ -77,7 +77,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold">画像・メーカー資料</h2>
-            <p className="mt-1 text-xs text-muted">サブ画像 ${images.length}枚・メーカー資料${option.manufacturer_document_url ? '登録済み' : '未登録'}</p>
+            <p className="mt-1 text-xs text-muted">サブ画像 {images.length}枚・メーカー資料 {option.manufacturer_document_url ? '登録済み' : '未登録'}</p>
           </div>
           <span className="text-xs font-semibold text-brown">開いて編集</span>
         </div>

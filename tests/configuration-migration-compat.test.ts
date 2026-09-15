@@ -59,6 +59,9 @@ describe('本番migration前のConfiguration互換', () => {
     expect(exteriorSql).toContain("'insulation-ceiling'::text");
     expect(exteriorSql).toContain('existing_category.code = w.category_code');
     expect(exteriorSql).toContain('return public.recalculate_configuration(v_id)');
+    expect(exteriorSql).toMatch(
+      /create or replace function public\.duplicate_configuration[\s\S]*return public\.recalculate_configuration\(v_id\);[\s\S]*end \$\$;/
+    );
   });
 
   it('spec未設定の旧Configurationでも保存済みoption_idsを初期選択として維持する', () => {

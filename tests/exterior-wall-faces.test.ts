@@ -60,6 +60,16 @@ describe('外壁4面', () => {
     expect(faces.every((f) => f.variant_choice_ids[0] === 'black')).toBe(true);
   });
 
+  it('exterior_faces空の旧Configurationは選択済みlegacy外壁から4面表示を復元できる', () => {
+    const legacy = option('exterior-galnote');
+    const current = option('exterior-current');
+
+    const faces = normalizeExteriorFaces([], [legacy, current], [], [], [legacy.id], []);
+
+    expect(faces).toHaveLength(4);
+    expect(faces.every((face) => face.option_id === legacy.id)).toBe(true);
+  });
+
   it('保存済みlegacy外壁は全商品を復元候補に含めれば自動置換しない', () => {
     const legacy = option('exterior-galnote');
     const current = option('exterior-current');

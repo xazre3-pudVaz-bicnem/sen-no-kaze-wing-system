@@ -126,7 +126,7 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
       {sp.drafted && <Alert tone="success">新本体Draftを作成しました。Publish・Simulator・Quoteはまだ切り替えていません。</Alert>}
 
       <Alert tone="info">
-        このPRでは base_breakdown_items / estimate_templates / 本体マスター / シミュレーターへ書き込みません。
+        旧 base_breakdown_items / estimate_templates は変更しません。ready後は監査済みの本体行だけを新本体Draftへコピーします。
       </Alert>
 
       <section className="card space-y-4 p-5">

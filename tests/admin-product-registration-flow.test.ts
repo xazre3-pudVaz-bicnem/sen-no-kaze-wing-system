@@ -18,6 +18,10 @@ const nav = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/admin-nav.tsx'),
   'utf8'
 );
+const media = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-media-manager.tsx'),
+  'utf8'
+);
 
 describe('商品登録管理画面の業務フロー', () => {
   it('編集画面を3つの分かりやすい領域に整理する', () => {
@@ -41,6 +45,13 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain("tab === 'customer'");
     expect(editPage).toContain("tab === 'sales'");
     expect(editPage).toContain("aria-current={active ? 'page' : undefined}");
+  });
+
+  it('画像・メーカー資料は必要なときだけ開いて編集する', () => {
+    expect(media).toContain('<details id="product-media"');
+    expect(media).toContain('画像・メーカー資料');
+    expect(media).toContain('開いて編集');
+    expect(media).toContain('サブ画像 {images.length}枚');
   });
 
   it('既存の商品保存フィールドを維持する', () => {

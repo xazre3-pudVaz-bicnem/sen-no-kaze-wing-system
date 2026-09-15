@@ -72,15 +72,19 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [docState, docAction, docPending] = useActionState(uploadOptionManufacturerDocumentAction, initial);
 
   return (
-    <section id="product-media" className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">商品情報：サブ画像・メーカー資料</h2>
-        <p className="mt-1 text-sm text-muted">
-          この商品のサブ画像と、お客様の商品詳細に表示するメーカー資料PDFを管理します。
-        </p>
-      </div>
+    <details id="product-media" className="card overflow-hidden">
+      <summary className="cursor-pointer list-none px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold">画像・メーカー資料</h2>
+            <p className="mt-1 text-xs text-muted">サブ画像 {images.length}枚・メーカー資料 {option.manufacturer_document_url ? '登録済み' : '未登録'}</p>
+          </div>
+          <span className="text-xs font-semibold text-brown">開いて編集</span>
+        </div>
+      </summary>
 
-      <div className="card space-y-5 p-6">
+      <div className="space-y-6 border-t border-line p-5 sm:p-6">
+      <div className="space-y-5">
         <div>
           <h3 className="font-semibold">サブ画像</h3>
           <p className="mt-1 text-xs text-muted">
@@ -120,7 +124,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         </div>
       </div>
 
-      <div className="card space-y-5 p-6">
+      <div className="space-y-5 border-t border-line pt-6">
         <div>
           <h3 className="font-semibold">メーカー資料</h3>
           <p className="mt-1 text-xs text-muted">
@@ -168,6 +172,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           <PendingButton pending={docPending}>{option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'}</PendingButton>
         </form>
       </div>
-    </section>
+      </div>
+    </details>
   );
 }

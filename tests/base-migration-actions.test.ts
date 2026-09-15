@@ -18,7 +18,10 @@ vi.mock('@/lib/data/store', () => ({ isLocalMode: mocks.isLocalMode }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }));
 
 import {
+  confirmLegacyBaseMigrationFireSpecAction,
+  finalizeLegacyBaseDraftValidationAction,
   materializeLegacyBaseDraftsAction,
+  publishLegacyBaseMigrationBatchAction,
   resolveLegacyEstimateDuplicateAction,
   setLegacyBaseMappingDecisionAction,
   setLegacyBaseSpecMappingAction,
@@ -28,6 +31,7 @@ const batchId = '11111111-1111-4111-8111-111111111111';
 const mappingId = '22222222-2222-4222-8222-222222222222';
 const modelId = '33333333-3333-4333-8333-333333333333';
 const checkId = '44444444-4444-4444-8444-444444444444';
+const draftOutputId = '55555555-5555-4555-8555-555555555555';
 
 describe('旧本体移行監査Server Action', () => {
   beforeEach(() => {
@@ -132,6 +136,64 @@ describe('旧本体移行監査Server Action', () => {
       .rejects.toThrow(`REDIRECT:/admin/base-migration?batch=${batchId}&drafted=1`);
 
     expect(mocks.rpc).toHaveBeenCalledWith('materialize_legacy_base_migration_drafts', {
+      p_batch_id: batchId,
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/admin/base-masters');
+  });
+
+  it('防火確認はversion・区分・根拠を専用RPCへ渡す', async () => {
+    const form = new FormData();
+    form.set('batch_id', batchId);
+    form.set('draft_output_id', draftOutputId);
+    form.set('expected_review_version', '2');
+    form.set('fire_spec_code', 'fire');
+    form.set('review_note', '設計図書の防火仕様を確認');
+
+    await expect(confirmLegacyBaseMigrationFireSpecAction(form))
+      .rejects.toThrow(`REDIRECT:/admin/base-migration?batch=${batchId}&fire_confirmed=1`);
+
+    expect(mocks.rpc).toHaveBeenCalledWith('confirm_legacy_base_migration_fire_spec', {
+      p_draft_output_id: draftOutputId,
+      p_expected_review_version: 2,
+      p_fire_spec_code: 'fire',
+      p_review_note: '設計図書の防火仕様を確認',
+    });
+  });
+
+  it('防火確認の根拠が空欄ならRPCへ到達しない', async () => {
+    const form = new FormData();
+    form.set('batch_id', batchId);
+    form.set('draft_output_id', draftOutputId);
+    form.set('expected_review_version', '0');
+    form.set('fire_spec_code', 'non_fire');
+    form.set('review_note', '   ');
+
+    await expect(confirmLegacyBaseMigrationFireSpecAction(form))
+      .rejects.toThrow('REDIRECT:/admin/base-migration?error=');
+
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('最終検算はbatch IDだけを専用RPCへ渡す', async () => {
+    const form = new FormData();
+    form.set('batch_id', batchId);
+
+    await expect(finalizeLegacyBaseDraftValidationAction(form))
+      .rejects.toThrow(`REDIRECT:/admin/base-migration?batch=${batchId}&validated=1`);
+
+    expect(mocks.rpc).toHaveBeenCalledWith('finalize_legacy_base_migration_draft_validation', {
+      p_batch_id: batchId,
+    });
+  });
+
+  it('一括Publishはbatch IDだけを専用RPCへ渡す', async () => {
+    const form = new FormData();
+    form.set('batch_id', batchId);
+
+    await expect(publishLegacyBaseMigrationBatchAction(form))
+      .rejects.toThrow(`REDIRECT:/admin/base-migration?batch=${batchId}&completed=1`);
+
+    expect(mocks.rpc).toHaveBeenCalledWith('publish_legacy_base_migration_batch', {
       p_batch_id: batchId,
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith('/admin/base-masters');

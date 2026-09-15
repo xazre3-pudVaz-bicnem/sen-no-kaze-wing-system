@@ -31,7 +31,12 @@ create table if not exists public.standard_estimate_masters (
     references public.base_masters(id, base_model_id)
     on delete restrict,
   unique (owner_organization_id, base_master_id, spec_code),
-  check (length(btrim(spec_code)) > 0),
+  check (
+    length(spec_code) > 0
+    and spec_code = lower(spec_code)
+    and spec_code = btrim(spec_code)
+    and spec_code !~ '[[:space:]]'
+  ),
   check (length(btrim(name)) > 0)
 );
 
@@ -276,6 +281,7 @@ create table if not exists public.standard_estimate_revision_lines (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (revision_id, line_key),
+  unique (revision_id, section_code, sort_order),
   foreign key (revision_id, section_code)
     references public.standard_estimate_revision_sections(revision_id, section_code)
     on delete cascade,

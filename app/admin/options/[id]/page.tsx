@@ -6,6 +6,7 @@ import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
+import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 
 export default async function EditOptionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
@@ -13,7 +14,12 @@ export default async function EditOptionPage({ params, searchParams }: { params:
   const store = await getStore();
   const option = await store.getOption(id);
   if (!option) notFound();
-  const [categories, models, options] = await Promise.all([store.listCategories(), store.listModels({ includeDraft: true }), store.listOptions()]);
+  const [categories, models, options, variants] = await Promise.all([
+    store.listCategories(),
+    store.listModels({ includeDraft: true }),
+    store.listOptions(),
+    store.getOptionVariants(id),
+  ]);
   // 関連（前提・競合）は全モデルのバンドルから集める
   const deps: OptionDependency[] = [];
   const confs: OptionConflict[] = [];
@@ -67,6 +73,7 @@ export default async function EditOptionPage({ params, searchParams }: { params:
         </ol>
       </section>
       <OptionForm option={option} categories={categories} models={models} allOptions={options} dependencies={deps} conflicts={confs} />
+      <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
       <OptionMediaManager option={option} />
     </AdminPage>
   );

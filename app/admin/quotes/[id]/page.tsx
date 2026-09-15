@@ -29,7 +29,7 @@ export default async function AdminQuoteDetailPage({
   const canEditBase = canEditCatalog(actor.role);
   if (!canManageAllQuotes && quote.dealer_id !== actor.id) notFound();
 
-  const canRevise = quote.status !== 'superseded' && (canManageAllQuotes || quote.dealer_id === actor.id);
+  const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);
   const [profiles, categories, options] = await Promise.all([
     isAdmin ? store.listProfiles() : Promise.resolve([]),
     store.listCategories(),

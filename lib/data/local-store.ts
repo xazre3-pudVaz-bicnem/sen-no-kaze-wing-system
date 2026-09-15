@@ -1053,8 +1053,8 @@ export class LocalStore implements DataStore {
       if (!(canEditAnyQuote || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
         throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');
       }
-      if (parent.status === 'superseded') {
-        throw new StoreError('LOCKED', 'この版はすでに改訂されています。最新の版から作成してください。');
+      if (parent.status !== 'issued') {
+        throw new StoreError('LOCKED', '改訂できるのは発行中（issued）の見積だけです。');
       }
       for (const it of input.items) {
         if (!hasRoleAtLeast(actor.role, 'dealer')) {

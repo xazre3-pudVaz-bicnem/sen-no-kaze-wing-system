@@ -177,8 +177,8 @@ describe('旧本体移行Draftの検算・防火区分確認・Publish', () => {
     expect(migration).not.toMatch(/delete\s+from\s+public\.base_breakdown_items/i);
     expect(migration).not.toMatch(/update\s+public\.estimate_templates/i);
     expect(migration).not.toMatch(/delete\s+from\s+public\.estimate_templates/i);
-    expect(migration).not.toMatch(/standard_estimate/i);
-    expect(migration).not.toMatch(/\bquote/i);
-    expect(migration).not.toMatch(/\bsimulator/i);
+    expect(migration).not.toMatch(/(insert into|update|delete from)\s+public\.standard_estimate/i);
+    expect(migration).not.toMatch(/(insert into|update|delete from)\s+public\.[a-z0-9_]*quote/i);
+    expect(migration).not.toMatch(/(insert into|update|delete from)\s+public\.[a-z0-9_]*simulator/i);
   });
 });

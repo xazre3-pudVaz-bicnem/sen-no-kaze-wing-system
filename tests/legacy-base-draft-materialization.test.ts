@@ -108,5 +108,8 @@ describe('監査済み旧本体から新本体Draft作成', () => {
     expect(actions).toContain("redirect(migrationUrl(parsed.data, 'drafted'))");
     expect(page).toContain('materializeLegacyBaseDraftsAction');
     expect(page).toContain('監査済みデータから新本体Draftを作成');
+    expect(page).toContain("from('legacy_base_migration_draft_outputs')");
+    expect(page).toContain('新本体Draft検算');
+    expect(page).toContain('Draftを開く');
   });
 });

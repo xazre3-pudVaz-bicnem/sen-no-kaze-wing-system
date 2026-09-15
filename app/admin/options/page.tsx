@@ -10,7 +10,7 @@ export default async function AdminOptionsPage({ searchParams }: { searchParams:
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
   return (
-    <AdminPage title="オプション" lead="名称・説明・価格・画像・選択ルール（前提／同時選択不可）・プレビューキーを管理します。" actions={<Link href="/admin/options/new" className="btn-primary btn-sm">新規作成</Link>}>
+    <AdminPage title="商品登録・編集" lead="商品情報・お客様資料・選択条件・追加金額を管理します。" actions={<Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link>}>
       <FlashMessages sp={sp} />
       {categories.map((cat) => {
         const list = options.filter((o) => o.category_id === cat.id);

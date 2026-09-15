@@ -9,10 +9,10 @@ const exteriorFacesMigration = read('supabase/migrations/20260830091000_exterior
 function tableBlock(table: string): string {
   const startMarker = 'create table if not exists public.' + table + ' (';
   const start = migration.indexOf(startMarker);
-  expect(start, table + ' definition start').toBeGreaterThanOrEqual(0);
+  expect(start).toBeGreaterThanOrEqual(0);
   const bodyStart = start + startMarker.length;
   const end = migration.indexOf('\n);', bodyStart);
-  expect(end, table + ' definition end').toBeGreaterThan(bodyStart);
+  expect(end).toBeGreaterThan(bodyStart);
   return migration.slice(bodyStart, end);
 }
 

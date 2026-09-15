@@ -106,6 +106,7 @@ declare
   v_id uuid;
   v_model_slug text;
   v_effective_spec text;
+  v_has_complete_independent_insulation boolean := false;
 begin
   select * into src from public.configurations where id = p_configuration_id;
   if not found then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
@@ -121,11 +122,13 @@ begin
   where b.id = src.base_model_id;
 
   if v_model_slug = 'wing-01' then
-    if v_effective_spec not in ('hotel', 'residence', 'office') then
-      raise exception
-        'VALIDATION: 複製元のWing仕様を判定できません。仕様を確認してから複製してください'
-        using errcode = 'P0001';
-    end if;
+    select count(distinct cat.code) = 3
+      into v_has_complete_independent_insulation
+    from public.configuration_items ci
+    join public.options o on o.id = ci.option_id
+    join public.option_categories cat on cat.id = o.category_id
+    where ci.configuration_id = p_configuration_id
+      and cat.code in ('insulation-floor', 'insulation-wall', 'insulation-ceiling');
 
     if exists (
       select 1
@@ -136,6 +139,13 @@ begin
     ) then
       raise exception
         'VALIDATION: 旧有料断熱を含む仕様は自動複製できません。断熱内容を確認してください'
+        using errcode = 'P0001';
+    end if;
+
+    if not v_has_complete_independent_insulation
+       and v_effective_spec not in ('hotel', 'residence', 'office') then
+      raise exception
+        'VALIDATION: 複製元のWing仕様を判定できません。仕様を確認してから複製してください'
         using errcode = 'P0001';
     end if;
   end if;
@@ -160,7 +170,7 @@ begin
 
   -- 旧正式履歴は変更せず、複製して新しく作るWing Draftだけを現行required条件へ補完する。
   -- すでに同じ独立断熱カテゴリーの商品がある場合は、その選択を尊重して標準品を追加しない。
-  if v_model_slug = 'wing-01' then
+  if v_model_slug = 'wing-01' and not v_has_complete_independent_insulation then
     with wanted(category_code, option_code) as (
       values
         ('insulation-floor'::text, 'insulation-floor-mirafoam-90'::text),

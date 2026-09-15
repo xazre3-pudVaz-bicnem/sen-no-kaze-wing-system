@@ -104,11 +104,40 @@ returns public.configurations language plpgsql security definer set search_path 
 declare
   src public.configurations;
   v_id uuid;
+  v_model_slug text;
+  v_effective_spec text;
 begin
   select * into src from public.configurations where id = p_configuration_id;
   if not found then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
   if not (public.is_admin() or src.user_id = auth.uid()) then
     raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+
+  select
+    b.slug,
+    coalesce(nullif(src.spec_code, ''), b.presets -> 0 ->> 'code', '')
+  into v_model_slug, v_effective_spec
+  from public.base_models b
+  where b.id = src.base_model_id;
+
+  if v_model_slug = 'wing-01' then
+    if v_effective_spec not in ('hotel', 'residence', 'office') then
+      raise exception
+        'VALIDATION: 複製元のWing仕様を判定できません。仕様を確認してから複製してください'
+        using errcode = 'P0001';
+    end if;
+
+    if exists (
+      select 1
+      from public.configuration_items ci
+      join public.options o on o.id = ci.option_id
+      where ci.configuration_id = p_configuration_id
+        and o.code = 'insulation-upgrade-wing'
+    ) then
+      raise exception
+        'VALIDATION: 旧有料断熱を含む仕様は自動複製できません。断熱内容を確認してください'
+        using errcode = 'P0001';
+    end if;
   end if;
 
   insert into public.configurations (
@@ -129,8 +158,52 @@ begin
     from public.configuration_items ci
    where ci.configuration_id = p_configuration_id;
 
+  -- 旧正式履歴は変更せず、複製して新しく作るWing Draftだけを現行required条件へ補完する。
+  -- すでに同じ独立断熱カテゴリーの商品がある場合は、その選択を尊重して標準品を追加しない。
+  if v_model_slug = 'wing-01' then
+    with wanted(category_code, option_code) as (
+      values
+        ('insulation-floor'::text, 'insulation-floor-mirafoam-90'::text),
+        (
+          'insulation-wall'::text,
+          case
+            when v_effective_spec = 'hotel' then 'insulation-wall-styrofoam-90-hotel-base'
+            else 'insulation-wall-glasswool-90-standard'
+          end
+        ),
+        (
+          'insulation-ceiling'::text,
+          case
+            when v_effective_spec = 'hotel' then 'insulation-ceiling-styrofoam-90-hotel-base'
+            else 'insulation-ceiling-glasswool-90-standard'
+          end
+        )
+    )
+    insert into public.configuration_items (
+      configuration_id,
+      option_id,
+      quantity,
+      variant_choice_ids
+    )
+    select
+      v_id,
+      standard_option.id,
+      1,
+      '{}'::uuid[]
+    from wanted w
+    join public.options standard_option on standard_option.code = w.option_code
+    where not exists (
+      select 1
+      from public.configuration_items ci
+      join public.options existing_option on existing_option.id = ci.option_id
+      join public.option_categories existing_category on existing_category.id = existing_option.category_id
+      where ci.configuration_id = v_id
+        and existing_category.code = w.category_code
+    );
+  end if;
+
   return public.recalculate_configuration(v_id);
-end $$;
+end $;
 
 revoke all on function public.duplicate_configuration(uuid) from public;
 grant execute on function public.duplicate_configuration(uuid) to authenticated;

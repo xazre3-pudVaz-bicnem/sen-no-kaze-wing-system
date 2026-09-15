@@ -16,6 +16,15 @@ function tableBlock(table: string): string {
   return migration.slice(bodyStart, end);
 }
 
+function functionBlock(functionName: string): string {
+  const startMarker = 'create or replace function public.' + functionName + '()';
+  const start = migration.indexOf(startMarker);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = migration.indexOf('\n$;', start);
+  expect(end).toBeGreaterThan(start);
+  return migration.slice(start, end + 4);
+}
+
 describe('Standard Estimate Master / Revision DB基盤契約', () => {
   it('確定した6テーブルだけを追加しgroup/diff tableを作らない', () => {
     const tables = [
@@ -90,9 +99,13 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(migration).toContain('v_base_model_id is distinct from new.base_model_id');
     expect(migration).toContain('base_masters_id_model_unique_idx');
     expect(block).toContain('foreign key (base_master_id, base_model_id)');
-    expect(migration).toContain('prevent_standard_estimate_master_identity_change_after_publish');
+    expect(migration).toContain('prevent_standard_estimate_master_identity_change_after_revision');
+    const identityFunction = functionBlock('prevent_standard_estimate_master_identity_change_after_revision');
+    expect(identityFunction).toContain('where r.standard_estimate_master_id = old.id');
+    expect(identityFunction).not.toContain("r.status in ('published', 'superseded')");
+    expect(identityFunction).toContain('LOCKED: Revision作成済みの標準見積');
     for (const column of ['owner_organization_id', 'base_model_id', 'base_master_id', 'spec_code']) {
-      expect(migration).toContain('new.' + column + ' is distinct from old.' + column);
+      expect(identityFunction).toContain('new.' + column + ' is distinct from old.' + column);
     }
   });
 
@@ -103,6 +116,9 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(block).toContain('tax_rate numeric(8, 6)');
     expect(block).toContain("check (source_kind in ('ui', 'legacy_excel'))");
     expect(block).toContain('check (subtotal = subtotal_raw + standard_adjustment_amount)');
+    expect(block).toContain("source_kind = 'ui' and tax = floor(subtotal::numeric * tax_rate)::integer");
+    expect(block).toContain("source_kind = 'legacy_excel'");
+    expect(block).toContain('abs(subtotal::numeric * tax_rate - tax::numeric) < 1');
     expect(block).toContain('check (total = subtotal + tax)');
     expect(block).toContain('standard_adjustment_amount = 0');
     expect(block).toContain('standard_adjustment_reason');
@@ -210,12 +226,19 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(migration).toContain('LOCKED: 公開済みStandard Estimate Revisionの内容は変更できません');
   });
 
-  it('current Published pointerは同じMasterのpublishedだけを指しcommit時にも検査する', () => {
+  it('current Published pointerはPublishedの有無と双方向一致しcommit時にRevision/Master双方から検査する', () => {
     expect(migration).toContain('standard_estimate_masters_current_published_revision_fk');
     expect(migration).toContain('r.standard_estimate_master_id = new.id');
     expect(migration).toContain("r.status = 'published'");
+    const commitFunction = functionBlock('validate_standard_estimate_current_pointer_at_commit');
+    expect(commitFunction).toContain("tg_table_name = 'standard_estimate_masters'");
+    expect(commitFunction).toContain("r.status = 'published'");
+    expect(commitFunction).toContain('if v_published_revision_id is null then');
+    expect(commitFunction).toContain('if v_current_revision_id is not null then');
+    expect(commitFunction).toContain('v_current_revision_id is distinct from v_published_revision_id');
     expect(migration).toContain('create constraint trigger standard_estimate_current_pointer_consistency');
-    expect(migration).toContain('deferrable initially deferred');
+    expect(migration).toContain('create constraint trigger standard_estimate_master_current_pointer_consistency');
+    expect(migration.match(/deferrable initially deferred/g)?.length).toBeGreaterThanOrEqual(2);
     expect(migration).toContain('validate_standard_estimate_current_pointer_at_commit');
   });
 

@@ -102,6 +102,53 @@ export default async function BaseMasterDetailPage({
     revisionRows.find((revision) => revision.status === 'published') ??
     null;
 
+  let migrationDraftOutput: {
+    id: string;
+    migration_batch_id: string;
+    fire_spec_review_required: boolean;
+    confirmed_fire_spec_code: string | null;
+  } | null = null;
+  let migrationBatchStatus: string | null = null;
+
+  if (draft) {
+    const { data: output, error: migrationOutputError } = await supabase
+      .from('legacy_base_migration_draft_outputs')
+      .select('id,migration_batch_id,fire_spec_review_required,confirmed_fire_spec_code')
+      .eq('revision_id', draft.id)
+      .maybeSingle();
+
+    if (migrationOutputError) {
+      return (
+        <AdminPage title={master.name}>
+          <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+          <Alert tone="danger">{migrationOutputError.message}</Alert>
+        </AdminPage>
+      );
+    }
+
+    migrationDraftOutput = output as typeof migrationDraftOutput;
+
+    if (migrationDraftOutput) {
+      const { data: migrationBatch, error: migrationBatchError } = await supabase
+        .from('legacy_base_migration_batches')
+        .select('status')
+        .eq('id', migrationDraftOutput.migration_batch_id)
+        .maybeSingle();
+
+      if (migrationBatchError) {
+        return (
+          <AdminPage title={master.name}>
+            <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+            <Alert tone="danger">{migrationBatchError.message}</Alert>
+          </AdminPage>
+        );
+      }
+      migrationBatchStatus = migrationBatch?.status ? String(migrationBatch.status) : null;
+    }
+  }
+
+  const migrationDraftLocked = Boolean(migrationDraftOutput);
+
   const detailView = resolveBaseMasterDetailView({
     canEdit: Boolean(canEdit),
     canViewOwned: Boolean(canViewOwned),
@@ -114,6 +161,7 @@ export default async function BaseMasterDetailPage({
   const lineRevisionIds = [
     ...(detailView.editableRevisionId ? [detailView.editableRevisionId] : []),
     ...detailView.readOnlyRevisionIds,
+    ...(migrationDraftLocked && draft ? [draft.id] : []),
   ];
   const uniqueLineRevisionIds = [...new Set(lineRevisionIds)];
 
@@ -192,7 +240,73 @@ export default async function BaseMasterDetailPage({
         <Alert tone="info">この本体は利用できますが、編集・公開はできません。Draftは表示されません。</Alert>
       )}
 
-      {editable && draft && detailView.editableRevisionId === draft.id && (
+      {migrationDraftLocked && draft && migrationDraftOutput && (
+        <section className="card space-y-4 p-6">
+          <div>
+            <h2 className="font-semibold">旧本体移行Draft</h2>
+            <p className="mt-1 text-sm text-muted">
+              このDraftは旧本体移行の検算中です。明細・金額・諸費用を直接変更できません。
+            </p>
+          </div>
+          <div className="grid gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted">防火区分</p>
+              <p className="mt-1 font-semibold">
+                {migrationDraftOutput.fire_spec_review_required
+                  ? '要確認'
+                  : migrationDraftOutput.confirmed_fire_spec_code === 'fire'
+                    ? '確認済み・防火'
+                    : '確認済み・非防火'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">移行状態</p>
+              <p className="mt-1 font-semibold">{migrationBatchStatus ?? '—'}</p>
+            </div>
+          </div>
+          <Link
+            href={'/admin/base-migration?batch=' + migrationDraftOutput.migration_batch_id}
+            className="btn-secondary btn-sm inline-flex"
+          >
+            旧本体移行監査を開く
+          </Link>
+        </section>
+      )}
+
+      {migrationDraftLocked && draft && (
+        <section id={'revision-' + draft.id} className="card overflow-x-auto">
+          <div className="border-b border-line px-5 py-4">
+            <h2 className="font-semibold">Draft v{draft.version}（移行監査・参照のみ）</h2>
+            <p className="mt-1 text-xs text-muted">
+              {(linesByRevision.get(draft.id) ?? []).length}行・明細合計 {formatYen(draft.line_subtotal)}・本体価格計 {formatYen(draft.total)}
+            </p>
+          </div>
+          {(linesByRevision.get(draft.id) ?? []).length > 0 ? (
+            <table className="w-full min-w-[48rem] text-sm">
+              <thead className="bg-sand/60 text-left text-xs text-muted">
+                <tr><Th>工事区分</Th><Th>品名</Th><Th right>数量</Th><Th>単位</Th><Th right>単価</Th><Th right>金額</Th><Th>備考</Th></tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {(linesByRevision.get(draft.id) ?? []).map((line) => (
+                  <tr key={line.id}>
+                    <Td>{line.section}</Td>
+                    <Td className="font-medium">{line.name}</Td>
+                    <Td right>{line.quantity}</Td>
+                    <Td>{line.unit ?? ''}</Td>
+                    <Td right>{formatYen(line.unit_price)}</Td>
+                    <Td right>{formatYen(line.amount)}</Td>
+                    <Td className="text-xs text-muted">{line.remark ?? ''}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="px-5 py-6 text-sm text-muted">このRevisionには明細がありません。</p>
+          )}
+        </section>
+      )}
+
+      {editable && draft && !migrationDraftLocked && detailView.editableRevisionId === draft.id && (
         <BaseMasterDraftEditor
           key={draft.id + ':' + (sp.saved ?? 'initial')}
           master={{

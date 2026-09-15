@@ -234,6 +234,7 @@ export interface DataStore {
   replaceEstimateTemplates(items: EstimateTemplateImportInput[]): Promise<void>;
 
   // ---- 商品のバリエーション ----
+  getOptionVariants(optionId: string): Promise<{ groups: OptionVariantGroup[]; choices: OptionVariantChoice[] }>;
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;
   upsertVariantChoice(input: OptionVariantChoice): Promise<OptionVariantChoice>;
   /** 商品・選択項目・選択肢を全件成功時だけ反映する。 */

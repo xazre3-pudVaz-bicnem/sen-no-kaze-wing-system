@@ -267,6 +267,8 @@ export interface ProductOption {
   description: string | null;
   price: number; // 税別・円
   image_url: string | null;
+  /** メーカー資料（PDF等）の表示URL。未登録時は null / 未取得。 */
+  manufacturer_document_url?: string | null;
   selection_type: 'checkbox' | 'radio';
   is_required: boolean;
   is_default: boolean;

@@ -83,6 +83,9 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(block).not.toContain('unique (owner_organization_id, base_model_id, spec_code)');
     expect(block).toContain('base_model_id uuid not null');
     expect(block).toContain('base_master_id uuid not null');
+    expect(block).toContain('spec_code = lower(spec_code)');
+    expect(block).toContain('spec_code = btrim(spec_code)');
+    expect(block).toContain("spec_code !~ '[[:space:]]'");
     expect(migration).toContain("if v_owner_type <> 'headquarters' then");
     expect(migration).toContain('v_base_model_id is distinct from new.base_model_id');
     expect(migration).toContain('base_masters_id_model_unique_idx');
@@ -131,6 +134,7 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     const block = tableBlock('standard_estimate_revision_lines');
     expect(block).toContain('line_key uuid not null default gen_random_uuid()');
     expect(block).toContain('unique (revision_id, line_key)');
+    expect(block).toContain('unique (revision_id, section_code, sort_order)');
     expect(block).toContain('quantity numeric(14, 4)');
     expect(block).toContain('unit_price integer');
     expect(block).toContain('amount integer');

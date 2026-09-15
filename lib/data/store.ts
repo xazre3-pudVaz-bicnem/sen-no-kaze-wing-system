@@ -267,10 +267,14 @@ export interface DataStore {
   deleteProductImage(id: string): Promise<void>;
   /** 画像をストレージへ保存し公開 URL を返す */
   uploadImage(file: UploadInput, folder: string): Promise<string>;
-  /** メーカー資料PDFを商品資料用ストレージへ保存し公開 URL を返す */
-  uploadProductDocument(file: UploadInput, folder: string): Promise<string>;
-  /** 商品資料用ストレージに保存したファイルを削除する */
-  deleteUploadedProductDocument(url: string): Promise<void>;
+  /** 商品サブ画像を option ID 固有prefixへ保存する */
+  uploadOptionImage(file: UploadInput, optionId: string): Promise<string>;
+  /** option ID 固有prefixと一致する商品サブ画像だけを削除する */
+  deleteUploadedOptionImage(url: string, optionId: string): Promise<void>;
+  /** メーカー資料PDFを option ID 固有prefixへ保存する */
+  uploadProductDocument(file: UploadInput, optionId: string): Promise<string>;
+  /** option ID 固有prefixと一致するメーカー資料だけを削除する */
+  deleteUploadedProductDocument(url: string, optionId: string): Promise<void>;
   /** 商品マスター Import 用画像を、実行ユーザーと session 単位の隔離パスへ保存する */
   uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number): Promise<string>;
   /** このリクエストで保存した画像を、後続処理失敗時に取り消す。 */

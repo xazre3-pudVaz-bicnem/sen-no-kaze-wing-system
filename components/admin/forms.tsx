@@ -532,6 +532,11 @@ export function OptionForm({
             <Field label="商品名" htmlFor={`name-${mode}`} required errors={e.name}>
               <Input id={`name-${mode}`} name="name" defaultValue={option?.name} required data-testid="option-name" />
             </Field>
+            {mode === 'all' && (
+              <Field label="管理用コード" htmlFor="code-all" required hint="英小文字・数字・ハイフン（一意）" errors={e.code}>
+                <Input id="code-all" name="code" defaultValue={option?.code} required />
+              </Field>
+            )}
             <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
               <Select id={`category_id-${mode}`} name="category_id" defaultValue={option?.category_id ?? defaultCategoryId ?? categories[0]?.id}>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
@@ -638,9 +643,11 @@ export function OptionForm({
             </summary>
             <div className="space-y-6 border-t border-line p-4 sm:p-5">
               <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="管理用コード" htmlFor={`code-${mode}`} required hint="英小文字・数字・ハイフン（一意）" errors={e.code}>
-                  <Input id={`code-${mode}`} name="code" defaultValue={option?.code} required />
-                </Field>
+                {mode !== 'all' && (
+                  <Field label="管理用コード" htmlFor={`code-${mode}`} required hint="英小文字・数字・ハイフン（一意）" errors={e.code}>
+                    <Input id={`code-${mode}`} name="code" defaultValue={option?.code} required />
+                  </Field>
+                )}
                 <Field label="選択方式（表示）" htmlFor={`selection_type-${mode}`} errors={e.selection_type}>
                   <Select id={`selection_type-${mode}`} name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>
                     <option value="checkbox">チェックボックス</option>

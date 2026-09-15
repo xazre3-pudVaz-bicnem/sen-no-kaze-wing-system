@@ -258,6 +258,16 @@ export interface EstimateTemplateBundle {
   baseline_option_ids: string[];
 }
 
+export interface OptionImage {
+  id: string;
+  option_id: string;
+  url: string;
+  alt: string;
+  caption: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface ProductOption {
   id: string;
   base_model_id: string | null; // null = 全モデル共通
@@ -267,8 +277,10 @@ export interface ProductOption {
   description: string | null;
   price: number; // 税別・円
   image_url: string | null;
-  /** メーカー資料（PDF等）の表示URL。未登録時は null / 未取得。 */
+  /** メーカー資料（PDF）の表示URL。未登録時は null / 未取得。 */
   manufacturer_document_url?: string | null;
+  /** 商品詳細ギャラリーに表示するサブ画像。DB上は option_images で管理する。 */
+  gallery_images?: OptionImage[];
   selection_type: 'checkbox' | 'radio';
   is_required: boolean;
   is_default: boolean;

@@ -36,6 +36,45 @@ describe('Standard Estimate Master / Revision DB基盤契約', () => {
     expect(migration).not.toMatch(/create table if not exists public\.standard_estimate_[a-z_]*diff/i);
   });
 
+  it('migrationのPL/pgSQL dollar quoteが壊れていない', () => {
+    const delimiters = migration.match(/\$\$/g) ?? [];
+    expect(delimiters.length).toBeGreaterThan(0);
+    expect(delimiters.length % 2).toBe(0);
+    expect(migration).not.toMatch(/^\s*as \$$/m);
+    expect(migration).not.toMatch(/^\s*\$;$/m);
+  });
+
+  it('6テーブルのFKを明示的に固定する', () => {
+    const masters = tableBlock('standard_estimate_masters');
+    expect(masters).toContain('references public.organizations(id) on delete restrict');
+    expect(masters).toContain('references public.base_models(id) on delete restrict');
+    expect(masters).toContain('references public.base_masters(id) on delete restrict');
+
+    const revisions = tableBlock('standard_estimate_revisions');
+    expect(revisions).toContain('references public.standard_estimate_masters(id) on delete cascade');
+    expect(revisions).toContain('references public.base_master_revisions(id) on delete restrict');
+
+    const sections = tableBlock('standard_estimate_revision_sections');
+    expect(sections).toContain('references public.standard_estimate_revisions(id) on delete cascade');
+
+    const lines = tableBlock('standard_estimate_revision_lines');
+    expect(lines).toContain('references public.standard_estimate_revision_sections(revision_id, section_code)');
+    expect(lines).toContain('on delete cascade');
+
+    const items = tableBlock('standard_estimate_revision_baseline_items');
+    expect(items).toContain('references public.standard_estimate_revisions(id) on delete cascade');
+    expect(items).toContain('references public.options(id) on delete restrict');
+    expect(items).toContain('references public.option_categories(id) on delete restrict');
+
+    const variants = tableBlock('standard_estimate_revision_baseline_variants');
+    expect(variants).toContain('references public.standard_estimate_revision_baseline_items(id) on delete cascade');
+    expect(variants).toContain('references public.option_variant_groups(id) on delete restrict');
+    expect(variants).toContain('references public.option_variant_choices(id) on delete restrict');
+
+    expect(migration).toContain('standard_estimate_masters_current_published_revision_fk');
+    expect(migration).toContain('references public.standard_estimate_revisions(id)');
+  });
+
   it('Master identityはowner + base_master + specで一意、base_model整合とHQ所有を保証する', () => {
     const block = tableBlock('standard_estimate_masters');
     expect(block).toContain('unique (owner_organization_id, base_master_id, spec_code)');

@@ -202,6 +202,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const exteriorWallOptions = hasCurrentExteriorCatalog
     ? allExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
     : allExteriorWallOptions;
+  // 保存済みConfigurationは旧外壁商品も復元対象にする。
+  // 新規作成・仕様変更時だけ current の商品候補へ限定する。
+  const initialExteriorWallOptions = initial ? allExteriorWallOptions : exteriorWallOptions;
 
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
@@ -210,7 +213,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() =>
     normalizeExteriorFaces(
       initial?.exterior_faces,
-      exteriorWallOptions,
+      initialExteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
       initialSelection,
@@ -1058,7 +1061,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       {exteriorFacePicker && exteriorWallCat && (
         <ExteriorWallFacesDialog
           category={exteriorWallCat}
-          options={exteriorWallOptions}
+          options={allExteriorWallOptions}
+          selectableOptions={exteriorWallOptions}
           variantGroups={bundle.variantGroups}
           variantChoices={bundle.variantChoices}
           selectedOptionIds={selected}

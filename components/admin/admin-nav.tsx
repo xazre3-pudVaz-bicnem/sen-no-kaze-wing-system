@@ -13,7 +13,7 @@ const items: { href: string; label: string; exact?: boolean; need?: 'catalog' | 
   { href: '/admin/free-products', label: 'フリー商品' },
   { href: '/admin/models', label: 'ベースコンテナ', need: 'catalog' },
   { href: '/admin/categories', label: 'オプションカテゴリー', need: 'catalog' },
-  { href: '/admin/options', label: 'オプション', need: 'catalog' },
+  { href: '/admin/options', label: '商品登録・編集', need: 'catalog' },
   { href: '/admin/import', label: '商品の一括登録', need: 'catalog' },
   { href: '/admin/base-masters', label: '本体マスター', need: 'catalog' },
   { href: '/admin/base-breakdown', label: '標準見積・本体内訳', need: 'catalog' },

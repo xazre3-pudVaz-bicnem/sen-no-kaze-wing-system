@@ -74,7 +74,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   return (
     <section id="product-media" className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">商品画像・メーカー資料</h2>
+        <h2 className="text-xl font-semibold">3. お客様資料（サブ画像・メーカー資料）</h2>
         <p className="mt-1 text-sm text-muted">
           この商品のサブ画像と、お客様の商品詳細に表示するメーカー資料PDFを管理します。
         </p>

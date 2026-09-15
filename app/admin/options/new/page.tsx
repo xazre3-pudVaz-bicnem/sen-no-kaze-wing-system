@@ -21,7 +21,10 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const isFree = defaultCategoryId && defaultCategoryId === freeCategory?.id;
 
   return (
-    <AdminPage title={isFree ? 'フリー商品を追加' : 'オプションを追加'}>
+    <AdminPage
+      title={isFree ? 'フリー商品を追加' : '商品を追加'}
+      lead="まず商品特定・詳細・お客様選択・価格を保存します。保存後にサブ画像とメーカー資料PDFを追加できます。"
+    >
       <BackLink href={isFree ? '/admin/free-products' : '/admin/options'} label="一覧へ戻る" />
       <OptionForm
         option={null}

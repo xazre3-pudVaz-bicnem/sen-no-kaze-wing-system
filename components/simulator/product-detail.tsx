@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, ChevronDown, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
@@ -36,10 +36,6 @@ export function ProductDetail({
 }: Props) {
   const manufacturerDocumentUrl = option.manufacturer_document_url?.trim() || null;
   const [activeMedia, setActiveMedia] = useState<'image' | 'document'>('image');
-
-  useEffect(() => {
-    setActiveMedia('image');
-  }, [option.id]);
 
   const basicInfo = [
     { label: 'シリーズ・型番', value: option.model_no },

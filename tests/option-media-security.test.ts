@@ -58,4 +58,13 @@ describe('商品メディアStorage境界', () => {
     expect(source).toContain("optionMediaPrefix(optionId, 'gallery')");
     expect(source).toContain("optionMediaPrefix(optionId, 'manufacturer')");
   });
+
+  it('商品メディアActionは汎用deleteUploadedImageではなくoption境界付き削除を使う', () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), 'lib/actions/admin.ts'), 'utf8');
+    const mediaSection = source.slice(source.indexOf('export async function addOptionImageAction'), source.indexOf('export async function deleteOptionAction'));
+    expect(mediaSection).toContain('uploadOptionImage(');
+    expect(mediaSection).toContain('deleteUploadedOptionImage(');
+    expect(mediaSection).toContain('deleteUploadedProductDocument(');
+    expect(mediaSection).not.toContain('deleteUploadedImage(');
+  });
 });

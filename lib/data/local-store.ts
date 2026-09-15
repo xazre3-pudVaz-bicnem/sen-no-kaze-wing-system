@@ -13,6 +13,7 @@ import type {
   Configuration,
   FinishLevel,
   OptionCategory,
+  OptionImage,
   PreviewImageRule,
   PreviewHotspot,
   ProductImage,
@@ -58,6 +59,7 @@ import {
   type DataStore,
   type ModelInput,
   type OptionInput,
+  type OptionImageInput,
   type PreviewRuleInput,
   type HotspotInput,
   type ProductImageInput,
@@ -102,6 +104,12 @@ export class LocalStore implements DataStore {
       const pub = <T extends { status: string }>(x: T) => opts?.includeDraft || x.status === 'published';
       const options = db.options
         .filter((o) => (o.base_model_id === null || o.base_model_id === modelId) && pub(o))
+        .map((o) => ({
+          ...o,
+          gallery_images: db.optionImages
+            .filter((image) => image.option_id === o.id)
+            .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+        }))
         .sort((a, b) => a.sort_order - b.sort_order);
       const ids = new Set(options.map((o) => o.id));
       return {
@@ -1294,7 +1302,16 @@ export class LocalStore implements DataStore {
     return this.read((db) => [...db.options].sort((a, b) => a.sort_order - b.sort_order));
   }
   async getOption(id: string) {
-    return this.read((db) => db.options.find((o) => o.id === id) ?? null);
+    return this.read((db) => {
+      const option = db.options.find((o) => o.id === id);
+      if (!option) return null;
+      return {
+        ...option,
+        gallery_images: db.optionImages
+          .filter((image) => image.option_id === id)
+          .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+      };
+    });
   }
   async upsertOption(input: OptionInput): Promise<ProductOption> {
     return this.mutate((db) => {
@@ -1342,8 +1359,42 @@ export class LocalStore implements DataStore {
         throw new StoreError('VALIDATION', '保存済みの仕様で使用されているため削除できません。非公開にしてください。');
       }
       db.options = db.options.filter((o) => o.id !== id);
+      db.optionImages = db.optionImages.filter((image) => image.option_id !== id);
       db.dependencies = db.dependencies.filter((d) => d.option_id !== id && d.requires_option_id !== id);
       db.conflicts = db.conflicts.filter((c) => c.option_id !== id && c.conflicts_with_option_id !== id);
+    });
+  }
+  async upsertOptionImage(input: OptionImageInput): Promise<OptionImage> {
+    return this.mutate((db) => {
+      const { id, ...rest } = input;
+      if (!db.options.some((option) => option.id === rest.option_id)) {
+        throw new StoreError('NOT_FOUND', '商品が見つかりません');
+      }
+      if (id) {
+        const image = db.optionImages.find((row) => row.id === id);
+        if (!image) throw new StoreError('NOT_FOUND', '商品画像が見つかりません');
+        Object.assign(image, rest);
+        return image;
+      }
+      const image: OptionImage = { ...rest, id: randomUUID(), created_at: nowIso() };
+      db.optionImages.push(image);
+      return image;
+    });
+  }
+  async deleteOptionImage(id: string): Promise<OptionImage | null> {
+    return this.mutate((db) => {
+      const image = db.optionImages.find((row) => row.id === id) ?? null;
+      if (!image) return null;
+      db.optionImages = db.optionImages.filter((row) => row.id !== id);
+      return image;
+    });
+  }
+  async setOptionManufacturerDocument(optionId: string, url: string | null): Promise<void> {
+    this.mutate((db) => {
+      const option = db.options.find((row) => row.id === optionId);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません');
+      option.manufacturer_document_url = url;
+      option.updated_at = nowIso();
     });
   }
   async setOptionRelations(
@@ -1465,6 +1516,22 @@ export class LocalStore implements DataStore {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, file.bytes);
     return `/api/local-files/${safeFolder}/${name}`;
+  }
+  async uploadProductDocument(file: UploadInput, folder: string) {
+    const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'documents';
+    const name = `${Date.now()}-${randomUUID().slice(0, 8)}.pdf`;
+    const abs = path.join(filesDir(), 'product-documents', safeFolder, name);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, file.bytes);
+    return `/api/local-files/product-documents/${safeFolder}/${name}`;
+  }
+  async deleteUploadedProductDocument(url: string) {
+    const prefix = '/api/local-files/product-documents/';
+    if (!url.startsWith(prefix)) return;
+    const relative = url.slice('/api/local-files/'.length);
+    const root = path.resolve(filesDir());
+    const target = path.resolve(root, relative);
+    if (target !== root && target.startsWith(`${root}${path.sep}`)) fs.rmSync(target, { force: true });
   }
   async uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number) {
     const storagePath = catalogImportUploadPath(userId, sessionId, index, file.fileName);

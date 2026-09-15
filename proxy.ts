@@ -10,6 +10,8 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-wing-pathname', pathname);
   const isProtected = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
   const isAuthPage = pathname === '/login' || pathname === '/register';
 
@@ -22,12 +24,12 @@ export default async function proxy(request: NextRequest) {
       url.search = `?next=${encodeURIComponent(pathname + request.nextUrl.search)}`;
       return NextResponse.redirect(url);
     }
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   if (!isProtected && !isAuthPage) return NextResponse.next();
 
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string, {
     cookies: {
       getAll() {
@@ -35,7 +37,7 @@ export default async function proxy(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },

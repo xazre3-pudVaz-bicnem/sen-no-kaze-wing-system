@@ -18,6 +18,13 @@ describe('商品メディア migration', () => {
     expect(sql).not.toMatch(/drop\s+column\s+(if\s+exists\s+)?image_url/i);
   });
 
+  it('DB直操作でも商品メディアURLを親option固有prefixに限定する', () => {
+    expect(sql).toContain('option_images_owned_storage_url_check');
+    expect(sql).toContain("'/storage/v1/object/public/product-images/option-' || option_id::text || '/gallery/'");
+    expect(sql).toContain('options_manufacturer_document_owned_url_check');
+    expect(sql).toContain("'/storage/v1/object/public/product-documents/option-' || id::text || '/manufacturer/'");
+  });
+
   it('options_adminはdealerの直接API更新を自分のfree-productだけに限定する', () => {
     expect(sql).toContain('drop policy if exists options_admin on public.options');
     expect(sql).toContain('create policy options_admin on public.options');

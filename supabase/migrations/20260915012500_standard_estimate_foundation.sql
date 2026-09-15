@@ -149,6 +149,13 @@ create table if not exists public.standard_estimate_revisions (
   updated_at timestamptz not null default now(),
   unique (standard_estimate_master_id, version),
   check (subtotal = subtotal_raw + standard_adjustment_amount),
+  check (
+    (source_kind = 'ui' and tax = floor(subtotal::numeric * tax_rate)::integer)
+    or (
+      source_kind = 'legacy_excel'
+      and abs(subtotal::numeric * tax_rate - tax::numeric) < 1
+    )
+  ),
   check (total = subtotal + tax),
   check (
     standard_adjustment_amount = 0
@@ -447,38 +454,37 @@ on public.standard_estimate_revision_baseline_variants
 for each row execute function public.validate_standard_estimate_baseline_variant_refs();
 
 -- ---------- Master identity immutable ----------
-create or replace function public.prevent_standard_estimate_master_identity_change_after_publish()
+create or replace function public.prevent_standard_estimate_master_identity_change_after_revision()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $
 begin
   if exists (
     select 1
       from public.standard_estimate_revisions r
      where r.standard_estimate_master_id = old.id
-       and r.status in ('published', 'superseded')
   ) and (
     new.owner_organization_id is distinct from old.owner_organization_id
     or new.base_model_id is distinct from old.base_model_id
     or new.base_master_id is distinct from old.base_master_id
     or new.spec_code is distinct from old.spec_code
   ) then
-    raise exception 'LOCKED: 公開履歴のある標準見積は所有組織・商品モデル・本体Master・用途区分を変更できません'
+    raise exception 'LOCKED: Revision作成済みの標準見積は所有組織・商品モデル・本体Master・用途区分を変更できません'
       using errcode = 'P0001';
   end if;
 
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists standard_estimate_masters_identity_immutable
 on public.standard_estimate_masters;
 create trigger standard_estimate_masters_identity_immutable
 before update of owner_organization_id, base_model_id, base_master_id, spec_code
 on public.standard_estimate_masters
-for each row execute function public.prevent_standard_estimate_master_identity_change_after_publish();
+for each row execute function public.prevent_standard_estimate_master_identity_change_after_revision();
 
 -- ---------- Published / superseded immutable ----------
 create or replace function public.prevent_published_standard_estimate_revision_mutation()
@@ -719,41 +725,64 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $
 declare
   v_master_id uuid;
+  v_current_revision_id uuid;
+  v_published_revision_id uuid;
 begin
-  if tg_op = 'DELETE' then
+  if tg_table_name = 'standard_estimate_masters' then
+    if tg_op = 'DELETE' then
+      v_master_id := old.id;
+    else
+      v_master_id := new.id;
+    end if;
+  elsif tg_op = 'DELETE' then
     v_master_id := old.standard_estimate_master_id;
   else
     v_master_id := new.standard_estimate_master_id;
   end if;
 
-  if exists (
-    select 1
-      from public.standard_estimate_masters m
-      left join public.standard_estimate_revisions r
-        on r.id = m.current_published_revision_id
-     where m.id = v_master_id
-       and m.current_published_revision_id is not null
-       and (
-         r.id is null
-         or r.standard_estimate_master_id <> m.id
-         or r.status <> 'published'
-       )
-  ) then
-    raise exception 'VALIDATION: Standard Estimateの現在公開版ポインタはtransaction完了時に自分自身のpublished Revisionを指す必要があります'
+  select m.current_published_revision_id
+    into v_current_revision_id
+    from public.standard_estimate_masters m
+   where m.id = v_master_id;
+
+  if not found then
+    return null;
+  end if;
+
+  select r.id
+    into v_published_revision_id
+    from public.standard_estimate_revisions r
+   where r.standard_estimate_master_id = v_master_id
+     and r.status = 'published';
+
+  if v_published_revision_id is null then
+    if v_current_revision_id is not null then
+      raise exception 'VALIDATION: Published RevisionがないStandard Estimateは現在公開版ポインタを持てません'
+        using errcode = 'P0001';
+    end if;
+  elsif v_current_revision_id is distinct from v_published_revision_id then
+    raise exception 'VALIDATION: Published RevisionがあるStandard Estimateはtransaction完了時にそのRevisionを現在公開版として指す必要があります'
       using errcode = 'P0001';
   end if;
 
   return null;
 end;
-$$;
+$;
 
 drop trigger if exists standard_estimate_current_pointer_consistency
 on public.standard_estimate_revisions;
 create constraint trigger standard_estimate_current_pointer_consistency
 after insert or update or delete on public.standard_estimate_revisions
+deferrable initially deferred
+for each row execute function public.validate_standard_estimate_current_pointer_at_commit();
+
+drop trigger if exists standard_estimate_master_current_pointer_consistency
+on public.standard_estimate_masters;
+create constraint trigger standard_estimate_master_current_pointer_consistency
+after insert or update or delete on public.standard_estimate_masters
 deferrable initially deferred
 for each row execute function public.validate_standard_estimate_current_pointer_at_commit();
 
@@ -964,7 +993,7 @@ revoke all on function public.validate_standard_estimate_master_refs() from publ
 revoke all on function public.validate_standard_estimate_base_revision_ref() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_baseline_item_refs() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_baseline_variant_refs() from public, anon, authenticated;
-revoke all on function public.prevent_standard_estimate_master_identity_change_after_publish() from public, anon, authenticated;
+revoke all on function public.prevent_standard_estimate_master_identity_change_after_revision() from public, anon, authenticated;
 revoke all on function public.prevent_published_standard_estimate_revision_mutation() from public, anon, authenticated;
 revoke all on function public.prevent_non_draft_standard_estimate_child_write() from public, anon, authenticated;
 revoke all on function public.prevent_non_draft_standard_estimate_variant_write() from public, anon, authenticated;
@@ -986,7 +1015,7 @@ grant execute on function public.validate_standard_estimate_master_refs(),
                           public.validate_standard_estimate_base_revision_ref(),
                           public.validate_standard_estimate_baseline_item_refs(),
                           public.validate_standard_estimate_baseline_variant_refs(),
-                          public.prevent_standard_estimate_master_identity_change_after_publish(),
+                          public.prevent_standard_estimate_master_identity_change_after_revision(),
                           public.prevent_published_standard_estimate_revision_mutation(),
                           public.prevent_non_draft_standard_estimate_child_write(),
                           public.prevent_non_draft_standard_estimate_variant_write(),

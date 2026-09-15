@@ -8,11 +8,16 @@
 -- =============================================================
 
 -- ---------- Standard Estimate Master ----------
+-- base_model_idを検索用にStandard Estimate側へ重複保持するため、
+-- (base_master_id, base_model_id)を複合FKで結び、参照元の後日変更もDB自身に防がせる。
+create unique index if not exists base_masters_id_model_unique_idx
+  on public.base_masters(id, base_model_id);
+
 create table if not exists public.standard_estimate_masters (
   id uuid primary key default gen_random_uuid(),
   owner_organization_id uuid not null references public.organizations(id) on delete restrict,
   base_model_id uuid not null references public.base_models(id) on delete restrict,
-  base_master_id uuid not null references public.base_masters(id) on delete restrict,
+  base_master_id uuid not null,
   spec_code text not null,
   name text not null,
   status text not null default 'active'
@@ -22,6 +27,9 @@ create table if not exists public.standard_estimate_masters (
   updated_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  foreign key (base_master_id, base_model_id)
+    references public.base_masters(id, base_model_id)
+    on delete restrict,
   unique (owner_organization_id, base_master_id, spec_code),
   check (length(btrim(spec_code)) > 0),
   check (length(btrim(name)) > 0)
@@ -103,36 +111,6 @@ create trigger standard_estimate_masters_refs
 before insert or update of owner_organization_id, base_model_id, base_master_id
 on public.standard_estimate_masters
 for each row execute function public.validate_standard_estimate_master_refs();
-
--- base_model_idをStandard Estimate Masterにも保持するため、参照元Base Master側の変更でも
--- 常に両者が一致するよう逆向きに保護する。
-create or replace function public.prevent_referenced_base_master_model_change()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if new.base_model_id is distinct from old.base_model_id
-     and exists (
-       select 1
-         from public.standard_estimate_masters m
-        where m.base_master_id = old.id
-          and m.base_model_id is distinct from new.base_model_id
-     )
-  then
-    raise exception 'LOCKED: Standard Estimateから参照中の本体Masterの商品モデルは変更できません'
-      using errcode = 'P0001';
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists base_masters_standard_estimate_model_guard on public.base_masters;
-create trigger base_masters_standard_estimate_model_guard
-before update of base_model_id on public.base_masters
-for each row execute function public.prevent_referenced_base_master_model_change();
 
 -- ---------- Standard Estimate Revision ----------
 create table if not exists public.standard_estimate_revisions (
@@ -977,7 +955,6 @@ grant all privileges on table public.standard_estimate_masters,
 to service_role;
 
 revoke all on function public.validate_standard_estimate_master_refs() from public, anon, authenticated;
-revoke all on function public.prevent_referenced_base_master_model_change() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_base_revision_ref() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_baseline_item_refs() from public, anon, authenticated;
 revoke all on function public.validate_standard_estimate_baseline_variant_refs() from public, anon, authenticated;
@@ -1000,7 +977,6 @@ grant execute on function public.can_create_standard_estimate_master_for_org(uui
 to authenticated, service_role;
 
 grant execute on function public.validate_standard_estimate_master_refs(),
-                          public.prevent_referenced_base_master_model_change(),
                           public.validate_standard_estimate_base_revision_ref(),
                           public.validate_standard_estimate_baseline_item_refs(),
                           public.validate_standard_estimate_baseline_variant_refs(),

@@ -14,6 +14,8 @@ describe('監査済み旧本体から新本体Draft作成', () => {
     expect(migration).toContain("v_batch.status not in ('ready', 'migrated')");
     expect(migration).toContain("if v_batch.status = 'migrated' then");
     expect(migration).toContain("'idempotent_replay', true");
+    expect(migration.indexOf("if v_batch.status = 'migrated' then"))
+      .toBeLessThan(migration.indexOf('perform public.assert_legacy_base_migration_source_current(p_batch_id);'));
     expect(migration).toContain('unique (migration_batch_id, base_model_id, proposed_group_key)');
   });
 
@@ -31,7 +33,7 @@ describe('監査済み旧本体から新本体Draft作成', () => {
     expect(migration).toContain("m.review_status = 'approved'");
     expect(migration).toContain("m.target_classification = 'base'");
     expect(migration).not.toMatch(/target_classification\s*=\s*'(interior_exterior|option|sitework)'/i);
-    expect(migration).toContain('本体以外の旧行が新本体Draftへ紐付いています');
+    expect(migration).toContain('本体以外または別groupの旧行が新本体Draftへ紐付いています');
   });
 
   it('proposed_group_key単位で本体を作り、同一group互換性を再検査する', () => {

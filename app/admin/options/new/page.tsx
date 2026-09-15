@@ -23,7 +23,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
-      lead="まず商品特定・詳細・お客様選択・価格を保存します。保存後にサブ画像とメーカー資料PDFを追加できます。"
+      lead="まず商品情報と販売設定を登録します。保存後、色・仕様、サブ画像、メーカー資料を追加できます。"
     >
       <BackLink href={isFree ? '/admin/free-products' : '/admin/options'} label="一覧へ戻る" />
       <OptionForm

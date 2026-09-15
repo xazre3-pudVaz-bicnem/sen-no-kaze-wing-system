@@ -198,6 +198,84 @@ export async function materializeLegacyBaseDraftsAction(formData: FormData): Pro
   redirect(migrationUrl(parsed.data, 'drafted'));
 }
 
+
+const fireSpecReviewSchema = z.object({
+  batch_id: z.uuid(),
+  draft_output_id: z.uuid(),
+  expected_review_version: decisionVersionSchema,
+  fire_spec_code: z.enum(['non_fire', 'fire']),
+  review_note: z.string().trim().min(1).max(1000),
+});
+
+export async function confirmLegacyBaseMigrationFireSpecAction(formData: FormData): Promise<void> {
+  await requireUser('/admin/base-migration');
+  ensureAvailable();
+
+  const parsed = fireSpecReviewSchema.safeParse({
+    batch_id: formData.get('batch_id'),
+    draft_output_id: formData.get('draft_output_id'),
+    expected_review_version: formData.get('expected_review_version'),
+    fire_spec_code: formData.get('fire_spec_code'),
+    review_note: formData.get('review_note') ?? '',
+  });
+  if (!parsed.success) redirect('/admin/base-migration?error=防火区分の確認内容が不正です');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('confirm_legacy_base_migration_fire_spec', {
+    p_draft_output_id: parsed.data.draft_output_id,
+    p_expected_review_version: parsed.data.expected_review_version,
+    p_fire_spec_code: parsed.data.fire_spec_code,
+    p_review_note: parsed.data.review_note,
+  });
+  if (error) {
+    redirect(`${migrationUrl(parsed.data.batch_id)}&error=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath('/admin/base-migration');
+  revalidatePath('/admin/base-masters');
+  redirect(migrationUrl(parsed.data.batch_id, 'fire_confirmed'));
+}
+
+export async function finalizeLegacyBaseDraftValidationAction(formData: FormData): Promise<void> {
+  await requireUser('/admin/base-migration');
+  ensureAvailable();
+
+  const parsed = z.uuid().safeParse(formData.get('batch_id'));
+  if (!parsed.success) redirect('/admin/base-migration?error=移行バッチIDが不正です');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('finalize_legacy_base_migration_draft_validation', {
+    p_batch_id: parsed.data,
+  });
+  if (error) {
+    redirect(`${migrationUrl(parsed.data)}&error=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath('/admin/base-migration');
+  revalidatePath('/admin/base-masters');
+  redirect(migrationUrl(parsed.data, 'validated'));
+}
+
+export async function publishLegacyBaseMigrationBatchAction(formData: FormData): Promise<void> {
+  await requireUser('/admin/base-migration');
+  ensureAvailable();
+
+  const parsed = z.uuid().safeParse(formData.get('batch_id'));
+  if (!parsed.success) redirect('/admin/base-migration?error=移行バッチIDが不正です');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('publish_legacy_base_migration_batch', {
+    p_batch_id: parsed.data,
+  });
+  if (error) {
+    redirect(`${migrationUrl(parsed.data)}&error=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath('/admin/base-migration');
+  revalidatePath('/admin/base-masters');
+  redirect(migrationUrl(parsed.data, 'completed'));
+}
+
 export async function cancelLegacyBaseMigrationBatchAction(formData: FormData): Promise<void> {
   await requireUser('/admin/base-migration');
   ensureAvailable();

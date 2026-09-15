@@ -471,16 +471,24 @@ begin
 
     if v_snapshot.legacy_base_expense is null
        or v_snapshot.legacy_base_expense <> round(v_snapshot.legacy_base_expense)
+       or v_snapshot.legacy_base_expense < 0
+       or v_snapshot.legacy_base_expense > 2147483647
        or v_snapshot.legacy_base_total is null
        or v_snapshot.legacy_base_total <> round(v_snapshot.legacy_base_total)
+       or v_snapshot.legacy_base_total < 0
+       or v_snapshot.legacy_base_total > 2147483647
     then
-      raise exception 'VALIDATION: 旧本体諸費用を1円単位で保存できません'
+      raise exception 'VALIDATION: 旧本体諸費用を1円単位のintegerへ完全保存できません'
         using errcode = 'P0001';
     end if;
 
     if v_snapshot.legacy_base_expense_rate is not null then
       if v_snapshot.legacy_base_expense_rate < 0 or v_snapshot.legacy_base_expense_rate > 1 then
         raise exception 'VALIDATION: 旧本体諸費用率が不正です'
+          using errcode = 'P0001';
+      end if;
+      if v_snapshot.legacy_base_expense_rate <> v_snapshot.legacy_base_expense_rate::numeric(8, 6) then
+        raise exception 'VALIDATION: 旧本体諸費用率を新Revisionの6桁精度へ無損失で保存できません'
           using errcode = 'P0001';
       end if;
       v_expense_method := 'rate';
@@ -490,6 +498,11 @@ begin
       v_expense_method := 'fixed';
       v_expense_rate := null;
       v_expense_amount := v_snapshot.legacy_base_expense::integer;
+    end if;
+
+    if v_source_total::numeric + v_expense_amount::numeric > 2147483647 then
+      raise exception 'VALIDATION: 新本体Draftのtotalがinteger範囲を超えます'
+        using errcode = 'P0001';
     end if;
     v_target_total := v_source_total + v_expense_amount;
 

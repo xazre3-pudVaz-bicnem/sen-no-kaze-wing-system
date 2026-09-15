@@ -12,13 +12,6 @@ import { StartBaseMasterDraftForm } from '@/components/admin/base-master-form';
 import { BaseMasterDraftEditor, type BaseMasterRevisionView } from '@/components/admin/base-master-revision-form';
 import type { BaseMasterRevisionLine } from '@/components/admin/base-master-lines';
 
-type MigrationDraftOutput = {
-  id: string;
-  migration_batch_id: string;
-  fire_spec_review_required: boolean;
-  confirmed_fire_spec_code: string | null;
-};
-
 type LegacyMigrationDraftOutputView = {
   id: string;
   migration_batch_id: string;
@@ -312,10 +305,13 @@ export default async function BaseMasterDetailPage({
 
       {readonlyRevisions.map((revision) => {
         const lines = linesByRevision.get(revision.id) ?? [];
+        const isMigrationDraft = migrationDraftLocked && draft?.id === revision.id;
         return (
           <section key={revision.id} id={`revision-${revision.id}`} className="card overflow-x-auto">
             <div className="border-b border-line px-5 py-4">
-              <h2 className="font-semibold">{readOnlyRevisionTitle(revision)}</h2>
+              <h2 className="font-semibold">
+                {isMigrationDraft ? `Draft v${revision.version}（移行監査・参照のみ）` : readOnlyRevisionTitle(revision)}
+              </h2>
               <p className="mt-1 text-xs text-muted">
                 {lines.length}行・明細合計 {formatYen(revision.line_subtotal)}・本体価格計 {formatYen(revision.total)}
               </p>
@@ -357,6 +353,7 @@ export default async function BaseMasterDetailPage({
           </thead>
           <tbody className="divide-y divide-line">
             {revisionRows.map((revision) => {
+              const isMigrationDraft = migrationDraftLocked && draft?.id === revision.id;
               const isEditing = editable && !migrationDraftLocked && draft?.id === revision.id;
               const isShown = readOnlyRevisionIds.includes(revision.id);
               return (

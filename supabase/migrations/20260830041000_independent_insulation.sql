@@ -26,7 +26,7 @@ begin
     join public.base_models b on b.id = cfg.base_model_id
     where b.slug = 'wing-01'
       and cfg.status = 'draft'
-      and coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code') not in ('hotel', 'residence', 'office')
+      and coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code', '') not in ('hotel', 'residence', 'office')
   ) then
     raise exception
       'MIGRATION_BLOCKED: Wing Draftに断熱標準を自動判定できないspec_codeがあります'
@@ -115,7 +115,7 @@ on conflict (id) do update set
 with draft_specs as (
   select
     cfg.id as configuration_id,
-    coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code') as effective_spec
+    coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code', '') as effective_spec
   from public.configurations cfg
   join public.base_models b on b.id = cfg.base_model_id
   where b.slug = 'wing-01'

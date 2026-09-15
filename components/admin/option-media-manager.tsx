@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, type ReactNode } from 'react';
 import {
   addOptionImageAction,
   deleteOptionImageAction,
@@ -22,7 +22,7 @@ function ActionStatus({ state }: { state: AdminFormState }) {
   return null;
 }
 
-function PendingButton({ pending, children }: { pending: boolean; children: React.ReactNode }) {
+function PendingButton({ pending, children }: { pending: boolean; children: ReactNode }) {
   return (
     <Button type="submit" disabled={pending}>
       {pending && <Spinner />}

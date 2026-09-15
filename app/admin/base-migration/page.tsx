@@ -9,6 +9,7 @@ import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import {
   createLegacyBaseMigrationBatchAction,
   finalizeLegacyBaseMigrationReviewAction,
+  materializeLegacyBaseDraftsAction,
   resolveLegacyEstimateDuplicateAction,
   setLegacyBaseMappingDecisionAction,
   setLegacyBaseSpecMappingAction,
@@ -82,6 +83,8 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
   let specs: Row[] = [];
   let duplicates: Row[] = [];
   let snapshots: Row[] = [];
+  let draftOutputs: Row[] = [];
+  let lineLinks: Row[] = [];
 
   if (selected) {
     const batchId = String(selected.id);
@@ -99,6 +102,25 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
     snapshots = (f.data ?? []) as Row[];
   }
 
+  if (selected && ['migrated', 'validated', 'completed'].includes(String(selected.status))) {
+    const batchId = String(selected.id);
+    const [o, l] = await Promise.all([
+      supabase
+        .from('legacy_base_migration_draft_outputs')
+        .select('*')
+        .eq('migration_batch_id', batchId)
+        .order('proposed_group_key'),
+      supabase
+        .from('legacy_base_migration_line_links')
+        .select('id,draft_output_id,mapping_id,revision_line_id,revision_line_key')
+        .eq('migration_batch_id', batchId),
+    ]);
+    const outputError = o.error || l.error;
+    if (outputError) return <AdminPage title="旧本体内訳の移行監査"><Alert tone="danger">{outputError.message}</Alert></AdminPage>;
+    draftOutputs = (o.data ?? []) as Row[];
+    lineLinks = (l.data ?? []) as Row[];
+  }
+
   const pendingMappings = mappings.filter((row) => row.review_status !== 'approved' || row.target_classification === 'review');
   const pendingSpecs = specs.filter((row) => row.decision_status !== 'approved' || !row.proposed_group_key);
   const pendingDuplicates = duplicates.filter((row) => row.resolution === 'pending');
@@ -110,21 +132,27 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
   const snapshotMap = new Map(
     snapshots.map((row) => [`${String(row.base_model_id)}::${String(row.legacy_spec_code)}`, row])
   );
+  const lineCountByOutput = new Map<string, number>();
+  for (const row of lineLinks) {
+    const key = String(row.draft_output_id);
+    lineCountByOutput.set(key, (lineCountByOutput.get(key) ?? 0) + 1);
+  }
   const readiness = assessLegacyBaseMigrationReadiness({ mappings, specs, duplicates, snapshots });
   const ready = Boolean(selected) && readiness.canAttemptFinalize;
 
   return (
     <AdminPage
       title="旧本体内訳の移行監査"
-      lead="旧本体内訳を新本体・内外装工事へ移す前に、元データを固定し、分類・重複・金額を確認します。ここでは実移行しません。"
+      lead="旧本体内訳の元データを固定し、分類・重複・金額を監査します。ready確定後は監査済みの本体行だけを新本体Draftへ作成します。"
     >
       {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {sp.created && <Alert tone="success">監査バッチを作成しました。旧データは変更していません。</Alert>}
       {sp.saved && <Alert tone="success">判定を保存しました。</Alert>}
-      {sp.ready && <Alert tone="success">レビュー完了です。実移行は次のPRで行います。</Alert>}
+      {sp.ready && <Alert tone="success">レビュー完了です。readyバッチから新本体Draftを作成できます。</Alert>}
+      {sp.drafted && <Alert tone="success">新本体Draftを作成しました。Publish・Simulator・Quoteはまだ切り替えていません。</Alert>}
 
       <Alert tone="info">
-        このPRでは base_breakdown_items / estimate_templates / 本体マスター / シミュレーターへ書き込みません。
+        旧 base_breakdown_items / estimate_templates は変更しません。ready後は監査済みの本体行だけを新本体Draftへコピーします。
       </Alert>
 
       <section className="card space-y-4 p-5">
@@ -343,6 +371,76 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               </tbody>
             </Table>
           </section>
+
+          {draftOutputs.length > 0 && (
+            <section className="space-y-3">
+              <div>
+                <h2 className="font-semibold">新本体Draft検算</h2>
+                <p className="text-sm text-muted">
+                  「旧本体明細」は移行前の本体区分全体、「新本体明細」は監査で本体に残した行だけの合計です。内外装工事・オプション・別途へ移した分は差額として残ります。
+                </p>
+              </div>
+              <Table minWidth="78rem">
+                <thead className="bg-sand/60">
+                  <tr>
+                    <Th>モデル</Th><Th>新本体グループ</Th><Th>代表旧仕様</Th>
+                    <Th right>旧本体明細</Th><Th right>新本体明細</Th><Th right>本体から除外</Th>
+                    <Th right>旧諸費用</Th><Th right>新諸費用</Th><Th right>新Draft計</Th>
+                    <Th>追跡</Th><Th>防火区分</Th><Th></Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {draftOutputs.map((row) => {
+                    const legacyLineTotal = Number(row.legacy_base_section_line_total ?? 0);
+                    const targetLineTotal = Number(row.target_line_subtotal ?? 0);
+                    const movedOut = legacyLineTotal - targetLineTotal;
+                    return (
+                      <tr key={String(row.id)}>
+                        <Td>{modelMap.get(String(row.base_model_id)) ?? '—'}</Td>
+                        <Td className="font-semibold">{String(row.proposed_group_key)}</Td>
+                        <Td>{String(row.representative_legacy_spec_code)}</Td>
+                        <Td right>{formatYen(legacyLineTotal)}</Td>
+                        <Td right>{formatYen(targetLineTotal)}</Td>
+                        <Td right>{formatYen(movedOut)}</Td>
+                        <Td right>{formatYen(Number(row.legacy_base_expense ?? 0))}</Td>
+                        <Td right>{formatYen(Number(row.target_expense_amount ?? 0))}</Td>
+                        <Td right className="font-semibold">{formatYen(Number(row.target_total ?? 0))}</Td>
+                        <Td>{lineCountByOutput.get(String(row.id)) ?? 0}行</Td>
+                        <Td>{row.fire_spec_review_required ? <Badge tone="warn">要確認</Badge> : <Badge tone="success">確認済み</Badge>}</Td>
+                        <Td>
+                          <Link className="text-sm underline" href={`/admin/base-masters/${String(row.base_master_id)}`}>Draftを開く</Link>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </section>
+          )}
+
+          {canManage && ['ready', 'migrated'].includes(String(selected.status)) && (
+            <section className="card space-y-3 p-5">
+              <h2 className="font-semibold">新本体Draft作成</h2>
+              <p className="text-sm">
+                approvedの「本体」行だけを proposed_group_key 単位で本部所有の新本体Draftへコピーします。
+              </p>
+              <div className="grid gap-1 text-xs text-muted sm:grid-cols-2">
+                <p>内外装工事・オプション・別途はこの工程ではコピーしません。</p>
+                <p>Publish・Simulator・Quoteの参照先は変更しません。</p>
+                <p>旧行から新lineへの追跡を保存し、1円単位で再検算します。</p>
+                <p>防火区分はDraft段階ではnon_fireを仮置きし、Publish前に明示確認します。</p>
+              </div>
+              <form action={materializeLegacyBaseDraftsAction}>
+                <input type="hidden" name="batch_id" value={String(selected.id)} />
+                <Button type="submit">
+                  {selected.status === 'ready' ? '監査済みデータから新本体Draftを作成' : 'Draft作成結果を再検証'}
+                </Button>
+              </form>
+              <p className="text-xs text-muted">
+                DB側でready状態・STALE・group互換性を再確認し、途中で失敗した場合は同一RPC transaction全体がrollbackされます。
+              </p>
+            </section>
+          )}
 
           {canManage && selected.status === 'reviewing' && (
             <section className="card space-y-3 p-5">

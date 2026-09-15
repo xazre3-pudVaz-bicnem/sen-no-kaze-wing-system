@@ -123,6 +123,23 @@ begin
 
   if exists (
     select 1
+      from public.legacy_base_migration_draft_outputs o
+     where o.migration_batch_id = p_batch_id
+       and not exists (
+         select 1
+           from public.legacy_base_spec_mappings s
+          where s.migration_batch_id = p_batch_id
+            and s.base_model_id = o.base_model_id
+            and s.proposed_group_key = o.proposed_group_key
+            and s.decision_status = 'approved'
+       )
+  ) then
+    raise exception 'VALIDATION: 新本体Draftに監査済みgroupと対応しない出力があります'
+      using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1
       from public.legacy_base_breakdown_mappings m
      where m.migration_batch_id = p_batch_id
        and m.review_status = 'approved'
@@ -142,14 +159,24 @@ begin
     select 1
       from public.legacy_base_migration_line_links l
       join public.legacy_base_breakdown_mappings m on m.id = l.mapping_id
+      join public.legacy_base_migration_draft_outputs o on o.id = l.draft_output_id
+      left join public.legacy_base_spec_mappings s
+        on s.migration_batch_id = m.migration_batch_id
+       and s.base_model_id = m.base_model_id
+       and s.legacy_spec_code = m.legacy_spec_code
      where l.migration_batch_id = p_batch_id
        and (
          m.migration_batch_id <> p_batch_id
+         or o.migration_batch_id <> p_batch_id
          or m.review_status <> 'approved'
          or m.target_classification <> 'base'
+         or s.id is null
+         or s.decision_status <> 'approved'
+         or s.proposed_group_key is distinct from o.proposed_group_key
+         or s.base_model_id <> o.base_model_id
        )
   ) then
-    raise exception 'VALIDATION: 本体以外の旧行が新本体Draftへ紐付いています'
+    raise exception 'VALIDATION: 本体以外または別groupの旧行が新本体Draftへ紐付いています'
       using errcode = 'P0001';
   end if;
 
@@ -193,10 +220,20 @@ begin
   if exists (
     select 1
       from public.legacy_base_migration_draft_outputs o
+      join public.base_masters b on b.id = o.base_master_id
+      join public.organizations owner_org on owner_org.id = b.owner_organization_id
       join public.base_master_revisions r on r.id = o.revision_id
      where o.migration_batch_id = p_batch_id
        and (
-         r.base_master_id <> o.base_master_id
+         b.base_model_id <> o.base_model_id
+         or b.status <> 'active'
+         or b.current_published_revision_id is not null
+         or b.fire_spec_code <> o.initial_fire_spec_code
+         or not o.fire_spec_review_required
+         or owner_org.code <> 'gijutsu-no-mori'
+         or owner_org.organization_type <> 'headquarters'
+         or owner_org.status <> 'active'
+         or r.base_master_id <> o.base_master_id
          or r.status <> 'draft'
          or r.line_subtotal <> o.target_line_subtotal
          or r.expense_method <> o.target_expense_method
@@ -210,7 +247,7 @@ begin
          ), 0)
        )
   ) then
-    raise exception 'VALIDATION: 作成した新本体Draftの金額が移行記録と一致しません'
+    raise exception 'VALIDATION: 作成したHQ所有の新本体Draftまたは金額が移行記録と一致しません'
       using errcode = 'P0001';
   end if;
 
@@ -289,15 +326,17 @@ begin
       using errcode = 'P0001';
   end if;
 
-  -- PR #106 と同じ順序で旧正本を固定し、ready後に元データが変わっていないことを再確認する。
-  perform public.lock_legacy_estimate_source();
-  perform public.assert_legacy_base_migration_source_current(p_batch_id);
-
-  -- 再実行は新規作成せず、既存出力を再検証して同じ結果を返す。
+  -- migrated後の再実行は、固定済み監査snapshotと作成済みDraftだけを再検証する。
+  -- 後日旧正本が更新されても、新規作成はせず同じ出力を返す。
   if v_batch.status = 'migrated' then
     return public.validate_legacy_base_draft_materialization(p_batch_id)
       || jsonb_build_object('status', 'migrated', 'idempotent_replay', true);
   end if;
+
+  -- 初回作成時だけPR #106と同じ順序で旧正本を固定し、
+  -- ready後に元データが変わっていないことを再確認する。
+  perform public.lock_legacy_estimate_source();
+  perform public.assert_legacy_base_migration_source_current(p_batch_id);
 
   if exists (
     select 1 from public.legacy_base_migration_draft_outputs o

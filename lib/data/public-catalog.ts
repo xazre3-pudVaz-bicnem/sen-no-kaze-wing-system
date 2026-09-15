@@ -109,6 +109,9 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
   const choiceRows = isMissingRelation(vchoices.error) ? [] : ((vchoices.data ?? []) as OptionVariantChoice[]);
   // 本体内訳は 0016 で追加。未適用の DB では「内訳なし」として扱う
   const breakdownRows = isMissingRelation(bbItems.error) ? [] : ((bbItems.data ?? []) as BaseBreakdownItem[]);
+  if (optionImages.error && !isMissingRelation(optionImages.error)) {
+    throw new Error(`public catalog option_images: ${optionImages.error.message}`);
+  }
   const optionImageRows = isMissingRelation(optionImages.error) ? [] : ((optionImages.data ?? []) as OptionImage[]);
   const err = [models, images, categories, options, dependencies, conflicts, rules].find((r) => r.error)?.error;
   if (err) throw new Error(`public catalog: ${err.message}`);

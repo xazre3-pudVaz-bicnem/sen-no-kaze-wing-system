@@ -178,6 +178,26 @@ export async function finalizeLegacyBaseMigrationReviewAction(formData: FormData
   redirect(migrationUrl(parsed.data, 'ready'));
 }
 
+export async function materializeLegacyBaseDraftsAction(formData: FormData): Promise<void> {
+  await requireUser('/admin/base-migration');
+  ensureAvailable();
+
+  const parsed = z.uuid().safeParse(formData.get('batch_id'));
+  if (!parsed.success) redirect('/admin/base-migration?error=移行バッチIDが不正です');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('materialize_legacy_base_migration_drafts', {
+    p_batch_id: parsed.data,
+  });
+  if (error) {
+    redirect(`${migrationUrl(parsed.data)}&error=${encodeURIComponent(errorMessage(error))}`);
+  }
+
+  revalidatePath('/admin/base-migration');
+  revalidatePath('/admin/base-masters');
+  redirect(migrationUrl(parsed.data, 'drafted'));
+}
+
 export async function cancelLegacyBaseMigrationBatchAction(formData: FormData): Promise<void> {
   await requireUser('/admin/base-migration');
   ensureAvailable();

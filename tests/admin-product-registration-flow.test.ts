@@ -20,18 +20,17 @@ const nav = fs.readFileSync(
 );
 
 describe('商品登録管理画面の業務フロー', () => {
-  it('商品登録の1〜5を同じ編集画面で案内する', () => {
-    for (const label of [
-      '1. 商品特定',
-      '2. 商品の詳細',
-      '3. お客様資料',
-      '4. お客様選択',
-      '5. 価格設定',
-    ]) {
-      expect(forms).toContain(label);
-    }
-    expect(editPage).toContain('6.</span>発注内容確認');
-    expect(editPage).toContain('7.</span>お客様画面最終確認');
+  it('編集画面を3つの分かりやすい領域に整理する', () => {
+    expect(editPage).toContain('1');
+    expect(editPage).toContain('商品情報');
+    expect(editPage).toContain('2');
+    expect(editPage).toContain('お客様表示・選択');
+    expect(editPage).toContain('3');
+    expect(editPage).toContain('販売・詳細設定');
+    expect(editPage).toContain('mode="product"');
+    expect(editPage).toContain('mode="sales"');
+    expect(forms).toContain('詳細設定');
+    expect(forms).toContain('通常は変更不要');
   });
 
   it('既存の商品保存フィールドを維持する', () => {
@@ -68,7 +67,14 @@ describe('商品登録管理画面の業務フロー', () => {
 
   it('価格は追加金額として案内する', () => {
     expect(forms).toContain('追加金額（税別・円）');
-    expect(forms).toContain('標準との差額ではなく、この商品を選んだときの追加金額');
+    expect(forms).toContain('この商品を選んだときに加算する金額');
+  });
+
+  it('商品一覧は検索・カテゴリー・公開状態で絞り込める', () => {
+    expect(listPage).toContain('name="q"');
+    expect(listPage).toContain('name="category"');
+    expect(listPage).toContain('name="status"');
+    expect(listPage).toContain('商品名・メーカー・型番');
   });
 
   it('管理画面では商品登録・編集として案内する', () => {

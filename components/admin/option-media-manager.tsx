@@ -74,7 +74,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   return (
     <section id="product-media" className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold">3. お客様資料（サブ画像・メーカー資料）</h2>
+        <h2 className="text-lg font-semibold">商品情報：サブ画像・メーカー資料</h2>
         <p className="mt-1 text-sm text-muted">
           この商品のサブ画像と、お客様の商品詳細に表示するメーカー資料PDFを管理します。
         </p>
@@ -84,7 +84,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         <div>
           <h3 className="font-semibold">サブ画像</h3>
           <p className="mt-1 text-xs text-muted">
-            メイン画像は上の「メイン画像・プレビュー」で管理します。ここでは商品詳細のサムネイルに追加する画像を登録します。
+            メイン画像は上の「商品情報」で管理します。ここでは商品詳細に追加する画像を登録します。
           </p>
         </div>
 

@@ -42,39 +42,50 @@ export default async function EditOptionPage({ params, searchParams }: { params:
     >
       <BackLink href="/admin/options" label="一覧へ戻る" />
       <FlashMessages sp={sp} />
-      <section className="card p-4 sm:p-5" aria-label="商品登録フロー">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="font-semibold">商品登録フロー</h2>
-            <p className="mt-1 text-xs text-muted">現在の画面で1〜5まで設定できます。6・7は後続工程で整備します。</p>
-          </div>
-          <span className="text-xs text-muted">保存しながら順番に確認できます</span>
+      <section className="card p-4 sm:p-5" aria-label="商品編集メニュー">
+        <div>
+          <h2 className="font-semibold">この商品の設定</h2>
+          <p className="mt-1 text-xs text-muted">通常は上から3つだけ確認すれば登録できます。細かなシステム設定は「販売・詳細設定」の中にまとめています。</p>
         </div>
-        <ol className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
+        <ol className="mt-4 grid gap-2 md:grid-cols-3">
           {[
-            ['1', '商品特定', '#product-identification'],
-            ['2', '商品の詳細', '#product-details'],
-            ['3', 'お客様資料', '#customer-materials-main'],
-            ['4', 'お客様選択', '#customer-selection'],
-            ['5', '価格設定', '#price-settings'],
-          ].map(([no, label, href]) => (
+            ['1', '商品情報', '商品名・メーカー・画像・メーカー資料', '#product-info'],
+            ['2', 'お客様表示・選択', '色・柄・仕様・追加金額', '#customer-selection'],
+            ['3', '販売・詳細設定', '商品価格・対象モデル・公開設定', '#sales-settings'],
+          ].map(([no, label, note, href]) => (
             <li key={no}>
-              <a href={href} className="block rounded-lg border border-line bg-white px-3 py-2 text-sm hover:border-brown">
-                <span className="mr-1 text-xs text-muted">{no}.</span>{label}
+              <a href={href} className="block h-full rounded-xl border border-line bg-white px-4 py-3 transition hover:border-brown hover:bg-ivory/30">
+                <span className="text-xs font-semibold text-brown">{no}</span>
+                <span className="ml-2 font-semibold">{label}</span>
+                <span className="mt-1 block text-xs text-muted">{note}</span>
               </a>
             </li>
           ))}
-          <li className="rounded-lg border border-dashed border-line px-3 py-2 text-sm text-muted">
-            <span className="mr-1 text-xs">6.</span>発注内容確認
-          </li>
-          <li className="rounded-lg border border-dashed border-line px-3 py-2 text-sm text-muted">
-            <span className="mr-1 text-xs">7.</span>お客様画面最終確認
-          </li>
         </ol>
       </section>
-      <OptionForm option={option} categories={categories} models={models} allOptions={options} dependencies={deps} conflicts={confs} />
-      <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
+
+      <OptionForm
+        mode="product"
+        option={option}
+        categories={categories}
+        models={models}
+        allOptions={options}
+        dependencies={deps}
+        conflicts={confs}
+      />
       <OptionMediaManager option={option} />
+
+      <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
+
+      <OptionForm
+        mode="sales"
+        option={option}
+        categories={categories}
+        models={models}
+        allOptions={options}
+        dependencies={deps}
+        conflicts={confs}
+      />
     </AdminPage>
   );
 }

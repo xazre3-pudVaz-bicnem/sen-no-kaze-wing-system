@@ -347,11 +347,11 @@ export function OptionVariantManager({
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 
   return (
-    <section id="product-variants" className="space-y-6 scroll-mt-6">
+    <section id="customer-selection" className="space-y-6 scroll-mt-6">
       <div>
-        <h2 className="text-xl font-semibold">4. お客様選択（色・仕様）</h2>
+        <h2 className="text-xl font-semibold">2. お客様表示・選択</h2>
         <p className="mt-1 text-sm text-muted">
-          お客様が商品詳細で選ぶ色・柄・仕様と、その追加金額を管理します。ここで保存した内容は既存のシミュレーター商品詳細で使用されます。
+          お客様が商品詳細で選ぶ色・柄・仕様と、その追加金額を管理します。シミュレーターの商品詳細にそのまま反映されます。
         </p>
         <p className="mt-2 text-xs text-muted">
           使用済みの見積・保存仕様との整合を守るため、この画面では物理削除を行いません。不要になった項目・選択肢は「非公開」にしてください。

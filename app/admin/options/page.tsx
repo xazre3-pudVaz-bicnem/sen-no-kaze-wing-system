@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { Badge } from '@/components/ui';
+import { Badge, Input, Select } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
 
@@ -44,30 +44,30 @@ export default async function AdminOptionsPage({
       <form method="get" className="card grid gap-3 p-4 sm:grid-cols-[minmax(14rem,1fr)_minmax(12rem,0.55fr)_10rem_auto] sm:items-end">
         <label className="block">
           <span className="label">商品を検索</span>
-          <input
+          <Input
             type="search"
             name="q"
             defaultValue={sp.q ?? ''}
             placeholder="商品名・メーカー・型番"
-            className="input mt-1 w-full"
+            className="mt-1 w-full"
           />
         </label>
         <label className="block">
           <span className="label">カテゴリー</span>
-          <select name="category" defaultValue={categoryId} className="input mt-1 w-full">
+          <Select name="category" defaultValue={categoryId} className="mt-1 w-full">
             <option value="">すべて</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block">
           <span className="label">公開状態</span>
-          <select name="status" defaultValue={status} className="input mt-1 w-full">
+          <Select name="status" defaultValue={status} className="mt-1 w-full">
             <option value="">すべて</option>
             <option value="published">公開</option>
             <option value="draft">非公開</option>
-          </select>
+          </Select>
         </label>
         <div className="flex gap-2">
           <button type="submit" className="btn-secondary btn-sm">絞り込む</button>

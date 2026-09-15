@@ -50,6 +50,7 @@ import {
   catalogImportUrlsForUser,
   localCatalogImportUrl,
 } from '@/lib/import/catalog-import-images';
+import { assertOwnedLocalMediaPath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
 import {
   StoreError,
@@ -1517,21 +1518,46 @@ export class LocalStore implements DataStore {
     fs.writeFileSync(abs, file.bytes);
     return `/api/local-files/${safeFolder}/${name}`;
   }
-  async uploadProductDocument(file: UploadInput, folder: string) {
-    const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'documents';
-    const name = `${Date.now()}-${randomUUID().slice(0, 8)}.pdf`;
-    const abs = path.join(filesDir(), 'product-documents', safeFolder, name);
+  async uploadOptionImage(file: UploadInput, optionId: string) {
+    const ext = path.extname(file.fileName).toLowerCase() || '.jpg';
+    const name = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
+    const relative = `${optionMediaPrefix(optionId, 'gallery')}${name}`;
+    const abs = path.join(filesDir(), ...relative.split('/'));
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, file.bytes);
-    return `/api/local-files/product-documents/${safeFolder}/${name}`;
+    return `/api/local-files/${relative}`;
   }
-  async deleteUploadedProductDocument(url: string) {
-    const prefix = '/api/local-files/product-documents/';
-    if (!url.startsWith(prefix)) return;
-    const relative = url.slice('/api/local-files/'.length);
+  async deleteUploadedOptionImage(url: string, optionId: string) {
+    let relative: string;
+    try {
+      relative = assertOwnedLocalMediaPath(url, optionId, 'gallery');
+    } catch (error) {
+      throw new StoreError('FORBIDDEN', error instanceof Error ? error.message : '商品画像の削除先が正しくありません');
+    }
     const root = path.resolve(filesDir());
-    const target = path.resolve(root, relative);
-    if (target !== root && target.startsWith(`${root}${path.sep}`)) fs.rmSync(target, { force: true });
+    const target = path.resolve(root, ...relative.split('/'));
+    if (target === root || !target.startsWith(`${root}${path.sep}`)) throw new StoreError('FORBIDDEN', '商品画像の削除先が正しくありません');
+    fs.rmSync(target, { force: true });
+  }
+  async uploadProductDocument(file: UploadInput, optionId: string) {
+    const name = `${Date.now()}-${randomUUID().slice(0, 8)}.pdf`;
+    const relative = `${optionMediaPrefix(optionId, 'manufacturer')}${name}`;
+    const abs = path.join(filesDir(), ...relative.split('/'));
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, file.bytes);
+    return `/api/local-files/${relative}`;
+  }
+  async deleteUploadedProductDocument(url: string, optionId: string) {
+    let relative: string;
+    try {
+      relative = assertOwnedLocalMediaPath(url, optionId, 'manufacturer');
+    } catch (error) {
+      throw new StoreError('FORBIDDEN', error instanceof Error ? error.message : 'メーカー資料の削除先が正しくありません');
+    }
+    const root = path.resolve(filesDir());
+    const target = path.resolve(root, ...relative.split('/'));
+    if (target === root || !target.startsWith(`${root}${path.sep}`)) throw new StoreError('FORBIDDEN', 'メーカー資料の削除先が正しくありません');
+    fs.rmSync(target, { force: true });
   }
   async uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number) {
     const storagePath = catalogImportUploadPath(userId, sessionId, index, file.fileName);

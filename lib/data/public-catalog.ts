@@ -6,6 +6,7 @@ import type {
   BaseModel,
   CatalogBundle,
   OptionCategory,
+  OptionImage,
   OptionConflict,
   OptionDependency,
   OptionVariantChoice,
@@ -30,6 +31,7 @@ function assemble(
   images: ProductImage[],
   categories: OptionCategory[],
   options: ProductOption[],
+  optionImages: OptionImage[],
   dependencies: OptionDependency[],
   conflicts: OptionConflict[],
   previewRules: PreviewImageRule[],
@@ -42,6 +44,12 @@ function assemble(
   for (const model of models) {
     const opts = options
       .filter((o) => o.base_model_id === null || o.base_model_id === model.id)
+      .map((option) => ({
+        ...option,
+        gallery_images: optionImages
+          .filter((image) => image.option_id === option.id)
+          .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+      }))
       .sort((a, b) => a.sort_order - b.sort_order);
     const ids = new Set(opts.map((o) => o.id));
     bundles[model.id] = {
@@ -80,11 +88,12 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
 
   const { createPublicClient } = await import('@/lib/supabase/public');
   const db = createPublicClient();
-  const [models, images, categories, options, dependencies, conflicts, rules, hotspots, vgroups, vchoices, bbItems] = await Promise.all([
+  const [models, images, categories, options, optionImages, dependencies, conflicts, rules, hotspots, vgroups, vchoices, bbItems] = await Promise.all([
     db.from('base_models').select('*').eq('status', 'published').order('sort_order'),
     db.from('product_images').select('*').order('sort_order'),
     db.from('option_categories').select('*').eq('status', 'published').order('sort_order'),
     db.from('options').select('*').eq('status', 'published').order('sort_order'),
+    db.from('option_images').select('*').order('sort_order'),
     db.from('option_dependencies').select('*'),
     db.from('option_conflicts').select('*'),
     db.from('preview_image_rules').select('*').eq('status', 'published'),
@@ -100,6 +109,10 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
   const choiceRows = isMissingRelation(vchoices.error) ? [] : ((vchoices.data ?? []) as OptionVariantChoice[]);
   // 本体内訳は 0016 で追加。未適用の DB では「内訳なし」として扱う
   const breakdownRows = isMissingRelation(bbItems.error) ? [] : ((bbItems.data ?? []) as BaseBreakdownItem[]);
+  if (optionImages.error && !isMissingRelation(optionImages.error)) {
+    throw new Error(`public catalog option_images: ${optionImages.error.message}`);
+  }
+  const optionImageRows = isMissingRelation(optionImages.error) ? [] : ((optionImages.data ?? []) as OptionImage[]);
   const err = [models, images, categories, options, dependencies, conflicts, rules].find((r) => r.error)?.error;
   if (err) throw new Error(`public catalog: ${err.message}`);
 
@@ -108,6 +121,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     (images.data ?? []) as ProductImage[],
     normalizeCategories((categories.data ?? []) as OptionCategory[]),
     normalizeOptions((options.data ?? []) as ProductOption[]),
+    optionImageRows,
     (dependencies.data ?? []) as OptionDependency[],
     (conflicts.data ?? []) as OptionConflict[],
     (rules.data ?? []) as PreviewImageRule[],

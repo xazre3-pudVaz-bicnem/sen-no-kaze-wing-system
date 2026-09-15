@@ -7,6 +7,7 @@ import type {
   Configuration,
   ConfigurationItem,
   OptionCategory,
+  OptionImage,
   PreviewImageRule,
   PreviewHotspot,
   ProductImage,
@@ -118,7 +119,8 @@ export interface UploadInput {
 
 export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
 export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
-export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
+export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images'> & { id?: string | null };
+export type OptionImageInput = Omit<OptionImage, 'id' | 'created_at'> & { id?: string | null };
 export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | null };
 export type HotspotInput = Omit<PreviewHotspot, 'id'> & { id?: string | null };
 export type ProductImageInput = Omit<ProductImage, 'id'> & { id?: string | null };
@@ -249,6 +251,9 @@ export interface DataStore {
   getOption(id: string): Promise<ProductOption | null>;
   upsertOption(input: OptionInput): Promise<ProductOption>;
   deleteOption(id: string): Promise<void>;
+  upsertOptionImage(input: OptionImageInput): Promise<OptionImage>;
+  deleteOptionImage(id: string): Promise<OptionImage | null>;
+  setOptionManufacturerDocument(optionId: string, url: string | null): Promise<void>;
   setOptionRelations(
     optionId: string,
     dependencies: { requires_option_id: string; message: string | null }[],
@@ -262,6 +267,14 @@ export interface DataStore {
   deleteProductImage(id: string): Promise<void>;
   /** 画像をストレージへ保存し公開 URL を返す */
   uploadImage(file: UploadInput, folder: string): Promise<string>;
+  /** 商品サブ画像を option ID 固有prefixへ保存する */
+  uploadOptionImage(file: UploadInput, optionId: string): Promise<string>;
+  /** option ID 固有prefixと一致する商品サブ画像だけを削除する */
+  deleteUploadedOptionImage(url: string, optionId: string): Promise<void>;
+  /** メーカー資料PDFを option ID 固有prefixへ保存する */
+  uploadProductDocument(file: UploadInput, optionId: string): Promise<string>;
+  /** option ID 固有prefixと一致するメーカー資料だけを削除する */
+  deleteUploadedProductDocument(url: string, optionId: string): Promise<void>;
   /** 商品マスター Import 用画像を、実行ユーザーと session 単位の隔離パスへ保存する */
   uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number): Promise<string>;
   /** このリクエストで保存した画像を、後続処理失敗時に取り消す。 */

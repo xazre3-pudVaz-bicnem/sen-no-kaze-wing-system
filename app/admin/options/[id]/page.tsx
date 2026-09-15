@@ -5,6 +5,7 @@ import type { OptionConflict, OptionDependency } from '@/lib/domain/types';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
+import { OptionMediaManager } from '@/components/admin/option-media-manager';
 
 export default async function EditOptionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
@@ -36,6 +37,7 @@ export default async function EditOptionPage({ params, searchParams }: { params:
       <BackLink href="/admin/options" label="一覧へ戻る" />
       <FlashMessages sp={sp} />
       <OptionForm option={option} categories={categories} models={models} allOptions={options} dependencies={deps} conflicts={confs} />
+      <OptionMediaManager option={option} />
     </AdminPage>
   );
 }

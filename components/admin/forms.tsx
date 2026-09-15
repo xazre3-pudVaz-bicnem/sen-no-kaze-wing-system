@@ -476,6 +476,21 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
               {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </Select>
           </Field>
+          <Field label="メーカー" htmlFor="manufacturer" errors={e.manufacturer}>
+            <Input id="manufacturer" name="manufacturer" defaultValue={option?.manufacturer ?? ''} placeholder="例：TOTO" />
+          </Field>
+          <Field label="シリーズ・型番" htmlFor="model_no" errors={e.model_no}>
+            <Input id="model_no" name="model_no" defaultValue={option?.model_no ?? ''} placeholder="例：サザナ HTシリーズ" />
+          </Field>
+          <Field label="サイズ・仕様" htmlFor="size_note" errors={e.size_note}>
+            <Input id="size_note" name="size_note" defaultValue={option?.size_note ?? ''} placeholder="例：1616サイズ" />
+          </Field>
+          <Field label="位置づけ" htmlFor="highlight" hint="任意。標準候補／おすすめ候補など" errors={e.highlight}>
+            <Input id="highlight" name="highlight" defaultValue={option?.highlight ?? ''} />
+          </Field>
+          <Field label="メーカー参考価格（税別・表示のみ）" htmlFor="list_price" errors={e.list_price}>
+            <Input id="list_price" name="list_price" type="number" min={0} step={1} defaultValue={option?.list_price ?? ''} />
+          </Field>
           <Field label="価格（税別・円）" htmlFor="price" required errors={e.price}><Input id="price" name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" /></Field>
           <Field label="表示順" htmlFor="sort_order" errors={e.sort_order}><Input id="sort_order" name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} /></Field>
           <Field label="選択方式（表示）" htmlFor="selection_type" errors={e.selection_type}>
@@ -499,9 +514,12 @@ export function OptionForm({ option, categories, models, allOptions, dependencie
       </div>
 
       <div className="card space-y-5 p-6">
-        <p className="font-semibold">画像・プレビュー</p>
+        <div>
+          <p className="font-semibold">メイン画像・プレビュー</p>
+          <p className="mt-1 text-xs text-muted">メイン画像は商品詳細と見積書の商品画像に利用します。サブ画像とメーカー資料は保存後、この画面下部で管理します。</p>
+        </div>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="オプション画像（ファイル）" htmlFor="image_file"><Input id="image_file" name="image_file" type="file" accept="image/*" className="py-2" /></Field>
+          <Field label="メイン画像（ファイル）" htmlFor="image_file"><Input id="image_file" name="image_file" type="file" accept="image/*" className="py-2" /></Field>
           <Field label="または画像URL" htmlFor="image_url" errors={e.image_url}><Input id="image_url" name="image_url" defaultValue={option?.image_url ?? ''} /></Field>
           <Field label="プレビューキー" htmlFor="preview_key" hint="完成イメージ切替の識別子（例: bath）。空なら画像に影響しない" errors={e.preview_key}><Input id="preview_key" name="preview_key" defaultValue={option?.preview_key ?? ''} /></Field>
           <div>

@@ -9,6 +9,7 @@ import type {
   Configuration,
   ConfigurationItem,
   OptionCategory,
+  OptionImage,
   PreviewImageRule,
   PreviewHotspot,
   ProductImage,
@@ -43,6 +44,7 @@ import {
   type DataStore,
   type ModelInput,
   type OptionInput,
+  type OptionImageInput,
   type PreviewRuleInput,
   type HotspotInput,
   type ProductImageInput,
@@ -117,14 +119,22 @@ export class SupabaseStore implements DataStore {
     if (!model) return null;
     const db = await this.db();
     const pub = <T extends { status: string }>(rows: T[]) => (opts?.includeDraft ? rows : rows.filter((r) => r.status === 'published'));
-    const [images, categories, options, previewRules] = await Promise.all([
+    const [images, categories, options, previewRules, optionImages] = await Promise.all([
       db.from('product_images').select('*').eq('base_model_id', modelId).order('sort_order'),
       db.from('option_categories').select('*').order('sort_order'),
       db.from('options').select('*').or(`base_model_id.is.null,base_model_id.eq.${modelId}`).order('sort_order'),
       db.from('preview_image_rules').select('*').eq('base_model_id', modelId),
+      db.from('option_images').select('*').order('sort_order'),
     ]);
     for (const r of [images, categories, options, previewRules]) if (r.error) mapPgError(r.error);
-    const opts_ = normalizeOptions(pub((options.data ?? []) as ProductOption[]));
+    if (optionImages.error && !isMissingRelation(optionImages.error)) mapPgError(optionImages.error);
+    const optionImageRows = (optionImages.error ? [] : (optionImages.data ?? [])) as OptionImage[];
+    const opts_ = normalizeOptions(pub((options.data ?? []) as ProductOption[])).map((option) => ({
+      ...option,
+      gallery_images: optionImageRows
+        .filter((image) => image.option_id === option.id)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    }));
     const ids = opts_.map((o) => o.id);
     const [deps, confs] = ids.length
       ? await Promise.all([
@@ -586,9 +596,18 @@ export class SupabaseStore implements DataStore {
   }
   async getOption(id: string) {
     const db = await this.db();
-    const { data, error } = await db.from('options').select('*').eq('id', id).maybeSingle();
-    if (error) mapPgError(error);
-    return (data as ProductOption | null) ?? null;
+    const [optionResult, imageResult] = await Promise.all([
+      db.from('options').select('*').eq('id', id).maybeSingle(),
+      db.from('option_images').select('*').eq('option_id', id).order('sort_order'),
+    ]);
+    if (optionResult.error) mapPgError(optionResult.error);
+    if (imageResult.error && !isMissingRelation(imageResult.error)) mapPgError(imageResult.error);
+    const option = (optionResult.data as ProductOption | null) ?? null;
+    if (!option) return null;
+    return {
+      ...option,
+      gallery_images: (imageResult.error ? [] : (imageResult.data ?? [])) as OptionImage[],
+    };
   }
   async upsertOption(input: OptionInput) {
     return this.upsert<ProductOption>('options', input);
@@ -600,6 +619,26 @@ export class SupabaseStore implements DataStore {
       throw new StoreError('VALIDATION', '保存済みの仕様で使用されているため削除できません。非公開にしてください。');
     }
     const { error } = await db.from('options').delete().eq('id', id);
+    if (error) mapPgError(error);
+  }
+  async upsertOptionImage(input: OptionImageInput) {
+    return this.upsert<OptionImage>('option_images', input);
+  }
+  async deleteOptionImage(id: string): Promise<OptionImage | null> {
+    const db = await this.db();
+    const existing = await db.from('option_images').select('*').eq('id', id).maybeSingle();
+    if (existing.error) mapPgError(existing.error);
+    if (!existing.data) return null;
+    const { error } = await db.from('option_images').delete().eq('id', id);
+    if (error) mapPgError(error);
+    return existing.data as OptionImage;
+  }
+  async setOptionManufacturerDocument(optionId: string, url: string | null): Promise<void> {
+    const db = await this.db();
+    const { error } = await db
+      .from('options')
+      .update({ manufacturer_document_url: url })
+      .eq('id', optionId);
     if (error) mapPgError(error);
   }
   async setOptionRelations(
@@ -693,6 +732,26 @@ export class SupabaseStore implements DataStore {
     const up = await admin.storage.from('product-images').upload(storagePath, file.bytes, { contentType: file.contentType, upsert: false });
     if (up.error) throw new StoreError('INTERNAL', up.error.message);
     return admin.storage.from('product-images').getPublicUrl(storagePath).data.publicUrl;
+  }
+  async uploadProductDocument(file: UploadInput, folder: string) {
+    const admin = createAdminClient();
+    const safeFolder = folder.replace(/[^a-z0-9-]/gi, '') || 'documents';
+    const storagePath = `${safeFolder}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.pdf`;
+    const up = await admin.storage
+      .from('product-documents')
+      .upload(storagePath, file.bytes, { contentType: 'application/pdf', upsert: false });
+    if (up.error) throw new StoreError('INTERNAL', up.error.message);
+    return admin.storage.from('product-documents').getPublicUrl(storagePath).data.publicUrl;
+  }
+  async deleteUploadedProductDocument(url: string) {
+    const marker = '/storage/v1/object/public/product-documents/';
+    const at = url.indexOf(marker);
+    if (at < 0) return;
+    const storagePath = decodeURIComponent(url.slice(at + marker.length));
+    if (!storagePath) return;
+    const admin = createAdminClient();
+    const { error } = await admin.storage.from('product-documents').remove([storagePath]);
+    if (error) throw new StoreError('INTERNAL', error.message);
   }
   async uploadCatalogImportImage(file: UploadInput, userId: string, sessionId: string, index: number) {
     const admin = createAdminClient();

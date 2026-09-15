@@ -1,49 +1,146 @@
 import Link from 'next/link';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { VIEW_LABELS } from '@/lib/domain/types';
 import { Badge } from '@/components/ui';
+import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
 
-export default async function AdminOptionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+export default async function AdminOptionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
+  const categoryMap = new Map(categories.map((category) => [category.id, category]));
+
+  const q = (sp.q ?? '').trim().toLowerCase();
+  const categoryId = sp.category ?? '';
+  const status = sp.status ?? '';
+  const filtered = options.filter((option) => {
+    if (categoryId && option.category_id !== categoryId) return false;
+    if (status && option.status !== status) return false;
+    if (!q) return true;
+    const haystack = [
+      option.name,
+      option.code,
+      option.manufacturer ?? '',
+      option.model_no ?? '',
+      option.size_note ?? '',
+      categoryMap.get(option.category_id)?.name ?? '',
+    ].join(' ').toLowerCase();
+    return haystack.includes(q);
+  });
+
   return (
-    <AdminPage title="商品登録・編集" lead="商品情報・お客様資料・選択条件・追加金額を管理します。" actions={<Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link>}>
+    <AdminPage
+      title="商品登録・編集"
+      lead="商品を探して編集します。細かな設定は商品詳細画面にまとめています。"
+      actions={<Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link>}
+    >
       <FlashMessages sp={sp} />
-      {categories.map((cat) => {
-        const list = options.filter((o) => o.category_id === cat.id);
-        if (!list.length) return null;
-        return (
-          <section key={cat.id}>
-            <h2 className="mb-2 text-lg">
-              <span className="text-sm text-muted">{cat.group_name} ›</span> {cat.name}{' '}
-              <span className="text-xs text-muted">{cat.selection_mode === 'single' ? '1つ選択' : '複数選択'}{cat.is_required ? '・必須' : ''}</span>
-            </h2>
-            <Table>
-              <thead className="bg-sand/60"><tr><Th>名称</Th><Th>コード</Th><Th right>価格</Th><Th>プレビュー</Th><Th>フラグ</Th><Th>公開</Th><Th></Th></tr></thead>
-              <tbody className="divide-y divide-line">
-                {list.map((o) => (
-                  <tr key={o.id} data-testid={`admin-option-${o.code}`}>
-                    <Td className="font-semibold">{o.name}</Td>
-                    <Td className="font-mono text-xs">{o.code}</Td>
-                    <Td right>{o.price_on_request ? '要見積' : formatYen(o.price)}</Td>
-                    <Td className="text-xs">{o.preview_key ? <>{o.preview_key}<br /><span className="text-muted">{o.affects_views.map((v) => VIEW_LABELS[v]).join('・')}</span></> : <span className="text-muted">—</span>}</Td>
-                    <Td className="space-x-1 text-xs">
-                      {o.is_default && <Badge>初期選択</Badge>}
-                      {o.is_required && <Badge tone="warn">必須</Badge>}
-                      {o.is_installation && <Badge tone="navy">設置関連</Badge>}
-                    </Td>
-                    <Td><Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開' : '非公開'}</Badge></Td>
-                    <Td right><Link href={`/admin/options/${o.id}`} className="btn-secondary btn-sm">編集</Link></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </section>
-        );
-      })}
+
+      <form method="get" className="card grid gap-3 p-4 sm:grid-cols-[minmax(14rem,1fr)_minmax(12rem,0.55fr)_10rem_auto] sm:items-end">
+        <label className="block">
+          <span className="label">商品を検索</span>
+          <input
+            type="search"
+            name="q"
+            defaultValue={sp.q ?? ''}
+            placeholder="商品名・メーカー・型番"
+            className="input mt-1 w-full"
+          />
+        </label>
+        <label className="block">
+          <span className="label">カテゴリー</span>
+          <select name="category" defaultValue={categoryId} className="input mt-1 w-full">
+            <option value="">すべて</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">公開状態</span>
+          <select name="status" defaultValue={status} className="input mt-1 w-full">
+            <option value="">すべて</option>
+            <option value="published">公開</option>
+            <option value="draft">非公開</option>
+          </select>
+        </label>
+        <div className="flex gap-2">
+          <button type="submit" className="btn-secondary btn-sm">絞り込む</button>
+          {(q || categoryId || status) && <Link href="/admin/options" className="btn-ghost btn-sm">クリア</Link>}
+        </div>
+      </form>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-muted">
+          {filtered.length === options.length
+            ? `${options.length}商品`
+            : `${filtered.length} / ${options.length}商品を表示`}
+        </p>
+      </div>
+
+      {filtered.length ? (
+        <Table>
+          <thead className="bg-sand/60">
+            <tr>
+              <Th>商品</Th>
+              <Th>カテゴリー</Th>
+              <Th right>追加金額</Th>
+              <Th>公開</Th>
+              <Th></Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {filtered.map((option) => {
+              const category = categoryMap.get(option.category_id);
+              return (
+                <tr key={option.id} data-testid={`admin-option-${option.code}`}>
+                  <Td>
+                    <div className="flex min-w-[18rem] items-center gap-3">
+                      <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-line bg-sand">
+                        {option.image_url ? (
+                          <SmartImage src={option.image_url} alt="" fill sizes="56px" className="object-contain" />
+                        ) : (
+                          <span className="flex h-full items-center justify-center text-[0.65rem] text-muted">画像なし</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold">{option.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted">
+                          {[option.manufacturer, option.model_no].filter(Boolean).join(' ／ ') || option.code}
+                        </p>
+                      </div>
+                    </div>
+                  </Td>
+                  <Td>
+                    <div className="text-sm">{category?.name ?? '—'}</div>
+                    {category?.group_name && <div className="mt-0.5 text-xs text-muted">{category.group_name}</div>}
+                  </Td>
+                  <Td right>
+                    <span className="font-semibold">{option.price_on_request ? '別途見積' : formatYen(option.price)}</span>
+                  </Td>
+                  <Td>
+                    <Badge tone={option.status === 'published' ? 'success' : 'neutral'}>
+                      {option.status === 'published' ? '公開' : '非公開'}
+                    </Badge>
+                  </Td>
+                  <Td right>
+                    <Link href={`/admin/options/${option.id}`} className="btn-secondary btn-sm">編集</Link>
+                  </Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      ) : (
+        <div className="card px-5 py-10 text-center text-sm text-muted">
+          条件に一致する商品がありません。
+        </div>
+      )}
     </AdminPage>
   );
 }

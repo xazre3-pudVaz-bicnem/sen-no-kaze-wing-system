@@ -271,9 +271,9 @@ export async function addOptionImageAction(_prev: AdminFormState, formData: Form
       return { ok: false, fieldErrors: { file: ['画像は 10MB 以下にしてください。'] } };
     }
 
-    uploadedUrl = await store.uploadImage(
+    uploadedUrl = await store.uploadOptionImage(
       { bytes: new Uint8Array(await file.arrayBuffer()), contentType: file.type, fileName: file.name },
-      'option-gallery'
+      optionId
     );
     const parsed = optionImageSchema.safeParse({
       id: null,
@@ -284,7 +284,7 @@ export async function addOptionImageAction(_prev: AdminFormState, formData: Form
       sort_order: formData.get('sort_order') || option.gallery_images?.length || 0,
     });
     if (!parsed.success) {
-      await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      await store.deleteUploadedOptionImage(uploadedUrl, optionId).catch(() => undefined);
       return { ok: false, fieldErrors: flattenErrors(parsed.error) };
     }
 
@@ -296,7 +296,7 @@ export async function addOptionImageAction(_prev: AdminFormState, formData: Form
     if (uploadedUrl) {
       try {
         const store = await getStore();
-        await store.deleteUploadedImage(uploadedUrl);
+        await store.deleteUploadedOptionImage(uploadedUrl, optionId);
       } catch {
         // 元のエラーを優先する
       }
@@ -346,7 +346,7 @@ export async function deleteOptionImageAction(formData: FormData): Promise<void>
   const deleted = await store.deleteOptionImage(imageId);
   if (deleted) {
     try {
-      await store.deleteUploadedImage(deleted.url);
+      await store.deleteUploadedOptionImage(deleted.url, optionId);
     } catch (error) {
       console.warn('[wing] option image storage cleanup failed', error);
     }
@@ -381,13 +381,13 @@ export async function uploadOptionManufacturerDocumentAction(
 
     uploadedUrl = await store.uploadProductDocument(
       { bytes: new Uint8Array(await file.arrayBuffer()), contentType: 'application/pdf', fileName: file.name },
-      `option-${optionId}`
+      optionId
     );
     await store.setOptionManufacturerDocument(optionId, uploadedUrl);
 
     if (option.manufacturer_document_url && option.manufacturer_document_url !== uploadedUrl) {
       try {
-        await store.deleteUploadedProductDocument(option.manufacturer_document_url);
+        await store.deleteUploadedProductDocument(option.manufacturer_document_url, optionId);
       } catch (error) {
         console.warn('[wing] old product document cleanup failed', error);
       }
@@ -400,7 +400,7 @@ export async function uploadOptionManufacturerDocumentAction(
     if (uploadedUrl) {
       try {
         const store = await getStore();
-        await store.deleteUploadedProductDocument(uploadedUrl);
+        await store.deleteUploadedProductDocument(uploadedUrl, optionId);
       } catch {
         // 元のエラーを優先する
       }
@@ -419,7 +419,7 @@ export async function deleteOptionManufacturerDocumentAction(formData: FormData)
   await store.setOptionManufacturerDocument(optionId, null);
   if (currentUrl) {
     try {
-      await store.deleteUploadedProductDocument(currentUrl);
+      await store.deleteUploadedProductDocument(currentUrl, optionId);
     } catch (error) {
       console.warn('[wing] product document storage cleanup failed', error);
     }

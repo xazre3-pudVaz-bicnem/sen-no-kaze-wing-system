@@ -165,6 +165,15 @@ export const optionSchema = z.object({
   highlight: optional(40).nullable(),
 });
 
+export const optionImageSchema = z.object({
+  id: z.uuid().nullable(),
+  option_id: z.uuid(),
+  url: trimmed(1000).min(1, '画像をアップロードしてください'),
+  alt: trimmed(200),
+  caption: optional(200).nullable(),
+  sort_order: intFromForm,
+});
+
 export const previewRuleSchema = z.object({
   id: z.uuid().nullable(),
   base_model_id: z.uuid(),

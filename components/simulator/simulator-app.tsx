@@ -97,6 +97,14 @@ const sameSelection = (a: string[], b: string[]) => {
   return aa.length === bb.length && aa.every((id, index) => id === bb[index]);
 };
 
+const sameExteriorFaces = (a: ExteriorFaceSelection[], b: ExteriorFaceSelection[]) => {
+  const key = (face: ExteriorFaceSelection) =>
+    `${face.face_code}:${face.option_id}:${[...face.variant_choice_ids].sort().join(',')}`;
+  const aa = a.map(key).sort();
+  const bb = b.map(key).sort();
+  return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
+};
+
 /** 選ばれている商品ごとに、標準の選択肢を選ぶ（表示条件つきの項目は条件を満たすときだけ） */
 function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[] {
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
@@ -694,6 +702,24 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   };
 
   const applyExteriorFaces = (nextFaces: ExteriorFaceSelection[]) => {
+    // 旧1商品方式(exterior_faces=[])を表示用に4面展開しただけなら、ApplyしてもDB正本を4面化しない。
+    // 旧有料外壁を「変更なし」で4面課金へ変換する事故を防ぐ。
+    if (exteriorFaces.length === 0 && selectedExteriorOption) {
+      const legacyDisplayedFaces = normalizeExteriorFaces(
+        [],
+        allExteriorWallOptions,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        selected,
+        variantIds
+      );
+      if (sameExteriorFaces(nextFaces, legacyDisplayedFaces)) {
+        setExteriorFacePicker(null);
+        pushToast('外壁の変更はありません', 'info');
+        return;
+      }
+    }
+
     const front = nextFaces.find((f) => f.face_code === 'front') ?? nextFaces[0];
     setExteriorFaces(nextFaces);
     if (front && exteriorWallCat) {

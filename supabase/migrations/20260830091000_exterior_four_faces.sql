@@ -203,7 +203,7 @@ begin
   end if;
 
   return public.recalculate_configuration(v_id);
-end $;
+end $$;
 
 revoke all on function public.duplicate_configuration(uuid) from public;
 grant execute on function public.duplicate_configuration(uuid) to authenticated;

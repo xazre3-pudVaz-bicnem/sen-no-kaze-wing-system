@@ -12,6 +12,13 @@ import { StartBaseMasterDraftForm } from '@/components/admin/base-master-form';
 import { BaseMasterDraftEditor, type BaseMasterRevisionView } from '@/components/admin/base-master-revision-form';
 import type { BaseMasterRevisionLine } from '@/components/admin/base-master-lines';
 
+type LegacyMigrationDraftOutputView = {
+  id: string;
+  migration_batch_id: string;
+  fire_spec_review_required: boolean;
+  confirmed_fire_spec_code: string | null;
+};
+
 function revisionTone(status: string): 'success' | 'warn' | 'neutral' {
   if (status === 'published') return 'success';
   if (status === 'draft') return 'warn';
@@ -102,12 +109,7 @@ export default async function BaseMasterDetailPage({
     revisionRows.find((revision) => revision.status === 'published') ??
     null;
 
-  let migrationDraftOutput: {
-    id: string;
-    migration_batch_id: string;
-    fire_spec_review_required: boolean;
-    confirmed_fire_spec_code: string | null;
-  } | null = null;
+  let migrationDraftOutput: LegacyMigrationDraftOutputView | null = null;
   let migrationBatchStatus: string | null = null;
 
   if (draft) {
@@ -126,7 +128,7 @@ export default async function BaseMasterDetailPage({
       );
     }
 
-    migrationDraftOutput = output as typeof migrationDraftOutput;
+    migrationDraftOutput = output as LegacyMigrationDraftOutputView | null;
 
     if (migrationDraftOutput) {
       const { data: migrationBatch, error: migrationBatchError } = await supabase
@@ -198,7 +200,11 @@ export default async function BaseMasterDetailPage({
 
   const editable = detailView.accessKind === 'editor';
   const identityLocked = revisionRows.some((revision) => revision.status === 'published' || revision.status === 'superseded');
-  const readonlyRevisions = detailView.readOnlyRevisionIds
+  const readOnlyRevisionIds = [
+    ...detailView.readOnlyRevisionIds,
+    ...(migrationDraftLocked && draft ? [draft.id] : []),
+  ];
+  const readonlyRevisions = [...new Set(readOnlyRevisionIds)]
     .map((revisionId) => revisionRows.find((revision) => revision.id === revisionId))
     .filter((revision): revision is BaseMasterRevisionView => Boolean(revision));
 
@@ -273,39 +279,6 @@ export default async function BaseMasterDetailPage({
         </section>
       )}
 
-      {migrationDraftLocked && draft && (
-        <section id={'revision-' + draft.id} className="card overflow-x-auto">
-          <div className="border-b border-line px-5 py-4">
-            <h2 className="font-semibold">Draft v{draft.version}（移行監査・参照のみ）</h2>
-            <p className="mt-1 text-xs text-muted">
-              {(linesByRevision.get(draft.id) ?? []).length}行・明細合計 {formatYen(draft.line_subtotal)}・本体価格計 {formatYen(draft.total)}
-            </p>
-          </div>
-          {(linesByRevision.get(draft.id) ?? []).length > 0 ? (
-            <table className="w-full min-w-[48rem] text-sm">
-              <thead className="bg-sand/60 text-left text-xs text-muted">
-                <tr><Th>工事区分</Th><Th>品名</Th><Th right>数量</Th><Th>単位</Th><Th right>単価</Th><Th right>金額</Th><Th>備考</Th></tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {(linesByRevision.get(draft.id) ?? []).map((line) => (
-                  <tr key={line.id}>
-                    <Td>{line.section}</Td>
-                    <Td className="font-medium">{line.name}</Td>
-                    <Td right>{line.quantity}</Td>
-                    <Td>{line.unit ?? ''}</Td>
-                    <Td right>{formatYen(line.unit_price)}</Td>
-                    <Td right>{formatYen(line.amount)}</Td>
-                    <Td className="text-xs text-muted">{line.remark ?? ''}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="px-5 py-6 text-sm text-muted">このRevisionには明細がありません。</p>
-          )}
-        </section>
-      )}
-
       {editable && draft && !migrationDraftLocked && detailView.editableRevisionId === draft.id && (
         <BaseMasterDraftEditor
           key={draft.id + ':' + (sp.saved ?? 'initial')}
@@ -377,8 +350,8 @@ export default async function BaseMasterDetailPage({
           </thead>
           <tbody className="divide-y divide-line">
             {revisionRows.map((revision) => {
-              const isEditing = editable && draft?.id === revision.id;
-              const isShown = detailView.readOnlyRevisionIds.includes(revision.id);
+              const isEditing = editable && !migrationDraftLocked && draft?.id === revision.id;
+              const isShown = readOnlyRevisionIds.includes(revision.id);
               return (
                 <tr key={revision.id}>
                   <Td className="font-semibold">v{revision.version}</Td>

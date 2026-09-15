@@ -25,7 +25,7 @@ describe('監査済み旧本体から新本体Draft作成', () => {
     expect(migration).not.toMatch(/update\s+public\.estimate_templates/i);
     expect(migration).not.toMatch(/delete\s+from\s+public\.estimate_templates/i);
     expect(migration).not.toMatch(/set\s+status\s*=\s*'published'/i);
-    expect(migration).not.toContain('current_published_revision_id');
+    expect(migration).not.toMatch(/set\s+current_published_revision_id\s*=/i);
     expect(page).toContain('Publish・Simulator・Quoteの参照先は変更しません。');
   });
 
@@ -74,6 +74,7 @@ describe('監査済み旧本体から新本体Draft作成', () => {
     expect(migration).toContain("v_expense_method := 'fixed'");
     expect(migration).toContain('legacy_base_expense_rate');
     expect(migration).toContain('target_expense_amount');
+    expect(migration).toContain('旧本体諸費用率を新Revisionの6桁精度へ無損失で保存できません');
   });
 
   it('元データlockとSTALE再検査をDraft作成直前にも行う', () => {

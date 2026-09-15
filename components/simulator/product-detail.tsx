@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, ChevronDown, ImageOff } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -36,6 +36,29 @@ export function ProductDetail({
 }: Props) {
   const manufacturerDocumentUrl = option.manufacturer_document_url?.trim() || null;
   const [activeMedia, setActiveMedia] = useState<'image' | 'document'>('image');
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+
+  const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
+  const galleryImages = [
+    ...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),
+    ...choices
+      .filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))
+      .map((choice) => ({
+        url: choice.image_url as string,
+        label: `${groupNameById.get(choice.group_id)}：${choice.name}`,
+      })),
+  ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
+  const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
+  const activeImage = galleryImages[safeImageIndex] ?? null;
+
+  const moveImage = (direction: -1 | 1) => {
+    if (galleryImages.length <= 1) return;
+    setActiveImageIndex((current) => {
+      const base = Math.min(current, galleryImages.length - 1);
+      return (base + direction + galleryImages.length) % galleryImages.length;
+    });
+  };
 
   const basicInfo = [
     { label: 'シリーズ・型番', value: option.model_no },
@@ -118,6 +141,18 @@ export function ProductDetail({
             id="product-media-panel"
             role="tabpanel"
             className="relative aspect-[3/2] overflow-hidden rounded-lg border border-line bg-sand"
+            onTouchStart={(event) => {
+              if (activeMedia !== 'image' || galleryImages.length <= 1) return;
+              touchStartX.current = event.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(event) => {
+              if (activeMedia !== 'image' || galleryImages.length <= 1 || touchStartX.current == null) return;
+              const endX = event.changedTouches[0]?.clientX ?? touchStartX.current;
+              const delta = endX - touchStartX.current;
+              touchStartX.current = null;
+              if (Math.abs(delta) < 40) return;
+              moveImage(delta < 0 ? 1 : -1);
+            }}
           >
             {activeMedia === 'document' && manufacturerDocumentUrl ? (
               <iframe
@@ -126,14 +161,39 @@ export function ProductDetail({
                 className="h-full w-full bg-white"
                 loading="lazy"
               />
-            ) : option.image_url ? (
-              <SmartImage
-                src={option.image_url}
-                alt={option.name}
-                fill
-                sizes="(min-width: 1024px) 36rem, 90vw"
-                className="object-contain"
-              />
+            ) : activeImage ? (
+              <>
+                <SmartImage
+                  src={activeImage.url}
+                  alt={`${option.name} ${activeImage.label}`}
+                  fill
+                  sizes="(min-width: 1024px) 36rem, 90vw"
+                  className="object-contain"
+                />
+                {galleryImages.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => moveImage(-1)}
+                      className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-1.5 text-ink shadow-soft transition hover:bg-white"
+                      aria-label="前の画像"
+                    >
+                      <ChevronLeft className="size-5" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveImage(1)}
+                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/90 p-1.5 text-ink shadow-soft transition hover:bg-white"
+                      aria-label="次の画像"
+                    >
+                      <ChevronRight className="size-5" aria-hidden="true" />
+                    </button>
+                    <span className="absolute bottom-2 right-2 rounded-full bg-ink/70 px-2 py-1 text-[0.65rem] font-semibold text-white">
+                      {safeImageIndex + 1} / {galleryImages.length}
+                    </span>
+                  </>
+                )}
+              </>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted">
                 <ImageOff className="size-8" aria-hidden="true" />
@@ -141,6 +201,42 @@ export function ProductDetail({
               </div>
             )}
           </div>
+
+          {activeMedia === 'image' && galleryImages.length > 1 && (
+            <div className="mt-2">
+              <div className="flex gap-2 overflow-x-auto pb-1" aria-label="商品画像一覧">
+                {galleryImages.map((image, index) => (
+                  <button
+                    key={image.url}
+                    type="button"
+                    onClick={() => setActiveImageIndex(index)}
+                    className={cn(
+                      'relative aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-md border bg-white transition',
+                      index === safeImageIndex
+                        ? 'border-brown ring-2 ring-brown/25'
+                        : 'border-line hover:border-ink/40'
+                    )}
+                    aria-label={`${image.label}を表示`}
+                    aria-current={index === safeImageIndex ? 'true' : undefined}
+                    title={image.label}
+                  >
+                    <SmartImage
+                      src={image.url}
+                      alt=""
+                      fill
+                      sizes="80px"
+                      className="object-contain"
+                    />
+                  </button>
+                ))}
+              </div>
+              {activeImage && (
+                <p className="mt-1 truncate text-[0.65rem] text-muted" title={activeImage.label}>
+                  {activeImage.label}
+                </p>
+              )}
+            </div>
+          )}
 
           {option.description && (
             <div className="mt-3 rounded-lg bg-ivory/55 px-3 py-2.5">

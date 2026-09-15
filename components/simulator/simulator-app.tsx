@@ -176,7 +176,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     pruneToScope(
       ctx,
       preserveLegacyInitialSelection
-        ? initial!.option_ids
+        ? (initial?.option_ids ?? initialBaselineIds)
         : initialBaselineIds,
       initialLevel
     ),

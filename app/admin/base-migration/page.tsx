@@ -9,6 +9,7 @@ import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import {
   createLegacyBaseMigrationBatchAction,
   finalizeLegacyBaseMigrationReviewAction,
+  materializeLegacyBaseDraftsAction,
   resolveLegacyEstimateDuplicateAction,
   setLegacyBaseMappingDecisionAction,
   setLegacyBaseSpecMappingAction,
@@ -121,7 +122,8 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
       {sp.error && <Alert tone="danger">{sp.error}</Alert>}
       {sp.created && <Alert tone="success">監査バッチを作成しました。旧データは変更していません。</Alert>}
       {sp.saved && <Alert tone="success">判定を保存しました。</Alert>}
-      {sp.ready && <Alert tone="success">レビュー完了です。実移行は次のPRで行います。</Alert>}
+      {sp.ready && <Alert tone="success">レビュー完了です。readyバッチから新本体Draftを作成できます。</Alert>}
+      {sp.drafted && <Alert tone="success">新本体Draftを作成しました。Publish・Simulator・Quoteはまだ切り替えていません。</Alert>}
 
       <Alert tone="info">
         このPRでは base_breakdown_items / estimate_templates / 本体マスター / シミュレーターへ書き込みません。
@@ -343,6 +345,30 @@ export default async function BaseMigrationPage({ searchParams }: { searchParams
               </tbody>
             </Table>
           </section>
+
+          {canManage && ['ready', 'migrated'].includes(String(selected.status)) && (
+            <section className="card space-y-3 p-5">
+              <h2 className="font-semibold">新本体Draft作成</h2>
+              <p className="text-sm">
+                approvedの「本体」行だけを proposed_group_key 単位で本部所有の新本体Draftへコピーします。
+              </p>
+              <div className="grid gap-1 text-xs text-muted sm:grid-cols-2">
+                <p>内外装工事・オプション・別途はこの工程ではコピーしません。</p>
+                <p>Publish・Simulator・Quoteの参照先は変更しません。</p>
+                <p>旧行から新lineへの追跡を保存し、1円単位で再検算します。</p>
+                <p>防火区分はDraft段階ではnon_fireを仮置きし、Publish前に明示確認します。</p>
+              </div>
+              <form action={materializeLegacyBaseDraftsAction}>
+                <input type="hidden" name="batch_id" value={String(selected.id)} />
+                <Button type="submit">
+                  {selected.status === 'ready' ? '監査済みデータから新本体Draftを作成' : 'Draft作成結果を再検証'}
+                </Button>
+              </form>
+              <p className="text-xs text-muted">
+                DB側でready状態・STALE・group互換性を再確認し、途中で失敗した場合は同一RPC transaction全体がrollbackされます。
+              </p>
+            </section>
+          )}
 
           {canManage && selected.status === 'reviewing' && (
             <section className="card space-y-3 p-5">

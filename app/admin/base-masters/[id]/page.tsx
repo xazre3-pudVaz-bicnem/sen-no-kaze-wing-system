@@ -12,6 +12,13 @@ import { StartBaseMasterDraftForm } from '@/components/admin/base-master-form';
 import { BaseMasterDraftEditor, type BaseMasterRevisionView } from '@/components/admin/base-master-revision-form';
 import type { BaseMasterRevisionLine } from '@/components/admin/base-master-lines';
 
+type MigrationDraftOutput = {
+  id: string;
+  migration_batch_id: string;
+  fire_spec_review_required: boolean;
+  confirmed_fire_spec_code: string | null;
+};
+
 type LegacyMigrationDraftOutputView = {
   id: string;
   migration_batch_id: string;
@@ -361,7 +368,9 @@ export default async function BaseMasterDetailPage({
                   <Td right>{formatYen(revision.total)}</Td>
                   <Td>{revision.published_at ? formatDate(revision.published_at) : '—'}</Td>
                   <Td right>
-                    {isEditing ? (
+                    {isMigrationDraft ? (
+                      <span className="text-xs text-muted">移行監査中</span>
+                    ) : isEditing ? (
                       <span className="text-xs text-muted">編集中</span>
                     ) : (
                       <Link

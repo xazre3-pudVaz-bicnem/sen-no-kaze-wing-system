@@ -2009,5 +2009,5 @@ export function municipalitiesFor(prefecture: string | null | undefined): readon
 
 export function isKnownMunicipality(prefecture: string | null | undefined, municipality: string | null | undefined): boolean {
   if (!municipality) return true;
-  return municipalitiesFor(prefecture).includes(municipality as never);
+  return (municipalitiesFor(prefecture) as readonly string[]).includes(municipality);
 }

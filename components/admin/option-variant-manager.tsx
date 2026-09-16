@@ -462,7 +462,6 @@ function ChoicePriceEditor({
             min={0}
             step={100}
             defaultValue={choice.extra_price}
-            disabled={choice.price_on_request}
           />
         </Field>
         <Checkbox name="price_on_request" defaultChecked={choice.price_on_request} label="別途見積" />
@@ -482,7 +481,6 @@ export function OptionVariantPricing({
   choices: OptionVariantChoice[];
 }) {
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
-  const publishedChoices = choices.filter((choice) => choice.status === 'published');
 
   return (
     <section id="variant-pricing" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
@@ -493,7 +491,7 @@ export function OptionVariantPricing({
         </p>
       </div>
 
-      {publishedChoices.length === 0 ? (
+      {choices.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line px-4 py-7 text-center text-sm text-muted">
           価格を設定する選択肢がありません。先に STEP 4「お客様選択」で色・仕様を登録してください。
         </div>

@@ -10,7 +10,7 @@ import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 import { StartBaseMasterDraftForm } from '@/components/admin/base-master-form';
 import { BaseMasterDraftEditor, type BaseMasterRevisionView } from '@/components/admin/base-master-revision-form';
-import type { BaseMasterRevisionLine } from '@/components/admin/base-master-lines';
+import { BaseMasterReadOnlyLines, type BaseMasterRevisionLine } from '@/components/admin/base-master-lines';
 
 type LegacyMigrationDraftOutputView = {
   id: string;
@@ -317,24 +317,12 @@ export default async function BaseMasterDetailPage({
               </p>
             </div>
             {lines.length > 0 ? (
-              <table className="w-full min-w-[48rem] text-sm">
-                <thead className="bg-sand/60 text-left text-xs text-muted">
-                  <tr><Th>工事区分</Th><Th>品名</Th><Th right>数量</Th><Th>単位</Th><Th right>単価</Th><Th right>金額</Th><Th>備考</Th></tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {lines.map((line) => (
-                    <tr key={line.id}>
-                      <Td>{line.section}</Td>
-                      <Td className="font-medium">{line.name}</Td>
-                      <Td right>{line.quantity}</Td>
-                      <Td>{line.unit ?? ''}</Td>
-                      <Td right>{formatYen(line.unit_price)}</Td>
-                      <Td right>{formatYen(line.amount)}</Td>
-                      <Td className="text-xs text-muted">{line.remark ?? ''}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <BaseMasterReadOnlyLines
+                lines={lines}
+                lineSubtotal={revision.line_subtotal}
+                expenseAmount={revision.expense_amount}
+                total={revision.total}
+              />
             ) : (
               <p className="px-5 py-6 text-sm text-muted">このRevisionには明細がありません。</p>
             )}

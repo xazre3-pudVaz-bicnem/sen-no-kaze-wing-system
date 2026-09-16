@@ -232,7 +232,7 @@ export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mo
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-xs text-muted">初期プランの「お客様表示名」を使ってプレビューします。</p>
+                <p className="mt-2 text-xs text-muted">初期仕様の「お客様表示名」を使ってプレビューします。</p>
               </div>
             </div>
           </section>
@@ -240,16 +240,16 @@ export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mo
           <section className="space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">プラン（推奨構成）</h2>
-                <p className="mt-1 text-xs text-muted">管理名とお客様表示名を分けて設定します。初期プランはシミュレーターを開いたとき最初に選ばれます。</p>
+                <h2 className="text-lg font-semibold">仕様（推奨構成）</h2>
+                <p className="mt-1 text-xs text-muted">管理名とお客様表示名を分けて設定します。初期仕様はシミュレーターを開いたとき最初に選ばれます。見積テンプレートの「仕様」もここから選ばれます。</p>
               </div>
-              <button type="button" onClick={addPreset} className="btn-secondary btn-sm">プランを追加</button>
+              <button type="button" onClick={addPreset} className="btn-secondary btn-sm">仕様を追加</button>
             </div>
             {e.presets && <p className="text-sm text-danger">{e.presets[0]}</p>}
 
             {presets.length === 0 ? (
               <div className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-muted">
-                プランがありません。「プランを追加」から登録してください。
+                仕様がありません。「仕様を追加」から登録してください。
               </div>
             ) : (
               <div className="space-y-3">
@@ -305,7 +305,7 @@ export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mo
                       <details className="mt-3 rounded-lg border border-line bg-white">
                         <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink-soft">高度な設定</summary>
                         <div className="grid gap-4 border-t border-line p-3 sm:grid-cols-2">
-                          <Field label="プランコード" htmlFor={`preset-code-${index}`} hint="hotel / residence / office など。標準見積と連携するため通常は変更しません。">
+                          <Field label="仕様コード" htmlFor={`preset-code-${index}`} hint="hotel / residence / office など。標準見積と連携するため通常は変更しません。">
                             <Input
                               id={`preset-code-${index}`}
                               value={preset.code}

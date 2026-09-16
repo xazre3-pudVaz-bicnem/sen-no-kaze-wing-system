@@ -250,7 +250,17 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   } catch (e) {
     return errState(e);
   }
-  if (createdId) redirect(`/admin/options/${createdId}?saved=1`);
+  if (createdId) {
+    const returnToRaw = String(formData.get('return_to') ?? '').trim();
+    if (returnToRaw.startsWith('/admin/') && !returnToRaw.startsWith('//')) {
+      const returnUrl = new URL(returnToRaw, 'https://wing.local');
+      if (returnUrl.pathname.startsWith('/admin/')) {
+        returnUrl.searchParams.set('created_option', createdId);
+        redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
+      }
+    }
+    redirect('/admin/options/' + createdId + '?saved=1');
+  }
   return { ok: true, message: '保存しました' };
 }
 

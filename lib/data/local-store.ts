@@ -52,6 +52,7 @@ import {
 } from '@/lib/import/catalog-import-images';
 import { assertOwnedLocalMediaPath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
+import { isKnownMunicipality } from '@/data/japan-municipalities';
 import {
   StoreError,
   type ContactInput,
@@ -584,6 +585,13 @@ export class LocalStore implements DataStore {
   }
   async saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     return this.mutate((db) => {
+      const undecided = input.site_location_undecided ?? false;
+      const sitePrefecture = undecided ? null : (input.site_prefecture ?? null);
+      const siteMunicipality = undecided ? null : (input.site_municipality ?? null);
+      if (siteMunicipality && !isKnownMunicipality(sitePrefecture, siteMunicipality)) {
+        throw new StoreError('VALIDATION', '設置予定地の市区町村を確認してください。');
+      }
+
       const model = db.models.find((m) => m.id === input.base_model_id && m.status === 'published');
       if (!model) throw new StoreError('VALIDATION', '公開中のモデルではありません');
       const level: FinishLevel = input.finish_level ?? 'full';
@@ -615,6 +623,9 @@ export class LocalStore implements DataStore {
         cfg.name = input.name || cfg.name;
         cfg.finish_level = level;
         cfg.spec_code = input.spec_code ?? cfg.spec_code ?? null;
+        cfg.site_prefecture = sitePrefecture;
+        cfg.site_municipality = siteMunicipality;
+        cfg.site_location_undecided = undecided;
         cfg.preview_image_url = input.preview_image_url;
         cfg.notes = input.notes;
         db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== cfg.id);
@@ -627,6 +638,9 @@ export class LocalStore implements DataStore {
           status: 'draft',
           finish_level: level,
           spec_code: input.spec_code ?? null,
+          site_prefecture: sitePrefecture,
+          site_municipality: siteMunicipality,
+          site_location_undecided: undecided,
           base_price: 0,
           base_expense: 0,
           option_subtotal: 0,

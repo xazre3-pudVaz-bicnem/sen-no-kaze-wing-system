@@ -16,7 +16,11 @@ export default async function NewEstimateTemplatePage() {
       <BackLink href="/admin/estimate-templates" label="見積テンプレート一覧へ戻る" />
 
       <NewEstimateTemplateForm
-        models={models.map((model) => ({ id: model.id, name: model.name }))}
+        models={models.map((model) => ({
+          id: model.id,
+          name: model.name,
+          specs: model.presets.map((preset) => ({ code: preset.code, name: preset.name })),
+        }))}
       />
     </AdminPage>
   );

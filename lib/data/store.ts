@@ -61,6 +61,11 @@ export interface SaveConfigurationInput {
   finish_level?: FinishLevel;
   /** 仕様（hotel / residence / office）。本体内訳の解決に使う */
   spec_code?: string | null;
+  /** 設置予定地。未選択時は null */
+  site_prefecture?: string | null;
+  site_municipality?: string | null;
+  /** 「設置予定地は未定」を明示選択した状態 */
+  site_location_undecided?: boolean;
   /** 選ばれたバリエーション（選択肢 ID） */
   variant_choice_ids?: string[];
 }

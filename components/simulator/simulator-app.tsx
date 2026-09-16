@@ -48,6 +48,7 @@ import { PreviewStage } from './preview-stage';
 import { OptionPickerDialog } from './option-picker-dialog';
 import { ExteriorWallFacesDialog } from './exterior-wall-faces-dialog';
 import { SaveDialog } from './save-dialog';
+import { SiteLocationPicker } from './site-location-picker';
 import { Toasts, type Toast } from './toasts';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,9 @@ export interface SimulatorInitial {
   finish_level: FinishLevel;
   /** 仕様（hotel / residence / office）。本体内訳の解決に使う */
   spec_code: string | null;
+  site_prefecture: string | null;
+  site_municipality: string | null;
+  site_location_undecided: boolean;
 }
 
 interface Props {
@@ -83,6 +87,9 @@ interface Draft {
   exteriorFaces?: ExteriorFaceSelection[];
   finishLevel?: FinishLevel;
   spec?: string;
+  sitePrefecture?: string | null;
+  siteMunicipality?: string | null;
+  siteLocationUndecided?: boolean;
   name: string;
   configId: string | null;
   pending: 'save' | 'quote' | null;
@@ -239,6 +246,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     );
   });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
+  const [sitePrefecture, setSitePrefecture] = useState<string | null>(initial?.site_prefecture ?? null);
+  const [siteMunicipality, setSiteMunicipality] = useState<string | null>(initial?.site_municipality ?? null);
+  const [siteLocationUndecided, setSiteLocationUndecided] = useState(initial?.site_location_undecided ?? false);
   const [picker, setPicker] = useState<string | null>(null);
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
@@ -393,6 +403,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           );
         }
 
+        setSiteLocationUndecided(Boolean(draft.siteLocationUndecided));
+        setSitePrefecture(draft.siteLocationUndecided ? null : (draft.sitePrefecture ?? null));
+        setSiteMunicipality(draft.siteLocationUndecided ? null : (draft.siteMunicipality ?? null));
         if (draft.name) setName(draft.name);
         if (draft.configId && !hasInvalidSpec) setConfigId(draft.configId);
         if (resume && user && draft.pending && !resumed.current) {
@@ -419,6 +432,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         exteriorFaces,
         finishLevel,
         spec: specCode,
+        sitePrefecture,
+        siteMunicipality,
+        siteLocationUndecided,
         name,
         configId,
         pending: null,
@@ -427,7 +443,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, exteriorFaces, finishLevel, specCode, name, configId, model.slug]
+    [selected, variantIds, exteriorFaces, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, model.slug]
   );
 
   useEffect(() => {
@@ -779,6 +795,9 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         variant_choice_ids: variantIds,
         exterior_faces: exteriorFaces,
         spec_code: specCode,
+        site_prefecture: sitePrefecture,
+        site_municipality: siteMunicipality,
+        site_location_undecided: siteLocationUndecided,
       });
       if (!result.ok) {
         if (result.code === 'UNAUTHENTICATED') {
@@ -961,42 +980,59 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
             </div>
           </div>
 
-          <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 lg:flex-row lg:items-end lg:justify-between lg:gap-x-6">
-            <div className="w-full min-w-0 lg:flex-1">
-              <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
-                仕様を選ぶ
-              </p>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {!usesManagedEstimateChoices && (
-                  <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
-                )}
-                {simulatorSpecChoices.map((choice) => (
-                  <button
-                    key={choice.code}
-                    type="button"
-                    onClick={() => applyPreset(choice.code)}
-                    disabled={!hydrated || readOnly}
-                    aria-pressed={specCode === choice.code}
-                    title={choice.description}
-                    className={cn(
-                      'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
-                      specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+          <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 xl:flex-row xl:items-end xl:justify-between xl:gap-x-6">
+            <div className="w-full min-w-0 xl:flex-1">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
+                <div className="min-w-0">
+                  <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
+                    仕様を選ぶ
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {!usesManagedEstimateChoices && (
+                      <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
                     )}
-                    data-testid={`preset-${choice.code}`}
-                  >
-                    {choice.name}
-                  </button>
-                ))}
+                    {simulatorSpecChoices.map((choice) => (
+                      <button
+                        key={choice.code}
+                        type="button"
+                        onClick={() => applyPreset(choice.code)}
+                        disabled={!hydrated || readOnly}
+                        aria-pressed={specCode === choice.code}
+                        title={choice.description}
+                        className={cn(
+                          'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
+                          specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                        )}
+                        data-testid={`preset-${choice.code}`}
+                      >
+                        {choice.name}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
+                </div>
+
+                <SiteLocationPicker
+                  prefecture={sitePrefecture}
+                  municipality={siteMunicipality}
+                  undecided={siteLocationUndecided}
+                  disabled={!hydrated || readOnly}
+                  onChange={(next) => {
+                    setSitePrefecture(next.prefecture);
+                    setSiteMunicipality(next.municipality);
+                    setSiteLocationUndecided(next.undecided);
+                    setDirty(true);
+                  }}
+                />
               </div>
-              <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
             </div>
 
-            <div className="flex w-full flex-wrap items-center justify-end gap-3 lg:w-auto lg:justify-end">
-              <div className="w-full text-right lg:w-auto lg:text-center">
+            <div className="flex w-full flex-wrap items-center justify-end gap-3 xl:w-auto xl:justify-end">
+              <div className="w-full text-right xl:w-auto xl:text-center">
                 <p className="text-xs text-muted">現在選択している見積金額は</p>
                 <p className="font-serif text-[2.05rem] leading-tight tabular-nums sm:text-[2.65rem]">{formatYen(pricing.total)}</p>
               </div>
-              <div className="hidden lg:block">
+              <div className="hidden xl:block">
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" size="sm" onClick={handleSaveClick} disabled={saving || readOnly} data-testid="save-button">
                     <Save className="size-4" aria-hidden="true" />

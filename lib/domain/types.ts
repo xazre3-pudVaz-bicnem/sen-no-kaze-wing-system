@@ -430,6 +430,11 @@ export interface Configuration {
   finish_level: FinishLevel;
   /** 仕様（hotel / residence / office）。本体内訳の解決に使う。null は旧データ */
   spec_code: string | null;
+  /** 設置予定地。地域別仕様の判定入力として保持し、現時点では価格計算には使わない。旧DB/旧ローカルJSON互換のため optional */
+  site_prefecture?: string | null;
+  site_municipality?: string | null;
+  /** 「設置予定地は未定」を明示選択した状態 */
+  site_location_undecided?: boolean;
   base_price: number;
   base_expense: number;
   option_subtotal: number;

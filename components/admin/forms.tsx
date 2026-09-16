@@ -547,7 +547,7 @@ export function OptionForm({
       {showIdentify && (
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
-            <p className="text-lg font-semibold">STEP 1 商品特定</p>
+            <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
             <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番で商品を特定します。</p>
           </div>
 
@@ -603,7 +603,7 @@ export function OptionForm({
       {showDetails && (
         <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
-            <p className="text-lg font-semibold">STEP 2 商品の詳細</p>
+            <p className="text-lg font-semibold">商品の詳細</p>
             <p className="mt-1 text-sm text-muted">サイズ、説明、お客様向けの特徴など、商品を理解するための情報を整理します。</p>
           </div>
 
@@ -632,7 +632,7 @@ export function OptionForm({
       {showMedia && (
         <section id="product-main-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
-            <p className="text-lg font-semibold">STEP 3 お客様資料</p>
+            <p className="text-lg font-semibold">メイン画像</p>
             <p className="mt-1 text-sm text-muted">ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。</p>
           </div>
 
@@ -660,8 +660,8 @@ export function OptionForm({
       {showSales && (
         <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
-            <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : 'STEP 5 価格設定'}</p>
-            <p className="mt-1 text-sm text-muted">基本追加金額を設定し、対象モデル・公開状態を確認します。色・仕様ごとの追加金額はこのSTEP内の一覧で設定します。</p>
+            <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : '価格・公開設定'}</p>
+            <p className="mt-1 text-sm text-muted">基本追加金額を設定し、対象モデル・公開状態を確認します。色・仕様ごとの追加金額も同じ商品情報画面で設定します。</p>
           </div>
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
@@ -778,11 +778,11 @@ export function OptionForm({
             pending={pending}
             label={
               mode === 'pricing'
-                ? '価格設定を保存'
+                ? '価格・公開設定を保存'
                 : mode === 'all' && returnTo
                   ? '登録して見積テンプレートへ戻る'
                   : mode === 'all'
-                    ? '商品を保存して続きの設定へ'
+                    ? '商品を作成して次へ'
                     : '販売・詳細設定を保存'
             }
           />

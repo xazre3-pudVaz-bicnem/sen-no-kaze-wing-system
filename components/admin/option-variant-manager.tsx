@@ -241,16 +241,7 @@ function ChoiceEditor({
             <option value="fixed">固定（変更不可）</option>
           </Select>
         </Field>
-        <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} errors={e.extra_price}>
-          <Input
-            id={`variant-choice-price-${choice?.id ?? group.id}`}
-            name="extra_price"
-            type="number"
-            min={0}
-            step={100}
-            defaultValue={choice?.extra_price ?? 0}
-          />
-        </Field>
+        <input type="hidden" name="extra_price" value={choice?.extra_price ?? 0} />
         <Field label="表示順" htmlFor={`variant-choice-sort-${choice?.id ?? group.id}`} errors={e.sort_order}>
           <Input
             id={`variant-choice-sort-${choice?.id ?? group.id}`}
@@ -292,11 +283,8 @@ function ChoiceEditor({
               placeholder="任意"
             />
           </Field>
-          <Checkbox
-            name="price_on_request"
-            defaultChecked={choice?.price_on_request}
-            label="この選択肢の価格は別途見積"
-          />
+          {choice?.price_on_request && <input type="hidden" name="price_on_request" value="on" />}
+          <p className="text-xs text-muted">追加金額・別途見積の設定は STEP 5「価格設定」で行います。</p>
         </div>
         <div className="rounded-lg border border-line bg-sand/40 p-2">
           {choice?.image_url ? (
@@ -305,7 +293,7 @@ function ChoiceEditor({
             </div>
           ) : (
             <div className="flex aspect-square items-center justify-center rounded-md border border-dashed border-line bg-white px-2 text-center text-xs text-muted">
-              画像なし
+              <span>画像なし<br />文字カードで表示</span>
             </div>
           )}
         </div>
@@ -349,9 +337,9 @@ export function OptionVariantManager({
   return (
     <section id="customer-selection" className="space-y-6 scroll-mt-6">
       <div>
-        <h2 className="text-xl font-semibold">2. お客様表示・選択</h2>
+        <h2 className="text-xl font-semibold">STEP 4 お客様選択</h2>
         <p className="mt-1 text-sm text-muted">
-          お客様が商品詳細で選ぶ色・柄・仕様と、その追加金額を管理します。シミュレーターの商品詳細にそのまま反映されます。
+          お客様が商品詳細で選ぶ色・柄・仕様を管理します。画像は任意で、画像を登録しない選択肢は文字カードとして表示できます。
         </p>
         <p className="mt-2 text-xs text-muted">
           使用済みの見積・保存仕様との整合を守るため、この画面では物理削除を行いません。不要になった項目・選択肢は「非公開」にしてください。
@@ -394,7 +382,7 @@ export function OptionVariantManager({
                 <div className="space-y-3">
                   <div>
                     <h4 className="text-sm font-semibold">選択肢</h4>
-                    <p className="mt-1 text-xs text-muted">標準・追加・固定、追加金額、画像、公開状態を設定します。</p>
+                    <p className="mt-1 text-xs text-muted">標準・追加・固定、画像または文字カード、公開状態を設定します。追加金額は STEP 5 で設定します。</p>
                   </div>
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
@@ -435,3 +423,104 @@ export function OptionVariantManager({
     </section>
   );
 }
+function ChoicePriceEditor({
+  optionId,
+  group,
+  choice,
+}: {
+  optionId: string;
+  group: OptionVariantGroup;
+  choice: OptionVariantChoice;
+}) {
+  const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
+  const e = state.fieldErrors ?? {};
+
+  return (
+    <form action={action} className="grid gap-4 rounded-xl border border-line bg-white p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end" noValidate>
+      <input type="hidden" name="id" value={choice.id} />
+      <input type="hidden" name="option_id" value={optionId} />
+      <input type="hidden" name="group_id" value={group.id} />
+      <input type="hidden" name="name" value={choice.name} />
+      <input type="hidden" name="code" value={choice.code} />
+      <input type="hidden" name="kind" value={choice.kind} />
+      <input type="hidden" name="sort_order" value={choice.sort_order} />
+      <input type="hidden" name="status" value={choice.status} />
+      <input type="hidden" name="image_url" value={choice.image_url ?? ''} />
+      <input type="hidden" name="note" value={choice.note ?? ''} />
+
+      <div>
+        <ActionStatus state={state} />
+        <p className="font-semibold text-ink">{choice.name}</p>
+        <p className="mt-1 text-xs text-muted">{group.name}・{VARIANT_KIND_LABELS[choice.kind]}</p>
+      </div>
+      <div className="space-y-2">
+        <Field label="追加金額（税別・円）" htmlFor={`variant-price-only-${choice.id}`} errors={e.extra_price}>
+          <Input
+            id={`variant-price-only-${choice.id}`}
+            name="extra_price"
+            type="number"
+            min={0}
+            step={100}
+            defaultValue={choice.extra_price}
+            disabled={choice.price_on_request}
+          />
+        </Field>
+        <Checkbox name="price_on_request" defaultChecked={choice.price_on_request} label="別途見積" />
+      </div>
+      <PendingButton pending={pending}>保存</PendingButton>
+    </form>
+  );
+}
+
+export function OptionVariantPricing({
+  option,
+  groups,
+  choices,
+}: {
+  option: ProductOption;
+  groups: OptionVariantGroup[];
+  choices: OptionVariantChoice[];
+}) {
+  const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+  const publishedChoices = choices.filter((choice) => choice.status === 'published');
+
+  return (
+    <section id="variant-pricing" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
+      <div>
+        <h2 className="text-lg font-semibold">色・仕様ごとの追加金額</h2>
+        <p className="mt-1 text-sm text-muted">
+          STEP 4 で登録した文字カード・画像カードごとの追加金額を設定します。0円の標準選択肢も明示しておくと確認しやすくなります。
+        </p>
+      </div>
+
+      {publishedChoices.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line px-4 py-7 text-center text-sm text-muted">
+          価格を設定する選択肢がありません。先に STEP 4「お客様選択」で色・仕様を登録してください。
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {orderedGroups.map((group) => {
+            const rows = choices
+              .filter((choice) => choice.group_id === group.id)
+              .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+            if (rows.length === 0) return null;
+            return (
+              <div key={group.id} className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-semibold">{group.name}</h3>
+                  <span className="text-xs text-muted">{rows.length}選択肢</span>
+                </div>
+                <div className="space-y-2">
+                  {rows.map((choice) => (
+                    <ChoicePriceEditor key={choice.id} optionId={option.id} group={group} choice={choice} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+

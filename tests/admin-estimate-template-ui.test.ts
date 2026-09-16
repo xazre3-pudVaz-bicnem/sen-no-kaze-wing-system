@@ -65,13 +65,11 @@ describe('見積テンプレート管理UI', () => {
     expect(adminForms).toContain('見積テンプレートの「仕様」もここから選ばれます');
   });
 
-  it('操作確認用サンプルは保存せず主要操作を試せる', () => {
-    expect(demoPage).toContain('操作確認用 Wing ホテル仕様 非防火');
-    expect(demoPage).toContain('demoMode');
-    expect(demoPage).toContain('ユニットバス 1216');
-    expect(demoPage).toContain('浄化槽工事');
-    expect(workbench).toContain('最初の状態に戻す');
-    expect(workbench).toContain('この画面の変更は保存されません');
+  it('操作確認用サンプルは保存せずExcel風の主要操作を試せる', () => {
+    expect(demoPage).toContain('操作確認用 Wing ホテルUB 非防火');
+    expect(demoPage).toContain('EstimateTemplateExcelDemo');
+    expect(demoPage).toContain('2026-09-01修正分類表見積書');
+    expect(demoPage).toContain('変更内容は保存されません');
   });
 
   it('詳細画面に4分類と日本語の版運用を置く', () => {

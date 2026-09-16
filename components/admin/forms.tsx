@@ -449,6 +449,8 @@ interface OptionFormProps {
   defaultCategoryId?: string;
   /** 編集画面では商品情報と販売・詳細設定を分けて表示する */
   mode?: 'all' | 'product' | 'sales';
+  /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
+  returnTo?: string;
 }
 
 export function OptionForm({
@@ -460,6 +462,7 @@ export function OptionForm({
   conflicts,
   defaultCategoryId,
   mode = 'all',
+  returnTo,
 }: OptionFormProps) {
   const [state, action, pending] = useActionState(saveOptionAction, initial);
   const e = state.fieldErrors ?? {};
@@ -517,6 +520,7 @@ export function OptionForm({
     <form action={action} className="space-y-6" noValidate>
       <input type="hidden" name="id" value={option?.id ?? ''} />
       <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
+      {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
       {preserveProductFields}
       {preserveSalesFields}
       <Status state={state} />

@@ -71,7 +71,7 @@ describe('見積テンプレート管理UI', () => {
     expect(demoPage).toContain('ユニットバス 1216');
     expect(demoPage).toContain('浄化槽工事');
     expect(workbench).toContain('最初の状態に戻す');
-    expect(workbench).toContain('変更内容は保存されません');
+    expect(workbench).toContain('この画面の変更は保存されません');
   });
 
   it('詳細画面に4分類と日本語の版運用を置く', () => {

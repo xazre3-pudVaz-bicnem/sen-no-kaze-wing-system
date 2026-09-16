@@ -6,6 +6,10 @@ const listPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'),
   'utf8'
 );
+const newPage = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/estimate-templates/new/page.tsx'),
+  'utf8'
+);
 const detailPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/[id]/page.tsx'),
   'utf8'
@@ -39,8 +43,13 @@ describe('見積テンプレート管理UI', () => {
   it('新規作成画面は選択項目と参照本体を分かりやすくする', () => {
     expect(newForm).toContain('▼');
     expect(newForm).toContain('基準となる本体');
-    expect(newForm).toContain('商品モデル・用途・防火仕様から自動入力');
+    expect(newForm).toContain('商品モデル・仕様・防火仕様から自動入力');
+    expect(newForm).toContain('商品モデルに登録されている仕様を表示します');
+    expect(newForm).not.toContain('SPEC_OPTIONS');
+    expect(newForm).toContain('max-w-[700px]');
+    expect(newForm).toContain('max-w-[600px]');
     expect(newForm).toContain('キャンセル');
+    expect(newPage).toContain('model.presets.map');
   });
 
   it('詳細画面に4分類と日本語の版運用を置く', () => {

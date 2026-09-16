@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
@@ -27,7 +28,7 @@ function SelectWithArrow({
 }: {
   name: string;
   defaultValue: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="relative mt-1">

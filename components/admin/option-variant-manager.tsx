@@ -284,7 +284,7 @@ function ChoiceEditor({
             />
           </Field>
           {choice?.price_on_request && <input type="hidden" name="price_on_request" value="on" />}
-          <p className="text-xs text-muted">追加金額・別途見積の設定は STEP 5「価格設定」で行います。</p>
+          <p className="text-xs text-muted">追加金額・別途見積の設定は、下の「価格・公開設定」で行います。</p>
         </div>
         <div className="rounded-lg border border-line bg-sand/40 p-2">
           {choice?.image_url ? (

@@ -254,40 +254,48 @@ export function EstimateTemplateExcelDemo({ products }: { products: EstimateExce
         setSelectedCell(event.target.value);
         updateRow(row.id, { [field]: event.target.value });
       }}
-      className="h-8 w-full border-0 bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-emerald-700/30"
+      className="h-7 w-full border-0 bg-transparent px-1.5 text-[13px] leading-none outline-none focus:ring-2 focus:ring-emerald-700/30"
     />
   );
 
   const renderSaleInput = (row: Row, rowIndex: number) => {
     if (row.priceOnRequest) return (
-      <div className="flex items-center justify-end gap-2 px-2">
-        <span className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">別途見積</span>
-        <button type="button" className="text-[10px] text-emerald-800 underline" onClick={() => toggleSeparate(row, false)}>金額入力</button>
+      <div className="flex h-7 items-center justify-end gap-1 px-1">
+        <span className="whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">別途見積</span>
+        <button type="button" className="whitespace-nowrap text-[10px] text-emerald-800 underline" onClick={() => toggleSeparate(row, false)}>金額入力</button>
       </div>
     );
     return (
-      <div className="px-1 py-1">
-        <div className="flex items-center gap-1">
-          <input
-            {...cellProps('S', rowIndex)}
-            type="number" min={0} step={1} value={row.sale}
-            onFocus={(event) => setSelectedCell(event.currentTarget.value)}
-            onChange={(event) => {
-              const value = Math.max(0, Number(event.target.value) || 0);
-              setSelectedCell(event.target.value);
-              updateRow(row.id, { sale: value, manualSale: true, priceOnRequest: false });
-            }}
-            className="h-8 w-full border-0 bg-transparent px-2 text-right text-sm outline-none focus:ring-2 focus:ring-emerald-700/30"
-          />
-          <button
-            type="button"
-            onClick={() => row.manualSale && updateRow(row.id, { sale: floorYen(row.cost * markupRate / 100), manualSale: false })}
-            className={row.manualSale ? 'rounded border border-orange-300 bg-orange-50 px-1.5 py-1 text-[10px] font-semibold text-orange-800' : 'rounded border border-emerald-300 bg-emerald-50 px-1.5 py-1 text-[10px] font-semibold text-emerald-800'}
-          >
-            {row.manualSale ? '手動' : '自動'}
-          </button>
-        </div>
-        <button type="button" className="px-2 pt-1 text-[10px] text-slate-500 underline" onClick={() => toggleSeparate(row, true)}>別途見積にする</button>
+      <div className="flex h-7 items-center gap-1 px-1">
+        <input
+          {...cellProps('S', rowIndex)}
+          type="number" min={0} step={1} value={row.sale}
+          onFocus={(event) => setSelectedCell(event.currentTarget.value)}
+          onChange={(event) => {
+            const value = Math.max(0, Number(event.target.value) || 0);
+            setSelectedCell(event.target.value);
+            updateRow(row.id, { sale: value, manualSale: true, priceOnRequest: false });
+          }}
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-right text-[13px] leading-none outline-none focus:ring-2 focus:ring-emerald-700/30"
+        />
+        <button
+          type="button"
+          title={row.manualSale ? 'クリックすると掛率からの自動計算へ戻します' : '掛率から自動計算'}
+          onClick={() => row.manualSale && updateRow(row.id, { sale: floorYen(row.cost * markupRate / 100), manualSale: false })}
+          className={row.manualSale
+            ? 'h-6 whitespace-nowrap rounded border border-orange-300 bg-orange-50 px-1.5 text-[10px] font-semibold text-orange-800'
+            : 'h-6 whitespace-nowrap rounded border border-emerald-300 bg-emerald-50 px-1.5 text-[10px] font-semibold text-emerald-800'}
+        >
+          {row.manualSale ? '手動' : '自動'}
+        </button>
+        <button
+          type="button"
+          title="この行を別途見積にする"
+          className="h-6 whitespace-nowrap px-1 text-[10px] text-slate-500 underline"
+          onClick={() => toggleSeparate(row, true)}
+        >
+          別途
+        </button>
       </div>
     );
   };
@@ -329,24 +337,24 @@ export function EstimateTemplateExcelDemo({ products }: { products: EstimateExce
             <button type="button" onClick={applyMarkup} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold">掛率から売価を再計算</button>
             <button type="button" disabled={!undoRows} onClick={() => { if (undoRows) { setRows(undoRows.map((row) => ({ ...row }))); setUndoRows(null); setDirty(true); } }} className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold disabled:opacity-40">直前の再計算を元に戻す</button>
           </div>
-          <p className="text-[11px] text-slate-500">黄色＝金額入力 ／ 商品名「…」＝商品選択 ／ Tab＝右 ／ Enter＝下</p>
+          <p className="text-[11px] text-slate-500">黄色＝金額入力 ／ 自動・手動・別途は販売単価と同じ行 ／ 商品名「…」＝商品選択 ／ Tab＝右 ／ Enter＝下</p>
         </div>
 
-        <div className="flex border-b border-slate-300 bg-slate-100 px-3 pt-2">
+        <div className="flex border-b border-slate-300 bg-slate-100 px-3 pt-1.5">
           {([['cost', '原価表'], ['sale', '売価表'], ['compare', '原価・売価比較']] as const).map(([value, label]) => (
-            <button key={value} type="button" onClick={() => setSheet(value)} className={sheet === value ? 'border-x border-t border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-emerald-900' : 'px-5 py-2 text-sm text-slate-600'}>{label}</button>
+            <button key={value} type="button" onClick={() => setSheet(value)} className={sheet === value ? 'border-x border-t border-slate-300 bg-white px-5 py-1.5 text-sm font-semibold text-emerald-900' : 'px-5 py-1.5 text-sm text-slate-600'}>{label}</button>
           ))}
         </div>
 
         <div className="flex border-b border-slate-200 text-xs">
-          <div className="w-16 border-r border-slate-200 bg-slate-100 px-2 py-2 font-semibold text-slate-500">内容</div>
-          <div className="min-h-8 flex-1 px-3 py-2">{selectedCell}</div>
+          <div className="w-16 border-r border-slate-200 bg-slate-100 px-2 py-1.5 font-semibold text-slate-500">内容</div>
+          <div className="min-h-7 flex-1 px-3 py-1.5">{selectedCell}</div>
         </div>
 
         <div className="max-h-[68vh] overflow-auto">
           <table className={sheet === 'compare' ? 'min-w-[110rem] border-collapse' : 'min-w-[84rem] border-collapse'}>
             <thead>
-              <tr>{tableHeaders.map((label, index) => <th key={label + index} className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-2 py-2 text-center text-xs font-semibold text-slate-600">{label}</th>)}</tr>
+              <tr>{tableHeaders.map((label, index) => <th key={label + index} className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">{label}</th>)}</tr>
             </thead>
             <tbody>
               {SECTIONS.map((section) => {
@@ -363,42 +371,53 @@ export function EstimateTemplateExcelDemo({ products }: { products: EstimateExce
                   const common = [
                     <th key="n" className="w-12 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">{index}</th>,
                     <td key="x" className="w-8 border-r border-slate-200 bg-white"></td>,
-                    <td key="name" className="relative min-w-[18rem] border-r border-slate-200 bg-white px-1 py-1">
-                      {renderInput(row, index, 'name', 'N')}
-                      <button type="button" className="absolute right-2 top-2 grid size-6 place-items-center rounded border border-slate-300 bg-white text-xs font-bold" onClick={() => { setReplaceRowId(row.id); setPickerSection(section); }}>…</button>
-                      {(row.manufacturer || row.modelNo) && <p className="truncate px-2 text-[11px] text-slate-500">{[row.manufacturer, row.modelNo].filter(Boolean).join(' ／ ')}</p>}
+                    <td
+                      key="name"
+                      title={[row.manufacturer, row.modelNo].filter(Boolean).join(' ／ ') || undefined}
+                      className="relative min-w-[18rem] border-r border-slate-200 bg-white px-0.5"
+                    >
+                      <div className="pr-6">{renderInput(row, index, 'name', 'N')}</div>
+                      <button
+                        type="button"
+                        title="商品を選択"
+                        aria-label={row.name + 'の商品を選択'}
+                        className="absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded border border-slate-300 bg-white text-[10px] font-bold"
+                        onClick={() => { setReplaceRowId(row.id); setPickerSection(section); }}
+                      >
+                        …
+                      </button>
                     </td>,
-                    <td key="group" className="min-w-40 border-r border-slate-200 bg-white px-1 py-1">{renderInput(row, index, 'group', 'G')}</td>,
-                    <td key="qty" className="w-24 border-r border-slate-200 bg-white px-1 py-1"><input {...cellProps('Q', index)} type="number" min={0} step={0.1} value={row.quantity} onFocus={(event) => setSelectedCell(event.currentTarget.value)} onChange={(event) => updateRow(row.id, { quantity: Math.max(0, Number(event.target.value) || 0) })} className="h-8 w-full border-0 bg-transparent px-2 text-right text-sm outline-none focus:ring-2 focus:ring-emerald-700/30" /></td>,
-                    <td key="unit" className="w-20 border-r border-slate-200 bg-white px-1 py-1">{renderInput(row, index, 'unit', 'U')}</td>,
+                    <td key="group" className="min-w-40 border-r border-slate-200 bg-white px-0.5">{renderInput(row, index, 'group', 'G')}</td>,
+                    <td key="qty" className="w-24 border-r border-slate-200 bg-white px-0.5"><input {...cellProps('Q', index)} type="number" min={0} step={0.1} value={row.quantity} onFocus={(event) => setSelectedCell(event.currentTarget.value)} onChange={(event) => updateRow(row.id, { quantity: Math.max(0, Number(event.target.value) || 0) })} className="h-7 w-full border-0 bg-transparent px-1.5 text-right text-[13px] leading-none outline-none focus:ring-2 focus:ring-emerald-700/30" /></td>,
+                    <td key="unit" className="w-20 border-r border-slate-200 bg-white px-0.5">{renderInput(row, index, 'unit', 'U')}</td>,
                   ];
 
-                  const remark = <td className="min-w-48 border-r border-slate-200 bg-white px-1 py-1">{renderInput(row, index, 'remark', 'R')}</td>;
+                  const remark = <td className="min-w-48 border-r border-slate-200 bg-white px-0.5">{renderInput(row, index, 'remark', 'R')}</td>;
                   const action = <td className="w-20 bg-white px-2 text-center">{row.userAdded ? <button type="button" className="text-xs text-red-700 underline" onClick={() => { setRows((current) => current.filter((item) => item.id !== row.id)); setDirty(true); }}>削除</button> : '—'}</td>;
 
-                  if (sheet === 'cost') return <tr key={row.id} className="border-b border-slate-200">{common}<td className="w-32 border-r border-slate-200 bg-amber-50 px-1"><input {...cellProps('C', index)} type="number" min={0} step={1} value={row.cost} onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })} className="h-8 w-full border-0 bg-transparent px-2 text-right text-sm outline-none" /></td><td className="w-32 border-r border-slate-200 bg-slate-50 px-3 text-right">{money(costAmount)}</td>{remark}{action}</tr>;
+                  if (sheet === 'cost') return <tr key={row.id} className="border-b border-slate-200">{common}<td className="w-32 border-r border-slate-200 bg-amber-50 px-0.5"><input {...cellProps('C', index)} type="number" min={0} step={1} value={row.cost} onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })} className="h-7 w-full border-0 bg-transparent px-1.5 text-right text-[13px] leading-none outline-none" /></td><td className="w-32 border-r border-slate-200 bg-slate-50 px-3 text-right">{money(costAmount)}</td>{remark}{action}</tr>;
                   if (sheet === 'sale') return <tr key={row.id} className="border-b border-slate-200">{common}<td className="min-w-44 border-r border-slate-200 bg-amber-50">{renderSaleInput(row, index)}</td><td className="w-36 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '別途見積' : money(saleAmount)}</td>{remark}{action}</tr>;
-                  return <tr key={row.id} className="border-b border-slate-200">{common}<td className="w-32 border-r border-slate-200 bg-amber-50 px-1"><input {...cellProps('C', index)} type="number" min={0} step={1} value={row.cost} onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })} className="h-8 w-full border-0 bg-transparent px-2 text-right text-sm outline-none" /></td><td className="w-32 border-r border-slate-200 bg-slate-50 px-3 text-right">{money(costAmount)}</td><td className="min-w-44 border-r border-slate-200 bg-amber-50">{renderSaleInput(row, index)}</td><td className="w-36 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '別途見積' : money(saleAmount)}</td><td className="w-36 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '—' : money(profit)}</td><td className="w-24 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '—' : percent(margin)}</td>{remark}{action}</tr>;
+                  return <tr key={row.id} className="border-b border-slate-200">{common}<td className="w-32 border-r border-slate-200 bg-amber-50 px-0.5"><input {...cellProps('C', index)} type="number" min={0} step={1} value={row.cost} onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })} className="h-7 w-full border-0 bg-transparent px-1.5 text-right text-[13px] leading-none outline-none" /></td><td className="w-32 border-r border-slate-200 bg-slate-50 px-3 text-right">{money(costAmount)}</td><td className="min-w-44 border-r border-slate-200 bg-amber-50">{renderSaleInput(row, index)}</td><td className="w-36 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '別途見積' : money(saleAmount)}</td><td className="w-36 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '—' : money(profit)}</td><td className="w-24 border-r border-slate-200 bg-slate-50 px-3 text-right">{row.priceOnRequest ? '—' : percent(margin)}</td>{remark}{action}</tr>;
                 });
 
                 const expenseCost = expense(section, 'cost');
                 const expenseSale = expense(section, 'sale');
                 return [
-                  !isCollapsed && <tr key={section + '-head'} className="border-b border-slate-300 bg-emerald-900 text-white"><th className="bg-slate-100"></th><td></td><td colSpan={tableHeaders.length - 2} className="px-3 py-2 text-sm font-semibold">{section}</td></tr>,
+                  !isCollapsed && <tr key={section + '-head'} className="border-b border-slate-300 bg-emerald-900 text-white"><th className="bg-slate-100"></th><td></td><td colSpan={tableHeaders.length - 2} className="px-3 py-1 text-sm font-semibold">{section}</td></tr>,
                   !isCollapsed && currentRows,
                   !isCollapsed && section !== '別途' && (sheet === 'compare'
-                    ? <tr key={section + '-expense'} className="border-b border-dashed border-slate-300 bg-stone-50 text-sm font-medium"><th className="bg-slate-100"></th><td></td><td className="px-3 py-2">{section}経費</td><td></td><td className="text-center">1</td><td className="text-center">式</td><td></td><td className="px-3 text-right">{money(expenseCost)}</td><td></td><td className="px-3 text-right">{money(expenseSale)}</td><td className="px-3 text-right">{money(expenseSale - expenseCost)}</td><td className="px-3 text-right">{percent(expenseSale ? (expenseSale - expenseCost) / expenseSale * 100 : 0)}</td><td className="px-3 text-xs text-slate-500">経費 {expenseRate.toFixed(2)}%</td><td></td></tr>
-                    : <tr key={section + '-expense'} className="border-b border-dashed border-slate-300 bg-stone-50 text-sm font-medium"><th className="bg-slate-100"></th><td></td><td className="px-3 py-2">{section}経費</td><td></td><td className="text-center">1</td><td className="text-center">式</td><td></td><td className="px-3 text-right">{money(sheet === 'cost' ? expenseCost : expenseSale)}</td><td className="px-3 text-xs text-slate-500">経費 {expenseRate.toFixed(2)}%</td><td></td></tr>),
+                    ? <tr key={section + '-expense'} className="border-b border-dashed border-slate-300 bg-stone-50 text-sm font-medium"><th className="bg-slate-100"></th><td></td><td className="px-3 py-1">{section}経費</td><td></td><td className="text-center">1</td><td className="text-center">式</td><td></td><td className="px-3 text-right">{money(expenseCost)}</td><td></td><td className="px-3 text-right">{money(expenseSale)}</td><td className="px-3 text-right">{money(expenseSale - expenseCost)}</td><td className="px-3 text-right">{percent(expenseSale ? (expenseSale - expenseCost) / expenseSale * 100 : 0)}</td><td className="px-3 text-xs text-slate-500">経費 {expenseRate.toFixed(2)}%</td><td></td></tr>
+                    : <tr key={section + '-expense'} className="border-b border-dashed border-slate-300 bg-stone-50 text-sm font-medium"><th className="bg-slate-100"></th><td></td><td className="px-3 py-1">{section}経費</td><td></td><td className="text-center">1</td><td className="text-center">式</td><td></td><td className="px-3 text-right">{money(sheet === 'cost' ? expenseCost : expenseSale)}</td><td className="px-3 text-xs text-slate-500">経費 {expenseRate.toFixed(2)}%</td><td></td></tr>),
                   sheet === 'compare'
-                    ? <tr key={section + '-total'} className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold"><th className="bg-slate-100"></th><td className="px-1 py-2 text-center"><button type="button" className="size-6 rounded border border-slate-400 bg-white" onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; })}>{isCollapsed ? '+' : '−'}</button></td><td className="px-3 py-2">{section} 計</td><td></td><td className="text-center">{isCollapsed ? '1' : ''}</td><td className="text-center">{isCollapsed ? '式' : ''}</td><td></td><td className="px-3 text-right">{money(st.cost)}</td><td></td><td className="px-3 text-right">{money(st.sale)}</td><td className="px-3 text-right">{money(st.profit)}</td><td className="px-3 text-right">{percent(st.margin)}</td><td></td><td className="px-2 text-right"><button type="button" className="mr-2 text-[11px] text-emerald-800 underline" onClick={() => addFree(section)}>＋自由項目</button><button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => { setReplaceRowId(null); setPickerSection(section); }}>＋商品</button></td></tr>
-                    : <tr key={section + '-total'} className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold"><th className="bg-slate-100"></th><td className="px-1 py-2 text-center"><button type="button" className="size-6 rounded border border-slate-400 bg-white" onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; })}>{isCollapsed ? '+' : '−'}</button></td><td className="px-3 py-2">{section} 計</td><td></td><td className="text-center">{isCollapsed ? '1' : ''}</td><td className="text-center">{isCollapsed ? '式' : ''}</td><td></td><td className="px-3 text-right">{money(sheet === 'cost' ? st.cost : st.sale)}</td><td></td><td className="px-2 text-right"><button type="button" className="mr-2 text-[11px] text-emerald-800 underline" onClick={() => addFree(section)}>＋自由項目</button><button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => { setReplaceRowId(null); setPickerSection(section); }}>＋商品</button></td></tr>,
+                    ? <tr key={section + '-total'} className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold"><th className="bg-slate-100"></th><td className="px-1 py-1 text-center"><button type="button" className="size-6 rounded border border-slate-400 bg-white" onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; })}>{isCollapsed ? '+' : '−'}</button></td><td className="px-3 py-1">{section} 計</td><td></td><td className="text-center">{isCollapsed ? '1' : ''}</td><td className="text-center">{isCollapsed ? '式' : ''}</td><td></td><td className="px-3 text-right">{money(st.cost)}</td><td></td><td className="px-3 text-right">{money(st.sale)}</td><td className="px-3 text-right">{money(st.profit)}</td><td className="px-3 text-right">{percent(st.margin)}</td><td></td><td className="px-2 text-right"><button type="button" className="mr-2 text-[11px] text-emerald-800 underline" onClick={() => addFree(section)}>＋自由項目</button><button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => { setReplaceRowId(null); setPickerSection(section); }}>＋商品</button></td></tr>
+                    : <tr key={section + '-total'} className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold"><th className="bg-slate-100"></th><td className="px-1 py-1 text-center"><button type="button" className="size-6 rounded border border-slate-400 bg-white" onClick={() => setCollapsed((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; })}>{isCollapsed ? '+' : '−'}</button></td><td className="px-3 py-1">{section} 計</td><td></td><td className="text-center">{isCollapsed ? '1' : ''}</td><td className="text-center">{isCollapsed ? '式' : ''}</td><td></td><td className="px-3 text-right">{money(sheet === 'cost' ? st.cost : st.sale)}</td><td></td><td className="px-2 text-right"><button type="button" className="mr-2 text-[11px] text-emerald-800 underline" onClick={() => addFree(section)}>＋自由項目</button><button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => { setReplaceRowId(null); setPickerSection(section); }}>＋商品</button></td></tr>,
                 ];
               })}
             </tbody>
             <tfoot className="bg-slate-50 text-sm font-semibold">
-              {sheet === 'cost' && <><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">原価小計</td><td className="px-3 text-right">{money(totals.costSubtotal)}</td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">原価調整額</td><td className="px-1"><input type="number" value={costAdjustment} onChange={(event) => { setCostAdjustment(Number(event.target.value) || 0); setDirty(true); }} className="w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right" /></td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">原価消費税 10%</td><td className="px-3 text-right">{money(totals.costTax)}</td><td colSpan={2}></td></tr><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-3 text-right">原価税込合計</td><td className="px-3 text-right text-base">{money(totals.costGrand)}</td><td colSpan={2}></td></tr></>}
-              {sheet === 'sale' && <><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">売価小計</td><td className="px-3 text-right">{money(totals.saleSubtotal)}</td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">売価調整額</td><td className="px-1"><input type="number" value={saleAdjustment} onChange={(event) => { setSaleAdjustment(Number(event.target.value) || 0); setDirty(true); }} className="w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right" /></td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">売価消費税 10%</td><td className="px-3 text-right">{money(totals.saleTax)}</td><td colSpan={2}></td></tr><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-3 text-right">売価税込合計</td><td className="px-3 text-right text-base">{money(totals.saleGrand)}</td><td colSpan={2}></td></tr></>}
-              {sheet === 'compare' && <><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">税抜小計</td><td className="px-3 text-right">{money(totals.costSubtotal)}</td><td></td><td className="px-3 text-right">{money(totals.saleSubtotal)}</td><td className="px-3 text-right">{money(totals.saleSubtotal - totals.costSubtotal)}</td><td colSpan={3}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">調整額</td><td className="px-3 text-right">{money(costAdjustment)}</td><td></td><td className="px-3 text-right">{money(saleAdjustment)}</td><td className="px-3 text-right">{money(saleAdjustment - costAdjustment)}</td><td colSpan={3}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">消費税</td><td className="px-3 text-right">{money(totals.costTax)}</td><td></td><td className="px-3 text-right">{money(totals.saleTax)}</td><td className="px-3 text-right">{money(totals.saleTax - totals.costTax)}</td><td colSpan={3}></td></tr><tr className="border-t-2 border-slate-700"><td colSpan={7} className="px-3 py-3 text-right">税込合計</td><td className="px-3 text-right text-base">{money(totals.costGrand)}</td><td></td><td className="px-3 text-right text-base">{money(totals.saleGrand)}</td><td className="px-3 text-right text-base">{money(totals.profit)}</td><td className="px-3 text-right">{percent(totals.margin)}</td><td colSpan={2}></td></tr></>}
+              {sheet === 'cost' && <><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">原価小計</td><td className="px-3 text-right">{money(totals.costSubtotal)}</td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">原価調整額</td><td className="px-1"><input type="number" value={costAdjustment} onChange={(event) => { setCostAdjustment(Number(event.target.value) || 0); setDirty(true); }} className="w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right" /></td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">原価消費税 10%</td><td className="px-3 text-right">{money(totals.costTax)}</td><td colSpan={2}></td></tr><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">原価税込合計</td><td className="px-3 text-right text-base">{money(totals.costGrand)}</td><td colSpan={2}></td></tr></>}
+              {sheet === 'sale' && <><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">売価小計</td><td className="px-3 text-right">{money(totals.saleSubtotal)}</td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">売価調整額</td><td className="px-1"><input type="number" value={saleAdjustment} onChange={(event) => { setSaleAdjustment(Number(event.target.value) || 0); setDirty(true); }} className="w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-right" /></td><td colSpan={2}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">売価消費税 10%</td><td className="px-3 text-right">{money(totals.saleTax)}</td><td colSpan={2}></td></tr><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">売価税込合計</td><td className="px-3 text-right text-base">{money(totals.saleGrand)}</td><td colSpan={2}></td></tr></>}
+              {sheet === 'compare' && <><tr className="border-t-2 border-slate-600"><td colSpan={7} className="px-3 py-2 text-right">税抜小計</td><td className="px-3 text-right">{money(totals.costSubtotal)}</td><td></td><td className="px-3 text-right">{money(totals.saleSubtotal)}</td><td className="px-3 text-right">{money(totals.saleSubtotal - totals.costSubtotal)}</td><td colSpan={3}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">調整額</td><td className="px-3 text-right">{money(costAdjustment)}</td><td></td><td className="px-3 text-right">{money(saleAdjustment)}</td><td className="px-3 text-right">{money(saleAdjustment - costAdjustment)}</td><td colSpan={3}></td></tr><tr><td colSpan={7} className="px-3 py-2 text-right">消費税</td><td className="px-3 text-right">{money(totals.costTax)}</td><td></td><td className="px-3 text-right">{money(totals.saleTax)}</td><td className="px-3 text-right">{money(totals.saleTax - totals.costTax)}</td><td colSpan={3}></td></tr><tr className="border-t-2 border-slate-700"><td colSpan={7} className="px-3 py-2 text-right">税込合計</td><td className="px-3 text-right text-base">{money(totals.costGrand)}</td><td></td><td className="px-3 text-right text-base">{money(totals.saleGrand)}</td><td className="px-3 text-right text-base">{money(totals.profit)}</td><td className="px-3 text-right">{percent(totals.margin)}</td><td colSpan={2}></td></tr></>}
             </tfoot>
           </table>
         </div>

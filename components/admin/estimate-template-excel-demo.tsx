@@ -100,36 +100,34 @@ export function EstimateTemplateExcelDemo({ products }: { products: EstimateExce
     return section === 'オプション' ? floorYen(value) : value;
   };
 
-  const sectionTotals = useMemo(() => {
-    return new Map(SECTIONS.map((section) => {
+  const sectionTotals = new Map<Section, { cost: number; sale: number; profit: number; margin: number }>(
+    SECTIONS.map((section) => {
       const sectionRows = rows.filter((row) => row.section === section);
       const cost = sectionRows.reduce((sum, row) => sum + rowCost(row), 0) + expense(section, 'cost');
       const sale = sectionRows.reduce((sum, row) => sum + rowSale(row), 0) + expense(section, 'sale');
       const profit = sale - cost;
       return [section, { cost, sale, profit, margin: sale ? profit / sale * 100 : 0 }];
-    }));
-  }, [rows, expenseRate]);
+    })
+  );
 
-  const totals = useMemo(() => {
-    const costSubtotal = SECTIONS.reduce((sum, section) => sum + (sectionTotals.get(section)?.cost ?? 0), 0);
-    const saleSubtotal = SECTIONS.reduce((sum, section) => sum + (sectionTotals.get(section)?.sale ?? 0), 0);
-    const costTax = floorYen((costSubtotal + costAdjustment) * 0.1);
-    const saleTax = floorYen((saleSubtotal + saleAdjustment) * 0.1);
-    const costGrand = costSubtotal + costAdjustment + costTax;
-    const saleGrand = saleSubtotal + saleAdjustment + saleTax;
-    const profit = saleGrand - costGrand;
-    return {
-      costSubtotal,
-      saleSubtotal,
-      costTax,
-      saleTax,
-      costGrand,
-      saleGrand,
-      profit,
-      margin: saleGrand ? profit / saleGrand * 100 : 0,
-      onRequest: rows.filter((row) => row.priceOnRequest).length,
-    };
-  }, [sectionTotals, costAdjustment, saleAdjustment, rows]);
+  const costSubtotal = SECTIONS.reduce((sum, section) => sum + (sectionTotals.get(section)?.cost ?? 0), 0);
+  const saleSubtotal = SECTIONS.reduce((sum, section) => sum + (sectionTotals.get(section)?.sale ?? 0), 0);
+  const costTax = floorYen((costSubtotal + costAdjustment) * 0.1);
+  const saleTax = floorYen((saleSubtotal + saleAdjustment) * 0.1);
+  const costGrand = costSubtotal + costAdjustment + costTax;
+  const saleGrand = saleSubtotal + saleAdjustment + saleTax;
+  const profit = saleGrand - costGrand;
+  const totals = {
+    costSubtotal,
+    saleSubtotal,
+    costTax,
+    saleTax,
+    costGrand,
+    saleGrand,
+    profit,
+    margin: saleGrand ? profit / saleGrand * 100 : 0,
+    onRequest: rows.filter((row) => row.priceOnRequest).length,
+  };
 
   const pickerProducts = useMemo(() => {
     const q = query.trim().toLowerCase();

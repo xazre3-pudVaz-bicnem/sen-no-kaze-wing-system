@@ -25,7 +25,7 @@ export function SiteLocationPicker({
   const prefectureValue = undecided ? UNDECIDED_VALUE : (prefecture ?? '');
 
   return (
-    <div className="min-w-0 lg:w-[21rem]" data-testid="site-location-picker">
+    <div className="w-full max-w-[20rem] min-w-0 lg:w-[21rem] lg:max-w-none" data-testid="site-location-picker">
       <p className="mb-1 text-[0.72rem] font-semibold text-muted">設置予定地</p>
       <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         <select

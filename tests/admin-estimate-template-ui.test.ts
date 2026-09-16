@@ -14,6 +14,10 @@ const detailPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/[id]/page.tsx'),
   'utf8'
 );
+const demoPage = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/estimate-templates/demo/page.tsx'),
+  'utf8'
+);
 const newForm = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/new-estimate-template-form.tsx'),
   'utf8'
@@ -42,6 +46,9 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('税込金額');
     expect(listPage).toContain('見積テンプレートはまだありません');
     expect(listPage).not.toContain('承認待ち 0件');
+    expect(listPage).toContain('一覧の絞り込み');
+    expect(listPage).toContain('複製には使用しません');
+    expect(listPage).toContain('/admin/estimate-templates/demo');
   });
 
   it('新規作成画面は選択項目と参照本体を分かりやすくする', () => {
@@ -56,6 +63,15 @@ describe('見積テンプレート管理UI', () => {
     expect(newPage).toContain('model.presets.map');
     expect(adminForms).toContain('仕様（推奨構成）');
     expect(adminForms).toContain('見積テンプレートの「仕様」もここから選ばれます');
+  });
+
+  it('操作確認用サンプルは保存せず主要操作を試せる', () => {
+    expect(demoPage).toContain('操作確認用 Wing ホテル仕様 非防火');
+    expect(demoPage).toContain('demoMode');
+    expect(demoPage).toContain('ユニットバス 1216');
+    expect(demoPage).toContain('浄化槽工事');
+    expect(workbench).toContain('最初の状態に戻す');
+    expect(workbench).toContain('この画面の変更は保存されません');
   });
 
   it('詳細画面に4分類と日本語の版運用を置く', () => {

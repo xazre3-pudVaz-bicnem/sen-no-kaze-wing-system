@@ -77,7 +77,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         <div>
           <h2 className="text-lg font-semibold">サブ画像・メーカー資料</h2>
           <p className="mt-1 text-sm text-muted">
-            商品画像とメーカーPDFを同じSTEPで確認できます。メーカーPDFは1商品につき1ファイルを基本とし、PDF内の複数ページはそのまま利用できます。
+            商品画像とメーカーPDFを同じ商品情報画面で確認できます。メーカーPDFは1商品につき1ファイルを基本とし、PDF内の複数ページはそのまま利用できます。
           </p>
         </div>
         <div className="rounded-lg border border-line bg-ivory/50 px-3 py-2 text-xs text-ink-soft">

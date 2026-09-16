@@ -175,8 +175,10 @@ export default async function EstimateTemplatesPage({
             {hasFilters ? (
               <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">条件をクリア</Link>
             ) : (
-              <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
-              <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の見積テンプレートを作成</Link>
+              <>
+                <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
+                <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の見積テンプレートを作成</Link>
+              </>
             )}
           </div>
         </section>

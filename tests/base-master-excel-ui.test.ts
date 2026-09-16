@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const page = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/base-masters/[id]/page.tsx'),
+  'utf8'
+);
 const editor = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/base-master-revision-form.tsx'),
   'utf8'
@@ -35,6 +39,13 @@ describe('本体マスター Excel風編集UI', () => {
     expect(lines).toContain('工事区分を追加');
     expect(lines).toContain('h-7 w-full');
     expect(lines).toContain('本体価格計');
+  });
+
+  it('公開済み・旧版の参照表示も同じExcel風明細を使う', () => {
+    expect(lines).toContain('export function BaseMasterReadOnlyLines');
+    expect(page).toContain('<BaseMasterReadOnlyLines');
+    expect(page).toContain('lineSubtotal={revision.line_subtotal}');
+    expect(page).toContain('expenseAmount={revision.expense_amount}');
   });
 
   it('見積専用の原価売価タブや掛率を本体マスターへ持ち込まない', () => {

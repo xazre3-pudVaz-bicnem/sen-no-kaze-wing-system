@@ -58,6 +58,7 @@ import {
 } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
+import { isKnownMunicipality } from '@/data/japan-municipalities';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -357,6 +358,13 @@ export class SupabaseStore implements DataStore {
   }
   async saveConfiguration(_actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     const db = await this.db();
+    const undecided = input.site_location_undecided ?? false;
+    const sitePrefecture = undecided ? null : (input.site_prefecture ?? null);
+    const siteMunicipality = undecided ? null : (input.site_municipality ?? null);
+    if (siteMunicipality && !isKnownMunicipality(sitePrefecture, siteMunicipality)) {
+      throw new StoreError('VALIDATION', '設置予定地の市区町村を確認してください。');
+    }
+
     const { data, error } = await db.rpc('save_configuration', {
       p_configuration_id: input.id,
       p_base_model_id: input.base_model_id,
@@ -369,7 +377,27 @@ export class SupabaseStore implements DataStore {
       p_spec_code: input.spec_code ?? null,
     });
     if (error) mapPgError(error);
-    return data as Configuration;
+
+    const configuration = data as Configuration;
+    const hasSiteInput =
+      input.site_prefecture !== undefined ||
+      input.site_municipality !== undefined ||
+      input.site_location_undecided !== undefined;
+    if (!hasSiteInput) return configuration;
+
+    // 金額・権限を扱う SECURITY DEFINER RPC は変更せず、設置予定地だけを既存RLS下で保存する。
+    const { data: saved, error: siteError } = await db
+      .from('configurations')
+      .update({
+        site_prefecture: sitePrefecture,
+        site_municipality: siteMunicipality,
+        site_location_undecided: undecided,
+      })
+      .eq('id', configuration.id)
+      .select('*')
+      .single();
+    if (siteError) mapPgError(siteError);
+    return saved as Configuration;
   }
   async duplicateConfiguration(id: string) {
     const db = await this.db();

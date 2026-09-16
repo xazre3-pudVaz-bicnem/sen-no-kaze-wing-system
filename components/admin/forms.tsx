@@ -288,7 +288,7 @@ export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mo
                         </button>
                       </div>
 
-                      <Field label="説明" htmlFor={`preset-description-${index}`} hint="このプランの用途・構成を管理者向けに記載">
+                      <Field label="説明" htmlFor={`preset-description-${index}`} hint="この仕様の用途・構成を管理者向けに記載">
                         <Input
                           id={`preset-description-${index}`}
                           value={preset.description}

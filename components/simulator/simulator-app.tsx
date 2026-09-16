@@ -982,48 +982,49 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
           <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 xl:flex-row xl:items-end xl:justify-between xl:gap-x-6">
             <div className="w-full min-w-0 xl:flex-1">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
-                <div className="min-w-0">
-                  <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
-                    仕様を選ぶ
-                  </p>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {!usesManagedEstimateChoices && (
-                      <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
-                    )}
-                    {simulatorSpecChoices.map((choice) => (
-                      <button
-                        key={choice.code}
-                        type="button"
-                        onClick={() => applyPreset(choice.code)}
-                        disabled={!hydrated || readOnly}
-                        aria-pressed={specCode === choice.code}
-                        title={choice.description}
-                        className={cn(
-                          'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
-                          specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
-                        )}
-                        data-testid={`preset-${choice.code}`}
-                      >
-                        {choice.name}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
+              <div className="min-w-0">
+                <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
+                  仕様を選ぶ
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {!usesManagedEstimateChoices && (
+                    <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
+                  )}
+                  {simulatorSpecChoices.map((choice) => (
+                    <button
+                      key={choice.code}
+                      type="button"
+                      onClick={() => applyPreset(choice.code)}
+                      disabled={!hydrated || readOnly}
+                      aria-pressed={specCode === choice.code}
+                      title={choice.description}
+                      className={cn(
+                        'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
+                        specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                      )}
+                      data-testid={`preset-${choice.code}`}
+                    >
+                      {choice.name}
+                    </button>
+                  ))}
                 </div>
 
-                <SiteLocationPicker
-                  prefecture={sitePrefecture}
-                  municipality={siteMunicipality}
-                  undecided={siteLocationUndecided}
-                  disabled={!hydrated || readOnly}
-                  onChange={(next) => {
-                    setSitePrefecture(next.prefecture);
-                    setSiteMunicipality(next.municipality);
-                    setSiteLocationUndecided(next.undecided);
-                    setDirty(true);
-                  }}
-                />
+                <div className="mt-3">
+                  <SiteLocationPicker
+                    prefecture={sitePrefecture}
+                    municipality={siteMunicipality}
+                    undecided={siteLocationUndecided}
+                    disabled={!hydrated || readOnly}
+                    onChange={(next) => {
+                      setSitePrefecture(next.prefecture);
+                      setSiteMunicipality(next.municipality);
+                      setSiteLocationUndecided(next.undecided);
+                      setDirty(true);
+                    }}
+                  />
+                </div>
+
+                <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
               </div>
             </div>
 

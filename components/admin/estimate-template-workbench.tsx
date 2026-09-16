@@ -52,6 +52,7 @@ export function EstimateTemplateWorkbench({
   returnSection,
   taxRate,
   adjustment,
+  demoMode = false,
 }: {
   templateId: string;
   role: 'admin' | 'master_dealer' | 'dealer' | 'customer';
@@ -73,6 +74,7 @@ export function EstimateTemplateWorkbench({
   returnSection?: SectionCode;
   taxRate: number;
   adjustment: number;
+  demoMode?: boolean;
 }) {
   const createdProduct = createdOptionId ? products.find((product) => product.id === createdOptionId) : null;
   const [rows, setRows] = useState<EstimateTemplateWorkbenchLine[]>(() => {
@@ -144,6 +146,13 @@ export function EstimateTemplateWorkbench({
       ].join(' ').toLowerCase().includes(query);
     });
   }, [products, pickerCategory, pickerQuery]);
+
+  const resetRows = () => {
+    setRows([...initialLines]);
+    setPickerSection(null);
+    setPickerCategory('');
+    setPickerQuery('');
+  };
 
   const updateRow = (id: string, patch: Partial<EstimateTemplateWorkbenchLine>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
@@ -345,9 +354,11 @@ export function EstimateTemplateWorkbench({
 
       <section className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
-          <p className="text-sm font-semibold">明細編集</p>
+          <p className="text-sm font-semibold">{demoMode ? '操作確認用テンプレート' : '明細編集'}</p>
           <p className="mt-1 text-xs text-muted">
-            既存データを使ったUI確認版です。この画面での変更はまだDBへ保存されません。
+            {demoMode
+              ? 'この画面の変更は保存されません。数量・単価・商品追加・自由項目追加・削除などを自由に試せます。'
+              : '既存データを使ったUI確認版です。この画面での変更はまだDBへ保存されません。'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -365,10 +376,16 @@ export function EstimateTemplateWorkbench({
           >
             原価＋販売価格
           </button>
-          <Button type="button" variant="secondary" disabled>下書きを保存</Button>
-          <Button type="button" disabled>
-            {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
-          </Button>
+          {demoMode ? (
+            <Button type="button" variant="secondary" onClick={resetRows}>最初の状態に戻す</Button>
+          ) : (
+            <>
+              <Button type="button" variant="secondary" disabled>下書きを保存</Button>
+              <Button type="button" disabled>
+                {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
+              </Button>
+            </>
+          )}
         </div>
       </section>
 
@@ -487,18 +504,20 @@ export function EstimateTemplateWorkbench({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-                <div>
-                  <p className="font-semibold">商品が見つからない場合</p>
-                  <p className="mt-1 text-xs text-muted">商品登録後、この見積テンプレートへ戻れます。</p>
+              {!demoMode && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+                  <div>
+                    <p className="font-semibold">商品が見つからない場合</p>
+                    <p className="mt-1 text-xs text-muted">商品登録後、この見積テンプレートへ戻れます。</p>
+                  </div>
+                  <Link
+                    href={'/admin/options/new?return_to=' + encodeURIComponent('/admin/estimate-templates/' + templateId + '?return_section=' + pickerSection)}
+                    className="btn-secondary btn-sm"
+                  >
+                    ＋ 新しい商品を登録
+                  </Link>
                 </div>
-                <Link
-                  href={'/admin/options/new?return_to=' + encodeURIComponent('/admin/estimate-templates/' + templateId + '?return_section=' + pickerSection)}
-                  className="btn-secondary btn-sm"
-                >
-                  ＋ 新しい商品を登録
-                </Link>
-              </div>
+              )}
             </div>
           </div>
         </div>

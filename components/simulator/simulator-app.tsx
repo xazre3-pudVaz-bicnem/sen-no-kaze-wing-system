@@ -904,127 +904,128 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         <div className="mt-4">
           <div className="min-w-0">
             <p className="label-en text-forest">Simulator</p>
-            <div className="mt-1 flex flex-wrap items-start gap-x-7 gap-y-2">
-              <div className="min-w-0">
-                <h1 className="text-[1.625rem] sm:text-4xl">
-                  <span className="inline-flex max-w-full items-baseline whitespace-nowrap">
-                    <span>{displayModelName}</span>
-                    {modelDescriptor && (
-                      <span className="ml-1 align-baseline text-[0.85rem] font-normal text-ink-soft sm:text-[1.65rem]">
-                        （{modelDescriptor}）
-                      </span>
-                    )}
-                  </span>
-                  {specName && <span className="sr-only">（{specName}）</span>}
-                </h1>
-                {modelDescription && <p className="mt-1 text-sm leading-relaxed text-ink-soft sm:text-base">{modelDescription}</p>}
-              </div>
-              {(models.length > 1 || fireproofCat) && (
-                <div className="flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3">
-                  {models.length > 1 && (
-                    <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
-                      <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-ink-soft">
-                        <span className="sm:hidden">本体</span>
-                        <span className="hidden sm:inline">本体を変える</span>
-                      </span>
-                      <select
-                        value={model.slug}
-                        onChange={(e) => router.push(`/simulator/${e.target.value}`)}
-                        className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
-                        aria-label="本体（モデル）を切り替える"
-                        data-testid="model-switcher"
-                      >
-                        {models.map((m) => (
-                          <option key={m.slug} value={m.slug}>
-                            {m.name === 'フラット' ? 'Flat' : m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+            <div className="mt-1 min-w-0">
+              <h1 className="text-[1.625rem] sm:text-4xl">
+                <span className="inline-flex max-w-full items-baseline whitespace-nowrap">
+                  <span>{displayModelName}</span>
+                  {modelDescriptor && (
+                    <span className="ml-1 align-baseline text-[0.85rem] font-normal text-ink-soft sm:text-[1.65rem]">
+                      （{modelDescriptor}）
+                    </span>
                   )}
-                  {fireproofCat && (
-                    <label
-                      className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm"
-                      data-testid="fireproof-picker"
-                    >
-                      <span className="whitespace-nowrap font-semibold text-ink-soft">
-                        <span className="sm:hidden">防火</span>
-                        <span className="hidden sm:inline">防火仕様</span>
-                      </span>
-                      <select
-                        value={fireproofChosen?.id ?? ''}
-                        onChange={(e) => {
-                          const nextId = e.target.value;
-                          if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
-                        }}
-                        disabled={readOnly}
-                        className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
-                        aria-label="防火仕様を切り替える"
-                        data-testid="fireproof-select"
-                      >
-                        {!fireproofChosen && (
-                          <option value="" disabled>
-                            選択
-                          </option>
-                        )}
-                        {fireproofOptions.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.name.includes('非防火') ? '非防火' : o.name.includes('防火構造') ? '防火構造' : o.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                </div>
-              )}
+                </span>
+                {specName && <span className="sr-only">（{specName}）</span>}
+              </h1>
+              {modelDescription && <p className="mt-1 text-sm leading-relaxed text-ink-soft sm:text-base">{modelDescription}</p>}
             </div>
           </div>
 
           <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 xl:flex-row xl:items-end xl:justify-between xl:gap-x-6">
             <div className="w-full min-w-0 xl:flex-1">
-              <div className="min-w-0">
-                <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
-                  仕様を選ぶ
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {!usesManagedEstimateChoices && (
-                    <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
-                  )}
-                  {simulatorSpecChoices.map((choice) => (
-                    <button
-                      key={choice.code}
-                      type="button"
-                      onClick={() => applyPreset(choice.code)}
+              <div className="grid gap-x-6 gap-y-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                {(models.length > 1 || fireproofCat) && (
+                  <div className="order-1 flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3 lg:order-2 lg:col-start-2 lg:row-start-1 lg:justify-self-end">
+                    {models.length > 1 && (
+                      <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
+                        <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-ink-soft">
+                          <span className="sm:hidden">本体</span>
+                          <span className="hidden sm:inline">本体を変える</span>
+                        </span>
+                        <select
+                          value={model.slug}
+                          onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                          className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
+                          aria-label="本体（モデル）を切り替える"
+                          data-testid="model-switcher"
+                        >
+                          {models.map((m) => (
+                            <option key={m.slug} value={m.slug}>
+                              {m.name === 'フラット' ? 'Flat' : m.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {fireproofCat && (
+                      <label
+                        className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm"
+                        data-testid="fireproof-picker"
+                      >
+                        <span className="whitespace-nowrap font-semibold text-ink-soft">
+                          <span className="sm:hidden">防火</span>
+                          <span className="hidden sm:inline">防火仕様</span>
+                        </span>
+                        <select
+                          value={fireproofChosen?.id ?? ''}
+                          onChange={(e) => {
+                            const nextId = e.target.value;
+                            if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
+                          }}
+                          disabled={readOnly}
+                          className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
+                          aria-label="防火仕様を切り替える"
+                          data-testid="fireproof-select"
+                        >
+                          {!fireproofChosen && (
+                            <option value="" disabled>
+                              選択
+                            </option>
+                          )}
+                          {fireproofOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.name.includes('非防火') ? '非防火' : o.name.includes('防火構造') ? '防火構造' : o.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                <div className="order-2 min-w-0 lg:order-1 lg:col-start-1 lg:row-start-1">
+                  <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
+                    仕様を選ぶ
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {!usesManagedEstimateChoices && (
+                      <FinishLevelPicker value={finishLevel} totals={levelTotals} readOnly={readOnly} onChange={changeFinishLevel} />
+                    )}
+                    {simulatorSpecChoices.map((choice) => (
+                      <button
+                        key={choice.code}
+                        type="button"
+                        onClick={() => applyPreset(choice.code)}
+                        disabled={!hydrated || readOnly}
+                        aria-pressed={specCode === choice.code}
+                        title={choice.description}
+                        className={cn(
+                          'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
+                          specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
+                        )}
+                        data-testid={`preset-${choice.code}`}
+                      >
+                        {choice.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-3">
+                    <SiteLocationPicker
+                      prefecture={sitePrefecture}
+                      municipality={siteMunicipality}
+                      undecided={siteLocationUndecided}
                       disabled={!hydrated || readOnly}
-                      aria-pressed={specCode === choice.code}
-                      title={choice.description}
-                      className={cn(
-                        'rounded-full border px-3.5 py-1 text-[0.82rem] font-medium transition disabled:opacity-50',
-                        specCode === choice.code ? 'border-brown bg-brown text-white' : 'border-line bg-white text-ink-soft hover:border-ink/40'
-                      )}
-                      data-testid={`preset-${choice.code}`}
-                    >
-                      {choice.name}
-                    </button>
-                  ))}
-                </div>
+                      onChange={(next) => {
+                        setSitePrefecture(next.prefecture);
+                        setSiteMunicipality(next.municipality);
+                        setSiteLocationUndecided(next.undecided);
+                        setDirty(true);
+                      }}
+                    />
+                  </div>
 
-                <div className="mt-3">
-                  <SiteLocationPicker
-                    prefecture={sitePrefecture}
-                    municipality={siteMunicipality}
-                    undecided={siteLocationUndecided}
-                    disabled={!hydrated || readOnly}
-                    onChange={(next) => {
-                      setSitePrefecture(next.prefecture);
-                      setSiteMunicipality(next.municipality);
-                      setSiteLocationUndecided(next.undecided);
-                      setDirty(true);
-                    }}
-                  />
+                  <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
                 </div>
-
-                <p className="mt-2 w-full text-sm leading-relaxed text-ink-soft">外壁や UB など設備を選んで概算見積出来ます。</p>
               </div>
             </div>
 

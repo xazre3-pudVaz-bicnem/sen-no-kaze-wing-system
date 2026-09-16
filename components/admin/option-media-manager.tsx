@@ -72,18 +72,39 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [docState, docAction, docPending] = useActionState(uploadOptionManufacturerDocumentAction, initial);
 
   return (
-    <details id="product-media" className="card overflow-hidden">
-      <summary className="cursor-pointer list-none px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-semibold">画像・メーカー資料</h2>
-            <p className="mt-1 text-xs text-muted">サブ画像 {images.length}枚・メーカー資料 {option.manufacturer_document_url ? '登録済み' : '未登録'}</p>
-          </div>
-          <span className="text-xs font-semibold text-brown">開いて編集</span>
+    <section id="product-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">サブ画像・メーカー資料</h2>
+          <p className="mt-1 text-sm text-muted">
+            商品画像とメーカーPDFを同じSTEPで確認できます。メーカーPDFは1商品につき1ファイルを基本とし、PDF内の複数ページはそのまま利用できます。
+          </p>
         </div>
-      </summary>
+        <div className="rounded-lg border border-line bg-ivory/50 px-3 py-2 text-xs text-ink-soft">
+          サブ画像 {images.length}枚 ／ メーカー資料 {option.manufacturer_document_url ? '登録済み' : '未登録'}
+        </div>
+      </div>
 
-      <div className="space-y-6 border-t border-line p-5 sm:p-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-line bg-white p-4">
+          <p className="text-sm font-semibold">商品画像</p>
+          <p className="mt-1 text-xs text-muted">メイン画像＋必要なサブ画像。商品の見た目を確認するための資料です。</p>
+          <p className="mt-3 text-xs text-ink-soft">メイン画像：{option.image_url ? '登録済み' : '未登録'} ／ サブ画像：{images.length}枚</p>
+        </div>
+        <div className="rounded-xl border border-line bg-white p-4">
+          <p className="text-sm font-semibold">メーカー資料</p>
+          <p className="mt-1 text-xs text-muted">仕様・固定構成・標準装備などを確認するPDFです。自動解析は必須ではなく、必要事項は手入力で補えます。</p>
+          {option.manufacturer_document_url ? (
+            <a href={option.manufacturer_document_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-brown underline underline-offset-4">
+              登録済みPDFを確認
+            </a>
+          ) : (
+            <p className="mt-3 text-xs text-muted">PDFはまだ登録されていません。</p>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-6">
       <div className="space-y-5">
         <div>
           <h3 className="font-semibold">サブ画像</h3>
@@ -173,6 +194,6 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         </form>
       </div>
       </div>
-    </details>
+    </section>
   );
 }

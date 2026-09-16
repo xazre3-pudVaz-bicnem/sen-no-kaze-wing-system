@@ -1,6 +1,7 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { Alert } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
 
@@ -19,13 +20,17 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const freeCategory = allCategories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const defaultCategoryId = sp.category ?? (catalogEditor ? undefined : freeCategory?.id);
   const isFree = defaultCategoryId && defaultCategoryId === freeCategory?.id;
+  const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;
 
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
       lead="まず商品情報と販売設定を登録します。保存後、色・仕様、サブ画像、メーカー資料を追加できます。"
     >
-      <BackLink href={isFree ? '/admin/free-products' : '/admin/options'} label="一覧へ戻る" />
+      <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
+      {returnTo && (
+        <Alert tone="info">見積テンプレートの商品追加から移動しています。商品を登録すると元の見積テンプレートへ戻ります。</Alert>
+      )}
       <OptionForm
         option={null}
         categories={categories}
@@ -34,6 +39,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         dependencies={[]}
         conflicts={[]}
         defaultCategoryId={defaultCategoryId}
+        returnTo={returnTo}
       />
     </AdminPage>
   );

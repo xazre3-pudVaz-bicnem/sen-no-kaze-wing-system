@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { VIEW_KEYS } from '@/lib/domain/types';
+import { PREFECTURES } from '@/lib/domain/address';
 import { contactTopics } from '@/data/site-content';
 
 const trimmed = (max: number) => z.string().trim().max(max);
@@ -64,6 +65,16 @@ export const saveConfigurationSchema = z.object({
   spec_code: z
     .preprocess((v) => (v === '' || v == null ? null : v), z.string().max(40).regex(/^[a-z0-9-]+$/).nullable())
     .default(null),
+  site_prefecture: z
+    .preprocess(
+      (v) => (v === '' || v == null ? null : v),
+      z.string().max(20).refine((v) => PREFECTURES.includes(v), '都道府県の指定が正しくありません').nullable()
+    )
+    .default(null),
+  site_municipality: z
+    .preprocess((v) => (v === '' || v == null ? null : v), z.string().trim().max(80).nullable())
+    .default(null),
+  site_location_undecided: z.boolean().default(false),
 });
 
 export const quoteRequestSchema = z.object({

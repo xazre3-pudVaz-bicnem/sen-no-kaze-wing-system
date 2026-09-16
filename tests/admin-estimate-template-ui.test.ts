@@ -10,6 +10,10 @@ const detailPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/[id]/page.tsx'),
   'utf8'
 );
+const newForm = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/new-estimate-template-form.tsx'),
+  'utf8'
+);
 const workbench = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/estimate-template-workbench.tsx'),
   'utf8'
@@ -26,10 +30,17 @@ const adminActions = fs.readFileSync(
 describe('見積テンプレート管理UI', () => {
   it('一覧に新しい管理項目を表示する', () => {
     expect(listPage).toContain('見積テンプレート');
-    expect(listPage).toContain('利用地域');
-    expect(listPage).toContain('作成元');
+    expect(listPage).toContain('作成元・利用地域');
     expect(listPage).toContain('税込金額');
-    expect(listPage).toContain('承認待ち');
+    expect(listPage).toContain('見積テンプレートはまだありません');
+    expect(listPage).not.toContain('承認待ち 0件');
+  });
+
+  it('新規作成画面は選択項目と参照本体を分かりやすくする', () => {
+    expect(newForm).toContain('▼');
+    expect(newForm).toContain('基準となる本体');
+    expect(newForm).toContain('商品モデル・用途・防火仕様から自動入力');
+    expect(newForm).toContain('キャンセル');
   });
 
   it('詳細画面に4分類と日本語の版運用を置く', () => {

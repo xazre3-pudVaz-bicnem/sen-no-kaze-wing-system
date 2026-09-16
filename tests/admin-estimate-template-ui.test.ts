@@ -22,6 +22,10 @@ const workbench = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/estimate-template-workbench.tsx'),
   'utf8'
 );
+const adminForms = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/forms.tsx'),
+  'utf8'
+);
 const optionNew = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'),
   'utf8'
@@ -50,6 +54,8 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('max-w-[600px]');
     expect(newForm).toContain('キャンセル');
     expect(newPage).toContain('model.presets.map');
+    expect(adminForms).toContain('仕様（推奨構成）');
+    expect(adminForms).toContain('見積テンプレートの「仕様」もここから選ばれます');
   });
 
   it('詳細画面に4分類と日本語の版運用を置く', () => {

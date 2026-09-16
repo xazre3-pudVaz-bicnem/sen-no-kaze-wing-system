@@ -10,6 +10,10 @@ const editPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'),
   'utf8'
 );
+const newPage = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'),
+  'utf8'
+);
 const listPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/page.tsx'),
   'utf8'
@@ -22,36 +26,55 @@ const media = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-media-manager.tsx'),
   'utf8'
 );
+const variants = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-variant-manager.tsx'),
+  'utf8'
+);
 
 describe('商品登録管理画面の業務フロー', () => {
-  it('編集画面を3つの分かりやすい領域に整理する', () => {
-    expect(editPage).toContain('1');
-    expect(editPage).toContain('商品情報');
-    expect(editPage).toContain('2');
-    expect(editPage).toContain('お客様表示・選択');
-    expect(editPage).toContain('3');
-    expect(editPage).toContain('販売・詳細設定');
+  it('商品登録を3つの大きな作業単位にまとめる', () => {
+    for (const label of ['登録開始', '商品情報を登録', 'お客様表示・登録']) {
+      expect(editPage).toContain(label);
+      expect(newPage).toContain(label);
+    }
+    expect(editPage).toContain('aria-label="商品登録の3ステップ"');
     expect(editPage).toContain('mode="product"');
-    expect(editPage).toContain('mode="sales"');
-    expect(forms).toContain('詳細設定');
-    expect(forms).toContain('通常は変更不要');
+    expect(editPage).toContain('mode="pricing"');
+    expect(editPage).toContain('data-testid="option-registration-info"');
+    expect(editPage).toContain('data-testid="option-customer-preview"');
+    expect(editPage).not.toContain('発注内容確認');
+    expect(editPage).not.toContain('商品登録の7ステップ');
+  });
+  it('新規登録でも3STEPとreturn_to導線を案内する', () => {
+    expect(newPage).toContain('商品登録の3ステップ');
+    expect(newPage).toContain('登録して見積テンプレートへ戻る');
+    expect(newPage).toContain('return_to');
+    expect(forms).toContain('登録して見積テンプレートへ戻る');
+    expect(forms).toContain('商品を作成して次へ');
+  });
+  it('商品特定は既存値を候補として使える', () => {
+    expect(forms).toContain('option-manufacturer-suggestions');
+    expect(forms).toContain('option-model-no-suggestions');
+    expect(forms).toContain('既存商品にあるメーカーは候補から選べます');
+    expect(forms).toContain('現在の商品マスターではシリーズ名と型番を1項目で管理します');
   });
 
-
-  it('編集画面は3領域をタブで切り替え、1つだけ表示する', () => {
-    expect(editPage).toContain("requestedTab === 'customer' || requestedTab === 'sales'");
-    expect(editPage).toContain("href={\`?tab=\${key}\`}");
-    expect(editPage).toContain("tab === 'product'");
-    expect(editPage).toContain("tab === 'customer'");
-    expect(editPage).toContain("tab === 'sales'");
-    expect(editPage).toContain("aria-current={active ? 'page' : undefined}");
+  it('商品情報画面にメイン画像・サブ画像・メーカーPDFをまとめる', () => {
+    expect(forms).toContain('メイン画像');
+    expect(media).toContain('サブ画像・メーカー資料');
+    expect(media).toContain('メイン画像＋必要なサブ画像');
+    expect(media).toContain('PDF内の複数ページはそのまま利用できます');
+    expect(media).toContain('登録済みPDFを確認');
+    expect(media).not.toContain('<details id="product-media"');
   });
 
-  it('画像・メーカー資料は必要なときだけ開いて編集する', () => {
-    expect(media).toContain('<details id="product-media"');
-    expect(media).toContain('画像・メーカー資料');
-    expect(media).toContain('開いて編集');
-    expect(media).toContain('サブ画像 {images.length}枚');
+  it('お客様選択は画像なし文字カードを許容し、価格設定と同じSTEP2内で管理する', () => {
+    expect(variants).toContain('お客様選択');
+    expect(variants).toContain('文字カードとして表示');
+    expect(variants).toContain('価格・公開設定');
+    expect(variants).toContain('色・仕様ごとの追加金額');
+    expect(variants).toContain('ChoicePriceEditor');
+    expect(variants).toContain('name="extra_price"');
   });
 
   it('既存の商品保存フィールドを維持する', () => {
@@ -87,6 +110,7 @@ describe('商品登録管理画面の業務フロー', () => {
   });
 
   it('価格は追加金額として案内する', () => {
+    expect(forms).toContain('価格・公開設定');
     expect(forms).toContain('追加金額（税別・円）');
     expect(forms).toContain('この商品を選んだときに加算する金額');
   });

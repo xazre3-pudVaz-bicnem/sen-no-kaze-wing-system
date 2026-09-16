@@ -2,36 +2,75 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { deleteOptionAction } from '@/lib/actions/admin';
 import { getStore } from '@/lib/data/store';
-import type { OptionConflict, OptionDependency } from '@/lib/domain/types';
+import { formatYen } from '@/lib/domain/pricing';
+import type { OptionConflict, OptionDependency, OptionVariantChoice, OptionVariantGroup } from '@/lib/domain/types';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
-import { OptionVariantManager } from '@/components/admin/option-variant-manager';
+import { OptionVariantManager, OptionVariantPricing } from '@/components/admin/option-variant-manager';
+import { SmartImage } from '@/components/ui/smart-image';
 
-export default async function EditOptionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
+type RegistrationStep = 'info' | 'preview';
+
+function publishedRows(groups: OptionVariantGroup[], choices: OptionVariantChoice[]) {
+  return groups
+    .filter((group) => group.status === 'published')
+    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+    .map((group) => ({
+      group,
+      choices: choices
+        .filter((choice) => choice.group_id === group.id && choice.status === 'published')
+        .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    }));
+}
+
+export default async function EditOptionPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
   const sp = await searchParams;
-  const requestedTab = sp.tab;
-  const tab = requestedTab === 'customer' || requestedTab === 'sales' ? requestedTab : 'product';
   const store = await getStore();
   const option = await store.getOption(id);
   if (!option) notFound();
+
+  const step: RegistrationStep = sp.step === 'preview' ? 'preview' : 'info';
+  const returnTo =
+    typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') && !sp.return_to.startsWith('//')
+      ? sp.return_to
+      : undefined;
+
   const [categories, models, options, variants] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
     store.getOptionVariants(id),
   ]);
-  // 関連（前提・競合）は全モデルのバンドルから集める
+
   const deps: OptionDependency[] = [];
   const confs: OptionConflict[] = [];
-  for (const m of models) {
-    const b = await store.getCatalogBundle(m.id, { includeDraft: true });
-    if (!b) continue;
-    for (const d of b.dependencies) if (d.option_id === id && !deps.some((x) => x.id === d.id)) deps.push(d);
-    for (const c of b.conflicts) if (c.option_id === id && !confs.some((x) => x.id === c.id)) confs.push(c);
+  for (const model of models) {
+    const bundle = await store.getCatalogBundle(model.id, { includeDraft: true });
+    if (!bundle) continue;
+    for (const dependency of bundle.dependencies) {
+      if (dependency.option_id === id && !deps.some((row) => row.id === dependency.id)) deps.push(dependency);
+    }
+    for (const conflict of bundle.conflicts) {
+      if (conflict.option_id === id && !confs.some((row) => row.id === conflict.id)) confs.push(conflict);
+    }
   }
+
+  const customerRows = publishedRows(variants.groups, variants.choices);
+  const stepHref = (key: RegistrationStep) => {
+    const params = new URLSearchParams({ step: key });
+    if (returnTo) params.set('return_to', returnTo);
+    return `?${params.toString()}`;
+  };
+
   return (
     <AdminPage
       title={option.name}
@@ -39,46 +78,71 @@ export default async function EditOptionPage({ params, searchParams }: { params:
       actions={
         <form action={deleteOptionAction}>
           <input type="hidden" name="id" value={option.id} />
-          <ConfirmSubmit message={`「${option.name}」を削除しますか？保存済みの仕様で使用中の場合は削除できません。`} className="btn-ghost btn-sm text-danger">削除</ConfirmSubmit>
+          <ConfirmSubmit
+            message={`「${option.name}」を削除しますか？保存済みの仕様で使用中の場合は削除できません。`}
+            className="btn-ghost btn-sm text-danger"
+          >
+            削除
+          </ConfirmSubmit>
         </form>
       }
     >
-      <BackLink href="/admin/options" label="一覧へ戻る" />
+      <BackLink href={returnTo ?? '/admin/options'} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
-      <section className="card p-4 sm:p-5" aria-label="商品編集メニュー">
-        <div>
-          <h2 className="font-semibold">この商品の設定</h2>
-          <p className="mt-1 text-xs text-muted">作業したい項目を選ぶと、その内容だけを表示します。</p>
+
+      <section className="card p-4 sm:p-5" aria-label="商品登録の3ステップ">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">商品登録の流れ</h2>
+            <p className="mt-1 text-xs text-muted">登録開始後は、商品情報を1画面で設定し、最後にお客様表示を確認します。</p>
+          </div>
+          <p className="text-xs font-semibold text-brown">現在：STEP {step === 'preview' ? 3 : 2}</p>
         </div>
-        <nav className="mt-4 grid gap-2 md:grid-cols-3" aria-label="商品編集タブ">
-          {[
-            ['product', '1', '商品情報', '商品名・メーカー・画像・メーカー資料'],
-            ['customer', '2', 'お客様表示・選択', '色・柄・仕様・追加金額'],
-            ['sales', '3', '販売・詳細設定', '商品価格・対象モデル・公開設定'],
-          ].map(([key, no, label, note]) => {
-            const active = tab === key;
-            return (
-              <Link
-                key={key}
-                href={`?tab=${key}`}
-                aria-current={active ? 'page' : undefined}
-                className={`block h-full rounded-xl border px-4 py-3 transition ${
-                  active
-                    ? 'border-brown bg-ivory/70 ring-1 ring-brown/20'
-                    : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
-                }`}
-              >
-                <span className="text-xs font-semibold text-brown">{no}</span>
-                <span className="ml-2 font-semibold">{label}</span>
-                <span className="mt-1 block text-xs text-muted">{note}</span>
-              </Link>
-            );
-          })}
+        <nav className="mt-4 grid gap-2 sm:grid-cols-3" aria-label="商品登録ステップ">
+          <div className="min-h-24 rounded-xl border border-line bg-ivory/30 px-3 py-3">
+            <span className="text-xs font-semibold text-brown">STEP 1</span>
+            <span className="mt-1 block text-sm font-semibold">登録開始</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">カテゴリーを選び、商品を作成</span>
+            <span className="mt-2 inline-flex rounded-full bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-muted">完了</span>
+          </div>
+          <Link
+            href={stepHref('info')}
+            aria-current={step === 'info' ? 'step' : undefined}
+            className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
+              step === 'info'
+                ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
+                : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
+            }`}
+          >
+            <span className="text-xs font-semibold text-brown">STEP 2</span>
+            <span className="mt-1 block text-sm font-semibold">商品情報を登録</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">商品・資料・選択項目・価格を設定</span>
+          </Link>
+          <Link
+            href={stepHref('preview')}
+            aria-current={step === 'preview' ? 'step' : undefined}
+            className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
+              step === 'preview'
+                ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
+                : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
+            }`}
+          >
+            <span className="text-xs font-semibold text-brown">STEP 3</span>
+            <span className="mt-1 block text-sm font-semibold">お客様表示・登録</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">お客様画面での見え方を最終確認</span>
+          </Link>
         </nav>
       </section>
 
-      {tab === 'product' && (
-        <>
+      {step === 'info' && (
+        <section className="space-y-6" data-testid="option-registration-info">
+          <div>
+            <h2 className="text-xl font-semibold">STEP 2 商品情報を登録</h2>
+            <p className="mt-1 text-sm text-muted">
+              商品情報、画像・メーカー資料、お客様が選ぶ色・仕様、追加金額と公開設定をこの画面でまとめて設定します。
+            </p>
+          </div>
+
           <OptionForm
             mode="product"
             option={option}
@@ -88,24 +152,124 @@ export default async function EditOptionPage({ params, searchParams }: { params:
             dependencies={deps}
             conflicts={confs}
           />
+
           <OptionMediaManager option={option} />
-        </>
-      )}
 
-      {tab === 'customer' && (
-        <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
-      )}
+          <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
 
-      {tab === 'sales' && (
-        <OptionForm
-          mode="sales"
-          option={option}
-          categories={categories}
-          models={models}
-          allOptions={options}
-          dependencies={deps}
-          conflicts={confs}
-        />
+          <OptionForm
+            mode="pricing"
+            option={option}
+            categories={categories}
+            models={models}
+            allOptions={options}
+            dependencies={deps}
+            conflicts={confs}
+          />
+
+          <OptionVariantPricing option={option} groups={variants.groups} choices={variants.choices} />
+        </section>
+      )}
+      {step === 'preview' && (
+        <section className="space-y-5" data-testid="option-customer-preview">
+          <div>
+            <h2 className="text-xl font-semibold">STEP 3 お客様表示・登録</h2>
+            <p className="mt-1 text-sm text-muted">シミュレーターの商品詳細でお客様に伝わる内容を、登録済みデータで確認します。</p>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+            <div className="card space-y-4 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold">商品画像</h3>
+                {option.manufacturer_document_url && (
+                  <a
+                    href={option.manufacturer_document_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-semibold text-brown underline underline-offset-4"
+                  >
+                    メーカー資料を見る
+                  </a>
+                )}
+              </div>
+              <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-line bg-sand/40">
+                {option.image_url ? (
+                  <SmartImage src={option.image_url} alt={option.name} fill sizes="(min-width: 1024px) 60vw, 100vw" className="object-contain" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted">メイン画像未登録</div>
+                )}
+              </div>
+              {!!option.gallery_images?.length && (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {option.gallery_images.slice(0, 8).map((image) => (
+                    <div key={image.id} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-line bg-white">
+                      <SmartImage src={image.url} alt={image.alt || option.name} fill sizes="160px" className="object-contain" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card space-y-5 p-5 sm:p-6">
+              <div>
+                <p className="text-xs text-muted">{[option.manufacturer, option.model_no].filter(Boolean).join(' ／ ')}</p>
+                <h3 className="mt-1 text-2xl font-semibold">{option.name}</h3>
+                {option.size_note && <p className="mt-2 text-sm text-ink-soft">{option.size_note}</p>}
+              </div>
+
+              {option.highlight && (
+                <div className="rounded-lg bg-ivory px-3 py-2 text-sm font-semibold text-ink-soft">{option.highlight}</div>
+              )}
+
+              {option.description && <p className="whitespace-pre-wrap text-sm leading-7 text-ink-soft">{option.description}</p>}
+
+              <div className="rounded-xl border border-line bg-white p-4">
+                <p className="text-xs text-muted">追加金額</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {option.price_on_request ? '別途見積' : option.price > 0 ? `+${formatYen(option.price)}` : '追加なし'}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {customerRows.map(({ group, choices }) => (
+                  <div key={group.id}>
+                    <p className="text-sm font-semibold">{group.name}</p>
+                    {group.note && <p className="mt-1 text-xs text-muted">{group.note}</p>}
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {choices.map((choice) => (
+                        <div key={choice.id} className="overflow-hidden rounded-lg border border-line bg-white">
+                          {choice.image_url ? (
+                            <div className="relative aspect-[5/3] bg-sand/30">
+                              <SmartImage src={choice.image_url} alt={choice.name} fill sizes="180px" className="object-contain" />
+                            </div>
+                          ) : (
+                            <div className="flex min-h-20 items-center justify-center bg-ivory/40 px-3 text-center text-sm font-semibold">
+                              {choice.name}
+                            </div>
+                          )}
+                          <div className="px-3 py-2">
+                            {choice.image_url && <p className="text-sm font-semibold">{choice.name}</p>}
+                            <p className="mt-1 text-xs text-muted">
+                              {choice.price_on_request
+                                ? '別途見積'
+                                : choice.extra_price > 0
+                                  ? `+${formatYen(choice.extra_price)}`
+                                  : '追加なし'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button type="button" className="btn-primary w-full" disabled>
+                この内容に変更する（プレビュー）
+              </button>
+            </div>
+          </div>
+        </section>
       )}
     </AdminPage>
   );

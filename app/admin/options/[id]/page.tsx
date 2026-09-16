@@ -11,21 +11,7 @@ import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager, OptionVariantPricing } from '@/components/admin/option-variant-manager';
 import { SmartImage } from '@/components/ui/smart-image';
 
-type RegistrationStep = 'identify' | 'details' | 'media' | 'choices' | 'pricing' | 'order' | 'preview';
-
-const STEPS: { key: RegistrationStep; no: number; label: string; note: string }[] = [
-  { key: 'identify', no: 1, label: '商品特定', note: 'カテゴリー・メーカー・商品名・型番' },
-  { key: 'details', no: 2, label: '商品の詳細', note: 'サイズ・説明・特徴' },
-  { key: 'media', no: 3, label: 'お客様資料', note: 'メイン画像・サブ画像・メーカーPDF' },
-  { key: 'choices', no: 4, label: 'お客様選択', note: '色・柄・仕様・文字カード' },
-  { key: 'pricing', no: 5, label: '価格設定', note: '基本・色仕様ごとの追加金額' },
-  { key: 'order', no: 6, label: '発注内容確認', note: '発注時に引き継ぐ項目' },
-  { key: 'preview', no: 7, label: 'お客様画面最終確認', note: 'シミュレーター表示の確認' },
-];
-
-function validStep(value: string | undefined): value is RegistrationStep {
-  return STEPS.some((step) => step.key === value);
-}
+type RegistrationStep = 'info' | 'preview';
 
 function publishedRows(groups: OptionVariantGroup[], choices: OptionVariantChoice[]) {
   return groups
@@ -52,9 +38,7 @@ export default async function EditOptionPage({
   const option = await store.getOption(id);
   if (!option) notFound();
 
-  const legacyStep: RegistrationStep =
-    sp.tab === 'customer' ? 'choices' : sp.tab === 'sales' ? 'pricing' : 'identify';
-  const step: RegistrationStep = validStep(sp.step) ? sp.step : legacyStep;
+  const step: RegistrationStep = sp.step === 'preview' ? 'preview' : 'info';
   const returnTo =
     typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') && !sp.return_to.startsWith('//')
       ? sp.return_to
@@ -80,8 +64,6 @@ export default async function EditOptionPage({
     }
   }
 
-  const category = categories.find((row) => row.id === option.category_id);
-  const model = models.find((row) => row.id === option.base_model_id);
   const customerRows = publishedRows(variants.groups, variants.choices);
   const stepHref = (key: RegistrationStep) => {
     const params = new URLSearchParams({ step: key });
@@ -108,65 +90,61 @@ export default async function EditOptionPage({
       <BackLink href={returnTo ?? '/admin/options'} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
 
-      <section className="card p-4 sm:p-5" aria-label="商品登録の7ステップ">
+      <section className="card p-4 sm:p-5" aria-label="商品登録の3ステップ">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="font-semibold">商品登録の流れ</h2>
-            <p className="mt-1 text-xs text-muted">既存の商品情報を使いながら、1〜7の順に確認できます。必要なSTEPだけ後から修正しても構いません。</p>
+            <p className="mt-1 text-xs text-muted">登録開始後は、商品情報を1画面で設定し、最後にお客様表示を確認します。</p>
           </div>
-          <p className="text-xs font-semibold text-brown">現在：STEP {STEPS.find((row) => row.key === step)?.no}</p>
+          <p className="text-xs font-semibold text-brown">現在：STEP {step === 'preview' ? 3 : 2}</p>
         </div>
-        <nav className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7" aria-label="商品登録ステップ">
-          {STEPS.map((item) => {
-            const active = step === item.key;
-            return (
-              <Link
-                key={item.key}
-                href={stepHref(item.key)}
-                aria-current={active ? 'step' : undefined}
-                className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
-                  active
-                    ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
-                    : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
-                }`}
-              >
-                <span className="text-xs font-semibold text-brown">STEP {item.no}</span>
-                <span className="mt-1 block text-sm font-semibold">{item.label}</span>
-                <span className="mt-1 block text-[0.7rem] leading-5 text-muted">{item.note}</span>
-              </Link>
-            );
-          })}
+        <nav className="mt-4 grid gap-2 sm:grid-cols-3" aria-label="商品登録ステップ">
+          <div className="min-h-24 rounded-xl border border-line bg-ivory/30 px-3 py-3">
+            <span className="text-xs font-semibold text-brown">STEP 1</span>
+            <span className="mt-1 block text-sm font-semibold">登録開始</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">カテゴリーを選び、商品を作成</span>
+            <span className="mt-2 inline-flex rounded-full bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-muted">完了</span>
+          </div>
+          <Link
+            href={stepHref('info')}
+            aria-current={step === 'info' ? 'step' : undefined}
+            className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
+              step === 'info'
+                ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
+                : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
+            }`}
+          >
+            <span className="text-xs font-semibold text-brown">STEP 2</span>
+            <span className="mt-1 block text-sm font-semibold">商品情報を登録</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">商品・資料・選択項目・価格を設定</span>
+          </Link>
+          <Link
+            href={stepHref('preview')}
+            aria-current={step === 'preview' ? 'step' : undefined}
+            className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
+              step === 'preview'
+                ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
+                : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
+            }`}
+          >
+            <span className="text-xs font-semibold text-brown">STEP 3</span>
+            <span className="mt-1 block text-sm font-semibold">お客様表示・登録</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">お客様画面での見え方を最終確認</span>
+          </Link>
         </nav>
       </section>
 
-      {step === 'identify' && (
-        <OptionForm
-          mode="identify"
-          option={option}
-          categories={categories}
-          models={models}
-          allOptions={options}
-          dependencies={deps}
-          conflicts={confs}
-        />
-      )}
+      {step === 'info' && (
+        <section className="space-y-6" data-testid="option-registration-info">
+          <div>
+            <h2 className="text-xl font-semibold">STEP 2 商品情報を登録</h2>
+            <p className="mt-1 text-sm text-muted">
+              商品情報、画像・メーカー資料、お客様が選ぶ色・仕様、追加金額と公開設定をこの画面でまとめて設定します。
+            </p>
+          </div>
 
-      {step === 'details' && (
-        <OptionForm
-          mode="details"
-          option={option}
-          categories={categories}
-          models={models}
-          allOptions={options}
-          dependencies={deps}
-          conflicts={confs}
-        />
-      )}
-
-      {step === 'media' && (
-        <>
           <OptionForm
-            mode="media"
+            mode="product"
             option={option}
             categories={categories}
             models={models}
@@ -174,16 +152,11 @@ export default async function EditOptionPage({
             dependencies={deps}
             conflicts={confs}
           />
+
           <OptionMediaManager option={option} />
-        </>
-      )}
 
-      {step === 'choices' && (
-        <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
-      )}
+          <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
 
-      {step === 'pricing' && (
-        <>
           <OptionForm
             mode="pricing"
             option={option}
@@ -193,62 +166,15 @@ export default async function EditOptionPage({
             dependencies={deps}
             conflicts={confs}
           />
+
           <OptionVariantPricing option={option} groups={variants.groups} choices={variants.choices} />
-        </>
-      )}
-
-      {step === 'order' && (
-        <section className="card space-y-6 p-5 sm:p-6" data-testid="option-order-preview">
-          <div>
-            <h2 className="text-xl font-semibold">STEP 6 発注内容確認</h2>
-            <p className="mt-1 text-sm text-muted">
-              発注時に必要になる情報を、現在の商品マスターから確認します。実際の選択色・仕様と数量は、お客様の見積・発注内容から引き継ぎます。
-            </p>
-          </div>
-
-          <div className="overflow-x-auto rounded-xl border border-line">
-            <table className="w-full min-w-[42rem] text-sm">
-              <tbody className="divide-y divide-line">
-                {[
-                  ['メーカー', option.manufacturer || '未入力'],
-                  ['商品名', option.name],
-                  ['シリーズ・型番', option.model_no || '未入力'],
-                  ['サイズ', option.size_note || '未入力'],
-                  ['数量', '1（見積・発注時に確定）'],
-                  ['対象商品モデル', model?.name ?? '全モデル共通'],
-                  ['カテゴリー', category?.name ?? '未設定'],
-                ].map(([label, value]) => (
-                  <tr key={label}>
-                    <th className="w-44 bg-ivory/60 px-4 py-3 text-left font-semibold">{label}</th>
-                    <td className="px-4 py-3">{value}</td>
-                  </tr>
-                ))}
-                {customerRows.map(({ group, choices }) => (
-                  <tr key={group.id}>
-                    <th className="w-44 bg-ivory/60 px-4 py-3 text-left font-semibold">{group.name}</th>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold">お客様選択から引き継ぎ</span>
-                      <span className="ml-2 text-xs text-muted">
-                        候補：{choices.length ? choices.map((choice) => choice.name).join(' ／ ') : '未登録'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="text-xs text-muted">
-            固定構成・標準装備はメーカーPDFで足りるものを重複登録せず、発注で必要な選択項目だけを商品マスターに持たせる運用です。
-          </p>
         </section>
       )}
-
       {step === 'preview' && (
         <section className="space-y-5" data-testid="option-customer-preview">
           <div>
-            <h2 className="text-xl font-semibold">STEP 7 お客様画面最終確認</h2>
-            <p className="mt-1 text-sm text-muted">シミュレーターの商品詳細でお客様に伝わる内容を、登録済みデータだけで最終確認します。</p>
+            <h2 className="text-xl font-semibold">STEP 3 お客様表示・登録</h2>
+            <p className="mt-1 text-sm text-muted">シミュレーターの商品詳細でお客様に伝わる内容を、登録済みデータで確認します。</p>
           </div>
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">

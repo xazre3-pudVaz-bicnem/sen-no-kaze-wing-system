@@ -337,7 +337,7 @@ export function OptionVariantManager({
   return (
     <section id="customer-selection" className="space-y-6 scroll-mt-6">
       <div>
-        <h2 className="text-xl font-semibold">STEP 4 お客様選択</h2>
+        <h2 className="text-xl font-semibold">お客様選択</h2>
         <p className="mt-1 text-sm text-muted">
           お客様が商品詳細で選ぶ色・柄・仕様を管理します。画像は任意で、画像を登録しない選択肢は文字カードとして表示できます。
         </p>
@@ -382,7 +382,7 @@ export function OptionVariantManager({
                 <div className="space-y-3">
                   <div>
                     <h4 className="text-sm font-semibold">選択肢</h4>
-                    <p className="mt-1 text-xs text-muted">標準・追加・固定、画像または文字カード、公開状態を設定します。追加金額は STEP 5 で設定します。</p>
+                    <p className="mt-1 text-xs text-muted">標準・追加・固定、画像または文字カード、公開状態を設定します。追加金額は下の「価格・公開設定」で設定します。</p>
                   </div>
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
@@ -487,13 +487,13 @@ export function OptionVariantPricing({
       <div>
         <h2 className="text-lg font-semibold">色・仕様ごとの追加金額</h2>
         <p className="mt-1 text-sm text-muted">
-          STEP 4 で登録した文字カード・画像カードごとの追加金額を設定します。0円の標準選択肢も明示しておくと確認しやすくなります。
+          上で登録した文字カード・画像カードごとの追加金額を設定します。0円の標準選択肢も明示しておくと確認しやすくなります。
         </p>
       </div>
 
       {choices.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line px-4 py-7 text-center text-sm text-muted">
-          価格を設定する選択肢がありません。先に STEP 4「お客様選択」で色・仕様を登録してください。
+          価格を設定する選択肢がありません。先に「お客様選択」で色・仕様を登録してください。
         </div>
       ) : (
         <div className="space-y-5">

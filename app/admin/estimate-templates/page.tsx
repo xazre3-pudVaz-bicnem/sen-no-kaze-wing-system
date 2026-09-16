@@ -76,9 +76,18 @@ export default async function EstimateTemplatesPage({
     <AdminPage
       title="見積テンプレート"
       lead="Webシミュレーター・案件見積の基準となる見積テンプレートを管理します。"
-      actions={<Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新規作成</Link>}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新規作成</Link>
+        </div>
+      }
     >
       <section className="card p-4">
+        <div className="mb-3">
+          <p className="text-sm font-semibold">一覧の絞り込み</p>
+          <p className="mt-1 text-xs text-muted">商品やテンプレート名・仕様で、下の一覧を探しやすくするための検索です。複製には使用しません。</p>
+        </div>
         <form method="get" className="grid gap-3 sm:grid-cols-[minmax(12rem,0.5fr)_minmax(16rem,1fr)_auto] sm:items-end">
           <label className="block">
             <span className="label">商品</span>
@@ -166,6 +175,7 @@ export default async function EstimateTemplatesPage({
             {hasFilters ? (
               <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">条件をクリア</Link>
             ) : (
+              <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
               <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の見積テンプレートを作成</Link>
             )}
           </div>

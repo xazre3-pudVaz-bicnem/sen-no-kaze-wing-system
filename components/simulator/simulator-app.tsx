@@ -923,64 +923,71 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           <div className="mt-2 flex flex-col gap-3 border-b border-line pb-2.5 xl:flex-row xl:items-end xl:justify-between xl:gap-x-6">
             <div className="w-full min-w-0 xl:flex-1">
               <div className="grid gap-x-6 gap-y-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                {(models.length > 1 || fireproofCat) && (
-                  <div className="order-1 flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3 lg:order-2 lg:col-start-2 lg:row-start-1 lg:justify-self-end lg:pt-[1.15rem]">
-                    {models.length > 1 && (
-                      <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
-                        <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-ink-soft">
-                          <span className="sm:hidden">本体</span>
-                          <span className="hidden sm:inline">本体を変える</span>
-                        </span>
-                        <select
-                          value={model.slug}
-                          onChange={(e) => router.push(`/simulator/${e.target.value}`)}
-                          className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
-                          aria-label="本体（モデル）を切り替える"
-                          data-testid="model-switcher"
+                <div className="order-1 w-full sm:w-auto lg:order-2 lg:col-start-2 lg:row-start-1 lg:justify-self-end lg:pt-[1.15rem]">
+                  {(models.length > 1 || fireproofCat) && (
+                    <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+                      {models.length > 1 && (
+                        <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
+                          <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-ink-soft">
+                            <span className="sm:hidden">本体</span>
+                            <span className="hidden sm:inline">本体を変える</span>
+                          </span>
+                          <select
+                            value={model.slug}
+                            onChange={(e) => router.push(`/simulator/${e.target.value}`)}
+                            className="min-h-9 w-20 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink sm:w-24 sm:px-3 sm:text-[0.95rem]"
+                            aria-label="本体（モデル）を切り替える"
+                            data-testid="model-switcher"
+                          >
+                            {models.map((m) => (
+                              <option key={m.slug} value={m.slug}>
+                                {m.name === 'フラット' ? 'Flat' : m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {fireproofCat && (
+                        <label
+                          className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm"
+                          data-testid="fireproof-picker"
                         >
-                          {models.map((m) => (
-                            <option key={m.slug} value={m.slug}>
-                              {m.name === 'フラット' ? 'Flat' : m.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    {fireproofCat && (
-                      <label
-                        className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm"
-                        data-testid="fireproof-picker"
-                      >
-                        <span className="whitespace-nowrap font-semibold text-ink-soft">
-                          <span className="sm:hidden">防火</span>
-                          <span className="hidden sm:inline">防火仕様</span>
-                        </span>
-                        <select
-                          value={fireproofChosen?.id ?? ''}
-                          onChange={(e) => {
-                            const nextId = e.target.value;
-                            if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
-                          }}
-                          disabled={readOnly}
-                          className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
-                          aria-label="防火仕様を切り替える"
-                          data-testid="fireproof-select"
-                        >
-                          {!fireproofChosen && (
-                            <option value="" disabled>
-                              選択
-                            </option>
-                          )}
-                          {fireproofOptions.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.name.includes('非防火') ? '非防火' : o.name.includes('防火構造') ? '防火構造' : o.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
+                          <span className="whitespace-nowrap font-semibold text-ink-soft">
+                            <span className="sm:hidden">防火</span>
+                            <span className="hidden sm:inline">防火仕様</span>
+                          </span>
+                          <select
+                            value={fireproofChosen?.id ?? ''}
+                            onChange={(e) => {
+                              const nextId = e.target.value;
+                              if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
+                            }}
+                            disabled={readOnly}
+                            className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"
+                            aria-label="防火仕様を切り替える"
+                            data-testid="fireproof-select"
+                          >
+                            {!fireproofChosen && (
+                              <option value="" disabled>
+                                選択
+                              </option>
+                            )}
+                            {fireproofOptions.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.name.includes('非防火') ? '非防火' : o.name.includes('防火構造') ? '防火構造' : o.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-2 hidden text-right lg:block">
+                    <p className="text-xs text-muted">現在選択している見積金額は</p>
+                    <p className="font-serif text-[2.65rem] leading-tight tabular-nums">{formatYen(pricing.total)}</p>
                   </div>
-                )}
+                </div>
 
                 <div className="order-2 min-w-0 lg:order-1 lg:col-start-1 lg:row-start-1">
                   <p className="mb-1 text-[0.72rem] font-semibold text-muted" data-testid="spec-choice-label">
@@ -1029,8 +1036,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
               </div>
             </div>
 
-            <div className="flex w-full flex-wrap items-center justify-end gap-3 xl:w-auto xl:justify-end">
-              <div className="w-full text-right xl:w-auto xl:text-center">
+            <div className="flex w-full flex-wrap items-center justify-end gap-3 lg:hidden xl:flex xl:w-auto xl:justify-end">
+              <div className="w-full text-right lg:hidden">
                 <p className="text-xs text-muted">現在選択している見積金額は</p>
                 <p className="font-serif text-[2.05rem] leading-tight tabular-nums sm:text-[2.65rem]">{formatYen(pricing.total)}</p>
               </div>

@@ -497,3 +497,152 @@ export function BaseMasterLinesEditor({
     </div>
   );
 }
+
+
+export function BaseMasterReadOnlyLines({
+  lines,
+  lineSubtotal,
+  expenseAmount,
+  total,
+}: {
+  lines: BaseMasterRevisionLine[];
+  lineSubtotal: number;
+  expenseAmount: number;
+  total: number;
+}) {
+  const sections = useMemo(() => makeSections(lines), [lines]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  const rowNumbers = useMemo(() => {
+    const result = new Map<string, number>();
+    let index = 0;
+    for (const section of sections) {
+      for (const row of section.rows) {
+        index += 1;
+        result.set(row.key, index);
+      }
+    }
+    return result;
+  }, [sections]);
+
+  const toggleSection = (sectionKey: string) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(sectionKey)) next.delete(sectionKey);
+      else next.add(sectionKey);
+      return next;
+    });
+  };
+
+  return (
+    <div className="max-h-[68vh] overflow-auto">
+      <table className="min-w-[66rem] border-collapse text-sm">
+        <thead>
+          <tr>
+            <th className="sticky top-0 z-10 w-12 border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">#</th>
+            <th className="sticky top-0 z-10 w-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-center text-xs font-semibold text-slate-600"></th>
+            <th className="sticky top-0 z-10 min-w-[20rem] border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">品名</th>
+            <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">数量</th>
+            <th className="sticky top-0 z-10 w-20 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">単位</th>
+            <th className="sticky top-0 z-10 w-32 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">単価</th>
+            <th className="sticky top-0 z-10 w-32 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">金額</th>
+            <th className="sticky top-0 z-10 min-w-48 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sections.map((section) => {
+            const isCollapsed = collapsed.has(section.key);
+            const sectionTotal = section.rows.reduce(
+              (sum, row) => sum + Math.round(row.unitPrice * row.quantity),
+              0
+            );
+
+            if (isCollapsed) {
+              return (
+                <tr key={section.key} className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold">
+                  <th className="bg-slate-100"></th>
+                  <td className="px-1 py-1 text-center">
+                    <button
+                      type="button"
+                      aria-label={section.name + 'を展開'}
+                      className="size-6 rounded border border-slate-400 bg-white"
+                      onClick={() => toggleSection(section.key)}
+                    >
+                      +
+                    </button>
+                  </td>
+                  <td className="px-3 py-1">{section.name} 計</td>
+                  <td className="text-right">1</td>
+                  <td className="text-center">式</td>
+                  <td></td>
+                  <td className="px-3 text-right tabular-nums">{formatYen(sectionTotal)}</td>
+                  <td></td>
+                </tr>
+              );
+            }
+
+            return [
+              <tr key={section.key + '-head'} className="border-b border-slate-300 bg-emerald-900 text-white">
+                <th className="bg-slate-100"></th>
+                <td></td>
+                <td colSpan={6} className="px-3 py-1 text-sm font-semibold">{section.name}</td>
+              </tr>,
+              ...section.rows.map((row) => {
+                const rowIndex = rowNumbers.get(row.key) ?? 0;
+                const amount = Math.round(row.unitPrice * row.quantity);
+                return (
+                  <tr key={row.key} className="border-b border-slate-200 bg-white">
+                    <th className="bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">{rowIndex}</th>
+                    <td className="border-r border-slate-200 bg-white"></td>
+                    <td className="h-7 border-r border-slate-200 px-2 text-[13px]">{row.name}</td>
+                    <td className="h-7 border-r border-slate-200 px-2 text-right text-[13px] tabular-nums">{row.quantity}</td>
+                    <td className="h-7 border-r border-slate-200 px-2 text-[13px]">{row.unit}</td>
+                    <td className="h-7 border-r border-slate-200 px-2 text-right text-[13px] tabular-nums">{formatYen(row.unitPrice)}</td>
+                    <td className="h-7 border-r border-slate-200 bg-slate-50 px-3 text-right text-[13px] tabular-nums">{formatYen(amount)}</td>
+                    <td className="h-7 px-2 text-[13px] text-slate-600">{row.remark}</td>
+                  </tr>
+                );
+              }),
+              <tr key={section.key + '-total'} className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold">
+                <th className="bg-slate-100"></th>
+                <td className="px-1 py-1 text-center">
+                  <button
+                    type="button"
+                    aria-label={section.name + 'を折り畳む'}
+                    className="size-6 rounded border border-slate-400 bg-white"
+                    onClick={() => toggleSection(section.key)}
+                  >
+                    −
+                  </button>
+                </td>
+                <td className="px-3 py-1">{section.name} 計</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td className="px-3 text-right tabular-nums">{formatYen(sectionTotal)}</td>
+                <td></td>
+              </tr>,
+            ];
+          })}
+        </tbody>
+        <tfoot className="bg-slate-50 text-sm">
+          <tr className="border-t-2 border-slate-600">
+            <td colSpan={6} className="px-3 py-2 text-right text-slate-600">明細合計</td>
+            <td className="px-3 text-right font-semibold tabular-nums">{formatYen(lineSubtotal)}</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colSpan={6} className="px-3 py-2 text-right text-slate-600">諸費用</td>
+            <td className="px-3 text-right font-semibold tabular-nums">{formatYen(expenseAmount)}</td>
+            <td></td>
+          </tr>
+          <tr className="border-t-2 border-slate-700 bg-emerald-50">
+            <td colSpan={6} className="px-3 py-2 text-right font-semibold">本体価格計</td>
+            <td className="px-3 text-right text-base font-bold tabular-nums">{formatYen(total)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}

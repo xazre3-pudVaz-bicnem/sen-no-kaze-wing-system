@@ -448,7 +448,7 @@ interface OptionFormProps {
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
   /** 編集画面では商品情報と販売・詳細設定を分けて表示する */
-  mode?: 'all' | 'product' | 'sales';
+  mode?: 'all' | 'product' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
   returnTo?: string;
 }
@@ -469,20 +469,37 @@ export function OptionForm({
   const others = allOptions.filter((o) => o.id !== option?.id);
   const depMap = new Map(dependencies.map((d) => [d.requires_option_id, d]));
   const confMap = new Map(conflicts.map((c) => [c.conflicts_with_option_id, c]));
-  const showProduct = mode === 'all' || mode === 'product';
-  const showSales = mode === 'all' || mode === 'sales';
+  const manufacturerSuggestions = Array.from(
+    new Set(allOptions.map((row) => row.manufacturer?.trim()).filter((value): value is string => Boolean(value)))
+  ).sort((a, b) => a.localeCompare(b, 'ja'));
+  const modelNoSuggestions = Array.from(
+    new Set(allOptions.map((row) => row.model_no?.trim()).filter((value): value is string => Boolean(value)))
+  ).sort((a, b) => a.localeCompare(b, 'ja'));
 
-  const preserveProductFields = !showProduct && option ? (
+  const showIdentify = mode === 'all' || mode === 'product' || mode === 'identify';
+  const showDetails = mode === 'all' || mode === 'product' || mode === 'details';
+  const showMedia = mode === 'all' || mode === 'product' || mode === 'media';
+  const showSales = mode === 'all' || mode === 'sales' || mode === 'pricing';
+
+  const preserveIdentifyFields = !showIdentify && option ? (
     <>
       <input type="hidden" name="name" value={option.name} />
       <input type="hidden" name="category_id" value={option.category_id} />
       <input type="hidden" name="manufacturer" value={option.manufacturer ?? ''} />
       <input type="hidden" name="model_no" value={option.model_no ?? ''} />
+    </>
+  ) : null;
+
+  const preserveDetailFields = !showDetails && option ? (
+    <>
       <input type="hidden" name="size_note" value={option.size_note ?? ''} />
       <input type="hidden" name="highlight" value={option.highlight ?? ''} />
       <input type="hidden" name="description" value={option.description ?? ''} />
-      <input type="hidden" name="image_url" value={option.image_url ?? ''} />
     </>
+  ) : null;
+
+  const preserveMediaFields = !showMedia && option ? (
+    <input type="hidden" name="image_url" value={option.image_url ?? ''} />
   ) : null;
 
   const preserveSalesFields = !showSales && option ? (
@@ -521,53 +538,108 @@ export function OptionForm({
       <input type="hidden" name="id" value={option?.id ?? ''} />
       <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
       {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
-      {preserveProductFields}
+      {preserveIdentifyFields}
+      {preserveDetailFields}
+      {preserveMediaFields}
       {preserveSalesFields}
       <Status state={state} />
 
-      {showProduct && (
-        <section id="product-info" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+      {showIdentify && (
+        <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
-            <p className="text-lg font-semibold">1. 商品情報</p>
-            <p className="mt-1 text-sm text-muted">まず商品そのものの情報と、お客様に見せる内容を登録します。</p>
+            <p className="text-lg font-semibold">STEP 1 商品特定</p>
+            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番で商品を特定します。</p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
+            <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
+              <Select id={`category_id-${mode}`} name="category_id" defaultValue={option?.category_id ?? defaultCategoryId ?? categories[0]?.id}>
+                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="メーカー" htmlFor={`manufacturer-${mode}`} hint="既存商品にあるメーカーは候補から選べます" errors={e.manufacturer}>
+              <Input
+                id={`manufacturer-${mode}`}
+                name="manufacturer"
+                list="option-manufacturer-suggestions"
+                defaultValue={option?.manufacturer ?? ''}
+                placeholder="例：TOTO"
+              />
+              <datalist id="option-manufacturer-suggestions">
+                {manufacturerSuggestions.map((value) => <option key={value} value={value} />)}
+              </datalist>
+            </Field>
             <Field label="商品名" htmlFor={`name-${mode}`} required errors={e.name}>
               <Input id={`name-${mode}`} name="name" defaultValue={option?.name} required data-testid="option-name" />
+            </Field>
+            <Field
+              label="シリーズ・型番"
+              htmlFor={`model_no-${mode}`}
+              hint="現在の商品マスターではシリーズ名と型番を1項目で管理します。既存値は候補から選べます"
+              errors={e.model_no}
+            >
+              <Input
+                id={`model_no-${mode}`}
+                name="model_no"
+                list="option-model-no-suggestions"
+                defaultValue={option?.model_no ?? ''}
+                placeholder="例：サザナ HTシリーズ / HTV1616"
+              />
+              <datalist id="option-model-no-suggestions">
+                {modelNoSuggestions.map((value) => <option key={value} value={value} />)}
+              </datalist>
             </Field>
             {mode === 'all' && (
               <Field label="管理用コード" htmlFor="code-all" required hint="英小文字・数字・ハイフン（一意）" errors={e.code}>
                 <Input id="code-all" name="code" defaultValue={option?.code} required />
               </Field>
             )}
-            <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
-              <Select id={`category_id-${mode}`} name="category_id" defaultValue={option?.category_id ?? defaultCategoryId ?? categories[0]?.id}>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </Select>
-            </Field>
-            <Field label="メーカー" htmlFor={`manufacturer-${mode}`} errors={e.manufacturer}>
-              <Input id={`manufacturer-${mode}`} name="manufacturer" defaultValue={option?.manufacturer ?? ''} placeholder="例：TOTO" />
-            </Field>
-            <Field label="シリーズ・型番" htmlFor={`model_no-${mode}`} errors={e.model_no}>
-              <Input id={`model_no-${mode}`} name="model_no" defaultValue={option?.model_no ?? ''} placeholder="例：サザナ HTシリーズ" />
-            </Field>
+          </div>
+
+          {mode === 'identify' && <SubmitButton pending={pending} label="商品特定を保存" />}
+        </section>
+      )}
+
+      {showDetails && (
+        <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+          <div>
+            <p className="text-lg font-semibold">STEP 2 商品の詳細</p>
+            <p className="mt-1 text-sm text-muted">サイズ、説明、お客様向けの特徴など、商品を理解するための情報を整理します。</p>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
             <Field label="サイズ・仕様" htmlFor={`size_note-${mode}`} errors={e.size_note}>
               <Input id={`size_note-${mode}`} name="size_note" defaultValue={option?.size_note ?? ''} placeholder="例：1616サイズ" />
             </Field>
-            <Field label="位置づけ" htmlFor={`highlight-${mode}`} hint="任意。標準候補／おすすめ候補など" errors={e.highlight}>
+            <Field label="お客様向け特徴" htmlFor={`highlight-${mode}`} hint="例：標準候補／清掃性が高い／節水仕様" errors={e.highlight}>
               <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
             </Field>
           </div>
 
           <Field label="商品説明" htmlFor={`description-${mode}`} errors={e.description}>
-            <Textarea id={`description-${mode}`} name="description" defaultValue={option?.description ?? ''} className="min-h-24" />
+            <Textarea id={`description-${mode}`} name="description" defaultValue={option?.description ?? ''} className="min-h-28" />
           </Field>
+
+          <p className="text-xs text-muted">
+            固定の商品構成・標準装備は、メーカー資料で確認できるものまで無理に個別登録する必要はありません。
+            お客様が選ぶ項目、価格に影響する項目、発注に必要な項目を優先してください。
+          </p>
+
+          {mode === 'details' && <SubmitButton pending={pending} label="商品の詳細を保存" />}
+        </section>
+      )}
+
+      {showMedia && (
+        <section id="product-main-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+          <div>
+            <p className="text-lg font-semibold">STEP 3 お客様資料</p>
+            <p className="mt-1 text-sm text-muted">ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。</p>
+          </div>
 
           <div className="rounded-xl border border-line bg-ivory/35 p-4 sm:p-5">
             <div>
               <p className="font-semibold">メイン画像</p>
-              <p className="mt-1 text-xs text-muted">サブ画像とメーカー資料は、商品を保存した後に同じ「商品情報」エリアで追加できます。</p>
+              <p className="mt-1 text-xs text-muted">サブ画像とメーカーPDFは、この商品の「お客様資料」画面で続けて登録できます。</p>
             </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
               <Field label="画像ファイル" htmlFor={`image_file-${mode}`}>
@@ -579,15 +651,17 @@ export function OptionForm({
             </div>
           </div>
 
-          <SubmitButton pending={pending} label={option ? '商品情報を保存' : '商品を保存して次へ'} />
+          {mode === 'media' && <SubmitButton pending={pending} label="メイン画像を保存" />}
         </section>
       )}
+
+      {mode === 'product' && <SubmitButton pending={pending} label="商品情報を保存" />}
 
       {showSales && (
         <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
-            <p className="text-lg font-semibold">{mode === 'all' ? '2. 販売・詳細設定' : '3. 販売・詳細設定'}</p>
-            <p className="mt-1 text-sm text-muted">追加金額、対象モデル、公開状態などを設定します。普段使わないシステム設定は「詳細設定」にまとめています。</p>
+            <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : 'STEP 5 価格設定'}</p>
+            <p className="mt-1 text-sm text-muted">基本追加金額を設定し、対象モデル・公開状態を確認します。色・仕様ごとの追加金額はこのSTEP内の一覧で設定します。</p>
           </div>
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
@@ -700,7 +774,18 @@ export function OptionForm({
             </div>
           </details>
 
-          <SubmitButton pending={pending} label="販売・詳細設定を保存" />
+          <SubmitButton
+            pending={pending}
+            label={
+              mode === 'pricing'
+                ? '価格設定を保存'
+                : mode === 'all' && returnTo
+                  ? '登録して見積テンプレートへ戻る'
+                  : mode === 'all'
+                    ? '商品を保存して続きの設定へ'
+                    : '販売・詳細設定を保存'
+            }
+          />
         </section>
       )}
     </form>

@@ -25,7 +25,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
-      lead="既存の商品マスターを使い、7つのSTEPで商品登録を整理します。まず商品を作成し、保存後に画像・PDF・色仕様・最終確認を続けられます。"
+      lead="商品登録は3STEPです。まず商品を作成し、保存後に商品情報をまとめて設定して、最後にお客様表示を確認します。"
     >
       <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       {returnTo && (
@@ -34,24 +34,21 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         </Alert>
       )}
 
-      <section className="card p-4 sm:p-5" aria-label="商品登録の流れ">
-        <h2 className="font-semibold">商品登録の7ステップ</h2>
+      <section className="card p-4 sm:p-5" aria-label="商品登録の3ステップ">
+        <h2 className="font-semibold">商品登録の3ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          新規作成では、まず商品を特定して基本情報を保存します。保存後の商品編集画面では各STEPを個別に開いて設定できます。
+          細かい入力項目を別々の画面にせず、登録開始・商品情報・お客様表示の3つにまとめています。
         </p>
-        <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <ol className="mt-4 grid gap-2 sm:grid-cols-3">
           {[
-            ['1', '商品特定'],
-            ['2', '商品の詳細'],
-            ['3', 'お客様資料'],
-            ['4', 'お客様選択'],
-            ['5', '価格設定'],
-            ['6', '発注内容確認'],
-            ['7', 'お客様画面最終確認'],
-          ].map(([no, label], index) => (
-            <li key={no} className={`rounded-xl border px-3 py-3 ${index < 2 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
+            ['1', '登録開始', 'カテゴリーを選び、商品を作成'],
+            ['2', '商品情報を登録', '商品・資料・選択項目・価格を設定'],
+            ['3', 'お客様表示・登録', '表示を確認して登録'],
+          ].map(([no, label, note], index) => (
+            <li key={no} className={`rounded-xl border px-3 py-3 ${index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
               <span className="text-xs font-semibold text-brown">STEP {no}</span>
               <span className="mt-1 block text-sm font-semibold">{label}</span>
+              <span className="mt-1 block text-[0.7rem] leading-5 text-muted">{note}</span>
             </li>
           ))}
         </ol>

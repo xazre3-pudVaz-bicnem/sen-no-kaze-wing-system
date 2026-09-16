@@ -924,7 +924,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
             <div className="w-full min-w-0 xl:flex-1">
               <div className="grid gap-x-6 gap-y-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                 {(models.length > 1 || fireproofCat) && (
-                  <div className="order-1 flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3 lg:order-2 lg:col-start-2 lg:row-start-1 lg:justify-self-end">
+                  <div className="order-1 flex w-full flex-nowrap items-center gap-2 sm:w-auto sm:gap-3 lg:order-2 lg:col-start-2 lg:row-start-1 lg:justify-self-end lg:pt-[1.15rem]">
                     {models.length > 1 && (
                       <div className="inline-flex min-w-0 items-center gap-1.5 text-[0.82rem] text-muted sm:text-sm">
                         <span className="inline-flex items-center gap-0.5 whitespace-nowrap font-semibold text-ink-soft">

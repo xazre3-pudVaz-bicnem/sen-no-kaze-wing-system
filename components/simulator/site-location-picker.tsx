@@ -25,7 +25,7 @@ export function SiteLocationPicker({
   const prefectureValue = undecided ? UNDECIDED_VALUE : (prefecture ?? '');
 
   return (
-    <div className="w-full max-w-[20rem] min-w-0 lg:w-[21rem] lg:max-w-none" data-testid="site-location-picker">
+    <div className="w-fit max-w-full min-w-0 sm:w-[20rem] lg:w-[21rem]" data-testid="site-location-picker">
       <p className="mb-1 text-[0.72rem] font-semibold text-muted">設置予定地</p>
       <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         <select
@@ -47,7 +47,7 @@ export function SiteLocationPicker({
             });
           }}
           disabled={disabled}
-          className="min-h-9 w-full rounded-lg border border-line bg-white px-2.5 text-[0.82rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:text-[0.9rem]"
+          className="min-h-9 w-36 rounded-lg border border-line bg-white px-2.5 text-[0.82rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-full sm:text-[0.9rem]"
           aria-label="設置予定地の都道府県"
           data-testid="site-prefecture-select"
         >
@@ -70,7 +70,7 @@ export function SiteLocationPicker({
             })
           }
           disabled={disabled || undecided || !prefecture}
-          className="min-h-9 w-full rounded-lg border border-line bg-white px-2.5 text-[0.82rem] text-ink disabled:cursor-not-allowed disabled:bg-sand/50 disabled:text-muted disabled:opacity-70 sm:text-[0.9rem]"
+          className="min-h-9 w-36 rounded-lg border border-line bg-white px-2.5 text-[0.82rem] text-ink disabled:cursor-not-allowed disabled:bg-sand/50 disabled:text-muted disabled:opacity-70 sm:w-full sm:text-[0.9rem]"
           aria-label="設置予定地の市区町村"
           data-testid="site-municipality-select"
         >

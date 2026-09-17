@@ -12,30 +12,51 @@ const demo = fs.readFileSync(
 );
 
 describe('見積テンプレート Excel風操作確認画面', () => {
-  it('デモ画面をExcel照合版へ切り替える', () => {
+  it('DB非連動の操作確認画面として表示する', () => {
     expect(page).toContain('EstimateTemplateExcelDemo');
     expect(page).toContain('2026-09-01修正分類表見積書');
     expect(page).toContain('変更内容は保存されません');
+    expect(page).toContain('DB非連動');
+    expect(page).not.toContain('getStore');
   });
 
-  it('原価・売価・比較の3タブとExcel照合ルールを表示する', () => {
-    expect(demo).toContain('原価表');
-    expect(demo).toContain('売価表');
-    expect(demo).toContain('原価・売価比較');
-    expect(demo).toContain('ROUNDDOWN(原価単価×掛率,0)');
-    expect(demo).toContain('粗利＝売価税込合計－原価税込合計');
+  it('本体マスターと同じ原価・売価・粗利の列構成を使う', () => {
+    expect(demo).toContain('>品名<');
+    expect(demo).toContain('>数量<');
+    expect(demo).toContain('>単位<');
+    expect(demo).toContain('>原価<');
+    expect(demo).toContain('>原価金額<');
+    expect(demo).toContain('>売価<');
+    expect(demo).toContain('>売価金額<');
+    expect(demo).toContain('>粗利<');
+    expect(demo).toContain('>備考<');
+    expect(demo).not.toContain('原価表');
+    expect(demo).not.toContain('売価表');
+    expect(demo).not.toContain('原価・売価比較');
   });
 
-  it('折り畳み・自動手動・別途見積・一括再計算の安全操作を持つ', () => {
+  it('本体は参照専用、その他は編集用として分ける', () => {
+    expect(demo).toContain('本体マスター参照・読取専用');
+    expect(demo).toContain('本体明細は見積テンプレート側では直接変更しません');
+    expect(demo).toContain('/admin/base-masters/demo');
+    expect(demo).toContain('内外装工事');
+    expect(demo).toContain('オプション');
+    expect(demo).toContain('別途');
+  });
+
+  it('折り畳み・掛率再計算・別途見積・商品追加を画面内で試せる', () => {
     expect(demo).toContain('掛率から売価を再計算');
-    expect(demo).toContain('直前の再計算を元に戻す');
-    expect(demo).toContain('別途見積にする');
+    expect(demo).toContain('別途見積');
+    expect(demo).toContain('商品を追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("isCollapsed ? '+' : '−'");
+    expect(demo).toContain('画面内でDraft保存');
   });
 
   it('IME変換中のEnterをセル移動に使わない', () => {
     expect(demo).toContain('event.nativeEvent.isComposing');
     expect(demo).toContain('event.keyCode === 229');
+    expect(demo).toContain("event.key === 'Tab'");
+    expect(demo).toContain("event.key === 'Enter'");
   });
 });

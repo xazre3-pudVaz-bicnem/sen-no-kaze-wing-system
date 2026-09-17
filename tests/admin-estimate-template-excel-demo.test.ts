@@ -44,12 +44,26 @@ describe('見積テンプレート Excel風操作確認画面', () => {
     expect(demo).toContain('別途');
   });
 
-  it('折り畳み・掛率再計算・別途見積・商品追加を画面内で試せる', () => {
+  it('商品名セルから商品変更でき、新規商品追加とは区別する', () => {
+    expect(demo).toContain('商品を選択・変更');
+    expect(demo).toContain('replaceRowId');
+    expect(demo).toContain('setReplaceRowId(row.id)');
+    expect(demo).toContain("replaceRowId ? '商品を変更' : '商品を追加'");
+    expect(demo).toContain("replaceRowId ? 'この商品に変更' : '追加'");
+    expect(demo).toContain('＋商品');
+    expect(demo).toContain('chooseProduct');
+  });
+
+  it('折り畳み・掛率再計算・Undo・別途見積を画面内で試せる', () => {
     expect(demo).toContain('掛率から売価を再計算');
-    expect(demo).toContain('別途見積');
-    expect(demo).toContain('商品を追加');
+    expect(demo).toContain('直前の再計算を元に戻す');
+    expect(demo).toContain('setUndoRows(cloneRows(rows))');
+    expect(demo).toContain('previousSale');
+    expect(demo).toContain('previousManualSale');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("isCollapsed ? '+' : '−'");
+    expect(demo).toContain("isCollapsed ? '1' : ''");
+    expect(demo).toContain("isCollapsed ? '式' : ''");
     expect(demo).toContain('画面内でDraft保存');
   });
 

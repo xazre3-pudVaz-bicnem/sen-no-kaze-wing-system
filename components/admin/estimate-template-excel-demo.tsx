@@ -60,6 +60,8 @@ const DEMO_PRODUCTS: DemoProduct[] = [
 
 const cloneRows = (rows: DemoRow[]) => rows.map((row) => ({ ...row }));
 const floorYen = (value: number) => Math.floor(value + 1e-9);
+const rowCost = (row: DemoRow) => Math.round(row.quantity * row.cost);
+const rowSale = (row: DemoRow) => row.priceOnRequest ? 0 : Math.round(row.quantity * row.sale);
 let seq = 0;
 const makeId = () => `estimate-demo-${Date.now()}-${++seq}`;
 
@@ -77,9 +79,6 @@ export function EstimateTemplateExcelDemo() {
   const [savedAdjustment, setSavedAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [query, setQuery] = useState('');
-
-  const rowCost = (row: DemoRow) => Math.round(row.quantity * row.cost);
-  const rowSale = (row: DemoRow) => row.priceOnRequest ? 0 : Math.round(row.quantity * row.sale);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);

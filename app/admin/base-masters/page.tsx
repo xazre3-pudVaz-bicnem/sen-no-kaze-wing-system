@@ -24,6 +24,7 @@ export default async function BaseMastersPage({
       <AdminPage
         title="本体マスター"
         lead="本体の製造明細・価格をRevision管理します。"
+        actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
       >
         <Alert tone="info">この画面はSupabase接続環境で利用できます。ローカルJSONモードでは参照・編集しません。</Alert>
       </AdminPage>
@@ -103,6 +104,7 @@ export default async function BaseMastersPage({
     <AdminPage
       title="本体マスター"
       lead="Wing・BOXなどの商品モデルの下に、会社ごとの本体製造明細と価格を版管理します。"
+      actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
     >
       {sp.discarded && <Alert tone="success">Draftを破棄しました。</Alert>}
       <Alert tone="info">

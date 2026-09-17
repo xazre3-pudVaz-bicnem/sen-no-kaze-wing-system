@@ -240,7 +240,7 @@
         "/simulator/wing-01"
       ],
       "auto": true,
-      "status": "planned"
+      "status": "published"
     },
     {
       "slug": "moving-and-reuse",

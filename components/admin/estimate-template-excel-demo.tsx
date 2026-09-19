@@ -19,6 +19,10 @@ type DemoRow = {
   sale: number;
   manualSale: boolean;
   priceOnRequest: boolean;
+  previousSale?: number | null;
+  previousManualSale?: boolean | null;
+  manufacturer?: string;
+  modelNo?: string;
   remark: string;
   source: 'base' | 'product' | 'free';
 };
@@ -78,6 +82,8 @@ export function EstimateTemplateExcelDemo() {
   const [adjustment, setAdjustment] = useState(-2500);
   const [savedAdjustment, setSavedAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
+  const [replaceRowId, setReplaceRowId] = useState<string | null>(null);
+  const [undoRows, setUndoRows] = useState<DemoRow[] | null>(null);
   const [query, setQuery] = useState('');
 
   const totals = useMemo(() => {
@@ -135,6 +141,7 @@ export function EstimateTemplateExcelDemo() {
     setSavedMarkupRate(markupRate);
     setSavedExpenseRate(expenseRate);
     setSavedAdjustment(adjustment);
+    setUndoRows(null);
     setDirty(false);
   };
 
@@ -145,6 +152,10 @@ export function EstimateTemplateExcelDemo() {
     setExpenseRate(savedExpenseRate);
     setAdjustment(savedAdjustment);
     setCollapsed(new Set());
+    setUndoRows(null);
+    setPickerSection(null);
+    setReplaceRowId(null);
+    setQuery('');
     setDirty(false);
   };
 
@@ -168,6 +179,7 @@ export function EstimateTemplateExcelDemo() {
     ).length;
     if (!window.confirm(`自動計算 ${autoCount}件を掛率 ${markupRate.toFixed(2)}% で再計算します。\n本体参照・手動売価・別途見積は変更しません。実行しますか？`)) return;
 
+    setUndoRows(cloneRows(rows));
     setRows((current) => current.map((row) =>
       row.section !== '本体' && row.cost > 0 && !row.manualSale && !row.priceOnRequest
         ? { ...row, sale: floorYen(row.cost * markupRate / 100) }
@@ -201,34 +213,75 @@ export function EstimateTemplateExcelDemo() {
     markDirty();
   };
 
-  const addProduct = (product: DemoProduct) => {
+  const chooseProduct = (product: DemoProduct) => {
     if (!pickerSection) return;
-    setRows((current) => [
-      ...current,
-      {
-        id: makeId(),
-        section: pickerSection,
-        name: product.name,
-        quantity: 1,
-        unit: product.priceOnRequest ? '式' : '台',
-        cost: 0,
-        sale: product.price,
-        manualSale: true,
-        priceOnRequest: product.priceOnRequest,
-        remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
-        source: 'product',
-      },
-    ]);
+
+    const patch: Partial<DemoRow> = {
+      name: product.name,
+      sale: product.priceOnRequest ? 0 : product.price,
+      manualSale: !product.priceOnRequest,
+      priceOnRequest: product.priceOnRequest,
+      previousSale: null,
+      previousManualSale: null,
+      manufacturer: product.manufacturer,
+      modelNo: product.modelNo,
+      remark: product.priceOnRequest
+        ? '別途見積'
+        : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
+      source: 'product',
+    };
+
+    if (replaceRowId) {
+      updateRow(replaceRowId, patch);
+    } else {
+      setRows((current) => [
+        ...current,
+        {
+          id: makeId(),
+          section: pickerSection,
+          name: product.name,
+          quantity: 1,
+          unit: product.priceOnRequest ? '式' : '台',
+          cost: 0,
+          sale: product.priceOnRequest ? 0 : product.price,
+          manualSale: !product.priceOnRequest,
+          priceOnRequest: product.priceOnRequest,
+          previousSale: null,
+          previousManualSale: null,
+          manufacturer: product.manufacturer,
+          modelNo: product.modelNo,
+          remark: product.priceOnRequest
+            ? '別途見積'
+            : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
+          source: 'product',
+        },
+      ]);
+      markDirty();
+    }
+
     setPickerSection(null);
+    setReplaceRowId(null);
     setQuery('');
-    markDirty();
   };
 
   const toggleSeparate = (row: DemoRow) => {
+    if (!row.priceOnRequest) {
+      updateRow(row.id, {
+        previousSale: row.sale,
+        previousManualSale: row.manualSale,
+        priceOnRequest: true,
+        manualSale: false,
+      });
+      return;
+    }
+
+    const restoreManual = row.previousManualSale === true && row.previousSale != null;
     updateRow(row.id, {
-      priceOnRequest: !row.priceOnRequest,
-      manualSale: row.priceOnRequest ? false : row.manualSale,
-      sale: row.priceOnRequest ? floorYen(row.cost * markupRate / 100) : row.sale,
+      priceOnRequest: false,
+      sale: restoreManual ? row.previousSale ?? 0 : floorYen(row.cost * markupRate / 100),
+      manualSale: restoreManual,
+      previousSale: null,
+      previousManualSale: null,
     });
   };
 
@@ -316,6 +369,19 @@ export function EstimateTemplateExcelDemo() {
             <button type="button" className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold" onClick={applyMarkup}>
               掛率から売価を再計算
             </button>
+            <button
+              type="button"
+              disabled={!undoRows}
+              className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold disabled:opacity-40"
+              onClick={() => {
+                if (!undoRows) return;
+                setRows(cloneRows(undoRows));
+                setUndoRows(null);
+                markDirty();
+              }}
+            >
+              直前の再計算を元に戻す
+            </button>
           </label>
           <label className="flex items-center gap-2 px-4 py-2">
             <span className="text-xs text-slate-500">売価諸費用</span>
@@ -401,7 +467,10 @@ export function EstimateTemplateExcelDemo() {
                           <button
                             type="button"
                             className="text-[11px] underline"
-                            onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
+                            onClick={() => {
+                              setReplaceRowId(null);
+                              setPickerSection(section as Exclude<Section, '本体'>);
+                            }}
                           >
                             商品追加
                           </button>
@@ -440,14 +509,31 @@ export function EstimateTemplateExcelDemo() {
                         <tr key={row.id} className="border-b border-slate-200 bg-white">
                           <th className="bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">{rowIndex}</th>
                           <td className="border-r border-slate-200"></td>
-                          <td className="border-r border-slate-200 bg-amber-50 px-0.5">
-                            <input
-                              {...cellProps('name', rowIndex)}
-                              value={row.name}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
-                              onChange={(event) => updateRow(row.id, { name: event.target.value })}
-                              className={inputClass}
-                            />
+                          <td
+                            title={[row.manufacturer, row.modelNo].filter(Boolean).join(' ／ ') || undefined}
+                            className="relative border-r border-slate-200 bg-amber-50 px-0.5"
+                          >
+                            <div className="pr-7">
+                              <input
+                                {...cellProps('name', rowIndex)}
+                                value={row.name}
+                                onFocus={(event) => setSelectedCell(event.currentTarget.value)}
+                                onChange={(event) => updateRow(row.id, { name: event.target.value })}
+                                className={inputClass}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              title="商品を選択・変更"
+                              aria-label={row.name + 'の商品を選択・変更'}
+                              className="absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded border border-slate-300 bg-white text-[10px] font-bold text-emerald-900"
+                              onClick={() => {
+                                setReplaceRowId(row.id);
+                                setPickerSection(section as Exclude<Section, '本体'>);
+                              }}
+                            >
+                              …
+                            </button>
                           </td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             <input
@@ -501,12 +587,22 @@ export function EstimateTemplateExcelDemo() {
                                   onChange={(event) => updateRow(row.id, { sale: Math.max(0, Number(event.target.value) || 0), manualSale: true })}
                                   className={inputClass + ' min-w-0 flex-1 text-right'}
                                 />
-                                <span className={row.manualSale
-                                  ? 'rounded border border-orange-300 bg-orange-50 px-1 text-[10px] font-semibold text-orange-800'
-                                  : 'rounded border border-emerald-300 bg-emerald-50 px-1 text-[10px] font-semibold text-emerald-800'}
+                                <button
+                                  type="button"
+                                  title={row.manualSale ? 'クリックすると掛率からの自動計算へ戻します' : '掛率から自動計算'}
+                                  onClick={() => {
+                                    if (!row.manualSale) return;
+                                    updateRow(row.id, {
+                                      sale: floorYen(row.cost * markupRate / 100),
+                                      manualSale: false,
+                                    });
+                                  }}
+                                  className={row.manualSale
+                                    ? 'rounded border border-orange-300 bg-orange-50 px-1 text-[10px] font-semibold text-orange-800'
+                                    : 'rounded border border-emerald-300 bg-emerald-50 px-1 text-[10px] font-semibold text-emerald-800'}
                                 >
                                   {row.manualSale ? '手動' : '自動'}
-                                </span>
+                                </button>
                               </div>
                             )}
                           </td>
@@ -522,14 +618,6 @@ export function EstimateTemplateExcelDemo() {
                             />
                           </td>
                           <td className="whitespace-nowrap px-1 text-center">
-                            <button
-                              type="button"
-                              title="商品マスターから選択"
-                              className="rounded px-1 text-xs font-semibold text-emerald-800"
-                              onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
-                            >
-                              …
-                            </button>
                             <button
                               type="button"
                               title={row.priceOnRequest ? '金額入力へ戻す' : 'この行を別途見積にする'}
@@ -550,7 +638,7 @@ export function EstimateTemplateExcelDemo() {
                       <th className="bg-slate-100"></th>
                       <td></td>
                       <td className="px-3 py-1">{section} 計</td>
-                      <td></td><td></td>
+                      <td className="text-center">{isCollapsed ? '1' : ''}</td><td className="text-center">{isCollapsed ? '式' : ''}</td>
                       <td className="px-3 text-right tabular-nums">{formatYen(sectionSummary.cost)}</td>
                       <td></td>
                       <td className="px-3 text-right tabular-nums">{section === '別途' && sectionSummary.onRequest ? '別途見積' : formatYen(sectionSummary.sale)}</td>
@@ -559,9 +647,21 @@ export function EstimateTemplateExcelDemo() {
                       <td></td>
                       <td className="px-2 text-right">
                         {section !== '本体' && (
-                          <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section as Exclude<Section, '本体'>)}>
-                            ＋自由明細
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section as Exclude<Section, '本体'>)}>
+                              ＋自由明細
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[11px] text-emerald-800 underline"
+                              onClick={() => {
+                                setReplaceRowId(null);
+                                setPickerSection(section as Exclude<Section, '本体'>);
+                              }}
+                            >
+                              ＋商品
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -622,14 +722,26 @@ export function EstimateTemplateExcelDemo() {
       </section>
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を追加">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を選択">
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">商品を追加</h2>
-                <p className="mt-1 text-xs text-slate-500">追加先：{pickerSection} ／ この一覧もDB非連動の確認用サンプルです。</p>
+                <h2 className="text-lg font-semibold">{replaceRowId ? '商品を変更' : '商品を追加'}</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {replaceRowId ? '選択中の明細を置き換えます' : '新しい明細として追加します'} ／ 追加・変更先：{pickerSection} ／ DB非連動の確認用サンプルです。
+                </p>
               </div>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setPickerSection(null)}>閉じる</button>
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                onClick={() => {
+                  setPickerSection(null);
+                  setReplaceRowId(null);
+                  setQuery('');
+                }}
+              >
+                閉じる
+              </button>
             </div>
 
             <div className="space-y-4 p-5">
@@ -649,7 +761,9 @@ export function EstimateTemplateExcelDemo() {
                     <p className="mt-1 text-xs text-slate-500">{product.modelNo || '型番なし'}</p>
                     <p className="mt-3 text-sm font-semibold">{product.priceOnRequest ? '別途見積' : '追加金額 ' + formatYen(product.price)}</p>
                     <div className="mt-4 flex justify-end">
-                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>追加</button>
+                      <button type="button" className="btn-primary btn-sm" onClick={() => chooseProduct(product)}>
+                        {replaceRowId ? 'この商品に変更' : '追加'}
+                      </button>
                     </div>
                   </article>
                 ))}

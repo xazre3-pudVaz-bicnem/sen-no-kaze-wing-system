@@ -276,7 +276,7 @@
         "/simulator/wing-01"
       ],
       "auto": true,
-      "status": "planned"
+      "status": "draft"
     },
     {
       "slug": "container-hotel-basics",

@@ -45,26 +45,44 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain('ledger-empty-detail');
   });
 
-  it('商品詳細を一覧下部ではなくレスポンシブモーダルで表示する', () => {
+  it('商品詳細を2タブのレスポンシブモーダルで表示する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('ledger-product-detail-modal');
     expect(client).toContain('role="dialog"');
     expect(client).toContain('aria-modal="true"');
+    expect(client).toContain('お客様表示');
+    expect(client).toContain('管理情報');
+    expect(client).toContain('role="tablist"');
+    expect(client).toContain('ledger-customer-panel');
+    expect(client).toContain('ledger-admin-panel');
     expect(client).toContain('選択中の商品');
     expect(client).toContain('商品詳細を閉じる');
     expect(client).toContain('前の商品');
     expect(client).toContain('次の商品');
     expect(client).toContain("event.key === 'Escape'");
+    expect(client).toContain("event.key !== 'Tab'");
     expect(client).toContain("document.body.style.overflow = 'hidden'");
+    expect(client).toContain('openerRef.current?.focus()');
     expect(client).not.toContain('data-testid="ledger-product-detail"');
   });
 
-  it('モーダル内でもローカル仕様プレビューと管理情報2カラムを維持する', () => {
+  it('お客様表示はシミュレーター共通ProductDetailをそのまま使う', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('仕様の選択はこの画面内だけのプレビューです。保存はされません。');
+    expect(client).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");
+    expect(client).toContain('シミュレーター画面と同じ商品詳細です。ここで変更した仕様は確認用で、保存されません。');
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');
+    expect(client).toContain('<ProductDetail category={category} option={selected}');
     expect(client).toContain('onVariantChange={onPreviewVariantChange}');
+  });
+
+  it('管理情報は正式に取得できる値と未取得の仕入情報を分離する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain('商品基本情報');
+    expect(client).toContain('シミュレーター・Web表示設定');
+    expect(client).toContain('自社の仕入・発注情報');
+    expect(client).toContain('未登録値を推測せず、取得可能になるまでは表示しません。');
+    expect(client).toContain('登録・権限情報');
     expect(client).not.toContain('自社設定を編集');
     expect(client).toContain('min-[900px]:grid-cols-2');
   });

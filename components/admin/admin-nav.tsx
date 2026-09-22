@@ -13,12 +13,11 @@ const sections: NavSection[] = [
   {
     href: '/admin/quotes', label: '案件管理', match: ['/admin', '/admin/quotes', '/admin/configurations', '/admin/notifications', '/admin/contacts'],
     items: [
-      { href: '/admin', label: '概要', exact: true },
-      { href: '/admin/quotes', label: '見積依頼・見積書' },
+      { href: '/admin/quotes', label: '案件一覧' },
       { href: '/admin/quotes/new', label: '新規見積を作成' },
       { href: '/admin/configurations', label: '保存された仕様', need: 'admin' },
-      { href: '/admin/notifications', label: 'お知らせ' },
       { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
+      { href: '/admin/notifications', label: 'お知らせ' },
     ],
   },
   {
@@ -35,11 +34,7 @@ const sections: NavSection[] = [
   },
   {
     href: '/admin/base-masters', label: '販売基準', match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'], need: 'admin',
-    items: [
-      { href: '/admin/base-masters', label: '本体マスター' },
-      { href: '/admin/estimate-templates', label: '標準見積' },
-      { href: '/admin/base-breakdown', label: '旧 標準見積Excel' },
-    ],
+    items: [],
   },
   {
     href: '/admin/settings', label: '管理設定', match: ['/admin/settings', '/admin/customers', '/admin/audit', '/admin/manual'],
@@ -89,7 +84,7 @@ export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migr
         );
       })}
       </div>
-      {activeSection && (
+      {activeSection && activeSection.items.length > 0 && (
         <div className="border-t border-line bg-sand/40">
           <div className="mx-auto flex max-w-[96rem] gap-x-4 gap-y-1 overflow-x-auto px-5 py-2 text-xs sm:px-8 [scrollbar-width:none]">
             {activeSection.items.map((item) => {

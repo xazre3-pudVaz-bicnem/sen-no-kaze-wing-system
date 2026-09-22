@@ -142,9 +142,24 @@ export function DealerRevisionForm({
   const tax = Math.floor(subtotal * quote.tax_rate);
 
   const update = (key: string, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) =>
+  const rowKinds = canEditBase ? FULL_KINDS : DEALER_KINDS;
+  const insertByKind = (cur: Row[], next: Row) => {
+    const lastSameKind = cur.reduce((last, row, index) => (row.kind === next.kind ? index : last), -1);
+    if (lastSameKind >= 0) return [...cur.slice(0, lastSameKind + 1), next, ...cur.slice(lastSameKind + 1)];
+    const targetOrder = rowKinds.indexOf(next.kind);
+    const nextGroup = cur.findIndex((row) => rowKinds.indexOf(row.kind) > targetOrder);
+    if (nextGroup < 0) return [...cur, next];
+    return [...cur.slice(0, nextGroup), next, ...cur.slice(nextGroup)];
+  };
+  const changeKind = (key: string, kind: RevisionItemKind) =>
     setRows((cur) => {
-      const next: Row = {
+      const row = cur.find((item) => item.key === key);
+      if (!row) return cur;
+      return insertByKind(cur.filter((item) => item.key !== key), { ...row, kind });
+    });
+  const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) =>
+    setRows((cur) =>
+      insertByKind(cur, {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
         kind,
         name: preset?.name ?? '',
@@ -154,11 +169,8 @@ export function DealerRevisionForm({
         unit_price: preset?.price ?? 0,
         quantity: 1,
         image_url: preset?.image_url ?? null,
-      };
-      const lastSameKind = cur.reduce((last, row, index) => (row.kind === kind ? index : last), -1);
-      if (lastSameKind < 0) return [...cur, next];
-      return [...cur.slice(0, lastSameKind + 1), next, ...cur.slice(lastSameKind + 1)];
-    });
+      })
+    );
   const [pickerOpen, setPickerOpen] = useState(false);
   const cellInputClass = sheetMode
     ? 'h-7 w-full rounded-none border-transparent bg-transparent px-2 py-0.5 text-xs shadow-none focus:border-[#6d9480] focus:bg-white focus:ring-1 focus:ring-[#6d9480]/30'
@@ -286,7 +298,7 @@ export function DealerRevisionForm({
                               <div className="flex border-t border-line/40">
                                 <select
                                   value={r.kind}
-                                  onChange={(e) => update(r.key, { kind: e.target.value as RevisionItemKind })}
+                                  onChange={(e) => changeKind(r.key, e.target.value as RevisionItemKind)}
                                   aria-label={`${i + 1} 行目の区分`}
                                   className="h-5 w-28 border-0 bg-transparent px-1 text-[0.6rem] text-muted outline-none focus:bg-white"
                                 >

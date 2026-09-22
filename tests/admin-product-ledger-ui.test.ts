@@ -28,6 +28,15 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('並び替え：更新が新しい順');
     expect(client).toContain('SmartImage');
     expect(client).toContain('Ellipsis');
+    expect(client).toContain('商品を種類から絞り込み');
+    expect(client).toContain('sticky top-0');
+    expect(client).toContain("useState(50)");
+    expect(client).toContain('表示件数');
+    expect(client).toContain('25件');
+    expect(client).toContain('50件');
+    expect(client).toContain('100件');
+    expect(client).toContain('前へ');
+    expect(client).toContain('次へ');
     expect(client).not.toContain('ledger-empty-detail');
   });
 

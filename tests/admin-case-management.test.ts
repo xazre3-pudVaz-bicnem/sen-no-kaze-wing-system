@@ -62,6 +62,11 @@ describe('Admin case management UI', () => {
     expect(detail).toContain('<CaseWorkspace');
     expect(workspace).toContain('data-testid="case-workspace"');
     expect(workspace).toContain('data-testid="case-workspace-header"');
+    expect(workspace).toContain('data-testid="case-structure-summary"');
+    expect(workspace).toContain('防火仕様');
+    expect(workspace).toContain('caseSelectedOptionIds');
+    expect(workspace).toContain("option.code === 'fire-proof'");
+    expect(workspace).toContain('案件構成・申し送り');
     expect(workspace).toContain('data-testid="case-workflow"');
     expect(workspace).toContain('buildInlineTabHref');
     expect(workspace).toContain("query.set('case', quoteId)");

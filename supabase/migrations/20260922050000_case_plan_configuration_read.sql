@@ -16,6 +16,7 @@ set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
+  v_rank integer := public.current_role_rank();
   v_quote public.quotes;
   v_result jsonb;
 begin
@@ -23,7 +24,7 @@ begin
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
   end if;
 
-  if public.current_role_rank() < 1 then
+  if v_rank < 1 then
     raise exception 'FORBIDDEN: 案件プランボードを確認できるのは担当者以上です'
       using errcode = '42501';
   end if;
@@ -37,7 +38,7 @@ begin
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
 
-  if not (public.is_admin() or v_quote.dealer_id = v_uid) then
+  if not (v_rank >= 2 or (v_rank >= 1 and v_quote.dealer_id = v_uid)) then
     raise exception 'FORBIDDEN: この見積の担当者ではありません'
       using errcode = '42501';
   end if;

@@ -10,15 +10,26 @@ import {
   QUOTE_STATUS_LABELS,
   canEditCatalog,
   type CatalogBundle,
+  type CaseDocument,
   type EstimateTemplateBundle,
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
+import { SmartImage } from '@/components/ui/smart-image';
 import { QuoteStatusForm } from '@/components/admin/forms';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 import { CasePlanBoard } from '@/components/admin/case-plan-board';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
+
+const CASE_DOCUMENT_KIND_LABELS: Record<CaseDocument['kind'], string> = {
+  floorplan: '平面図',
+  elevation: '立面図',
+  estimate: '見積',
+  contract: '契約',
+  site: '現地・敷地',
+  other: 'その他',
+};
 
 const TABS = [
   { key: 'estimate', label: '見積書' },
@@ -95,11 +106,12 @@ export async function CaseWorkspace({
   const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);
   const activeTab: TabKey = isTabKey(tab) ? tab : 'estimate';
 
-  const [profiles, categories, options, casePlanConfiguration] = await Promise.all([
+  const [profiles, categories, options, casePlanConfiguration, caseDocuments] = await Promise.all([
     isAdmin ? store.listProfiles() : Promise.resolve([]),
     store.listCategories(),
     store.listOptions(),
     store.getCasePlanConfiguration(quote.id, actor),
+    activeTab === 'documents' ? store.listCaseDocuments(quote.id, actor) : Promise.resolve([] as CaseDocument[]),
   ]);
 
   const dealers = profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer');
@@ -286,7 +298,7 @@ export async function CaseWorkspace({
         <div className="flex min-w-max">
           {TABS.map((tabItem) => {
             const active = activeTab === tabItem.key;
-            const future = ['site', 'documents', 'production', 'handover', 'disaster'].includes(tabItem.key);
+            const future = ['site', 'production', 'handover', 'disaster'].includes(tabItem.key);
             return (
               <Link
                 key={tabItem.key}
@@ -300,6 +312,7 @@ export async function CaseWorkspace({
               >
                 {tabItem.label}
                 {tabItem.key === 'estimate' && <span className="ml-1 text-[0.6rem] text-[#2f6b4f]">第{quote.revision}版</span>}
+                {tabItem.key === 'documents' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">参照</span>}
                 {future && <span className="ml-1 text-[0.58rem] text-muted">未対応</span>}
               </Link>
             );
@@ -427,9 +440,118 @@ export async function CaseWorkspace({
       )}
 
       {activeTab === 'documents' && (
-        <FuturePanel title="契約・図面・資料">
-          契約書・確定図面・案件資料を案件単位で保存し、版や交付状況を管理する正式機能はまだありません。見積書PDFは「見積書」タブで既存機能を利用できます。
-        </FuturePanel>
+        <section className="space-y-4" data-testid="case-tab-documents">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">契約・図面・資料</h2>
+                <Badge tone="neutral">参照のみ</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                この案件に紐づく図面・見積・現地資料をまとめて確認します。正式なアップロード・差替え・版管理は次工程です。
+              </p>
+            </div>
+            <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm">
+              現在の見積書PDF
+            </a>
+          </div>
+
+          {caseDocuments.some((row) => row.preview_url) && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">図面</h3>
+                <span className="text-xs text-muted">
+                  {caseDocuments.filter((row) => row.preview_url).length}点
+                </span>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="case-drawing-grid">
+                {caseDocuments.filter((row) => row.preview_url).map((row) => (
+                  <article key={row.id} className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+                    <div className="relative aspect-[4/3] bg-[#f7f8f8]">
+                      <SmartImage
+                        src={row.preview_url ?? ''}
+                        alt={row.title}
+                        fill
+                        sizes="(min-width:1280px) 33vw, (min-width:768px) 50vw, 100vw"
+                        className="object-contain p-2"
+                      />
+                    </div>
+                    <div className="space-y-1 border-t border-line p-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-sand px-2 py-0.5 text-[0.62rem] font-semibold text-ink-soft">
+                          {CASE_DOCUMENT_KIND_LABELS[row.kind]}
+                        </span>
+                        {row.is_latest && <Badge tone="success">最新版</Badge>}
+                        {row.revision_label && <span className="text-[0.65rem] text-muted">{row.revision_label}</span>}
+                      </div>
+                      <p className="font-semibold">{row.title}</p>
+                      <p className="truncate text-[0.68rem] text-muted">{row.file_name}</p>
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-[0.68rem] text-muted">
+                          {row.document_date ? formatDate(row.document_date) : '日付未登録'}
+                        </span>
+                        {row.url && (
+                          <a href={row.url} target="_blank" rel="noopener" className="text-xs font-semibold text-[#2f6b4f] underline underline-offset-4">
+                            大きく見る
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">資料一覧</h3>
+              <span className="text-xs text-muted">{caseDocuments.length + 1}件（現在の見積書を含む）</span>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" data-testid="case-document-list">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 text-sm">
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-sand px-2 py-0.5 text-[0.62rem] font-semibold text-ink-soft">見積</span>
+                    <Badge tone="success">現在</Badge>
+                  </div>
+                  <p className="mt-1 font-semibold">正式見積書 第{quote.revision}版</p>
+                  <p className="text-[0.68rem] text-muted">{quote.quote_no}／発行 {formatDate(quote.issued_at)}</p>
+                </div>
+                <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm">開く</a>
+              </div>
+              {caseDocuments.map((row) => (
+                <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 last:border-b-0">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-sand px-2 py-0.5 text-[0.62rem] font-semibold text-ink-soft">
+                        {CASE_DOCUMENT_KIND_LABELS[row.kind]}
+                      </span>
+                      {row.is_latest && <Badge tone="success">最新版</Badge>}
+                      {row.revision_label && <span className="text-[0.65rem] text-muted">{row.revision_label}</span>}
+                    </div>
+                    <p className="mt-1 font-semibold">{row.title}</p>
+                    <p className="text-[0.68rem] text-muted">
+                      {row.file_name}
+                      {row.document_date ? `／${formatDate(row.document_date)}` : ''}
+                    </p>
+                    {row.note && <p className="mt-1 text-[0.68rem] leading-5 text-ink-soft">{row.note}</p>}
+                  </div>
+                  {row.url ? (
+                    <a href={row.url} target="_blank" rel="noopener" className="btn-secondary btn-sm">開く</a>
+                  ) : (
+                    <span className="rounded-md bg-[#f7f8f8] px-2 py-1 text-[0.65rem] text-muted">原本保管は未実装</span>
+                  )}
+                </div>
+              ))}
+              {caseDocuments.length === 0 && (
+                <div className="px-3 py-5 text-sm text-muted">
+                  案件資料はまだ登録されていません。正式な案件資料アップロード機能は次工程で実装します。
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       )}
 
       {activeTab === 'production' && (

@@ -13,7 +13,7 @@ export default async function AdminContactsPage({ searchParams }: { searchParams
   const newCount = messages.filter((m) => m.status === 'new').length;
 
   return (
-    <AdminPage title="お問い合わせ" lead={`全 ${messages.length} 件（未対応 ${newCount} 件）`}>
+    <AdminPage title="問い合わせ受付" lead={`全 ${messages.length} 件（未対応 ${newCount} 件）`}>
       <FlashMessages sp={sp} />
       <Table minWidth="60rem">
         <thead className="bg-sand/60">

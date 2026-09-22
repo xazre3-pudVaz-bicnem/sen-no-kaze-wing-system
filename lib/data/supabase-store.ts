@@ -49,6 +49,7 @@ import {
   type HotspotInput,
   type ProductImageInput,
   type QuoteDetail,
+  type CasePlanConfiguration,
   type SaveConfigurationInput,
   type SessionUser,
   type UploadInput,
@@ -355,6 +356,18 @@ export class SupabaseStore implements DataStore {
     const items = await db.from('configuration_items').select('*').eq('configuration_id', id);
     if (items.error) mapPgError(items.error);
     return { configuration: data as Configuration, items: (items.data ?? []) as ConfigurationItem[] };
+  }
+  async getCasePlanConfiguration(quoteId: string, actor: SessionUser): Promise<CasePlanConfiguration | null> {
+    void actor; // RPC 内で auth.uid() と担当見積を再確認する
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_case_plan_configuration', { p_quote_id: quoteId });
+    if (error) {
+      // migration未適用環境では案件画面全体を落とさず、プランボードだけ未表示にする。
+      if (error.code === 'PGRST202' || /get_case_plan_configuration/i.test(error.message ?? '')) return null;
+      mapPgError(error);
+    }
+    if (!data) return null;
+    return data as CasePlanConfiguration;
   }
   async saveConfiguration(_actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     const db = await this.db();

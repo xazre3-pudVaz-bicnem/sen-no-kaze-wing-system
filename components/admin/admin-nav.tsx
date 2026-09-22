@@ -87,7 +87,7 @@ export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migr
         );
       })}
       </div>
-      {activeSection && (
+      {activeSection && activeSection.label !== '案件管理' && (
         <div className="border-t border-line bg-sand/40">
           <div className="mx-auto flex max-w-[96rem] gap-x-4 gap-y-1 overflow-x-auto px-5 py-2 text-xs sm:px-8 [scrollbar-width:none]">
             {activeSection.items.map((item) => {

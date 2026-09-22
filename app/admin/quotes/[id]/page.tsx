@@ -147,7 +147,7 @@ export default async function AdminQuoteDetailPage({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="min-w-0 text-lg font-semibold sm:text-xl">{customerName}</h1>
-              <Badge tone={quote.status === 'accepted' ? 'success' : 'navy'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+              <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
               {request && <span className="rounded-full border border-white/30 px-2 py-0.5 text-[0.68rem]">依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</span>}
             </div>
             <p className="mt-1 font-mono text-[0.68rem] text-white/70">
@@ -235,7 +235,7 @@ export default async function AdminQuoteDetailPage({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-xl font-semibold">見積書</h2>
-                <Badge tone={quote.status === 'accepted' ? 'success' : 'navy'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+                <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
                 発行 {formatDate(quote.issued_at)}／有効期限 {formatDate(quote.valid_until)}／第{quote.revision}版

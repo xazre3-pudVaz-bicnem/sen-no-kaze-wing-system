@@ -45,7 +45,21 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain('ledger-empty-detail');
   });
 
-  it('ローカル仕様プレビューと900pxの管理情報2カラムを維持する', () => {
+  it('商品詳細を一覧下部ではなくレスポンシブモーダルで表示する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain('ledger-product-detail-modal');
+    expect(client).toContain('role="dialog"');
+    expect(client).toContain('aria-modal="true"');
+    expect(client).toContain('選択中の商品');
+    expect(client).toContain('商品詳細を閉じる');
+    expect(client).toContain('前の商品');
+    expect(client).toContain('次の商品');
+    expect(client).toContain("event.key === 'Escape'");
+    expect(client).toContain("document.body.style.overflow = 'hidden'");
+    expect(client).not.toContain('data-testid="ledger-product-detail"');
+  });
+
+  it('モーダル内でもローカル仕様プレビューと管理情報2カラムを維持する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('仕様の選択はこの画面内だけのプレビューです。保存はされません。');
     expect(client).toContain('defaultVariantIdsFor');

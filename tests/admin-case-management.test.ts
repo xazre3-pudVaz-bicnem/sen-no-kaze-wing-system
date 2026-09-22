@@ -103,7 +103,23 @@ describe('Admin case management UI', () => {
 
   it('does not present unsupported downstream workflow data as implemented', () => {
     expect(workspace).toContain('案件受付・現地メモ');
-    expect(workspace).toContain('用途地域・防火地域・建蔽率・容積率・接道・搬入条件・地盤条件を個別項目として保存する正式機能はまだありません。');
+    expect(workspace).toContain('data-testid="case-site-condition-candidates"');
+    expect(workspace).toContain('正式登録候補');
+    expect(workspace).toContain('都市計画区域');
+    expect(workspace).toContain('用途地域');
+    expect(workspace).toContain('高度地区');
+    expect(workspace).toContain('防火地域');
+    expect(workspace).toContain('建蔽率');
+    expect(workspace).toContain('容積率');
+    expect(workspace).toContain('道路幅員');
+    expect(workspace).toContain('接道・道路境界');
+    expect(workspace).toContain('日影規制');
+    expect(workspace).toContain('遺跡対象地域');
+    expect(workspace).toContain('搬入条件');
+    expect(workspace).toContain('地盤条件');
+    expect(workspace).toContain('要登録・確認');
+    expect(workspace).toContain('都市計画資料は参考図として扱い');
+    expect(workspace).toContain("tabHref('documents')");
     expect(workspace).toContain('正式なアップロード・差替え・版管理は次工程です。');
     expect(workspace).toContain('data-testid="case-drawing-grid"');
     expect(workspace).toContain('data-testid="case-document-list"');

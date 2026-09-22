@@ -603,6 +603,29 @@ export interface QuoteDocument {
   generated_at: string;
 }
 
+export type CaseDocumentKind =
+  | 'floorplan'
+  | 'elevation'
+  | 'estimate'
+  | 'contract'
+  | 'site'
+  | 'other';
+
+export interface CaseDocument {
+  id: string;
+  quote_id: string;
+  kind: CaseDocumentKind;
+  title: string;
+  file_name: string;
+  url: string | null;
+  preview_url: string | null;
+  document_date: string | null;
+  revision_label: string | null;
+  is_latest: boolean;
+  note: string | null;
+  sort_order: number;
+}
+
 /* ---------- 計算結果（クライアント／サーバー共通） ---------- */
 
 export interface PricingLine {

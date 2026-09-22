@@ -14,7 +14,6 @@ export default async function AdminSettingsPage() {
           <p className="mt-2 text-sm text-ink-soft">ログイン中の権限に応じた操作手順を確認します。</p>
         </Link>
         {isAdmin && <Link href="/admin/customers" className="card p-5 transition-colors hover:bg-sand/40"><h2 className="text-lg">ユーザー・権限</h2><p className="mt-2 text-sm text-ink-soft">ユーザー情報と権限を管理します。</p></Link>}
-        {isAdmin && <Link href="/admin/contacts" className="card p-5 transition-colors hover:bg-sand/40"><h2 className="text-lg">お問い合わせ</h2><p className="mt-2 text-sm text-ink-soft">公開サイトからのお問い合わせを確認します。</p></Link>}
         {isAdmin && <Link href="/admin/audit" className="card p-5 transition-colors hover:bg-sand/40"><h2 className="text-lg">変更履歴</h2><p className="mt-2 text-sm text-ink-soft">価格・公開状態・権限の変更履歴を確認します。</p></Link>}
       </div>
     </AdminPage>

@@ -1,7 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getAdminNavSections } from '@/components/admin/admin-nav';
 
 const labelsFor = (role: 'admin' | 'master_dealer' | 'dealer') => getAdminNavSections(role).map((section) => section.label);
+const settingsPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/settings/page.tsx'), 'utf8');
 
 describe('管理画面の業務領域ナビゲーション', () => {
   it('本部には4つの業務領域を表示する', () => {
@@ -20,5 +23,12 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(caseItems).toContain('お問い合わせ');
     expect(settingItems).not.toContain('お問い合わせ');
     expect(settingItems).toEqual(['設定一覧', '操作マニュアル', 'ユーザー・権限', '変更履歴']);
+  });
+
+  it('管理設定ランディングにお問い合わせカードを残さない', () => {
+    expect(settingsPage).not.toContain('href="/admin/contacts"');
+    for (const label of ['操作マニュアル', 'ユーザー・権限', '変更履歴']) {
+      expect(settingsPage).toContain(label);
+    }
   });
 });

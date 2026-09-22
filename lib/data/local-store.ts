@@ -487,7 +487,13 @@ export class LocalStore implements DataStore {
           site_municipality: configuration.site_municipality ?? null,
           site_location_undecided: configuration.site_location_undecided ?? false,
         },
-        items: db.configurationItems.filter((item) => item.configuration_id === configuration.id),
+        items: db.configurationItems
+          .filter((item) => item.configuration_id === configuration.id)
+          .map((item) => ({
+            option_id: item.option_id,
+            quantity: item.quantity,
+            variant_choice_ids: item.variant_choice_ids ?? [],
+          })),
         exterior_faces: Array.isArray(exteriorFaces) ? exteriorFaces : [],
       };
     });

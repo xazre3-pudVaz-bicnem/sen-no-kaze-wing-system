@@ -96,6 +96,31 @@ describe('亀有実受注案件ローカルfixture', () => {
     expect(request.message).toContain('容積率200%');
   });
 
+  it('切り出した平面図・立面図4面と元資料情報を案件資料として保持する', () => {
+    const db = seedFixture();
+    expect(db.caseDocuments).toHaveLength(9);
+    const previews = db.caseDocuments.filter((row: { preview_url: string | null }) => row.preview_url);
+    expect(previews).toHaveLength(5);
+    expect(previews.map((row: { title: string }) => row.title)).toEqual([
+      '1階・2階 平面図',
+      '南側立面図',
+      '東側立面図',
+      '西側立面図',
+      '北側立面図',
+    ]);
+    expect(previews.every((row: { url: string | null }) => row.url?.startsWith('/images/cases/kameari-test/'))).toBe(true);
+
+    const latestEstimate = db.caseDocuments.find(
+      (row: { kind: string; is_latest: boolean; title: string }) => row.kind === 'estimate' && row.is_latest
+    );
+    expect(latestEstimate.title).toBe('見積書');
+    expect(latestEstimate.document_date).toBe('2026-09-20');
+    expect(latestEstimate.url).toBeNull();
+
+    const siteDocs = db.caseDocuments.filter((row: { kind: string }) => row.kind === 'site');
+    expect(siteDocs.map((row: { title: string }) => row.title)).toEqual(['配置・敷地図', '都市計画情報']);
+  });
+
   it('担当者と顧客を実案件名で表示できる', () => {
     const db = seedFixture();
     const customer = db.profiles.find((profile: { role_code: string }) => profile.role_code === 'customer');

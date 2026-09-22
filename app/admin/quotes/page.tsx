@@ -11,6 +11,7 @@ import {
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
+import { CaseManagementNav } from '@/components/admin/case-management-nav';
 import { matchesRegion, parseAddress, PREFECTURES, readRegionFilter } from '@/lib/domain/address';
 
 const SPEC_LABELS: Record<string, string> = {
@@ -113,6 +114,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-3">
         <CasePageHeading role={actor.role} caseCount={latest.length} />
+        <CaseManagementNav role={actor.role} active="cases" />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}
@@ -184,12 +186,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     );
   }
 
-  const [requests, quotes, configurations, models, profiles] = await Promise.all([
+  const [requests, quotes, configurations, models, profiles, contacts] = await Promise.all([
     store.listQuoteRequests(),
     store.listAllQuotes(),
     actor.role === 'admin' ? store.listAllConfigurations() : Promise.resolve([]),
     actor.role === 'admin' ? store.listModels({ includeDraft: true }) : Promise.resolve([]),
     actor.role === 'admin' ? store.listProfiles() : Promise.resolve([]),
+    actor.role === 'admin' ? store.listContactMessages() : Promise.resolve([]),
   ]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
   const configurationById = new Map(configurations.map((configuration) => [configuration.id, configuration]));
@@ -256,9 +259,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const acceptedCount = shownQuotes.filter((quote) => quote.status === 'accepted').length;
   const filtersActive = Boolean(textQuery || statusFilter || dealerFilter || filter.block || filter.pref || filter.city);
 
+  const savedCount = configurations.filter((configuration) => configuration.status === 'draft').length;
+  const inquiryCount = contacts.filter((contact) => contact.status === 'new').length;
+
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-3">
       <CasePageHeading role={actor.role} caseCount={requests.length} />
+      <CaseManagementNav role={actor.role} active="cases" savedCount={savedCount} inquiryCount={inquiryCount} />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}

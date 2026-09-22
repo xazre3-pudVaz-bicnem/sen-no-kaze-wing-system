@@ -44,7 +44,16 @@ begin
   end if;
 
   select jsonb_build_object(
-           'configuration', to_jsonb(c),
+           'configuration', jsonb_build_object(
+             'id', c.id,
+             'base_model_id', c.base_model_id,
+             'status', c.status,
+             'finish_level', c.finish_level,
+             'spec_code', c.spec_code,
+             'site_prefecture', c.site_prefecture,
+             'site_municipality', c.site_municipality,
+             'site_location_undecided', c.site_location_undecided
+           ),
            'items', coalesce(
              (
                select jsonb_agg(to_jsonb(ci) order by ci.id)

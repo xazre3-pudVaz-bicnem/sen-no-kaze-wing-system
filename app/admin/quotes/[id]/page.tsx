@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
@@ -36,6 +37,7 @@ export default async function AdminQuoteDetailPage({
     store.listOptions(),
   ]);
   const dealers = profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer');
+  const assignedDealer = dealers.find((dealer) => dealer.id === quote.dealer_id);
   const freeCategory = categories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const freeProducts = options
     .filter((o) => o.category_id === freeCategory?.id && o.status === 'published' && (isAdmin || o.owner_id === actor.id))
@@ -65,14 +67,61 @@ export default async function AdminQuoteDetailPage({
       }
     >
       <BackLink href="/admin/quotes" label="一覧へ戻る" />
-      {/* grid の子は既定で min-width:auto。中の表（min-w-[44rem]）に押し広げられるので min-w-0 を付ける */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-6">
+      <nav aria-label="案件詳細の業務領域" className="overflow-x-auto border-y border-line py-3">
+        <div className="flex w-max gap-2 whitespace-nowrap text-sm">
+          <a href="#case-overview" className="btn-ghost btn-sm">案件概要</a>
+          <a href="#quote-document" className="btn-ghost btn-sm">見積書</a>
+          <a href="#plan-board" className="btn-ghost btn-sm">プランボード</a>
+          <a href="#case-documents" className="btn-ghost btn-sm">契約・図面・資料</a>
+          <a href="#manufacturing" className="btn-ghost btn-sm">製造・施工</a>
+          <a href="#handover" className="btn-ghost btn-sm">引渡し・アフター</a>
+        </div>
+      </nav>
+
+      <section id="case-overview" className="scroll-mt-6">
+        <h2 className="mb-3 text-lg">案件概要</h2>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="card p-5 text-sm">
+            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              <div><dt className="text-xs text-muted">顧客番号</dt><dd className="mt-1 font-mono">{quote.customer_no ?? profile?.customer_no ?? '—'}</dd></div>
+              <div><dt className="text-xs text-muted">顧客名</dt><dd className="mt-1">{request?.contact.full_name ?? quote.customer_name}</dd></div>
+              <div><dt className="text-xs text-muted">法人名</dt><dd className="mt-1">{request?.contact.company_name ?? quote.customer_company ?? '—'}</dd></div>
+              <div><dt className="text-xs text-muted">メール</dt><dd className="mt-1 break-all">{request?.contact.email ?? profile?.email ?? '—'}</dd></div>
+              <div><dt className="text-xs text-muted">電話</dt><dd className="mt-1">{request?.contact.phone ?? profile?.phone ?? '—'}</dd></div>
+              <div><dt className="text-xs text-muted">住所</dt><dd className="mt-1">{request?.contact.address ?? profile?.address ?? '—'}</dd></div>
+              <div><dt className="text-xs text-muted">設置予定地</dt><dd className="mt-1">{request?.contact.site_address || '—'}</dd></div>
+              <div><dt className="text-xs text-muted">対象モデル</dt><dd className="mt-1">{quote.base_model_name}</dd></div>
+            </dl>
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-xs text-muted">ご要望</p>
+              <p className="mt-1 whitespace-pre-wrap text-ink-soft">{request?.message || '—'}</p>
+            </div>
+          </div>
+          <aside className="space-y-4">
+            <div className="card p-4 text-sm">
+              <p className="font-semibold">案件の状態</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge tone="navy">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+                {request && <Badge>{QUOTE_REQUEST_STATUS_LABELS[request.status]}</Badge>}
+              </div>
+              <dl className="mt-4 space-y-2 text-ink-soft">
+                <div><dt className="inline text-muted">担当代理店：</dt><dd className="inline">{assignedDealer?.company_name ?? assignedDealer?.full_name ?? (quote.dealer_id ? '割当済み' : '未割当')}</dd></div>
+                <div><dt className="inline text-muted">見積番号：</dt><dd className="inline font-mono">{quote.quote_no}（第{quote.revision}版）</dd></div>
+              </dl>
+            </div>
+            {isAdmin && <AssignDealerForm quote={quote} dealers={dealers} />}
+          </aside>
+        </div>
+      </section>
+
+      <section id="quote-document" className="scroll-mt-6">
+        <h2 className="mb-3 text-lg">見積書</h2>
+        <div className="space-y-6">
           <div className="card overflow-hidden">
             <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />
           </div>
           <p className="text-xs text-muted">
-            金額は発行時点のスナップショットです。マスター価格を変更しても変わりません。
+            金額は発行時点の確定内容です。マスター価格を変更しても変わりません。
             別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
           </p>
           {sp.created && (
@@ -93,34 +142,40 @@ export default async function AdminQuoteDetailPage({
           )}
           {isAdmin && <QuoteStatusForm quote={quote} request={request} />}
         </div>
-        <aside className="min-w-0 space-y-4">
-          {isAdmin && <AssignDealerForm quote={quote} dealers={dealers} />}
-          <div className="card p-4 text-sm">
-            <p className="font-semibold">状態</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Badge tone="navy">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
-              {request && <Badge>{QUOTE_REQUEST_STATUS_LABELS[request.status]}</Badge>}
-            </div>
-            <p className="mt-3 text-xs text-muted">PDF：{document ? `生成済み（${formatDate(document.generated_at, true)}）` : '未生成（初回表示時に生成）'}</p>
-          </div>
-          <div className="card p-4 text-sm">
-            <p className="font-semibold">顧客情報</p>
-            <dl className="mt-2 space-y-1 text-ink-soft">
-              <div><dt className="inline text-muted">顧客番号：</dt><dd className="inline font-mono">{quote.customer_no ?? profile?.customer_no ?? '—'}</dd></div>
-              <div><dt className="inline text-muted">氏名：</dt><dd className="inline">{request?.contact.full_name ?? quote.customer_name}</dd></div>
-              <div><dt className="inline text-muted">法人：</dt><dd className="inline">{request?.contact.company_name ?? quote.customer_company ?? '—'}</dd></div>
-              <div><dt className="inline text-muted">メール：</dt><dd className="inline">{request?.contact.email ?? profile?.email}</dd></div>
-              <div><dt className="inline text-muted">電話：</dt><dd className="inline">{request?.contact.phone ?? profile?.phone}</dd></div>
-              <div><dt className="inline text-muted">住所：</dt><dd className="inline">{request?.contact.address ?? profile?.address}</dd></div>
-              <div><dt className="inline text-muted">設置予定地：</dt><dd className="inline">{request?.contact.site_address || '—'}</dd></div>
-            </dl>
-          </div>
-          <div className="card p-4 text-sm">
-            <p className="font-semibold">ご要望</p>
-            <p className="mt-2 whitespace-pre-wrap text-ink-soft">{request?.message || '—'}</p>
-          </div>
-        </aside>
-      </div>
+      </section>
+
+      <section id="plan-board" className="scroll-mt-6">
+        <h2 className="mb-3 text-lg">プランボード</h2>
+        <div className="card p-5 text-sm">
+          <p className="font-semibold">{quote.base_model_name}</p>
+          <p className="mt-1 text-ink-soft">この案件に紐づく保存済みの仕様を確認します。</p>
+          {isAdmin ? (
+            <Link href={`/admin/configurations/${quote.configuration_id}`} className="btn-secondary btn-sm mt-4">保存された仕様を確認</Link>
+          ) : (
+            <p className="mt-4 text-xs text-muted">保存された仕様の確認は、閲覧権限のある利用者が行います。</p>
+          )}
+        </div>
+      </section>
+
+      <section id="case-documents" className="scroll-mt-6">
+        <h2 className="mb-3 text-lg">契約・図面・資料</h2>
+        <div className="card p-5 text-sm">
+          <p className="font-semibold">見積書PDF</p>
+          <p className="mt-1 text-ink-soft">{document ? `${document.file_name}（${formatDate(document.generated_at, true)}）` : '見積書PDFは初回表示時に生成されます。'}</p>
+          <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm mt-4">見積書PDFを開く</a>
+          <p className="mt-5 border-t border-line pt-4 text-xs text-muted">契約書・図面・案件資料の保存機能は、今後の工程で追加予定です。</p>
+        </div>
+      </section>
+
+      <section id="manufacturing" className="scroll-mt-6">
+        <h2 className="mb-3 text-lg">製造・施工</h2>
+        <div className="card p-5 text-sm text-muted">製造・施工の進捗を管理する機能は、今後の工程で追加予定です。</div>
+      </section>
+
+      <section id="handover" className="scroll-mt-6">
+        <h2 className="mb-3 text-lg">引渡し・アフター</h2>
+        <div className="card p-5 text-sm text-muted">引渡し・アフター対応を管理する機能は、今後の工程で追加予定です。</div>
+      </section>
     </AdminPage>
   );
 }

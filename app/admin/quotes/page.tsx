@@ -20,8 +20,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     const latest = mine.filter((q) => q.status !== 'superseded');
     return (
       <AdminPage
-        title="担当の見積"
-        lead={`割り当てられた見積 ${latest.length} 件。案件内容に合わせて見積を直接編集し、確定見積を発行できます。`}
+        title="担当案件"
+        lead={`割り当てられた案件 ${latest.length} 件。案件内容に合わせて見積書を確認・更新できます。`}
         actions={
           <Link href="/admin/quotes/new" className="btn-primary btn-sm" data-testid="new-quote-link">
             新規見積を作成
@@ -57,14 +57,14 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 </Td>
                 <Td right>
                   <Link href={`/admin/quotes/${q.id}`} className="btn-secondary btn-sm">
-                    見積を編集
+                    案件を開く
                   </Link>
                 </Td>
               </tr>
             ))}
             {latest.length === 0 && (
               <tr>
-                <Td className="text-center text-muted">割り当てられた見積はまだありません</Td>
+                <Td className="text-center text-muted">割り当てられた案件はまだありません</Td>
               </tr>
             )}
           </tbody>
@@ -91,7 +91,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   return (
     <AdminPage
-      title="見積依頼・見積書"
+      title="案件一覧"
       lead={`見積依頼 ${requests.length} 件`}
       actions={
         <Link href="/admin/quotes/new" className="btn-primary btn-sm" data-testid="new-quote-link">

@@ -5,6 +5,7 @@ import { QUOTE_REQUEST_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Stat, Table, Td, Th } from '@/components/admin/ui';
+import { CaseManagementNav } from '@/components/admin/case-management-nav';
 
 export default async function AdminDashboard() {
   const actor = await requireStaff();
@@ -18,6 +19,7 @@ export default async function AdminDashboard() {
     const mine = mineAll.filter((q) => q.status === 'issued');
     return (
       <AdminPage title="案件管理" lead="担当案件を確認し、必要に応じて見積書を更新・発行します。">
+        <CaseManagementNav role={actor.role} active="cases" />
         <div className="grid gap-4 sm:grid-cols-2">
           <Stat label="未読のお知らせ" value={unread.length} href="/admin/notifications" />
           <Stat label="対応が必要な案件" value={mine.length} href="/admin/quotes" />
@@ -52,6 +54,7 @@ export default async function AdminDashboard() {
 
   return (
     <AdminPage title="案件管理" lead="案件・見積依頼・お問い合わせの対応状況を確認します。">
+      <CaseManagementNav role={actor.role} active="cases" inquiryCount={contacts.filter((c) => c.status === 'new').length} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="未読のお知らせ" value={unread.length} href="/admin/notifications" />
         <Stat label="未対応の見積依頼" value={requests.filter((r) => r.status === 'new').length} href="/admin/quotes" />

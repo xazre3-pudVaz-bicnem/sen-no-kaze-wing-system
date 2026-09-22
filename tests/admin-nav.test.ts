@@ -15,13 +15,13 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
   });
 
-  it('お問い合わせは本部の案件管理に分類し、管理設定には含めない', () => {
+  it('問い合わせ受付は本部の案件管理に分類し、管理設定には含めない', () => {
     const sections = getAdminNavSections('admin');
     const caseItems = sections.find((section) => section.label === '案件管理')?.items.map((item) => item.label);
     const settingItems = sections.find((section) => section.label === '管理設定')?.items.map((item) => item.label);
 
-    expect(caseItems).toContain('お問い合わせ');
-    expect(settingItems).not.toContain('お問い合わせ');
+    expect(caseItems).toContain('問い合わせ受付');
+    expect(settingItems).not.toContain('問い合わせ受付');
     expect(settingItems).toEqual(['設定一覧', '操作マニュアル', 'ユーザー・権限', '変更履歴']);
   });
 

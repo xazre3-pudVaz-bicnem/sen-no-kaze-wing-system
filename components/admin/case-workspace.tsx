@@ -51,7 +51,7 @@ function buildInlineTabHref(
 ) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams ?? {})) {
-    if (!value || key === 'tab' || key === 'created' || key === 'from') continue;
+    if (!value || key === 'tab' || key === 'created' || key === 'revised' || key === 'from') continue;
     query.set(key, value);
   }
   query.set('case', quoteId);

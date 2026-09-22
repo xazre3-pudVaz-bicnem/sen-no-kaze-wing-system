@@ -16,8 +16,11 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   ]);
   // 代理店が登録できるのはフリー商品だけ（サーバーアクション側でも拒否している）
   const catalogEditor = canEditCatalog(actor.role);
-  const categories = catalogEditor ? allCategories : allCategories.filter((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const freeCategory = allCategories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
+  const requestedFreeCategory = Boolean(sp.category && sp.category === freeCategory?.id);
+  const categories = catalogEditor
+    ? (requestedFreeCategory ? allCategories : allCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE))
+    : allCategories.filter((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const defaultCategoryId = sp.category ?? (catalogEditor ? undefined : freeCategory?.id);
   const isFree = defaultCategoryId && defaultCategoryId === freeCategory?.id;
   const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;
@@ -25,7 +28,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
-      lead="商品登録は3STEPです。まず商品を作成し、保存後に商品情報をまとめて設定して、最後にお客様表示を確認します。"
+      lead="商品情報を入力し、内容を確認して登録します。"
     >
       <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       {returnTo && (
@@ -34,16 +37,15 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         </Alert>
       )}
 
-      <section className="card p-4 sm:p-5" aria-label="商品登録の3ステップ">
-        <h2 className="font-semibold">商品登録の3ステップ</h2>
+      <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
+        <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          細かい入力項目を別々の画面にせず、登録開始・商品情報・お客様表示の3つにまとめています。
+          商品情報を入力した後、登録済みの内容をお客様表示で確認します。
         </p>
-        <ol className="mt-4 grid gap-2 sm:grid-cols-3">
+        <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
-            ['1', '登録開始', 'カテゴリーを選び、商品を作成'],
-            ['2', '商品情報を登録', '商品・資料・選択項目・価格を設定'],
-            ['3', 'お客様表示・登録', '表示を確認して登録'],
+            ['1', '商品情報', '商品・資料・選択項目・価格を入力'],
+            ['2', '内容確認・登録', '登録後、お客様表示を確認'],
           ].map(([no, label, note], index) => (
             <li key={no} className={`rounded-xl border px-3 py-3 ${index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
               <span className="text-xs font-semibold text-brown">STEP {no}</span>

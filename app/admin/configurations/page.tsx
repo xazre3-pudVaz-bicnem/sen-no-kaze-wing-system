@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { CONFIGURATION_STATUS_LABELS } from '@/lib/domain/types';
@@ -7,9 +8,11 @@ import { Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { matchesRegion, parseAddress, readRegionFilter } from '@/lib/domain/address';
 import { RegionFilter } from '@/components/admin/region-filter';
+import { CaseManagementNav } from '@/components/admin/case-management-nav';
 
 export default async function AdminConfigurationsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
+  const actor = await requireStaff('/admin/configurations');
   const store = await getStore();
   const [configurations, models] = await Promise.all([store.listAllConfigurations(), store.listModels({ includeDraft: true })]);
   const nameOf = new Map(models.map((m) => [m.id, m.name]));
@@ -27,7 +30,8 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
   const shown = configurations.filter((c) => matchesRegion(c.user_address, filter));
 
   return (
-    <AdminPage title="保存された仕様" lead={`全顧客の保存データ ${configurations.length} 件`}>
+    <AdminPage title="保存済み仕様" lead={`シミュレーター等で保存されている仕様 ${configurations.length} 件。状態は既存Configurationの値をそのまま表示します。`}>
+      <CaseManagementNav role={actor.role} active="saved" savedCount={configurations.length} />
       <RegionFilter value={filter} cities={cityPool} total={configurations.length} matched={shown.length} />
       <Table minWidth="56rem">
         <thead className="bg-sand/60"><tr><Th>更新日時</Th><Th>保存名</Th><Th>モデル</Th><Th>顧客</Th><Th>住所</Th><Th>状態</Th><Th right>合計（税込）</Th><Th></Th></tr></thead>

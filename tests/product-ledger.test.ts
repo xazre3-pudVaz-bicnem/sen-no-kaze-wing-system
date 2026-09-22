@@ -17,4 +17,8 @@ describe('商品台帳の絞り込み', () => {
   it('商品名・メーカー・型番で検索できる', () => {
     expect(optionMatchesLedgerFilters(option(), { query: 'メーカー A-1', categoryId: '', status: '', quick: 'all' })).toBe(true);
   });
+
+  it('使用中・非公開の重複クイックフィルターを持たない', () => {
+    expect(optionMatchesLedgerFilters(option(), { query: '', categoryId: '', status: '', quick: 'draft' })).toBe(false);
+  });
 });

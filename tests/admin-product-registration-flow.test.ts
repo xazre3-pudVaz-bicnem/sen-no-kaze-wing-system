@@ -32,12 +32,12 @@ const variants = fs.readFileSync(
 );
 
 describe('商品登録管理画面の業務フロー', () => {
-  it('商品登録を3つの大きな作業単位にまとめる', () => {
-    for (const label of ['登録開始', '商品情報を登録', 'お客様表示・登録']) {
+  it('商品登録を2つの大きな作業単位にまとめる', () => {
+    for (const label of ['商品情報', '内容確認・登録']) {
       expect(editPage).toContain(label);
       expect(newPage).toContain(label);
     }
-    expect(editPage).toContain('aria-label="商品登録の3ステップ"');
+    expect(editPage).toContain('aria-label="商品登録の2ステップ"');
     expect(editPage).toContain('mode="product"');
     expect(editPage).toContain('mode="pricing"');
     expect(editPage).toContain('data-testid="option-registration-info"');
@@ -45,18 +45,26 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).not.toContain('発注内容確認');
     expect(editPage).not.toContain('商品登録の7ステップ');
   });
-  it('新規登録でも3STEPとreturn_to導線を案内する', () => {
-    expect(newPage).toContain('商品登録の3ステップ');
+  it('新規登録でも2STEPとreturn_to導線を案内する', () => {
+    expect(newPage).toContain('商品登録の2ステップ');
     expect(newPage).toContain('登録して見積テンプレートへ戻る');
     expect(newPage).toContain('return_to');
     expect(forms).toContain('登録して見積テンプレートへ戻る');
     expect(forms).toContain('商品を作成して次へ');
+  });
+
+  it('正式商品とフリー商品の登録導線を分ける', () => {
+    expect(newPage).toContain('requestedFreeCategory');
+    expect(newPage).toContain('FREE_PRODUCT_CATEGORY_CODE');
+    expect(editPage).toContain("'/admin/free-products'");
+    expect(listPage).toContain('catalogOptions');
   });
   it('商品特定は既存値を候補として使える', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');
     expect(forms).toContain('既存商品にあるメーカーは候補から選べます');
     expect(forms).toContain('現在の商品マスターではシリーズ名と型番を1項目で管理します');
+    expect(forms).toContain('型番・品番');
   });
 
   it('商品情報画面にメイン画像・サブ画像・メーカーPDFをまとめる', () => {

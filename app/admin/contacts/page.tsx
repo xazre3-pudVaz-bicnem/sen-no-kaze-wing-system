@@ -4,16 +4,18 @@ import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
 import { ContactStatusForm } from '@/components/admin/forms';
+import { CaseManagementNav } from '@/components/admin/case-management-nav';
 
 export default async function AdminContactsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin();
+  const actor = await requireAdmin();
   const sp = await searchParams;
   const store = await getStore();
   const messages = await store.listContactMessages();
   const newCount = messages.filter((m) => m.status === 'new').length;
 
   return (
-    <AdminPage title="お問い合わせ" lead={`全 ${messages.length} 件（未対応 ${newCount} 件）`}>
+    <AdminPage title="問い合わせ受付" lead={`全 ${messages.length} 件（未対応 ${newCount} 件）`}>
+      <CaseManagementNav role={actor.role} active="inquiries" inquiryCount={newCount} />
       <FlashMessages sp={sp} />
       <Table minWidth="60rem">
         <thead className="bg-sand/60">

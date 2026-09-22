@@ -80,7 +80,7 @@ export default async function EditOptionPage({
     <AdminPage
       title={option.name}
       lead={option.code}
-      actions={canEditThisOption ? (
+      actions={catalogEditor ? (
         <form action={deleteOptionAction}>
           <input type="hidden" name="id" value={option.id} />
           <ConfirmSubmit
@@ -92,24 +92,18 @@ export default async function EditOptionPage({
         </form>
       ) : undefined}
     >
-      <BackLink href={returnTo ?? '/admin/options'} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
+      <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
 
-      <section className="card p-4 sm:p-5" aria-label="商品登録の3ステップ">
+      <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="font-semibold">商品登録の流れ</h2>
-            <p className="mt-1 text-xs text-muted">登録開始後は、商品情報を1画面で設定し、最後にお客様表示を確認します。</p>
+            <p className="mt-1 text-xs text-muted">商品情報を確認・編集し、お客様表示で登録内容を確認します。</p>
           </div>
-          <p className="text-xs font-semibold text-brown">現在：STEP {step === 'preview' ? 3 : 2}</p>
+          <p className="text-xs font-semibold text-brown">現在：STEP {step === 'preview' ? 2 : 1}</p>
         </div>
-        <nav className="mt-4 grid gap-2 sm:grid-cols-3" aria-label="商品登録ステップ">
-          <div className="min-h-24 rounded-xl border border-line bg-ivory/30 px-3 py-3">
-            <span className="text-xs font-semibold text-brown">STEP 1</span>
-            <span className="mt-1 block text-sm font-semibold">登録開始</span>
-            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">カテゴリーを選び、商品を作成</span>
-            <span className="mt-2 inline-flex rounded-full bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-muted">完了</span>
-          </div>
+        <nav className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="商品登録ステップ">
           <Link
             href={stepHref('info')}
             aria-current={step === 'info' ? 'step' : undefined}
@@ -119,8 +113,8 @@ export default async function EditOptionPage({
                 : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
             }`}
           >
-            <span className="text-xs font-semibold text-brown">STEP 2</span>
-            <span className="mt-1 block text-sm font-semibold">商品情報を登録</span>
+            <span className="text-xs font-semibold text-brown">STEP 1</span>
+            <span className="mt-1 block text-sm font-semibold">商品情報</span>
             <span className="mt-1 block text-[0.7rem] leading-5 text-muted">商品・資料・選択項目・価格を設定</span>
           </Link>
           <Link
@@ -132,8 +126,8 @@ export default async function EditOptionPage({
                 : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
             }`}
           >
-            <span className="text-xs font-semibold text-brown">STEP 3</span>
-            <span className="mt-1 block text-sm font-semibold">お客様表示・登録</span>
+            <span className="text-xs font-semibold text-brown">STEP 2</span>
+            <span className="mt-1 block text-sm font-semibold">内容確認・登録</span>
             <span className="mt-1 block text-[0.7rem] leading-5 text-muted">お客様画面での見え方を最終確認</span>
           </Link>
         </nav>
@@ -142,7 +136,7 @@ export default async function EditOptionPage({
       {step === 'info' && (canEditThisOption ? (
         <section className="space-y-6" data-testid="option-registration-info">
           <div>
-            <h2 className="text-xl font-semibold">STEP 2 商品情報を登録</h2>
+            <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
             <p className="mt-1 text-sm text-muted">
               商品情報、画像・メーカー資料、お客様が選ぶ色・仕様、商品価格と公開設定をこの画面でまとめて設定します。
             </p>
@@ -178,7 +172,7 @@ export default async function EditOptionPage({
       {step === 'preview' && (
         <section className="space-y-5" data-testid="option-customer-preview">
           <div>
-            <h2 className="text-xl font-semibold">STEP 3 お客様表示・登録</h2>
+            <h2 className="text-xl font-semibold">STEP 2 内容確認・登録</h2>
             <p className="mt-1 text-sm text-muted">シミュレーターの商品詳細でお客様に伝わる内容を、登録済みデータで確認します。</p>
           </div>
 
@@ -258,8 +252,8 @@ export default async function EditOptionPage({
                               {choice.price_on_request
                                 ? '別途見積'
                                 : choice.extra_price > 0
-                                  ? formatYen(choice.extra_price)
-                                  : formatYen(0)}
+                                  ? `+${formatYen(choice.extra_price)}`
+                                  : '追加なし'}
                             </p>
                           </div>
                         </div>

@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { cn } from '@/lib/utils';
+import { CaseManagementNav } from '@/components/admin/case-management-nav';
 
 const EMAIL_LABELS: Record<string, string> = {
   pending: 'メール送信待ち',
@@ -38,6 +39,7 @@ export default async function AdminNotificationsPage({ searchParams }: { searchP
         ) : null
       }
     >
+      <CaseManagementNav role={actor.role} active="notifications" />
       <FlashMessages sp={sp} />
 
       {!mailConfigured() && (

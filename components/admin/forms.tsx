@@ -548,7 +548,7 @@ export function OptionForm({
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
             <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番で商品を特定します。</p>
+            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、型番・品番で商品を特定します。</p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
@@ -573,7 +573,7 @@ export function OptionForm({
               <Input id={`name-${mode}`} name="name" defaultValue={option?.name} required data-testid="option-name" />
             </Field>
             <Field
-              label="シリーズ・型番"
+              label="型番・品番"
               htmlFor={`model_no-${mode}`}
               hint="現在の商品マスターではシリーズ名と型番を1項目で管理します。既存値は候補から選べます"
               errors={e.model_no}
@@ -950,27 +950,42 @@ export function ContactStatusForm({ id, status }: { id: string; status: 'new' | 
 
 /* ---------- 見積ステータス ---------- */
 
-export function QuoteStatusForm({ quote, request }: { quote: Quote; request: QuoteRequest | null }) {
+export function QuoteStatusForm({
+  quote,
+  request,
+  compact = false,
+}: {
+  quote: Quote;
+  request: QuoteRequest | null;
+  compact?: boolean;
+}) {
   const [state, action, pending] = useActionState(updateQuoteStatusAction, initial);
   return (
-    <form action={action} className="card space-y-4 p-6" noValidate>
+    <form action={action} className={compact ? 'space-y-2' : 'card space-y-4 p-6'} noValidate>
       <input type="hidden" name="quote_id" value={quote.id} />
-      <p className="font-semibold">ステータス変更</p>
+      {!compact && <p className="font-semibold">ステータス変更</p>}
       <Status state={state} />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={compact ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-4 sm:grid-cols-2'}>
         <Field label="見積書の状態" htmlFor="q-status" required>
-          <Select id="q-status" name="status" defaultValue={quote.status}>
+          <Select id="q-status" name="status" defaultValue={quote.status} className={compact ? 'py-1 text-xs' : undefined}>
             {Object.entries(QUOTE_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
         </Field>
         <Field label="見積依頼の対応状況" htmlFor="q-req-status">
-          <Select id="q-req-status" name="request_status" defaultValue={request?.status ?? ''}>
+          <Select id="q-req-status" name="request_status" defaultValue={request?.status ?? ''} className={compact ? 'py-1 text-xs' : undefined}>
             <option value="">変更しない</option>
             {Object.entries(QUOTE_REQUEST_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
         </Field>
       </div>
-      <SubmitButton pending={pending} label="更新する" />
+      {compact ? (
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending && <Spinner />}
+          更新する
+        </Button>
+      ) : (
+        <SubmitButton pending={pending} label="更新する" />
+      )}
     </form>
   );
 }

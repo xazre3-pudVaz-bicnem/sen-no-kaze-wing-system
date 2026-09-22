@@ -465,6 +465,39 @@ export class LocalStore implements DataStore {
       return { configuration, items: db.configurationItems.filter((i) => i.configuration_id === id) };
     });
   }
+  async getCasePlanConfiguration(quoteId: string, actor: SessionUser) {
+    return this.read((db) => {
+      const quote = db.quotes.find((row) => row.id === quoteId);
+      if (!quote) return null;
+      const isStaff = hasRoleAtLeast(actor.role, 'dealer');
+      if (!isStaff) return null;
+      const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');
+      if (!canViewAny && quote.dealer_id !== actor.id) return null;
+      const configuration = db.configurations.find((row) => row.id === quote.configuration_id);
+      if (!configuration) return null;
+      const exteriorFaces = (configuration as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces;
+      return {
+        configuration: {
+          id: configuration.id,
+          base_model_id: configuration.base_model_id,
+          status: configuration.status,
+          finish_level: configuration.finish_level,
+          spec_code: configuration.spec_code,
+          site_prefecture: configuration.site_prefecture ?? null,
+          site_municipality: configuration.site_municipality ?? null,
+          site_location_undecided: configuration.site_location_undecided ?? false,
+        },
+        items: db.configurationItems
+          .filter((item) => item.configuration_id === configuration.id)
+          .map((item) => ({
+            option_id: item.option_id,
+            quantity: item.quantity,
+            variant_choice_ids: item.variant_choice_ids ?? [],
+          })),
+        exterior_faces: Array.isArray(exteriorFaces) ? exteriorFaces : [],
+      };
+    });
+  }
   static recalculateInMemory(db: LocalDb, cfg: Configuration) {
     const model = db.models.find((m) => m.id === cfg.base_model_id);
     if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');

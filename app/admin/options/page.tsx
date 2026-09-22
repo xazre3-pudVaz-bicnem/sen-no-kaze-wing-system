@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { canEditCatalog } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { Badge, Input, Select } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
@@ -17,12 +17,15 @@ export default async function AdminOptionsPage({
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
+  const freeCategoryId = categories.find((category) => category.code === FREE_PRODUCT_CATEGORY_CODE)?.id;
+  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE);
+  const catalogOptions = freeCategoryId ? options.filter((option) => option.category_id !== freeCategoryId) : options;
   const categoryMap = new Map(categories.map((category) => [category.id, category]));
 
   const q = (sp.q ?? '').trim().toLowerCase();
   const categoryId = sp.category ?? '';
   const status = sp.status ?? '';
-  const filtered = options.filter((option) => {
+  const filtered = catalogOptions.filter((option) => {
     if (categoryId && option.category_id !== categoryId) return false;
     if (status && option.status !== status) return false;
     if (!q) return true;
@@ -60,7 +63,7 @@ export default async function AdminOptionsPage({
           <span className="label">カテゴリー</span>
           <Select name="category" defaultValue={categoryId} className="mt-1 w-full">
             <option value="">すべて</option>
-            {categories.map((category) => (
+            {catalogCategories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>
             ))}
           </Select>
@@ -81,9 +84,9 @@ export default async function AdminOptionsPage({
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          {filtered.length === options.length
-            ? `${options.length}商品`
-            : `${filtered.length} / ${options.length}商品を表示`}
+          {filtered.length === catalogOptions.length
+            ? `${catalogOptions.length}商品`
+            : `${filtered.length} / ${catalogOptions.length}商品を表示`}
         </p>
       </div>
 

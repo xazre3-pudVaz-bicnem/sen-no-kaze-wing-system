@@ -259,7 +259,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
         redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
       }
     }
-    redirect('/admin/options/' + createdId + '?saved=1');
+    redirect('/admin/options/' + createdId + '?step=preview&saved=1');
   }
   return { ok: true, message: '保存しました' };
 }
@@ -868,7 +868,7 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
   } catch (e) {
     return errState(e);
   }
-  redirect(`/admin/quotes/${newId}?revised=1`);
+  redirect(`/admin/quotes?case=${encodeURIComponent(newId)}&tab=estimate&revised=1#case-workspace`);
 }
 
 /** 管理者：ユーザーの権限を変更する（自分自身は変更できない） */

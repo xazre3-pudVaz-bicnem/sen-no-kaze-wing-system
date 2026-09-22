@@ -16,8 +16,11 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   ]);
   // 代理店が登録できるのはフリー商品だけ（サーバーアクション側でも拒否している）
   const catalogEditor = canEditCatalog(actor.role);
-  const categories = catalogEditor ? allCategories : allCategories.filter((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const freeCategory = allCategories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
+  const requestedFreeCategory = Boolean(sp.category && sp.category === freeCategory?.id);
+  const categories = catalogEditor
+    ? (requestedFreeCategory ? allCategories : allCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE))
+    : allCategories.filter((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const defaultCategoryId = sp.category ?? (catalogEditor ? undefined : freeCategory?.id);
   const isFree = defaultCategoryId && defaultCategoryId === freeCategory?.id;
   const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;

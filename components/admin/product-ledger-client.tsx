@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Ellipsis } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, X } from 'lucide-react';
 import { ProductDetail } from '@/components/simulator/product-detail';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Badge, Input, Select } from '@/components/ui';
@@ -31,6 +31,19 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
   }, [selected, variants]);
   useEffect(() => setPreviewVariantIds(preview.defaults), [preview.defaults]); // 選択中商品のみのローカル表示状態。保存はしない。
   /* eslint-enable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!selectedId) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedId(null);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [selectedId]);
   const onPreviewVariantChange = (choiceId: string, groupId: string) => {
     setPreviewVariantIds((current) => pruneHiddenVariantChoices(preview.groups, preview.choices, [...current.filter((id) => preview.choices.find((choice) => choice.id === id)?.group_id !== groupId), choiceId]));
   };
@@ -48,6 +61,13 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
   const pageOptions = filtered.slice(pageStart, pageStart + pageSize);
   const firstShown = filtered.length ? pageStart + 1 : 0;
   const lastShown = Math.min(pageStart + pageSize, filtered.length);
+  const selectedIndex = selected ? filtered.findIndex((option) => option.id === selected.id) : -1;
+  const selectAt = (index: number) => {
+    const option = filtered[index];
+    if (!option) return;
+    setPage(Math.floor(index / pageSize) + 1);
+    setSelectedId(option.id);
+  };
   const resetFilters = () => { setQuery(''); setCategoryId(''); setStatus(''); setQuick('all'); setSort('updated'); setPage(1); };
   return <div className="space-y-5">
     <div className="grid items-start gap-4 md:grid-cols-[11rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)]">
@@ -132,7 +152,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
               const attention = needsProductAttention(o);
               return <tr key={o.id} className={selectedId === o.id ? 'bg-ivory/65' : 'bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
                 <td className="px-4 py-2.5">
-                  <button type="button" className="flex w-full items-center gap-3 text-left" onClick={() => setSelectedId(o.id)}>
+                  <button type="button" aria-haspopup="dialog" className="flex w-full items-center gap-3 text-left" onClick={() => setSelectedId(o.id)}>
                     <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">
                       {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="48px" className="object-contain" /> : '画像'}
                     </span>
@@ -150,7 +170,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
                 <td className="hidden px-4 py-2.5 text-muted xl:table-cell">{dash}</td>
                 <td className="px-4 py-2.5"><Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge></td>
                 <td className="px-3 py-2.5 text-right">
-                  <button type="button" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-9 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => setSelectedId(o.id)}>
+                  <button type="button" aria-haspopup="dialog" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-9 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => setSelectedId(o.id)}>
                     <Ellipsis className="size-4" aria-hidden="true" />
                   </button>
                 </td>
@@ -178,6 +198,100 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
       </div>}
     </section>
     </div>
-    {selected && category && <section className="space-y-5" data-testid="ledger-product-detail"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-brown">お客様への表示</p><h2 className="mt-1 text-xl font-semibold">シミュレーターと共通の表示</h2></div>{canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm">商品情報を編集</Link>}</div><div className="card p-4 sm:p-5"><p className="mb-3 text-xs text-muted">仕様の選択はこの画面内だけのプレビューです。保存はされません。</p><ProductDetail category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} onVariantChange={onPreviewVariantChange} /></div><div><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-brown">管理情報</p><h2 className="mt-1 text-xl font-semibold">商品・仕入れ情報</h2></div></div><div className="mt-3 grid gap-4 min-[900px]:grid-cols-2"><dl className="card p-4"><h3 className="mb-2 font-semibold">商品基本情報・カテゴリー固有仕様</h3><Row label="カテゴリー" value={category.name}/><Row label="メーカー" value={selected.manufacturer || dash}/><Row label="型番・品番" value={selected.model_no || '要設定'}/><Row label="サイズ・仕様" value={selected.size_note || dash}/><Row label="対象モデル" value={selected.base_model_id ? '特定モデル' : '全モデル共通'}/></dl><dl className="card p-4"><h3 className="mb-2 font-semibold">自社の仕入・発注情報</h3><Row label="自社仕入先" value={dash}/><Row label="自社発注コード" value={dash}/><Row label="自社仕入原価（税抜）" value={dash}/><Row label="発注単位" value={dash}/><Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/></dl></div><div className="mt-4 space-y-3"><details open={Boolean(selected.preview_key || selected.affects_views.length)} className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">シミュレーター・Web表示設定 <ChevronDown className="size-4" /></summary><dl className="border-t border-line px-4"><Row label="シミュレーター対象" value={selected.preview_key || selected.affects_views.length ? '対象' : '対象外'}/><Row label="公開状態" value={selected.status === 'published' ? '公開' : '下書き・非公開'}/><Row label="商品価格（税別）" value={selected.price_on_request ? '別途見積' : formatYen(selected.price)}/></dl></details><details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary><p className="border-t border-line px-4 py-3 text-sm text-muted">標準見積の使用先は、この画面で取得できる既存データにはありません。</p></details><details className="card"><summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary><dl className="border-t border-line px-4"><Row label="登録組織" value={selected.owner_id ? '登録者の組織' : '共通商品'}/><Row label="管理区分" value={selected.owner_id ? '登録者所有の商品' : '共通商品'}/><Row label="最終更新" value={date(selected.updated_at)}/><Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/></dl></details></div></div></section>}
+    {selected && category && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/55 p-0 sm:p-4" data-testid="ledger-product-detail-modal" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedId(null); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="ledger-product-detail-title" className="relative flex h-full w-full flex-col overflow-hidden bg-sand/40 shadow-2xl sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-line">
+        <header className="sticky top-0 z-20 border-b border-line bg-white/95 px-4 py-3 backdrop-blur sm:px-5">
+          <div className="flex items-start gap-3">
+            <span className="relative hidden size-14 shrink-0 overflow-hidden rounded-lg border border-line bg-sand sm:block">
+              {selected.image_url ? <SmartImage src={selected.image_url} alt="" fill sizes="56px" className="object-contain" /> : null}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.68rem] font-semibold tracking-wide text-brown">選択中の商品</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                <h2 id="ledger-product-detail-title" className="min-w-0 truncate text-lg font-semibold sm:text-xl">{selected.name}</h2>
+                <Badge tone={selected.status === 'published' ? 'success' : 'neutral'}>{selected.status === 'published' ? '公開中' : '下書き'}</Badge>
+                {needsProductAttention(selected) && <Badge tone="warn">要確認</Badge>}
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted">{[selected.manufacturer, selected.model_no].filter(Boolean).join(' ／ ') || selected.code}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm hidden sm:inline-flex">商品情報を編集</Link>}
+              <button type="button" aria-label="商品詳細を閉じる" title="閉じる" className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => setSelectedId(null)}>
+                <X className="size-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
+            <button type="button" className="btn-secondary btn-sm" disabled={selectedIndex <= 0} onClick={() => selectAt(selectedIndex - 1)}>
+              <ChevronLeft className="size-4" aria-hidden="true" /> 前の商品
+            </button>
+            <p className="text-xs text-muted">{selectedIndex + 1} / {filtered.length}</p>
+            <button type="button" className="btn-secondary btn-sm" disabled={selectedIndex < 0 || selectedIndex >= filtered.length - 1} onClick={() => selectAt(selectedIndex + 1)}>
+              次の商品 <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+          {canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm mt-3 w-full sm:hidden">商品情報を編集</Link>}
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="space-y-5">
+            <section>
+              <div>
+                <p className="text-xs font-semibold text-brown">お客様への表示</p>
+                <h3 className="mt-1 text-xl font-semibold">シミュレーターと共通の表示</h3>
+              </div>
+              <div className="card mt-3 p-4 sm:p-5">
+                <p className="mb-3 text-xs text-muted">仕様の選択はこの画面内だけのプレビューです。保存はされません。</p>
+                <ProductDetail category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} onVariantChange={onPreviewVariantChange} />
+              </div>
+            </section>
+            <section>
+              <p className="text-xs font-semibold text-brown">管理情報</p>
+              <h3 className="mt-1 text-xl font-semibold">商品・仕入れ情報</h3>
+              <div className="mt-3 grid gap-4 min-[900px]:grid-cols-2">
+                <dl className="card p-4">
+                  <h4 className="mb-2 font-semibold">商品基本情報・カテゴリー固有仕様</h4>
+                  <Row label="カテゴリー" value={category.name}/>
+                  <Row label="メーカー" value={selected.manufacturer || dash}/>
+                  <Row label="型番・品番" value={selected.model_no || '要設定'}/>
+                  <Row label="サイズ・仕様" value={selected.size_note || dash}/>
+                  <Row label="対象モデル" value={selected.base_model_id ? '特定モデル' : '全モデル共通'}/>
+                </dl>
+                <dl className="card p-4">
+                  <h4 className="mb-2 font-semibold">自社の仕入・発注情報</h4>
+                  <Row label="自社仕入先" value={dash}/>
+                  <Row label="自社発注コード" value={dash}/>
+                  <Row label="自社仕入原価（税抜）" value={dash}/>
+                  <Row label="発注単位" value={dash}/>
+                  <Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/>
+                </dl>
+              </div>
+              <div className="mt-4 space-y-3">
+                <details open={Boolean(selected.preview_key || selected.affects_views.length)} className="card">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">シミュレーター・Web表示設定 <ChevronDown className="size-4" /></summary>
+                  <dl className="border-t border-line px-4">
+                    <Row label="シミュレーター対象" value={selected.preview_key || selected.affects_views.length ? '対象' : '対象外'}/>
+                    <Row label="公開状態" value={selected.status === 'published' ? '公開' : '下書き・非公開'}/>
+                    <Row label="商品価格（税別）" value={selected.price_on_request ? '別途見積' : formatYen(selected.price)}/>
+                  </dl>
+                </details>
+                <details className="card">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary>
+                  <p className="border-t border-line px-4 py-3 text-sm text-muted">標準見積の使用先は、この画面で取得できる既存データにはありません。</p>
+                </details>
+                <details className="card">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary>
+                  <dl className="border-t border-line px-4">
+                    <Row label="登録組織" value={selected.owner_id ? '登録者の組織' : '共通商品'}/>
+                    <Row label="管理区分" value={selected.owner_id ? '登録者所有の商品' : '共通商品'}/>
+                    <Row label="最終更新" value={date(selected.updated_at)}/>
+                    <Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/>
+                  </dl>
+                </details>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>}
   </div>;
 }

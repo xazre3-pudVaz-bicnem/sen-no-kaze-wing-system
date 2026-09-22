@@ -13,6 +13,12 @@ describe('商品台帳の入口', () => {
     expect(ledger).not.toContain('/admin/base-breakdown');
   });
 
+  it('フリー商品を正式な商品台帳へ混ぜない', () => {
+    expect(ledger).toContain('FREE_PRODUCT_CATEGORY_CODE');
+    expect(ledger).toContain('catalogOptions');
+    expect(ledger).toContain('catalogCategories');
+  });
+
   it('一覧全体でなく表領域だけを横スクロールする共通Tableを使う', () => {
     expect(ledger).toContain('<Table>');
   });

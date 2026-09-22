@@ -34,12 +34,20 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('{KIND_LABELS[r.kind]}');
   });
 
+  it('keeps non-editable base items visible in the same sheet for dealer editing', () => {
+    expect(form).toContain('const lockedItems = sheetMode ? items.filter((i) => !editable(i.kind)) : [];');
+    expect(form).toContain('本体・固定項目（変更不可）');
+    expect(form).toContain('data-testid={`revision-locked-row-${index}`}');
+    expect(form).toContain('<LockKeyhole');
+  });
+
   it('keeps existing row actions, product picker, live totals and next-revision issuance', () => {
     expect(form).toContain('data-testid="open-catalog-picker"');
     expect(form).toContain('data-testid="add-installation"');
     expect(form).toContain('data-testid="add-interior-exterior"');
     expect(form).toContain('data-testid="add-option"');
     expect(form).toContain('data-testid="add-free"');
+    expect(form).toContain('lastSameKind');
     expect(form).toContain('formatYen(amountOf(r))');
     expect(form).toContain('data-testid="revision-preview"');
     expect(form).toContain('第${quote.revision + 1}版として発行する');

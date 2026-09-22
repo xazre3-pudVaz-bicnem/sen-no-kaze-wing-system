@@ -50,8 +50,8 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
   const lastShown = Math.min(pageStart + pageSize, filtered.length);
   const resetFilters = () => { setQuery(''); setCategoryId(''); setStatus(''); setQuick('all'); setSort('updated'); setPage(1); };
   return <div className="space-y-5">
-    <div className="grid items-start gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
-      <aside className="hidden lg:sticky lg:top-4 lg:block">
+    <div className="grid items-start gap-4 md:grid-cols-[11rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)]">
+      <aside className="hidden md:sticky md:top-4 md:block">
         <div className="card overflow-hidden">
           <div className="border-b border-line px-4 py-3">
             <p className="text-sm font-semibold">カテゴリー</p>
@@ -75,12 +75,12 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
         </div>
         <p className="text-xs text-muted">{filtered.length} / {options.length} 商品</p>
       </div>
-      <div className="sticky top-0 z-20 grid gap-2 border-b border-line bg-white/95 p-3 shadow-sm backdrop-blur sm:grid-cols-[minmax(16rem,1fr)_minmax(10rem,.42fr)_minmax(9rem,.34fr)_minmax(11rem,.42fr)] lg:grid-cols-[minmax(16rem,1fr)_minmax(9rem,.34fr)_minmax(11rem,.42fr)_auto] sm:p-4">
-        <label className="min-w-0">
+      <div className="sticky top-0 z-20 grid gap-2 border-b border-line bg-white/95 p-3 shadow-sm backdrop-blur sm:grid-cols-2 sm:p-4 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_minmax(9rem,.34fr)_minmax(11rem,.42fr)_auto]">
+        <label className="min-w-0 sm:col-span-2 xl:col-span-1">
           <span className="sr-only">商品を検索</span>
           <Input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・型番を検索" className="w-full" />
         </label>
-        <label className="min-w-0 lg:hidden">
+        <label className="min-w-0 md:hidden">
           <span className="sr-only">カテゴリー</span>
           <Select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1); }} className="w-full">
             <option value="">カテゴリー：すべて</option>
@@ -106,25 +106,25 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
             <option value="needs-attention">要確認</option>
           </Select>
         </label>
-        <label className="min-w-0">
+        <label className="min-w-0 sm:col-span-2 md:col-span-1">
           <span className="sr-only">並び替え</span>
           <Select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }} className="w-full">
             <option value="updated">並び替え：更新が新しい順</option>
             <option value="name">並び替え：商品名順</option>
           </Select>
         </label>
-        <button type="button" className="btn-ghost btn-sm hidden lg:inline-flex" onClick={resetFilters} disabled={!query && !categoryId && !status && quick === 'all' && sort === 'updated'}>条件をクリア</button>
+        <button type="button" className="btn-ghost btn-sm hidden xl:inline-flex" onClick={resetFilters} disabled={!query && !categoryId && !status && quick === 'all' && sort === 'updated'}>条件をクリア</button>
       </div>
-      <div className="overflow-x-auto lg:overflow-x-visible">
-        <table className="w-full min-w-[54rem] table-fixed text-left text-sm">
-          <thead className="bg-forest/5 text-xs text-muted lg:sticky lg:top-[4.55rem] lg:z-10">
+      <div className="overflow-x-auto md:overflow-x-visible">
+        <table className="w-full table-fixed text-left text-sm">
+          <thead className="bg-forest/5 text-xs text-muted md:sticky md:top-[8.5rem] md:z-10 xl:top-20">
             <tr>
-              <th className="w-[43%] px-4 py-3">商品</th>
-              <th className="w-[20%] px-4 py-3">カテゴリー</th>
-              <th className="w-[14%] px-4 py-3 text-right">自社仕入原価</th>
-              <th className="w-[8%] px-4 py-3">単位</th>
-              <th className="w-[11%] px-4 py-3">状態</th>
-              <th className="w-[4%] px-3 py-3 text-right">操作</th>
+              <th className="w-auto px-4 py-3 xl:w-[43%]">商品</th>
+              <th className="hidden px-4 py-3 xl:table-cell xl:w-[20%]">カテゴリー</th>
+              <th className="hidden px-4 py-3 text-right xl:table-cell xl:w-[14%]">自社仕入原価</th>
+              <th className="hidden px-4 py-3 xl:table-cell xl:w-[8%]">単位</th>
+              <th className="w-24 px-4 py-3 sm:w-28 xl:w-[11%]">状態</th>
+              <th className="w-14 px-3 py-3 text-right xl:w-[4%]">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -145,9 +145,9 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
                     </span>
                   </button>
                 </td>
-                <td className="truncate px-4 py-2.5">{categoryMap.get(o.category_id)?.name ?? dash}</td>
-                <td className="px-4 py-2.5 text-right text-muted">{dash}</td>
-                <td className="px-4 py-2.5 text-muted">{dash}</td>
+                <td className="hidden truncate px-4 py-2.5 xl:table-cell">{categoryMap.get(o.category_id)?.name ?? dash}</td>
+                <td className="hidden px-4 py-2.5 text-right text-muted xl:table-cell">{dash}</td>
+                <td className="hidden px-4 py-2.5 text-muted xl:table-cell">{dash}</td>
                 <td className="px-4 py-2.5"><Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge></td>
                 <td className="px-3 py-2.5 text-right">
                   <button type="button" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-9 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => setSelectedId(o.id)}>

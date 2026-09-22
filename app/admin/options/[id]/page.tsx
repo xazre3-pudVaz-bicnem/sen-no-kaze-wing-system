@@ -92,7 +92,7 @@ export default async function EditOptionPage({
         </form>
       ) : undefined}
     >
-      <BackLink href={returnTo ?? '/admin/options'} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
+      <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
 
       <section className="card p-4 sm:p-5" aria-label="商品登録の3ステップ">

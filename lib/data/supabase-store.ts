@@ -363,7 +363,7 @@ export class SupabaseStore implements DataStore {
     const { data, error } = await db.rpc('get_case_plan_configuration', { p_quote_id: quoteId });
     if (error) {
       // migration未適用環境では案件画面全体を落とさず、プランボードだけ未表示にする。
-      if (error.code === 'PGRST202' || /get_case_plan_configuration/i.test(error.message ?? '')) return null;
+      if (error.code === 'PGRST202' || error.code === '42883') return null;
       mapPgError(error);
     }
     if (!data) return null;

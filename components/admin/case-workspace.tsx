@@ -148,6 +148,14 @@ export async function CaseWorkspace({
           .filter(Boolean)
           .join('')) ||
     '—';
+  const caseSelectedOptionIds = new Set(casePlanConfiguration?.items.map((item) => item.option_id) ?? []);
+  const fireSelection =
+    options.find(
+      (option) =>
+        caseSelectedOptionIds.has(option.id) &&
+        (option.code === 'fire-proof' || option.code === 'fire-standard')
+    )?.name ?? '未確認';
+  const caseStructureNote = quote.dealer_note?.trim() || null;
 
   let planBundle: CatalogBundle | null = null;
   let planEstimateTemplate: EstimateTemplateBundle | null = null;
@@ -252,6 +260,27 @@ export async function CaseWorkspace({
           <span><b className="text-white">設置</b> {siteAddress}</span>
           <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
           <span><b className="text-white">注文範囲</b> {FINISH_LEVEL_INFO[quote.finish_level].name}</span>
+        </div>
+      </section>
+
+      <section
+        className="grid gap-2 rounded-lg border border-line bg-white p-2.5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
+        data-testid="case-structure-summary"
+        aria-label="案件概要"
+      >
+        <div className="rounded-md bg-[#f7f9f8] px-3 py-2">
+          <p className="text-[0.65rem] text-muted">本体</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{quote.base_model_name}</p>
+        </div>
+        <div className="rounded-md bg-[#f7f9f8] px-3 py-2">
+          <p className="text-[0.65rem] text-muted">防火仕様</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{fireSelection}</p>
+        </div>
+        <div className="rounded-md bg-[#f7f9f8] px-3 py-2 sm:col-span-2">
+          <p className="text-[0.65rem] text-muted">案件構成・申し送り</p>
+          <p className="mt-0.5 text-sm font-semibold leading-5 text-ink">
+            {caseStructureNote ?? '案件構成の登録はまだありません。'}
+          </p>
         </div>
       </section>
 

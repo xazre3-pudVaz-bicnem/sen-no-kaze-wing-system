@@ -4,7 +4,7 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { Badge, Input, Select } from '@/components/ui';
-import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
+import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -83,6 +83,7 @@ export default async function EstimateTemplatesPage({
         </div>
       }
     >
+      <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
       <section className="card p-4">
         <div className="mb-3">
           <p className="text-sm font-semibold">一覧の絞り込み</p>

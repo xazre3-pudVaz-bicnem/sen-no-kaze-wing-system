@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
+import { canEditCatalog } from '@/lib/domain/types';
 import { Badge, Input, Select } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
@@ -10,6 +12,8 @@ export default async function AdminOptionsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const actor = await requireStaff();
+  const editor = canEditCatalog(actor.role);
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
@@ -37,7 +41,7 @@ export default async function AdminOptionsPage({
     <AdminPage
       title="商品登録・編集"
       lead="商品を探して編集します。細かな設定は商品詳細画面にまとめています。"
-      actions={<Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link>}
+      actions={editor ? <Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link> : undefined}
     >
       <FlashMessages sp={sp} />
 
@@ -89,7 +93,7 @@ export default async function AdminOptionsPage({
             <tr>
               <Th>商品</Th>
               <Th>カテゴリー</Th>
-              <Th right>追加金額</Th>
+              <Th right>商品価格（税別）</Th>
               <Th>公開</Th>
               <Th></Th>
             </tr>
@@ -129,7 +133,7 @@ export default async function AdminOptionsPage({
                     </Badge>
                   </Td>
                   <Td right>
-                    <Link href={`/admin/options/${option.id}`} className="btn-secondary btn-sm">編集</Link>
+                    <Link href={`/admin/options/${option.id}`} className="btn-secondary btn-sm">{editor ? '詳細・編集' : '詳細'}</Link>
                   </Td>
                 </tr>
               );

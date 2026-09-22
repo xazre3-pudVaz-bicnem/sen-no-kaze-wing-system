@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { deleteOptionAction } from '@/lib/actions/admin';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import type { OptionConflict, OptionDependency, OptionVariantChoice, OptionVariantGroup } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, type OptionConflict, type OptionDependency, type OptionVariantChoice, type OptionVariantGroup } from '@/lib/domain/types';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
@@ -34,6 +35,7 @@ export default async function EditOptionPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const actor = await requireStaff();
   const store = await getStore();
   const option = await store.getOption(id);
   if (!option) notFound();
@@ -50,6 +52,9 @@ export default async function EditOptionPage({
     store.listOptions(),
     store.getOptionVariants(id),
   ]);
+  const category = categories.find((row) => row.id === option.category_id);
+  const canEditThisOption = canEditCatalog(actor.role) || (category?.code === FREE_PRODUCT_CATEGORY_CODE && option.owner_id === actor.id);
+  const catalogEditor = canEditCatalog(actor.role);
 
   const deps: OptionDependency[] = [];
   const confs: OptionConflict[] = [];
@@ -75,7 +80,7 @@ export default async function EditOptionPage({
     <AdminPage
       title={option.name}
       lead={option.code}
-      actions={
+      actions={canEditThisOption ? (
         <form action={deleteOptionAction}>
           <input type="hidden" name="id" value={option.id} />
           <ConfirmSubmit
@@ -85,7 +90,7 @@ export default async function EditOptionPage({
             削除
           </ConfirmSubmit>
         </form>
-      }
+      ) : undefined}
     >
       <BackLink href={returnTo ?? '/admin/options'} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
@@ -134,12 +139,12 @@ export default async function EditOptionPage({
         </nav>
       </section>
 
-      {step === 'info' && (
+      {step === 'info' && (canEditThisOption ? (
         <section className="space-y-6" data-testid="option-registration-info">
           <div>
             <h2 className="text-xl font-semibold">STEP 2 商品情報を登録</h2>
             <p className="mt-1 text-sm text-muted">
-              商品情報、画像・メーカー資料、お客様が選ぶ色・仕様、追加金額と公開設定をこの画面でまとめて設定します。
+              商品情報、画像・メーカー資料、お客様が選ぶ色・仕様、商品価格と公開設定をこの画面でまとめて設定します。
             </p>
           </div>
 
@@ -155,7 +160,7 @@ export default async function EditOptionPage({
 
           <OptionMediaManager option={option} />
 
-          <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
+          {catalogEditor && <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />}
 
           <OptionForm
             mode="pricing"
@@ -167,9 +172,9 @@ export default async function EditOptionPage({
             conflicts={confs}
           />
 
-          <OptionVariantPricing option={option} groups={variants.groups} choices={variants.choices} />
+          {catalogEditor && <OptionVariantPricing option={option} groups={variants.groups} choices={variants.choices} />}
         </section>
-      )}
+      ) : <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>)}
       {step === 'preview' && (
         <section className="space-y-5" data-testid="option-customer-preview">
           <div>
@@ -224,9 +229,9 @@ export default async function EditOptionPage({
               {option.description && <p className="whitespace-pre-wrap text-sm leading-7 text-ink-soft">{option.description}</p>}
 
               <div className="rounded-xl border border-line bg-white p-4">
-                <p className="text-xs text-muted">追加金額</p>
+                <p className="text-xs text-muted">商品価格（税別）</p>
                 <p className="mt-1 text-lg font-semibold">
-                  {option.price_on_request ? '別途見積' : option.price > 0 ? `+${formatYen(option.price)}` : '追加なし'}
+                  {option.price_on_request ? '別途見積' : formatYen(option.price)}
                 </p>
               </div>
 
@@ -253,8 +258,8 @@ export default async function EditOptionPage({
                               {choice.price_on_request
                                 ? '別途見積'
                                 : choice.extra_price > 0
-                                  ? `+${formatYen(choice.extra_price)}`
-                                  : '追加なし'}
+                                  ? formatYen(choice.extra_price)
+                                  : formatYen(0)}
                             </p>
                           </div>
                         </div>

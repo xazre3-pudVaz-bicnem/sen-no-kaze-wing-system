@@ -42,7 +42,6 @@ export interface EstimateTemplateWorkbenchSection {
 
 export function EstimateTemplateWorkbench({
   templateId,
-  role,
   baseLines,
   baseTotal,
   initialLines,

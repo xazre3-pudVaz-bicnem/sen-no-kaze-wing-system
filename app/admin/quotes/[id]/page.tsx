@@ -61,7 +61,7 @@ export default async function AdminQuoteDetailPage({
   const detail = await store.getQuote(id, actor);
   if (!detail) notFound();
 
-  const { quote, items, request, profile, document } = detail;
+  const { quote, items, request, document } = detail;
   const isAdmin = actor.role === 'admin';
   const canManageAllQuotes = canEditCatalog(actor.role);
   const canEditBase = canEditCatalog(actor.role);

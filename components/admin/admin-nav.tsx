@@ -34,11 +34,7 @@ const sections: NavSection[] = [
   },
   {
     href: '/admin/base-masters', label: '販売基準', match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'], need: 'admin',
-    items: [
-      { href: '/admin/base-masters', label: '本体マスター' },
-      { href: '/admin/estimate-templates', label: '標準見積' },
-      { href: '/admin/base-breakdown', label: '旧 標準見積Excel' },
-    ],
+    items: [],
   },
   {
     href: '/admin/settings', label: '管理設定', match: ['/admin/settings', '/admin/customers', '/admin/audit', '/admin/manual'],
@@ -88,7 +84,7 @@ export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migr
         );
       })}
       </div>
-      {activeSection && (
+      {activeSection && activeSection.items.length > 0 && (
         <div className="border-t border-line bg-sand/40">
           <div className="mx-auto flex max-w-[96rem] gap-x-4 gap-y-1 overflow-x-auto px-5 py-2 text-xs sm:px-8 [scrollbar-width:none]">
             {activeSection.items.map((item) => {

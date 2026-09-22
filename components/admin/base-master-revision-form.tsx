@@ -60,7 +60,7 @@ export function BaseMasterDraftEditor({
         {identityLocked && <input type="hidden" name="fire_spec_code" value={fireSpec} />}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Draft v{revision.version}</h2>
+            <h2 className="text-lg font-semibold">下書き 第{revision.version}版</h2>
             <p className="mt-1 text-sm text-muted">保存中は公開版に影響しません。公開した時点でこの版が現在版になります。</p>
           </div>
           {dirty && <span className="rounded-full bg-warn/10 px-3 py-1 text-xs font-semibold text-warn">未保存</span>}
@@ -99,13 +99,13 @@ export function BaseMasterDraftEditor({
           ) : <input type="hidden" name="expense_amount" value={0} />}
         </div>
         <BaseMasterLinesEditor lines={lines} expenseMethod={method} expenseRatePercent={rate} fixedExpense={fixed} onDirty={() => setDirty(true)} />
-        <BaseMasterPendingButton pending={saving}>Draftを保存</BaseMasterPendingButton>
+        <BaseMasterPendingButton pending={saving}>下書きを保存</BaseMasterPendingButton>
       </form>
 
       <section className="card space-y-4 p-6">
         <div>
-          <h2 className="font-semibold">Draftの操作</h2>
-          <p className="mt-1 text-sm text-muted">公開すると旧公開版は履歴として残り、このDraftが現在の公開版になります。</p>
+          <h2 className="font-semibold">下書きの操作</h2>
+          <p className="mt-1 text-sm text-muted">公開すると旧公開版は履歴として残り、この下書きが現在の公開版になります。</p>
         </div>
         <BaseMasterActionStatus state={publishState} />
         <BaseMasterActionStatus state={discardState} />
@@ -117,13 +117,13 @@ export function BaseMasterDraftEditor({
               type="submit"
               disabled={publishing || dirty || lines.length === 0}
               onClick={(event) => {
-                if (!window.confirm(`Draft v${revision.version}を公開します。公開後はこのRevisionを直接編集できません。よろしいですか？`)) {
+                if (!window.confirm(`下書き 第${revision.version}版を公開します。公開後はこの版を直接編集できません。よろしいですか？`)) {
                   event.preventDefault();
                 }
               }}
             >
               {publishing && <Spinner />}
-              このDraftを公開
+              この下書きを公開
             </Button>
           </form>
           <form action={discardAction}>
@@ -134,15 +134,15 @@ export function BaseMasterDraftEditor({
               className="text-danger"
               disabled={discarding}
               onClick={(event) => {
-                if (!window.confirm('このDraftを破棄します。よろしいですか？')) event.preventDefault();
+                if (!window.confirm('この下書きを破棄します。よろしいですか？')) event.preventDefault();
               }}
             >
               {discarding && <Spinner />}
-              Draftを破棄
+              下書きを破棄
             </Button>
           </form>
         </div>
-        {dirty && <p className="text-xs text-warn">未保存の変更があります。公開する前にDraftを保存してください。</p>}
+        {dirty && <p className="text-xs text-warn">未保存の変更があります。公開する前に下書きを保存してください。</p>}
       </section>
     </div>
   );

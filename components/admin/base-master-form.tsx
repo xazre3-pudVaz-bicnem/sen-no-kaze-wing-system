@@ -50,7 +50,7 @@ export function BaseMasterCreateForm({
       <div>
         <h2 className="text-lg font-semibold">新しい本体を作成</h2>
         <p className="mt-1 text-sm text-muted">
-          まずDraftとして作成します。明細と金額を確認した後に公開します。
+          まず下書きとして作成します。明細と金額を確認した後に公開します。
         </p>
       </div>
       <BaseMasterActionStatus state={state} />
@@ -79,7 +79,7 @@ export function BaseMasterCreateForm({
           </Select>
         </Field>
       </div>
-      <BaseMasterPendingButton pending={pending}>Draftを作成</BaseMasterPendingButton>
+      <BaseMasterPendingButton pending={pending}>下書きを作成</BaseMasterPendingButton>
     </form>
   );
 }
@@ -91,7 +91,7 @@ export function StartBaseMasterDraftForm({ masterId }: { masterId: string }) {
       <BaseMasterActionStatus state={state} />
       <form action={action}>
         <input type="hidden" name="master_id" value={masterId} />
-        <BaseMasterPendingButton pending={pending}>新しいDraftを作る</BaseMasterPendingButton>
+        <BaseMasterPendingButton pending={pending}>新しい下書きを作る</BaseMasterPendingButton>
       </form>
     </div>
   );

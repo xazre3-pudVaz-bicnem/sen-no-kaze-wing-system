@@ -42,7 +42,6 @@ export interface EstimateTemplateWorkbenchSection {
 
 export function EstimateTemplateWorkbench({
   templateId,
-  role,
   baseLines,
   baseTotal,
   initialLines,
@@ -347,14 +346,14 @@ export function EstimateTemplateWorkbench({
     <div className="space-y-6">
       {createdProduct && (
         <div className="rounded-xl border border-forest/30 bg-forest/5 px-4 py-3 text-sm">
-          「{createdProduct.name}」を商品登録し、見積テンプレートへ戻りました。
+          「{createdProduct.name}」を商品登録し、標準見積へ戻りました。
           画面確認用として「{returnSection === 'interior_exterior' ? '内外装工事' : returnSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
         </div>
       )}
 
       <section className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
-          <p className="text-sm font-semibold">{demoMode ? '操作確認用テンプレート' : '明細編集'}</p>
+          <p className="text-sm font-semibold">{demoMode ? '操作確認用標準見積' : '明細編集'}</p>
           <p className="mt-1 text-xs text-muted">
             {demoMode
               ? 'この画面の変更は保存されません。数量・単価・商品追加・自由項目追加・削除などを自由に試せます。'
@@ -382,7 +381,7 @@ export function EstimateTemplateWorkbench({
             <>
               <Button type="button" variant="secondary" disabled>下書きを保存</Button>
               <Button type="button" disabled>
-                {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
+                公開内容を確認
               </Button>
             </>
           )}
@@ -392,7 +391,7 @@ export function EstimateTemplateWorkbench({
       <section className="card overflow-hidden">
         <div className="border-b border-line px-5 py-4">
           <h2 className="font-semibold">本体</h2>
-          <p className="mt-1 text-xs text-muted">本体マスターの公開中の版を参照します。見積テンプレート上では直接変更しません。</p>
+          <p className="mt-1 text-xs text-muted">本体マスターの公開中の版を参照します。標準見積上では直接変更しません。</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] text-sm">
@@ -508,7 +507,7 @@ export function EstimateTemplateWorkbench({
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                   <div>
                     <p className="font-semibold">商品が見つからない場合</p>
-                    <p className="mt-1 text-xs text-muted">商品登録後、この見積テンプレートへ戻れます。</p>
+                    <p className="mt-1 text-xs text-muted">商品登録後、この標準見積へ戻れます。</p>
                   </div>
                   <Link
                     href={'/admin/options/new?return_to=' + encodeURIComponent('/admin/estimate-templates/' + templateId + '?return_section=' + pickerSection)}

@@ -10,10 +10,10 @@ export default async function NewEstimateTemplatePage() {
 
   return (
     <AdminPage
-      title="見積テンプレートを新規作成"
+      title="標準見積を新規作成"
       lead="商品・仕様・防火区分・参照本体・利用地域を決めて、下書き版を作成します。"
     >
-      <BackLink href="/admin/estimate-templates" label="見積テンプレート一覧へ戻る" />
+      <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
 
       <NewEstimateTemplateForm
         models={models.map((model) => ({

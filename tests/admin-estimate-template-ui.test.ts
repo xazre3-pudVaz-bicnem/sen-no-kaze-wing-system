@@ -61,6 +61,8 @@ describe('標準見積管理UI', () => {
     expect(newForm).toContain('max-w-[600px]');
     expect(newForm).toContain('キャンセル');
     expect(newPage).toContain('model.presets.map');
+    expect(newPage).toContain('title="標準見積を新規作成"');
+    expect(newPage).toContain('販売基準へ戻る');
     expect(adminForms).toContain('仕様（推奨構成）');
     expect(adminForms).toContain('見積テンプレートの「仕様」もここから選ばれます');
   });
@@ -78,6 +80,7 @@ describe('標準見積管理UI', () => {
     expect(detailPage).toContain('オプション');
     expect(detailPage).toContain('別途');
     expect(detailPage).toContain('新しい下書き版を作る');
+    expect(detailPage).toContain('販売基準へ戻る');
     expect(detailPage).toContain('複製して新規作成');
   });
 

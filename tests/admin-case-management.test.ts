@@ -43,7 +43,7 @@ describe('Admin case management UI', () => {
     for (const label of ['案件・顧客', '状態', '更新', '設置予定地', '商品モデル', '見積額', '担当代理店']) {
       expect(list).toContain(label);
     }
-    expect(list).toContain('案件名・顧客・住所・見積番号');
+    expect(list).toContain('顧客・住所・見積番号・商品モデル');
     expect(list).toContain('状態：すべて');
     expect(list).toContain('担当：すべて');
     expect(list).toContain('data-testid="case-list-scroll"');

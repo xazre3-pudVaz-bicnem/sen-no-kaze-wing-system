@@ -109,10 +109,10 @@ describe('商品登録管理画面の業務フロー', () => {
     }
   });
 
-  it('価格は追加金額として案内する', () => {
+  it('商品価格と標準品との差額を混同しない', () => {
     expect(forms).toContain('価格・公開設定');
-    expect(forms).toContain('追加金額（税別・円）');
-    expect(forms).toContain('この商品を選んだときに加算する金額');
+    expect(forms).toContain('商品価格（税別・円）');
+    expect(forms).toContain('標準品との差額は別途の計算で扱います');
   });
 
   it('商品一覧は検索・カテゴリー・公開状態で絞り込める', () => {

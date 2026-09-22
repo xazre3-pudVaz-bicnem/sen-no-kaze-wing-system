@@ -14,9 +14,8 @@ const sections: NavSection[] = [
     href: '/admin/quotes', label: '案件管理', match: ['/admin', '/admin/quotes', '/admin/configurations', '/admin/notifications', '/admin/contacts'],
     items: [
       { href: '/admin/quotes', label: '案件一覧' },
-      { href: '/admin/quotes/new', label: '新規見積を作成' },
-      { href: '/admin/configurations', label: '保存された仕様', need: 'admin' },
-      { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
+      { href: '/admin/configurations', label: '保存済み仕様', need: 'admin' },
+      { href: '/admin/contacts', label: '問い合わせ受付', need: 'admin' },
       { href: '/admin/notifications', label: 'お知らせ' },
     ],
   },

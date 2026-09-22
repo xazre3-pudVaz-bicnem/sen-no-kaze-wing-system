@@ -259,7 +259,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const acceptedCount = shownQuotes.filter((quote) => quote.status === 'accepted').length;
   const filtersActive = Boolean(textQuery || statusFilter || dealerFilter || filter.block || filter.pref || filter.city);
 
-  const savedCount = configurations.filter((configuration) => configuration.status === 'draft').length;
+  const savedCount = configurations.length;
   const inquiryCount = contacts.filter((contact) => contact.status === 'new').length;
 
   return (

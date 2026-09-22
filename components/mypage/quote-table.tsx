@@ -304,7 +304,6 @@ export function QuoteTable({
       </div>
 
       <QuoteReferenceDetails quote={quote} items={items} />
-      )}
     </div>
   );
 }

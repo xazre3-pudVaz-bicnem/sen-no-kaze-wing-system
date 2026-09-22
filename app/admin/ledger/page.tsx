@@ -38,7 +38,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
         <label className="block"><span className="label">カテゴリー</span><Select name="category" defaultValue={categoryId} className="mt-1 w-full"><option value="">すべて</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></label>
         <div className="flex gap-2"><button type="submit" className="btn-secondary btn-sm">絞り込む</button>{(q || categoryId) && <Link href="/admin/ledger" className="btn-ghost btn-sm">クリア</Link>}</div>
       </form>
-      <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted">{filtered.length === options.length ? `${options.length}商品` : `${filtered.length} / ${options.length}商品を表示`}</p><Link href="/admin/options" className="text-sm font-semibold text-brown underline underline-offset-4">登録・編集一覧へ</Link></div>
+      <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted">{filtered.length === options.length ? `${options.length}商品` : `${filtered.length} / ${options.length}商品を表示`}</p>{editor && <Link href="/admin/options" className="text-sm font-semibold text-brown underline underline-offset-4">登録・編集一覧へ</Link>}</div>
       {filtered.length ? (
         <Table>
           <thead className="bg-sand/60"><tr><Th>商品</Th><Th>カテゴリー</Th><Th>対象モデル</Th><Th right>商品価格（税別）</Th><Th>状態</Th><Th /></tr></thead>

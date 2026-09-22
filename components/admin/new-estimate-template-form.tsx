@@ -142,7 +142,7 @@ export function NewEstimateTemplateForm({
         </div>
 
         <label className="block max-w-[600px]">
-          <span className="label">テンプレート名</span>
+          <span className="label">標準見積名</span>
           <Input
             className="mt-1 w-full"
             value={name}
@@ -158,7 +158,7 @@ export function NewEstimateTemplateForm({
         <div>
           <h2 className="font-semibold">基準となる本体</h2>
           <p className="mt-1 text-xs text-muted">
-            この見積テンプレートは、選択した本体マスターの公開中の版を基準にします。
+            この標準見積は、選択した本体マスターの公開中の版を基準にします。
           </p>
         </div>
         <label className="mt-4 block max-w-[600px]">

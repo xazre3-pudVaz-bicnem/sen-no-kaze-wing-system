@@ -477,7 +477,16 @@ export class LocalStore implements DataStore {
       if (!configuration) return null;
       const exteriorFaces = (configuration as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces;
       return {
-        configuration,
+        configuration: {
+          id: configuration.id,
+          base_model_id: configuration.base_model_id,
+          status: configuration.status,
+          finish_level: configuration.finish_level,
+          spec_code: configuration.spec_code,
+          site_prefecture: configuration.site_prefecture ?? null,
+          site_municipality: configuration.site_municipality ?? null,
+          site_location_undecided: configuration.site_location_undecided ?? false,
+        },
         items: db.configurationItems.filter((item) => item.configuration_id === configuration.id),
         exterior_faces: Array.isArray(exteriorFaces) ? exteriorFaces : [],
       };

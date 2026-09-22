@@ -11,7 +11,7 @@ describe('Admin quote Excel-like editor', () => {
   it('switches the quote between read mode and edit mode in the same place', () => {
     expect(sheet).toContain("const [editing, setEditing] = useState");
     expect(sheet).toContain('data-testid="quote-edit-toggle"');
-    expect(sheet).toContain('見積を編集');
+    expect(sheet).toContain('＋新しい見積書');
     expect(sheet).toContain('<QuoteTable quote={quote}');
     expect(sheet).toContain('<DealerRevisionForm');
     expect(sheet).toContain('sheetMode');
@@ -24,20 +24,27 @@ describe('Admin quote Excel-like editor', () => {
     expect(workspace).toContain('正式見積書');
   });
 
-  it('uses compact spreadsheet-like cells with native Tab navigation', () => {
+  it('keeps the edit table visually aligned with the read-only quote table', () => {
     expect(form).toContain("data-sheet-mode={sheetMode ? 'true' : undefined}");
-    expect(form).toContain('Tabキーで次の入力セルへ移動できます。');
+    expect(form).toContain('表示中の見積書と同じ並びのまま、セルを直接編集できます。');
+    expect(form).toContain('Tabキーで次のセルへ移動します。');
     expect(form).toContain('sticky top-0 z-10');
-    expect(form).toContain('border-collapse text-xs');
-    expect(form).toContain('onFocus={sheetMode ? (event) => event.currentTarget.select() : undefined}');
-    expect(form).toContain('>{i + 1}</td>');
-    expect(form).toContain('{KIND_LABELS[r.kind]}');
+    expect(form).toContain('min-w-[44rem] text-sm');
+    for (const label of ['項目', '数量', '単位', '単価', '金額', '備考']) {
+      expect(form).toContain(label);
+    }
+    expect(form).toContain('【本体価格計】');
+    expect(form).toContain('【内外装価格計】');
+    expect(form).toContain('【オプション価格計】');
+    expect(form).toContain('【別途工事計】');
+    expect(form).toContain('合　計（税込）');
+    expect(form).toContain('onFocus={(event) => event.currentTarget.select()}');
   });
 
   it('keeps non-editable base items visible in the same sheet for dealer editing', () => {
     expect(form).toContain('const lockedItems = sheetMode ? items.filter((i) => !editable(i.kind)) : [];');
-    expect(form).toContain('本体・固定項目（変更不可）');
     expect(form).toContain('data-testid={`revision-locked-row-${index}`}');
+    expect(form).toContain('aria-label="変更不可"');
     expect(form).toContain('<LockKeyhole');
   });
 
@@ -47,7 +54,8 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('data-testid="add-interior-exterior"');
     expect(form).toContain('data-testid="add-option"');
     expect(form).toContain('data-testid="add-free"');
-    expect(form).toContain('lastSameKind');
+    expect(form).toContain('insertByKind');
+    expect(form).toContain('changeKind');
     expect(form).toContain('formatYen(amountOf(r))');
     expect(form).toContain('data-testid="revision-preview"');
     expect(form).toContain('第${quote.revision + 1}版として発行する');

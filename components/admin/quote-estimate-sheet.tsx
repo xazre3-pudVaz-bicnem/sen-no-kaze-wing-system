@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil } from 'lucide-react';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
 import { QuoteTable } from '@/components/mypage/quote-table';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
@@ -50,8 +49,7 @@ export function QuoteEstimateSheet({
             className="inline-flex items-center gap-1.5 rounded-md border border-[#9eb6a9] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f1f7f3]"
             data-testid="quote-edit-toggle"
           >
-            <Pencil className="size-3.5" aria-hidden="true" />
-            見積を編集
+            ＋新しい見積書
           </button>
         </div>
       )}

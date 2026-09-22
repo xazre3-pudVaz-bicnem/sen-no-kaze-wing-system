@@ -48,7 +48,7 @@ describe('Admin case management UI', () => {
       expect(detail).toContain(label);
     }
     expect(detail).toContain('現在の状態');
-    expect(detail).toContain('仕様');
+    expect(detail).toContain('注文範囲');
     expect(detail).toContain('FINISH_LEVEL_INFO[quote.finish_level].name');
     expect(detail).toContain('<QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />');
     expect(detail).toContain('<DealerRevisionForm quote={quote}');

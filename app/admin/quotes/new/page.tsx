@@ -16,7 +16,7 @@ export default async function AdminNewQuotePage() {
       title="新規見積を作成"
       lead="モデルと仕様を選ぶと、標準構成の第1版（概算見積）が発行されます。発行後にエクセル表で明細を編集できます。"
     >
-      <BackLink href="/admin/quotes" label="見積一覧へ戻る" />
+      <BackLink href="/admin/quotes" label="案件一覧へ戻る" />
       <ManualQuoteForm
         models={models.map((m) => ({
           id: m.id,

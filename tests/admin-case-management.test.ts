@@ -62,6 +62,11 @@ describe('Admin case management UI', () => {
     expect(detail).toContain('<CaseWorkspace');
     expect(workspace).toContain('data-testid="case-workspace"');
     expect(workspace).toContain('data-testid="case-workspace-header"');
+    expect(workspace).toContain('data-testid="case-structure-summary"');
+    expect(workspace).toContain('防火仕様');
+    expect(workspace).toContain('caseSelectedOptionIds');
+    expect(workspace).toContain("option.code === 'fire-proof'");
+    expect(workspace).toContain('案件構成・申し送り');
     expect(workspace).toContain('data-testid="case-workflow"');
     expect(workspace).toContain('buildInlineTabHref');
     expect(workspace).toContain("query.set('case', quoteId)");
@@ -97,8 +102,32 @@ describe('Admin case management UI', () => {
   });
 
   it('does not present unsupported downstream workflow data as implemented', () => {
-    expect(workspace).toContain('現地調査、搬入条件、地盤条件などを案件工程として保存する機能はまだありません。');
-    expect(workspace).toContain('契約書・確定図面・案件資料を案件単位で保存し、版や交付状況を管理する正式機能はまだありません。');
+    expect(workspace).toContain('案件受付・現地メモ');
+    expect(workspace).toContain('data-testid="case-site-condition-candidates"');
+    expect(workspace).toContain('正式登録候補');
+    expect(workspace).toContain('都市計画区域');
+    expect(workspace).toContain('用途地域');
+    expect(workspace).toContain('高度地区');
+    expect(workspace).toContain('防火地域');
+    expect(workspace).toContain('建蔽率');
+    expect(workspace).toContain('容積率');
+    expect(workspace).toContain('道路幅員');
+    expect(workspace).toContain('接道・道路境界');
+    expect(workspace).toContain('日影規制');
+    expect(workspace).toContain('遺跡対象地域');
+    expect(workspace).toContain('搬入条件');
+    expect(workspace).toContain('地盤条件');
+    expect(workspace).toContain('要登録・確認');
+    expect(workspace).toContain('都市計画資料は参考図として扱い');
+    expect(workspace).toContain("tabHref('documents')");
+    expect(workspace).toContain('正式なアップロード・差替え・版管理は次工程です。');
+    expect(workspace).toContain('data-testid="case-drawing-grid"');
+    expect(workspace).toContain('data-testid="case-document-list"');
+    expect(workspace).toContain('data-testid="case-document-notes"');
+    expect(workspace).toContain('案件構成・申し送り');
+    expect(workspace).toContain('受注・契約メモ');
+    expect(workspace).toContain('現在の見積書PDF');
+    expect(workspace).toContain('原本保管は未実装');
     expect(workspace).toContain('製造指示、製造個体、工程日、搬入・施工進捗を保存する正式機能はまだありません。');
     expect(workspace).toContain('引渡し日、完了確認、保証、点検、アフター対応を保存する正式機能はまだありません。');
     expect(workspace).toContain('現在は供給可否を判定・集計しません。');

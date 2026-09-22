@@ -20,6 +20,7 @@ import type {
   Quote,
   QuoteContact,
   QuoteDocument,
+  CaseDocument,
   QuoteItem,
   QuoteRequest,
   QuoteRequestStatus,
@@ -223,6 +224,8 @@ export interface DataStore {
   listQuotes(userId: string): Promise<Quote[]>;
   listQuotesByConfiguration(userId: string): Promise<Map<string, Quote>>;
   getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null>;
+  /** 案件資料のread-only一覧。正式な保存・版管理は別工程。 */
+  listCaseDocuments(quoteId: string, actor: SessionUser): Promise<CaseDocument[]>;
   listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
   listQuoteRequests(): Promise<(QuoteRequest & { quote_no: string | null; user_email: string })[]>;
   updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null): Promise<void>;

@@ -23,6 +23,7 @@ import type {
   Quote,
   QuoteContact,
   QuoteDocument,
+  CaseDocument,
   QuoteItem,
   QuoteRequest,
   QuoteRequestStatus,
@@ -491,6 +492,12 @@ export class SupabaseStore implements DataStore {
       profile: (profile.data as Profile | null) ?? null,
     };
   }
+  async listCaseDocuments(_quoteId: string, _actor: SessionUser): Promise<CaseDocument[]> {
+    // 正式な案件資料テーブル／Storage権限は未実装。
+    // 本番では架空データを返さず、正式実装までは空一覧とする。
+    return [];
+  }
+
   async listAllQuotes() {
     const db = await this.db();
     const { data, error } = await db.from('quotes').select('*, profiles!quotes_user_id_fkey(email)').order('issued_at', { ascending: false });

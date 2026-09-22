@@ -10,15 +10,26 @@ import {
   QUOTE_STATUS_LABELS,
   canEditCatalog,
   type CatalogBundle,
+  type CaseDocument,
   type EstimateTemplateBundle,
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
+import { SmartImage } from '@/components/ui/smart-image';
 import { QuoteStatusForm } from '@/components/admin/forms';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 import { CasePlanBoard } from '@/components/admin/case-plan-board';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
+
+const CASE_DOCUMENT_KIND_LABELS: Record<CaseDocument['kind'], string> = {
+  floorplan: '平面図',
+  elevation: '立面図',
+  estimate: '見積',
+  contract: '契約',
+  site: '現地・敷地',
+  other: 'その他',
+};
 
 const TABS = [
   { key: 'estimate', label: '見積書' },
@@ -63,6 +74,74 @@ function buildInlineTabHref(
   return `/admin/quotes?${query.toString()}#case-workspace`;
 }
 
+function matchSiteValue(text: string, pattern: RegExp, suffix = '') {
+  const match = text.match(pattern);
+  return match?.[1] ? `${match[1]}${suffix}` : '未登録';
+}
+
+function buildSiteConditionCandidates(siteAddress: string, evidenceText: string) {
+  const roadWidth = evidenceText.match(/道路幅員\s*[:：]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(mm|m)/i);
+  const shadowRule =
+    evidenceText.includes('日影規制') && evidenceText.includes('対象建物10m超')
+      ? '対象建物10m超／4時間・2.5時間／測定面4m'
+      : '未登録';
+
+  return [
+    { label: '設置予定地', value: siteAddress, source: '保存済み住所' },
+    {
+      label: '都市計画区域',
+      value: evidenceText.includes('市街化区域') ? '市街化区域' : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '用途地域',
+      value: evidenceText.includes('第一種住居地域') ? '第一種住居地域' : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '高度地区',
+      value:
+        evidenceText.includes('第2種高度地区') || evidenceText.includes('第２種高度地区')
+          ? '第2種高度地区'
+          : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '防火地域',
+      value: evidenceText.includes('準防火地域') ? '準防火地域' : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '建蔽率',
+      value: matchSiteValue(evidenceText, /建(?:蔽|ぺい)率\s*[:：]?\s*([0-9.]+)\s*%/, '%'),
+      source: '案件受付・資料',
+    },
+    {
+      label: '容積率',
+      value: matchSiteValue(evidenceText, /容積率\s*[:：]?\s*([0-9.]+)\s*%/, '%'),
+      source: '案件受付・資料',
+    },
+    {
+      label: '道路幅員',
+      value: roadWidth ? `${roadWidth[1]}${roadWidth[2]}` : '未登録',
+      source: '配置・敷地図',
+    },
+    {
+      label: '接道・道路境界',
+      value: evidenceText.includes('道路境界線') ? '配置図に道路境界線あり（詳細要確認）' : '未登録',
+      source: '配置・敷地図',
+    },
+    { label: '日影規制', value: shadowRule, source: '都市計画資料' },
+    {
+      label: '遺跡対象地域',
+      value: evidenceText.includes('遺跡地及び行政指導範囲') ? '遺跡地及び行政指導範囲' : '未登録',
+      source: '都市計画資料',
+    },
+    { label: '搬入条件', value: '未登録', source: '要現地確認' },
+    { label: '地盤条件', value: '未登録', source: '要現地確認' },
+  ];
+}
+
 export async function CaseWorkspace({
   quoteId,
   actor,
@@ -95,11 +174,14 @@ export async function CaseWorkspace({
   const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);
   const activeTab: TabKey = isTabKey(tab) ? tab : 'estimate';
 
-  const [profiles, categories, options, casePlanConfiguration] = await Promise.all([
+  const [profiles, categories, options, casePlanConfiguration, caseDocuments] = await Promise.all([
     isAdmin ? store.listProfiles() : Promise.resolve([]),
     store.listCategories(),
     store.listOptions(),
     store.getCasePlanConfiguration(quote.id, actor),
+    activeTab === 'documents' || activeTab === 'site'
+      ? store.listCaseDocuments(quote.id, actor)
+      : Promise.resolve([] as CaseDocument[]),
   ]);
 
   const dealers = profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer');
@@ -136,6 +218,19 @@ export async function CaseWorkspace({
           .filter(Boolean)
           .join('')) ||
     '—';
+  const caseSelectedOptionIds = new Set(casePlanConfiguration?.items.map((item) => item.option_id) ?? []);
+  const fireSelection =
+    options.find(
+      (option) =>
+        caseSelectedOptionIds.has(option.id) &&
+        (option.code === 'fire-proof' || option.code === 'fire-standard')
+    )?.name ?? '未確認';
+  const caseStructureNote = quote.dealer_note?.trim() || null;
+  const siteEvidenceText = [
+    request?.message ?? '',
+    ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
+  ].join(' ');
+  const siteConditionCandidates = buildSiteConditionCandidates(siteAddress, siteEvidenceText);
 
   let planBundle: CatalogBundle | null = null;
   let planEstimateTemplate: EstimateTemplateBundle | null = null;
@@ -243,6 +338,27 @@ export async function CaseWorkspace({
         </div>
       </section>
 
+      <section
+        className="grid gap-2 rounded-lg border border-line bg-white p-2.5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
+        data-testid="case-structure-summary"
+        aria-label="案件概要"
+      >
+        <div className="rounded-md bg-[#f7f9f8] px-3 py-2">
+          <p className="text-[0.65rem] text-muted">本体</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{quote.base_model_name}</p>
+        </div>
+        <div className="rounded-md bg-[#f7f9f8] px-3 py-2">
+          <p className="text-[0.65rem] text-muted">防火仕様</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">{fireSelection}</p>
+        </div>
+        <div className="rounded-md bg-[#f7f9f8] px-3 py-2 sm:col-span-2">
+          <p className="text-[0.65rem] text-muted">案件構成・申し送り</p>
+          <p className="mt-0.5 text-sm font-semibold leading-5 text-ink">
+            {caseStructureNote ?? '案件構成の登録はまだありません。'}
+          </p>
+        </div>
+      </section>
+
       <section className="overflow-x-auto rounded-lg border border-line bg-white shadow-sm [scrollbar-width:thin]" aria-label="案件工程" data-testid="case-workflow">
         <div className="flex min-w-max items-center px-2.5 py-2">
           {workflow.map((step, index) => (
@@ -286,7 +402,7 @@ export async function CaseWorkspace({
         <div className="flex min-w-max">
           {TABS.map((tabItem) => {
             const active = activeTab === tabItem.key;
-            const future = ['site', 'documents', 'production', 'handover', 'disaster'].includes(tabItem.key);
+            const future = ['site', 'production', 'handover', 'disaster'].includes(tabItem.key);
             return (
               <Link
                 key={tabItem.key}
@@ -300,6 +416,7 @@ export async function CaseWorkspace({
               >
                 {tabItem.label}
                 {tabItem.key === 'estimate' && <span className="ml-1 text-[0.6rem] text-[#2f6b4f]">第{quote.revision}版</span>}
+                {tabItem.key === 'documents' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">参照</span>}
                 {future && <span className="ml-1 text-[0.58rem] text-muted">未対応</span>}
               </Link>
             );
@@ -421,15 +538,192 @@ export async function CaseWorkspace({
 
       {activeTab === 'site' && (
         <FuturePanel title="現地条件">
-          <p><b>現在保存されている設置予定地：</b>{siteAddress}</p>
-          <p className="mt-2">現地調査、搬入条件、地盤条件などを案件工程として保存する機能はまだありません。今回は入力欄や完了状態を追加しません。</p>
+          <div className="space-y-4" data-testid="case-site-condition-candidates">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-ink">正式登録候補</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  現在は保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式項目化は次工程です。
+                </p>
+              </div>
+              <Link href={tabHref('documents')} className="btn-secondary btn-sm">
+                現地資料を確認
+              </Link>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {siteConditionCandidates.map((row) => {
+                const pending = row.value === '未登録' || row.value.includes('要確認');
+                return (
+                  <div key={row.label} className="rounded-lg border border-line bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-semibold text-muted">{row.label}</p>
+                      <span
+                        className={
+                          pending
+                            ? 'rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.58rem] font-semibold text-[#8a6416]'
+                            : 'rounded-full bg-[#eef7f1] px-2 py-0.5 text-[0.58rem] font-semibold text-[#2f6b4f]'
+                        }
+                      >
+                        {pending ? '要登録・確認' : '既存情報'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold leading-5 text-ink">{row.value}</p>
+                    <p className="mt-1 text-[0.65rem] text-muted">出典：{row.source}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-[#f7f8f8] p-3">
+                <p className="text-xs text-muted">案件受付・現地メモ</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink">
+                  {request?.message?.trim() || '現地条件のメモはまだありません。'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3">
+                <p className="text-xs font-semibold text-[#765d1f]">正式確認時の注意</p>
+                <p className="mt-1 text-xs leading-5 text-ink-soft">
+                  都市計画資料は参考図として扱い、建築可否・法規条件の正式判断は所管課・設計者による確認を前提とします。
+                  接道、搬入、地盤についても現地確認後に確定します。
+                </p>
+              </div>
+            </div>
+          </div>
         </FuturePanel>
       )}
 
       {activeTab === 'documents' && (
-        <FuturePanel title="契約・図面・資料">
-          契約書・確定図面・案件資料を案件単位で保存し、版や交付状況を管理する正式機能はまだありません。見積書PDFは「見積書」タブで既存機能を利用できます。
-        </FuturePanel>
+        <section className="space-y-4" data-testid="case-tab-documents">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">契約・図面・資料</h2>
+                <Badge tone="neutral">参照のみ</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                この案件に紐づく図面・見積・現地資料をまとめて確認します。正式なアップロード・差替え・版管理は次工程です。
+              </p>
+            </div>
+            <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm">
+              現在の見積書PDF
+            </a>
+          </div>
+
+          {(quote.dealer_note || quote.notes) && (
+            <div className="grid gap-3 md:grid-cols-2" data-testid="case-document-notes">
+              {quote.dealer_note && (
+                <div className="rounded-lg border border-line bg-white p-3 shadow-sm">
+                  <p className="text-xs font-semibold text-muted">案件構成・申し送り</p>
+                  <p className="mt-1 text-sm leading-6 text-ink">{quote.dealer_note}</p>
+                </div>
+              )}
+              {quote.notes && (
+                <div className="rounded-lg border border-line bg-white p-3 shadow-sm">
+                  <p className="text-xs font-semibold text-muted">受注・契約メモ</p>
+                  <p className="mt-1 text-sm leading-6 text-ink">{quote.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {caseDocuments.some((row) => row.preview_url) && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">図面</h3>
+                <span className="text-xs text-muted">
+                  {caseDocuments.filter((row) => row.preview_url).length}点
+                </span>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="case-drawing-grid">
+                {caseDocuments.filter((row) => row.preview_url).map((row) => (
+                  <article key={row.id} className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+                    <div className="relative aspect-[4/3] bg-[#f7f8f8]">
+                      <SmartImage
+                        src={row.preview_url ?? ''}
+                        alt={row.title}
+                        fill
+                        sizes="(min-width:1280px) 33vw, (min-width:768px) 50vw, 100vw"
+                        className="object-contain p-2"
+                      />
+                    </div>
+                    <div className="space-y-1 border-t border-line p-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-sand px-2 py-0.5 text-[0.62rem] font-semibold text-ink-soft">
+                          {CASE_DOCUMENT_KIND_LABELS[row.kind]}
+                        </span>
+                        {row.is_latest && <Badge tone="success">最新版</Badge>}
+                        {row.revision_label && <span className="text-[0.65rem] text-muted">{row.revision_label}</span>}
+                      </div>
+                      <p className="font-semibold">{row.title}</p>
+                      <p className="truncate text-[0.68rem] text-muted">{row.file_name}</p>
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-[0.68rem] text-muted">
+                          {row.document_date ? formatDate(row.document_date) : '日付未登録'}
+                        </span>
+                        {row.url && (
+                          <a href={row.url} target="_blank" rel="noopener" className="text-xs font-semibold text-[#2f6b4f] underline underline-offset-4">
+                            大きく見る
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">資料一覧</h3>
+              <span className="text-xs text-muted">{caseDocuments.length + 1}件（現在の見積書を含む）</span>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" data-testid="case-document-list">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 text-sm">
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-sand px-2 py-0.5 text-[0.62rem] font-semibold text-ink-soft">見積</span>
+                    <Badge tone="success">現在</Badge>
+                  </div>
+                  <p className="mt-1 font-semibold">正式見積書 第{quote.revision}版</p>
+                  <p className="text-[0.68rem] text-muted">{quote.quote_no}／発行 {formatDate(quote.issued_at)}</p>
+                </div>
+                <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm">開く</a>
+              </div>
+              {caseDocuments.map((row) => (
+                <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 last:border-b-0">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-sand px-2 py-0.5 text-[0.62rem] font-semibold text-ink-soft">
+                        {CASE_DOCUMENT_KIND_LABELS[row.kind]}
+                      </span>
+                      {row.is_latest && <Badge tone="success">最新版</Badge>}
+                      {row.revision_label && <span className="text-[0.65rem] text-muted">{row.revision_label}</span>}
+                    </div>
+                    <p className="mt-1 font-semibold">{row.title}</p>
+                    <p className="text-[0.68rem] text-muted">
+                      {row.file_name}
+                      {row.document_date ? `／${formatDate(row.document_date)}` : ''}
+                    </p>
+                    {row.note && <p className="mt-1 text-[0.68rem] leading-5 text-ink-soft">{row.note}</p>}
+                  </div>
+                  {row.url ? (
+                    <a href={row.url} target="_blank" rel="noopener" className="btn-secondary btn-sm">開く</a>
+                  ) : (
+                    <span className="rounded-md bg-[#f7f8f8] px-2 py-1 text-[0.65rem] text-muted">原本保管は未実装</span>
+                  )}
+                </div>
+              ))}
+              {caseDocuments.length === 0 && (
+                <div className="px-3 py-5 text-sm text-muted">
+                  案件資料はまだ登録されていません。正式な案件資料アップロード機能は次工程で実装します。
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       )}
 
       {activeTab === 'production' && (

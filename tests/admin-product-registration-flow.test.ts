@@ -26,6 +26,10 @@ const media = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-media-manager.tsx'),
   'utf8'
 );
+const customerPreview = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-customer-preview.tsx'),
+  'utf8'
+);
 const variants = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-variant-manager.tsx'),
   'utf8'
@@ -36,14 +40,17 @@ const adminActions = fs.readFileSync(
 );
 
 describe('商品登録管理画面の業務フロー', () => {
-  it('商品登録を保存後の内容確認までの2つの大きな作業単位にまとめる', () => {
+  it('商品登録を入力とお客様表示確認の2つの大きな作業単位にまとめる', () => {
     for (const label of ['商品情報', '登録内容確認']) {
       expect(editPage).toContain(label);
       expect(newPage).toContain(label);
     }
     expect(editPage).toContain('aria-label="商品登録の2ステップ"');
-    expect(editPage).toContain('mode="product"');
-    expect(editPage).toContain('mode="pricing"');
+    expect(editPage).toContain('mode="all"');
+    expect(editPage).not.toContain('mode="product"');
+    expect(editPage).not.toContain('mode="pricing"');
+    expect(editPage).toContain('基本情報・メイン画像・価格公開は1つの保存ボタンで保存');
+    expect(editPage).toContain('STEP 2 登録内容確認へ');
     expect(editPage).toContain('data-testid="option-registration-info"');
     expect(editPage).toContain('data-testid="option-customer-preview"');
     expect(editPage).not.toContain('発注内容確認');
@@ -57,8 +64,16 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(newPage).toContain('return_to');
     expect(forms).toContain('登録して見積テンプレートへ戻る');
     expect(forms).toContain('商品を作成して次へ');
+    expect(forms).toContain("mode === 'all' && option");
+    expect(forms).toContain("'商品情報を保存'");
     expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?step=preview&saved=1')");
     expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
+  });
+
+  it('削除操作は通常のヘッダーから外してその他の操作へ退避する', () => {
+    expect(editPage).toContain('その他の操作');
+    expect(editPage).toContain('商品を削除');
+    expect(editPage).not.toContain('actions={catalogEditor');
   });
 
   it('正式商品とフリー商品の登録導線を分ける', () => {
@@ -71,8 +86,21 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');
     expect(forms).toContain('既存商品にあるメーカーは候補から選べます');
-    expect(forms).toContain('現在の商品マスターではシリーズ名と型番を1項目で管理します');
-    expect(forms).toContain('型番・品番');
+    expect(forms).toContain('現在の商品マスターではシリーズ名と型番・品番を1項目で管理します');
+    expect(forms).toContain('シリーズ・型番／品番');
+    expect(forms).toContain('productSizeMeta');
+    expect(forms).toContain('このカテゴリーの入力目安');
+  });
+
+  it('登録内容確認はシミュレーター共通の商品詳細を使う', () => {
+    expect(editPage).toContain('OptionCustomerPreview');
+    expect(editPage).toContain('現在のシミュレーターと同じ商品詳細コンポーネント');
+    expect(customerPreview).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");
+    expect(customerPreview).toContain('defaultVariantIdsFor');
+    expect(customerPreview).toContain('pruneHiddenVariantChoices');
+    expect(customerPreview).toContain('visibleVariantGroups');
+    expect(customerPreview).toContain('<ProductDetail');
+    expect(editPage).not.toContain('この内容に変更する（プレビュー）');
   });
 
   it('商品情報画面にメイン画像・サブ画像・メーカーPDFをまとめる', () => {

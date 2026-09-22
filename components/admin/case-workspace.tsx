@@ -9,6 +9,8 @@ import {
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
   canEditCatalog,
+  type CatalogBundle,
+  type EstimateTemplateBundle,
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
@@ -135,8 +137,8 @@ export async function CaseWorkspace({
           .join('')) ||
     '—';
 
-  let planBundle = null;
-  let planEstimateTemplate = null;
+  let planBundle: CatalogBundle | null = null;
+  let planEstimateTemplate: EstimateTemplateBundle | null = null;
   let planElevations: { url: string; label: string; alt: string }[] = [];
   if (activeTab === 'plan' && casePlanConfiguration) {
     planBundle = await store.getCatalogBundle(casePlanConfiguration.configuration.base_model_id);
@@ -157,7 +159,7 @@ export async function CaseWorkspace({
         registeredElevations.length > 0
           ? registeredElevations
           : planBundle.model.id === MODEL_WING01_ID
-            ? ELEVATIONS
+            ? ELEVATIONS.map((row) => ({ ...row }))
             : [];
     }
   }

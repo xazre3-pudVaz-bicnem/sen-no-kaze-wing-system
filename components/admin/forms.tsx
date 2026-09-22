@@ -548,7 +548,7 @@ export function OptionForm({
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
             <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番で商品を特定します。</p>
+            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、型番・品番で商品を特定します。</p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
@@ -573,7 +573,7 @@ export function OptionForm({
               <Input id={`name-${mode}`} name="name" defaultValue={option?.name} required data-testid="option-name" />
             </Field>
             <Field
-              label="シリーズ・型番"
+              label="型番・品番"
               htmlFor={`model_no-${mode}`}
               hint="現在の商品マスターではシリーズ名と型番を1項目で管理します。既存値は候補から選べます"
               errors={e.model_no}

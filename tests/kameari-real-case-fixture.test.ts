@@ -95,10 +95,17 @@ describe('亀有実受注案件ローカルfixture', () => {
     const request = db.quoteRequests[0];
     expect(request.status).toBe('closed');
     expect(request.contact.site_address).toBe('東京都葛飾区亀有2丁目39-8');
+    expect(request.message).toContain('市街化区域');
     expect(request.message).toContain('第一種住居地域');
+    expect(request.message).toContain('第2種高度地区');
     expect(request.message).toContain('準防火地域');
     expect(request.message).toContain('建蔽率60%');
     expect(request.message).toContain('容積率200%');
+    expect(request.message).toContain('道路幅員4,000mm');
+    expect(request.message).toContain('日影規制');
+    expect(request.message).toContain('遺跡地及び行政指導範囲');
+    expect(request.message).toContain('搬入条件・地盤条件は未確認');
+    expect(request.message).toContain('正式判断は所管課確認');
   });
 
   it('切り出した平面図・立面図4面と元資料情報を案件資料として保持する', () => {

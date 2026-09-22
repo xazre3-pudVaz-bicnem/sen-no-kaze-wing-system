@@ -259,7 +259,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
         redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
       }
     }
-    redirect('/admin/options/' + createdId + '?saved=1');
+    redirect('/admin/options/' + createdId + '?step=preview&saved=1');
   }
   return { ok: true, message: '保存しました' };
 }

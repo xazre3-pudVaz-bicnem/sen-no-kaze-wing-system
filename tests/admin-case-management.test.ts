@@ -98,7 +98,11 @@ describe('Admin case management UI', () => {
 
   it('does not present unsupported downstream workflow data as implemented', () => {
     expect(workspace).toContain('現地調査、搬入条件、地盤条件などを案件工程として保存する機能はまだありません。');
-    expect(workspace).toContain('契約書・確定図面・案件資料を案件単位で保存し、版や交付状況を管理する正式機能はまだありません。');
+    expect(workspace).toContain('正式なアップロード・差替え・版管理は次工程です。');
+    expect(workspace).toContain('data-testid="case-drawing-grid"');
+    expect(workspace).toContain('data-testid="case-document-list"');
+    expect(workspace).toContain('現在の見積書PDF');
+    expect(workspace).toContain('原本保管は未実装');
     expect(workspace).toContain('製造指示、製造個体、工程日、搬入・施工進捗を保存する正式機能はまだありません。');
     expect(workspace).toContain('引渡し日、完了確認、保証、点検、アフター対応を保存する正式機能はまだありません。');
     expect(workspace).toContain('現在は供給可否を判定・集計しません。');

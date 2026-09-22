@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { canEditCatalog } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { Badge, Input, Select } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
@@ -14,10 +14,13 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
+  const freeCategoryId = categories.find((category) => category.code === FREE_PRODUCT_CATEGORY_CODE)?.id;
+  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE);
+  const catalogOptions = freeCategoryId ? options.filter((option) => option.category_id !== freeCategoryId) : options;
   const categoryMap = new Map(categories.map((category) => [category.id, category]));
   const q = (sp.q ?? '').trim().toLowerCase();
   const categoryId = sp.category ?? '';
-  const filtered = options.filter((option) => {
+  const filtered = catalogOptions.filter((option) => {
     if (categoryId && option.category_id !== categoryId) return false;
     if (!q) return true;
     return [option.name, option.manufacturer ?? '', option.model_no ?? '', categoryMap.get(option.category_id)?.name ?? '']
@@ -35,10 +38,10 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       <FlashMessages sp={sp} />
       <form method="get" className="card grid gap-3 p-4 sm:grid-cols-[minmax(14rem,1fr)_minmax(12rem,0.55fr)_auto] sm:items-end">
         <label className="block"><span className="label">商品を検索</span><Input type="search" name="q" defaultValue={sp.q ?? ''} placeholder="商品名・メーカー・型番" className="mt-1 w-full" /></label>
-        <label className="block"><span className="label">カテゴリー</span><Select name="category" defaultValue={categoryId} className="mt-1 w-full"><option value="">すべて</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></label>
+        <label className="block"><span className="label">カテゴリー</span><Select name="category" defaultValue={categoryId} className="mt-1 w-full"><option value="">すべて</option>{catalogCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</Select></label>
         <div className="flex gap-2"><button type="submit" className="btn-secondary btn-sm">絞り込む</button>{(q || categoryId) && <Link href="/admin/ledger" className="btn-ghost btn-sm">クリア</Link>}</div>
       </form>
-      <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted">{filtered.length === options.length ? `${options.length}商品` : `${filtered.length} / ${options.length}商品を表示`}</p>{editor && <Link href="/admin/options" className="text-sm font-semibold text-brown underline underline-offset-4">登録・編集一覧へ</Link>}</div>
+      <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted">{filtered.length === catalogOptions.length ? `${catalogOptions.length}商品` : `${filtered.length} / ${catalogOptions.length}商品を表示`}</p>{editor && <Link href="/admin/options" className="text-sm font-semibold text-brown underline underline-offset-4">登録・編集一覧へ</Link>}</div>
       {filtered.length ? (
         <Table>
           <thead className="bg-sand/60"><tr><Th>商品</Th><Th>カテゴリー</Th><Th>対象モデル</Th><Th right>商品価格（税別）</Th><Th>状態</Th><Th /></tr></thead>

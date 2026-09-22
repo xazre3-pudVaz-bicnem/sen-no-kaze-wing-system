@@ -438,6 +438,31 @@ export function CategoryForm({ category }: { category: OptionCategory | null }) 
 
 /* ---------- オプション ---------- */
 
+function productSizeMeta(categoryCode: string): { label: string; placeholder: string } {
+  const values: Record<string, { label: string; placeholder: string }> = {
+    ub: { label: 'サイズ', placeholder: '例：1616サイズ' },
+    toilet: { label: 'サイズ・仕様', placeholder: '例：床排水／排水芯200mm' },
+    washbasin: { label: '間口', placeholder: '例：750mm' },
+    kitchen: { label: '間口', placeholder: '例：W2550' },
+    boiler: { label: 'サイズ・設置', placeholder: '例：24号／屋外壁掛け' },
+    aircon: { label: '適用畳数', placeholder: '例：主に10畳用' },
+    sash: { label: 'サイズ・呼称', placeholder: '例：16520' },
+    furniture: { label: '寸法', placeholder: '例：W1200×D450×H850' },
+  };
+  return values[categoryCode] ?? { label: 'サイズ・仕様', placeholder: '主なサイズ・仕様を入力' };
+}
+
+function categoryRegistrationHint(categoryCode: string): string | null {
+  const values: Record<string, string> = {
+    ub: '浴室サイズなど固定情報はここで入力し、壁色・浴槽色などお客様が選ぶ内容は下の「お客様選択」で登録します。',
+    toilet: '排水方式など商品固有の固定情報は商品説明へ、お客様が選べる仕様がある場合は下の「お客様選択」で登録します。',
+    washbasin: '間口など固定情報はここで入力し、扉色・水栓など選択できる内容は下の「お客様選択」で登録します。',
+    kitchen: '間口など固定情報はここで入力し、扉色・ワークトップなど選択できる内容は下の「お客様選択」で登録します。',
+    sash: '呼称・サイズなど固定情報を入力します。シミュレーターに出さない台帳専用商品は公開設定とカテゴリー設定に従います。',
+  };
+  return values[categoryCode] ?? null;
+}
+
 interface OptionFormProps {
   option: ProductOption | null;
   categories: OptionCategory[];
@@ -447,7 +472,7 @@ interface OptionFormProps {
   conflicts: OptionConflict[];
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
-  /** 編集画面では商品情報と販売・詳細設定を分けて表示する */
+  /** 必要に応じて商品情報の一部だけを編集するための表示モード */
   mode?: 'all' | 'product' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
   returnTo?: string;
@@ -475,6 +500,11 @@ export function OptionForm({
   const modelNoSuggestions = Array.from(
     new Set(allOptions.map((row) => row.model_no?.trim()).filter((value): value is string => Boolean(value)))
   ).sort((a, b) => a.localeCompare(b, 'ja'));
+  const initialCategoryId = option?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? '';
+  const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
+  const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
+  const sizeMeta = productSizeMeta(selectedCategory?.code ?? '');
+  const registrationHint = categoryRegistrationHint(selectedCategory?.code ?? '');
 
   const showIdentify = mode === 'all' || mode === 'product' || mode === 'identify';
   const showDetails = mode === 'all' || mode === 'product' || mode === 'details';
@@ -553,7 +583,12 @@ export function OptionForm({
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
-              <Select id={`category_id-${mode}`} name="category_id" defaultValue={option?.category_id ?? defaultCategoryId ?? categories[0]?.id}>
+              <Select
+                id={`category_id-${mode}`}
+                name="category_id"
+                defaultValue={initialCategoryId}
+                onChange={(event) => setSelectedCategoryId(event.target.value)}
+              >
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </Select>
             </Field>
@@ -573,9 +608,9 @@ export function OptionForm({
               <Input id={`name-${mode}`} name="name" defaultValue={option?.name} required data-testid="option-name" />
             </Field>
             <Field
-              label="型番・品番"
+              label="シリーズ・型番／品番"
               htmlFor={`model_no-${mode}`}
-              hint="現在の商品マスターではシリーズ名と型番を1項目で管理します。既存値は候補から選べます"
+              hint="現在の商品マスターではシリーズ名と型番・品番を1項目で管理します。既存値は候補から選べます"
               errors={e.model_no}
             >
               <Input
@@ -607,9 +642,15 @@ export function OptionForm({
             <p className="mt-1 text-sm text-muted">サイズ、説明、お客様向けの特徴など、商品を理解するための情報を整理します。</p>
           </div>
 
+          {registrationHint && (
+            <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft">
+              <span className="font-semibold">このカテゴリーの入力目安：</span>{registrationHint}
+            </div>
+          )}
+
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="サイズ・仕様" htmlFor={`size_note-${mode}`} errors={e.size_note}>
-              <Input id={`size_note-${mode}`} name="size_note" defaultValue={option?.size_note ?? ''} placeholder="例：1616サイズ" />
+            <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} errors={e.size_note}>
+              <Input id={`size_note-${mode}`} name="size_note" defaultValue={option?.size_note ?? ''} placeholder={sizeMeta.placeholder} />
             </Field>
             <Field label="お客様向け特徴" htmlFor={`highlight-${mode}`} hint="例：標準候補／清掃性が高い／節水仕様" errors={e.highlight}>
               <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
@@ -779,11 +820,13 @@ export function OptionForm({
             label={
               mode === 'pricing'
                 ? '価格・公開設定を保存'
-                : mode === 'all' && returnTo
-                  ? '登録して見積テンプレートへ戻る'
-                  : mode === 'all'
-                    ? '商品を作成して次へ'
-                    : '販売・詳細設定を保存'
+                : mode === 'all' && option
+                  ? '商品情報を保存'
+                  : mode === 'all' && returnTo
+                    ? '登録して見積テンプレートへ戻る'
+                    : mode === 'all'
+                      ? '商品を作成して次へ'
+                      : '販売・詳細設定を保存'
             }
           />
         </section>

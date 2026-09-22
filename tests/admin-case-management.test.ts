@@ -12,6 +12,7 @@ const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quo
 const newQuote = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
 const configurations = fs.readFileSync(path.join(root, 'app/admin/configurations/page.tsx'), 'utf8');
 const contacts = fs.readFileSync(path.join(root, 'app/admin/contacts/page.tsx'), 'utf8');
+const adminActions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
 
 describe('Admin case management UI', () => {
   it('prioritizes the HTML case-management entrances while keeping existing routes', () => {
@@ -81,10 +82,18 @@ describe('Admin case management UI', () => {
     expect(quoteEstimateSheet).toContain('<QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />');
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
     expect(workspace).toContain('<AssignDealerForm quote={quote} dealers={dealers} />');
-    expect(workspace).toContain('<QuoteStatusForm quote={quote} request={request} />');
+    expect(workspace).toContain('<QuoteStatusForm quote={quote} request={request} compact />');
+    expect(workspace).toContain('data-testid="case-admin-controls"');
+    expect(workspace).toContain('状態を変更');
     expect(workspace).toContain('正式見積書');
     expect(workspace).toContain('金額は発行時点の確定内容です。');
     expect(workspace).not.toContain('金額は発行時点のスナップショットです。');
+  });
+
+  it('returns to the inline case workspace after issuing a new quote revision', () => {
+    expect(adminActions).toContain('redirect(`/admin/quotes?case=${encodeURIComponent(newId)}&tab=estimate&revised=1#case-workspace`)');
+    expect(list).toContain('revised={sp.revised}');
+    expect(workspace).toContain('第${quote.revision}版を発行しました');
   });
 
   it('does not present unsupported downstream workflow data as implemented', () => {

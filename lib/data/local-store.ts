@@ -465,6 +465,23 @@ export class LocalStore implements DataStore {
       return { configuration, items: db.configurationItems.filter((i) => i.configuration_id === id) };
     });
   }
+  async getCasePlanConfiguration(quoteId: string, actor: SessionUser) {
+    return this.read((db) => {
+      const quote = db.quotes.find((row) => row.id === quoteId);
+      if (!quote) return null;
+      const isStaff = actor.role === 'admin' || actor.role === 'master_dealer' || actor.role === 'dealer';
+      if (!isStaff) return null;
+      if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;
+      const configuration = db.configurations.find((row) => row.id === quote.configuration_id);
+      if (!configuration) return null;
+      const exteriorFaces = (configuration as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces;
+      return {
+        configuration,
+        items: db.configurationItems.filter((item) => item.configuration_id === configuration.id),
+        exterior_faces: Array.isArray(exteriorFaces) ? exteriorFaces : [],
+      };
+    });
+  }
   static recalculateInMemory(db: LocalDb, cfg: Configuration) {
     const model = db.models.find((m) => m.id === cfg.base_model_id);
     if (!model) throw new StoreError('NOT_FOUND', 'モデルが見つかりません');

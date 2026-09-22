@@ -13,8 +13,8 @@ import {
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { QuoteStatusForm } from '@/components/admin/forms';
-import { AssignDealerForm, DealerRevisionForm } from '@/components/admin/dealer-forms';
-import { QuoteTable } from '@/components/mypage/quote-table';
+import { AssignDealerForm } from '@/components/admin/dealer-forms';
+import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 
 const TABS = [
   { key: 'estimate', label: '見積書' },
@@ -271,7 +271,7 @@ export async function CaseWorkspace({
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">見積書</h2>
+                <h2 className="text-lg font-semibold">正式見積書</h2>
                 <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>
                   {QUOTE_STATUS_LABELS[quote.status]}
                 </Badge>
@@ -293,11 +293,15 @@ export async function CaseWorkspace({
             </Alert>
           )}
 
-          <div className="rounded-lg border border-line bg-white shadow-sm">
-            <div className="overflow-x-auto">
-              <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />
-            </div>
-          </div>
+          <QuoteEstimateSheet
+            quote={quote}
+            items={items}
+            freeProducts={freeProducts}
+            catalog={catalog}
+            canEditBase={canEditBase}
+            canRevise={canRevise}
+            startInEditMode={Boolean(created)}
+          />
 
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
             <div>
@@ -314,9 +318,6 @@ export async function CaseWorkspace({
             別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
           </p>
 
-          {canRevise && (
-            <DealerRevisionForm quote={quote} items={items} freeProducts={freeProducts} catalog={catalog} canEditBase={canEditBase} />
-          )}
           {quote.status === 'superseded' && <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>}
           {isAdmin && <QuoteStatusForm quote={quote} request={request} />}
         </section>

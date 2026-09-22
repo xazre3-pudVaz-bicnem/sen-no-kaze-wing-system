@@ -384,7 +384,7 @@ export function DealerRevisionForm({
         ))}
       </div>
 
-      <div className={sheetMode ? 'grid gap-3 border-b border-line px-3 py-3 lg:grid-cols-[minmax(0,1fr)_22rem]' : ''}>
+      <div className={sheetMode ? 'grid gap-3 border-b border-line px-3 py-3 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'space-y-5'}>
         <Field label="お客様への申し送り（任意）" htmlFor="dealer_note" hint="現地条件・工期・注意事項など。見積書の備考に入ります">
           <Textarea
             id="dealer_note"

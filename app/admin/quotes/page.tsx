@@ -100,7 +100,7 @@ function caseSelectionHref(quoteId: string, sp: Record<string, string | undefine
     if (value) query.set(key, value);
   }
   query.set('case', quoteId);
-  return `/admin/quotes?${query.toString()}#case-workspace`;
+  return `/admin/quotes?${query.toString()}`;
 }
 
 export default async function AdminQuotesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {

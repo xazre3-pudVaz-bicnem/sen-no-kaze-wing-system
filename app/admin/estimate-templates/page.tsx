@@ -74,8 +74,8 @@ export default async function EstimateTemplatesPage({
 
   return (
     <AdminPage
-      title="見積テンプレート"
-      lead="Webシミュレーター・案件見積の基準となる見積テンプレートを管理します。"
+      title="標準見積"
+      lead="Webシミュレーター・案件見積の販売基準となる標準見積を管理します。"
       actions={
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>
@@ -86,7 +86,7 @@ export default async function EstimateTemplatesPage({
       <section className="card p-4">
         <div className="mb-3">
           <p className="text-sm font-semibold">一覧の絞り込み</p>
-          <p className="mt-1 text-xs text-muted">商品やテンプレート名・仕様で、下の一覧を探しやすくするための検索です。複製には使用しません。</p>
+          <p className="mt-1 text-xs text-muted">商品や標準見積名・仕様で、下の一覧を探しやすくするための検索です。複製には使用しません。</p>
         </div>
         <form method="get" className="grid gap-3 sm:grid-cols-[minmax(12rem,0.5fr)_minmax(16rem,1fr)_auto] sm:items-end">
           <label className="block">
@@ -104,7 +104,7 @@ export default async function EstimateTemplatesPage({
               type="search"
               name="q"
               defaultValue={sp.q ?? ''}
-              placeholder="テンプレート名・仕様"
+              placeholder="標準見積名・仕様"
               className="mt-1 w-full"
             />
           </label>
@@ -120,7 +120,7 @@ export default async function EstimateTemplatesPage({
           <thead className="bg-sand/60">
             <tr>
               <Th>商品</Th>
-              <Th>テンプレート名</Th>
+              <Th>標準見積名</Th>
               <Th>仕様</Th>
               <Th>作成元・利用地域</Th>
               <Th>公開状況</Th>
@@ -164,12 +164,12 @@ export default async function EstimateTemplatesPage({
       ) : (
         <section className="card px-6 py-12 text-center">
           <h2 className="text-lg font-semibold">
-            {hasFilters ? '条件に一致する見積テンプレートがありません' : '見積テンプレートはまだありません'}
+            {hasFilters ? '条件に一致する標準見積がありません' : '標準見積はまだありません'}
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
             {hasFilters
               ? '検索条件を変更するか、条件をクリアしてもう一度確認してください。'
-              : '最初の見積テンプレートを作成して、Webシミュレーターと案件見積の基準を登録します。'}
+              : '最初の標準見積を作成して、Webシミュレーターと案件見積の販売基準を登録します。'}
           </p>
           <div className="mt-5 flex justify-center gap-2">
             {hasFilters ? (
@@ -177,7 +177,7 @@ export default async function EstimateTemplatesPage({
             ) : (
               <>
                 <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
-                <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の見積テンプレートを作成</Link>
+                <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の標準見積を作成</Link>
               </>
             )}
           </div>

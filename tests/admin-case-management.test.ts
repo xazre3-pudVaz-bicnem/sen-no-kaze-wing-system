@@ -97,7 +97,8 @@ describe('Admin case management UI', () => {
   });
 
   it('does not present unsupported downstream workflow data as implemented', () => {
-    expect(workspace).toContain('現地調査、搬入条件、地盤条件などを案件工程として保存する機能はまだありません。');
+    expect(workspace).toContain('案件受付・現地メモ');
+    expect(workspace).toContain('用途地域・防火地域・建蔽率・容積率・接道・搬入条件・地盤条件を個別項目として保存する正式機能はまだありません。');
     expect(workspace).toContain('正式なアップロード・差替え・版管理は次工程です。');
     expect(workspace).toContain('data-testid="case-drawing-grid"');
     expect(workspace).toContain('data-testid="case-document-list"');

@@ -72,7 +72,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('シミュレーター画面と同じ商品詳細です。ここで変更した仕様は確認用で、保存されません。');
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');
-    expect(client).toContain('<ProductDetail category={category} option={selected}');
+    expect(client).toContain('<ProductDetail key={selected.id} category={category} option={selected}');
     expect(client).toContain('onVariantChange={onPreviewVariantChange}');
   });
 

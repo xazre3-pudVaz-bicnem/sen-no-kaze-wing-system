@@ -13,8 +13,8 @@ export default async function AdminNewQuotePage() {
   const models = await store.listModels();
   return (
     <AdminPage
-      title="新規見積を作成"
-      lead="モデルと仕様を選ぶと、標準構成の第1版（概算見積）が発行されます。発行後にエクセル表で明細を編集できます。"
+      title="新規案件／見積作成"
+      lead="電話・来店・紹介など、スタッフ起点で新しい案件の見積を作成します。既存の見積作成処理をそのまま利用します。"
     >
       <BackLink href="/admin/quotes" label="案件一覧へ戻る" />
       <ManualQuoteForm

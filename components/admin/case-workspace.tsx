@@ -15,6 +15,8 @@ import { Alert, Badge } from '@/components/ui';
 import { QuoteStatusForm } from '@/components/admin/forms';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
+import { CasePlanBoard } from '@/components/admin/case-plan-board';
+import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 
 const TABS = [
   { key: 'estimate', label: '見積書' },
@@ -91,11 +93,11 @@ export async function CaseWorkspace({
   const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);
   const activeTab: TabKey = isTabKey(tab) ? tab : 'estimate';
 
-  const [profiles, categories, options, configurationDetail] = await Promise.all([
+  const [profiles, categories, options, casePlanConfiguration] = await Promise.all([
     isAdmin ? store.listProfiles() : Promise.resolve([]),
     store.listCategories(),
     store.listOptions(),
-    isAdmin ? store.getConfiguration(quote.configuration_id, actor) : Promise.resolve(null),
+    store.getCasePlanConfiguration(quote.id, actor),
   ]);
 
   const dealers = profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer');
@@ -126,12 +128,39 @@ export async function CaseWorkspace({
     (quote.dealer_id ? (actor.role === 'dealer' ? actor.full_name || '担当中' : '割当済み') : '未割当');
   const siteAddress =
     request?.contact.site_address ||
-    (configurationDetail?.configuration.site_location_undecided
+    (casePlanConfiguration?.configuration.site_location_undecided
       ? '未定'
-      : [configurationDetail?.configuration.site_prefecture, configurationDetail?.configuration.site_municipality]
+      : [casePlanConfiguration?.configuration.site_prefecture, casePlanConfiguration?.configuration.site_municipality]
           .filter(Boolean)
           .join('')) ||
     '—';
+
+  let planBundle = null;
+  let planEstimateTemplate = null;
+  let planElevations: { url: string; label: string; alt: string }[] = [];
+  if (activeTab === 'plan' && casePlanConfiguration) {
+    planBundle = await store.getCatalogBundle(casePlanConfiguration.configuration.base_model_id);
+    if (planBundle) {
+      const specCode = casePlanConfiguration.configuration.spec_code;
+      if (specCode) {
+        planEstimateTemplate = await store.getEstimateTemplateBundle(planBundle.model.id, specCode);
+      }
+      const registeredElevations = planBundle.images
+        .filter((image) => image.kind === 'elevation')
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((image) => ({
+          url: image.url,
+          label: image.caption ?? image.alt ?? '立面図',
+          alt: image.alt,
+        }));
+      planElevations =
+        registeredElevations.length > 0
+          ? registeredElevations
+          : planBundle.model.id === MODEL_WING01_ID
+            ? ELEVATIONS
+            : [];
+    }
+  }
 
   const workflow = [
     {
@@ -338,30 +367,53 @@ export async function CaseWorkspace({
       )}
 
       {activeTab === 'plan' && (
-        <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-tab-plan">
+        <section className="space-y-3" data-testid="case-tab-plan">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 className="font-semibold">プランボード</h2>
-              <p className="mt-1 text-sm text-ink-soft">この案件に紐づく保存済みConfigurationを参照します。</p>
+              <h2 className="text-lg font-semibold">プランボード</h2>
+              <p className="mt-1 text-xs text-muted">
+                案件に紐づく保存済み仕様を、シミュレーターと同じ表示ロジックで確認します。ここでは変更できません。
+              </p>
             </div>
-            {isAdmin && (
-              <Link href={`/admin/configurations/${quote.configuration_id}`} className="btn-secondary btn-sm">
-                保存済み仕様を確認
+            {isAdmin && planBundle && casePlanConfiguration && (
+              <Link
+                href={`/simulator/${planBundle.model.slug}?c=${casePlanConfiguration.configuration.id}`}
+                target="_blank"
+                className="btn-secondary btn-sm"
+              >
+                シミュレーターで確認
               </Link>
             )}
           </div>
-          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+
+          <dl className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg bg-[#f7f9f8] p-2.5"><dt className="text-xs text-muted">本体</dt><dd className="mt-1 font-semibold">{quote.base_model_name}</dd></div>
             <div className="rounded-lg bg-[#f7f9f8] p-2.5"><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-1 font-semibold">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd></div>
             <div className="rounded-lg bg-[#f7f9f8] p-2.5"><dt className="text-xs text-muted">設置予定地</dt><dd className="mt-1 font-semibold">{siteAddress}</dd></div>
             <div className="rounded-lg bg-[#f7f9f8] p-2.5">
               <dt className="text-xs text-muted">保存状態</dt>
               <dd className="mt-1 font-semibold">
-                {configurationDetail ? CONFIGURATION_STATUS_LABELS[configurationDetail.configuration.status] : '既存Configurationを参照'}
+                {casePlanConfiguration
+                  ? CONFIGURATION_STATUS_LABELS[casePlanConfiguration.configuration.status]
+                  : '読み込み不可'}
               </dd>
             </div>
           </dl>
-          {!isAdmin && <p className="mt-3 text-xs text-muted">保存済み仕様の詳細画面は、現在の既存権限どおり本部管理者のみ確認できます。</p>}
+
+          {casePlanConfiguration && planBundle ? (
+            <CasePlanBoard
+              bundle={planBundle}
+              configuration={casePlanConfiguration.configuration}
+              items={casePlanConfiguration.items}
+              exteriorFaces={casePlanConfiguration.exterior_faces}
+              estimateTemplate={planEstimateTemplate}
+              elevations={planElevations}
+            />
+          ) : (
+            <Alert tone="warn">
+              この案件の保存済みプランボードを読み込めませんでした。Configurationとの紐付けと閲覧権限を確認してください。
+            </Alert>
+          )}
         </section>
       )}
 

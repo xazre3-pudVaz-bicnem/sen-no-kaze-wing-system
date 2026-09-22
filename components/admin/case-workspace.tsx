@@ -64,6 +64,7 @@ export async function CaseWorkspace({
   actor,
   tab,
   created,
+  revised,
   from,
   embedded = false,
   listSearchParams,
@@ -72,6 +73,7 @@ export async function CaseWorkspace({
   actor: SessionUser;
   tab?: string;
   created?: string;
+  revised?: string;
   from?: string;
   embedded?: boolean;
   listSearchParams?: Record<string, string | undefined>;
@@ -233,12 +235,20 @@ export async function CaseWorkspace({
       </section>
 
       {isAdmin && (
-        <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
-          <summary className="cursor-pointer font-semibold text-[#315745]">担当代理店を変更</summary>
-          <div className="mt-2 max-w-xl">
-            <AssignDealerForm quote={quote} dealers={dealers} />
-          </div>
-        </details>
+        <div className="grid gap-2 sm:grid-cols-2" data-testid="case-admin-controls">
+          <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
+            <summary className="cursor-pointer font-semibold text-[#315745]">担当代理店を変更</summary>
+            <div className="mt-2">
+              <AssignDealerForm quote={quote} dealers={dealers} />
+            </div>
+          </details>
+          <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
+            <summary className="cursor-pointer font-semibold text-[#315745]">状態を変更</summary>
+            <div className="mt-2">
+              <QuoteStatusForm quote={quote} request={request} compact />
+            </div>
+          </details>
+        </div>
       )}
 
       <nav aria-label="案件内メニュー" className="overflow-x-auto border-y border-line bg-white [scrollbar-width:none]">
@@ -287,6 +297,11 @@ export async function CaseWorkspace({
               下の入力表で本体・オプション・別途工事の行を確認し、必要に応じて編集して発行してください。
             </Alert>
           )}
+          {revised && (
+            <Alert tone="success" title={`第${quote.revision}版を発行しました`}>
+              新しい版を案件ワークスペースへ反映しました。以前の版は履歴として残っています。
+            </Alert>
+          )}
           {from === 'mail' && canRevise && (
             <Alert tone="info" title="メールからお越しの方へ">
               この案件の見積を編集し、次の版を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。
@@ -319,7 +334,6 @@ export async function CaseWorkspace({
           </p>
 
           {quote.status === 'superseded' && <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>}
-          {isAdmin && <QuoteStatusForm quote={quote} request={request} />}
         </section>
       )}
 

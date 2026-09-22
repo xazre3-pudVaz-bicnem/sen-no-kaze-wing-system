@@ -108,8 +108,19 @@ export interface QuoteDetail {
   profile?: Profile | null;
 }
 
+export interface CasePlanConfigurationHeader {
+  id: string;
+  base_model_id: string;
+  status: Configuration['status'];
+  finish_level: Configuration['finish_level'];
+  spec_code: string | null;
+  site_prefecture?: string | null;
+  site_municipality?: string | null;
+  site_location_undecided?: boolean;
+}
+
 export interface CasePlanConfiguration {
-  configuration: Configuration;
+  configuration: CasePlanConfigurationHeader;
   items: ConfigurationItem[];
   exterior_faces: ExteriorFaceSelection[];
 }

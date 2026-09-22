@@ -950,27 +950,42 @@ export function ContactStatusForm({ id, status }: { id: string; status: 'new' | 
 
 /* ---------- 見積ステータス ---------- */
 
-export function QuoteStatusForm({ quote, request }: { quote: Quote; request: QuoteRequest | null }) {
+export function QuoteStatusForm({
+  quote,
+  request,
+  compact = false,
+}: {
+  quote: Quote;
+  request: QuoteRequest | null;
+  compact?: boolean;
+}) {
   const [state, action, pending] = useActionState(updateQuoteStatusAction, initial);
   return (
-    <form action={action} className="card space-y-4 p-6" noValidate>
+    <form action={action} className={compact ? 'space-y-2' : 'card space-y-4 p-6'} noValidate>
       <input type="hidden" name="quote_id" value={quote.id} />
-      <p className="font-semibold">ステータス変更</p>
+      {!compact && <p className="font-semibold">ステータス変更</p>}
       <Status state={state} />
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={compact ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-4 sm:grid-cols-2'}>
         <Field label="見積書の状態" htmlFor="q-status" required>
-          <Select id="q-status" name="status" defaultValue={quote.status}>
+          <Select id="q-status" name="status" defaultValue={quote.status} className={compact ? 'py-1 text-xs' : undefined}>
             {Object.entries(QUOTE_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
         </Field>
         <Field label="見積依頼の対応状況" htmlFor="q-req-status">
-          <Select id="q-req-status" name="request_status" defaultValue={request?.status ?? ''}>
+          <Select id="q-req-status" name="request_status" defaultValue={request?.status ?? ''} className={compact ? 'py-1 text-xs' : undefined}>
             <option value="">変更しない</option>
             {Object.entries(QUOTE_REQUEST_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
         </Field>
       </div>
-      <SubmitButton pending={pending} label="更新する" />
+      {compact ? (
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending && <Spinner />}
+          更新する
+        </Button>
+      ) : (
+        <SubmitButton pending={pending} label="更新する" />
+      )}
     </form>
   );
 }

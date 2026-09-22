@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
-import { QuoteTable } from '@/components/mypage/quote-table';
+import { QuoteReferenceDetails, QuoteTable } from '@/components/mypage/quote-table';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
 import type { CatalogPickerItem } from '@/components/admin/catalog-picker';
 
@@ -27,15 +27,20 @@ export function QuoteEstimateSheet({
 
   if (editing && canRevise) {
     return (
-      <DealerRevisionForm
-        quote={quote}
-        items={items}
-        freeProducts={freeProducts}
-        catalog={catalog}
-        canEditBase={canEditBase}
-        sheetMode
-        onCancel={() => setEditing(false)}
-      />
+      <div className="space-y-2" data-testid="quote-estimate-editing">
+        <DealerRevisionForm
+          quote={quote}
+          items={items}
+          freeProducts={freeProducts}
+          catalog={catalog}
+          canEditBase={canEditBase}
+          sheetMode
+          onCancel={() => setEditing(false)}
+        />
+        <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
+          <QuoteReferenceDetails quote={quote} items={items} />
+        </div>
+      </div>
     );
   }
 

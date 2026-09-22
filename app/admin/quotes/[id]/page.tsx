@@ -29,6 +29,7 @@ export default async function AdminQuoteDetailPage({
         actor={actor}
         tab={sp.tab}
         created={sp.created}
+        revised={sp.revised}
         from={sp.from}
       />
     </div>

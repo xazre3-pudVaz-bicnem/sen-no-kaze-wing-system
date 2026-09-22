@@ -178,19 +178,31 @@ export function DealerRevisionForm({
   const compactMetaInputClass = sheetMode
     ? 'h-5 rounded-none border-transparent bg-transparent px-1 py-0 text-[0.62rem] text-muted shadow-none focus:border-[#6d9480] focus:bg-white focus:ring-1 focus:ring-[#6d9480]/30'
     : 'mt-1 text-xs';
+  const isFireDisplayItem = (item: Pick<Row, 'kind' | 'name'> | Pick<QuoteItem, 'kind' | 'name'>) =>
+    item.kind === 'option' && item.name.includes('防火');
   const sheetSections: {
+    key: 'base' | 'interior' | 'option' | 'sitework' | 'free';
     label: string;
     kinds: RevisionItemKind[];
     subtotalLabel: string;
     amount: number;
     always?: boolean;
   }[] = [
-    { label: '本体価格', kinds: ['base', 'base_expense'], subtotalLabel: '【本体価格計】', amount: baseTotal, always: true },
-    { label: '内外装工事', kinds: ['interior_exterior', 'interior_exterior_expense'], subtotalLabel: '【内外装価格計】', amount: interiorExteriorTotal },
-    { label: 'オプション価格', kinds: ['option', 'option_expense'], subtotalLabel: '【オプション価格計】', amount: optionTotal, always: true },
-    { label: '別途工事（運送費・現地工事）', kinds: ['installation'], subtotalLabel: '【別途工事計】', amount: siteworkTotal, always: true },
-    { label: 'フリー商品', kinds: ['free'], subtotalLabel: '【フリー商品計】', amount: freeTotal },
+    { key: 'base', label: '本体価格', kinds: ['base', 'base_expense'], subtotalLabel: '【本体価格計】', amount: baseTotal, always: true },
+    { key: 'interior', label: '内外装工事', kinds: ['interior_exterior', 'interior_exterior_expense'], subtotalLabel: '【内外装価格計】', amount: interiorExteriorTotal },
+    { key: 'option', label: 'オプション価格', kinds: ['option', 'option_expense'], subtotalLabel: '【オプション価格計】', amount: optionTotal, always: true },
+    { key: 'sitework', label: '別途工事（運送費・現地工事）', kinds: ['installation'], subtotalLabel: '【別途工事計】', amount: siteworkTotal, always: true },
+    { key: 'free', label: 'フリー商品', kinds: ['free'], subtotalLabel: '【フリー商品計】', amount: freeTotal },
   ];
+  const matchesSheetSection = (
+    section: (typeof sheetSections)[number],
+    item: Pick<Row, 'kind' | 'name'> | Pick<QuoteItem, 'kind' | 'name'>
+  ) => {
+    const fire = isFireDisplayItem(item);
+    if (section.key === 'base') return section.kinds.includes(item.kind as RevisionItemKind) || fire;
+    if (section.key === 'option') return section.kinds.includes(item.kind as RevisionItemKind) && !fire;
+    return section.kinds.includes(item.kind as RevisionItemKind);
+  };
 
 
   return (
@@ -249,38 +261,102 @@ export function DealerRevisionForm({
             </thead>
             <tbody className="divide-y divide-line/60">
               {sheetSections.map((section) => {
-                const locked = lockedItems.filter((item) => section.kinds.includes(item.kind as RevisionItemKind));
-                const editableRows = rows
+                const locked = lockedItems.filter((item) => matchesSheetSection(section, item));
+                const matchedEditableRows = rows
                   .map((row, index) => ({ row, index }))
-                  .filter(({ row }) => section.kinds.includes(row.kind));
+                  .filter(({ row }) => matchesSheetSection(section, row));
+                const editableRows =
+                  section.key === 'base'
+                    ? [
+                        ...matchedEditableRows.filter(({ row }) => isFireDisplayItem(row)),
+                        ...matchedEditableRows.filter(({ row }) => !isFireDisplayItem(row)),
+                      ]
+                    : matchedEditableRows;
                 if (!section.always && locked.length === 0 && editableRows.length === 0) return null;
                 return (
                   <Fragment key={section.label}>
                     <tr className="bg-ivory">
                       <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
                         {section.label}
+                        {section.key === 'base' && rows.some(isFireDisplayItem) && (
+                          <span className="ml-2 font-normal text-[0.62rem] text-muted">防火仕様は閲覧時と同じく本体欄に表示</span>
+                        )}
                       </td>
                     </tr>
-                    {locked.map((item, index) => (
-                      <tr key={item.id} className="bg-white text-xs" data-testid={`revision-locked-row-${index}`}>
-                        <td className="px-3 py-1.5">
-                          <span className="inline-flex items-center gap-1.5">
-                            <LockKeyhole className="size-3 text-muted" aria-label="変更不可" />
-                            <span>
-                              {item.name}
-                              {item.description && <span className="ml-2 text-[0.65rem] text-muted">{item.description}</span>}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="w-16 px-2 py-1.5 text-right tabular-nums">{formatQty(item.quantity)}</td>
-                        <td className="w-16 px-2 py-1.5 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
-                        <td className="w-24 px-2 py-1.5 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
-                        <td className="w-28 px-3 py-1.5 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
-                        <td className="w-36 px-3 py-1.5 text-[0.7rem] text-muted">{item.remark ?? ''}</td>
-                      </tr>
-                    ))}
-                    {editableRows.map(({ row: r, index: i }) => (
-                      <tr key={r.key} className="group bg-white text-xs" data-testid={`revision-row-${i}`}>
+                    {locked.map((item, index) => {
+                      const previous = locked[index - 1];
+                      const next = locked[index + 1];
+                      const showBaseGroupHeading =
+                        section.key === 'base' &&
+                        item.kind === 'base' &&
+                        Boolean(item.description) &&
+                        (previous?.kind !== 'base' || previous.description !== item.description);
+                      const showBaseGroupSubtotal =
+                        section.key === 'base' &&
+                        item.kind === 'base' &&
+                        Boolean(item.description) &&
+                        (next?.kind !== 'base' || next.description !== item.description);
+                      const baseGroupAmount = showBaseGroupSubtotal
+                        ? locked
+                            .filter((candidate) => candidate.kind === 'base' && candidate.description === item.description)
+                            .reduce((sum, candidate) => sum + candidate.amount, 0)
+                        : 0;
+                      return (
+                        <Fragment key={item.id}>
+                          {showBaseGroupHeading && (
+                            <tr className="bg-sand/40">
+                              <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">{item.description}</td>
+                            </tr>
+                          )}
+                          <tr className="bg-white text-xs" data-testid={`revision-locked-row-${index}`}>
+                            <td className="px-3 py-1.5">
+                              <span className="inline-flex items-center gap-1.5">
+                                <LockKeyhole className="size-3 text-muted" aria-label="変更不可" />
+                                <span>{item.name}</span>
+                              </span>
+                            </td>
+                            <td className="w-16 px-2 py-1.5 text-right tabular-nums">{formatQty(item.quantity)}</td>
+                            <td className="w-16 px-2 py-1.5 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
+                            <td className="w-24 px-2 py-1.5 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
+                            <td className="w-28 px-3 py-1.5 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
+                            <td className="w-36 px-3 py-1.5 text-[0.7rem] text-muted">{item.remark ?? ''}</td>
+                          </tr>
+                          {showBaseGroupSubtotal && (
+                            <tr className="bg-white text-[0.7rem] text-ink-soft">
+                              <td colSpan={4} className="px-3 py-1 text-right font-semibold">{item.description}　計</td>
+                              <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
+                              <td></td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                    {editableRows.map(({ row: r, index: i }, visibleIndex) => {
+                      const previous = editableRows[visibleIndex - 1]?.row;
+                      const next = editableRows[visibleIndex + 1]?.row;
+                      const showBaseGroupHeading =
+                        section.key === 'base' &&
+                        r.kind === 'base' &&
+                        Boolean(r.description) &&
+                        (previous?.kind !== 'base' || previous.description !== r.description);
+                      const showBaseGroupSubtotal =
+                        section.key === 'base' &&
+                        r.kind === 'base' &&
+                        Boolean(r.description) &&
+                        (next?.kind !== 'base' || next.description !== r.description);
+                      const baseGroupAmount = showBaseGroupSubtotal
+                        ? editableRows
+                            .filter(({ row }) => row.kind === 'base' && row.description === r.description)
+                            .reduce((sum, { row }) => sum + amountOf(row), 0)
+                        : 0;
+                      return (
+                      <Fragment key={r.key}>
+                        {showBaseGroupHeading && (
+                          <tr className="bg-sand/40">
+                            <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">{r.description}</td>
+                          </tr>
+                        )}
+                      <tr className="group bg-white text-xs" data-testid={`revision-row-${i}`}>
                         <td className="relative px-0 py-0 align-top">
                           <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
                           <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
@@ -376,7 +452,16 @@ export function DealerRevisionForm({
                           />
                         </td>
                       </tr>
-                    ))}
+                      {showBaseGroupSubtotal && (
+                        <tr className="bg-white text-[0.7rem] text-ink-soft">
+                          <td colSpan={4} className="px-3 py-1 text-right font-semibold">{r.description}　計</td>
+                          <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
+                          <td></td>
+                        </tr>
+                      )}
+                      </Fragment>
+                      );
+                    })}
                     <tr className="border-y border-brown/40 bg-brown/10 font-semibold">
                       <td colSpan={4} className="px-3 py-2 text-sm">{section.subtotalLabel}</td>
                       <td className="px-3 py-2 text-right text-sm tabular-nums">

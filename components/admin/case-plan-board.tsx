@@ -3,13 +3,12 @@
 import { useMemo, useState } from 'react';
 import type {
   CatalogBundle,
-  ConfigurationItem,
   EstimateTemplateBundle,
   ViewKey,
 } from '@/lib/domain/types';
 import { VIEW_KEYS } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
-import type { CasePlanConfigurationHeader } from '@/lib/data/store';
+import type { CasePlanConfigurationHeader, CasePlanConfigurationItem } from '@/lib/data/store';
 import { normalizeExteriorFaces } from '@/lib/domain/exterior-wall';
 import { categoriesInScope, defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
@@ -40,7 +39,7 @@ export function CasePlanBoard({
 }: {
   bundle: CatalogBundle;
   configuration: CasePlanConfigurationHeader;
-  items: ConfigurationItem[];
+  items: CasePlanConfigurationItem[];
   exteriorFaces: ExteriorFaceSelection[];
   estimateTemplate: EstimateTemplateBundle | null;
   elevations: { url: string; label: string; alt: string }[];

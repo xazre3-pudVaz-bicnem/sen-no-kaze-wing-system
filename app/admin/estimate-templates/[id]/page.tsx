@@ -110,7 +110,7 @@ export default async function EstimateTemplateDetailPage({
         </div>
       }
     >
-      <BackLink href="/admin/estimate-templates" label="見積テンプレート一覧へ戻る" />
+      <BackLink href="/admin/estimate-templates" label="標準見積一覧へ戻る" />
 
       <Alert tone="info">
         既存の分類表見積データを使って、新しい編集画面を確認しています。

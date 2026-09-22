@@ -37,6 +37,11 @@ describe('亀有実受注案件ローカルfixture', () => {
     expect(quote.subtotal).toBe(8_360_000);
     expect(quote.tax).toBe(836_000);
     expect(quote.adjustment).toBe(-9_798);
+    expect(quote.dealer_note).toContain('BOX 2台（1階1台＋2階1台）');
+    expect(quote.dealer_note).toContain('防火構造');
+    expect(quote.dealer_note).toContain('屋外鉄骨階段付き');
+    expect(quote.notes).toContain('受注契約日 2026/9/20');
+    expect(quote.notes).toContain('元請入金確認後1週間以内振込支払い');
   });
 
   it('原見積の4分類と2台合計が内部でも一致する', () => {

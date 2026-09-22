@@ -14,7 +14,8 @@
     "seed:supabase": "node scripts/seed-supabase.ts",
     "admin:create": "node scripts/create-admin.ts",
     "images:build": "node scripts/build-images.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "seed:kameari-case": "node scripts/seed-kameari-case.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.0",

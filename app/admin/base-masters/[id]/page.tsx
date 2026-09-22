@@ -51,7 +51,7 @@ export default async function BaseMasterDetailPage({
   if (isLocalMode()) {
     return (
       <AdminPage title="本体マスター">
-        <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+        <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
         <Alert tone="info">この画面はSupabase接続環境で利用できます。</Alert>
       </AdminPage>
     );
@@ -67,7 +67,7 @@ export default async function BaseMasterDetailPage({
   if (masterError) {
     return (
       <AdminPage title="本体マスター">
-        <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+        <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
         <Alert tone="danger">{masterError.message}</Alert>
       </AdminPage>
     );
@@ -96,7 +96,7 @@ export default async function BaseMasterDetailPage({
   if (loadError) {
     return (
       <AdminPage title={master.name}>
-        <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+        <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
         <Alert tone="danger">{loadError.message}</Alert>
       </AdminPage>
     );
@@ -122,7 +122,7 @@ export default async function BaseMasterDetailPage({
     if (migrationOutputError) {
       return (
         <AdminPage title={master.name}>
-          <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+          <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
           <Alert tone="danger">{migrationOutputError.message}</Alert>
         </AdminPage>
       );
@@ -140,7 +140,7 @@ export default async function BaseMasterDetailPage({
       if (migrationBatchError) {
         return (
           <AdminPage title={master.name}>
-            <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+            <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
             <Alert tone="danger">{migrationBatchError.message}</Alert>
           </AdminPage>
         );
@@ -178,7 +178,7 @@ export default async function BaseMasterDetailPage({
     if (error) {
       return (
         <AdminPage title={master.name}>
-          <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+          <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
           <Alert tone="danger">{error.message}</Alert>
         </AdminPage>
       );
@@ -213,7 +213,7 @@ export default async function BaseMasterDetailPage({
       title={master.name}
       lead={`${model?.name ?? '—'}／${owner?.name ?? '—'}／${master.fire_spec_code === 'fire' ? '防火' : '非防火'}`}
     >
-      <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
+      <BackLink href="/admin/base-masters" label="販売基準へ戻る" />
 
       {sp.created && <Alert tone="success">本体と下書き 第1版を作成しました。明細を登録してください。</Alert>}
       {sp.saved && <Alert tone="success">下書きを保存しました。</Alert>}
@@ -358,7 +358,7 @@ export default async function BaseMasterDetailPage({
               const isShown = readOnlyRevisionIds.includes(revision.id);
               return (
                 <tr key={revision.id}>
-                  <Td className="font-semibold">v{revision.version}</Td>
+                  <Td className="font-semibold">第{revision.version}版</Td>
                   <Td><Badge tone={revisionTone(revision.status)}>{revisionLabel(revision.status)}</Badge></Td>
                   <Td right>{formatYen(revision.line_subtotal)}</Td>
                   <Td right>{formatYen(revision.expense_amount)}</Td>

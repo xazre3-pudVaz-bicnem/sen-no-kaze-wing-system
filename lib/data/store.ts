@@ -119,9 +119,14 @@ export interface CasePlanConfigurationHeader {
   site_location_undecided?: boolean;
 }
 
+export type CasePlanConfigurationItem = Pick<
+  ConfigurationItem,
+  'option_id' | 'quantity' | 'variant_choice_ids'
+>;
+
 export interface CasePlanConfiguration {
   configuration: CasePlanConfigurationHeader;
-  items: ConfigurationItem[];
+  items: CasePlanConfigurationItem[];
   exterior_faces: ExteriorFaceSelection[];
 }
 

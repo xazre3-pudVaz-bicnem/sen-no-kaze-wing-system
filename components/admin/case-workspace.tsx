@@ -434,8 +434,22 @@ export async function CaseWorkspace({
 
       {activeTab === 'site' && (
         <FuturePanel title="現地条件">
-          <p><b>現在保存されている設置予定地：</b>{siteAddress}</p>
-          <p className="mt-2">現地調査、搬入条件、地盤条件などを案件工程として保存する機能はまだありません。今回は入力欄や完了状態を追加しません。</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg bg-[#f7f8f8] p-3">
+              <p className="text-xs text-muted">設置予定地</p>
+              <p className="mt-1 font-semibold text-ink">{siteAddress}</p>
+            </div>
+            <div className="rounded-lg bg-[#f7f8f8] p-3">
+              <p className="text-xs text-muted">案件受付・現地メモ</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
+                {request?.message?.trim() || '現地条件のメモはまだありません。'}
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-muted">
+            用途地域・防火地域・建蔽率・容積率・接道・搬入条件・地盤条件を個別項目として保存する正式機能はまだありません。
+            現在は既存の案件受付メモを参照表示しています。
+          </p>
         </FuturePanel>
       )}
 

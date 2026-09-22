@@ -470,6 +470,23 @@ export async function CaseWorkspace({
             </a>
           </div>
 
+          {(quote.dealer_note || quote.notes) && (
+            <div className="grid gap-3 md:grid-cols-2" data-testid="case-document-notes">
+              {quote.dealer_note && (
+                <div className="rounded-lg border border-line bg-white p-3 shadow-sm">
+                  <p className="text-xs font-semibold text-muted">案件構成・申し送り</p>
+                  <p className="mt-1 text-sm leading-6 text-ink">{quote.dealer_note}</p>
+                </div>
+              )}
+              {quote.notes && (
+                <div className="rounded-lg border border-line bg-white p-3 shadow-sm">
+                  <p className="text-xs font-semibold text-muted">受注・契約メモ</p>
+                  <p className="mt-1 text-sm leading-6 text-ink">{quote.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {caseDocuments.some((row) => row.preview_url) && (
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">

@@ -15,6 +15,7 @@ import {
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { QuoteStatusForm } from '@/components/admin/forms';
+import { CaseManagementNav } from '@/components/admin/case-management-nav';
 import { AssignDealerForm, DealerRevisionForm } from '@/components/admin/dealer-forms';
 import { QuoteTable } from '@/components/mypage/quote-table';
 
@@ -141,6 +142,7 @@ export default async function AdminQuoteDetailPage({
         </Link>
         <span className="rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">{ROLE_LABELS[actor.role]}</span>
       </div>
+      <CaseManagementNav role={actor.role} active="cases" />
 
       <section className="overflow-hidden rounded-xl border border-[#2b5d48] bg-[#245c45] text-white shadow-sm" data-testid="case-workspace-header">
         <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5">

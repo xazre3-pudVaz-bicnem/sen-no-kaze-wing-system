@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
@@ -33,7 +34,7 @@ function isTabKey(value: string | undefined): value is TabKey {
   return TABS.some((tab) => tab.key === value);
 }
 
-function FuturePanel({ title, children }: { title: string; children: React.ReactNode }) {
+function FuturePanel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-line bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">

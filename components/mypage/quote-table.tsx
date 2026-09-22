@@ -69,6 +69,52 @@ function ItemRow({ it, showImage = false }: { it: QuoteItem; showImage?: boolean
   );
 }
 
+export function QuoteReferenceDetails({ quote, items }: { quote: Quote; items: QuoteItem[] }) {
+  const withImages = items.filter((item) => item.image_url);
+  const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
+
+  return (
+    <>
+      <div className="space-y-2 border-t border-line px-6 py-4 text-xs text-ink-soft sm:px-8" data-testid="quote-reference-details">
+        {quote.dealer_note && (
+          <p className="rounded-lg bg-ivory px-3 py-2" data-testid="dealer-note">
+            <strong className="font-semibold">代理店より：</strong>
+            {quote.dealer_note}
+          </p>
+        )}
+        <p data-testid="quote-scope">
+          <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong> — {levelInfo.lead}
+        </p>
+        <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
+        <Link href="/dealers" className="inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4">
+          代理店・工務店を探す／お問い合わせ
+          <ArrowRight className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+
+      {withImages.length > 0 && (
+        <div className="border-t border-line px-6 py-5 sm:px-8" data-testid="quote-selected-images">
+          <p className="text-xs font-semibold text-muted">選択いただいた商品（画像一覧）</p>
+          <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
+            {withImages.map((item) => (
+              <li key={item.id}>
+                <span className="relative block aspect-square overflow-hidden rounded-lg bg-sand">
+                  {item.image_url ? (
+                    <SmartImage src={item.image_url} alt={item.name} fill sizes="120px" className="object-cover" />
+                  ) : (
+                    <ImageOff className="m-auto size-5" />
+                  )}
+                </span>
+                <span className="mt-1 block text-xs text-ink-soft">{item.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function QuoteTable({
   quote,
   items,
@@ -103,9 +149,6 @@ export function QuoteTable({
     interiorItems.length > 0 || interiorExpense
       ? optionItemsTotal
       : quote.option_subtotal + quote.option_expense;
-  // 画像一覧はオプションに限らず、画像を持つ明細すべて（フリー商品・別途工事も）
-  const withImages = items.filter((i) => i.image_url);
-  const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
 
   /** 本体の内訳を工事区分（description）ごとにまとめる */
   const baseSections: { section: string; items: QuoteItem[] }[] = [];
@@ -260,37 +303,7 @@ export function QuoteTable({
         </table>
       </div>
 
-      <div className="space-y-2 border-t border-line px-6 py-4 text-xs text-ink-soft sm:px-8">
-        {quote.dealer_note && (
-          <p className="rounded-lg bg-ivory px-3 py-2" data-testid="dealer-note">
-            <strong className="font-semibold">代理店より：</strong>
-            {quote.dealer_note}
-          </p>
-        )}
-        <p data-testid="quote-scope">
-          <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong> — {levelInfo.lead}
-        </p>
-        <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
-        <Link href="/dealers" className="inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4">
-          代理店・工務店を探す／お問い合わせ
-          <ArrowRight className="size-3.5" aria-hidden="true" />
-        </Link>
-      </div>
-
-      {withImages.length > 0 && (
-        <div className="border-t border-line px-6 py-5 sm:px-8">
-          <p className="text-xs font-semibold text-muted">選択いただいた商品（画像一覧）</p>
-          <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
-            {withImages.map((it) => (
-              <li key={it.id}>
-                <span className="relative block aspect-square overflow-hidden rounded-lg bg-sand">
-                  {it.image_url ? <SmartImage src={it.image_url} alt={it.name} fill sizes="120px" className="object-cover" /> : <ImageOff className="m-auto size-5" />}
-                </span>
-                <span className="mt-1 block text-xs text-ink-soft">{it.name}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <QuoteReferenceDetails quote={quote} items={items} />
       )}
     </div>
   );

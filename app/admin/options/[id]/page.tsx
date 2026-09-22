@@ -80,7 +80,7 @@ export default async function EditOptionPage({
     <AdminPage
       title={option.name}
       lead={option.code}
-      actions={canEditThisOption ? (
+      actions={catalogEditor ? (
         <form action={deleteOptionAction}>
           <input type="hidden" name="id" value={option.id} />
           <ConfirmSubmit
@@ -258,8 +258,8 @@ export default async function EditOptionPage({
                               {choice.price_on_request
                                 ? '別途見積'
                                 : choice.extra_price > 0
-                                  ? formatYen(choice.extra_price)
-                                  : formatYen(0)}
+                                  ? `+${formatYen(choice.extra_price)}`
+                                  : '追加なし'}
                             </p>
                           </div>
                         </div>

@@ -74,6 +74,74 @@ function buildInlineTabHref(
   return `/admin/quotes?${query.toString()}#case-workspace`;
 }
 
+function matchSiteValue(text: string, pattern: RegExp, suffix = '') {
+  const match = text.match(pattern);
+  return match?.[1] ? `${match[1]}${suffix}` : '未登録';
+}
+
+function buildSiteConditionCandidates(siteAddress: string, evidenceText: string) {
+  const roadWidth = evidenceText.match(/道路幅員\s*[:：]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(mm|m)/i);
+  const shadowRule =
+    evidenceText.includes('日影規制') && evidenceText.includes('対象建物10m超')
+      ? '対象建物10m超／4時間・2.5時間／測定面4m'
+      : '未登録';
+
+  return [
+    { label: '設置予定地', value: siteAddress, source: '保存済み住所' },
+    {
+      label: '都市計画区域',
+      value: evidenceText.includes('市街化区域') ? '市街化区域' : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '用途地域',
+      value: evidenceText.includes('第一種住居地域') ? '第一種住居地域' : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '高度地区',
+      value:
+        evidenceText.includes('第2種高度地区') || evidenceText.includes('第２種高度地区')
+          ? '第2種高度地区'
+          : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '防火地域',
+      value: evidenceText.includes('準防火地域') ? '準防火地域' : '未登録',
+      source: '案件受付・資料',
+    },
+    {
+      label: '建蔽率',
+      value: matchSiteValue(evidenceText, /建(?:蔽|ぺい)率\s*[:：]?\s*([0-9.]+)\s*%/, '%'),
+      source: '案件受付・資料',
+    },
+    {
+      label: '容積率',
+      value: matchSiteValue(evidenceText, /容積率\s*[:：]?\s*([0-9.]+)\s*%/, '%'),
+      source: '案件受付・資料',
+    },
+    {
+      label: '道路幅員',
+      value: roadWidth ? `${roadWidth[1]}${roadWidth[2]}` : '未登録',
+      source: '配置・敷地図',
+    },
+    {
+      label: '接道・道路境界',
+      value: evidenceText.includes('道路境界線') ? '配置図に道路境界線あり（詳細要確認）' : '未登録',
+      source: '配置・敷地図',
+    },
+    { label: '日影規制', value: shadowRule, source: '都市計画資料' },
+    {
+      label: '遺跡対象地域',
+      value: evidenceText.includes('遺跡地及び行政指導範囲') ? '遺跡地及び行政指導範囲' : '未登録',
+      source: '都市計画資料',
+    },
+    { label: '搬入条件', value: '未登録', source: '要現地確認' },
+    { label: '地盤条件', value: '未登録', source: '要現地確認' },
+  ];
+}
+
 export async function CaseWorkspace({
   quoteId,
   actor,
@@ -111,7 +179,9 @@ export async function CaseWorkspace({
     store.listCategories(),
     store.listOptions(),
     store.getCasePlanConfiguration(quote.id, actor),
-    activeTab === 'documents' ? store.listCaseDocuments(quote.id, actor) : Promise.resolve([] as CaseDocument[]),
+    activeTab === 'documents' || activeTab === 'site'
+      ? store.listCaseDocuments(quote.id, actor)
+      : Promise.resolve([] as CaseDocument[]),
   ]);
 
   const dealers = profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer');
@@ -156,6 +226,11 @@ export async function CaseWorkspace({
         (option.code === 'fire-proof' || option.code === 'fire-standard')
     )?.name ?? '未確認';
   const caseStructureNote = quote.dealer_note?.trim() || null;
+  const siteEvidenceText = [
+    request?.message ?? '',
+    ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
+  ].join(' ');
+  const siteConditionCandidates = buildSiteConditionCandidates(siteAddress, siteEvidenceText);
 
   let planBundle: CatalogBundle | null = null;
   let planEstimateTemplate: EstimateTemplateBundle | null = null;
@@ -463,22 +538,59 @@ export async function CaseWorkspace({
 
       {activeTab === 'site' && (
         <FuturePanel title="現地条件">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-[#f7f8f8] p-3">
-              <p className="text-xs text-muted">設置予定地</p>
-              <p className="mt-1 font-semibold text-ink">{siteAddress}</p>
+          <div className="space-y-4" data-testid="case-site-condition-candidates">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-ink">正式登録候補</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  現在は保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式項目化は次工程です。
+                </p>
+              </div>
+              <Link href={tabHref('documents')} className="btn-secondary btn-sm">
+                現地資料を確認
+              </Link>
             </div>
-            <div className="rounded-lg bg-[#f7f8f8] p-3">
-              <p className="text-xs text-muted">案件受付・現地メモ</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
-                {request?.message?.trim() || '現地条件のメモはまだありません。'}
-              </p>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {siteConditionCandidates.map((row) => {
+                const pending = row.value === '未登録' || row.value.includes('要確認');
+                return (
+                  <div key={row.label} className="rounded-lg border border-line bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-semibold text-muted">{row.label}</p>
+                      <span
+                        className={
+                          pending
+                            ? 'rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.58rem] font-semibold text-[#8a6416]'
+                            : 'rounded-full bg-[#eef7f1] px-2 py-0.5 text-[0.58rem] font-semibold text-[#2f6b4f]'
+                        }
+                      >
+                        {pending ? '要登録・確認' : '既存情報'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold leading-5 text-ink">{row.value}</p>
+                    <p className="mt-1 text-[0.65rem] text-muted">出典：{row.source}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-[#f7f8f8] p-3">
+                <p className="text-xs text-muted">案件受付・現地メモ</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink">
+                  {request?.message?.trim() || '現地条件のメモはまだありません。'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3">
+                <p className="text-xs font-semibold text-[#765d1f]">正式確認時の注意</p>
+                <p className="mt-1 text-xs leading-5 text-ink-soft">
+                  都市計画資料は参考図として扱い、建築可否・法規条件の正式判断は所管課・設計者による確認を前提とします。
+                  接道、搬入、地盤についても現地確認後に確定します。
+                </p>
+              </div>
             </div>
           </div>
-          <p className="mt-3 text-xs leading-5 text-muted">
-            用途地域・防火地域・建蔽率・容積率・接道・搬入条件・地盤条件を個別項目として保存する正式機能はまだありません。
-            現在は既存の案件受付メモを参照表示しています。
-          </p>
         </FuturePanel>
       )}
 

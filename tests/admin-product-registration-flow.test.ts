@@ -52,6 +52,13 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('登録して見積テンプレートへ戻る');
     expect(forms).toContain('商品を作成して次へ');
   });
+
+  it('正式商品とフリー商品の登録導線を分ける', () => {
+    expect(newPage).toContain('requestedFreeCategory');
+    expect(newPage).toContain('FREE_PRODUCT_CATEGORY_CODE');
+    expect(editPage).toContain("'/admin/free-products'");
+    expect(listPage).toContain('catalogOptions');
+  });
   it('商品特定は既存値を候補として使える', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');

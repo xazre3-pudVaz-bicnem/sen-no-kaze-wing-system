@@ -469,9 +469,10 @@ export class LocalStore implements DataStore {
     return this.read((db) => {
       const quote = db.quotes.find((row) => row.id === quoteId);
       if (!quote) return null;
-      const isStaff = actor.role === 'admin' || actor.role === 'master_dealer' || actor.role === 'dealer';
+      const isStaff = hasRoleAtLeast(actor.role, 'dealer');
       if (!isStaff) return null;
-      if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;
+      const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');
+      if (!canViewAny && quote.dealer_id !== actor.id) return null;
       const configuration = db.configurations.find((row) => row.id === quote.configuration_id);
       if (!configuration) return null;
       const exteriorFaces = (configuration as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces;

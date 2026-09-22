@@ -27,14 +27,14 @@ function revisionTone(status: string): 'success' | 'warn' | 'neutral' {
 
 function revisionLabel(status: string) {
   if (status === 'published') return '公開中';
-  if (status === 'draft') return 'Draft';
+  if (status === 'draft') return '下書き';
   return '旧版';
 }
 
 function readOnlyRevisionTitle(revision: BaseMasterRevisionView) {
-  if (revision.status === 'draft') return `Draft v${revision.version}（参照のみ）`;
-  if (revision.status === 'published') return `公開版 v${revision.version}`;
-  return `旧版 v${revision.version}`;
+  if (revision.status === 'draft') return `下書き 第${revision.version}版（参照のみ）`;
+  if (revision.status === 'published') return `公開版 第${revision.version}版`;
+  return `旧版 第${revision.version}版`;
 }
 
 export default async function BaseMasterDetailPage({
@@ -215,10 +215,10 @@ export default async function BaseMasterDetailPage({
     >
       <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
 
-      {sp.created && <Alert tone="success">本体とDraft v1を作成しました。明細を登録してください。</Alert>}
-      {sp.saved && <Alert tone="success">Draftを保存しました。</Alert>}
-      {sp.published && <Alert tone="success">新しいRevisionを公開しました。</Alert>}
-      {sp.draft && <Alert tone="success">公開版から新しいDraftを作成しました。</Alert>}
+      {sp.created && <Alert tone="success">本体と下書き 第1版を作成しました。明細を登録してください。</Alert>}
+      {sp.saved && <Alert tone="success">下書きを保存しました。</Alert>}
+      {sp.published && <Alert tone="success">新しい版を公開しました。</Alert>}
+      {sp.draft && <Alert tone="success">公開版から新しい下書きを作成しました。</Alert>}
 
       <section className="card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
@@ -231,27 +231,27 @@ export default async function BaseMasterDetailPage({
         </div>
         <div>
           <p className="text-xs text-muted">現在公開版</p>
-          <p className="mt-1 font-semibold">{current ? `v${current.version}・${formatYen(current.total)}` : '未公開'}</p>
+          <p className="mt-1 font-semibold">{current ? `第${current.version}版・${formatYen(current.total)}` : '未公開'}</p>
         </div>
         <div>
           <p className="text-xs text-muted">編集中</p>
-          <p className="mt-1 font-semibold">{draft ? `Draft v${draft.version}` : 'なし'}</p>
+          <p className="mt-1 font-semibold">{draft ? `第${draft.version}版 編集中` : 'なし'}</p>
         </div>
       </section>
 
       {detailView.accessKind === 'owner_viewer' && (
-        <Alert tone="info">この本体は所有組織の参照権限です。Draftと公開版を確認できますが、編集・公開はできません。</Alert>
+        <Alert tone="info">この本体は所有組織の参照権限です。下書きと公開版を確認できますが、編集・公開はできません。</Alert>
       )}
       {detailView.accessKind === 'shared_viewer' && (
-        <Alert tone="info">この本体は利用できますが、編集・公開はできません。Draftは表示されません。</Alert>
+        <Alert tone="info">この本体は利用できますが、編集・公開はできません。下書きは表示されません。</Alert>
       )}
 
       {migrationDraftLocked && draft && migrationDraftOutput && (
         <section className="card space-y-4 p-6">
           <div>
-            <h2 className="font-semibold">旧本体移行Draft</h2>
+            <h2 className="font-semibold">旧本体移行の下書き</h2>
             <p className="mt-1 text-sm text-muted">
-              このDraftは旧本体移行の検算中です。明細・金額・諸費用を直接変更できません。
+              この下書きは旧本体移行の検算中です。明細・金額・諸費用を直接変更できません。
             </p>
           </div>
           <div className="grid gap-3 text-sm sm:grid-cols-2">
@@ -296,8 +296,8 @@ export default async function BaseMasterDetailPage({
       {editable && !draft && current && (
         <section className="card space-y-4 p-6">
           <div>
-            <h2 className="font-semibold">公開版 v{current.version}</h2>
-            <p className="mt-1 text-sm text-muted">公開済みRevisionは直接変更しません。変更するときは新しいDraftを作成します。</p>
+            <h2 className="font-semibold">公開版 第{current.version}版</h2>
+            <p className="mt-1 text-sm text-muted">公開済みの版は直接変更しません。変更するときは新しい下書きを作成します。</p>
           </div>
           <StartBaseMasterDraftForm masterId={master.id} />
         </section>
@@ -310,7 +310,7 @@ export default async function BaseMasterDetailPage({
           <section key={revision.id} id={`revision-${revision.id}`} className="card overflow-x-auto">
             <div className="border-b border-line px-5 py-4">
               <h2 className="font-semibold">
-                {isMigrationDraft ? `Draft v${revision.version}（移行監査・参照のみ）` : readOnlyRevisionTitle(revision)}
+                {isMigrationDraft ? `下書き 第${revision.version}版（移行監査・参照のみ）` : readOnlyRevisionTitle(revision)}
               </h2>
               <p className="mt-1 text-xs text-muted">
                 {lines.length}行・明細合計 {formatYen(revision.line_subtotal)}・本体価格計 {formatYen(revision.total)}
@@ -336,7 +336,7 @@ export default async function BaseMasterDetailPage({
                 </tbody>
               </table>
             ) : (
-              <p className="px-5 py-6 text-sm text-muted">このRevisionには明細がありません。</p>
+              <p className="px-5 py-6 text-sm text-muted">この版には明細がありません。</p>
             )}
           </section>
         );
@@ -344,7 +344,7 @@ export default async function BaseMasterDetailPage({
 
       <section className="space-y-3">
         <div>
-          <h2 className="font-semibold">Revision履歴</h2>
+          <h2 className="font-semibold">版の履歴</h2>
           <p className="mt-1 text-sm text-muted">公開済みの版は内容を固定して残します。各版の明細も参照できます。</p>
         </div>
         <Table minWidth="54rem">
@@ -381,7 +381,7 @@ export default async function BaseMasterDetailPage({
                 </tr>
               );
             })}
-            {revisionRows.length === 0 && <tr><Td colSpan={7} className="py-8 text-center text-muted">Revisionがありません。</Td></tr>}
+            {revisionRows.length === 0 && <tr><Td colSpan={7} className="py-8 text-center text-muted">版がありません。</Td></tr>}
           </tbody>
         </Table>
       </section>

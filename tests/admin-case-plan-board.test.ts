@@ -58,6 +58,8 @@ describe('案件プランボード', () => {
     expect(localStore).toContain('async getCasePlanConfiguration(quoteId: string, actor: SessionUser)');
     expect(localStore).toContain("const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');");
     expect(localStore).toContain('quote.dealer_id !== actor.id');
+    expect(localStore).toContain('option_id: item.option_id');
+    expect(localStore).toContain('variant_choice_ids: item.variant_choice_ids ?? []');
   });
 
   it('専用RPCはSECURITY DEFINERをhardeningし、顧客と無関係な代理店を拒否する', () => {
@@ -70,6 +72,14 @@ describe('案件プランボード', () => {
     expect(body).toContain('from public.quotes');
     expect(body).toContain('from public.configurations');
     expect(body).toContain('from public.configuration_items');
+    expect(body).toContain("'base_model_id', c.base_model_id");
+    expect(body).toContain("'finish_level', c.finish_level");
+    expect(body).toContain("'option_id', ci.option_id");
+    expect(body).toContain("'variant_choice_ids', ci.variant_choice_ids");
+    expect(body).not.toContain('to_jsonb(c)');
+    expect(body).not.toContain("'user_id', c.user_id");
+    expect(body).not.toContain("'total', c.total");
+    expect(body).not.toContain("'notes', c.notes");
     expect(body).not.toMatch(/\binsert\s+into\b/i);
     expect(body).not.toMatch(/\bupdate\s+public\./i);
     expect(body).not.toMatch(/\bdelete\s+from\b/i);

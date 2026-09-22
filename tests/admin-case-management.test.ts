@@ -102,6 +102,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('正式なアップロード・差替え・版管理は次工程です。');
     expect(workspace).toContain('data-testid="case-drawing-grid"');
     expect(workspace).toContain('data-testid="case-document-list"');
+    expect(workspace).toContain('data-testid="case-document-notes"');
+    expect(workspace).toContain('案件構成・申し送り');
+    expect(workspace).toContain('受注・契約メモ');
     expect(workspace).toContain('現在の見積書PDF');
     expect(workspace).toContain('原本保管は未実装');
     expect(workspace).toContain('製造指示、製造個体、工程日、搬入・施工進捗を保存する正式機能はまだありません。');

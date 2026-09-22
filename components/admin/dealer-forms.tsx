@@ -1,9 +1,9 @@
 'use client';
 
 import { Fragment, useActionState, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { LockKeyhole, Plus, Trash2, X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
-import { formatYen } from '@/lib/domain/pricing';
+import { formatQty, formatYen } from '@/lib/domain/pricing';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
@@ -111,6 +111,7 @@ export function DealerRevisionForm({
   const editable = (k: QuoteItem['kind']): k is RevisionItemKind =>
     (canEditBase ? FULL_KINDS : DEALER_KINDS).includes(k as RevisionItemKind);
 
+  const lockedItems = sheetMode ? items.filter((i) => !editable(i.kind)) : [];
   const [rows, setRows] = useState<Row[]>(() =>
     items
       .filter((i) => editable(i.kind))
@@ -140,9 +141,8 @@ export function DealerRevisionForm({
 
   const update = (key: string, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) =>
-    setRows((cur) => [
-      ...cur,
-      {
+    setRows((cur) => {
+      const next: Row = {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
         kind,
         name: preset?.name ?? '',
@@ -152,8 +152,11 @@ export function DealerRevisionForm({
         unit_price: preset?.price ?? 0,
         quantity: 1,
         image_url: preset?.image_url ?? null,
-      },
-    ]);
+      };
+      const lastSameKind = cur.reduce((last, row, index) => (row.kind === kind ? index : last), -1);
+      if (lastSameKind < 0) return [...cur, next];
+      return [...cur.slice(0, lastSameKind + 1), next, ...cur.slice(lastSameKind + 1)];
+    });
   const [pickerOpen, setPickerOpen] = useState(false);
   const cellInputClass = sheetMode
     ? 'h-7 rounded-none border-transparent bg-transparent px-1.5 py-0.5 text-xs shadow-none focus:border-[#6d9480] focus:bg-white focus:ring-1 focus:ring-[#6d9480]/30'
@@ -222,6 +225,34 @@ export function DealerRevisionForm({
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
+            {sheetMode && lockedItems.length > 0 && (
+              <>
+                <tr className="bg-[#eef3f2]">
+                  <td colSpan={9} className="px-2 py-1 text-[0.66rem] font-semibold text-[#536771]">
+                    <span className="inline-flex items-center gap-1">
+                      <LockKeyhole className="size-3" aria-hidden="true" />
+                      本体・固定項目（変更不可）
+                    </span>
+                  </td>
+                </tr>
+                {lockedItems.map((item, index) => (
+                  <tr key={item.id} className="bg-[#fafbf9] text-[0.68rem] text-ink-soft" data-testid={`revision-locked-row-${index}`}>
+                    <td className="border-r border-line/70 px-1 py-1 text-center text-[0.62rem] text-muted">—</td>
+                    <td className="border-r border-line/70 px-2 py-1">{KIND_LABELS[item.kind as RevisionItemKind] ?? '固定項目'}</td>
+                    <td className="border-r border-line/70 px-2 py-1">
+                      <span className="font-medium text-ink">{item.name}</span>
+                      {item.description && <span className="ml-1 text-[0.6rem] text-muted">{item.description}</span>}
+                    </td>
+                    <td className="border-r border-line/70 px-2 py-1 text-right tabular-nums">{formatQty(item.quantity)}</td>
+                    <td className="border-r border-line/70 px-2 py-1">{item.unit ?? '式'}</td>
+                    <td className="border-r border-line/70 px-2 py-1 text-right tabular-nums">{formatYen(item.unit_price)}</td>
+                    <td className="border-r border-line/70 px-2 py-1 text-right tabular-nums">{formatYen(item.amount)}</td>
+                    <td className="border-r border-line/70 px-2 py-1">{item.remark ?? ''}</td>
+                    <td className="px-1 py-1 text-center"><LockKeyhole className="mx-auto size-3 text-muted" aria-label="変更不可" /></td>
+                  </tr>
+                ))}
+              </>
+            )}
             {rows.map((r, i) => (
               <Fragment key={r.key}>
                 {sheetMode && (i === 0 || rows[i - 1]?.kind !== r.kind) && (

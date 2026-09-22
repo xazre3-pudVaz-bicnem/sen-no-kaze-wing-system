@@ -39,12 +39,12 @@ const adminActions = fs.readFileSync(
   'utf8'
 );
 
-describe('見積テンプレート管理UI', () => {
+describe('標準見積管理UI', () => {
   it('一覧に新しい管理項目を表示する', () => {
-    expect(listPage).toContain('見積テンプレート');
+    expect(listPage).toContain('標準見積');
     expect(listPage).toContain('作成元・利用地域');
     expect(listPage).toContain('税込金額');
-    expect(listPage).toContain('見積テンプレートはまだありません');
+    expect(listPage).toContain('標準見積はまだありません');
     expect(listPage).not.toContain('承認待ち 0件');
     expect(listPage).toContain('一覧の絞り込み');
     expect(listPage).toContain('複製には使用しません');
@@ -90,7 +90,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('お客様には表示しない');
   });
 
-  it('見積テンプレートから商品登録へ移動して戻れる', () => {
+  it('標準見積から商品登録へ移動して戻れる', () => {
     expect(workbench).toContain('/admin/options/new?return_to=');
     expect(optionNew).toContain('見積テンプレートの商品追加から移動しています');
     expect(optionNew).toContain('returnTo={returnTo}');

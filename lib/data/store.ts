@@ -32,6 +32,7 @@ import type {
   EstimateTemplateLine,
   EstimateTemplateSection,
 } from '@/lib/domain/types';
+import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 
 export interface SessionUser {
   id: string;
@@ -105,6 +106,28 @@ export interface QuoteDetail {
   document: QuoteDocument | null;
   /** 管理者向け: 顧客プロフィール */
   profile?: Profile | null;
+}
+
+export interface CasePlanConfigurationHeader {
+  id: string;
+  base_model_id: string;
+  status: Configuration['status'];
+  finish_level: Configuration['finish_level'];
+  spec_code: string | null;
+  site_prefecture?: string | null;
+  site_municipality?: string | null;
+  site_location_undecided?: boolean;
+}
+
+export type CasePlanConfigurationItem = Pick<
+  ConfigurationItem,
+  'option_id' | 'quantity' | 'variant_choice_ids'
+>;
+
+export interface CasePlanConfiguration {
+  configuration: CasePlanConfigurationHeader;
+  items: CasePlanConfigurationItem[];
+  exterior_faces: ExteriorFaceSelection[];
 }
 
 export interface ContactInput {
@@ -188,6 +211,8 @@ export interface DataStore {
   // ---- 保存した仕様 ----
   listConfigurations(userId: string): Promise<Configuration[]>;
   getConfiguration(id: string, actor: SessionUser): Promise<{ configuration: Configuration; items: ConfigurationItem[] } | null>;
+  /** 案件プランボード用。管理者または担当代理店だけが見積経由で読み取れる。 */
+  getCasePlanConfiguration(quoteId: string, actor: SessionUser): Promise<CasePlanConfiguration | null>;
   saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration>;
   duplicateConfiguration(id: string, actor: SessionUser): Promise<Configuration>;
   deleteConfiguration(id: string, actor: SessionUser): Promise<void>;

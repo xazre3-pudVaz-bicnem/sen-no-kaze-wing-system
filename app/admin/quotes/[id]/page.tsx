@@ -108,6 +108,8 @@ export default async function AdminQuoteDetailPage({
               <dl className="mt-4 space-y-2 text-ink-soft">
                 <div><dt className="inline text-muted">担当代理店：</dt><dd className="inline">{assignedDealer?.company_name ?? assignedDealer?.full_name ?? (quote.dealer_id ? '割当済み' : '未割当')}</dd></div>
                 <div><dt className="inline text-muted">見積番号：</dt><dd className="inline font-mono">{quote.quote_no}（第{quote.revision}版）</dd></div>
+                <div><dt className="inline text-muted">見積発行日：</dt><dd className="inline">{formatDate(quote.issued_at)}</dd></div>
+                <div><dt className="inline text-muted">有効期限：</dt><dd className="inline">{formatDate(quote.valid_until)}</dd></div>
               </dl>
             </div>
             {isAdmin && <AssignDealerForm quote={quote} dealers={dealers} />}

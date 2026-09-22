@@ -11,13 +11,14 @@ type NavSection = { href: string; label: string; match: string[]; items: NavItem
 
 const sections: NavSection[] = [
   {
-    href: '/admin/quotes', label: '案件管理', match: ['/admin', '/admin/quotes', '/admin/configurations', '/admin/notifications'],
+    href: '/admin/quotes', label: '案件管理', match: ['/admin', '/admin/quotes', '/admin/configurations', '/admin/notifications', '/admin/contacts'],
     items: [
       { href: '/admin', label: '概要', exact: true },
       { href: '/admin/quotes', label: '見積依頼・見積書' },
       { href: '/admin/quotes/new', label: '新規見積を作成' },
       { href: '/admin/configurations', label: '保存された仕様', need: 'admin' },
       { href: '/admin/notifications', label: 'お知らせ' },
+      { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
     ],
   },
   {
@@ -41,12 +42,11 @@ const sections: NavSection[] = [
     ],
   },
   {
-    href: '/admin/settings', label: '管理設定', match: ['/admin/settings', '/admin/customers', '/admin/contacts', '/admin/audit', '/admin/manual'],
+    href: '/admin/settings', label: '管理設定', match: ['/admin/settings', '/admin/customers', '/admin/audit', '/admin/manual'],
     items: [
       { href: '/admin/settings', label: '設定一覧', exact: true },
       { href: '/admin/manual', label: '操作マニュアル' },
       { href: '/admin/customers', label: 'ユーザー・権限', need: 'admin' },
-      { href: '/admin/contacts', label: 'お問い合わせ', need: 'admin' },
       { href: '/admin/audit', label: '変更履歴', need: 'admin' },
     ],
   },

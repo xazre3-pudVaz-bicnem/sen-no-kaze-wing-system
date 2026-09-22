@@ -8,6 +8,7 @@ const dashboard = fs.readFileSync(path.join(root, 'app/admin/page.tsx'), 'utf8')
 const list = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8');
 const detail = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/page.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
+const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
 const newQuote = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
 const configurations = fs.readFileSync(path.join(root, 'app/admin/configurations/page.tsx'), 'utf8');
 const contacts = fs.readFileSync(path.join(root, 'app/admin/contacts/page.tsx'), 'utf8');
@@ -74,10 +75,14 @@ describe('Admin case management UI', () => {
       expect(workspace).toContain(label);
     }
     expect(workspace).toContain('今後対応予定');
-    expect(workspace).toContain('<QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />');
-    expect(workspace).toContain('<DealerRevisionForm quote={quote}');
+    expect(workspace).toContain('<QuoteEstimateSheet');
+    expect(workspace).toContain('startInEditMode={Boolean(created)}');
+    expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
+    expect(quoteEstimateSheet).toContain('<QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />');
+    expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
     expect(workspace).toContain('<AssignDealerForm quote={quote} dealers={dealers} />');
     expect(workspace).toContain('<QuoteStatusForm quote={quote} request={request} />');
+    expect(workspace).toContain('正式見積書');
     expect(workspace).toContain('金額は発行時点の確定内容です。');
     expect(workspace).not.toContain('金額は発行時点のスナップショットです。');
   });

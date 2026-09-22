@@ -25,6 +25,7 @@ import type {
   ContactMessage,
   Quote,
   QuoteDocument,
+  CaseDocument,
   QuoteItem,
   QuoteRequest,
   EstimateTemplate,
@@ -65,6 +66,7 @@ export interface LocalDb {
   quotes: Quote[];
   quoteItems: QuoteItem[];
   quoteDocuments: QuoteDocument[];
+  caseDocuments: CaseDocument[];
   quoteSequences: Record<string, number>;
   resetTokens: { token: string; user_id: string; expires_at: string }[];
   contactMessages: ContactMessage[];
@@ -116,6 +118,7 @@ export function emptyDb(): LocalDb {
     quotes: [],
     quoteItems: [],
     quoteDocuments: [],
+    caseDocuments: [],
     quoteSequences: {},
     resetTokens: [],
     contactMessages: [],

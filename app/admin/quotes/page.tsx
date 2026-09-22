@@ -283,7 +283,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               name="q"
               type="search"
               defaultValue={sp.q ?? ''}
-              placeholder="案件名・顧客・住所・見積番号"
+              placeholder="顧客・住所・見積番号・商品モデル"
               className="min-w-0 rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-[#6d9480]"
             />
             <select name="status" defaultValue={statusFilter} className="rounded-lg border border-line bg-white px-3 py-2 text-sm">

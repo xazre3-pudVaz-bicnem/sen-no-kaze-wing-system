@@ -21,14 +21,16 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
   const [query, setQuery] = useState(''); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [sort, setSort] = useState('name'); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const filtered = useMemo(() => options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId, status, quick })).sort((a, b) => sort === 'updated' ? b.updated_at.localeCompare(a.updated_at) : a.name.localeCompare(b.name, 'ja-JP')), [categoryId, options, query, quick, sort, status]);
+  /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
   useEffect(() => setSelectedId((id) => selectedOptionAfterFilter(id, filtered.map((o) => o.id))), [filtered]);
   const selected = filtered.find((o) => o.id === selectedId); const category = selected && categoryMap.get(selected.category_id); const variants = selected ? variantsByOptionId[selected.id] ?? EMPTY_VARIANTS : EMPTY_VARIANTS;
   const preview = useMemo(() => {
     const groups = variants.groups.filter((group) => group.status === 'published');
     const choices = variants.choices.filter((choice) => choice.status === 'published');
     return { groups, choices, defaults: selected ? defaultVariantIdsFor(groups, choices, [selected.id]) : [] };
-  }, [selected?.id, variants]);
+  }, [selected, variants]);
   useEffect(() => setPreviewVariantIds(preview.defaults), [preview.defaults]); // 選択中商品のみのローカル表示状態。保存はしない。
+  /* eslint-enable react-hooks/set-state-in-effect */
   const onPreviewVariantChange = (choiceId: string, groupId: string) => {
     setPreviewVariantIds((current) => pruneHiddenVariantChoices(preview.groups, preview.choices, [...current.filter((id) => preview.choices.find((choice) => choice.id === id)?.group_id !== groupId), choiceId]));
   };

@@ -661,13 +661,13 @@ export function OptionForm({
         <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
             <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : '価格・公開設定'}</p>
-            <p className="mt-1 text-sm text-muted">基本追加金額を設定し、対象モデル・公開状態を確認します。色・仕様ごとの追加金額も同じ商品情報画面で設定します。</p>
+            <p className="mt-1 text-sm text-muted">商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。</p>
           </div>
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <p className="font-semibold">価格</p>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="追加金額（税別・円）" htmlFor={`price-${mode}`} required hint="この商品を選んだときに加算する金額" errors={e.price}>
+              <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="この商品の登録済み価格。標準品との差額は別途の計算で扱います" errors={e.price}>
                 <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
               </Field>
               <Field label="メーカー参考価格（税別・表示のみ）" htmlFor={`list_price-${mode}`} errors={e.list_price}>

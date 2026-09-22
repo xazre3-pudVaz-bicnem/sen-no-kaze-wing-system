@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { Badge, Input, Select } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
@@ -10,15 +12,20 @@ export default async function AdminOptionsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const actor = await requireStaff();
+  const editor = canEditCatalog(actor.role);
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
+  const freeCategoryId = categories.find((category) => category.code === FREE_PRODUCT_CATEGORY_CODE)?.id;
+  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE);
+  const catalogOptions = freeCategoryId ? options.filter((option) => option.category_id !== freeCategoryId) : options;
   const categoryMap = new Map(categories.map((category) => [category.id, category]));
 
   const q = (sp.q ?? '').trim().toLowerCase();
   const categoryId = sp.category ?? '';
   const status = sp.status ?? '';
-  const filtered = options.filter((option) => {
+  const filtered = catalogOptions.filter((option) => {
     if (categoryId && option.category_id !== categoryId) return false;
     if (status && option.status !== status) return false;
     if (!q) return true;
@@ -37,7 +44,7 @@ export default async function AdminOptionsPage({
     <AdminPage
       title="商品登録・編集"
       lead="商品を探して編集します。細かな設定は商品詳細画面にまとめています。"
-      actions={<Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link>}
+      actions={editor ? <Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link> : undefined}
     >
       <FlashMessages sp={sp} />
 
@@ -56,7 +63,7 @@ export default async function AdminOptionsPage({
           <span className="label">カテゴリー</span>
           <Select name="category" defaultValue={categoryId} className="mt-1 w-full">
             <option value="">すべて</option>
-            {categories.map((category) => (
+            {catalogCategories.map((category) => (
               <option key={category.id} value={category.id}>{category.name}</option>
             ))}
           </Select>
@@ -77,9 +84,9 @@ export default async function AdminOptionsPage({
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          {filtered.length === options.length
-            ? `${options.length}商品`
-            : `${filtered.length} / ${options.length}商品を表示`}
+          {filtered.length === catalogOptions.length
+            ? `${catalogOptions.length}商品`
+            : `${filtered.length} / ${catalogOptions.length}商品を表示`}
         </p>
       </div>
 
@@ -89,7 +96,7 @@ export default async function AdminOptionsPage({
             <tr>
               <Th>商品</Th>
               <Th>カテゴリー</Th>
-              <Th right>追加金額</Th>
+              <Th right>商品価格（税別）</Th>
               <Th>公開</Th>
               <Th></Th>
             </tr>
@@ -129,7 +136,7 @@ export default async function AdminOptionsPage({
                     </Badge>
                   </Td>
                   <Td right>
-                    <Link href={`/admin/options/${option.id}`} className="btn-secondary btn-sm">編集</Link>
+                    <Link href={`/admin/options/${option.id}`} className="btn-secondary btn-sm">{editor ? '詳細・編集' : '詳細'}</Link>
                   </Td>
                 </tr>
               );

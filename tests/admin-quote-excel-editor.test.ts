@@ -6,6 +6,7 @@ const root = process.cwd();
 const sheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
 const form = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
+const quoteTable = fs.readFileSync(path.join(root, 'components/mypage/quote-table.tsx'), 'utf8');
 
 describe('Admin quote Excel-like editor', () => {
   it('switches the quote between read mode and edit mode in the same place', () => {
@@ -39,6 +40,22 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('【別途工事計】');
     expect(form).toContain('合　計（税込）');
     expect(form).toContain('onFocus={(event) => event.currentTarget.select()}');
+  });
+
+  it('keeps the same base grouping and fire-item placement between read and edit modes', () => {
+    expect(quoteTable).toContain("const fireItems = allOptionItems.filter((i) => i.name.includes('防火'));");
+    expect(quoteTable).toContain('const baseSections: { section: string; items: QuoteItem[] }[] = [];');
+    expect(form).toContain("item.kind === 'option' && item.name.includes('防火')");
+    expect(form).toContain("section.key === 'base'");
+    expect(form).toContain('防火仕様は閲覧時と同じく本体欄に表示');
+    expect(form).toContain('showBaseGroupHeading');
+    expect(form).toContain('showBaseGroupSubtotal');
+  });
+
+  it('keeps quote reference details visible while editing', () => {
+    expect(quoteTable).toContain('export function QuoteReferenceDetails');
+    expect(sheet).toContain('<QuoteReferenceDetails quote={quote} items={items} />');
+    expect(sheet).toContain('data-testid="quote-estimate-editing"');
   });
 
   it('keeps non-editable base items visible in the same sheet for dealer editing', () => {

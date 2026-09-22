@@ -80,7 +80,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   </Td>
                   <Td>
                     <p className="font-semibold">{q.base_model_name}</p>
-                    <p className="mt-0.5 text-xs text-muted">{FINISH_LEVEL_INFO[q.finish_level].name}</p>
+                    <p className="mt-0.5 text-xs text-muted">注文範囲：{FINISH_LEVEL_INFO[q.finish_level].name}</p>
                   </Td>
                   <Td className="max-w-56 text-xs">{request?.contact.site_address || '—'}</Td>
                   <Td className="text-xs">担当中</Td>
@@ -171,11 +171,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             const q = r.quote_id ? quoteById.get(r.quote_id) : undefined;
             const configuration = configurationById.get(r.configuration_id);
             const modelName = q?.base_model_name ?? (configuration ? modelNameById.get(configuration.base_model_id) : undefined);
-            const specName = q
-              ? FINISH_LEVEL_INFO[q.finish_level].name
-              : configuration?.spec_code
-                ? (SPEC_LABELS[configuration.spec_code] ?? configuration.spec_code)
-                : null;
+            const specName = configuration?.spec_code
+              ? (SPEC_LABELS[configuration.spec_code] ?? configuration.spec_code)
+              : null;
+            const finishLevelName = q ? FINISH_LEVEL_INFO[q.finish_level].name : null;
             const dealer = q?.dealer_id ? profileById.get(q.dealer_id) : undefined;
             const dealerName = dealer?.company_name ?? dealer?.full_name;
             const updatedAt = q?.updated_at ?? r.updated_at;
@@ -193,7 +192,11 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 </Td>
                 <Td>
                   <p className="font-semibold">{modelName ?? '—'}</p>
-                  {specName && <p className="mt-0.5 text-xs text-muted">{specName}</p>}
+                  {specName ? (
+                    <p className="mt-0.5 text-xs text-muted">{specName}</p>
+                  ) : finishLevelName ? (
+                    <p className="mt-0.5 text-xs text-muted">注文範囲：{finishLevelName}</p>
+                  ) : null}
                 </Td>
                 <Td className="max-w-64 text-xs">{r.contact.site_address || '—'}</Td>
                 <Td className="text-xs">

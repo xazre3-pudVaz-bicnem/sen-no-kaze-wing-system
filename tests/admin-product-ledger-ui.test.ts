@@ -19,9 +19,20 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('catalogCategories');
   });
 
-  it('未選択開始・ローカル仕様プレビュー・900pxの2カラムを提供する', () => {
+  it('一覧を主役にし、未選択時は余分な詳細カードを出さない', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('商品を選択すると詳細を表示します');
+    expect(client).toContain('商品一覧');
+    expect(client).toContain('商品名・メーカー・型番を検索');
+    expect(client).toContain('カテゴリー：すべて');
+    expect(client).toContain('状態：すべて');
+    expect(client).toContain('並び替え：更新が新しい順');
+    expect(client).toContain('SmartImage');
+    expect(client).toContain('Ellipsis');
+    expect(client).not.toContain('ledger-empty-detail');
+  });
+
+  it('ローカル仕様プレビューと900pxの管理情報2カラムを維持する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('仕様の選択はこの画面内だけのプレビューです。保存はされません。');
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');

@@ -17,7 +17,12 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const selected = typeof sp.product === 'string' && catalogOptions.some((option) => option.id === sp.product) ? sp.product : undefined;
   const editor = canEditCatalog(actor.role);
 
-  return <AdminPage title="商品台帳" lead="商品を探して内容を確認し、必要なときだけ編集します。お客様への表示はシミュレーターと共通です。" actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">一括登録</Link>}{editor && <Link href="/admin/categories" className="btn-secondary btn-sm">分類・カテゴリー</Link>}{editor && <Link href="/admin/options/new" className="btn-primary btn-sm">商品を追加</Link>}</>}>
+  return <AdminPage
+    title="商品台帳"
+    lead="UB・キッチン・サッシ・外壁・床・構造用面材など、見積で使う商品を登録・管理します。見積書のどの区分へ入れるかは、見積作成時に決めます。"
+    notice={<><span className="font-semibold text-ink">商品台帳：</span> 商品そのものを登録する場所です。商品を「本体用」「オプション用」などに固定せず、見積書の各区分で「手入力」または「商品台帳から選択」して使います。</>}
+    actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
+  >
     <FlashMessages sp={sp} />
     <ProductLedgerClient canEdit={editor} categories={catalogCategories} options={catalogOptions} variantsByOptionId={Object.fromEntries(rows)} initiallySelectedId={selected} />
   </AdminPage>;

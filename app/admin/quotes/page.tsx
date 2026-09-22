@@ -199,6 +199,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             quoteId={selectedQuoteId}
             actor={actor}
             tab={sp.tab}
+            revised={sp.revised}
             embedded
             listSearchParams={sp}
           />
@@ -449,6 +450,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           quoteId={selectedQuoteId}
           actor={actor}
           tab={sp.tab}
+          revised={sp.revised}
           embedded
           listSearchParams={sp}
         />

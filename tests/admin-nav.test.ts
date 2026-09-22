@@ -15,6 +15,13 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
   });
 
+  it('販売基準は本体マスターと標準見積を別メニューにせず一つの入口にする', () => {
+    const sections = getAdminNavSections('admin');
+    const salesBasis = sections.find((section) => section.label === '販売基準');
+    expect(salesBasis?.href).toBe('/admin/base-masters');
+    expect(salesBasis?.items).toEqual([]);
+  });
+
   it('お問い合わせは本部の案件管理に分類し、管理設定には含めない', () => {
     const sections = getAdminNavSections('admin');
     const caseItems = sections.find((section) => section.label === '案件管理')?.items.map((item) => item.label);

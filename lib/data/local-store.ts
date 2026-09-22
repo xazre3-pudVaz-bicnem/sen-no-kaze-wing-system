@@ -27,6 +27,7 @@ import type {
   QuoteItem,
   QuoteContact,
   QuoteDocument,
+  CaseDocument,
   QuoteRequest,
   QuoteRequestStatus,
   QuoteStatus,
@@ -1031,6 +1032,18 @@ export class LocalStore implements DataStore {
         document: db.quoteDocuments.filter((d) => d.quote_id === id).sort((a, b) => b.generated_at.localeCompare(a.generated_at))[0] ?? null,
         profile: db.profiles.find((p) => p.id === quote.user_id) ?? null,
       };
+    });
+  }
+  async listCaseDocuments(quoteId: string, actor: SessionUser): Promise<CaseDocument[]> {
+    return this.read((db) => {
+      const quote = db.quotes.find((row) => row.id === quoteId);
+      const dealerAccess =
+        hasRoleAtLeast(actor.role, 'master_dealer') ||
+        (hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id);
+      if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return [];
+      return db.caseDocuments
+        .filter((row) => row.quote_id === quoteId)
+        .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
     });
   }
   async listAllQuotes() {

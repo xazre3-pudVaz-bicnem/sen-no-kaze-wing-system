@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
+import { FINISH_LEVEL_INFO, FREE_PRODUCT_CATEGORY_CODE, QUOTE_REQUEST_STATUS_LABELS, QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
@@ -57,16 +57,16 @@ export default async function AdminQuoteDetailPage({
     }));
   return (
     <AdminPage
-      title={`見積書 ${quote.quote_no}`}
-      lead={`顧客番号 ${quote.customer_no ?? '—'}／発行 ${formatDate(quote.issued_at)}／有効期限 ${formatDate(quote.valid_until)}`}
+      title="案件詳細"
+      lead={`${request?.contact.full_name ?? quote.customer_name}／${quote.base_model_name}／見積番号 ${quote.quote_no}（第${quote.revision}版）`}
       actions={
         <>
-          <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-primary btn-sm" data-testid="admin-pdf-link">見積書PDF</a>
+          <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm" data-testid="admin-pdf-link">見積書PDF</a>
           <a href={`/api/quotes/${quote.id}/pdf?regenerate=1`} target="_blank" rel="noopener" className="btn-ghost btn-sm" title="レイアウト変更後に PDF を作り直す（金額は変わりません）">PDF再生成</a>
         </>
       }
     >
-      <BackLink href="/admin/quotes" label="一覧へ戻る" />
+      <BackLink href="/admin/quotes" label="案件一覧へ戻る" />
       <nav aria-label="案件詳細の業務領域" className="overflow-x-auto border-y border-line py-3">
         <div className="flex w-max gap-2 whitespace-nowrap text-sm">
           <a href="#case-overview" className="btn-ghost btn-sm">案件概要</a>
@@ -91,6 +91,7 @@ export default async function AdminQuoteDetailPage({
               <div><dt className="text-xs text-muted">住所</dt><dd className="mt-1">{request?.contact.address ?? profile?.address ?? '—'}</dd></div>
               <div><dt className="text-xs text-muted">設置予定地</dt><dd className="mt-1">{request?.contact.site_address || '—'}</dd></div>
               <div><dt className="text-xs text-muted">対象モデル</dt><dd className="mt-1">{quote.base_model_name}</dd></div>
+              <div><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-1">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd></div>
             </dl>
             <div className="mt-5 border-t border-line pt-4">
               <p className="text-xs text-muted">ご要望</p>
@@ -99,14 +100,16 @@ export default async function AdminQuoteDetailPage({
           </div>
           <aside className="space-y-4">
             <div className="card p-4 text-sm">
-              <p className="font-semibold">案件の状態</p>
+              <p className="font-semibold">現在の状態</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <Badge tone="navy">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
-                {request && <Badge>{QUOTE_REQUEST_STATUS_LABELS[request.status]}</Badge>}
+                <Badge tone="navy">見積：{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+                {request && <Badge>依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</Badge>}
               </div>
               <dl className="mt-4 space-y-2 text-ink-soft">
                 <div><dt className="inline text-muted">担当代理店：</dt><dd className="inline">{assignedDealer?.company_name ?? assignedDealer?.full_name ?? (quote.dealer_id ? '割当済み' : '未割当')}</dd></div>
                 <div><dt className="inline text-muted">見積番号：</dt><dd className="inline font-mono">{quote.quote_no}（第{quote.revision}版）</dd></div>
+                <div><dt className="inline text-muted">見積発行日：</dt><dd className="inline">{formatDate(quote.issued_at)}</dd></div>
+                <div><dt className="inline text-muted">有効期限：</dt><dd className="inline">{formatDate(quote.valid_until)}</dd></div>
               </dl>
             </div>
             {isAdmin && <AssignDealerForm quote={quote} dealers={dealers} />}
@@ -119,6 +122,17 @@ export default async function AdminQuoteDetailPage({
         <div className="space-y-6">
           <div className="card overflow-hidden">
             <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/30 px-4 py-3 text-xs">
+            <div>
+              <span className="font-semibold text-ink">見積書PDF</span>
+              <span className="ml-2 text-muted">
+                {document ? `${document.file_name}（${formatDate(document.generated_at, true)}）` : '初回表示時に生成されます'}
+              </span>
+            </div>
+            <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-ghost btn-sm">
+              PDFを開く
+            </a>
           </div>
           <p className="text-xs text-muted">
             金額は発行時点の確定内容です。マスター価格を変更しても変わりません。
@@ -159,22 +173,19 @@ export default async function AdminQuoteDetailPage({
 
       <section id="case-documents" className="scroll-mt-6">
         <h2 className="mb-3 text-lg">契約・図面・資料</h2>
-        <div className="card p-5 text-sm">
-          <p className="font-semibold">見積書PDF</p>
-          <p className="mt-1 text-ink-soft">{document ? `${document.file_name}（${formatDate(document.generated_at, true)}）` : '見積書PDFは初回表示時に生成されます。'}</p>
-          <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm mt-4">見積書PDFを開く</a>
-          <p className="mt-5 border-t border-line pt-4 text-xs text-muted">契約書・図面・案件資料の保存機能は、今後の工程で追加予定です。</p>
+        <div className="card p-5 text-sm text-muted">
+          契約書・図面・案件資料の正式な保存・管理機能は、今後の工程で対応予定です。
         </div>
       </section>
 
       <section id="manufacturing" className="scroll-mt-6">
         <h2 className="mb-3 text-lg">製造・施工</h2>
-        <div className="card p-5 text-sm text-muted">製造・施工の進捗を管理する機能は、今後の工程で追加予定です。</div>
+        <div className="card p-5 text-sm text-muted">製造・施工の正式な進捗管理機能は、今後の工程で対応予定です。</div>
       </section>
 
       <section id="handover" className="scroll-mt-6">
         <h2 className="mb-3 text-lg">引渡し・アフター</h2>
-        <div className="card p-5 text-sm text-muted">引渡し・アフター対応を管理する機能は、今後の工程で追加予定です。</div>
+        <div className="card p-5 text-sm text-muted">引渡し・アフター対応の正式な管理機能は、今後の工程で対応予定です。</div>
       </section>
     </AdminPage>
   );

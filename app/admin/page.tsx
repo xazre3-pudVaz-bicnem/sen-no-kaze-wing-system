@@ -51,7 +51,7 @@ export default async function AdminDashboard() {
   const [requests, contacts] = await Promise.all([store.listQuoteRequests(), store.listContactMessages()]);
 
   return (
-    <AdminPage title="案件管理" lead="見積依頼・担当状況・お問い合わせを確認します。">
+    <AdminPage title="案件管理" lead="案件・見積依頼・お問い合わせの対応状況を確認します。">
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="未読のお知らせ" value={unread.length} href="/admin/notifications" />
         <Stat label="未対応の見積依頼" value={requests.filter((r) => r.status === 'new').length} href="/admin/quotes" />
@@ -59,7 +59,7 @@ export default async function AdminDashboard() {
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg">最近の見積依頼</h2>
+        <h2 className="mb-3 text-lg">最近の案件受付</h2>
         <Table>
           <thead className="bg-sand/60"><tr><Th>受付日時</Th><Th>見積番号</Th><Th>顧客</Th><Th>状態</Th><Th></Th></tr></thead>
           <tbody className="divide-y divide-line">
@@ -69,7 +69,7 @@ export default async function AdminDashboard() {
                 <Td className="font-mono">{r.quote_no ?? '—'}</Td>
                 <Td>{r.contact.full_name}{r.contact.company_name ? `（${r.contact.company_name}）` : ''}<br /><span className="text-xs text-muted">{r.user_email}</span></Td>
                 <Td><Badge tone={r.status === 'new' ? 'danger' : r.status === 'closed' ? 'success' : 'neutral'}>{QUOTE_REQUEST_STATUS_LABELS[r.status]}</Badge></Td>
-                <Td right>{r.quote_id && <Link href={`/admin/quotes/${r.quote_id}`} className="btn-ghost btn-sm">詳細</Link>}</Td>
+                <Td right>{r.quote_id && <Link href={`/admin/quotes/${r.quote_id}`} className="btn-ghost btn-sm">案件を開く</Link>}</Td>
               </tr>
             ))}
             {requests.length === 0 && <tr><Td className="text-center text-muted">見積依頼はまだありません</Td></tr>}

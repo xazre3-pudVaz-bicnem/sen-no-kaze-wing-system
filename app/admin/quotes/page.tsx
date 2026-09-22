@@ -247,9 +247,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     return true;
   });
 
-  const shownQuotes = shown
-    .map((request) => (request.quote_id ? quoteById.get(request.quote_id) : undefined))
-    .filter((quote): quote is NonNullable<typeof quote> => Boolean(quote));
+  const shownQuotes = shown.flatMap((request) => {
+    const quote = request.quote_id ? quoteById.get(request.quote_id) : undefined;
+    return quote ? [quote] : [];
+  });
   const shownQuoteTotal = shownQuotes.reduce((sum, quote) => sum + quote.total, 0);
   const newCount = shown.filter((request) => request.status === 'new').length;
   const acceptedCount = shownQuotes.filter((quote) => quote.status === 'accepted').length;

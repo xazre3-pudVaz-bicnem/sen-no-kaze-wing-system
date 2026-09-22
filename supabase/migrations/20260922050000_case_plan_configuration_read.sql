@@ -56,7 +56,14 @@ begin
            ),
            'items', coalesce(
              (
-               select jsonb_agg(to_jsonb(ci) order by ci.id)
+               select jsonb_agg(
+                        jsonb_build_object(
+                          'option_id', ci.option_id,
+                          'quantity', ci.quantity,
+                          'variant_choice_ids', ci.variant_choice_ids
+                        )
+                        order by ci.id
+                      )
                  from public.configuration_items ci
                 where ci.configuration_id = c.id
              ),

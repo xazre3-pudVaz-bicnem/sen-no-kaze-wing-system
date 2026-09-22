@@ -222,7 +222,7 @@ const quote = {
   total: 9196000,
   dealer_id: IDS.dealer,
   dealer_note:
-    'BOX（防火構造）2階建て・屋外階段付き。外構工事・ゴミステーションは別途工事。設置予定地は東京都葛飾区亀有2丁目39-8。',
+    'BOX 2台（1階1台＋2階1台）・防火構造・2階建て・屋外鉄骨階段付き。外構工事・ゴミステーションは別途工事。設置予定地は東京都葛飾区亀有2丁目39-8。',
   revision: 1,
   parent_quote_id: null,
   preview_image_url: null,

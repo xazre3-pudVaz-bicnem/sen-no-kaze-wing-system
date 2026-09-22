@@ -19,8 +19,8 @@ const quoteResponseMigration = fs.readFileSync(
   path.join(root, 'supabase/migrations/0012_notifications_audit.sql'),
   'utf8'
 );
-const adminQuote = fs.readFileSync(
-  path.join(root, 'app/admin/quotes/[id]/page.tsx'),
+const adminQuoteWorkspace = fs.readFileSync(
+  path.join(root, 'components/admin/case-workspace.tsx'),
   'utf8'
 );
 const localStore = fs.readFileSync(path.join(root, 'lib/data/local-store.ts'), 'utf8');
@@ -207,7 +207,7 @@ describe('Security / Quote lifecycle corrective', () => {
   });
 
   it('Quote改訂UIはissuedだけ表示可能にする', () => {
-    expect(adminQuote).toContain(
+    expect(adminQuoteWorkspace).toContain(
       "const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);"
     );
   });

@@ -91,7 +91,7 @@ export default async function AdminQuoteDetailPage({
               <div><dt className="text-xs text-muted">住所</dt><dd className="mt-1">{request?.contact.address ?? profile?.address ?? '—'}</dd></div>
               <div><dt className="text-xs text-muted">設置予定地</dt><dd className="mt-1">{request?.contact.site_address || '—'}</dd></div>
               <div><dt className="text-xs text-muted">対象モデル</dt><dd className="mt-1">{quote.base_model_name}</dd></div>
-              <div><dt className="text-xs text-muted">仕様</dt><dd className="mt-1">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd></div>
+              <div><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-1">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd></div>
             </dl>
             <div className="mt-5 border-t border-line pt-4">
               <p className="text-xs text-muted">ご要望</p>

@@ -23,7 +23,10 @@ describe('商品台帳の入口', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品を選択すると詳細を表示します');
     expect(client).toContain('仕様の選択はこの画面内だけのプレビューです。保存はされません。');
+    expect(client).toContain('defaultVariantIdsFor');
+    expect(client).toContain('pruneHiddenVariantChoices');
     expect(client).toContain('onVariantChange={onPreviewVariantChange}');
+    expect(client).not.toContain('自社設定を編集');
     expect(client).toContain('min-[900px]:grid-cols-2');
   });
 });

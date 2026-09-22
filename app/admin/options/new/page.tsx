@@ -28,7 +28,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
-      lead="商品情報を入力し、内容を確認して登録します。"
+      lead="商品情報を登録し、登録済みの内容を確認します。"
     >
       <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       {returnTo && (
@@ -45,7 +45,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
             ['1', '商品情報', '商品・資料・選択項目・価格を入力'],
-            ['2', '内容確認・登録', '登録後、お客様表示を確認'],
+            ['2', '登録内容確認', '登録済みの内容をお客様表示で確認'],
           ].map(([no, label, note], index) => (
             <li key={no} className={`rounded-xl border px-3 py-3 ${index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
               <span className="text-xs font-semibold text-brown">STEP {no}</span>

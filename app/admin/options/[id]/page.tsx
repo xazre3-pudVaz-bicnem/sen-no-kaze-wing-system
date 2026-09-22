@@ -127,8 +127,8 @@ export default async function EditOptionPage({
             }`}
           >
             <span className="text-xs font-semibold text-brown">STEP 2</span>
-            <span className="mt-1 block text-sm font-semibold">内容確認・登録</span>
-            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">お客様画面での見え方を最終確認</span>
+            <span className="mt-1 block text-sm font-semibold">登録内容確認</span>
+            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">お客様画面で登録済みの内容を確認</span>
           </Link>
         </nav>
       </section>
@@ -172,7 +172,7 @@ export default async function EditOptionPage({
       {step === 'preview' && (
         <section className="space-y-5" data-testid="option-customer-preview">
           <div>
-            <h2 className="text-xl font-semibold">STEP 2 内容確認・登録</h2>
+            <h2 className="text-xl font-semibold">STEP 2 登録内容確認</h2>
             <p className="mt-1 text-sm text-muted">シミュレーターの商品詳細でお客様に伝わる内容を、登録済みデータで確認します。</p>
           </div>
 

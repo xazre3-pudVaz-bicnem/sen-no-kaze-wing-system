@@ -30,10 +30,14 @@ const variants = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-variant-manager.tsx'),
   'utf8'
 );
+const adminActions = fs.readFileSync(
+  path.resolve(process.cwd(), 'lib/actions/admin.ts'),
+  'utf8'
+);
 
 describe('商品登録管理画面の業務フロー', () => {
-  it('商品登録を2つの大きな作業単位にまとめる', () => {
-    for (const label of ['商品情報', '内容確認・登録']) {
+  it('商品登録を保存後の内容確認までの2つの大きな作業単位にまとめる', () => {
+    for (const label of ['商品情報', '登録内容確認']) {
       expect(editPage).toContain(label);
       expect(newPage).toContain(label);
     }
@@ -43,6 +47,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('data-testid="option-registration-info"');
     expect(editPage).toContain('data-testid="option-customer-preview"');
     expect(editPage).not.toContain('発注内容確認');
+    expect(editPage).not.toContain('内容確認・登録');
+    expect(newPage).not.toContain('内容確認・登録');
     expect(editPage).not.toContain('商品登録の7ステップ');
   });
   it('新規登録でも2STEPとreturn_to導線を案内する', () => {
@@ -51,6 +57,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(newPage).toContain('return_to');
     expect(forms).toContain('登録して見積テンプレートへ戻る');
     expect(forms).toContain('商品を作成して次へ');
+    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?step=preview&saved=1')");
+    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
   });
 
   it('正式商品とフリー商品の登録導線を分ける', () => {

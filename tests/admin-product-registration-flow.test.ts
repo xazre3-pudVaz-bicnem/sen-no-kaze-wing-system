@@ -73,7 +73,7 @@ describe('商品登録管理画面の業務フロー', () => {
   it('新規商品は下書きで作成し、お客様表示確認後に明示公開する', () => {
     expect(forms).toContain('カテゴリーを選択してください');
     expect(forms).toContain('新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。');
-    expect(adminActions).toContain("status: existingOption ? formData.get('status') : 'draft'");
+    expect(adminActions).toContain("status: existingOption?.status === 'published' ? formData.get('status') : 'draft'");
     expect(adminActions).toContain('export async function publishOptionAction');
     expect(adminActions).toContain('const actor = await requireStaff()');
     expect(adminActions).toContain('editableOptionContext(actor, id)');
@@ -82,6 +82,10 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('現在は下書きです。上のお客様表示に問題がなければ公開してください。');
     expect(editPage).toContain('この内容で公開');
     expect(newPage).toContain('STEP 2で実際のお客様表示を確認してから公開します。');
+    expect(forms).toContain("option?.status === 'published'");
+    expect(forms).toContain('下書き商品の公開はSTEP 2のお客様表示を確認してから行います。');
+    expect(forms).toContain('下書きへ戻す');
+    expect(adminActions).toContain('公開への変更はSTEP 2の publishOptionAction に限定する');
   });
 
   it('削除操作は通常のヘッダーから外してその他の操作へ退避する', () => {

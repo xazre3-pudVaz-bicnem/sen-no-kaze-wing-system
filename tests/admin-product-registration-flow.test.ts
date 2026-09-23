@@ -94,6 +94,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('保存時に自動採番');
     expect(forms).toContain('PRD-000001形式');
     expect(forms).not.toContain('label="管理用コード"');
+    expect(forms).not.toContain('id="code-all"');
     expect(adminActions).toContain('const internalCode = existingOption?.code ?? `opt-${randomUUID()}`');
     expect(adminActions).toContain('code: internalCode');
   });
@@ -159,7 +160,6 @@ describe('商品登録管理画面の業務フロー', () => {
   });
 
   it('技術コードは登録担当者に入力させず既存値を保持する', () => {
-    expect(forms).not.toContain('name="code"');
     expect(adminActions).toContain('const existingOption = optionId ? await store.getOption(optionId) : null');
     expect(adminActions).toContain('existingOption?.code');
     expect(adminActions).toContain('opt-${randomUUID()}');

@@ -831,7 +831,7 @@ export function OptionForm({
                 : mode === 'all' && option
                   ? '商品情報を保存'
                   : mode === 'all' && returnTo
-                    ? '登録して見積テンプレートへ戻る'
+                    ? '下書き登録して見積テンプレートへ戻る'
                     : mode === 'all'
                       ? '下書き保存してSTEP 2へ'
                       : '販売・詳細設定を保存'

@@ -157,8 +157,7 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
     finish_level: formData.get('finish_level') || 'full',
     is_required: formData.get('is_required'),
     sort_order: formData.get('sort_order'),
-    // 新規商品は必ず下書きで作成し、STEP 2のお客様表示確認後に明示公開する。
-    status: existingOption ? formData.get('status') : 'draft',
+    status: formData.get('status'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   try {
@@ -212,7 +211,8 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     list_price: formData.get('list_price'),
     highlight: formData.get('highlight'),
     sort_order: formData.get('sort_order'),
-    status: formData.get('status'),
+    // 新規商品は必ず下書きで作成し、STEP 2のお客様表示確認後に明示公開する。
+    status: existingOption ? formData.get('status') : 'draft',
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   // 代理店はフリー商品カテゴリー以外を触れない（サーバー側で拒否）

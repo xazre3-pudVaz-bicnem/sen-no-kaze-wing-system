@@ -125,7 +125,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
       <div className="sticky top-0 z-20 grid gap-2 border-b border-line bg-white/95 p-3 shadow-sm backdrop-blur sm:grid-cols-2 sm:p-4 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_minmax(9rem,.34fr)_minmax(11rem,.42fr)_auto]">
         <label className="min-w-0 sm:col-span-2 xl:col-span-1">
           <span className="sr-only">商品を検索</span>
-          <Input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・型番を検索" className="w-full" />
+          <Input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・型番・商品番号を検索" className="w-full" />
         </label>
         <label className="min-w-0 md:hidden">
           <span className="sr-only">カテゴリー</span>
@@ -280,6 +280,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
               <div className="grid gap-4 min-[900px]:grid-cols-2">
                 <dl className="card p-4">
                   <h3 className="mb-2 font-semibold">商品基本情報</h3>
+                  <Row label="商品管理番号" value={selected.product_no || '未採番'}/>
                   <Row label="カテゴリー" value={category.name}/>
                   <Row label="メーカー" value={selected.manufacturer || dash}/>
                   <Row label="型番・品番" value={selected.model_no || '要設定'}/>

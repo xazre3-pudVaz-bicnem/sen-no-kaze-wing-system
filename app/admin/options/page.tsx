@@ -119,7 +119,7 @@ export default async function AdminOptionsPage({
                       <div className="min-w-0">
                         <p className="font-semibold">{option.name}</p>
                         <p className="mt-0.5 truncate text-xs text-muted">
-                          {[option.manufacturer, option.model_no].filter(Boolean).join(' ／ ') || option.code}
+                          {[option.manufacturer, option.model_no].filter(Boolean).join(' ／ ') || option.product_no || '—'}
                         </p>
                       </div>
                     </div>

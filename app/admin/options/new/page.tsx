@@ -40,12 +40,12 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          商品情報を入力した後、登録済みの内容をお客様表示で確認します。
+          新規商品は下書きで保存し、STEP 2で実際のお客様表示を確認してから公開します。
         </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
             ['1', '商品情報', '商品・資料・選択項目・価格を入力'],
-            ['2', '登録内容確認', '登録済みの内容をお客様表示で確認'],
+            ['2', '登録内容確認', '実際のお客様表示を確認して公開'],
           ].map(([no, label, note], index) => (
             <li key={no} className={`rounded-xl border px-3 py-3 ${index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
               <span className="text-xs font-semibold text-brown">STEP {no}</span>

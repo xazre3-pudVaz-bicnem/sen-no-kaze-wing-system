@@ -165,7 +165,7 @@ export async function CaseWorkspace({
   const detail = await store.getQuote(quoteId, actor);
   if (!detail) notFound();
 
-  const { quote, items, request, document } = detail;
+  const { quote, items, request } = detail;
   const isAdmin = actor.role === 'admin';
   const canManageAllQuotes = canEditCatalog(actor.role);
   const canEditBase = canEditCatalog(actor.role);
@@ -473,16 +473,6 @@ export async function CaseWorkspace({
             canRevise={canRevise}
             startInEditMode={Boolean(created)}
           />
-
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
-            <div>
-              <span className="font-semibold text-ink">この見積のPDF・画像</span>
-              <span className="ml-2 text-muted">
-                {document ? `${document.file_name}（${formatDate(document.generated_at, true)}）` : 'PDFは初回表示時に生成されます'}
-              </span>
-            </div>
-            <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm">確認</a>
-          </div>
 
           <p className="text-xs leading-5 text-muted">
             金額は発行時点の確定内容です。マスター価格を変更しても変わりません。

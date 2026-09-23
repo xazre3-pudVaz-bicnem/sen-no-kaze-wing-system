@@ -211,8 +211,10 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     list_price: formData.get('list_price'),
     highlight: formData.get('highlight'),
     sort_order: formData.get('sort_order'),
-    // 新規商品は必ず下書きで作成し、STEP 2のお客様表示確認後に明示公開する。
-    status: existingOption ? formData.get('status') : 'draft',
+    // 新規商品と既存の下書き商品はSTEP 1から公開できない。
+    // 公開への変更はSTEP 2の publishOptionAction に限定する。
+    // 既に公開中の商品は、STEP 1から下書きへ戻す操作だけ許可する。
+    status: existingOption?.status === 'published' ? formData.get('status') : 'draft',
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   // 代理店はフリー商品カテゴリー以外を触れない（サーバー側で拒否）

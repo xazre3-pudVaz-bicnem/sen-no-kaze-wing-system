@@ -268,13 +268,17 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
 }
 
 export async function publishOptionAction(formData: FormData): Promise<void> {
-  await requireCatalogEditor();
+  const actor = await requireStaff();
   const id = String(formData.get('id') ?? '').trim();
   if (!id) redirect('/admin/options?error=' + encodeURIComponent('商品が指定されていません。'));
 
-  const store = await getStore();
-  const option = await store.getOption(id);
-  if (!option) redirect('/admin/options?error=' + encodeURIComponent('商品が見つかりません。'));
+  let context: Awaited<ReturnType<typeof editableOptionContext>>;
+  try {
+    context = await editableOptionContext(actor, id);
+  } catch (e) {
+    redirect(`/admin/options/${id}?step=preview&error=${encodeURIComponent(errState(e).error ?? '公開できませんでした。')}`);
+  }
+  const { store, option } = context;
 
   if (option.status !== 'published') {
     const {

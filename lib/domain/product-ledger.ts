@@ -18,3 +18,68 @@ export function optionMatchesLedgerFilters(option: ProductOption, filters: { que
 export function selectedOptionAfterFilter(selectedId: string | null, visibleIds: readonly string[]): string | null {
   return selectedId && visibleIds.includes(selectedId) ? selectedId : null;
 }
+
+
+export type ProductDuplicateReason = 'manufacturer-model' | 'category-manufacturer-name';
+
+export interface ProductDuplicateCandidate {
+  option: ProductOption;
+  reason: ProductDuplicateReason;
+}
+
+function normalizeIdentityPart(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('ja-JP');
+}
+
+export function findProductDuplicateCandidates(
+  options: readonly ProductOption[],
+  input: {
+    categoryId: string;
+    manufacturer: string;
+    name: string;
+    modelNo: string;
+    excludeId?: string | null;
+  }
+): ProductDuplicateCandidate[] {
+  const categoryId = input.categoryId.trim();
+  const manufacturer = normalizeIdentityPart(input.manufacturer);
+  const name = normalizeIdentityPart(input.name);
+  const modelNo = normalizeIdentityPart(input.modelNo);
+
+  if (!manufacturer && !modelNo && !name) return [];
+
+  const candidates: ProductDuplicateCandidate[] = [];
+
+  for (const option of options) {
+    if (input.excludeId && option.id === input.excludeId) continue;
+
+    const optionManufacturer = normalizeIdentityPart(option.manufacturer);
+    const optionName = normalizeIdentityPart(option.name);
+    const optionModelNo = normalizeIdentityPart(option.model_no);
+
+    if (manufacturer && modelNo && optionManufacturer === manufacturer && optionModelNo === modelNo) {
+      candidates.push({ option, reason: 'manufacturer-model' });
+      continue;
+    }
+
+    if (
+      categoryId &&
+      manufacturer &&
+      name &&
+      option.category_id === categoryId &&
+      optionManufacturer === manufacturer &&
+      optionName === name
+    ) {
+      candidates.push({ option, reason: 'category-manufacturer-name' });
+    }
+  }
+
+  return candidates.sort((a, b) => {
+    const rank = (reason: ProductDuplicateReason) => (reason === 'manufacturer-model' ? 0 : 1);
+    return rank(a.reason) - rank(b.reason) || a.option.name.localeCompare(b.option.name, 'ja');
+  });
+}

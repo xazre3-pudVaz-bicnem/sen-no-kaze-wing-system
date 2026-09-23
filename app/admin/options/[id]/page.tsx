@@ -177,7 +177,7 @@ export default async function EditOptionPage({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">STEP 2 登録内容確認</h2>
-              <p className="mt-1 text-sm text-muted">現在のシミュレーターと同じ商品詳細コンポーネントで、登録済みデータを確認します。</p>
+              <p className="mt-1 text-sm text-muted">実際のシミュレーターの商品詳細表示と同じ本文・レイアウトで、登録済みデータを確認します。</p>
             </div>
             {canEditThisOption && <Link href={stepHref('info')} className="btn-secondary btn-sm">商品情報に戻る</Link>}
           </div>
@@ -187,15 +187,13 @@ export default async function EditOptionPage({
           </div>
 
           {category ? (
-            <div className="card p-4 sm:p-5">
-              <OptionCustomerPreview
-                key={option.id}
-                category={category}
-                option={option}
-                groups={variants.groups}
-                choices={variants.choices}
-              />
-            </div>
+            <OptionCustomerPreview
+              key={option.id}
+              category={category}
+              option={option}
+              groups={variants.groups}
+              choices={variants.choices}
+            />
           ) : (
             <div className="card p-5 text-sm text-danger">商品カテゴリーが見つからないため、お客様表示を確認できません。</div>
           )}

@@ -39,15 +39,33 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
 
   const visibleGroups = visibleVariantGroups(preview.groups, preview.choices, selectedVariantIds);
 
+  const categoryDisplayName =
+    category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
+
   return (
-    <ProductDetail
-      category={category}
-      option={option}
-      groups={visibleGroups}
-      choices={preview.choices}
-      selectedVariantIds={selectedVariantIds}
-      isCurrentlySelected={false}
-      onVariantChange={onVariantChange}
-    />
+    <div data-testid="simulator-product-detail-preview">
+      <div className="overflow-hidden rounded-xl border border-line bg-white shadow-soft">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
+          <div>
+            <h3 className="text-lg">{categoryDisplayName} 商品詳細</h3>
+          </div>
+        </div>
+        <div className="px-4 py-3 sm:px-5 lg:h-[64vh] lg:max-h-[42rem] lg:overflow-hidden">
+          <ProductDetail
+            category={category}
+            option={option}
+            groups={visibleGroups}
+            choices={preview.choices}
+            selectedVariantIds={selectedVariantIds}
+            isCurrentlySelected={false}
+            onVariantChange={onVariantChange}
+          />
+        </div>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted">
+        商品詳細本文は実際のシミュレーターと同じコンポーネントです。商品追加額・仕様追加額・合計追加額と
+        「この内容に変更する」操作は、実際のシミュレーターで選択中の標準商品・仕様によって変わるため、この確認画面では表示しません。
+      </p>
+    </div>
   );
 }

@@ -893,20 +893,29 @@ export function OptionForm({
             </div>
           </div>
 
-          <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
-            <p className="font-semibold">通常設定</p>
+          <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="option-normal-settings">
+            <div>
+              <p className="font-semibold">通常設定</p>
+              <p className="mt-1 text-xs text-muted">通常の商品登録では、対象モデルと公開状態だけ確認します。</p>
+            </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="対象モデル" htmlFor={`base_model_id-${mode}`} errors={e.base_model_id}>
+              <Field label="対象モデル" htmlFor={`base_model_id-${mode}`} hint="通常は全モデル共通。特定モデル専用の商品だけ変更します" errors={e.base_model_id}>
                 <Select id={`base_model_id-${mode}`} name="base_model_id" defaultValue={option?.base_model_id ?? ''}>
                   <option value="">全モデル共通</option>
                   {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                 </Select>
               </Field>
-              {option ? (
-                <Field label="公開状態" htmlFor={`status-${mode}`} required errors={e.status}>
-                  <Select id={`status-${mode}`} name="status" defaultValue={option.status}>
+              {option?.status === 'published' ? (
+                <Field
+                  label="公開状態"
+                  htmlFor={`status-${mode}`}
+                  required
+                  hint="公開中の商品を下書きへ戻すことはできます。下書きからの再公開はSTEP 2で行います"
+                  errors={e.status}
+                >
+                  <Select id={`status-${mode}`} name="status" defaultValue="published">
                     <option value="published">公開</option>
-                    <option value="draft">下書き</option>
+                    <option value="draft">下書きへ戻す</option>
                   </Select>
                 </Field>
               ) : (
@@ -914,26 +923,13 @@ export function OptionForm({
                   <p className="label">公開状態</p>
                   <input type="hidden" name="status" value="draft" />
                   <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">下書き</div>
-                  <p className="mt-1 text-xs text-muted">新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {option
+                      ? '下書き商品の公開はSTEP 2のお客様表示を確認してから行います。'
+                      : '新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。'}
+                  </p>
                 </div>
               )}
-              <Field label="表示順" htmlFor={`sort_order-${mode}`} errors={e.sort_order}>
-                <Input id={`sort_order-${mode}`} name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} />
-              </Field>
-              <div>
-                <p className="label">対応する仕様</p>
-                <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用']].map(([code, label]) => (
-                    <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option?.spec_codes.includes(code)} label={label} />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
-              <Checkbox name="is_default" defaultChecked={option?.is_default} label="初期状態で選択" />
-              <Checkbox name="is_required" defaultChecked={option?.is_required} label="必須（解除不可）" />
-              <Checkbox name="is_installation" defaultChecked={option?.is_installation} label="設置関連費用として集計" />
             </div>
           </div>
 
@@ -943,6 +939,32 @@ export function OptionForm({
               <span className="ml-2 text-xs font-normal text-muted">通常は変更不要</span>
             </summary>
             <div className="space-y-6 border-t border-line p-4 sm:p-5">
+              <section className="space-y-4" data-testid="option-advanced-display-settings">
+                <div>
+                  <p className="font-semibold">シミュレーター表示条件</p>
+                  <p className="mt-1 text-xs text-muted">通常は変更不要です。表示順・仕様限定・標準選択などを調整する場合だけ使用します。</p>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <Field label="表示順" htmlFor={`sort_order-${mode}`} errors={e.sort_order}>
+                    <Input id={`sort_order-${mode}`} name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} />
+                  </Field>
+                  <div>
+                    <p className="label">対応する仕様</p>
+                    <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                      {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用']].map(([code, label]) => (
+                        <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option?.spec_codes.includes(code)} label={label} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <Checkbox name="is_default" defaultChecked={option?.is_default} label="初期状態で選択" />
+                  <Checkbox name="is_required" defaultChecked={option?.is_required} label="必須（解除不可）" />
+                  <Checkbox name="is_installation" defaultChecked={option?.is_installation} label="設置関連費用として集計" />
+                </div>
+              </section>
+
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="選択方式（表示）" htmlFor={`selection_type-${mode}`} errors={e.selection_type}>
                   <Select id={`selection_type-${mode}`} name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>

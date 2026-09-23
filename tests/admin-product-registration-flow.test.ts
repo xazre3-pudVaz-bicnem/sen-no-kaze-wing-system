@@ -126,7 +126,7 @@ describe('商品登録管理画面の業務フロー', () => {
   it('商品特定は既存値を候補として使える', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');
-    expect(forms).toContain('既存商品にあるメーカーは候補から選べます');
+    expect(forms).toContain('カテゴリー別候補＋登録済みメーカーから選べます。候補外も直接入力できます');
     expect(forms).toContain('現在の商品マスターではシリーズ名と型番・品番を1項目で管理します');
     expect(forms).toContain('シリーズ・型番／品番');
     expect(forms).toContain('productSizeMeta');

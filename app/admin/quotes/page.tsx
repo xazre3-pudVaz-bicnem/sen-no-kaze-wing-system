@@ -335,7 +335,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             {filtersActive && <Link href="/admin/quotes" className="text-[0.68rem] text-[#315745] underline underline-offset-4">条件を解除</Link>}
           </div>
 
-          <form method="get" className="grid gap-1.5 lg:grid-cols-[minmax(15rem,1.4fr)_minmax(9rem,.7fr)_minmax(9rem,.7fr)_auto]">
+          <form
+            method="get"
+            className="grid gap-1.5 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8.5rem,.7fr)_minmax(8.5rem,.7fr)_auto_auto]"
+          >
             <input
               name="q"
               type="search"
@@ -343,7 +346,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               placeholder="顧客・住所・見積番号・商品モデル"
               className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-[#6d9480]"
             />
-            <select name="status" defaultValue={statusFilter} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
+            <select name="status" defaultValue={statusFilter} className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
               <option value="">状態：すべて</option>
               <optgroup label="見積依頼">
                 {Object.entries(QUOTE_REQUEST_STATUS_LABELS).map(([value, label]) => (
@@ -356,31 +359,34 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 ))}
               </optgroup>
             </select>
-            <select name="dealer" defaultValue={dealerFilter} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
+            <select name="dealer" defaultValue={dealerFilter} className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
               <option value="">担当：すべて</option>
               <option value="unassigned">未割当</option>
               {dealers.map((dealer) => (
                 <option key={dealer.id} value={dealer.id}>{dealer.company_name ?? dealer.full_name}</option>
               ))}
             </select>
-            <button type="submit" className="rounded-lg border border-[#a9bdb3] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f4f8f6]">
-              絞り込む
-            </button>
 
-            <details className="lg:col-span-4" open={Boolean(filter.pref || filter.city)}>
-              <summary className="cursor-pointer select-none text-[0.68rem] font-semibold text-ink-soft">詳細条件</summary>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <select name="pref" defaultValue={filter.pref ?? ''} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
+            <details className="relative" open={Boolean(filter.pref || filter.city)}>
+              <summary className="flex h-full min-h-[2rem] cursor-pointer list-none items-center justify-center gap-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-[#f8fbf9] [&::-webkit-details-marker]:hidden">
+                詳細条件 <span aria-hidden="true">▼</span>
+              </summary>
+              <div className="mt-1.5 flex flex-wrap gap-1.5 rounded-lg border border-line bg-white p-2 shadow-sm md:absolute md:right-0 md:z-20 md:w-[32rem] md:shadow-lg">
+                <select name="pref" defaultValue={filter.pref ?? ''} className="min-w-[9rem] flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
                   <option value="">都道府県：すべて</option>
                   {PREFECTURES.map((prefecture) => <option key={prefecture} value={prefecture}>{prefecture}</option>)}
                 </select>
-                <select name="city" defaultValue={filter.city ?? ''} disabled={!filter.pref} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs disabled:bg-sand disabled:text-muted">
+                <select name="city" defaultValue={filter.city ?? ''} disabled={!filter.pref} className="min-w-[9rem] flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs disabled:bg-sand disabled:text-muted">
                   <option value="">市区町村：すべて</option>
                   {cityPool.map((city) => <option key={city} value={city}>{city}</option>)}
                 </select>
-                <span className="self-center text-[0.65rem] text-muted">地域は設置予定地を優先し、未登録時は顧客住所で判定します。</span>
+                <span className="w-full text-[0.65rem] text-muted">地域は設置予定地を優先し、未登録時は顧客住所で判定します。</span>
               </div>
             </details>
+
+            <button type="submit" className="rounded-lg border border-[#a9bdb3] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f4f8f6]">
+              絞り込む
+            </button>
           </form>
         </div>
 

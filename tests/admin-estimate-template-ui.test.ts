@@ -10,6 +10,10 @@ const newPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/new/page.tsx'),
   'utf8'
 );
+const simulatorPreview = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/standard-estimate-simulator-preview.tsx'),
+  'utf8'
+);
 const detailPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/[id]/page.tsx'),
   'utf8'
@@ -56,6 +60,24 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).not.toContain('SAMPLE_WING_ROWS');
     expect(listPage).not.toContain('添付HTMLに合わせた画面見本');
     expect(listPage).toContain('/admin/estimate-templates/demo');
+    expect(listPage).toContain('selected_model');
+    expect(listPage).toContain('selected_spec');
+    expect(listPage).toContain('#estimate-preview');
+    expect(listPage).toContain('StandardEstimateSimulatorPreview');
+    expect(listPage).toContain('行を選ぶと下に見積書が表示されます');
+  });
+
+  it('選択した標準見積の下にシミュレーターと同じ見積書とプランボードを表示する', () => {
+    expect(simulatorPreview).toContain('computeStandardEstimatePricing');
+    expect(simulatorPreview).toContain('computePricing');
+    expect(simulatorPreview).toContain('buildEstimateBaselineSelection');
+    expect(simulatorPreview).toContain('buildPresetSelection');
+    expect(simulatorPreview).toContain('<QuoteSheet');
+    expect(simulatorPreview).toContain('<PlanBoard');
+    expect(simulatorPreview).toContain('readOnly');
+    expect(simulatorPreview).toContain('シミュレーターの標準状態と同じ選択内容');
+    expect(simulatorPreview).toContain('標準見積を編集');
+    expect(simulatorPreview).toContain('シミュレーターで確認');
   });
 
   it('新規作成画面は選択項目と参照本体を分かりやすくする', () => {

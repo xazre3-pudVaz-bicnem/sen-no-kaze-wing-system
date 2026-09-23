@@ -12,7 +12,7 @@ export function optionMatchesLedgerFilters(option: ProductOption, filters: { que
   if (filters.quick === 'draft' && option.status !== 'draft') return false;
   if (filters.quick === 'needs-attention' && !needsProductAttention(option)) return false;
   const query = filters.query.trim().toLocaleLowerCase('ja-JP');
-  return !query || [option.name, option.manufacturer ?? '', option.model_no ?? '', option.code].join(' ').toLocaleLowerCase('ja-JP').includes(query);
+  return !query || [option.name, option.product_no ?? '', option.manufacturer ?? '', option.model_no ?? '', option.code].join(' ').toLocaleLowerCase('ja-JP').includes(query);
 }
 
 export function selectedOptionAfterFilter(selectedId: string | null, visibleIds: readonly string[]): string | null {

@@ -52,7 +52,7 @@ import {
   localCatalogImportUrl,
 } from '@/lib/import/catalog-import-images';
 import { assertOwnedLocalMediaPath, optionMediaPrefix } from '@/lib/storage/option-media';
-import { filesDir, loadDb, saveDb, type LocalDb } from './local-db';
+import { allocateLocalProductNo, filesDir, loadDb, saveDb, type LocalDb } from './local-db';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 import {
   StoreError,
@@ -1340,11 +1340,18 @@ export class LocalStore implements DataStore {
         const existing = db.options.find((o) => o.code === input.code);
         const { import_operation: _operation, ...optionInput } = input;
         if (existing) {
-          const { id: _id, ...patch } = optionInput;
+          const { id: _id, product_no: _productNo, ...patch } = optionInput;
           Object.assign(existing, patch, { updated_at: nowIso() });
         } else {
           if (!optionInput.id) throw new StoreError('VALIDATION', `商品「${optionInput.code}」の ID がありません`);
-          db.options.push({ ...optionInput, id: optionInput.id, created_at: nowIso(), updated_at: nowIso() });
+          const { product_no: _productNo, ...rest } = optionInput;
+          db.options.push({
+            ...rest,
+            id: optionInput.id,
+            product_no: allocateLocalProductNo(db),
+            created_at: nowIso(),
+            updated_at: nowIso(),
+          });
         }
       }
       for (const input of batch.variantGroups) {
@@ -1388,14 +1395,20 @@ export class LocalStore implements DataStore {
   }
   async upsertOption(input: OptionInput): Promise<ProductOption> {
     return this.mutate((db) => {
-      const { id, ...rest } = input;
+      const { id, product_no: _productNo, ...rest } = input;
       if (db.options.some((o) => o.code === rest.code && o.id !== id)) {
         throw new StoreError('VALIDATION', `コード「${rest.code}」は既に使われています`);
       }
       if (id) {
         const o = db.options.find((x) => x.id === id);
         if (!o) {
-          const created: ProductOption = { ...rest, id, created_at: nowIso(), updated_at: nowIso() };
+          const created: ProductOption = {
+            ...rest,
+            id,
+            product_no: allocateLocalProductNo(db),
+            created_at: nowIso(),
+            updated_at: nowIso(),
+          };
           db.options.push(created);
           this.pushAudit(db, null, { action: 'create', entity: 'option', entity_id: created.id, summary: `商品を追加：${created.name}` });
           return created;
@@ -1420,7 +1433,13 @@ export class LocalStore implements DataStore {
         }
         return o;
       }
-      const o: ProductOption = { ...rest, id: randomUUID(), created_at: nowIso(), updated_at: nowIso() };
+      const o: ProductOption = {
+        ...rest,
+        id: randomUUID(),
+        product_no: allocateLocalProductNo(db),
+        created_at: nowIso(),
+        updated_at: nowIso(),
+      };
       db.options.push(o);
       this.pushAudit(db, null, { action: 'create', entity: 'option', entity_id: o.id, summary: `商品を追加：${o.name}` });
       return o;

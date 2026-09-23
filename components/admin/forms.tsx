@@ -441,24 +441,86 @@ export function CategoryForm({ category }: { category: OptionCategory | null }) 
 
 function productSizeMeta(categoryCode: string): { label: string; placeholder: string } {
   const values: Record<string, { label: string; placeholder: string }> = {
-    ub: { label: 'サイズ', placeholder: '例：1616サイズ' },
-    toilet: { label: 'サイズ・仕様', placeholder: '例：床排水／排水芯200mm' },
-    washbasin: { label: '間口', placeholder: '例：750mm' },
-    kitchen: { label: '間口', placeholder: '例：W2550' },
-    boiler: { label: 'サイズ・設置', placeholder: '例：24号／屋外壁掛け' },
-    aircon: { label: '適用畳数', placeholder: '例：主に10畳用' },
+    ub: { label: 'サイズ', placeholder: '例：1216' },
+    toilet: { label: '排水・主な仕様', placeholder: '例：床排水／排水芯120mm／手洗いなし' },
+    washbasin: { label: '間口・サイズ', placeholder: '例：600mm' },
+    kitchen: { label: '間口', placeholder: '例：1200mm' },
+    boiler: { label: '号数・ガス種・給湯機能・設置方式', placeholder: '例：16号／LPガス／給湯専用／屋外壁掛型' },
+    aircon: { label: '能力クラス・電源', placeholder: '例：2.2kW（6畳程度）／単相100V' },
     sash: { label: 'サイズ・呼称', placeholder: '例：16520' },
     furniture: { label: '寸法', placeholder: '例：W1200×D450×H850' },
   };
   return values[categoryCode] ?? { label: 'サイズ・仕様', placeholder: '主なサイズ・仕様を入力' };
 }
 
+type ProductRegistrationGuidance = {
+  manufacturers: string[];
+  sizeCandidates: string[];
+  example: string | null;
+  fixedInfo: string[];
+};
+
+function productRegistrationGuidance(categoryCode: string): ProductRegistrationGuidance {
+  const values: Record<string, ProductRegistrationGuidance> = {
+    ub: {
+      manufacturers: ['TOTO', 'LIXIL', 'Panasonic', 'タカラスタンダード', 'クリナップ', 'トクラス'],
+      sizeCandidates: ['1014', '1116', '1216'],
+      example: 'TOTO / サザナ / HTシリーズ / Sタイプ / 1216 / HTV1216USX1',
+      fixedInfo: ['浴槽材質', 'ドア種類', '換気設備', '設置方式'],
+    },
+    toilet: {
+      manufacturers: ['TOTO', 'LIXIL', 'Panasonic'],
+      sizeCandidates: ['床排水／排水芯120mm', '床排水／排水芯200mm'],
+      example: 'LIXIL / プレアス LSタイプ / CL6A / YBC-CL10SU + DT-CL116AU',
+      fixedInfo: ['排水方式', '排水芯', '手洗い', '洗浄方式'],
+    },
+    washbasin: {
+      manufacturers: ['TOTO', 'LIXIL', 'Panasonic', 'タカラスタンダード', 'クリナップ', 'KVK', 'SANEI', 'カクダイ'],
+      sizeCandidates: ['450mm', '500mm', '600mm', '750mm', '900mm', '1000mm', '1200mm'],
+      example: 'LIXIL / 洗面化粧台 / ピアラ / 600mm / 扉タイプ / 代表品番',
+      fixedInfo: ['ボウル材質', '水栓タイプ', '間口', 'ミラー構成'],
+    },
+    kitchen: {
+      manufacturers: ['LIXIL', 'Panasonic', 'タカラスタンダード', 'クリナップ', 'トクラス', 'TOTO'],
+      sizeCandidates: ['900mm', '1050mm', '1200mm', '1500mm', '1800mm'],
+      example: 'LIXIL / ミニキッチン / DMKシリーズ / 1200mm / I型 / 代表品番',
+      fixedInfo: ['間口', '天板材質', '水栓タイプ', '加熱機器'],
+    },
+    boiler: {
+      manufacturers: ['リンナイ', 'ノーリツ', 'パロマ'],
+      sizeCandidates: ['16号', '20号', '24号'],
+      example: 'リンナイ / RUX-Eシリーズ / 16号 / LPガス / 給湯専用 / 屋外壁掛型 / RUX-E1616W',
+      fixedInfo: ['号数', 'ガス種', '給湯機能', '設置方式'],
+    },
+    aircon: {
+      manufacturers: ['ダイキン', '三菱電機', 'Panasonic', '日立', 'シャープ', '富士通ゼネラル', '東芝'],
+      sizeCandidates: [
+        '2.2kW（6畳程度）',
+        '2.5kW（8畳程度）',
+        '2.8kW（10畳程度）',
+        '3.6kW（12畳程度）',
+        '4.0kW（14畳程度）',
+        '5.6kW（18畳程度）',
+        '6.3kW（20畳程度）',
+        '7.1kW（23畳程度）',
+        '8.0kW（26畳程度）',
+        '9.0kW（29畳程度）',
+      ],
+      example: 'ダイキン / ルームエアコン / Eシリーズ / 2.2kW（6畳程度） / 単相100V / S225ATES-W',
+      fixedInfo: ['能力クラス', '電源', '室内機・室外機', '寒冷地対応（必要な場合）'],
+    },
+  };
+  return values[categoryCode] ?? { manufacturers: [], sizeCandidates: [], example: null, fixedInfo: [] };
+}
+
 function categoryRegistrationHint(categoryCode: string): string | null {
   const values: Record<string, string> = {
     ub: '浴室サイズなど固定情報はここで入力し、壁色・浴槽色などお客様が選ぶ内容は下の「お客様選択」で登録します。',
-    toilet: '排水方式など商品固有の固定情報は商品説明へ、お客様が選べる仕様がある場合は下の「お客様選択」で登録します。',
+    toilet: '排水方式・排水芯など商品固有の固定情報を入力し、お客様が選べる色や機能だけを下の「お客様選択」で登録します。',
     washbasin: '間口など固定情報はここで入力し、扉色・水栓など選択できる内容は下の「お客様選択」で登録します。',
     kitchen: '間口など固定情報はここで入力し、扉色・ワークトップなど選択できる内容は下の「お客様選択」で登録します。',
+    boiler: '号数・ガス種・給湯機能・設置方式を確認し、この欄には商品を判別できる主要仕様をまとめて入力します。',
+    aircon: '能力クラスと電源を確認します。お客様が比較するときに必要な仕様を優先して入力します。',
     sash: '呼称・サイズなど固定情報を入力します。シミュレーターに出さない台帳専用商品は公開設定とカテゴリー設定に従います。',
   };
   return values[categoryCode] ?? null;
@@ -495,20 +557,38 @@ export function OptionForm({
   const others = allOptions.filter((o) => o.id !== option?.id);
   const depMap = new Map(dependencies.map((d) => [d.requires_option_id, d]));
   const confMap = new Map(conflicts.map((c) => [c.conflicts_with_option_id, c]));
-  const manufacturerSuggestions = Array.from(
-    new Set(allOptions.map((row) => row.manufacturer?.trim()).filter((value): value is string => Boolean(value)))
-  ).sort((a, b) => a.localeCompare(b, 'ja'));
-  const modelNoSuggestions = Array.from(
-    new Set(allOptions.map((row) => row.model_no?.trim()).filter((value): value is string => Boolean(value)))
-  ).sort((a, b) => a.localeCompare(b, 'ja'));
   const initialCategoryId = option?.category_id ?? defaultCategoryId ?? '';
   const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
   const [manufacturerValue, setManufacturerValue] = useState(option?.manufacturer ?? '');
   const [nameValue, setNameValue] = useState(option?.name ?? '');
   const [modelNoValue, setModelNoValue] = useState(option?.model_no ?? '');
+  const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? '');
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
-  const sizeMeta = productSizeMeta(selectedCategory?.code ?? '');
-  const registrationHint = categoryRegistrationHint(selectedCategory?.code ?? '');
+  const categoryCode = selectedCategory?.code ?? '';
+  const sizeMeta = productSizeMeta(categoryCode);
+  const registrationHint = categoryRegistrationHint(categoryCode);
+  const guidance = productRegistrationGuidance(categoryCode);
+  const categoryOptions = allOptions.filter((row) => !selectedCategoryId || row.category_id === selectedCategoryId);
+  const makerMatchedOptions = categoryOptions.filter(
+    (row) => !manufacturerValue.trim() || row.manufacturer?.trim().toLocaleLowerCase('ja-JP') === manufacturerValue.trim().toLocaleLowerCase('ja-JP')
+  );
+  const nameMatchedOptions = makerMatchedOptions.filter(
+    (row) => !nameValue.trim() || row.name.trim().toLocaleLowerCase('ja-JP') === nameValue.trim().toLocaleLowerCase('ja-JP')
+  );
+  const manufacturerSuggestions = Array.from(
+    new Set(
+      [...guidance.manufacturers, ...categoryOptions.map((row) => row.manufacturer?.trim() ?? '')].filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, 'ja'));
+  const productNameSuggestions = Array.from(new Set(makerMatchedOptions.map((row) => row.name.trim()).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b, 'ja')
+  );
+  const modelNoSuggestions = Array.from(
+    new Set(nameMatchedOptions.map((row) => row.model_no?.trim() ?? '').filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, 'ja'));
+  const sizeSuggestions = Array.from(
+    new Set([...guidance.sizeCandidates, ...categoryOptions.map((row) => row.size_note?.trim() ?? '')].filter(Boolean))
+  );
   const duplicateCandidates = useMemo(
     () =>
       findProductDuplicateCandidates(allOptions, {
@@ -607,7 +687,7 @@ export function OptionForm({
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </Select>
             </Field>
-            <Field label="メーカー" htmlFor={`manufacturer-${mode}`} hint="既存商品にあるメーカーは候補から選べます" errors={e.manufacturer}>
+            <Field label="メーカー" htmlFor={`manufacturer-${mode}`} hint="カテゴリー別候補＋登録済みメーカーから選べます。候補外も直接入力できます" errors={e.manufacturer}>
               <Input
                 id={`manufacturer-${mode}`}
                 name="manufacturer"
@@ -620,20 +700,24 @@ export function OptionForm({
                 {manufacturerSuggestions.map((value) => <option key={value} value={value} />)}
               </datalist>
             </Field>
-            <Field label="商品名" htmlFor={`name-${mode}`} required errors={e.name}>
+            <Field label="商品名" htmlFor={`name-${mode}`} hint="選んだカテゴリー・メーカーの登録済み商品名を候補表示します" required errors={e.name}>
               <Input
                 id={`name-${mode}`}
                 name="name"
+                list="option-product-name-suggestions"
                 defaultValue={option?.name}
                 onChange={(event) => setNameValue(event.target.value)}
                 required
                 data-testid="option-name"
               />
+              <datalist id="option-product-name-suggestions">
+                {productNameSuggestions.map((value) => <option key={value} value={value} />)}
+              </datalist>
             </Field>
             <Field
               label="シリーズ・型番／品番"
               htmlFor={`model_no-${mode}`}
-              hint="現在の商品マスターではシリーズ名と型番・品番を1項目で管理します。既存値は候補から選べます"
+              hint="現在の商品マスターではシリーズ名と型番・品番を1項目で管理します。カテゴリー・メーカー・商品名に合う既存値を候補表示します"
               errors={e.model_no}
             >
               <Input
@@ -695,15 +779,51 @@ export function OptionForm({
             <p className="mt-1 text-sm text-muted">サイズ、説明、お客様向けの特徴など、商品を理解するための情報を整理します。</p>
           </div>
 
-          {registrationHint && (
-            <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft">
-              <span className="font-semibold">このカテゴリーの入力目安：</span>{registrationHint}
+          {(registrationHint || guidance.example || guidance.fixedInfo.length > 0) && (
+            <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft" data-testid="category-registration-guidance">
+              {registrationHint && (
+                <p><span className="font-semibold">このカテゴリーの入力目安：</span>{registrationHint}</p>
+              )}
+              {guidance.example && (
+                <p className={registrationHint ? 'mt-1' : undefined}>
+                  <span className="font-semibold">入力例：</span>{guidance.example}
+                </p>
+              )}
+              {guidance.fixedInfo.length > 0 && (
+                <p className="mt-1">
+                  <span className="font-semibold">確認ポイント：</span>{guidance.fixedInfo.join('・')}
+                </p>
+              )}
             </div>
           )}
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} errors={e.size_note}>
-              <Input id={`size_note-${mode}`} name="size_note" defaultValue={option?.size_note ?? ''} placeholder={sizeMeta.placeholder} />
+            <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
+              <Input
+                id={`size_note-${mode}`}
+                name="size_note"
+                list="option-size-note-suggestions"
+                value={sizeNoteValue}
+                onChange={(event) => setSizeNoteValue(event.target.value)}
+                placeholder={sizeMeta.placeholder}
+              />
+              <datalist id="option-size-note-suggestions">
+                {sizeSuggestions.map((value) => <option key={value} value={value} />)}
+              </datalist>
+              {guidance.sizeCandidates.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
+                  {guidance.sizeCandidates.slice(0, 10).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+                      onClick={() => setSizeNoteValue(value)}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              )}
             </Field>
             <Field label="お客様向け特徴" htmlFor={`highlight-${mode}`} hint="例：標準候補／清掃性が高い／節水仕様" errors={e.highlight}>
               <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />

@@ -106,10 +106,27 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('/admin/options/\${candidate.id}');
   });
 
+  it('カテゴリーに応じてメーカー・商品名・主要仕様の入力を支援する', () => {
+    expect(forms).toContain('productRegistrationGuidance');
+    expect(forms).toContain("ub: {");
+    expect(forms).toContain("manufacturers: ['TOTO', 'LIXIL', 'Panasonic'");
+    expect(forms).toContain("boiler: {");
+    expect(forms).toContain("manufacturers: ['リンナイ', 'ノーリツ', 'パロマ']");
+    expect(forms).toContain("aircon: {");
+    expect(forms).toContain("'2.2kW（6畳程度）'");
+    expect(forms).toContain("'9.0kW（29畳程度）'");
+    expect(forms).toContain('option-product-name-suggestions');
+    expect(forms).toContain('option-size-note-suggestions');
+    expect(forms).toContain('category-registration-guidance');
+    expect(forms).toContain('カテゴリー別の入力候補');
+    expect(forms).toContain('カテゴリー別候補＋登録済みメーカー');
+    expect(forms).toContain('カテゴリー・メーカー・商品名に合う既存値');
+  });
+
   it('商品特定は既存値を候補として使える', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');
-    expect(forms).toContain('既存商品にあるメーカーは候補から選べます');
+    expect(forms).toContain('カテゴリー別候補＋登録済みメーカーから選べます。候補外も直接入力できます');
     expect(forms).toContain('現在の商品マスターではシリーズ名と型番・品番を1項目で管理します');
     expect(forms).toContain('シリーズ・型番／品番');
     expect(forms).toContain('productSizeMeta');

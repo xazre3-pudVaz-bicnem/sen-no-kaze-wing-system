@@ -40,14 +40,20 @@ const adminActions = fs.readFileSync(
 );
 
 describe('見積テンプレート管理UI', () => {
-  it('一覧に新しい管理項目を表示する', () => {
-    expect(listPage).toContain('見積テンプレート');
-    expect(listPage).toContain('作成元・利用地域');
-    expect(listPage).toContain('税込金額');
-    expect(listPage).toContain('見積テンプレートはまだありません');
-    expect(listPage).not.toContain('承認待ち 0件');
-    expect(listPage).toContain('一覧の絞り込み');
-    expect(listPage).toContain('複製には使用しません');
+  it('標準見積一覧を統合HTMLに近い構成で表示する', () => {
+    expect(listPage).toContain('title="標準見積"');
+    expect(listPage).toContain('標準見積一覧');
+    expect(listPage).toContain('＋ 新規標準見積を作成');
+    expect(listPage).toContain('すべて');
+    expect(listPage).toContain('見積名を検索');
+    expect(listPage).toContain('<Th>見積名</Th>');
+    expect(listPage).toContain('<Th>防火</Th>');
+    expect(listPage).toContain('<Th right>原価税込</Th>');
+    expect(listPage).toContain('<Th right>売価税込</Th>');
+    expect(listPage).toContain('<Th right>粗利率</Th>');
+    expect(listPage).toContain('<Th>状態</Th>');
+    expect(listPage).toContain('旧取込');
+    expect(listPage).toContain('新しい標準見積Revision基盤との接続後に表示します');
     expect(listPage).toContain('/admin/estimate-templates/demo');
   });
 

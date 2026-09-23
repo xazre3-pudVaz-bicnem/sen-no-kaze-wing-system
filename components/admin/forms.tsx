@@ -905,11 +905,17 @@ export function OptionForm({
                   {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                 </Select>
               </Field>
-              {option ? (
-                <Field label="公開状態" htmlFor={`status-${mode}`} required errors={e.status}>
-                  <Select id={`status-${mode}`} name="status" defaultValue={option.status}>
+              {option?.status === 'published' ? (
+                <Field
+                  label="公開状態"
+                  htmlFor={`status-${mode}`}
+                  required
+                  hint="公開中の商品を下書きへ戻すことはできます。下書きからの再公開はSTEP 2で行います"
+                  errors={e.status}
+                >
+                  <Select id={`status-${mode}`} name="status" defaultValue="published">
                     <option value="published">公開</option>
-                    <option value="draft">下書き</option>
+                    <option value="draft">下書きへ戻す</option>
                   </Select>
                 </Field>
               ) : (
@@ -917,7 +923,11 @@ export function OptionForm({
                   <p className="label">公開状態</p>
                   <input type="hidden" name="status" value="draft" />
                   <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">下書き</div>
-                  <p className="mt-1 text-xs text-muted">新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {option
+                      ? '下書き商品の公開はSTEP 2のお客様表示を確認してから行います。'
+                      : '新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。'}
+                  </p>
                 </div>
               )}
             </div>

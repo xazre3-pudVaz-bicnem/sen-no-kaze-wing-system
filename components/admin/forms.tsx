@@ -627,7 +627,7 @@ export function OptionForm({
               <div>
                 <p className="label">商品管理番号</p>
                 <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">
-                  {option?.product_no ?? '保存時に自動採番'}
+                  {option ? option.product_no ?? '未採番' : '保存時に自動採番'}
                 </div>
                 <p className="mt-1 text-xs text-muted">PRD-000001形式で自動採番し、登録後は変更しません。</p>
               </div>

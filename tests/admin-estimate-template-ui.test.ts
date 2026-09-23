@@ -74,6 +74,16 @@ describe('見積テンプレート管理UI', () => {
     expect(simulatorPreview).toContain('buildPresetSelection');
     expect(simulatorPreview).toContain('<QuoteSheet');
     expect(simulatorPreview).toContain('<PlanBoard');
+    expect(simulatorPreview).toContain('<PreviewStage');
+    expect(simulatorPreview).toContain('<ElevationStrip');
+    expect(simulatorPreview).toContain('<EquipmentBoard');
+    expect(simulatorPreview).toContain('<SimulatorCaseImagesProvider');
+    expect(simulatorPreview).toContain('VIEW_KEYS.map');
+    expect(simulatorPreview).toContain("image.kind === 'case'");
+    expect(simulatorPreview).toContain("image.kind === 'elevation'");
+    expect(simulatorPreview).toContain('categoriesInScope');
+    expect(simulatorPreview).toContain('baselineVariantIds');
+    expect(simulatorPreview).toContain('平面図・完成イメージ・立面図・標準設備及び仕上げ表');
     expect(simulatorPreview).toContain('readOnly');
     expect(simulatorPreview).toContain('シミュレーターの標準状態と同じ選択内容');
     expect(simulatorPreview).toContain('標準見積を編集');

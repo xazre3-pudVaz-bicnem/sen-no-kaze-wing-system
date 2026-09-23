@@ -50,6 +50,11 @@ describe('Quote revision production compatibility corrective', () => {
     }
   });
 
+  it('migration runnerのtransaction管理を妨げる明示BEGIN/COMMITを持たない', () => {
+    expect(migration).not.toMatch(/^begin;\s*$/im);
+    expect(migration).not.toMatch(/^commit;\s*$/im);
+  });
+
   it('create_quote_revisionは8区分を受け入れて現行集計へ揃える', () => {
     const body = functionBody(migration, 'create_quote_revision');
 
@@ -62,12 +67,16 @@ describe('Quote revision production compatibility corrective', () => {
     );
   });
 
-  it('金額はRPCで再計算し千円未満切捨てと税floorを維持する', () => {
+  it('金額はRPCで入力を正規化して再計算し千円未満切捨てと税floorを維持する', () => {
     const body = functionBody(migration, 'create_quote_revision');
 
-    expect(body).toContain(
-      "v_amount := round(coalesce((r ->> 'unit_price')::numeric, 0) * v_qty)::integer;"
-    );
+    expect(body).toContain("v_qty := coalesce((r ->> 'quantity')::numeric, 1);");
+    expect(body).toContain('if v_qty < 0.01 or v_qty > 99999 then');
+    expect(body).toContain("v_unit_price_raw := coalesce((r ->> 'unit_price')::numeric, 0);");
+    expect(body).toContain('v_unit_price_raw <> trunc(v_unit_price_raw)');
+    expect(body).toContain('v_unit_price := v_unit_price_raw::integer;');
+    expect(body).toContain('v_amount := round(v_unit_price * v_qty)::integer;');
+    expect(body).toContain('round(v_unit_price * v_qty)::integer');
     expect(body).toContain('v_sub := floor(v_sub_raw / 1000.0)::integer * 1000;');
     expect(body).toContain('v_tax := floor(v_sub * parent.tax_rate)::integer;');
     expect(body).toContain('v_sub - v_sub_raw');

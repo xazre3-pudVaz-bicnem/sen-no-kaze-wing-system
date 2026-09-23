@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { deleteOptionAction } from '@/lib/actions/admin';
+import { deleteOptionAction, publishOptionAction } from '@/lib/actions/admin';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
@@ -199,6 +199,31 @@ export default async function EditOptionPage({
           ) : (
             <div className="card p-5 text-sm text-danger">商品カテゴリーが見つからないため、お客様表示を確認できません。</div>
           )}
+
+          <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品公開">
+            <div>
+              <h3 className="font-semibold">公開状態</h3>
+              {option.status === 'published' ? (
+                <p className="mt-1 text-sm text-muted">公開中です。お客様のシミュレーターに表示される設定になっています。</p>
+              ) : (
+                <p className="mt-1 text-sm text-muted">現在は下書きです。上のお客様表示に問題がなければ公開してください。</p>
+              )}
+            </div>
+            {catalogEditor && option.status === 'draft' && category && (
+              <form action={publishOptionAction}>
+                <input type="hidden" name="id" value={option.id} />
+                <ConfirmSubmit
+                  message={`「${option.name}」をお客様向けに公開しますか？`}
+                  className="btn-primary"
+                >
+                  この内容で公開
+                </ConfirmSubmit>
+              </form>
+            )}
+            {option.status === 'published' && (
+              <span className="inline-flex w-fit rounded-full bg-[#eaf6f1] px-3 py-1 text-xs font-semibold text-[#245a48]">公開中</span>
+            )}
+          </section>
         </section>
       )}
     </AdminPage>

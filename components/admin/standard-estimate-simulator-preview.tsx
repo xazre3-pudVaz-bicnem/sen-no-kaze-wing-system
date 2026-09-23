@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -113,9 +114,16 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
               シミュレーターの標準状態と同じ選択内容で、見積書を読み取り専用表示しています。
             </p>
           </div>
-          <a href={`/simulator/${model.slug}`} className="btn-secondary btn-sm">
-            シミュレーターで確認
-          </a>
+          <div className="flex flex-wrap gap-2">
+            {template && (
+              <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
+                標準見積を編集
+              </Link>
+            )}
+            <Link href={`/simulator/${model.slug}`} className="btn-secondary btn-sm">
+              シミュレーターで確認
+            </Link>
+          </div>
         </div>
 
         <div className="px-4 py-4 sm:px-5">

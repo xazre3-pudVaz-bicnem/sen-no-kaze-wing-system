@@ -90,6 +90,11 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("option.code === 'fire-proof'");
     expect(workspace).toContain('案件構成・申し送り');
     expect(workspace).toContain('data-testid="case-workflow"');
+    expect(workspace).toContain('data-testid="case-workflow-summary"');
+    expect(workspace).toContain('lg:grid-cols-9');
+    expect(workspace).toContain('案件設定');
+    expect(workspace).toContain('未集計');
+    expect(workspace).toContain("caseStructureNote ?? '未登録'");
     expect(workspace).toContain('buildInlineTabHref');
     expect(workspace).toContain("query.set('case', quoteId)");
     expect(workspace).toContain('/admin/quotes?');

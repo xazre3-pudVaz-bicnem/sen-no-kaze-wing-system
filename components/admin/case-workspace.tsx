@@ -263,25 +263,37 @@ export async function CaseWorkspace({
     {
       label: '見積依頼',
       value: request ? QUOTE_REQUEST_STATUS_LABELS[request.status] : '記録なし',
-      available: Boolean(request),
+      state: request ? 'done' : 'pending',
     },
     {
       label: '担当決定',
       value: quote.dealer_id ? '割当済み' : '未割当',
-      available: Boolean(quote.dealer_id),
+      state: quote.dealer_id ? 'done' : 'pending',
     },
-    { label: '現地確認', value: '未対応', available: false },
+    { label: '現地確認', value: '未対応', state: 'pending' },
     {
       label: '正式見積',
       value: QUOTE_STATUS_LABELS[quote.status],
-      available: true,
+      state: quote.status === 'accepted' ? 'done' : 'current',
     },
-    { label: '契約', value: '未対応', available: false },
-    { label: '製造', value: '未対応', available: false },
-    { label: '施工', value: '未対応', available: false },
-    { label: '引渡し', value: '未対応', available: false },
-    { label: 'アフター', value: '未対応', available: false },
-  ];
+    {
+      label: '契約',
+      value: '未対応',
+      state: quote.status === 'accepted' ? 'current' : 'pending',
+    },
+    { label: '製造', value: '未対応', state: 'pending' },
+    { label: '施工', value: '未対応', state: 'pending' },
+    { label: '引渡し', value: '未対応', state: 'pending' },
+    { label: 'アフター', value: '未対応', state: 'pending' },
+  ] as const;
+
+  const currentWorkflowLabel = `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+  const nextWorkflowLabel =
+    quote.status === 'accepted'
+      ? '契約'
+      : quote.status === 'issued'
+        ? '見積内容の判断'
+        : '—';
 
   const tabHref = (nextTab: TabKey) =>
     embedded
@@ -291,7 +303,7 @@ export async function CaseWorkspace({
   return (
     <div id="case-workspace" className="scroll-mt-3 space-y-2" data-testid="case-workspace">
       <section className="overflow-hidden rounded-lg border border-[#2b5d48] bg-[#245c45] text-white shadow-sm" data-testid="case-workspace-header">
-        <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-2.5">
+        <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-2">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="min-w-0 text-base font-semibold sm:text-lg">{customerName}</h2>
@@ -299,13 +311,14 @@ export async function CaseWorkspace({
                 {QUOTE_STATUS_LABELS[quote.status]}
               </Badge>
               {request && (
-                <span className="rounded-full border border-white/30 px-2 py-0.5 text-[0.65rem]">
+                <span className="rounded-full border border-white/30 px-2 py-0.5 text-[0.62rem]">
                   依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}
                 </span>
               )}
+              <span className="text-[0.62rem] text-white/70">更新 {formatDate(quote.updated_at)}</span>
             </div>
-            <p className="mt-0.5 font-mono text-[0.65rem] text-white/70">
-              見積番号 {quote.quote_no}／第{quote.revision}版　更新 {formatDate(quote.updated_at, true)}
+            <p className="mt-0.5 font-mono text-[0.62rem] text-white/70">
+              見積番号 {quote.quote_no}／第{quote.revision}版
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -313,7 +326,7 @@ export async function CaseWorkspace({
               href={`/api/quotes/${quote.id}/pdf`}
               target="_blank"
               rel="noopener"
-              className="rounded-md border border-white/30 px-2.5 py-1 text-[0.7rem] font-semibold hover:bg-white/10"
+              className="rounded-md border border-white/30 px-2.5 py-1 text-[0.68rem] font-semibold hover:bg-white/10"
               data-testid="admin-pdf-link"
             >
               見積書PDF
@@ -322,84 +335,82 @@ export async function CaseWorkspace({
               href={`/api/quotes/${quote.id}/pdf?regenerate=1`}
               target="_blank"
               rel="noopener"
-              className="rounded-md border border-white/30 px-2.5 py-1 text-[0.7rem] hover:bg-white/10"
+              className="rounded-md border border-white/30 px-2.5 py-1 text-[0.68rem] hover:bg-white/10"
               title="レイアウト変更後に PDF を作り直す（金額は変わりません）"
             >
               PDF再生成
             </a>
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.68rem] text-white/85">
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.66rem] text-white/85">
           <span><b className="text-white">顧客</b> {customerCompany || customerName}</span>
-          <span><b className="text-white">担当代理店</b> {assignedDealerName}</span>
+          <span><b className="text-white">担当組織</b> {assignedDealerName}</span>
           <span><b className="text-white">設置</b> {siteAddress}</span>
           <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
           <span><b className="text-white">注文範囲</b> {FINISH_LEVEL_INFO[quote.finish_level].name}</span>
         </div>
-      </section>
 
-      <section
-        className="grid gap-2 rounded-lg border border-line bg-white p-2.5 shadow-sm sm:grid-cols-2 lg:grid-cols-4"
-        data-testid="case-structure-summary"
-        aria-label="案件概要"
-      >
-        <div className="rounded-md bg-[#f7f9f8] px-3 py-2">
-          <p className="text-[0.65rem] text-muted">本体</p>
-          <p className="mt-0.5 text-sm font-semibold text-ink">{quote.base_model_name}</p>
-        </div>
-        <div className="rounded-md bg-[#f7f9f8] px-3 py-2">
-          <p className="text-[0.65rem] text-muted">防火仕様</p>
-          <p className="mt-0.5 text-sm font-semibold text-ink">{fireSelection}</p>
-        </div>
-        <div className="rounded-md bg-[#f7f9f8] px-3 py-2 sm:col-span-2">
-          <p className="text-[0.65rem] text-muted">案件構成・申し送り</p>
-          <p className="mt-0.5 text-sm font-semibold leading-5 text-ink">
-            {caseStructureNote ?? '案件構成の登録はまだありません。'}
-          </p>
+        <div
+          className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.64rem] text-white/75"
+          data-testid="case-structure-summary"
+          aria-label="案件概要"
+        >
+          <span><b className="text-white/90">本体</b> {quote.base_model_name}</span>
+          <span><b className="text-white/90">防火仕様</b> {fireSelection}</span>
+          <span className="min-w-0"><b className="text-white/90">案件構成</b> {caseStructureNote ?? '未登録'}</span>
         </div>
       </section>
 
-      <section className="overflow-x-auto rounded-lg border border-line bg-white shadow-sm [scrollbar-width:thin]" aria-label="案件工程" data-testid="case-workflow">
-        <div className="flex min-w-max items-center px-2.5 py-2">
-          {workflow.map((step, index) => (
-            <div key={step.label} className="flex items-center">
-              <div
-                className={
-                  step.available
-                    ? 'min-w-20 rounded-md border border-[#b8d3c4] bg-[#eef7f1] px-2 py-1.5 text-center'
-                    : 'min-w-20 rounded-md border border-line bg-[#f7f8f8] px-2 py-1.5 text-center'
-                }
-              >
-                <p className={step.available ? 'text-[0.68rem] font-semibold text-[#2f6b4f]' : 'text-[0.68rem] font-semibold text-muted'}>
-                  {step.label}
-                </p>
-                <p className="mt-0.5 text-[0.6rem] text-muted">{step.value}</p>
+      <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" aria-label="案件工程" data-testid="case-workflow">
+        <div className="grid grid-cols-3 gap-1 p-2 sm:grid-cols-5 lg:grid-cols-9">
+          {workflow.map((step, index) => {
+            const stateClass =
+              step.state === 'done'
+                ? 'border-[#b8d3c4] bg-[#eef7f1] text-[#2f6b4f]'
+                : step.state === 'current'
+                  ? 'border-[#e4c47f] bg-[#fff7df] text-[#8a5a20]'
+                  : 'border-line bg-[#f7f8f8] text-muted';
+            return (
+              <div key={step.label} className="relative min-w-0">
+                <div className={`rounded-md border px-1.5 py-1.5 text-center ${stateClass}`}>
+                  <p className="truncate text-[0.66rem] font-semibold">
+                    {step.state === 'done' ? '✓ ' : step.state === 'current' ? '● ' : ''}{step.label}
+                  </p>
+                  <p className="mt-0.5 truncate text-[0.58rem] opacity-75">{step.value}</p>
+                </div>
+                {index < workflow.length - 1 && (
+                  <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-[0.62rem] text-muted lg:block">→</span>
+                )}
               </div>
-              {index < workflow.length - 1 && <span className="px-1 text-[0.65rem] text-muted">→</span>}
-            </div>
-          ))}
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-[#fbfcfb] px-3 py-1.5 text-[0.65rem]" data-testid="case-workflow-summary">
+          <span><span className="text-muted">現在</span> <strong className="text-ink">{currentWorkflowLabel}</strong></span>
+          <span><span className="text-muted">次</span> <strong className="text-[#2f6b4f]">{nextWorkflowLabel}</strong></span>
+          <span><span className="text-muted">要対応</span> <strong className="text-muted">未集計</strong></span>
         </div>
       </section>
 
       {isAdmin && (
-        <div className="grid gap-2 sm:grid-cols-2" data-testid="case-admin-controls">
-          <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
-            <summary className="cursor-pointer font-semibold text-[#315745]">担当代理店を変更</summary>
-            <div className="mt-2">
+        <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm" data-testid="case-admin-controls">
+          <summary className="cursor-pointer font-semibold text-[#315745]">案件設定</summary>
+          <div className="mt-2 grid gap-3 border-t border-line pt-2 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
               <AssignDealerForm quote={quote} dealers={dealers} />
             </div>
-          </details>
-          <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm">
-            <summary className="cursor-pointer font-semibold text-[#315745]">状態を変更</summary>
-            <div className="mt-2">
+            <div>
+              <p className="mb-1 text-[0.66rem] font-semibold text-muted">状態を変更</p>
               <QuoteStatusForm quote={quote} request={request} compact />
             </div>
-          </details>
-        </div>
+          </div>
+        </details>
       )}
 
-      <nav aria-label="案件内メニュー" className="overflow-x-auto border-y border-line bg-white [scrollbar-width:none]">
-        <div className="flex min-w-max">
+      <nav aria-label="案件内メニュー" className="border-y border-line bg-white">
+        <div className="flex flex-wrap">
           {TABS.map((tabItem) => {
             const active = activeTab === tabItem.key;
             const future = ['site', 'production', 'handover', 'disaster'].includes(tabItem.key);
@@ -410,14 +421,14 @@ export async function CaseWorkspace({
                 aria-current={active ? 'page' : undefined}
                 className={
                   active
-                    ? 'border-b-2 border-[#2f6b4f] bg-[#eef7f1] px-3 py-2 text-[0.7rem] font-semibold text-[#245c45]'
-                    : 'border-b-2 border-transparent px-3 py-2 text-[0.7rem] font-medium text-ink-soft hover:bg-sand/50'
+                    ? 'border-b-2 border-[#2f6b4f] bg-[#eef7f1] px-3 py-2 text-[0.68rem] font-semibold text-[#245c45]'
+                    : 'border-b-2 border-transparent px-3 py-2 text-[0.68rem] font-medium text-ink-soft hover:bg-sand/50'
                 }
               >
                 {tabItem.label}
-                {tabItem.key === 'estimate' && <span className="ml-1 text-[0.6rem] text-[#2f6b4f]">第{quote.revision}版</span>}
-                {tabItem.key === 'documents' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">参照</span>}
-                {future && <span className="ml-1 text-[0.58rem] text-muted">未対応</span>}
+                {tabItem.key === 'estimate' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">第{quote.revision}版</span>}
+                {tabItem.key === 'documents' && <span className="ml-1 text-[0.56rem] text-[#2f6b4f]">参照</span>}
+                {future && <span className="ml-1 text-[0.56rem] text-muted">未対応</span>}
               </Link>
             );
           })}

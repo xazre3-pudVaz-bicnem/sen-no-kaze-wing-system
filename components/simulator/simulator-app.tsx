@@ -1088,8 +1088,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       {/* 先方モック（2026-08-29）：平面図｜完成イメージ → 立面図（4面）→ 標準設備及び仕上げ表。 */}
       <div className="container-x max-w-5xl pt-6 pb-2">
         <h2 className="mb-2 text-lg font-semibold text-ink">プランボード</h2>
-        <section aria-label="プランボード" className="space-y-4 lg:space-y-0">
-          <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
+        <section aria-label="プランボード" className="space-y-4 md:space-y-0">
+          <div className="grid gap-4 md:grid-cols-2 md:items-stretch md:gap-0">
             <div className="min-w-0">
               <PlanBoard plan={previews.floorplan} specName={planDisplayName} planSize={planSize} modelSlug={model.slug} readOnly={readOnly} />
             </div>

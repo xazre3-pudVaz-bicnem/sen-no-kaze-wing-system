@@ -28,6 +28,125 @@ function filterHref(model: string, q: string) {
   return query ? `/admin/estimate-templates?${query}` : '/admin/estimate-templates';
 }
 
+type SampleEstimateRow = {
+  name: string;
+  fire: boolean;
+  cost: number;
+  sale: number;
+  margin: string;
+  status?: 'published' | 'draft';
+};
+
+const SAMPLE_WING_ROWS: SampleEstimateRow[] = [
+  { name: '本体', fire: false, cost: 991100, sale: 1487200, margin: '33.4%' },
+  { name: 'ホテルUB', fire: false, cost: 4978600, sale: 7399800, margin: '32.6%', status: 'published' },
+  { name: 'ホテルUB', fire: true, cost: 5259100, sale: 7810000, margin: '32.7%' },
+  { name: '単身者用', fire: false, cost: 4119500, sale: 6139100, margin: '32.9%', status: 'draft' },
+  { name: '単身者用', fire: true, cost: 4160200, sale: 6199600, margin: '32.9%' },
+  { name: '事務所', fire: false, cost: 2120800, sale: 3181200, margin: '33.3%' },
+  { name: '事務所', fire: true, cost: 2165900, sale: 3249400, margin: '33.3%' },
+];
+
+const SAMPLE_GRID = 'grid grid-cols-[minmax(10rem,2fr)_6rem_9rem_9rem_6rem_8rem] items-center';
+
+function MarginBadge({ value }: { value: string }) {
+  const numeric = Number.parseFloat(value);
+  const tone = numeric >= 33 ? 'border-success/20 bg-success/10 text-success' : 'border-warn/25 bg-amber-50 text-warn';
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{value}</span>;
+}
+
+function SampleStatus({ status }: { status?: SampleEstimateRow['status'] }) {
+  if (!status) return <span className="text-muted">—</span>;
+  if (status === 'published') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-navy/15 bg-blue-50 px-2 py-1 text-xs font-semibold text-navy">
+        公開済み <span className="rounded-full bg-white px-1.5 text-[10px] text-muted">例</span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-success/20 bg-success/10 px-2 py-1 text-xs font-semibold text-success">
+      下書きあり <span className="rounded-full bg-white px-1.5 text-[10px] text-muted">例</span>
+    </span>
+  );
+}
+
+function StandardEstimateListSample() {
+  return (
+    <div>
+      <div className="border-b border-line bg-amber-50/60 px-4 py-2.5 text-xs text-warn sm:px-5">
+        現在の標準見積データはまだありません。以下は添付HTMLに合わせた画面見本で、金額・状態は保存データではありません。
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[52rem]">
+          <div className={`${SAMPLE_GRID} border-b border-line bg-sand/40 px-3 py-2 text-xs font-semibold text-ink-soft`}>
+            <div>見積名</div>
+            <div>防火</div>
+            <div className="text-right">原価税込</div>
+            <div className="text-right">売価税込</div>
+            <div className="text-right">粗利率</div>
+            <div>状態</div>
+          </div>
+
+          <details open className="group">
+            <summary className="list-none cursor-pointer border-b border-line bg-[#eaf4ee] px-3 py-2 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-2 text-sm font-semibold text-forest">
+                <span className="text-xs transition-transform group-open:rotate-90">▶</span>
+                <span>Wing</span>
+                <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">7件</span>
+                <span className="text-xs font-normal text-muted">選択中</span>
+              </div>
+            </summary>
+            <div className="divide-y divide-line">
+              {SAMPLE_WING_ROWS.map((row, index) => (
+                <div
+                  key={`${row.name}-${row.fire ? 'fire' : 'normal'}`}
+                  className={`${SAMPLE_GRID} min-h-12 px-3 py-2 text-sm ${index === 0 ? 'border-l-4 border-l-success bg-success/5 pl-2' : 'bg-white'}`}
+                >
+                  <div className="font-semibold">{row.name}</div>
+                  <div>
+                    {row.fire ? (
+                      <span className="inline-flex rounded-full border border-warn/25 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-warn">防火</span>
+                    ) : (
+                      <span className="text-muted">非防火</span>
+                    )}
+                  </div>
+                  <div className="text-right font-semibold">{formatYen(row.cost)}</div>
+                  <div className="text-right font-semibold">{formatYen(row.sale)}</div>
+                  <div className="text-right"><MarginBadge value={row.margin} /></div>
+                  <div><SampleStatus status={row.status} /></div>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          {[
+            { name: 'BOX', count: 4 },
+            { name: 'Flat', count: 3 },
+          ].map((group) => (
+            <details key={group.name} className="group border-b border-line">
+              <summary className="list-none cursor-pointer bg-[#eaf4ee] px-3 py-2 [&::-webkit-details-marker]:hidden">
+                <div className="flex items-center gap-2 text-sm font-semibold text-forest">
+                  <span className="text-xs transition-transform group-open:rotate-90">▶</span>
+                  <span>{group.name}</span>
+                  <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">{group.count}件</span>
+                  <span className="text-xs font-normal text-muted">クリックで展開</span>
+                </div>
+              </summary>
+              <div className="bg-white px-5 py-4 text-xs text-muted">
+                この画面見本ではグループ行のみ表示しています。実データ接続後はここに標準見積が並びます。
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+      <div className="border-t border-line bg-sand/20 px-4 py-2.5 text-[11px] text-muted sm:px-5">
+        状態欄の「公開済み」「下書きあり」は表示例です。実際の確定状態は新しいStandard Estimate Revision基盤との接続後に表示します。
+      </div>
+    </div>
+  );
+}
+
 export default async function EstimateTemplatesPage({
   searchParams,
 }: {
@@ -181,27 +300,18 @@ export default async function EstimateTemplatesPage({
               現在の一覧では旧取込データの売価税込だけを表示しています。
             </div>
           </>
-        ) : (
+        ) : hasFilters ? (
           <div className="px-6 py-12 text-center">
-            <h2 className="text-lg font-semibold">
-              {hasFilters ? '条件に一致する標準見積がありません' : '標準見積はまだありません'}
-            </h2>
+            <h2 className="text-lg font-semibold">条件に一致する標準見積がありません</h2>
             <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
-              {hasFilters
-                ? '検索条件を変更するか、条件をクリアしてもう一度確認してください。'
-                : '最初の標準見積を作成して、Webシミュレーターと案件見積の基準を登録します。'}
+              検索条件を変更するか、条件をクリアしてもう一度確認してください。
             </p>
-            <div className="mt-5 flex justify-center gap-2">
-              {hasFilters ? (
-                <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">条件をクリア</Link>
-              ) : (
-                <>
-                  <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
-                  <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の標準見積を作成</Link>
-                </>
-              )}
+            <div className="mt-5 flex justify-center">
+              <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">条件をクリア</Link>
             </div>
           </div>
+        ) : (
+          <StandardEstimateListSample />
         )}
       </section>
     </AdminPage>

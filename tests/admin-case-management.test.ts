@@ -40,7 +40,9 @@ describe('Admin case management UI', () => {
   it('keeps the list dense and shows the selected case workspace on the same page', () => {
     expect(list).toContain('data-testid="case-summary-strip"');
     expect(list).toContain('案件状況');
-    expect(list).toContain('現在の見積金額合計');
+    expect(list).toContain('各案件の現在金額合計');
+    expect(list).toContain('data-testid="case-summary-finance"');
+    expect(list).toContain('data-testid="case-summary-disaster"');
     expect(list).not.toContain('契約・製造・原価・利益・災害時供給は今後対応予定');
     expect(list).toContain('案件を選択すると、下のワークスペースが切り替わります。');
     expect(list).toContain('max-h-[20rem] overflow-auto');

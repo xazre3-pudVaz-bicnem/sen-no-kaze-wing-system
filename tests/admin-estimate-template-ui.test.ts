@@ -55,15 +55,18 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('<Th>状態</Th>');
     expect(listPage).toContain('旧取込');
     expect(listPage).toContain('新しい標準見積Revision基盤との接続後に表示します');
-    expect(listPage).toContain('SAMPLE_WING_ROWS');
-    expect(listPage).toContain('Wing');
-    expect(listPage).toContain('7件');
-    expect(listPage).toContain('BOX');
-    expect(listPage).toContain("{ name: 'BOX', count: 4 }");
-    expect(listPage).toContain('Flat');
-    expect(listPage).toContain("{ name: 'Flat', count: 3 }");
-    expect(listPage).toContain('添付HTMLに合わせた画面見本');
-    expect(listPage).toContain('金額・状態は保存データではありません');
+    expect(listPage).toContain('SAMPLE_ESTIMATE_GROUPS');
+    expect(listPage).toContain("name: 'Wing'");
+    expect(listPage).toContain("name: 'BOX'");
+    expect(listPage).toContain("name: 'Flat'");
+    expect(listPage).toContain('cost: 991100, sale: 1487200');
+    expect(listPage).toContain('cost: 4978600, sale: 7389800');
+    expect(listPage).toContain('cost: 3217500, sale: 5085300');
+    expect(listPage).toContain('cost: 1324400, sale: 1732500');
+    expect(listPage).toContain('20260901修正分類表見積書(20260923-023847).xlsx');
+    expect(listPage).toContain('14見積シートを画面見本として表示しています');
+    expect(listPage).toContain('販売費100%・経費15%・掛率150%');
+    expect(listPage).toContain('状態はExcelにRevision情報がないため「—」');
     expect(listPage).toContain('/admin/estimate-templates/demo');
   });
 

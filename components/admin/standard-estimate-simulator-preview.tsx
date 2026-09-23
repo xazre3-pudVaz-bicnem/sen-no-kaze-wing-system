@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -11,11 +12,20 @@ import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-di
 import { baseBreakdownTotal, buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
 import { computePricing } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
-import { defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
+import { categoriesInScope, defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
 import { computeStandardEstimatePricing } from '@/lib/domain/standard-estimate-pricing';
 import { makeDefaultExteriorFaces } from '@/lib/domain/exterior-wall';
-import type { CatalogBundle, EstimateTemplateBundle } from '@/lib/domain/types';
-import { PlanBoard } from '@/components/simulator/plan-board';
+import {
+  VIEW_KEYS,
+  type CatalogBundle,
+  type EstimateTemplateBundle,
+  type ViewKey,
+} from '@/lib/domain/types';
+import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
+import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-context';
+import { EquipmentBoard } from '@/components/simulator/equipment-board';
+import { ElevationStrip, PlanBoard } from '@/components/simulator/plan-board';
+import { PreviewStage } from '@/components/simulator/preview-stage';
 import { QuoteSheet } from '@/components/simulator/quote-sheet';
 
 interface Props {
@@ -25,6 +35,7 @@ interface Props {
 }
 
 export function StandardEstimateSimulatorPreview({ bundle, specCode, template }: Props) {
+  const [view, setView] = useState<ViewKey>('exterior');
   const { model } = bundle;
   const ctx: RuleContext = {
     options: bundle.options,
@@ -84,6 +95,7 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
     );
 
   const specName = template?.template.name ?? choice?.name ?? preset?.name ?? specCode;
+  const displayModelName = model.name === 'フラット' ? 'Flat' : model.name;
   const planDisplayName = customerPlanName(preset, specName);
   const planSize = planDisplaySizeFromSpecs(model.specs);
   const preferredFloorplanKeys = preset
@@ -93,69 +105,164 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
         'floorplan'
       )
     : undefined;
-  const plan = resolvePreview(
-    bundle.previewRules,
-    'floorplan',
-    selectedPreviewKeys(bundle.options, selected, 'floorplan'),
-    specCode,
-    preferredFloorplanKeys
+  const previews = Object.fromEntries(
+    VIEW_KEYS.map((previewView) => [
+      previewView,
+      resolvePreview(
+        bundle.previewRules,
+        previewView,
+        selectedPreviewKeys(bundle.options, selected, previewView),
+        specCode,
+        previewView === 'floorplan' ? preferredFloorplanKeys : undefined
+      ),
+    ])
+  ) as Record<ViewKey, ReturnType<typeof resolvePreview>>;
+
+  const registeredElevations = bundle.images
+    .filter((image) => image.kind === 'elevation')
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((image) => ({
+      url: image.url,
+      label: image.caption ?? image.alt ?? '立面図',
+      alt: image.alt,
+    }));
+  const elevations =
+    registeredElevations.length > 0
+      ? registeredElevations
+      : model.id === MODEL_WING01_ID
+        ? ELEVATIONS
+        : [];
+
+  const caseImages = bundle.images
+    .filter((image) => image.kind === 'case')
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((image) => ({
+      id: image.id,
+      url: image.url,
+      alt: image.alt,
+      caption: image.caption,
+    }));
+
+  const specOptions =
+    template || !preset
+      ? bundle.options
+      : bundle.options.filter(
+          (option) => option.spec_codes.length === 0 || option.spec_codes.includes(specCode)
+        );
+  const scopedCategories = categoriesInScope(bundle.categories, finishLevel).filter(
+    (category) => category.customer_visible !== false
   );
+  const scopedCategoryIds = new Set(scopedCategories.map((category) => category.id));
+  const specCategories = scopedCategories.filter(
+    (category) =>
+      category.code !== 'fireproof' &&
+      specOptions.some((option) => option.category_id === category.id)
+  );
+  const scopedOptions = specOptions.filter((option) => scopedCategoryIds.has(option.category_id));
 
   return (
-    <div className="space-y-5">
-      <section className="card overflow-hidden" id="estimate-preview">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-sand/20 px-4 py-4 sm:px-5">
-          <div>
-            <p className="text-xs font-semibold text-forest">選択中の標準見積</p>
-            <h2 className="mt-1 text-lg font-semibold">
-              {model.name === 'フラット' ? 'Flat' : model.name} / {specName}
-            </h2>
+    <SimulatorCaseImagesProvider images={caseImages}>
+      <div className="space-y-5">
+        <section className="card overflow-hidden" id="estimate-preview">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-sand/20 px-4 py-4 sm:px-5">
+            <div>
+              <p className="text-xs font-semibold text-forest">選択中の標準見積</p>
+              <h2 className="mt-1 text-lg font-semibold">
+                {displayModelName} / {specName}
+              </h2>
+              <p className="mt-1 text-xs text-muted">
+                シミュレーターの標準状態と同じ選択内容で、見積書を読み取り専用表示しています。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {template && (
+                <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
+                  標準見積を編集
+                </Link>
+              )}
+              <Link href={`/simulator/${model.slug}`} className="btn-secondary btn-sm">
+                シミュレーターで確認
+              </Link>
+            </div>
+          </div>
+
+          <div className="px-4 py-4 sm:px-5">
+            <QuoteSheet
+              modelName={displayModelName}
+              specName={specName}
+              finishLevel={finishLevel}
+              pricing={pricing}
+              standardEstimate={standardEstimate}
+              categories={bundle.categories}
+              options={bundle.options}
+              readOnly
+              onPickCategory={() => undefined}
+            />
+          </div>
+        </section>
+
+        <section className="card overflow-hidden">
+          <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
+            <h2 className="text-base font-semibold">プランボード</h2>
             <p className="mt-1 text-xs text-muted">
-              シミュレーターの標準状態と同じ選択内容で、見積書を読み取り専用表示しています。
+              シミュレーターと同じ構成で、平面図・完成イメージ・立面図・標準設備及び仕上げ表を確認できます。
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {template && (
-              <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
-                標準見積を編集
-              </Link>
-            )}
-            <Link href={`/simulator/${model.slug}`} className="btn-secondary btn-sm">
-              シミュレーターで確認
-            </Link>
+
+          <div className="p-4 sm:p-5">
+            <section aria-label="プランボード" className="space-y-4 lg:space-y-0">
+              <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
+                <div className="min-w-0">
+                  <PlanBoard
+                    plan={previews.floorplan}
+                    specName={planDisplayName}
+                    planSize={planSize}
+                    modelSlug={model.slug}
+                    readOnly
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <PreviewStage
+                    previews={previews}
+                    view={view}
+                    onViewChange={setView}
+                    options={bundle.options}
+                    modelName={displayModelName}
+                  />
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <ElevationStrip
+                  elevations={elevations}
+                  categories={bundle.categories}
+                  options={bundle.options}
+                  variantChoices={bundle.variantChoices}
+                  exteriorFaces={exteriorFaces}
+                  readOnly
+                  onPickExteriorFace={() => undefined}
+                />
+              </div>
+            </section>
+
+            <div className="mt-4">
+              <EquipmentBoard
+                categories={specCategories}
+                options={scopedOptions}
+                selected={selected}
+                baselineSelected={baselineIds}
+                selectedVariantIds={variantIds}
+                baselineVariantIds={variantIds}
+                variantGroups={bundle.variantGroups}
+                variantChoices={bundle.variantChoices}
+                readOnly
+                onPickCategory={() => undefined}
+              />
+            </div>
           </div>
-        </div>
-
-        <div className="px-4 py-4 sm:px-5">
-          <QuoteSheet
-            modelName={model.name === 'フラット' ? 'Flat' : model.name}
-            specName={specName}
-            finishLevel={finishLevel}
-            pricing={pricing}
-            standardEstimate={standardEstimate}
-            categories={bundle.categories}
-            options={bundle.options}
-            readOnly
-            onPickCategory={() => undefined}
-          />
-        </div>
-      </section>
-
-      <section className="card overflow-hidden">
-        <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
-          <h2 className="text-base font-semibold">プランボード</h2>
-          <p className="mt-1 text-xs text-muted">同じ標準状態の平面図を確認できます。</p>
-        </div>
-        <div className="p-4 sm:p-5">
-          <PlanBoard
-            plan={plan}
-            specName={planDisplayName}
-            planSize={planSize}
-            modelSlug={model.slug}
-            readOnly
-          />
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </SimulatorCaseImagesProvider>
   );
 }

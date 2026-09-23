@@ -48,23 +48,47 @@ function CaseSummary({
   return (
     <section
       aria-label="案件集計"
-      className="overflow-x-auto rounded-lg border border-[#dbe4df] bg-white shadow-sm [scrollbar-width:thin]"
+      className="rounded-lg border border-[#dbe4df] bg-white px-3 py-2 shadow-sm"
       data-testid="case-summary-strip"
     >
-      <div className="flex min-w-max items-center gap-4 px-3 py-2 text-[0.7rem]">
-        <span className="font-semibold text-[#315745]">案件状況</span>
-        <span className="text-muted">案件</span>
-        <strong className="text-xs text-ink">{caseCount}</strong>
-        <span className="text-muted">新規依頼</span>
-        <strong className={newCount > 0 ? 'rounded-full bg-[#fff1d7] px-1.5 py-0.5 text-[#8a5a20]' : 'text-ink'}>{newCount}</strong>
-        <span className="text-muted">見積あり</span>
-        <strong className="text-ink">{quotedCount}</strong>
-        <span className="text-muted">承諾</span>
-        <strong className="text-ink">{acceptedCount}</strong>
-        <span className="h-4 w-px bg-line" aria-hidden="true" />
-        <span className="font-semibold text-[#315745]">見積</span>
-        <span className="text-muted">{filtered ? '表示中の見積金額合計' : '現在の見積金額合計'}</span>
-        <strong className="text-xs tabular-nums text-ink">{formatYen(quoteTotal)}</strong>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.7rem]">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-status">
+          <span className="font-semibold text-[#315745]">案件状況</span>
+          <span className="text-muted">案件</span>
+          <strong className="text-xs text-ink">{caseCount}</strong>
+          <span className="text-muted">新規依頼</span>
+          <strong className={newCount > 0 ? 'rounded-full bg-[#fff1d7] px-1.5 py-0.5 text-[#8a5a20]' : 'text-ink'}>{newCount}</strong>
+          <span className="text-muted">見積あり</span>
+          <strong className="text-ink">{quotedCount}</strong>
+          <span className="text-muted">承諾</span>
+          <strong className="text-ink">{acceptedCount}</strong>
+        </div>
+
+        <span className="hidden h-4 w-px bg-line md:block" aria-hidden="true" />
+
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-finance">
+          <span className="font-semibold text-[#315745]">収支</span>
+          <span className="text-muted">{filtered ? '表示中の見積金額合計' : '各案件の現在金額合計'}</span>
+          <strong className="text-xs tabular-nums text-ink">{formatYen(quoteTotal)}</strong>
+          <span className="text-muted">原価</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">利益</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">利益率</span>
+          <strong className="text-muted">—</strong>
+        </div>
+
+        <span className="hidden h-4 w-px bg-line md:block" aria-hidden="true" />
+
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-disaster">
+          <span className="font-semibold text-[#315745]">災害時供給</span>
+          <span className="text-muted">登録</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">供給可</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">要確認</span>
+          <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 text-[#8a5a20]">未登録</strong>
+        </div>
       </div>
     </section>
   );

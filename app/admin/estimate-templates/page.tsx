@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { Badge, Input, Select } from '@/components/ui';
+import { Badge, Input } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 
 const SPEC_LABELS: Record<string, string> = {
@@ -21,28 +20,12 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
-function SelectWithArrow({
-  name,
-  defaultValue,
-  children,
-}: {
-  name: string;
-  defaultValue: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="relative mt-1">
-      <Select name={name} defaultValue={defaultValue} className="w-full pr-10">
-        {children}
-      </Select>
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted"
-      >
-        ▼
-      </span>
-    </div>
-  );
+function filterHref(model: string, q: string) {
+  const params = new URLSearchParams();
+  if (model) params.set('model', model);
+  if (q) params.set('q', q);
+  const query = params.toString();
+  return query ? `/admin/estimate-templates?${query}` : '/admin/estimate-templates';
 }
 
 export default async function EstimateTemplatesPage({
@@ -60,7 +43,8 @@ export default async function EstimateTemplatesPage({
 
   const modelMap = new Map(models.map((model) => [model.id, model]));
   const modelId = sp.model ?? '';
-  const q = (sp.q ?? '').trim().toLowerCase();
+  const qRaw = (sp.q ?? '').trim();
+  const q = qRaw.toLowerCase();
   const filtered = templates
     .filter((row) => !modelId || row.base_model_id === modelId)
     .filter((row) => {
@@ -71,118 +55,155 @@ export default async function EstimateTemplatesPage({
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
   const hasFilters = Boolean(modelId || q);
+  const visibleModels = models.filter((model) => templates.some((template) => template.base_model_id === model.id));
 
   return (
     <AdminPage
-      title="見積テンプレート"
-      lead="Webシミュレーター・案件見積の基準となる見積テンプレートを管理します。"
+      title="標準見積"
+      lead="標準見積を選び、原価・売価・粗利率と紐づくプランボードを確認・調整します。"
       actions={
-        <div className="flex flex-wrap gap-2">
-          <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新規作成</Link>
-        </div>
+        <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+          ＋ 新規標準見積を作成
+        </Link>
       }
     >
-      <section className="card p-4">
-        <div className="mb-3">
-          <p className="text-sm font-semibold">一覧の絞り込み</p>
-          <p className="mt-1 text-xs text-muted">商品やテンプレート名・仕様で、下の一覧を探しやすくするための検索です。複製には使用しません。</p>
-        </div>
-        <form method="get" className="grid gap-3 sm:grid-cols-[minmax(12rem,0.5fr)_minmax(16rem,1fr)_auto] sm:items-end">
-          <label className="block">
-            <span className="label">商品</span>
-            <SelectWithArrow name="model" defaultValue={modelId}>
-              <option value="">すべて</option>
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>{model.name}</option>
-              ))}
-            </SelectWithArrow>
-          </label>
-          <label className="block">
-            <span className="label">検索</span>
-            <Input
-              type="search"
-              name="q"
-              defaultValue={sp.q ?? ''}
-              placeholder="テンプレート名・仕様"
-              className="mt-1 w-full"
-            />
-          </label>
-          <div className="flex gap-2">
-            <button type="submit" className="btn-secondary btn-sm">絞り込む</button>
-            {hasFilters && <Link href="/admin/estimate-templates" className="btn-ghost btn-sm">クリア</Link>}
+      <section className="card overflow-hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
+          <div>
+            <h2 className="text-base font-semibold">標準見積一覧</h2>
+            <p className="mt-1 text-xs text-muted">
+              編集する標準見積を選択します。商品モデルと見積名で絞り込めます。
+            </p>
           </div>
-        </form>
-      </section>
+          <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">
+            操作確認用サンプル
+          </Link>
+        </div>
 
-      {filtered.length > 0 ? (
-        <Table minWidth="56rem">
-          <thead className="bg-sand/60">
-            <tr>
-              <Th>商品</Th>
-              <Th>テンプレート名</Th>
-              <Th>仕様</Th>
-              <Th>作成元・利用地域</Th>
-              <Th>公開状況</Th>
-              <Th right>税込金額</Th>
-              <Th>更新日</Th>
-              <Th></Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {filtered.map((template) => {
-              const model = modelMap.get(template.base_model_id);
+        <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-2" aria-label="商品モデル">
+            <Link
+              href={filterHref('', qRaw)}
+              aria-current={!modelId ? 'page' : undefined}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                !modelId
+                  ? 'border-ink bg-ink text-white'
+                  : 'border-line bg-white text-ink hover:bg-sand'
+              }`}
+            >
+              すべて
+            </Link>
+            {visibleModels.map((model) => {
+              const active = model.id === modelId;
               return (
-                <tr key={template.id}>
-                  <Td className="font-semibold">{model?.name ?? '—'}</Td>
-                  <Td>
-                    <p className="font-semibold">{template.name}</p>
-                    <p className="mt-0.5 text-xs text-muted">{template.source_sheet_name}</p>
-                  </Td>
-                  <Td>
-                    <p>{SPEC_LABELS[template.spec_code] ?? template.spec_code}</p>
-                    <p className="mt-0.5 text-xs text-muted">防火：未設定</p>
-                  </Td>
-                  <Td>
-                    <p>本部（移行元）</p>
-                    <p className="mt-0.5 text-xs text-muted">全国</p>
-                  </Td>
-                  <Td>
-                    <Badge tone="neutral">取込済み</Badge>
-                    <p className="mt-1 text-xs text-muted">公開版 —</p>
-                  </Td>
-                  <Td right className="font-semibold">{formatYen(template.total)}</Td>
-                  <Td>{formatDate(template.updated_at)}</Td>
-                  <Td right>
-                    <Link href={'/admin/estimate-templates/' + template.id} className="btn-secondary btn-sm">開く</Link>
-                  </Td>
-                </tr>
+                <Link
+                  key={model.id}
+                  href={filterHref(model.id, qRaw)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                    active
+                      ? 'border-forest bg-forest text-white'
+                      : 'border-line bg-white text-ink hover:bg-sand'
+                  }`}
+                >
+                  {model.name}
+                </Link>
               );
             })}
-          </tbody>
-        </Table>
-      ) : (
-        <section className="card px-6 py-12 text-center">
-          <h2 className="text-lg font-semibold">
-            {hasFilters ? '条件に一致する見積テンプレートがありません' : '見積テンプレートはまだありません'}
-          </h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
-            {hasFilters
-              ? '検索条件を変更するか、条件をクリアしてもう一度確認してください。'
-              : '最初の見積テンプレートを作成して、Webシミュレーターと案件見積の基準を登録します。'}
-          </p>
-          <div className="mt-5 flex justify-center gap-2">
-            {hasFilters ? (
-              <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">条件をクリア</Link>
-            ) : (
-              <>
-                <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
-                <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の見積テンプレートを作成</Link>
-              </>
-            )}
           </div>
-        </section>
-      )}
+
+          <form method="get" className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            {modelId && <input type="hidden" name="model" value={modelId} />}
+            <label className="block min-w-0 flex-1">
+              <span className="label">検索</span>
+              <Input
+                type="search"
+                name="q"
+                defaultValue={sp.q ?? ''}
+                placeholder="見積名を検索"
+                className="mt-1 w-full"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button type="submit" className="btn-secondary btn-sm">絞り込む</button>
+              {hasFilters && <Link href="/admin/estimate-templates" className="btn-ghost btn-sm">条件をクリア</Link>}
+            </div>
+          </form>
+        </div>
+
+        {filtered.length > 0 ? (
+          <>
+            <Table minWidth="56rem">
+              <thead className="bg-sand/60">
+                <tr>
+                  <Th>見積名</Th>
+                  <Th>防火</Th>
+                  <Th right>原価税込</Th>
+                  <Th right>売価税込</Th>
+                  <Th right>粗利率</Th>
+                  <Th>状態</Th>
+                  <Th>更新日</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {filtered.map((template) => {
+                  const model = modelMap.get(template.base_model_id);
+                  return (
+                    <tr key={template.id} className="hover:bg-sand/30">
+                      <Td>
+                        <Link
+                          href={'/admin/estimate-templates/' + template.id}
+                          className="font-semibold text-ink underline-offset-4 hover:underline"
+                        >
+                          {template.name}
+                        </Link>
+                        <p className="mt-1 text-xs text-muted">
+                          {model?.name ?? '—'} ／ {SPEC_LABELS[template.spec_code] ?? template.spec_code}
+                        </p>
+                      </Td>
+                      <Td>
+                        <span className="text-sm text-muted">未設定</span>
+                      </Td>
+                      <Td right className="text-muted">—</Td>
+                      <Td right className="font-semibold">{formatYen(template.total)}</Td>
+                      <Td right className="text-muted">—</Td>
+                      <Td>
+                        <Badge tone="neutral">旧取込</Badge>
+                      </Td>
+                      <Td>{formatDate(template.updated_at)}</Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+            <div className="border-t border-line bg-sand/20 px-4 py-3 text-xs text-muted sm:px-5">
+              原価税込・粗利率・正式な公開状態は、新しい標準見積Revision基盤との接続後に表示します。
+              現在の一覧では旧取込データの売価税込だけを表示しています。
+            </div>
+          </>
+        ) : (
+          <div className="px-6 py-12 text-center">
+            <h2 className="text-lg font-semibold">
+              {hasFilters ? '条件に一致する標準見積がありません' : '標準見積はまだありません'}
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
+              {hasFilters
+                ? '検索条件を変更するか、条件をクリアしてもう一度確認してください。'
+                : '最初の標準見積を作成して、Webシミュレーターと案件見積の基準を登録します。'}
+            </p>
+            <div className="mt-5 flex justify-center gap-2">
+              {hasFilters ? (
+                <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">条件をクリア</Link>
+              ) : (
+                <>
+                  <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">操作確認用サンプルを開く</Link>
+                  <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 最初の標準見積を作成</Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
     </AdminPage>
   );
 }

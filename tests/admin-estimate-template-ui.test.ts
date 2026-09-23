@@ -59,9 +59,9 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('Wing');
     expect(listPage).toContain('7件');
     expect(listPage).toContain('BOX');
-    expect(listPage).toContain('4件');
+    expect(listPage).toContain("{ name: 'BOX', count: 4 }");
     expect(listPage).toContain('Flat');
-    expect(listPage).toContain('3件');
+    expect(listPage).toContain("{ name: 'Flat', count: 3 }");
     expect(listPage).toContain('添付HTMLに合わせた画面見本');
     expect(listPage).toContain('金額・状態は保存データではありません');
     expect(listPage).toContain('/admin/estimate-templates/demo');

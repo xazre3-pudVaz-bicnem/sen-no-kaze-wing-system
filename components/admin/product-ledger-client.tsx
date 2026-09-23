@@ -188,7 +188,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
                         <span className="truncate font-semibold">{o.name}</span>
                         {attention && <Badge tone="warn">要確認</Badge>}
                       </span>
-                      <span className="mt-0.5 block truncate text-xs text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || o.code}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || o.product_no || dash}</span>
                     </span>
                   </button>
                 </td>
@@ -239,7 +239,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
                 <Badge tone={selected.status === 'published' ? 'success' : 'neutral'}>{selected.status === 'published' ? '公開中' : '下書き'}</Badge>
                 {needsProductAttention(selected) && <Badge tone="warn">要確認</Badge>}
               </div>
-              <p className="mt-0.5 truncate text-xs text-muted">{[selected.manufacturer, selected.model_no].filter(Boolean).join(' ／ ') || selected.code}</p>
+              <p className="mt-0.5 truncate text-xs text-muted">{[selected.manufacturer, selected.model_no].filter(Boolean).join(' ／ ') || selected.product_no || dash}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm hidden sm:inline-flex">商品情報を編集</Link>}

@@ -289,10 +289,11 @@ export async function CaseWorkspace({
     { label: 'アフター', value: '未対応', state: 'pending' },
   ] as const;
 
-  const currentWorkflowLabel = `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+  const currentWorkflowLabel =
+    quote.status === 'accepted' ? '契約' : `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
     quote.status === 'accepted'
-      ? '契約'
+      ? '契約条件の確認'
       : quote.status === 'issued'
         ? '見積内容の判断'
         : '—';
@@ -340,7 +341,7 @@ export async function CaseWorkspace({
         </div>
 
         <div
-          className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.65rem] text-white/82"
+          className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.65rem] text-white/80"
           data-testid="case-structure-summary"
           aria-label="案件概要"
         >

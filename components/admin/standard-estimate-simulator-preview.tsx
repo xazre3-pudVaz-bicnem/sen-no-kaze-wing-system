@@ -57,6 +57,7 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
 
   const selected = pruneToScope(ctx, baselineIds, finishLevel);
   const variantIds = defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, selected);
+  const baselineVariantIds = defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);
 
   const exteriorCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
   const exteriorOptions = bundle.options
@@ -253,7 +254,7 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
                 selected={selected}
                 baselineSelected={baselineIds}
                 selectedVariantIds={variantIds}
-                baselineVariantIds={variantIds}
+                baselineVariantIds={baselineVariantIds}
                 variantGroups={bundle.variantGroups}
                 variantChoices={bundle.variantChoices}
                 readOnly

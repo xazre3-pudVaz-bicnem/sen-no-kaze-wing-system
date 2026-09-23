@@ -22,7 +22,7 @@ describe('商品台帳の入口', () => {
   it('一覧を主役にし、未選択時は余分な詳細カードを出さない', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品一覧');
-    expect(client).toContain('商品名・メーカー・型番を検索');
+    expect(client).toContain('商品名・メーカー・型番・商品番号を検索');
     expect(client).toContain('カテゴリー：すべて');
     expect(client).toContain('状態：すべて');
     expect(client).toContain('並び替え：更新が新しい順');

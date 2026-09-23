@@ -363,7 +363,7 @@ export async function CaseWorkspace({
       </section>
 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" aria-label="案件工程" data-testid="case-workflow">
-        <div className="grid grid-cols-3 gap-1 p-2 sm:grid-cols-5 lg:grid-cols-9">
+        <div className="grid grid-cols-3 gap-1 p-2 md:grid-cols-9">
           {workflow.map((step, index) => {
             const stateClass =
               step.state === 'done'
@@ -380,7 +380,7 @@ export async function CaseWorkspace({
                   <p className="mt-0.5 truncate text-[0.58rem] opacity-75">{step.value}</p>
                 </div>
                 {index < workflow.length - 1 && (
-                  <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-[0.62rem] text-muted lg:block">→</span>
+                  <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-[0.62rem] font-semibold text-muted md:block">→</span>
                 )}
               </div>
             );

@@ -765,11 +765,6 @@ export function OptionForm({
             </summary>
             <div className="space-y-6 border-t border-line p-4 sm:p-5">
               <div className="grid gap-5 sm:grid-cols-2">
-                {mode !== 'all' && (
-                  <Field label="管理用コード" htmlFor={`code-${mode}`} required hint="英小文字・数字・ハイフン（一意）" errors={e.code}>
-                    <Input id={`code-${mode}`} name="code" defaultValue={option?.code} required />
-                  </Field>
-                )}
                 <Field label="選択方式（表示）" htmlFor={`selection_type-${mode}`} errors={e.selection_type}>
                   <Select id={`selection_type-${mode}`} name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>
                     <option value="checkbox">チェックボックス</option>

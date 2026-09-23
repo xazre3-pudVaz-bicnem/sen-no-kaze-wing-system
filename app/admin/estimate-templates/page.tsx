@@ -46,12 +46,13 @@ export default async function EstimateTemplatesPage({
     bundlesByModel.set(bundle.template.base_model_id, rows);
   }
 
+  const simulatorModels = models.filter((model) => model.status === 'published');
   const modelId = sp.model ?? '';
   const qRaw = (sp.q ?? '').trim();
   const q = qRaw.toLowerCase();
   const hasFilters = Boolean(modelId || q);
 
-  const groups = models
+  const groups = simulatorModels
     .filter((model) => !modelId || model.id === modelId)
     .map((model) => {
       const choices = simulatorEstimateChoices(model, bundlesByModel.get(model.id) ?? [])
@@ -105,7 +106,7 @@ export default async function EstimateTemplatesPage({
             >
               すべて
             </Link>
-            {models.map((model) => {
+            {simulatorModels.map((model) => {
               const active = model.id === modelId;
               return (
                 <Link

@@ -534,7 +534,6 @@ export function OptionForm({
 
   const preserveSalesFields = !showSales && option ? (
     <>
-      <input type="hidden" name="code" value={option.code} />
       <input type="hidden" name="base_model_id" value={option.base_model_id ?? ''} />
       <input type="hidden" name="status" value={option.status} />
       <input type="hidden" name="sort_order" value={option.sort_order} />
@@ -578,7 +577,7 @@ export function OptionForm({
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
             <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、型番・品番で商品を特定します。</p>
+            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。</p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
@@ -625,9 +624,13 @@ export function OptionForm({
               </datalist>
             </Field>
             {mode === 'all' && (
-              <Field label="管理用コード" htmlFor="code-all" required hint="英小文字・数字・ハイフン（一意）" errors={e.code}>
-                <Input id="code-all" name="code" defaultValue={option?.code} required />
-              </Field>
+              <div>
+                <p className="label">商品管理番号</p>
+                <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">
+                  {option?.product_no ?? '保存時に自動採番'}
+                </div>
+                <p className="mt-1 text-xs text-muted">PRD-000001形式で自動採番し、登録後は変更しません。</p>
+              </div>
             )}
           </div>
 

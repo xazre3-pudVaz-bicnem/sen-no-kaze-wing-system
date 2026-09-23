@@ -22,7 +22,7 @@ export function AdminShell({ children, email, role, migrationOnly = false }: Adm
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-[96rem] items-center justify-between gap-4 px-5 py-3 sm:px-8">
           <Link href={homeHref} className="flex shrink-0 items-baseline gap-2">
-            <span className="font-serif text-xl tracking-[0.08em]">Wing</span>
+            <span className="font-serif text-xl tracking-[0.04em]">千の風プロジェクト</span>
             <span className="text-xs text-muted">管理画面</span>
           </Link>
           <div className="flex min-w-0 items-center gap-3 text-xs text-muted">

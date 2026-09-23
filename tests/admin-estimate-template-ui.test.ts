@@ -55,6 +55,15 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('<Th>状態</Th>');
     expect(listPage).toContain('旧取込');
     expect(listPage).toContain('新しい標準見積Revision基盤との接続後に表示します');
+    expect(listPage).toContain('SAMPLE_WING_ROWS');
+    expect(listPage).toContain('Wing');
+    expect(listPage).toContain('7件');
+    expect(listPage).toContain('BOX');
+    expect(listPage).toContain('4件');
+    expect(listPage).toContain('Flat');
+    expect(listPage).toContain('3件');
+    expect(listPage).toContain('添付HTMLに合わせた画面見本');
+    expect(listPage).toContain('金額・状態は保存データではありません');
     expect(listPage).toContain('/admin/estimate-templates/demo');
   });
 

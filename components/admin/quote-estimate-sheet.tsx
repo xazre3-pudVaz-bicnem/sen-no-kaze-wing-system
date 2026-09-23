@@ -59,7 +59,13 @@ export function QuoteEstimateSheet({
         </div>
       )}
       <div className="overflow-x-auto">
-        <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />
+        <QuoteTable
+          quote={quote}
+          items={items}
+          totalTestId="admin-quote-total"
+          showBaseDetail
+          showSelectedImages={false}
+        />
       </div>
     </div>
   );

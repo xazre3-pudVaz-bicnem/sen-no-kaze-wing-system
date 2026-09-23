@@ -60,9 +60,9 @@ describe('商品登録管理画面の業務フロー', () => {
   });
   it('新規登録でも2STEPとreturn_to導線を案内する', () => {
     expect(newPage).toContain('商品登録の2ステップ');
-    expect(newPage).toContain('登録して見積テンプレートへ戻る');
+    expect(newPage).toContain('下書き登録して見積テンプレートへ戻る');
     expect(newPage).toContain('return_to');
-    expect(forms).toContain('登録して見積テンプレートへ戻る');
+    expect(forms).toContain('下書き登録して見積テンプレートへ戻る');
     expect(forms).toContain('下書き保存してSTEP 2へ');
     expect(forms).toContain("mode === 'all' && option");
     expect(forms).toContain("'商品情報を保存'");
@@ -75,7 +75,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。');
     expect(adminActions).toContain("status: existingOption ? formData.get('status') : 'draft'");
     expect(adminActions).toContain('export async function publishOptionAction');
-    expect(adminActions).toContain('await requireCatalogEditor()');
+    expect(adminActions).toContain('const actor = await requireStaff()');
+    expect(adminActions).toContain('editableOptionContext(actor, id)');
     expect(adminActions).toContain("status: 'published'");
     expect(editPage).toContain('publishOptionAction');
     expect(editPage).toContain('現在は下書きです。上のお客様表示に問題がなければ公開してください。');

@@ -41,7 +41,7 @@ export function PlanBoard({ plan, specName, planSize, modelSlug, readOnly }: Pro
   const specLabel = specName.trim();
 
   return (
-    <figure className="overflow-hidden rounded-lg border border-[#e8b100] bg-white lg:rounded-none" data-testid="plan-board">
+    <figure className="overflow-hidden rounded-lg border border-[#e8b100] bg-white md:rounded-none" data-testid="plan-board">
       <figcaption className="px-4 pt-3 pb-2 text-base font-medium leading-tight text-ink">
         <span className="font-semibold">【平面図】</span>
         {(specLabel || shortSize) && (
@@ -53,7 +53,7 @@ export function PlanBoard({ plan, specName, planSize, modelSlug, readOnly }: Pro
         )}
       </figcaption>
       <div
-        className={modelSlug === 'flat' ? 'relative aspect-[2/1] bg-white px-2 pb-2 sm:aspect-[16/7] lg:aspect-[4/3]' : 'relative aspect-[4/3] bg-white px-2 pb-2'}
+        className={modelSlug === 'flat' ? 'relative aspect-[2/1] bg-white px-2 pb-2 sm:aspect-[16/7] md:aspect-[4/3]' : 'relative aspect-[4/3] bg-white px-2 pb-2'}
         data-testid="plan-image"
         data-plan-src={planImage?.url ?? ''}
         data-plan-display-src={displayPlanUrl}
@@ -137,18 +137,18 @@ export function ElevationStrip({
   const elevationGroups = [elevations.slice(0, 2), elevations.slice(2, 4)].filter((group) => group.length > 0);
 
   return (
-    <figure className="overflow-hidden rounded-lg border border-[#e8b100] bg-white lg:-mt-px lg:rounded-none">
+    <figure className="overflow-hidden rounded-lg border border-[#e8b100] bg-white md:-mt-px md:rounded-none">
       <figcaption className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-4 pt-3 pb-2">
         <span className="text-base font-semibold text-ink">【立面図（4面）】</span>
         <span className="text-xs font-normal text-muted">各面をクリックして外壁を個別に選べます。</span>
         <span className="text-[0.68rem] text-muted">（外壁は内外装工事に含まれます）</span>
       </figcaption>
-      <div className="grid border-t border-[#e8b100] lg:grid-cols-2">
+      <div className="grid border-t border-[#e8b100] md:grid-cols-2">
         {elevationGroups.map((group, groupIndex) => (
           <ul
             key={group[0]?.url}
-            className={`grid grid-cols-2 bg-white p-3 [&>li+li]:border-l [&>li+li]:border-line lg:p-4 ${
-              groupIndex === 1 ? 'border-t border-[#e8b100] lg:border-t-0 lg:border-l' : ''
+            className={`grid grid-cols-2 bg-white p-3 [&>li+li]:border-l [&>li+li]:border-line md:p-4 ${
+              groupIndex === 1 ? 'border-t border-[#e8b100] md:border-t-0 md:border-l' : ''
             }`}
             data-testid={groupIndex === 0 ? 'elevation-group-front' : 'elevation-group-back'}
           >

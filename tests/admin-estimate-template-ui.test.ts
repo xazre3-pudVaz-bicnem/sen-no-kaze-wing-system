@@ -45,6 +45,7 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('標準見積一覧');
     expect(listPage).toContain('＋ 新規標準見積を作成');
     expect(listPage).toContain('すべて');
+    expect(listPage).toContain('const visibleModels = models;');
     expect(listPage).toContain('見積名を検索');
     expect(listPage).toContain('<Th>見積名</Th>');
     expect(listPage).toContain('<Th>防火</Th>');
@@ -54,6 +55,15 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('<Th>状態</Th>');
     expect(listPage).toContain('旧取込');
     expect(listPage).toContain('新しい標準見積Revision基盤との接続後に表示します');
+    expect(listPage).toContain('SAMPLE_WING_ROWS');
+    expect(listPage).toContain('Wing');
+    expect(listPage).toContain('7件');
+    expect(listPage).toContain('BOX');
+    expect(listPage).toContain("{ name: 'BOX', count: 4 }");
+    expect(listPage).toContain('Flat');
+    expect(listPage).toContain("{ name: 'Flat', count: 3 }");
+    expect(listPage).toContain('添付HTMLに合わせた画面見本');
+    expect(listPage).toContain('金額・状態は保存データではありません');
     expect(listPage).toContain('/admin/estimate-templates/demo');
   });
 

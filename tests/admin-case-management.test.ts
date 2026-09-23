@@ -40,7 +40,9 @@ describe('Admin case management UI', () => {
   it('keeps the list dense and shows the selected case workspace on the same page', () => {
     expect(list).toContain('data-testid="case-summary-strip"');
     expect(list).toContain('案件状況');
-    expect(list).toContain('現在の見積金額合計');
+    expect(list).toContain('各案件の現在金額合計');
+    expect(list).toContain('data-testid="case-summary-finance"');
+    expect(list).toContain('data-testid="case-summary-disaster"');
     expect(list).not.toContain('契約・製造・原価・利益・災害時供給は今後対応予定');
     expect(list).toContain('案件を選択すると、下のワークスペースが切り替わります。');
     expect(list).toContain('max-h-[20rem] overflow-auto');
@@ -57,6 +59,10 @@ describe('Admin case management UI', () => {
     expect(list).toContain('見積番号');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
     expect(list).toContain('>選択中</span>');
+    for (const label of ['棟数', '見積・契約額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
+      expect(list).toContain(label);
+    }
+    expect(list).toContain('未登録');
   });
 
   it('uses one reusable workspace for the inline list and the existing detail route', () => {

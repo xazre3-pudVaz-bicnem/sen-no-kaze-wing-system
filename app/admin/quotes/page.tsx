@@ -48,23 +48,47 @@ function CaseSummary({
   return (
     <section
       aria-label="案件集計"
-      className="overflow-x-auto rounded-lg border border-[#dbe4df] bg-white shadow-sm [scrollbar-width:thin]"
+      className="rounded-lg border border-[#dbe4df] bg-white px-3 py-2 shadow-sm"
       data-testid="case-summary-strip"
     >
-      <div className="flex min-w-max items-center gap-4 px-3 py-2 text-[0.7rem]">
-        <span className="font-semibold text-[#315745]">案件状況</span>
-        <span className="text-muted">案件</span>
-        <strong className="text-xs text-ink">{caseCount}</strong>
-        <span className="text-muted">新規依頼</span>
-        <strong className={newCount > 0 ? 'rounded-full bg-[#fff1d7] px-1.5 py-0.5 text-[#8a5a20]' : 'text-ink'}>{newCount}</strong>
-        <span className="text-muted">見積あり</span>
-        <strong className="text-ink">{quotedCount}</strong>
-        <span className="text-muted">承諾</span>
-        <strong className="text-ink">{acceptedCount}</strong>
-        <span className="h-4 w-px bg-line" aria-hidden="true" />
-        <span className="font-semibold text-[#315745]">見積</span>
-        <span className="text-muted">{filtered ? '表示中の見積金額合計' : '現在の見積金額合計'}</span>
-        <strong className="text-xs tabular-nums text-ink">{formatYen(quoteTotal)}</strong>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.7rem]">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-status">
+          <span className="font-semibold text-[#315745]">案件状況</span>
+          <span className="text-muted">案件</span>
+          <strong className="text-xs text-ink">{caseCount}</strong>
+          <span className="text-muted">新規依頼</span>
+          <strong className={newCount > 0 ? 'rounded-full bg-[#fff1d7] px-1.5 py-0.5 text-[#8a5a20]' : 'text-ink'}>{newCount}</strong>
+          <span className="text-muted">見積あり</span>
+          <strong className="text-ink">{quotedCount}</strong>
+          <span className="text-muted">承諾</span>
+          <strong className="text-ink">{acceptedCount}</strong>
+        </div>
+
+        <span className="hidden h-4 w-px bg-line md:block" aria-hidden="true" />
+
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-finance">
+          <span className="font-semibold text-[#315745]">収支</span>
+          <span className="text-muted">{filtered ? '表示中の見積金額合計' : '各案件の現在金額合計'}</span>
+          <strong className="text-xs tabular-nums text-ink">{formatYen(quoteTotal)}</strong>
+          <span className="text-muted">原価</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">利益</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">利益率</span>
+          <strong className="text-muted">—</strong>
+        </div>
+
+        <span className="hidden h-4 w-px bg-line md:block" aria-hidden="true" />
+
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-disaster">
+          <span className="font-semibold text-[#315745]">災害時供給</span>
+          <span className="text-muted">登録</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">供給可</span>
+          <strong className="text-muted">—</strong>
+          <span className="text-muted">要確認</span>
+          <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 text-[#8a5a20]">未登録</strong>
+        </div>
       </div>
     </section>
   );
@@ -146,7 +170,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </span>
           </div>
           <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-            <table className="w-full min-w-[70rem] table-fixed text-[0.72rem]">
+            <table className="w-full min-w-[104rem] table-fixed text-[0.72rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
                   <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
@@ -154,8 +178,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
                   <th className="w-[16rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                   <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                  <th className="w-[7rem] px-2.5 py-1.5 text-left font-semibold">担当</th>
+                  <th className="w-[5rem] px-2.5 py-1.5 text-center font-semibold">棟数</th>
+                  <th className="w-[9rem] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">原価</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">利益</th>
+                  <th className="w-[6rem] px-2.5 py-1.5 text-right font-semibold">利益率</th>
+                  <th className="w-[11rem] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-left font-semibold">災害時供給</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -191,13 +220,18 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <strong>{q.base_model_name}</strong>
                         <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[q.finish_level].name}</span>
                       </td>
+                      <td className="px-2.5 py-1.5 text-center align-top text-muted">—</td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
+                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
+                      <td className="px-2.5 py-1.5 align-top text-[0.68rem] text-muted">未登録</td>
                     </tr>
                   );
                 })}
                 {latest.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
+                  <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
                 )}
               </tbody>
             </table>
@@ -325,7 +359,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             {filtersActive && <Link href="/admin/quotes" className="text-[0.68rem] text-[#315745] underline underline-offset-4">条件を解除</Link>}
           </div>
 
-          <form method="get" className="grid gap-1.5 lg:grid-cols-[minmax(15rem,1.4fr)_minmax(9rem,.7fr)_minmax(9rem,.7fr)_auto]">
+          <form
+            method="get"
+            className="grid gap-1.5 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8.5rem,.7fr)_minmax(8.5rem,.7fr)_auto_auto]"
+          >
             <input
               name="q"
               type="search"
@@ -333,7 +370,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               placeholder="顧客・住所・見積番号・商品モデル"
               className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-[#6d9480]"
             />
-            <select name="status" defaultValue={statusFilter} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
+            <select name="status" defaultValue={statusFilter} className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
               <option value="">状態：すべて</option>
               <optgroup label="見積依頼">
                 {Object.entries(QUOTE_REQUEST_STATUS_LABELS).map(([value, label]) => (
@@ -346,36 +383,39 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 ))}
               </optgroup>
             </select>
-            <select name="dealer" defaultValue={dealerFilter} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
+            <select name="dealer" defaultValue={dealerFilter} className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
               <option value="">担当：すべて</option>
               <option value="unassigned">未割当</option>
               {dealers.map((dealer) => (
                 <option key={dealer.id} value={dealer.id}>{dealer.company_name ?? dealer.full_name}</option>
               ))}
             </select>
-            <button type="submit" className="rounded-lg border border-[#a9bdb3] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f4f8f6]">
-              絞り込む
-            </button>
 
-            <details className="lg:col-span-4" open={Boolean(filter.pref || filter.city)}>
-              <summary className="cursor-pointer select-none text-[0.68rem] font-semibold text-ink-soft">詳細条件</summary>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <select name="pref" defaultValue={filter.pref ?? ''} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
+            <details className="relative" open={Boolean(filter.pref || filter.city)}>
+              <summary className="flex h-full min-h-[2rem] cursor-pointer list-none items-center justify-center gap-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-[#f8fbf9] [&::-webkit-details-marker]:hidden">
+                詳細条件 <span aria-hidden="true">▼</span>
+              </summary>
+              <div className="mt-1.5 flex flex-wrap gap-1.5 rounded-lg border border-line bg-white p-2 shadow-sm md:absolute md:right-0 md:z-20 md:w-[32rem] md:shadow-lg">
+                <select name="pref" defaultValue={filter.pref ?? ''} className="min-w-[9rem] flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
                   <option value="">都道府県：すべて</option>
                   {PREFECTURES.map((prefecture) => <option key={prefecture} value={prefecture}>{prefecture}</option>)}
                 </select>
-                <select name="city" defaultValue={filter.city ?? ''} disabled={!filter.pref} className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs disabled:bg-sand disabled:text-muted">
+                <select name="city" defaultValue={filter.city ?? ''} disabled={!filter.pref} className="min-w-[9rem] flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs disabled:bg-sand disabled:text-muted">
                   <option value="">市区町村：すべて</option>
                   {cityPool.map((city) => <option key={city} value={city}>{city}</option>)}
                 </select>
-                <span className="self-center text-[0.65rem] text-muted">地域は設置予定地を優先し、未登録時は顧客住所で判定します。</span>
+                <span className="w-full text-[0.65rem] text-muted">地域は設置予定地を優先し、未登録時は顧客住所で判定します。</span>
               </div>
             </details>
+
+            <button type="submit" className="rounded-lg border border-[#a9bdb3] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f4f8f6]">
+              絞り込む
+            </button>
           </form>
         </div>
 
         <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-          <table className="w-full min-w-[76rem] table-fixed text-[0.72rem]">
+          <table className="w-full min-w-[108rem] table-fixed text-[0.72rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
                 <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
@@ -383,8 +423,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
                 <th className="w-[17rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                 <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">担当代理店</th>
+                <th className="w-[5rem] px-2.5 py-1.5 text-center font-semibold">棟数</th>
+                <th className="w-[9rem] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">原価</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">利益</th>
+                <th className="w-[6rem] px-2.5 py-1.5 text-right font-semibold">利益率</th>
+                <th className="w-[11rem] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-left font-semibold">災害時供給</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -448,17 +493,22 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[quote.finish_level].name}</span>
                       ) : null}
                     </td>
+                    <td className="px-2.5 py-1.5 text-center align-top text-muted">—</td>
                     <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
                     </td>
+                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">
                       {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
                     </td>
+                    <td className="px-2.5 py-1.5 align-top text-[0.68rem] text-muted">未登録</td>
                   </tr>
                 );
               })}
               {shown.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
               )}
             </tbody>
           </table>

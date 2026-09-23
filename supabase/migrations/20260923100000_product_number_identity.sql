@@ -71,10 +71,10 @@ begin
   end if;
 
   with numbered as (
-    select id,
-           v_start + row_number() over (order by created_at, id) as next_no
-      from public.options
-     where product_no is null
+    select o.id,
+           v_start + row_number() over (order by o.created_at, o.id) as next_no
+      from public.options o
+     where o.product_no is null
   )
   update public.options o
      set product_no = 'PRD-' || lpad(numbered.next_no::text, 6, '0')

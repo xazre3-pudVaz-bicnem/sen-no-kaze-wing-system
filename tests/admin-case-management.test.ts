@@ -45,7 +45,7 @@ describe('Admin case management UI', () => {
     expect(list).toContain('案件を選択すると、下のワークスペースが切り替わります。');
     expect(list).toContain('max-h-[20rem] overflow-auto');
     expect(list).toContain('data-selected={selected ? \'true\' : undefined}');
-    expect(list).toContain("selected ? 'bg-[#fff8e8]'");
+    expect(list).toContain("selected ? 'bg-[#fff7df]");
     expect(list).toContain('caseSelectionHref');
     expect(list).toContain('<CaseWorkspace');
     expect(list).toContain('embedded');
@@ -55,6 +55,8 @@ describe('Admin case management UI', () => {
     expect(list).toContain('担当：すべて');
     expect(list).toContain('data-testid="case-list-scroll"');
     expect(list).toContain('見積番号');
+    expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
+    expect(list).toContain('>選択中</span>');
   });
 
   it('uses one reusable workspace for the inline list and the existing detail route', () => {

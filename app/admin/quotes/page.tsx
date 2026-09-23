@@ -136,21 +136,26 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
         />
 
         <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
-          <div className="border-b border-line px-3 py-2">
-            <h2 className="text-sm font-semibold">担当案件</h2>
-            <p className="text-[0.68rem] text-muted">案件を選択すると、下のワークスペースが切り替わります。</p>
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-line px-3 py-2">
+            <div>
+              <h2 className="text-sm font-semibold">担当案件</h2>
+              <p className="text-[0.68rem] text-muted">案件を選択すると、下のワークスペースが切り替わります。</p>
+            </div>
+            <span className="rounded-full border border-[#d7e2dc] bg-[#f3f8f5] px-2 py-0.5 text-[0.65rem] font-semibold text-[#3d6450]">
+              {latest.length}件
+            </span>
           </div>
           <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-            <table className="w-full min-w-[66rem] text-[0.72rem]">
+            <table className="w-full min-w-[70rem] table-fixed text-[0.72rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
-                  <th className="px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold">状態</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold">更新</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                  <th className="px-2.5 py-1.5 text-left font-semibold">担当</th>
+                  <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
+                  <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">状態</th>
+                  <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
+                  <th className="w-[16rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
+                  <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">見積額</th>
+                  <th className="w-[7rem] px-2.5 py-1.5 text-left font-semibold">担当</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -160,14 +165,19 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   return (
                     <tr
                       key={q.id}
-                      className={selected ? 'bg-[#fff8e8]' : 'hover:bg-[#f8fbf9]'}
+                      className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8,inset_0_-1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
                       data-testid="dealer-quote-row"
                       data-selected={selected ? 'true' : undefined}
                     >
                       <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
-                        <Link href={caseSelectionHref(q.id, sp)} className="font-semibold text-ink hover:underline">
-                          {q.customer_name}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link href={caseSelectionHref(q.id, sp)} className="min-w-0 truncate font-semibold text-ink hover:underline">
+                            {q.customer_name}
+                          </Link>
+                          {selected && (
+                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.56rem] font-semibold text-white">選択中</span>
+                          )}
+                        </div>
                         {q.customer_company && <span className="ml-1 text-[0.64rem] text-muted">{q.customer_company}</span>}
                         <span className="mt-0.5 block font-mono text-[0.62rem] text-muted">見積番号 {q.quote_no}／第{q.revision}版</span>
                       </td>
@@ -303,9 +313,14 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
         <div className="border-b border-line px-3 py-2">
           <div className="mb-1.5 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold">案件一覧</h2>
-              <p className="text-[0.68rem] text-muted">案件を選択すると、下のワークスペースが切り替わります。</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">案件一覧</h2>
+                <p className="text-[0.68rem] text-muted">案件を選択すると、下のワークスペースが切り替わります。</p>
+              </div>
+              <span className="mb-0.5 rounded-full border border-[#d7e2dc] bg-[#f3f8f5] px-2 py-0.5 text-[0.65rem] font-semibold text-[#3d6450]">
+                表示 {shown.length}件 / 全{requests.length}件
+              </span>
             </div>
             {filtersActive && <Link href="/admin/quotes" className="text-[0.68rem] text-[#315745] underline underline-offset-4">条件を解除</Link>}
           </div>
@@ -360,16 +375,16 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
         </div>
 
         <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-          <table className="w-full min-w-[72rem] text-[0.72rem]">
+          <table className="w-full min-w-[76rem] table-fixed text-[0.72rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                <th className="px-2.5 py-1.5 text-left font-semibold">状態</th>
-                <th className="px-2.5 py-1.5 text-left font-semibold">更新</th>
-                <th className="px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
-                <th className="px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                <th className="px-2.5 py-1.5 text-left font-semibold">担当代理店</th>
+                <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
+                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">状態</th>
+                <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
+                <th className="w-[17rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
+                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">見積額</th>
+                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">担当代理店</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -388,15 +403,20 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 return (
                   <tr
                     key={request.id}
-                    className={selected ? 'bg-[#fff8e8]' : 'hover:bg-[#f8fbf9]'}
+                    className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8,inset_0_-1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
                     data-testid="admin-quote-row"
                     data-selected={selected ? 'true' : undefined}
                   >
                     <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                       {quote ? (
-                        <Link href={caseSelectionHref(quote.id, sp)} className="font-semibold text-ink hover:underline">
-                          {request.contact.full_name}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link href={caseSelectionHref(quote.id, sp)} className="min-w-0 truncate font-semibold text-ink hover:underline">
+                            {request.contact.full_name}
+                          </Link>
+                          {selected && (
+                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.56rem] font-semibold text-white">選択中</span>
+                          )}
+                        </div>
                       ) : (
                         <strong>{request.contact.full_name}</strong>
                       )}

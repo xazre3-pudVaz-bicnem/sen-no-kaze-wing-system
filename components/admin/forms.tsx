@@ -31,6 +31,7 @@ import {
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
+import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 
 const initial: AdminFormState = { ok: false };
 
@@ -502,9 +503,23 @@ export function OptionForm({
   ).sort((a, b) => a.localeCompare(b, 'ja'));
   const initialCategoryId = option?.category_id ?? defaultCategoryId ?? '';
   const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
+  const [manufacturerValue, setManufacturerValue] = useState(option?.manufacturer ?? '');
+  const [nameValue, setNameValue] = useState(option?.name ?? '');
+  const [modelNoValue, setModelNoValue] = useState(option?.model_no ?? '');
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const sizeMeta = productSizeMeta(selectedCategory?.code ?? '');
   const registrationHint = categoryRegistrationHint(selectedCategory?.code ?? '');
+  const duplicateCandidates = useMemo(
+    () =>
+      findProductDuplicateCandidates(allOptions, {
+        categoryId: selectedCategoryId,
+        manufacturer: manufacturerValue,
+        name: nameValue,
+        modelNo: modelNoValue,
+        excludeId: option?.id ?? null,
+      }).slice(0, 3),
+    [allOptions, manufacturerValue, modelNoValue, nameValue, option?.id, selectedCategoryId]
+  );
 
   const showIdentify = mode === 'all' || mode === 'product' || mode === 'identify';
   const showDetails = mode === 'all' || mode === 'product' || mode === 'details';
@@ -598,6 +613,7 @@ export function OptionForm({
                 name="manufacturer"
                 list="option-manufacturer-suggestions"
                 defaultValue={option?.manufacturer ?? ''}
+                onChange={(event) => setManufacturerValue(event.target.value)}
                 placeholder="例：TOTO"
               />
               <datalist id="option-manufacturer-suggestions">
@@ -605,7 +621,14 @@ export function OptionForm({
               </datalist>
             </Field>
             <Field label="商品名" htmlFor={`name-${mode}`} required errors={e.name}>
-              <Input id={`name-${mode}`} name="name" defaultValue={option?.name} required data-testid="option-name" />
+              <Input
+                id={`name-${mode}`}
+                name="name"
+                defaultValue={option?.name}
+                onChange={(event) => setNameValue(event.target.value)}
+                required
+                data-testid="option-name"
+              />
             </Field>
             <Field
               label="シリーズ・型番／品番"
@@ -618,6 +641,7 @@ export function OptionForm({
                 name="model_no"
                 list="option-model-no-suggestions"
                 defaultValue={option?.model_no ?? ''}
+                onChange={(event) => setModelNoValue(event.target.value)}
                 placeholder="例：サザナ HTシリーズ / HTV1616"
               />
               <datalist id="option-model-no-suggestions">
@@ -634,6 +658,31 @@ export function OptionForm({
               </div>
             )}
           </div>
+
+          {duplicateCandidates.length > 0 && (
+            <div className="rounded-xl border border-[#d9a441] bg-[#fff8e8] p-4" data-testid="option-duplicate-warning">
+              <p className="font-semibold text-ink">既存商品に重複候補があります</p>
+              <p className="mt-1 text-xs leading-5 text-ink-soft">
+                登録を止める判定ではありません。新規商品かどうかを確認してから保存してください。
+              </p>
+              <ul className="mt-3 space-y-2">
+                {duplicateCandidates.map(({ option: candidate, reason }) => (
+                  <li key={candidate.id} className="rounded-lg border border-[#ead6a7] bg-white px-3 py-2 text-sm">
+                    <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">
+                      {candidate.name}
+                    </a>
+                    <span className="ml-2 text-xs text-muted">{candidate.product_no ?? '商品番号未反映'}</span>
+                    <p className="mt-1 text-xs text-muted">
+                      {reason === 'manufacturer-model'
+                        ? 'メーカー＋シリーズ・型番／品番が一致'
+                        : '同一カテゴリー＋メーカー＋商品名が一致'}
+                      {candidate.model_no ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.model_no}` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {mode === 'identify' && <SubmitButton pending={pending} label="商品特定を保存" />}
         </section>

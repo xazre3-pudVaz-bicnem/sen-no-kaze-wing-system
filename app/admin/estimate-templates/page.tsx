@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import type { EstimateTemplateBundle } from '@/lib/domain/types';
 import { Badge, Input } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
+import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
 
 function filterHref(model: string, q: string) {
   const params = new URLSearchParams();
@@ -13,6 +14,20 @@ function filterHref(model: string, q: string) {
   if (q) params.set('q', q);
   const query = params.toString();
   return query ? `/admin/estimate-templates?${query}` : '/admin/estimate-templates';
+}
+
+function selectionHref(
+  model: string,
+  q: string,
+  selectedModel: string,
+  selectedSpec: string
+) {
+  const params = new URLSearchParams();
+  if (model) params.set('model', model);
+  if (q) params.set('q', q);
+  params.set('selected_model', selectedModel);
+  params.set('selected_spec', selectedSpec);
+  return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
 }
 
 const LIST_GRID =
@@ -68,6 +83,23 @@ export default async function EstimateTemplatesPage({
     })
     .filter((group) => group.choices.length > 0);
 
+  const requestedModelId = sp.selected_model ?? '';
+  const requestedSpecCode = sp.selected_spec ?? '';
+  const requestedSelection = groups
+    .flatMap((group) =>
+      group.choices.map((choice) => ({ model: group.model, choice }))
+    )
+    .find(
+      ({ model, choice }) =>
+        model.id === requestedModelId && choice.code === requestedSpecCode
+    );
+  const firstSelection =
+    groups[0]?.choices[0] ? { model: groups[0].model, choice: groups[0].choices[0] } : null;
+  const selected = requestedSelection ?? firstSelection;
+  const selectedCatalog = selected
+    ? await store.getCatalogBundle(selected.model.id)
+    : null;
+
   const totalChoices = groups.reduce((sum, group) => sum + group.choices.length, 0);
 
   return (
@@ -85,7 +117,7 @@ export default async function EstimateTemplatesPage({
           <div>
             <h2 className="text-base font-semibold">標準見積一覧</h2>
             <p className="mt-1 text-xs text-muted">
-              シミュレーターの「仕様を選ぶ」と同じ候補を、商品モデルごとに表示します。
+              シミュレーターの「仕様を選ぶ」と同じ候補を、商品モデルごとに表示します。行を選ぶと下に見積書が表示されます。
             </p>
           </div>
           <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">
@@ -167,10 +199,11 @@ export default async function EstimateTemplatesPage({
 
               {groups.map((group, groupIndex) => {
                 const displayModelName = group.model.name === 'フラット' ? 'Flat' : group.model.name;
+                const selectedGroup = selected?.model.id === group.model.id;
                 return (
                   <details
                     key={group.model.id}
-                    open={Boolean(modelId) || groupIndex === 0}
+                    open={Boolean(modelId) || groupIndex === 0 || selectedGroup}
                     className="group border-b border-line"
                   >
                     <summary className="list-none cursor-pointer bg-[#eaf4ee] px-3 py-2 [&::-webkit-details-marker]:hidden">
@@ -181,7 +214,7 @@ export default async function EstimateTemplatesPage({
                           {group.choices.length}件
                         </span>
                         <span className="text-xs font-normal text-muted">
-                          {Boolean(modelId) || groupIndex === 0 ? '選択中' : 'クリックで展開'}
+                          {selectedGroup ? '選択中' : 'クリックで展開'}
                         </span>
                       </div>
                     </summary>
@@ -189,22 +222,22 @@ export default async function EstimateTemplatesPage({
                     <div className="divide-y divide-line">
                       {group.choices.map((choice) => {
                         const template = choice.template?.template ?? null;
+                        const active =
+                          selected?.model.id === group.model.id &&
+                          selected?.choice.code === choice.code;
                         return (
-                          <div
+                          <Link
                             key={choice.code}
-                            className={`${LIST_GRID} min-h-12 bg-white px-3 py-2 text-sm`}
+                            href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
+                            aria-current={active ? 'true' : undefined}
+                            className={`${LIST_GRID} min-h-12 px-3 py-2 text-sm transition ${
+                              active
+                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-2'
+                                : 'bg-white hover:bg-sand/30'
+                            }`}
                           >
                             <div className="min-w-0">
-                              {template ? (
-                                <Link
-                                  href={'/admin/estimate-templates/' + template.id}
-                                  className="font-semibold text-ink underline-offset-4 hover:underline"
-                                >
-                                  {choice.name}
-                                </Link>
-                              ) : (
-                                <span className="font-semibold">{choice.name}</span>
-                              )}
+                              <span className="font-semibold text-ink">{choice.name}</span>
                               <p className="mt-0.5 truncate text-xs text-muted">{choice.code}</p>
                             </div>
                             <div>
@@ -224,7 +257,7 @@ export default async function EstimateTemplatesPage({
                                 </span>
                               )}
                             </div>
-                          </div>
+                          </Link>
                         );
                       })}
                     </div>
@@ -253,6 +286,14 @@ export default async function EstimateTemplatesPage({
           未登録候補は現行シミュレーターの従来計算へフォールバックします。
         </div>
       </section>
+
+      {selected && selectedCatalog && (
+        <StandardEstimateSimulatorPreview
+          bundle={selectedCatalog}
+          specCode={selected.choice.code}
+          template={selected.choice.template}
+        />
+      )}
     </AdminPage>
   );
 }

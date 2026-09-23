@@ -57,6 +57,10 @@ describe('Admin case management UI', () => {
     expect(list).toContain('見積番号');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
     expect(list).toContain('>選択中</span>');
+    for (const label of ['棟数', '見積・契約額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
+      expect(list).toContain(label);
+    }
+    expect(list).toContain('未登録');
   });
 
   it('uses one reusable workspace for the inline list and the existing detail route', () => {

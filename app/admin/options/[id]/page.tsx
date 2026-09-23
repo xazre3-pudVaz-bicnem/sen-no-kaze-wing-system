@@ -209,7 +209,7 @@ export default async function EditOptionPage({
                 <p className="mt-1 text-sm text-muted">現在は下書きです。上のお客様表示に問題がなければ公開してください。</p>
               )}
             </div>
-            {catalogEditor && option.status === 'draft' && category && (
+            {canEditThisOption && option.status === 'draft' && category && (
               <form action={publishOptionAction}>
                 <input type="hidden" name="id" value={option.id} />
                 <ConfirmSubmit

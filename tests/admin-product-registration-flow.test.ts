@@ -127,6 +127,35 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('カテゴリー・メーカー・商品名に合う既存値');
   });
 
+  it('残りの商品カテゴリーにも既存設計の入力支援を広げる', () => {
+    for (const categoryCode of [
+      "'exterior-wall': {",
+      'floor: {',
+      "'wall-ceiling': {",
+      'sash: {',
+      "'interior-door': {",
+      'lighting: {',
+      'furniture: {',
+      'smartlock: {',
+    ]) {
+      expect(forms).toContain(categoryCode);
+    }
+    expect(forms).toContain("manufacturers: ['ニチハ', 'ケイミュー', 'アイジー工業', '旭トステム外装']");
+    expect(forms).toContain("manufacturers: ['DAIKEN', '朝日ウッドテック', 'Panasonic', 'LIXIL', 'EIDAI', 'ウッドワン']");
+    expect(forms).toContain("manufacturers: ['サンゲツ', 'リリカラ', 'シンコール', 'トキワ', 'ルノン', 'DAIKEN']");
+    expect(forms).toContain("manufacturers: ['LIXIL', 'YKK AP', '三協アルミ']");
+    expect(forms).toContain("manufacturers: ['Panasonic', 'オーデリック', 'コイズミ照明', '大光電機', '東芝ライテック']");
+    expect(forms).toContain("manufacturers: ['LIXIL', 'YKK AP', '美和ロック', 'GOAL', 'SwitchBot']");
+    expect(forms).toContain("'窯業系サイディング'");
+    expect(forms).toContain("'複合フローリング'");
+    expect(forms).toContain("'ビニル壁紙'");
+    expect(forms).toContain("'引違い窓'");
+    expect(forms).toContain("'開き戸'");
+    expect(forms).toContain("'ダウンライト'");
+    expect(forms).toContain("'対応扉厚35〜55mm'");
+    expect(forms).toContain('現在のサッシカテゴリーはお客様画面非表示');
+  });
+
   it('商品特定は既存値を候補として使える', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');

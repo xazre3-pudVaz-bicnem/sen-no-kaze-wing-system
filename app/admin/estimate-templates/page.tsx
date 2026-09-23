@@ -31,7 +31,7 @@ function selectionHref(
 }
 
 const LIST_GRID =
-  'grid grid-cols-[minmax(12rem,2fr)_8rem_9rem_9rem_6rem_9rem] items-center';
+  'grid grid-cols-[minmax(9rem,2fr)_4.25rem_5.75rem_7rem_4.25rem_7.5rem] items-center';
 
 export default async function EstimateTemplatesPage({
   searchParams,
@@ -187,8 +187,8 @@ export default async function EstimateTemplatesPage({
 
         {groups.length > 0 ? (
           <div className="overflow-x-auto">
-            <div className="min-w-[58rem]">
-              <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-3 py-2 text-xs font-semibold text-ink-soft`}>
+            <div className="min-w-[40rem]">
+              <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-2 py-2 text-xs font-semibold text-ink-soft`}>
                 <div>見積名</div>
                 <div>防火</div>
                 <div className="text-right">原価税込</div>
@@ -230,9 +230,9 @@ export default async function EstimateTemplatesPage({
                             key={choice.code}
                             href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
                             aria-current={active ? 'true' : undefined}
-                            className={`${LIST_GRID} min-h-12 px-3 py-2 text-sm transition ${
+                            className={`${LIST_GRID} min-h-12 px-2 py-2 text-sm transition ${
                               active
-                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-2'
+                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-1'
                                 : 'bg-white hover:bg-sand/30'
                             }`}
                           >
@@ -245,14 +245,14 @@ export default async function EstimateTemplatesPage({
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div className="text-right font-semibold">
-                              {template ? formatYen(template.total) : <span className="text-xs font-normal text-muted">シミュレーターで算出</span>}
+                              {template ? formatYen(template.total) : <span className="text-xs font-normal leading-tight text-muted">シミュレーターで算出</span>}
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div>
                               {template ? (
                                 <Badge tone="neutral">登録済み</Badge>
                               ) : (
-                                <span className="inline-flex rounded-full border border-line bg-sand/40 px-2 py-1 text-xs font-semibold text-muted">
+                                <span className="inline-flex rounded-full border border-line bg-sand/40 px-1.5 py-1 text-[0.7rem] font-semibold leading-tight text-muted">
                                   シミュレーター候補
                                 </span>
                               )}

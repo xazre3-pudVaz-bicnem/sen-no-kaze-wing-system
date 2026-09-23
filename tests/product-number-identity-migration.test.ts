@@ -38,7 +38,7 @@ describe('商品管理番号の自動採番', () => {
   it('既存options.codeは互換キーとして残し、登録担当者には入力させない', () => {
     expect(types).toContain('既存Preset / Import互換の技術キー');
     expect(forms).not.toContain('label="管理用コード"');
-    expect(forms).not.toContain('name="code"');
+    expect(forms).not.toContain('id="code-all"');
     expect(forms).toContain('商品管理番号');
     expect(actions).toContain('existingOption?.code');
     expect(actions).toContain('opt-${randomUUID()}');

@@ -68,6 +68,8 @@ export interface LocalDb {
   quoteDocuments: QuoteDocument[];
   caseDocuments: CaseDocument[];
   quoteSequences: Record<string, number>;
+  /** 商品管理番号の採番高水位。削除済み番号も再利用しない。 */
+  productNoSequence: number;
   resetTokens: { token: string; user_id: string; expires_at: string }[];
   contactMessages: ContactMessage[];
   variantGroups: OptionVariantGroup[];
@@ -120,6 +122,7 @@ export function emptyDb(): LocalDb {
     quoteDocuments: [],
     caseDocuments: [],
     quoteSequences: {},
+    productNoSequence: 0,
     resetTokens: [],
     contactMessages: [],
     notifications: [],
@@ -129,26 +132,44 @@ export function emptyDb(): LocalDb {
 
 function parseProductNo(value: string | null | undefined): number | null {
   const match = /^PRD-(\d{6})$/.exec(value ?? '');
-  return match ? Number(match[1]) : null;
+  if (!match) return null;
+  const n = Number(match[1]);
+  return n >= 1 && n <= 999999 ? n : null;
 }
 
 export function allocateLocalProductNo(db: LocalDb): string {
-  const max = db.options.reduce((current, option) => {
-    const n = parseProductNo(option.product_no);
-    return n === null ? current : Math.max(current, n);
-  }, 0);
-  const next = max + 1;
+  const next = db.productNoSequence + 1;
   if (next > 999999) throw new Error('商品管理番号の採番上限に達しました');
+  db.productNoSequence = next;
   return `PRD-${String(next).padStart(6, '0')}`;
 }
 
 function reconcileProductNumbers(db: LocalDb): boolean {
+  let changed = false;
+  let maxExisting = 0;
+
+  for (const option of db.options) {
+    if (option.product_no == null) continue;
+    const n = parseProductNo(option.product_no);
+    if (n === null) {
+      throw new Error(`商品「${option.name}」の商品管理番号「${option.product_no}」の形式が正しくありません`);
+    }
+    maxExisting = Math.max(maxExisting, n);
+  }
+
+  if (db.productNoSequence < maxExisting) {
+    db.productNoSequence = maxExisting;
+    changed = true;
+  }
+
   const missing = db.options
-    .filter((option) => !parseProductNo(option.product_no))
+    .filter((option) => option.product_no == null)
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
-  if (!missing.length) return false;
-  for (const option of missing) option.product_no = allocateLocalProductNo(db);
-  return true;
+  for (const option of missing) {
+    option.product_no = allocateLocalProductNo(db);
+    changed = true;
+  }
+  return changed;
 }
 
 const INDEPENDENT_INSULATION_CATEGORY_CODES = new Set(['insulation-floor', 'insulation-wall', 'insulation-ceiling']);

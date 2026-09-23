@@ -127,6 +127,30 @@ export function emptyDb(): LocalDb {
   };
 }
 
+function parseProductNo(value: string | null | undefined): number | null {
+  const match = /^PRD-(\d{6})$/.exec(value ?? '');
+  return match ? Number(match[1]) : null;
+}
+
+export function allocateLocalProductNo(db: LocalDb): string {
+  const max = db.options.reduce((current, option) => {
+    const n = parseProductNo(option.product_no);
+    return n === null ? current : Math.max(current, n);
+  }, 0);
+  const next = max + 1;
+  if (next > 999999) throw new Error('商品管理番号の採番上限に達しました');
+  return `PRD-${String(next).padStart(6, '0')}`;
+}
+
+function reconcileProductNumbers(db: LocalDb): boolean {
+  const missing = db.options
+    .filter((option) => !parseProductNo(option.product_no))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  if (!missing.length) return false;
+  for (const option of missing) option.product_no = allocateLocalProductNo(db);
+  return true;
+}
+
 const INDEPENDENT_INSULATION_CATEGORY_CODES = new Set(['insulation-floor', 'insulation-wall', 'insulation-ceiling']);
 
 function insulationBucket(code: string): 'floor' | 'wall' | 'ceiling' | null {
@@ -201,13 +225,16 @@ export function loadDb(): LocalDb {
   }
   if (!fs.existsSync(p)) {
     const db = emptyDb();
+    reconcileProductNumbers(db);
     saveDb(db);
     return db;
   }
   const raw = fs.readFileSync(p, 'utf8');
   const parsed = JSON.parse(raw) as Partial<LocalDb>;
   const db = { ...emptyDb(), ...parsed } as LocalDb;
-  if (reconcileIndependentInsulation(db)) saveDb(db);
+  const insulationChanged = reconcileIndependentInsulation(db);
+  const productNumbersChanged = reconcileProductNumbers(db);
+  if (insulationChanged || productNumbersChanged) saveDb(db);
   return db;
 }
 

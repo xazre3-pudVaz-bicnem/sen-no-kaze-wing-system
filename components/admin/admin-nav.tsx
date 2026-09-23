@@ -32,7 +32,7 @@ const sections: NavSection[] = [
     ],
   },
   {
-    href: '/admin/base-masters', label: '販売基準', match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'], need: 'admin',
+    href: '/admin/estimate-templates', label: '標準見積', match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'], need: 'admin',
     items: [
       { href: '/admin/base-masters', label: '本体マスター' },
       { href: '/admin/estimate-templates', label: '標準見積' },

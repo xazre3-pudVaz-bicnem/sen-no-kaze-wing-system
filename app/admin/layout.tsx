@@ -4,7 +4,7 @@ import { requireStaff, requireUser } from '@/lib/auth/session';
 import { AdminShell } from '@/components/admin/admin-shell';
 
 export const metadata: Metadata = {
-  title: { default: '管理画面', template: '%s｜Wing 管理画面' },
+  title: { default: '千の風プロジェクト 管理画面', template: '%s｜千の風プロジェクト 管理画面' },
   robots: { index: false, follow: false, nocache: true },
 };
 

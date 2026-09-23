@@ -169,17 +169,16 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               {latest.length}件
             </span>
           </div>
-          <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-            <table className="w-full min-w-[56rem] table-fixed text-[0.72rem]">
+          <div data-testid="case-list-scroll">
+            <table className="w-full table-fixed text-[0.72rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
-                  <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                  <th className="w-[11%] px-2.5 py-1.5 text-left font-semibold">状態</th>
-                  <th className="w-[10%] px-2.5 py-1.5 text-left font-semibold">更新</th>
+                  <th className="w-[22%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
+                  <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">状態</th>
                   <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                   <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="w-[13%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
-                  <th className="w-[14%] px-2.5 py-1.5 text-left font-semibold">担当</th>
+                  <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                  <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">担当</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,8 +207,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       <td className="px-2.5 py-1.5 align-top">
                         <Badge tone={quoteStatusTone(q.status)}>{QUOTE_STATUS_LABELS[q.status]}</Badge>
                         {request && <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</span>}
+                        <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(q.updated_at, true)}</span>
                       </td>
-                      <td className="whitespace-nowrap px-2.5 py-1.5 align-top text-[0.68rem]">{formatDate(q.updated_at, true)}</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request?.contact.site_address || '—'}</td>
                       <td className="px-2.5 py-1.5 align-top">
                         <strong>{q.base_model_name}</strong>
@@ -223,7 +222,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
                       data-testid="case-row-meta"
                     >
-                      <td colSpan={7} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                      <td colSpan={6} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.64rem] text-muted">
                           <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
                           <span>原価 <strong className="font-semibold text-muted">—</strong></span>
@@ -236,7 +235,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   ];
                 })}
                 {latest.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
                 )}
               </tbody>
             </table>
@@ -419,17 +418,16 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           </form>
         </div>
 
-        <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-          <table className="w-full min-w-[56rem] table-fixed text-[0.72rem]">
+        <div data-testid="case-list-scroll">
+          <table className="w-full table-fixed text-[0.72rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                <th className="w-[11%] px-2.5 py-1.5 text-left font-semibold">状態</th>
-                <th className="w-[10%] px-2.5 py-1.5 text-left font-semibold">更新</th>
+                <th className="w-[22%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
+                <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">状態</th>
                 <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                 <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="w-[13%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
-                <th className="w-[14%] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
+                <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
               </tr>
             </thead>
             <tbody>
@@ -482,8 +480,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                           {QUOTE_REQUEST_STATUS_LABELS[request.status]}
                         </Badge>
                       )}
+                      <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(updatedAt, true)}</span>
                     </td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 align-top text-[0.68rem]">{formatDate(updatedAt, true)}</td>
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request.contact.site_address || '—'}</td>
                     <td className="px-2.5 py-1.5 align-top">
                       <strong>{modelName ?? '—'}</strong>
@@ -505,7 +503,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
                     data-testid="case-row-meta"
                   >
-                    <td colSpan={7} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                    <td colSpan={6} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.64rem] text-muted">
                         <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
                         <span>原価 <strong className="font-semibold text-muted">—</strong></span>
@@ -518,7 +516,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 ];
               })}
               {shown.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
               )}
             </tbody>
           </table>

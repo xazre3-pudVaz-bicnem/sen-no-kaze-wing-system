@@ -142,13 +142,33 @@ describe('商品登録管理画面の業務フロー', () => {
 
   it('登録内容確認はシミュレーター共通の商品詳細を使う', () => {
     expect(editPage).toContain('OptionCustomerPreview');
-    expect(editPage).toContain('現在のシミュレーターと同じ商品詳細コンポーネント');
+    expect(editPage).toContain('実際のシミュレーターの商品詳細表示と同じ本文・レイアウト');
     expect(customerPreview).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");
     expect(customerPreview).toContain('defaultVariantIdsFor');
     expect(customerPreview).toContain('pruneHiddenVariantChoices');
     expect(customerPreview).toContain('visibleVariantGroups');
     expect(customerPreview).toContain('<ProductDetail');
+    expect(customerPreview).toContain('simulator-product-detail-preview');
+    expect(customerPreview).toContain('商品詳細本文は実際のシミュレーターと同じコンポーネントです');
+    expect(customerPreview).toContain('この確認画面では表示しません');
     expect(editPage).not.toContain('この内容に変更する（プレビュー）');
+  });
+
+  it('通常の商品登録では対象モデルと公開状態だけを前面に出す', () => {
+    expect(forms).toContain('data-testid="option-normal-settings"');
+    expect(forms).toContain('通常の商品登録では、対象モデルと公開状態だけ確認します。');
+    expect(forms).toContain('data-testid="option-advanced-display-settings"');
+    expect(forms).toContain('シミュレーター表示条件');
+    expect(forms).toContain('表示順・仕様限定・標準選択などを調整する場合だけ使用します。');
+
+    const normalStart = forms.indexOf('data-testid="option-normal-settings"');
+    const advancedStart = forms.indexOf('data-testid="option-advanced-display-settings"');
+    expect(normalStart).toBeGreaterThan(-1);
+    expect(advancedStart).toBeGreaterThan(normalStart);
+    const normalSection = forms.slice(normalStart, advancedStart);
+    for (const label of ['表示順', '対応する仕様', '初期状態で選択', '必須（解除不可）', '設置関連費用として集計']) {
+      expect(normalSection).not.toContain(label);
+    }
   });
 
   it('商品情報画面にメイン画像・サブ画像・メーカーPDFをまとめる', () => {

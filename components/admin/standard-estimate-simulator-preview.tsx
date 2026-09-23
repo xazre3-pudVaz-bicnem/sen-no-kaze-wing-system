@@ -211,8 +211,8 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
           </div>
 
           <div className="p-4 sm:p-5">
-            <section aria-label="プランボード" className="space-y-4 lg:space-y-0">
-              <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
+            <section aria-label="プランボード" className="space-y-4 md:space-y-0">
+              <div className="grid gap-4 md:grid-cols-2 md:items-stretch md:gap-0">
                 <div className="min-w-0">
                   <PlanBoard
                     plan={previews.floorplan}

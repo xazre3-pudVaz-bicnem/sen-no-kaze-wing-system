@@ -23,19 +23,20 @@ describe('商品管理番号の自動採番', () => {
     expect(migration).toContain('options_product_no_unique_idx');
     expect(migration).toContain("product_no ~ '^PRD-[0-9]{6}$'");
     expect(migration).toContain("product_no <> 'PRD-000000'");
-    expect(migration).toContain('revoke all on sequence public.product_no_seq from public, anon, authenticated');
-    expect(migration).toContain('greatest(current_max.max_no, sequence_state.last_no)');
+    expect(migration).toContain('revoke all on sequence public.product_no_seq from public, anon, authenticated, service_role');
+    expect(migration).toContain('v_start := greatest(v_existing_max, v_sequence_high_water)');
+    expect(migration).toContain('if v_start + v_missing > 999999 then');
   });
 
   it('商品管理番号はINSERT時にDBが発番し、作成後の変更を拒否する', () => {
     expect(migration).toContain('create or replace function public.assign_option_product_no()');
     expect(migration).toContain('security definer');
-    expect(migration).toContain('set search_path = pg_catalog, public');
+    expect(migration).toContain('set search_path = pg_catalog');
     expect(migration).toContain("if tg_op = 'INSERT'");
     expect(migration).toContain('nextval');
     expect(migration).toContain('LOCKED: 商品管理番号は変更できません');
     expect(migration).toContain('before insert or update of product_no');
-    expect(migration).toContain('revoke all on function public.assign_option_product_no() from public');
+    expect(migration).toContain('from public, anon, authenticated, service_role');
   });
 
   it('既存options.codeは互換キーとして残し、登録担当者には入力させない', () => {

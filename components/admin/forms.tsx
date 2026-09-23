@@ -500,7 +500,7 @@ export function OptionForm({
   const modelNoSuggestions = Array.from(
     new Set(allOptions.map((row) => row.model_no?.trim()).filter((value): value is string => Boolean(value)))
   ).sort((a, b) => a.localeCompare(b, 'ja'));
-  const initialCategoryId = option?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? '';
+  const initialCategoryId = option?.category_id ?? defaultCategoryId ?? '';
   const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const sizeMeta = productSizeMeta(selectedCategory?.code ?? '');
@@ -588,6 +588,7 @@ export function OptionForm({
                 defaultValue={initialCategoryId}
                 onChange={(event) => setSelectedCategoryId(event.target.value)}
               >
+                {!initialCategoryId && <option value="" disabled>カテゴリーを選択してください</option>}
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </Select>
             </Field>
@@ -732,12 +733,21 @@ export function OptionForm({
                   {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                 </Select>
               </Field>
-              <Field label="公開状態" htmlFor={`status-${mode}`} required errors={e.status}>
-                <Select id={`status-${mode}`} name="status" defaultValue={option?.status ?? 'published'}>
-                  <option value="published">公開</option>
-                  <option value="draft">非公開</option>
-                </Select>
-              </Field>
+              {option ? (
+                <Field label="公開状態" htmlFor={`status-${mode}`} required errors={e.status}>
+                  <Select id={`status-${mode}`} name="status" defaultValue={option.status}>
+                    <option value="published">公開</option>
+                    <option value="draft">下書き</option>
+                  </Select>
+                </Field>
+              ) : (
+                <div>
+                  <p className="label">公開状態</p>
+                  <input type="hidden" name="status" value="draft" />
+                  <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">下書き</div>
+                  <p className="mt-1 text-xs text-muted">新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。</p>
+                </div>
+              )}
               <Field label="表示順" htmlFor={`sort_order-${mode}`} errors={e.sort_order}>
                 <Input id={`sort_order-${mode}`} name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} />
               </Field>
@@ -821,9 +831,9 @@ export function OptionForm({
                 : mode === 'all' && option
                   ? '商品情報を保存'
                   : mode === 'all' && returnTo
-                    ? '登録して見積テンプレートへ戻る'
+                    ? '下書き登録して見積テンプレートへ戻る'
                     : mode === 'all'
-                      ? '商品を作成して次へ'
+                      ? '下書き保存してSTEP 2へ'
                       : '販売・詳細設定を保存'
             }
           />

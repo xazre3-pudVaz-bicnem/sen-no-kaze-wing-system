@@ -60,14 +60,28 @@ describe('商品登録管理画面の業務フロー', () => {
   });
   it('新規登録でも2STEPとreturn_to導線を案内する', () => {
     expect(newPage).toContain('商品登録の2ステップ');
-    expect(newPage).toContain('登録して見積テンプレートへ戻る');
+    expect(newPage).toContain('下書き登録して見積テンプレートへ戻る');
     expect(newPage).toContain('return_to');
-    expect(forms).toContain('登録して見積テンプレートへ戻る');
-    expect(forms).toContain('商品を作成して次へ');
+    expect(forms).toContain('下書き登録して見積テンプレートへ戻る');
+    expect(forms).toContain('下書き保存してSTEP 2へ');
     expect(forms).toContain("mode === 'all' && option");
     expect(forms).toContain("'商品情報を保存'");
     expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?step=preview&saved=1')");
     expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
+  });
+
+  it('新規商品は下書きで作成し、お客様表示確認後に明示公開する', () => {
+    expect(forms).toContain('カテゴリーを選択してください');
+    expect(forms).toContain('新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。');
+    expect(adminActions).toContain("status: existingOption ? formData.get('status') : 'draft'");
+    expect(adminActions).toContain('export async function publishOptionAction');
+    expect(adminActions).toContain('const actor = await requireStaff()');
+    expect(adminActions).toContain('editableOptionContext(actor, id)');
+    expect(adminActions).toContain("status: 'published'");
+    expect(editPage).toContain('publishOptionAction');
+    expect(editPage).toContain('現在は下書きです。上のお客様表示に問題がなければ公開してください。');
+    expect(editPage).toContain('この内容で公開');
+    expect(newPage).toContain('STEP 2で実際のお客様表示を確認してから公開します。');
   });
 
   it('削除操作は通常のヘッダーから外してその他の操作へ退避する', () => {

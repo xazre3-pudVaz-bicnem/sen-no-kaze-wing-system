@@ -211,7 +211,8 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     list_price: formData.get('list_price'),
     highlight: formData.get('highlight'),
     sort_order: formData.get('sort_order'),
-    status: formData.get('status'),
+    // 新規商品は必ず下書きで作成し、STEP 2のお客様表示確認後に明示公開する。
+    status: existingOption ? formData.get('status') : 'draft',
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   // 代理店はフリー商品カテゴリー以外を触れない（サーバー側で拒否）
@@ -264,6 +265,40 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     redirect('/admin/options/' + createdId + '?step=preview&saved=1');
   }
   return { ok: true, message: '保存しました' };
+}
+
+export async function publishOptionAction(formData: FormData): Promise<void> {
+  const actor = await requireStaff();
+  const id = String(formData.get('id') ?? '').trim();
+  if (!id) redirect('/admin/options?error=' + encodeURIComponent('商品が指定されていません。'));
+
+  let context: Awaited<ReturnType<typeof editableOptionContext>>;
+  try {
+    context = await editableOptionContext(actor, id);
+  } catch (e) {
+    redirect(`/admin/options/${id}?step=preview&error=${encodeURIComponent(errState(e).error ?? '公開できませんでした。')}`);
+  }
+  const { store, option } = context;
+
+  if (option.status !== 'published') {
+    const {
+      id: optionId,
+      product_no: _productNo,
+      gallery_images: _galleryImages,
+      created_at: _createdAt,
+      updated_at: _updatedAt,
+      ...editable
+    } = option;
+    try {
+      await store.upsertOption({ ...editable, id: optionId, status: 'published' });
+    } catch (e) {
+      redirect(`/admin/options/${id}?step=preview&error=${encodeURIComponent(errState(e).error ?? '公開できませんでした。')}`);
+    }
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+  }
+
+  redirect(`/admin/options/${id}?step=preview&published=1`);
 }
 
 export async function saveVariantGroupAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {

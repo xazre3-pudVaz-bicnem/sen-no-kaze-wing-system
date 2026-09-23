@@ -33,41 +33,86 @@ type SampleEstimateRow = {
   fire: boolean;
   cost: number;
   sale: number;
-  margin: string;
-  status?: 'published' | 'draft';
 };
 
-const SAMPLE_WING_ROWS: SampleEstimateRow[] = [
-  { name: '本体', fire: false, cost: 991100, sale: 1487200, margin: '33.4%' },
-  { name: 'ホテルUB', fire: false, cost: 4978600, sale: 7399800, margin: '32.6%', status: 'published' },
-  { name: 'ホテルUB', fire: true, cost: 5259100, sale: 7810000, margin: '32.7%' },
-  { name: '単身者用', fire: false, cost: 4119500, sale: 6139100, margin: '32.9%', status: 'draft' },
-  { name: '単身者用', fire: true, cost: 4160200, sale: 6199600, margin: '32.9%' },
-  { name: '事務所', fire: false, cost: 2120800, sale: 3181200, margin: '33.3%' },
-  { name: '事務所', fire: true, cost: 2165900, sale: 3249400, margin: '33.3%' },
+type SampleEstimateGroup = {
+  name: 'Wing' | 'BOX' | 'Flat';
+  rows: SampleEstimateRow[];
+};
+
+const SAMPLE_ESTIMATE_SOURCE = '20260901修正分類表見積書(20260923-023847).xlsx';
+
+const SAMPLE_ESTIMATE_GROUPS: SampleEstimateGroup[] = [
+  {
+    name: 'Wing',
+    rows: [
+      { name: '本体', fire: false, cost: 991100, sale: 1487200 },
+      { name: 'ホテルUB', fire: false, cost: 4978600, sale: 7389800 },
+      { name: 'ホテルUB', fire: true, cost: 5259100, sale: 7810000 },
+      { name: '単身者用', fire: false, cost: 4119500, sale: 6139100 },
+      { name: '単身者用', fire: true, cost: 4160200, sale: 6199600 },
+      { name: '事務所', fire: false, cost: 2120800, sale: 3181200 },
+      { name: '事務所', fire: true, cost: 2165900, sale: 3249400 },
+    ],
+  },
+  {
+    name: 'BOX',
+    rows: [
+      { name: '本体', fire: false, cost: 544500, sale: 816200 },
+      { name: 'ホテル単身者', fire: false, cost: 2589400, sale: 3812600 },
+      { name: '水回りキット', fire: false, cost: 3147100, sale: 4648600 },
+      { name: '水回りキット', fire: true, cost: 3217500, sale: 5085300 },
+    ],
+  },
+  {
+    name: 'Flat',
+    rows: [
+      { name: '本体', fire: false, cost: 529100, sale: 794200 },
+      { name: '本体', fire: true, cost: 537900, sale: 807400 },
+      { name: '物置事務所', fire: false, cost: 1324400, sale: 1732500 },
+    ],
+  },
 ];
 
 const SAMPLE_GRID = 'grid grid-cols-[minmax(10rem,2fr)_6rem_9rem_9rem_6rem_8rem] items-center';
 
-function MarginBadge({ value }: { value: string }) {
+function marginPercent(cost: number, sale: number) {
+  if (sale <= 0) return '—';
+  return `${(((sale - cost) / sale) * 100).toFixed(1)}%`;
+}
+
+function MarginBadge({ cost, sale }: { cost: number; sale: number }) {
+  const value = marginPercent(cost, sale);
   const numeric = Number.parseFloat(value);
   const tone = numeric >= 33 ? 'border-success/20 bg-success/10 text-success' : 'border-warn/25 bg-amber-50 text-warn';
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>{value}</span>;
 }
 
-function SampleStatus({ status }: { status?: SampleEstimateRow['status'] }) {
-  if (!status) return <span className="text-muted">—</span>;
-  if (status === 'published') {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-navy/15 bg-blue-50 px-2 py-1 text-xs font-semibold text-navy">
-        公開済み <span className="rounded-full bg-white px-1.5 text-[10px] text-muted">例</span>
-      </span>
-    );
-  }
+function SampleEstimateRows({ rows, highlightFirst = false }: { rows: SampleEstimateRow[]; highlightFirst?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-success/20 bg-success/10 px-2 py-1 text-xs font-semibold text-success">
-      下書きあり <span className="rounded-full bg-white px-1.5 text-[10px] text-muted">例</span>
-    </span>
+    <div className="divide-y divide-line">
+      {rows.map((row, index) => (
+        <div
+          key={`${row.name}-${row.fire ? 'fire' : 'normal'}`}
+          className={`${SAMPLE_GRID} min-h-12 px-3 py-2 text-sm ${
+            highlightFirst && index === 0 ? 'border-l-4 border-l-success bg-success/5 pl-2' : 'bg-white'
+          }`}
+        >
+          <div className="font-semibold">{row.name}</div>
+          <div>
+            {row.fire ? (
+              <span className="inline-flex rounded-full border border-warn/25 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-warn">防火</span>
+            ) : (
+              <span className="text-muted">非防火</span>
+            )}
+          </div>
+          <div className="text-right font-semibold">{formatYen(row.cost)}</div>
+          <div className="text-right font-semibold">{formatYen(row.sale)}</div>
+          <div className="text-right"><MarginBadge cost={row.cost} sale={row.sale} /></div>
+          <div className="text-muted">—</div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -75,7 +120,8 @@ function StandardEstimateListSample() {
   return (
     <div>
       <div className="border-b border-line bg-amber-50/60 px-4 py-2.5 text-xs text-warn sm:px-5">
-        現在の標準見積データはまだありません。以下は添付HTMLに合わせた画面見本で、金額・状態は保存データではありません。
+        DB未登録のため、現在は「{SAMPLE_ESTIMATE_SOURCE}」の14見積シートを画面見本として表示しています。
+        金額はExcelの表示値を1円単位に丸めた見本で、DBの正式データではありません。
       </div>
       <div className="overflow-x-auto">
         <div className="min-w-[52rem]">
@@ -88,60 +134,24 @@ function StandardEstimateListSample() {
             <div>状態</div>
           </div>
 
-          <details open className="group">
-            <summary className="list-none cursor-pointer border-b border-line bg-[#eaf4ee] px-3 py-2 [&::-webkit-details-marker]:hidden">
-              <div className="flex items-center gap-2 text-sm font-semibold text-forest">
-                <span className="text-xs transition-transform group-open:rotate-90">▶</span>
-                <span>Wing</span>
-                <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">7件</span>
-                <span className="text-xs font-normal text-muted">選択中</span>
-              </div>
-            </summary>
-            <div className="divide-y divide-line">
-              {SAMPLE_WING_ROWS.map((row, index) => (
-                <div
-                  key={`${row.name}-${row.fire ? 'fire' : 'normal'}`}
-                  className={`${SAMPLE_GRID} min-h-12 px-3 py-2 text-sm ${index === 0 ? 'border-l-4 border-l-success bg-success/5 pl-2' : 'bg-white'}`}
-                >
-                  <div className="font-semibold">{row.name}</div>
-                  <div>
-                    {row.fire ? (
-                      <span className="inline-flex rounded-full border border-warn/25 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-warn">防火</span>
-                    ) : (
-                      <span className="text-muted">非防火</span>
-                    )}
-                  </div>
-                  <div className="text-right font-semibold">{formatYen(row.cost)}</div>
-                  <div className="text-right font-semibold">{formatYen(row.sale)}</div>
-                  <div className="text-right"><MarginBadge value={row.margin} /></div>
-                  <div><SampleStatus status={row.status} /></div>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          {[
-            { name: 'BOX', count: 4 },
-            { name: 'Flat', count: 3 },
-          ].map((group) => (
-            <details key={group.name} className="group border-b border-line">
+          {SAMPLE_ESTIMATE_GROUPS.map((group, groupIndex) => (
+            <details key={group.name} open={groupIndex === 0} className="group border-b border-line">
               <summary className="list-none cursor-pointer bg-[#eaf4ee] px-3 py-2 [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-2 text-sm font-semibold text-forest">
                   <span className="text-xs transition-transform group-open:rotate-90">▶</span>
                   <span>{group.name}</span>
-                  <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">{group.count}件</span>
-                  <span className="text-xs font-normal text-muted">クリックで展開</span>
+                  <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">{group.rows.length}件</span>
+                  <span className="text-xs font-normal text-muted">{groupIndex === 0 ? '選択中' : 'クリックで展開'}</span>
                 </div>
               </summary>
-              <div className="bg-white px-5 py-4 text-xs text-muted">
-                この画面見本ではグループ行のみ表示しています。実データ接続後はここに標準見積が並びます。
-              </div>
+              <SampleEstimateRows rows={group.rows} highlightFirst={groupIndex === 0} />
             </details>
           ))}
         </div>
       </div>
       <div className="border-t border-line bg-sand/20 px-4 py-2.5 text-[11px] text-muted sm:px-5">
-        状態欄の「公開済み」「下書きあり」は表示例です。実際の確定状態は新しいStandard Estimate Revision基盤との接続後に表示します。
+        販売費100%・経費15%・掛率150%は添付Excelの値です。状態はExcelにRevision情報がないため「—」としています。
+        正式な原価・売価・状態はStandard Estimate Revision基盤へ移行後に表示します。
       </div>
     </div>
   );

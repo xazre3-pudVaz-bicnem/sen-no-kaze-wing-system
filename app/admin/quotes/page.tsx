@@ -146,7 +146,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </span>
           </div>
           <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-            <table className="w-full min-w-[70rem] table-fixed text-[0.72rem]">
+            <table className="w-full min-w-[104rem] table-fixed text-[0.72rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
                   <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
@@ -154,8 +154,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
                   <th className="w-[16rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                   <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                  <th className="w-[7rem] px-2.5 py-1.5 text-left font-semibold">担当</th>
+                  <th className="w-[5rem] px-2.5 py-1.5 text-center font-semibold">棟数</th>
+                  <th className="w-[9rem] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">原価</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">利益</th>
+                  <th className="w-[6rem] px-2.5 py-1.5 text-right font-semibold">利益率</th>
+                  <th className="w-[11rem] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
+                  <th className="w-[8rem] px-2.5 py-1.5 text-left font-semibold">災害時供給</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -191,13 +196,18 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <strong>{q.base_model_name}</strong>
                         <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[q.finish_level].name}</span>
                       </td>
+                      <td className="px-2.5 py-1.5 text-center align-top text-muted">—</td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
+                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
+                      <td className="px-2.5 py-1.5 align-top text-[0.68rem] text-muted">未登録</td>
                     </tr>
                   );
                 })}
                 {latest.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
+                  <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
                 )}
               </tbody>
             </table>
@@ -375,7 +385,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
         </div>
 
         <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-          <table className="w-full min-w-[76rem] table-fixed text-[0.72rem]">
+          <table className="w-full min-w-[108rem] table-fixed text-[0.72rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
                 <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
@@ -383,8 +393,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
                 <th className="w-[17rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                 <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">担当代理店</th>
+                <th className="w-[5rem] px-2.5 py-1.5 text-center font-semibold">棟数</th>
+                <th className="w-[9rem] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">原価</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">利益</th>
+                <th className="w-[6rem] px-2.5 py-1.5 text-right font-semibold">利益率</th>
+                <th className="w-[11rem] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
+                <th className="w-[8rem] px-2.5 py-1.5 text-left font-semibold">災害時供給</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -448,17 +463,22 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[quote.finish_level].name}</span>
                       ) : null}
                     </td>
+                    <td className="px-2.5 py-1.5 text-center align-top text-muted">—</td>
                     <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
                     </td>
+                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
+                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">
                       {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
                     </td>
+                    <td className="px-2.5 py-1.5 align-top text-[0.68rem] text-muted">未登録</td>
                   </tr>
                 );
               })}
               {shown.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
               )}
             </tbody>
           </table>

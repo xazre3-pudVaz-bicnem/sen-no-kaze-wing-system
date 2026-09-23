@@ -40,30 +40,21 @@ const adminActions = fs.readFileSync(
 );
 
 describe('見積テンプレート管理UI', () => {
-  it('標準見積一覧を統合HTMLに近い構成で表示する', () => {
+  it('シミュレーターで選べる標準見積を同じロジックで一覧表示する', () => {
     expect(listPage).toContain('title="標準見積"');
     expect(listPage).toContain('標準見積一覧');
     expect(listPage).toContain('＋ 新規標準見積を作成');
-    expect(listPage).toContain('すべて');
-    expect(listPage).toContain('const visibleModels = models;');
-    expect(listPage).toContain('見積名を検索');
-    expect(listPage).toContain('<Th>見積名</Th>');
-    expect(listPage).toContain('<Th>防火</Th>');
-    expect(listPage).toContain('<Th right>原価税込</Th>');
-    expect(listPage).toContain('<Th right>売価税込</Th>');
-    expect(listPage).toContain('<Th right>粗利率</Th>');
-    expect(listPage).toContain('<Th>状態</Th>');
-    expect(listPage).toContain('旧取込');
-    expect(listPage).toContain('新しい標準見積Revision基盤との接続後に表示します');
-    expect(listPage).toContain('SAMPLE_WING_ROWS');
-    expect(listPage).toContain('Wing');
-    expect(listPage).toContain('7件');
-    expect(listPage).toContain('BOX');
-    expect(listPage).toContain("{ name: 'BOX', count: 4 }");
-    expect(listPage).toContain('Flat');
-    expect(listPage).toContain("{ name: 'Flat', count: 3 }");
-    expect(listPage).toContain('添付HTMLに合わせた画面見本');
-    expect(listPage).toContain('金額・状態は保存データではありません');
+    expect(listPage).toContain('simulatorEstimateChoices');
+    expect(listPage).toContain("model.status === 'published'");
+    expect(listPage).toContain('store.getEstimateTemplateBundle');
+    expect(listPage).toContain('シミュレーターの「仕様を選ぶ」と同じ候補');
+    expect(listPage).toContain('防火仕様はシミュレーターでは標準見積とは別のプルダウン');
+    expect(listPage).toContain('シミュレーター候補');
+    expect(listPage).toContain('登録済み');
+    expect(listPage).toContain('シミュレーターで算出');
+    expect(listPage).toContain('未登録候補は現行シミュレーターの従来計算へフォールバックします');
+    expect(listPage).not.toContain('SAMPLE_WING_ROWS');
+    expect(listPage).not.toContain('添付HTMLに合わせた画面見本');
     expect(listPage).toContain('/admin/estimate-templates/demo');
   });
 

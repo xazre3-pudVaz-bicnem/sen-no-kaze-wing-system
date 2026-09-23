@@ -96,6 +96,16 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain("'/admin/free-products'");
     expect(listPage).toContain('catalogOptions');
   });
+  it('商品登録中に既存商品の重複候補を自動表示する', () => {
+    expect(forms).toContain('findProductDuplicateCandidates');
+    expect(forms).toContain('option-duplicate-warning');
+    expect(forms).toContain('既存商品に重複候補があります');
+    expect(forms).toContain('登録を止める判定ではありません');
+    expect(forms).toContain('メーカー＋シリーズ・型番／品番が一致');
+    expect(forms).toContain('同一カテゴリー＋メーカー＋商品名が一致');
+    expect(forms).toContain('/admin/options/\${candidate.id}');
+  });
+
   it('商品特定は既存値を候補として使える', () => {
     expect(forms).toContain('option-manufacturer-suggestions');
     expect(forms).toContain('option-model-no-suggestions');

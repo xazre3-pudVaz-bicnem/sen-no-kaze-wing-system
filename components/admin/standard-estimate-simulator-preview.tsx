@@ -202,7 +202,7 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
           </div>
         </section>
 
-        <section className="card overflow-hidden">
+        <section className="card mx-auto w-full max-w-5xl overflow-hidden">
           <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
             <h2 className="text-base font-semibold">プランボード</h2>
             <p className="mt-1 text-xs text-muted">

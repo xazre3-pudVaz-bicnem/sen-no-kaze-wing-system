@@ -45,6 +45,7 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('標準見積一覧');
     expect(listPage).toContain('＋ 新規標準見積を作成');
     expect(listPage).toContain('simulatorEstimateChoices');
+    expect(listPage).toContain("model.status === 'published'");
     expect(listPage).toContain('store.getEstimateTemplateBundle');
     expect(listPage).toContain('シミュレーターの「仕様を選ぶ」と同じ候補');
     expect(listPage).toContain('防火仕様はシミュレーターでは標準見積とは別のプルダウン');

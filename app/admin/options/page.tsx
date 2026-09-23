@@ -31,6 +31,7 @@ export default async function AdminOptionsPage({
     if (!q) return true;
     const haystack = [
       option.name,
+      option.product_no ?? '',
       option.code,
       option.manufacturer ?? '',
       option.model_no ?? '',
@@ -55,7 +56,7 @@ export default async function AdminOptionsPage({
             type="search"
             name="q"
             defaultValue={sp.q ?? ''}
-            placeholder="商品名・メーカー・型番"
+            placeholder="商品名・メーカー・型番・商品番号"
             className="mt-1 w-full"
           />
         </label>
@@ -118,7 +119,7 @@ export default async function AdminOptionsPage({
                       <div className="min-w-0">
                         <p className="font-semibold">{option.name}</p>
                         <p className="mt-0.5 truncate text-xs text-muted">
-                          {[option.manufacturer, option.model_no].filter(Boolean).join(' ／ ') || option.code}
+                          {[option.product_no, option.manufacturer, option.model_no].filter(Boolean).join(' ／ ') || '—'}
                         </p>
                       </div>
                     </div>

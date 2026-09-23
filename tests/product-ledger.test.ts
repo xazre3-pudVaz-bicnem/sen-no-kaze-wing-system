@@ -14,8 +14,9 @@ describe('商品台帳の絞り込み', () => {
     expect(selectedOptionAfterFilter('o1', ['o2'])).toBeNull();
     expect(selectedOptionAfterFilter('o1', ['o1'])).toBe('o1');
   });
-  it('商品名・メーカー・型番で検索できる', () => {
-    expect(optionMatchesLedgerFilters(option(), { query: 'メーカー A-1', categoryId: '', status: '', quick: 'all' })).toBe(true);
+  it('商品名・メーカー・型番・商品管理番号で検索できる', () => {
+    expect(optionMatchesLedgerFilters(option({ product_no: 'PRD-000123' }), { query: 'メーカー A-1', categoryId: '', status: '', quick: 'all' })).toBe(true);
+    expect(optionMatchesLedgerFilters(option({ product_no: 'PRD-000123' }), { query: 'prd-000123', categoryId: '', status: '', quick: 'all' })).toBe(true);
   });
 
   it('使用中・非公開の重複クイックフィルターを持たない', () => {

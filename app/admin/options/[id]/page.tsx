@@ -63,7 +63,7 @@ export default async function EditOptionPage({
   };
 
   return (
-    <AdminPage title={option.name} lead={option.code}>
+    <AdminPage title={option.name} lead={option.product_no ?? '商品管理番号はDB反映後に表示'}>
       <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
 

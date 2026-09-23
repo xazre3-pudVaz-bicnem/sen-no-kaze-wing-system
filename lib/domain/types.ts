@@ -270,8 +270,11 @@ export interface OptionImage {
 
 export interface ProductOption {
   id: string;
+  /** 人が扱う商品管理番号。migration適用前の互換性のため optional。 */
+  product_no?: string | null;
   base_model_id: string | null; // null = 全モデル共通
   category_id: string;
+  /** 既存Preset / Import互換の技術キー。通常の登録担当者には入力させない。 */
   code: string;
   name: string;
   description: string | null;

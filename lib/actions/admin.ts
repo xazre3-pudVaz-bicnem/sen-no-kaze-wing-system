@@ -174,6 +174,13 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
 export async function saveOptionAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const actor = await requireStaff();
   const catalogEditor = canEditCatalog(actor.role);
+  const optionId = nullableId(formData.get('id'));
+  const store = await getStore();
+  const existingOption = optionId ? await store.getOption(optionId) : null;
+  if (optionId && !existingOption) return { ok: false, error: '商品が見つかりません。' };
+  // options.code は既存Preset / Import互換の技術キー。登録担当者には入力させず、
+  // 既存商品では必ず保持し、新規手入力商品だけ内部で一意な値を作る。
+  const internalCode = existingOption?.code ?? `opt-${randomUUID()}`;
   let image_url: string;
   try {
     image_url = await resolveImageUrl(formData, 'options', 'image_url', 'image_file');
@@ -181,10 +188,10 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     return errState(e);
   }
   const parsed = optionSchema.safeParse({
-    id: nullableId(formData.get('id')),
+    id: optionId,
     base_model_id: formData.get('base_model_id'),
     category_id: formData.get('category_id'),
-    code: formData.get('code'),
+    code: internalCode,
     name: formData.get('name'),
     description: formData.get('description'),
     price: formData.get('price'),
@@ -209,17 +216,13 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   // 代理店はフリー商品カテゴリー以外を触れない（サーバー側で拒否）
   if (!catalogEditor) {
-    const store = await getStore();
     const categories = await store.listCategories();
     const cat = categories.find((c) => c.id === parsed.data.category_id);
     if (cat?.code !== FREE_PRODUCT_CATEGORY_CODE) {
       return { ok: false, error: '代理店が登録できるのはフリー商品だけです。' };
     }
-    if (parsed.data.id) {
-      const existing = (await store.listOptions()).find((o) => o.id === parsed.data.id);
-      if (existing && existing.owner_id !== actor.id) {
-        return { ok: false, error: '他の代理店が登録した商品は編集できません。' };
-      }
+    if (existingOption && existingOption.owner_id !== actor.id) {
+      return { ok: false, error: '他の代理店が登録した商品は編集できません。' };
     }
   }
   const dependencies = formData
@@ -237,7 +240,6 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     }));
   let createdId: string | null = null;
   try {
-    const store = await getStore();
     const o = await store.upsertOption(parsed.data);
     await store.setOptionRelations(
       o.id,

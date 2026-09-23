@@ -9,7 +9,7 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('ProductLedgerClient');
     expect(ledger).not.toContain('/admin/base-breakdown');
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('商品名・メーカー・型番');
+    expect(client).toContain('商品名・メーカー・型番・商品番号');
     expect(client).toContain('商品価格（税別）');
   });
 
@@ -22,7 +22,7 @@ describe('商品台帳の入口', () => {
   it('一覧を主役にし、未選択時は余分な詳細カードを出さない', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品一覧');
-    expect(client).toContain('商品名・メーカー・型番を検索');
+    expect(client).toContain('商品名・メーカー・型番・商品番号を検索');
     expect(client).toContain('カテゴリー：すべて');
     expect(client).toContain('状態：すべて');
     expect(client).toContain('並び替え：更新が新しい順');
@@ -79,6 +79,7 @@ describe('商品台帳の入口', () => {
   it('管理情報は正式に取得できる値と未取得の仕入情報を分離する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品基本情報');
+    expect(client).toContain('商品管理番号');
     expect(client).toContain('シミュレーター・Web表示設定');
     expect(client).toContain('自社の仕入・発注情報');
     expect(client).toContain('未登録値を推測せず、取得可能になるまでは表示しません。');

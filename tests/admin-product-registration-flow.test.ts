@@ -90,6 +90,12 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('シリーズ・型番／品番');
     expect(forms).toContain('productSizeMeta');
     expect(forms).toContain('このカテゴリーの入力目安');
+    expect(forms).toContain('商品管理番号');
+    expect(forms).toContain('保存時に自動採番');
+    expect(forms).toContain('PRD-000001形式');
+    expect(forms).not.toContain('label="管理用コード"');
+    expect(adminActions).toContain('const internalCode = existingOption?.code ?? `opt-${randomUUID()}`');
+    expect(adminActions).toContain('code: internalCode');
   });
 
   it('登録内容確認はシミュレーター共通の商品詳細を使う', () => {
@@ -124,7 +130,6 @@ describe('商品登録管理画面の業務フロー', () => {
   it('既存の商品保存フィールドを維持する', () => {
     for (const name of [
       'name',
-      'code',
       'category_id',
       'base_model_id',
       'manufacturer',
@@ -151,6 +156,13 @@ describe('商品登録管理画面の業務フロー', () => {
     ]) {
       expect(forms).toContain(`name="${name}"`);
     }
+  });
+
+  it('技術コードは登録担当者に入力させず既存値を保持する', () => {
+    expect(forms).not.toContain('name="code"');
+    expect(adminActions).toContain('const existingOption = optionId ? await store.getOption(optionId) : null');
+    expect(adminActions).toContain('existingOption?.code');
+    expect(adminActions).toContain('opt-${randomUUID()}');
   });
 
   it('商品価格と標準品との差額を混同しない', () => {

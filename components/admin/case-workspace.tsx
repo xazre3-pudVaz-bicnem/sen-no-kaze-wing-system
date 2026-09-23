@@ -226,6 +226,8 @@ export async function CaseWorkspace({
         (option.code === 'fire-proof' || option.code === 'fire-standard')
     )?.name ?? '未確認';
   const caseStructureNote = quote.dealer_note?.trim() || null;
+  const caseTitle = customerCompany || customerName;
+  const currentPhaseLabel = quote.status === 'accepted' ? '契約' : '正式見積';
   const siteEvidenceText = [
     request?.message ?? '',
     ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
@@ -287,10 +289,11 @@ export async function CaseWorkspace({
     { label: 'アフター', value: '未対応', state: 'pending' },
   ] as const;
 
-  const currentWorkflowLabel = `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+  const currentWorkflowLabel =
+    quote.status === 'accepted' ? '契約' : `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
     quote.status === 'accepted'
-      ? '契約'
+      ? '契約条件の確認'
       : quote.status === 'issued'
         ? '見積内容の判断'
         : '—';
@@ -303,67 +306,57 @@ export async function CaseWorkspace({
   return (
     <div id="case-workspace" className="scroll-mt-3 space-y-2" data-testid="case-workspace">
       <section className="overflow-hidden rounded-lg border border-[#2b5d48] bg-[#245c45] text-white shadow-sm" data-testid="case-workspace-header">
-        <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-2">
+        <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-2.5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="min-w-0 text-base font-semibold sm:text-lg">{customerName}</h2>
-              <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>
-                {QUOTE_STATUS_LABELS[quote.status]}
-              </Badge>
-              {request && (
-                <span className="rounded-full border border-white/30 px-2 py-0.5 text-[0.62rem]">
-                  依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}
-                </span>
-              )}
+              <span className="text-[0.62rem] font-semibold text-white/70">案件</span>
+              <h2 className="min-w-0 text-base font-semibold sm:text-lg">{caseTitle}</h2>
+              <span className="rounded-full border border-[#d8c07b] bg-[#fff4cf] px-2 py-0.5 text-[0.62rem] font-semibold text-[#765b11]">
+                現在フェーズ：{currentPhaseLabel}
+              </span>
               <span className="text-[0.62rem] text-white/70">更新 {formatDate(quote.updated_at)}</span>
             </div>
-            <p className="mt-0.5 font-mono text-[0.62rem] text-white/70">
-              見積番号 {quote.quote_no}／第{quote.revision}版
-            </p>
+            {customerCompany && (
+              <p className="mt-0.5 text-[0.64rem] text-white/75">顧客 {customerName}</p>
+            )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <a
-              href={`/api/quotes/${quote.id}/pdf`}
-              target="_blank"
-              rel="noopener"
-              className="rounded-md border border-white/30 px-2.5 py-1 text-[0.68rem] font-semibold hover:bg-white/10"
-              data-testid="admin-pdf-link"
-            >
-              見積書PDF
-            </a>
-            <a
-              href={`/api/quotes/${quote.id}/pdf?regenerate=1`}
-              target="_blank"
-              rel="noopener"
-              className="rounded-md border border-white/30 px-2.5 py-1 text-[0.68rem] hover:bg-white/10"
-              title="レイアウト変更後に PDF を作り直す（金額は変わりません）"
-            >
-              PDF再生成
-            </a>
-          </div>
-        </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.66rem] text-white/85">
-          <span><b className="text-white">顧客</b> {customerCompany || customerName}</span>
-          <span><b className="text-white">担当組織</b> {assignedDealerName}</span>
-          <span><b className="text-white">設置</b> {siteAddress}</span>
-          <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
-          <span><b className="text-white">注文範囲</b> {FINISH_LEVEL_INFO[quote.finish_level].name}</span>
+          {isAdmin && (
+            <details className="relative text-xs" data-testid="case-admin-controls">
+              <summary className="cursor-pointer list-none rounded-md border border-white/35 px-2.5 py-1.5 font-semibold text-white hover:bg-white/10 [&::-webkit-details-marker]:hidden">
+                案件設定
+              </summary>
+              <div className="mt-2 grid min-w-[18rem] gap-3 rounded-lg border border-line bg-white p-3 text-ink shadow-lg sm:min-w-[34rem] sm:grid-cols-2">
+                <div>
+                  <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
+                  <AssignDealerForm quote={quote} dealers={dealers} />
+                </div>
+                <div>
+                  <p className="mb-1 text-[0.66rem] font-semibold text-muted">状態を変更</p>
+                  <QuoteStatusForm quote={quote} request={request} compact />
+                </div>
+              </div>
+            </details>
+          )}
         </div>
 
         <div
-          className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.64rem] text-white/75"
+          className="flex flex-wrap gap-x-4 gap-y-1 border-t border-white/15 px-4 py-1.5 text-[0.65rem] text-white/80"
           data-testid="case-structure-summary"
           aria-label="案件概要"
         >
-          <span><b className="text-white/90">本体</b> {quote.base_model_name}</span>
-          <span><b className="text-white/90">防火仕様</b> {fireSelection}</span>
-          <span className="min-w-0"><b className="text-white/90">案件構成</b> {caseStructureNote ?? '未登録'}</span>
+          <span><b className="text-white">顧客</b> {customerCompany || customerName}</span>
+          <span><b className="text-white">担当</b> {assignedDealerName}</span>
+          <span><b className="text-white">設置</b> {siteAddress}</span>
+          <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
+          <span><b className="text-white">注文範囲</b> {FINISH_LEVEL_INFO[quote.finish_level].name}</span>
+          <span><b className="text-white">防火仕様</b> {fireSelection}</span>
+          <span className="min-w-0"><b className="text-white">案件構成</b> {caseStructureNote ?? '未登録'}</span>
         </div>
       </section>
 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" aria-label="案件工程" data-testid="case-workflow">
-        <div className="grid grid-cols-3 gap-1 p-2 sm:grid-cols-5 lg:grid-cols-9">
+        <div className="grid grid-cols-3 gap-1 p-2 md:grid-cols-9">
           {workflow.map((step, index) => {
             const stateClass =
               step.state === 'done'
@@ -380,7 +373,7 @@ export async function CaseWorkspace({
                   <p className="mt-0.5 truncate text-[0.58rem] opacity-75">{step.value}</p>
                 </div>
                 {index < workflow.length - 1 && (
-                  <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-[0.62rem] text-muted lg:block">→</span>
+                  <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-[0.62rem] font-semibold text-muted md:block">→</span>
                 )}
               </div>
             );
@@ -392,22 +385,6 @@ export async function CaseWorkspace({
           <span><span className="text-muted">要対応</span> <strong className="text-muted">未集計</strong></span>
         </div>
       </section>
-
-      {isAdmin && (
-        <details className="rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-sm" data-testid="case-admin-controls">
-          <summary className="cursor-pointer font-semibold text-[#315745]">案件設定</summary>
-          <div className="mt-2 grid gap-3 border-t border-line pt-2 sm:grid-cols-2">
-            <div>
-              <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
-              <AssignDealerForm quote={quote} dealers={dealers} />
-            </div>
-            <div>
-              <p className="mb-1 text-[0.66rem] font-semibold text-muted">状態を変更</p>
-              <QuoteStatusForm quote={quote} request={request} compact />
-            </div>
-          </div>
-        </details>
-      )}
 
       <nav aria-label="案件内メニュー" className="border-y border-line bg-white">
         <div className="flex flex-wrap">
@@ -446,8 +423,28 @@ export async function CaseWorkspace({
                 </Badge>
               </div>
               <p className="mt-0.5 text-[0.68rem] text-muted">
-                発行 {formatDate(quote.issued_at)}／有効期限 {formatDate(quote.valid_until)}／第{quote.revision}版
+                見積番号 {quote.quote_no}／発行 {formatDate(quote.issued_at)}／有効期限 {formatDate(quote.valid_until)}／第{quote.revision}版
               </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <a
+                href={`/api/quotes/${quote.id}/pdf`}
+                target="_blank"
+                rel="noopener"
+                className="btn-secondary btn-sm"
+                data-testid="admin-pdf-link"
+              >
+                見積書PDF
+              </a>
+              <a
+                href={`/api/quotes/${quote.id}/pdf?regenerate=1`}
+                target="_blank"
+                rel="noopener"
+                className="btn-secondary btn-sm"
+                title="レイアウト変更後に PDF を作り直す（金額は変わりません）"
+              >
+                PDF再生成
+              </a>
             </div>
           </div>
 

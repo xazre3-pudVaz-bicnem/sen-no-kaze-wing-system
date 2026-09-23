@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const nav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx'), 'utf8');
+const shell = fs.readFileSync(path.join(root, 'components/admin/admin-shell.tsx'), 'utf8');
+const adminLayout = fs.readFileSync(path.join(root, 'app/admin/layout.tsx'), 'utf8');
 const dashboard = fs.readFileSync(path.join(root, 'app/admin/page.tsx'), 'utf8');
 const list = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8');
 const detail = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/page.tsx'), 'utf8');
@@ -45,7 +47,7 @@ describe('Admin case management UI', () => {
     expect(list).toContain('data-testid="case-summary-disaster"');
     expect(list).not.toContain('契約・製造・原価・利益・災害時供給は今後対応予定');
     expect(list).toContain('案件を選択すると、下のワークスペースが切り替わります。');
-    expect(list).toContain('max-h-[20rem] overflow-auto');
+    expect(list).not.toContain('max-h-[20rem] overflow-auto');
     expect(list).toContain('data-selected={selected ? \'true\' : undefined}');
     expect(list).toContain("selected ? 'bg-[#fff7df]");
     expect(list).toContain('caseSelectionHref');
@@ -60,12 +62,21 @@ describe('Admin case management UI', () => {
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
     expect(list).toContain('>選択中</span>');
     expect(list).toContain('data-testid="case-row-meta"');
-    expect(list).toContain('min-w-[56rem]');
-    expect(list).toContain('colSpan={7}');
+    expect(list).not.toContain('min-w-[56rem]');
+    expect(list).toContain('colSpan={6}');
     for (const label of ['棟数', '見積・契約額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
       expect(list).toContain(label);
     }
     expect(list).toContain('未登録');
+    expect(list).toContain('更新 {formatDate(updatedAt, true)}');
+    expect(list).not.toContain('>更新</th>');
+  });
+
+  it('uses the 千の風プロジェクト name in the admin shell and browser title', () => {
+    expect(shell).toContain('千の風プロジェクト');
+    expect(shell).not.toContain('>Wing</span>');
+    expect(adminLayout).toContain("千の風プロジェクト 管理画面");
+    expect(adminLayout).not.toContain('Wing 管理画面');
   });
 
   it('uses one reusable workspace for the inline list and the existing detail route', () => {

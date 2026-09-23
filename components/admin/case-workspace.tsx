@@ -377,7 +377,7 @@ export async function CaseWorkspace({
                   <p className="truncate text-[0.66rem] font-semibold">
                     {step.state === 'done' ? '✓ ' : step.state === 'current' ? '● ' : ''}{step.label}
                   </p>
-                  <p className="mt-0.5 truncate text-[0.58rem] text-current/75">{step.value}</p>
+                  <p className="mt-0.5 truncate text-[0.58rem] opacity-75">{step.value}</p>
                 </div>
                 {index < workflow.length - 1 && (
                   <span className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-[0.62rem] text-muted lg:block">→</span>

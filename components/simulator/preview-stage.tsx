@@ -116,7 +116,7 @@ export function PreviewStage({ previews, view, onViewChange, options, modelName 
   const currentCase = caseImages[caseIndex] ?? null;
 
   return (
-    <section aria-label="完成イメージ" className="flex h-full flex-col overflow-hidden rounded-lg border border-[#e8b100] bg-white lg:-ml-px lg:rounded-none">
+    <section aria-label="完成イメージ" className="flex h-full flex-col overflow-hidden rounded-lg border border-[#e8b100] bg-white md:-ml-px md:rounded-none">
       <div className="px-4 pt-3 pb-2 text-base font-medium leading-tight text-ink">
         完成イメージ
         <span className="ml-2 text-xs font-normal text-ink-soft">（実物と一致しているものではありません）</span>

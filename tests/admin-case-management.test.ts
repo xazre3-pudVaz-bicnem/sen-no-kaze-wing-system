@@ -59,6 +59,9 @@ describe('Admin case management UI', () => {
     expect(list).toContain('見積番号');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
     expect(list).toContain('>選択中</span>');
+    expect(list).toContain('data-testid="case-row-meta"');
+    expect(list).toContain('min-w-[56rem]');
+    expect(list).toContain('colSpan={7}');
     for (const label of ['棟数', '見積・契約額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
       expect(list).toContain(label);
     }

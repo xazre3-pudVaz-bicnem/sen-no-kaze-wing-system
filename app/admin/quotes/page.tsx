@@ -170,31 +170,26 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </span>
           </div>
           <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-            <table className="w-full min-w-[104rem] table-fixed text-[0.72rem]">
+            <table className="w-full min-w-[56rem] table-fixed text-[0.72rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
-                  <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                  <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">状態</th>
-                  <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
-                  <th className="w-[16rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
-                  <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="w-[5rem] px-2.5 py-1.5 text-center font-semibold">棟数</th>
-                  <th className="w-[9rem] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
-                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">原価</th>
-                  <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">利益</th>
-                  <th className="w-[6rem] px-2.5 py-1.5 text-right font-semibold">利益率</th>
-                  <th className="w-[11rem] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
-                  <th className="w-[8rem] px-2.5 py-1.5 text-left font-semibold">災害時供給</th>
+                  <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
+                  <th className="w-[11%] px-2.5 py-1.5 text-left font-semibold">状態</th>
+                  <th className="w-[10%] px-2.5 py-1.5 text-left font-semibold">更新</th>
+                  <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
+                  <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
+                  <th className="w-[13%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                  <th className="w-[14%] px-2.5 py-1.5 text-left font-semibold">担当</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody>
                 {latest.map((q) => {
                   const request = requestByQuoteId.get(q.id);
                   const selected = q.id === selectedQuoteId;
-                  return (
+                  return [
                     <tr
-                      key={q.id}
-                      className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8,inset_0_-1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
+                      key={`${q.id}-main`}
+                      className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
                       data-testid="dealer-quote-row"
                       data-selected={selected ? 'true' : undefined}
                     >
@@ -215,23 +210,33 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         {request && <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</span>}
                       </td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 align-top text-[0.68rem]">{formatDate(q.updated_at, true)}</td>
-                      <td className="max-w-56 px-2.5 py-1.5 align-top text-[0.68rem]">{request?.contact.site_address || '—'}</td>
+                      <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request?.contact.site_address || '—'}</td>
                       <td className="px-2.5 py-1.5 align-top">
                         <strong>{q.base_model_name}</strong>
                         <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[q.finish_level].name}</span>
                       </td>
-                      <td className="px-2.5 py-1.5 text-center align-top text-muted">—</td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
-                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
-                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
-                      <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
-                      <td className="px-2.5 py-1.5 align-top text-[0.68rem] text-muted">未登録</td>
-                    </tr>
-                  );
+                    </tr>,
+                    <tr
+                      key={`${q.id}-meta`}
+                      className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
+                      data-testid="case-row-meta"
+                    >
+                      <td colSpan={7} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.64rem] text-muted">
+                          <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
+                          <span>原価 <strong className="font-semibold text-muted">—</strong></span>
+                          <span>利益 <strong className="font-semibold text-muted">—</strong></span>
+                          <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
+                          <span>災害時供給 <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 font-semibold text-[#8a5a20]">未登録</strong></span>
+                        </div>
+                      </td>
+                    </tr>,
+                  ];
                 })}
                 {latest.length === 0 && (
-                  <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">割り当てられた案件はまだありません</td></tr>
                 )}
               </tbody>
             </table>
@@ -415,24 +420,19 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
         </div>
 
         <div className="max-h-[20rem] overflow-auto [scrollbar-width:thin]" data-testid="case-list-scroll">
-          <table className="w-full min-w-[108rem] table-fixed text-[0.72rem]">
+          <table className="w-full min-w-[56rem] table-fixed text-[0.72rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[15rem] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">状態</th>
-                <th className="w-[9rem] px-2.5 py-1.5 text-left font-semibold">更新</th>
-                <th className="w-[17rem] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
-                <th className="w-[10rem] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="w-[5rem] px-2.5 py-1.5 text-center font-semibold">棟数</th>
-                <th className="w-[9rem] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
-                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">原価</th>
-                <th className="w-[8rem] px-2.5 py-1.5 text-right font-semibold">利益</th>
-                <th className="w-[6rem] px-2.5 py-1.5 text-right font-semibold">利益率</th>
-                <th className="w-[11rem] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
-                <th className="w-[8rem] px-2.5 py-1.5 text-left font-semibold">災害時供給</th>
+                <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
+                <th className="w-[11%] px-2.5 py-1.5 text-left font-semibold">状態</th>
+                <th className="w-[10%] px-2.5 py-1.5 text-left font-semibold">更新</th>
+                <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
+                <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
+                <th className="w-[13%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                <th className="w-[14%] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {shown.map((request) => {
                 const quote = request.quote_id ? quoteById.get(request.quote_id) : undefined;
                 const configuration = configurationById.get(request.configuration_id);
@@ -445,10 +445,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 const updatedAt = quote?.updated_at ?? request.updated_at;
                 const selected = quote?.id === selectedQuoteId;
 
-                return (
+                return [
                   <tr
-                    key={request.id}
-                    className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8,inset_0_-1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
+                    key={`${request.id}-main`}
+                    className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
                     data-testid="admin-quote-row"
                     data-selected={selected ? 'true' : undefined}
                   >
@@ -484,7 +484,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       )}
                     </td>
                     <td className="whitespace-nowrap px-2.5 py-1.5 align-top text-[0.68rem]">{formatDate(updatedAt, true)}</td>
-                    <td className="max-w-64 px-2.5 py-1.5 align-top text-[0.68rem]">{request.contact.site_address || '—'}</td>
+                    <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request.contact.site_address || '—'}</td>
                     <td className="px-2.5 py-1.5 align-top">
                       <strong>{modelName ?? '—'}</strong>
                       {specName ? (
@@ -493,22 +493,32 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[quote.finish_level].name}</span>
                       ) : null}
                     </td>
-                    <td className="px-2.5 py-1.5 text-center align-top text-muted">—</td>
                     <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
                     </td>
-                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
-                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
-                    <td className="px-2.5 py-1.5 text-right align-top text-muted">—</td>
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">
                       {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
                     </td>
-                    <td className="px-2.5 py-1.5 align-top text-[0.68rem] text-muted">未登録</td>
-                  </tr>
-                );
+                  </tr>,
+                  <tr
+                    key={`${request.id}-meta`}
+                    className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
+                    data-testid="case-row-meta"
+                  >
+                    <td colSpan={7} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.64rem] text-muted">
+                        <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
+                        <span>原価 <strong className="font-semibold text-muted">—</strong></span>
+                        <span>利益 <strong className="font-semibold text-muted">—</strong></span>
+                        <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
+                        <span>災害時供給 <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 font-semibold text-[#8a5a20]">未登録</strong></span>
+                      </div>
+                    </td>
+                  </tr>,
+                ];
               })}
               {shown.length === 0 && (
-                <tr><td colSpan={12} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
               )}
             </tbody>
           </table>

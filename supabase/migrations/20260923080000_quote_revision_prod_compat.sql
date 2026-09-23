@@ -7,8 +7,6 @@
 -- constraint and replace create_quote_revision with the current contract.
 -- =============================================================
 
-begin;
-
 -- Preserve every kind already accepted by production and add the two kinds
 -- emitted by the current estimate editor.
 alter table public.quote_items
@@ -59,6 +57,8 @@ declare
   r jsonb;
   v_kind text;
   v_qty numeric;
+  v_unit_price_raw numeric;
+  v_unit_price integer;
   v_amount integer;
 begin
   if v_uid is null then
@@ -107,10 +107,22 @@ begin
       raise exception 'FORBIDDEN: 本体を編集できるのは総代理店・本部だけです' using errcode = '42501';
     end if;
 
-    v_qty := greatest(coalesce((r ->> 'quantity')::numeric, 1), 0.01);
-    v_amount := round(coalesce((r ->> 'unit_price')::numeric, 0) * v_qty)::integer;
+    v_qty := coalesce((r ->> 'quantity')::numeric, 1);
+    if v_qty < 0.01 or v_qty > 99999 then
+      raise exception 'VALIDATION: 数量は0.01以上99999以下で入力してください' using errcode = 'P0001';
+    end if;
 
-    if v_amount < 0 and coalesce(r ->> 'name', '') <> '選択商品の変更差額' then
+    v_unit_price_raw := coalesce((r ->> 'unit_price')::numeric, 0);
+    if v_unit_price_raw <> trunc(v_unit_price_raw)
+       or v_unit_price_raw < -100000000
+       or v_unit_price_raw > 100000000 then
+      raise exception 'VALIDATION: 単価は整数かつ-100000000以上100000000以下で入力してください' using errcode = 'P0001';
+    end if;
+
+    v_unit_price := v_unit_price_raw::integer;
+    v_amount := round(v_unit_price * v_qty)::integer;
+
+    if v_unit_price < 0 and coalesce(r ->> 'name', '') <> '選択商品の変更差額' then
       raise exception 'VALIDATION: 通常明細の金額は0円以上で入力してください' using errcode = 'P0001';
     end if;
 
@@ -185,7 +197,8 @@ begin
     end if;
 
     v_sort := v_sort + 1;
-    v_qty := greatest(coalesce((r ->> 'quantity')::numeric, 1), 0.01);
+    v_qty := coalesce((r ->> 'quantity')::numeric, 1);
+    v_unit_price := coalesce((r ->> 'unit_price')::numeric, 0)::integer;
 
     insert into public.quote_items(
       quote_id, kind, name, description, unit, remark, unit_price, quantity, amount, image_url, sort_order
@@ -197,9 +210,9 @@ begin
       nullif(r ->> 'description', ''),
       coalesce(nullif(r ->> 'unit', ''), '式'),
       nullif(r ->> 'remark', ''),
-      round(coalesce((r ->> 'unit_price')::numeric, 0))::integer,
+      v_unit_price,
       v_qty,
-      round(coalesce((r ->> 'unit_price')::numeric, 0) * v_qty)::integer,
+      round(v_unit_price * v_qty)::integer,
       nullif(r ->> 'image_url', ''),
       v_sort
     );
@@ -222,4 +235,3 @@ revoke execute on function public.create_quote_revision(uuid, jsonb, text)
   from public, anon, authenticated, service_role;
 grant execute on function public.create_quote_revision(uuid, jsonb, text) to authenticated;
 
-commit;

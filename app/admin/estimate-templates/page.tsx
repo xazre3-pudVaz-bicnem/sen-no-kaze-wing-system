@@ -55,7 +55,7 @@ export default async function EstimateTemplatesPage({
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 
   const hasFilters = Boolean(modelId || q);
-  const visibleModels = models.filter((model) => templates.some((template) => template.base_model_id === model.id));
+  const visibleModels = models;
 
   return (
     <AdminPage

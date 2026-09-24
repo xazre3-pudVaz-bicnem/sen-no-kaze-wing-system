@@ -70,16 +70,21 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(newPage).not.toContain('内容確認・登録');
     expect(editPage).not.toContain('商品登録の7ステップ');
   });
-  it('新規登録でも2STEPとreturn_to導線を案内する', () => {
+  it('見積テンプレートからの新規登録も2STEPを完了してから戻る', () => {
     expect(newPage).toContain('商品登録の2ステップ');
-    expect(newPage).toContain('下書き登録して見積テンプレートへ戻る');
+    expect(newPage).toContain('まず下書きを作成してSTEP 1を続け');
+    expect(newPage).toContain('STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。');
     expect(newPage).toContain('return_to');
-    expect(forms).toContain('下書き登録して見積テンプレートへ戻る');
+    expect(forms).not.toContain('下書き登録して見積テンプレートへ戻る');
     expect(forms).toContain('下書きを作成してSTEP 1を続ける');
     expect(forms).toContain("mode === 'all' && option");
     expect(forms).toContain("'商品情報を保存'");
-    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?step=info&saved=1')");
-    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
+    expect(adminActions).toContain("const returnTo = safeAdminReturnTo(formData.get('return_to'))");
+    expect(adminActions).toContain("return_to: returnTo");
+    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?' + params.toString())");
+    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', id)");
+    expect(editPage).toContain('returnTo={returnTo}');
+    expect(editPage).toContain('name="return_to" value={returnTo}');
     expect(editPage).toContain('サブ画像・メーカー資料');
     expect(editPage).toContain('お客様選択');
   });

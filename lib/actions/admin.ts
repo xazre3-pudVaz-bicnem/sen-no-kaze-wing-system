@@ -81,6 +81,18 @@ const nullableId = (v: FormDataEntryValue | null) => {
   return s ? s : null;
 };
 
+const safeAdminReturnTo = (value: FormDataEntryValue | null): string | null => {
+  const raw = String(value ?? '').trim();
+  if (!raw.startsWith('/admin/') || raw.startsWith('//')) return null;
+  try {
+    const url = new URL(raw, 'https://wing.local');
+    if (!url.pathname.startsWith('/admin/')) return null;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return null;
+  }
+};
+
 async function editableOptionContext(actor: SessionUser, optionId: string) {
   const store = await getStore();
   const option = await store.getOption(optionId);
@@ -272,13 +284,14 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     return errState(e);
   }
   if (createdId) {
-    const returnToRaw = String(formData.get('return_to') ?? '').trim();
-    if (returnToRaw.startsWith('/admin/') && !returnToRaw.startsWith('//')) {
-      const returnUrl = new URL(returnToRaw, 'https://wing.local');
-      if (returnUrl.pathname.startsWith('/admin/')) {
-        returnUrl.searchParams.set('created_option', createdId);
-        redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
-      }
+    const returnTo = safeAdminReturnTo(formData.get('return_to'));
+    if (returnTo) {
+      const params = new URLSearchParams({
+        step: 'info',
+        saved: '1',
+        return_to: returnTo,
+      });
+      redirect('/admin/options/' + createdId + '?' + params.toString());
     }
     redirect('/admin/options/' + createdId + '?step=info&saved=1');
   }
@@ -288,13 +301,19 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
 export async function publishOptionAction(formData: FormData): Promise<void> {
   const actor = await requireStaff();
   const id = String(formData.get('id') ?? '').trim();
+  const returnTo = safeAdminReturnTo(formData.get('return_to'));
+  const previewUrl = (params: Record<string, string>) => {
+    const search = new URLSearchParams({ step: 'preview', ...params });
+    if (returnTo) search.set('return_to', returnTo);
+    return `/admin/options/${id}?${search.toString()}`;
+  };
   if (!id) redirect('/admin/options?error=' + encodeURIComponent('商品が指定されていません。'));
 
   let context: Awaited<ReturnType<typeof editableOptionContext>>;
   try {
     context = await editableOptionContext(actor, id);
   } catch (e) {
-    redirect(`/admin/options/${id}?step=preview&error=${encodeURIComponent(errState(e).error ?? '公開できませんでした。')}`);
+    redirect(previewUrl({ error: errState(e).error ?? '公開できませんでした。' }));
   }
   const { store, option } = context;
 
@@ -304,9 +323,10 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     formData.get('confirm_zero_price') !== 'on'
   ) {
     redirect(
-      `/admin/options/${id}?step=preview&error=${encodeURIComponent(
-        '商品価格が0円です。正式な0円として公開する場合は確認欄にチェックしてください。価格未確認なら商品情報へ戻り、価格確定後に公開してください。'
-      )}`
+      previewUrl({
+        error:
+          '商品価格が0円です。正式な0円として公開する場合は確認欄にチェックしてください。価格未確認なら商品情報へ戻り、価格確定後に公開してください。',
+      })
     );
   }
 
@@ -322,13 +342,19 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     try {
       await store.upsertOption({ ...editable, id: optionId, status: 'published' });
     } catch (e) {
-      redirect(`/admin/options/${id}?step=preview&error=${encodeURIComponent(errState(e).error ?? '公開できませんでした。')}`);
+      redirect(previewUrl({ error: errState(e).error ?? '公開できませんでした。' }));
     }
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
   }
 
-  redirect(`/admin/options/${id}?step=preview&published=1`);
+  if (returnTo) {
+    const returnUrl = new URL(returnTo, 'https://wing.local');
+    returnUrl.searchParams.set('created_option', id);
+    redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
+  }
+
+  redirect(previewUrl({ published: '1' }));
 }
 
 export async function saveVariantGroupAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {

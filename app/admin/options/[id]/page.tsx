@@ -138,6 +138,7 @@ export default async function EditOptionPage({
             allOptions={options}
             dependencies={deps}
             conflicts={confs}
+            returnTo={returnTo}
           />
 
           <OptionMediaManager option={option} />
@@ -212,6 +213,7 @@ export default async function EditOptionPage({
             {canEditThisOption && option.status === 'draft' && category && (
               <form action={publishOptionAction} className="space-y-3">
                 <input type="hidden" name="id" value={option.id} />
+                {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
                 {needsZeroPriceConfirmation && (
                   <div className="max-w-xl rounded-xl border border-[#d9a441] bg-[#fff8e8] p-3 text-sm">
                     <p className="font-semibold text-ink">商品価格が0円です</p>

@@ -27,21 +27,23 @@ describe('Admin quote Excel-like editor', () => {
     expect(workspace).toContain('見積書');
   });
 
-  it('keeps the edit table visually aligned with the read-only quote table', () => {
+  it('keeps the case editor simple and estimate-like', () => {
     expect(form).toContain("data-sheet-mode={sheetMode ? 'true' : undefined}");
-    expect(form).toContain('現地確認後の施工金額や商品変更を、表示中の見積と同じ並びで反映できます。');
-    expect(form).toContain('Tabで右、Enterで同じ列の次行へ移動します。');
+    expect(form).toContain('現地確認後に決まる運送・基礎・電気・給排水・設置などの金額を入力します。');
+    expect(form).toContain('シミュレーターで確定した内容は通常は確認表示です。');
     expect(form).toContain('sticky top-0 z-10');
-    expect(form).toContain('min-w-[70rem] text-sm');
-    for (const label of ['品名', '数量', '単位', '原価', '原価金額', '売価', '売価金額', '粗利', '備考']) {
+    expect(form).toContain('min-w-[52rem] text-sm');
+    for (const label of ['品名', '数量', '単位', '売価', '売価金額', '備考']) {
       expect(form).toContain(label);
     }
+    expect(form).not.toContain('>原価</th>');
+    expect(form).not.toContain('>原価金額</th>');
+    expect(form).not.toContain('>粗利</th>');
     expect(form).toContain('【本体価格計】');
     expect(form).toContain('【内外装価格計】');
     expect(form).toContain('【オプション価格計】');
     expect(form).toContain('【別途工事計】');
     expect(form).toContain('合　計（税込）');
-    expect(form).toContain('onFocus={(event) => event.currentTarget.select()}');
   });
 
   it('keeps the same base grouping and fire-item placement between read and edit modes', () => {
@@ -67,29 +69,36 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('<LockKeyhole');
   });
 
-  it('adds Excel-like folding, sticky totals and keyboard movement without inventing cost values', () => {
+  it('focuses normal editing on site work while preserving confirmed rows', () => {
     expect(form).toContain('data-testid="revision-sticky-summary"');
     expect(form).toContain('未保存の変更あり');
     expect(form).toContain('編集前と同じ');
     expect(form).toContain('前版');
     expect(form).toContain('編集中');
     expect(form).toContain('差額');
-    expect(form).toContain('原価：未登録');
-    expect(form).toContain('粗利：—');
-    expect(form).toContain('Quote Revisionに発行時点の原価スナップショット');
-    expect(form).toContain('collapsedSections.has(section.key)');
+    expect(form).toContain("new Set<string>(['base', 'interior', 'option', 'free'])");
+    expect(form).toContain("const rowEditable = section.key === 'sitework' || scopeChangeMode");
+    expect(form).toContain('readOnly={!rowEditable}');
+    expect(form).toContain('disabled={!rowEditable}');
+    expect(form).toContain('現地確認後に入力');
+    expect(form).toContain('確定済み・確認のみ');
+    expect(form).toContain('isCollapsed && editableRows.map');
+    expect(form).toContain('name={`items.${i}.unit_price`} value={r.unit_price}');
+    expect(form).toContain('!element.readOnly');
     expect(form).toContain("isCollapsed ? '+' : '−'");
     expect(form).toContain('data-revision-col="quantity"');
     expect(form).toContain('handleSheetKeyDown');
-    expect(form).toContain('event.nativeEvent.isComposing');
-    expect(form).toContain('event.keyCode === 229');
-    expect(form).toContain("event.key !== 'Enter'");
     expect(form).toContain('明細を編集前に戻す');
   });
 
-  it('keeps existing row actions, product picker, live totals and next-revision issuance', () => {
-    expect(form).toContain('data-testid="open-catalog-picker"');
+  it('keeps advanced product changes explicit and separate from site-work entry', () => {
     expect(form).toContain('data-testid="add-installation"');
+    expect(form).toContain('現地工事を追加');
+    expect(form).toContain('data-testid="toggle-scope-change"');
+    expect(form).toContain("scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'");
+    expect(form).toContain('data-testid="scope-change-actions"');
+    expect(form).toContain('商品・仕様変更');
+    expect(form).toContain('data-testid="open-catalog-picker"');
     expect(form).toContain('data-testid="add-interior-exterior"');
     expect(form).toContain('data-testid="add-option"');
     expect(form).toContain('data-testid="add-free"');
@@ -99,7 +108,6 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('data-testid="revision-preview"');
     expect(form).toContain('この内容で改訂見積を発行');
     expect(form).toContain('この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。');
-    expect(form).not.toContain('改訂見積を発行する（第${quote.revision + 1}版）');
   });
 
   it('keeps the immutable issued-quote lifecycle wording in edit mode', () => {

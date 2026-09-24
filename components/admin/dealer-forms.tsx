@@ -40,6 +40,7 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
 
 interface Row {
   key: string;
+  source_id: string | null;
   kind: RevisionItemKind;
   name: string;
   description: string;
@@ -81,6 +82,8 @@ const DEALER_KINDS: RevisionItemKind[] = [
   'free',
 ];
 
+const COMMON_SITEWORK_ITEMS = ['運搬費', '基礎工事', '電気工事', '給排水工事', '設置工事'] as const;
+
 /**
  * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
  * 代理店は本体を閲覧のみ、オプション・別途等を編集可能。
@@ -117,6 +120,7 @@ export function DealerRevisionForm({
       .filter((i) => editable(i.kind))
       .map((i, n) => ({
         key: `${i.id}-${n}`,
+        source_id: i.id,
         kind: i.kind as RevisionItemKind,
         name: i.name,
         description: i.description ?? '',
@@ -131,6 +135,7 @@ export function DealerRevisionForm({
   const defaultCollapsedSections = () => new Set<string>(['base', 'interior', 'option', 'free']);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(defaultCollapsedSections);
   const [scopeChangeMode, setScopeChangeMode] = useState(false);
+  const [dealerNote, setDealerNote] = useState(quote.dealer_note ?? '');
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
@@ -146,6 +151,52 @@ export function DealerRevisionForm({
   const tax = Math.floor(subtotal * quote.tax_rate);
   const editingTotal = subtotal + tax;
   const revisionDifference = editingTotal - quote.total;
+  const siteworkRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.kind === 'installation');
+  const siteworkNames = new Set(siteworkRows.map(({ row }) => row.name.trim()).filter(Boolean));
+  const originalEditableItems = items.filter((item) => editable(item.kind));
+  const currentBySourceId = new Map(
+    rows.filter((row) => row.source_id).map((row) => [row.source_id as string, row])
+  );
+  const changePreview: { key: string; label: string; delta: number | null }[] = [];
+
+  for (const original of originalEditableItems) {
+    const current = currentBySourceId.get(original.id);
+    if (!current) {
+      changePreview.push({
+        key: `removed-${original.id}`,
+        label: `${original.name}を削除`,
+        delta: -original.amount,
+      });
+      continue;
+    }
+    const changed =
+      current.kind !== original.kind ||
+      current.name !== original.name ||
+      current.description !== (original.description ?? '') ||
+      current.unit !== (original.unit ?? '式') ||
+      current.remark !== (original.remark ?? '') ||
+      current.unit_price !== original.unit_price ||
+      current.quantity !== original.quantity;
+    if (changed) {
+      changePreview.push({
+        key: `changed-${original.id}`,
+        label: `${current.name || original.name}を変更`,
+        delta: amountOf(current) - original.amount,
+      });
+    }
+  }
+  for (const row of rows.filter((item) => !item.source_id)) {
+    changePreview.push({
+      key: row.key,
+      label: `${row.name.trim() || '新しい項目'}を追加`,
+      delta: amountOf(row),
+    });
+  }
+  if (dealerNote !== (quote.dealer_note ?? '')) {
+    changePreview.push({ key: 'dealer-note', label: 'お客様への申し送りを変更', delta: null });
+  }
 
   const markDirty = () => setIsDirty(true);
   const update = (key: string, patch: Partial<Row>) => {
@@ -164,6 +215,7 @@ export function DealerRevisionForm({
     setRows(buildInitialRows());
     setCollapsedSections(defaultCollapsedSections());
     setScopeChangeMode(false);
+    setDealerNote(quote.dealer_note ?? '');
     setIsDirty(false);
   };
   const toggleScopeChangeMode = () => {
@@ -213,6 +265,7 @@ export function DealerRevisionForm({
     setRows((cur) =>
       insertByKind(cur, {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
+        source_id: null,
         kind,
         name: preset?.name ?? '',
         description: preset?.description ?? '',

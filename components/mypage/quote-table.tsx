@@ -287,7 +287,7 @@ export function QuoteTable({
               <td></td>
             </tr>
             <tr className="text-sm text-ink-soft">
-              <td colSpan={4} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
+              <td colSpan={4} className="px-3 py-1">値引き等調整額</td>
               <td className="px-3 py-1 text-right tabular-nums">{formatYen(quote.adjustment)}</td>
               <td></td>
             </tr>

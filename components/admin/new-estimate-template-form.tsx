@@ -6,6 +6,7 @@ import { Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   EstimateTemplateWorkbench,
+  type EstimateTemplateWorkbenchLine,
   type EstimateTemplateWorkbenchProduct,
   type EstimateTemplateWorkbenchSection,
 } from '@/components/admin/estimate-template-workbench';
@@ -20,6 +21,81 @@ const PREVIEW_SECTIONS: EstimateTemplateWorkbenchSection[] = [
   { code: 'interior_exterior', label: '内外装工事', expenseLabel: null, expenseAmount: 0 },
   { code: 'option', label: 'オプション', expenseLabel: null, expenseAmount: 0 },
   { code: 'sitework', label: '別途', expenseLabel: null, expenseAmount: 0 },
+];
+
+const SAMPLE_EDIT_LINES: EstimateTemplateWorkbenchLine[] = [
+  {
+    id: 'sample-interior-exterior-wall',
+    section: 'interior_exterior',
+    groupLabel: '外壁',
+    name: '外壁仕様：角スパンガルバリウム鋼板',
+    quantity: 4,
+    unit: '面',
+    saleUnitPrice: 0,
+    remark: '標準仕様・画面確認用',
+    source: 'product',
+    customerSelection: '標準・変更可',
+  },
+  {
+    id: 'sample-interior-finish',
+    section: 'interior_exterior',
+    groupLabel: '内装',
+    name: '室内造作工事（床・壁・天井）',
+    quantity: 1,
+    unit: '式',
+    saleUnitPrice: 312500,
+    remark: '画面確認用',
+    source: 'free',
+    customerSelection: '—',
+  },
+  {
+    id: 'sample-option-unit-bath',
+    section: 'option',
+    groupLabel: 'ユニットバス',
+    name: 'ユニットバス 1216（浴槽付）',
+    quantity: 1,
+    unit: '式',
+    saleUnitPrice: 570000,
+    remark: '画面確認用',
+    source: 'product',
+    customerSelection: '標準・変更可',
+  },
+  {
+    id: 'sample-option-water-heater',
+    section: 'option',
+    groupLabel: '給湯器',
+    name: 'ガス給湯器 16号',
+    quantity: 1,
+    unit: '台',
+    saleUnitPrice: 270000,
+    remark: '画面確認用',
+    source: 'product',
+    customerSelection: '標準・変更可',
+  },
+  {
+    id: 'sample-option-aircon',
+    section: 'option',
+    groupLabel: 'エアコン',
+    name: 'エアコン',
+    quantity: 1,
+    unit: '台',
+    saleUnitPrice: 375000,
+    remark: '画面確認用',
+    source: 'product',
+    customerSelection: '任意オプション',
+  },
+  {
+    id: 'sample-sitework-shipping',
+    section: 'sitework',
+    groupLabel: '別途工事',
+    name: '運送費',
+    quantity: 1,
+    unit: '式',
+    saleUnitPrice: 0,
+    remark: '別途見積',
+    source: 'free',
+    customerSelection: '—',
+  },
 ];
 
 type TemplateModel = {
@@ -256,7 +332,7 @@ export function NewEstimateTemplateForm({
             {samplePreview ? '画面確認用サンプルです。' : '現在は画面確認用です。'}
           </strong>
           {samplePreview
-            ? ' 旧見積の表示用データを使ってExcel形式の操作を確認しています。変更内容は保存・公開されません。'
+            ? ' 旧見積の表示用データと編集確認用の仮明細を使っています。黄色いセルの編集・商品変更・商品追加・削除・折り畳みを試せます。変更内容は保存・公開されません。'
             : ' 編集内容は保存されません。保存・公開機能は準備中です。'}
         </div>
 
@@ -265,7 +341,7 @@ export function NewEstimateTemplateForm({
           role={role}
           baseLines={selectedBaseMaster?.lines ?? []}
           baseTotal={selectedBaseMaster?.total ?? 0}
-          initialLines={[]}
+          initialLines={samplePreview ? SAMPLE_EDIT_LINES : []}
           sections={PREVIEW_SECTIONS}
           products={products}
           taxRate={0.1}

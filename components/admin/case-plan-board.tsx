@@ -11,7 +11,7 @@ import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { CasePlanConfigurationHeader, CasePlanConfigurationItem } from '@/lib/data/store';
 import { normalizeExteriorFaces } from '@/lib/domain/exterior-wall';
 import { categoriesInScope, defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
-import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
+import { resolvePreview, selectedPreviewKeys, type PreviewResolution } from '@/lib/domain/preview';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -36,6 +36,7 @@ export function CasePlanBoard({
   exteriorFaces,
   estimateTemplate,
   elevations,
+  caseFloorplan,
 }: {
   bundle: CatalogBundle;
   configuration: CasePlanConfigurationHeader;
@@ -43,6 +44,7 @@ export function CasePlanBoard({
   exteriorFaces: ExteriorFaceSelection[];
   estimateTemplate: EstimateTemplateBundle | null;
   elevations: { url: string; label: string; alt: string }[];
+  caseFloorplan?: { url: string; title: string } | null;
 }) {
   const [view, setView] = useState<ViewKey>('exterior');
   const selected = useMemo(() => items.map((item) => item.option_id), [items]);
@@ -136,6 +138,18 @@ export function CasePlanBoard({
     [bundle.options, bundle.previewRules, preferredFloorplanKeys, selected, specCode]
   );
 
+  const displayedFloorplan: PreviewResolution = caseFloorplan
+    ? {
+        view: 'floorplan',
+        kind: 'exact',
+        layers: [{ url: caseFloorplan.url, alt: caseFloorplan.title, z_index: 0 }],
+        missing_keys: [],
+        extra_keys: [],
+        note: null,
+        approximate: false,
+      }
+    : previews.floorplan;
+
   const exteriorWallCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
   const exteriorWallOptions = bundle.options.filter(
     (option) => option.category_id === exteriorWallCategory?.id && option.status === 'published'
@@ -154,7 +168,7 @@ export function CasePlanBoard({
       : exteriorFaces;
 
   const specName = estimateTemplate?.template.name ?? activePreset?.name ?? '';
-  const planDisplayName = customerPlanName(activePreset, specName);
+  const planDisplayName = caseFloorplan ? '案件図面' : customerPlanName(activePreset, specName);
   const planSize = planDisplaySizeFromSpecs(bundle.model.specs);
   const displayModelName = bundle.model.name === 'フラット' ? 'Flat' : bundle.model.name;
   const caseImages = bundle.images
@@ -174,7 +188,7 @@ export function CasePlanBoard({
           <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch lg:gap-0">
             <div className="min-w-0">
               <PlanBoard
-                plan={previews.floorplan}
+                plan={displayedFloorplan}
                 specName={planDisplayName}
                 planSize={planSize}
                 modelSlug={bundle.model.slug}

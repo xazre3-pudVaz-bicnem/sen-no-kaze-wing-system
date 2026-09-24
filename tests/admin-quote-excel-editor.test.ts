@@ -30,10 +30,10 @@ describe('Admin quote Excel-like editor', () => {
   it('keeps the edit table visually aligned with the read-only quote table', () => {
     expect(form).toContain("data-sheet-mode={sheetMode ? 'true' : undefined}");
     expect(form).toContain('表示中の見積書と同じ並びのまま、セルを直接編集できます。');
-    expect(form).toContain('Tabキーで次のセルへ移動します。');
+    expect(form).toContain('Tabで右、Enterで同じ列の次行へ移動します。');
     expect(form).toContain('sticky top-0 z-10');
-    expect(form).toContain('min-w-[44rem] text-sm');
-    for (const label of ['項目', '数量', '単位', '単価', '金額', '備考']) {
+    expect(form).toContain('min-w-[70rem] text-sm');
+    for (const label of ['品名', '数量', '単位', '原価', '原価金額', '売価', '売価金額', '粗利', '備考']) {
       expect(form).toContain(label);
     }
     expect(form).toContain('【本体価格計】');
@@ -65,6 +65,26 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('data-testid={`revision-locked-row-${index}`}');
     expect(form).toContain('aria-label="変更不可"');
     expect(form).toContain('<LockKeyhole');
+  });
+
+  it('adds Excel-like folding, sticky totals and keyboard movement without inventing cost values', () => {
+    expect(form).toContain('data-testid="revision-sticky-summary"');
+    expect(form).toContain('未保存の変更あり');
+    expect(form).toContain('編集前と同じ');
+    expect(form).toContain('前版');
+    expect(form).toContain('編集中');
+    expect(form).toContain('差額');
+    expect(form).toContain('原価：未登録');
+    expect(form).toContain('粗利：—');
+    expect(form).toContain('Quote Revisionに発行時点の原価スナップショット');
+    expect(form).toContain('collapsedSections.has(section.key)');
+    expect(form).toContain("isCollapsed ? '+' : '−'");
+    expect(form).toContain('data-revision-col="quantity"');
+    expect(form).toContain('handleSheetKeyDown');
+    expect(form).toContain('event.nativeEvent.isComposing');
+    expect(form).toContain('event.keyCode === 229');
+    expect(form).toContain("event.key !== 'Enter'");
+    expect(form).toContain('明細を編集前に戻す');
   });
 
   it('keeps existing row actions, product picker, live totals and next-revision issuance', () => {

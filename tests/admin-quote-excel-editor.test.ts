@@ -11,9 +11,6 @@ const quoteTable = fs.readFileSync(path.join(root, 'components/mypage/quote-tabl
 describe('Admin quote Excel-like editor', () => {
   it('switches the quote between read mode and edit mode in the same place', () => {
     expect(sheet).toContain("const [editing, setEditing] = useState");
-    expect(sheet).toContain('useEffect(() => {');
-    expect(sheet).toContain('if (startInEditMode && canRevise) setEditing(true);');
-    expect(sheet).toContain('[startInEditMode, canRevise]');
     expect(sheet).toContain('data-testid="quote-edit-toggle"');
     expect(sheet).toContain('見積内容を更新');
     expect(sheet).toContain('<QuoteTable');

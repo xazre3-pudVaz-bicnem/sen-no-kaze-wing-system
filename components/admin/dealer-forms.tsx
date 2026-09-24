@@ -747,8 +747,21 @@ export function DealerRevisionForm({
         )}
       </div>
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 bg-[#f7f9f8] px-3 py-2' : ''}>
-        {sheetMode && <p className="text-[0.67rem] text-muted">発行すると現在の版は上書きされず、履歴として残ります。</p>}
-        <SubmitButton pending={pending} label={`改訂見積を発行する（第${quote.revision + 1}版）`} />
+        {sheetMode && (
+          <p className="text-[0.67rem] text-muted">
+            {canEditBase
+              ? '発行すると現在の版は上書きされず、履歴として残ります。'
+              : `この内容を第${quote.revision + 1}版として発行します。現在の版は履歴として残ります。`}
+          </p>
+        )}
+        <SubmitButton
+          pending={pending}
+          label={
+            canEditBase
+              ? `改訂見積を発行する（第${quote.revision + 1}版）`
+              : 'この内容で改訂見積を発行'
+          }
+        />
       </div>
 
       {pickerOpen && (

@@ -100,6 +100,19 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(variants).toContain('お客様が選べる色・仕様');
   });
 
+  it('STEP2直前に保存済み内容の基本チェック結果を表示する', () => {
+    expect(editPage).toContain('STEP 2前の自動チェック');
+    expect(editPage).toContain('option-registration-check');
+    expect(editPage).toContain('registrationCheckIssues');
+    expect(editPage).toContain('基本チェックOK');
+    expect(editPage).toContain('要確認：');
+    expect(editPage).toContain('既存商品に重複候補があります');
+    expect(editPage).toContain('メイン画像が未登録です');
+    expect(editPage).toContain('商品価格が0円です');
+    expect(editPage).toContain('お客様へ表示する選択肢がありません');
+    expect(editPage).toContain('未保存の変更はSTEP 2へ進むときに先に自動保存されます。');
+  });
+
   it('既存商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {
     expect(editPage).toContain('OptionRegistrationSaveBoundary');
     expect(editPage).toContain('OptionRegistrationPreviewButton');
@@ -163,10 +176,13 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain("'/admin/free-products'");
     expect(listPage).toContain('catalogOptions');
   });
-  it('商品登録中に既存商品の重複候補を自動表示する', () => {
+  it('商品登録中に既存商品の重複状態を常時表示する', () => {
     expect(forms).toContain('findProductDuplicateCandidates');
+    expect(forms).toContain('option-duplicate-status');
+    expect(forms).toContain('既存商品チェック');
+    expect(forms).toContain('重複候補なし');
+    expect(forms).toContain('要確認：重複候補あり');
     expect(forms).toContain('option-duplicate-warning');
-    expect(forms).toContain('既存商品に重複候補があります');
     expect(forms).toContain('登録を止める判定ではありません');
     expect(forms).toContain('メーカー＋シリーズ・型番／品番が一致');
     expect(forms).toContain('同一カテゴリー＋メーカー＋商品名が一致');

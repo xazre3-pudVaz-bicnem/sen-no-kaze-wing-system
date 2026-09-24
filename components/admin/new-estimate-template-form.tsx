@@ -127,12 +127,14 @@ export function NewEstimateTemplateForm({
   models,
   baseMasters,
   baseMasterSourceReady,
+  sampleBaseMaster,
   products,
 }: {
   role: 'admin' | 'master_dealer' | 'dealer' | 'customer';
   models: TemplateModel[];
   baseMasters: EstimateBaseMasterChoice[];
   baseMasterSourceReady: boolean;
+  sampleBaseMaster: EstimateBaseMasterChoice | null;
   products: EstimateTemplateWorkbenchProduct[];
 }) {
   const [selectedBaseMasterId, setSelectedBaseMasterId] = useState('');
@@ -144,9 +146,12 @@ export function NewEstimateTemplateForm({
   const [step, setStep] = useState<'setup' | 'edit'>('setup');
 
   const selectedBaseMaster = useMemo(
-    () => baseMasters.find((baseMaster) => baseMaster.id === selectedBaseMasterId) ?? null,
-    [baseMasters, selectedBaseMasterId]
+    () =>
+      baseMasters.find((baseMaster) => baseMaster.id === selectedBaseMasterId) ??
+      (sampleBaseMaster?.id === selectedBaseMasterId ? sampleBaseMaster : null),
+    [baseMasters, sampleBaseMaster, selectedBaseMasterId]
   );
+  const samplePreview = Boolean(sampleBaseMaster && selectedBaseMasterId === sampleBaseMaster.id);
   const pickerBaseMaster = useMemo(
     () =>
       baseMasters.find((baseMaster) => baseMaster.id === pickerBaseMasterId) ??
@@ -189,6 +194,19 @@ export function NewEstimateTemplateForm({
     setBasePickerOpen(false);
   };
 
+  const openSampleEditor = () => {
+    if (!sampleBaseMaster) return;
+    const model = models.find((item) => item.id === sampleBaseMaster.modelId) ?? null;
+    const sampleSpec = model?.specs.find((item) => item.code === 'hotel') ?? model?.specs[0] ?? null;
+    setSelectedBaseMasterId(sampleBaseMaster.id);
+    setPickerBaseMasterId('');
+    setSpec(sampleSpec?.code ?? '');
+    setRegion('all');
+    setCustomName('Wing ホテル仕様（画面確認用）');
+    setBasePickerOpen(false);
+    setStep('edit');
+  };
+
   const handleSpecChange = (value: string) => {
     setSpec(value);
     setCustomName(null);
@@ -209,9 +227,9 @@ export function NewEstimateTemplateForm({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                  画面内プレビュー
+                  {samplePreview ? '画面確認用サンプル' : '画面内プレビュー'}
                 </span>
-                <span className="text-xs text-muted">新規標準見積</span>
+                <span className="text-xs text-muted">{samplePreview ? '保存・公開されません' : '新規標準見積'}</span>
               </div>
               <h2 className="mt-1 truncate text-lg font-semibold">{name || '名称未設定'}</h2>
             </div>
@@ -219,7 +237,7 @@ export function NewEstimateTemplateForm({
 
           <div className="grid gap-px border-t border-line bg-line text-xs sm:grid-cols-2 lg:grid-cols-5">
             {[
-              ['基準本体', selectedBaseMaster ? selectedBaseMaster.name + ' v' + selectedBaseMaster.revisionVersion : '—'],
+              ['基準本体', selectedBaseMaster ? selectedBaseMaster.name + (samplePreview ? '' : ' v' + selectedBaseMaster.revisionVersion) : '—'],
               ['商品モデル', modelName || '—'],
               ['仕様', specLabel || '—'],
               ['防火仕様', selectedFireLabel || '—'],
@@ -234,8 +252,12 @@ export function NewEstimateTemplateForm({
         </section>
 
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-relaxed text-ink-soft">
-          <strong className="font-semibold text-ink">現在は画面確認用です。</strong>
-          編集内容は保存されません。保存・公開機能は準備中です。
+          <strong className="font-semibold text-ink">
+            {samplePreview ? '画面確認用サンプルです。' : '現在は画面確認用です。'}
+          </strong>
+          {samplePreview
+            ? ' 旧見積の表示用データを使ってExcel形式の操作を確認しています。変更内容は保存・公開されません。'
+            : ' 編集内容は保存されません。保存・公開機能は準備中です。'}
         </div>
 
         <EstimateTemplateWorkbench
@@ -321,14 +343,24 @@ export function NewEstimateTemplateForm({
           </section>
 
           {!baseMasterSourceReady && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-ink-soft">
-              本体マスターの正式な読込環境が未接続のため、現在は候補を表示できません。画面構成は先行して利用できます。
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-ink-soft">
+              <span>本体マスターの正式な読込環境が未接続です。正式データは選べませんが、画面確認用サンプルで明細編集を確認できます。</span>
+              {sampleBaseMaster && (
+                <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
+                  画面確認用サンプルでExcel明細編集を見る
+                </button>
+              )}
             </div>
           )}
 
           {baseMasterSourceReady && baseMasters.length === 0 && (
-            <div className="rounded-lg border border-line bg-sand/20 px-3 py-2 text-[11px] text-muted">
-              公開中の基準本体がありません。本体マスターで公開版を用意すると、ここから選択できます。
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/20 px-3 py-2 text-[11px] text-muted">
+              <span>公開中の基準本体がありません。本体マスターで公開版を用意すると正式データを選択できます。</span>
+              {sampleBaseMaster && (
+                <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
+                  画面確認用サンプルでExcel明細編集を見る
+                </button>
+              )}
             </div>
           )}
 

@@ -240,7 +240,7 @@ export async function CaseWorkspace({
   const contractDocuments = caseDocuments.filter((row) => row.kind === 'contract');
   const nonContractDocuments = caseDocuments.filter((row) => row.kind !== 'contract');
   const drawingDocuments = nonContractDocuments.filter((row) => row.preview_url);
-  const currentPhaseLabel = quote.status === 'accepted' ? '契約確認' : '正式見積';
+  const currentPhaseLabel = quote.status === 'accepted' ? '契約確認' : '見積';
   const siteEvidenceText = [
     request?.message ?? '',
     ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
@@ -287,7 +287,7 @@ export async function CaseWorkspace({
 
   const workflow = [
     {
-      label: '見積依頼',
+      label: '案件受付',
       value: request ? QUOTE_REQUEST_STATUS_LABELS[request.status] : '記録なし',
       state: request ? 'done' : 'pending',
     },
@@ -298,7 +298,7 @@ export async function CaseWorkspace({
     },
     { label: '現地確認', value: '未対応', state: 'pending' },
     {
-      label: '正式見積',
+      label: '見積',
       value: QUOTE_STATUS_LABELS[quote.status],
       state: quote.status === 'accepted' ? 'done' : 'current',
     },
@@ -314,7 +314,7 @@ export async function CaseWorkspace({
   ] as const;
 
   const currentWorkflowLabel =
-    quote.status === 'accepted' ? '契約確認' : `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+    quote.status === 'accepted' ? '契約確認' : `見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
     quote.status === 'accepted'
       ? '契約条件の確認'
@@ -450,7 +450,7 @@ export async function CaseWorkspace({
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">正式見積書</h2>
+                <h2 className="text-lg font-semibold">見積書</h2>
                 <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>
                   {QUOTE_STATUS_LABELS[quote.status]}
                 </Badge>
@@ -483,7 +483,7 @@ export async function CaseWorkspace({
 
           {created && (
             <Alert tone="success" title="見積を作成しました">
-              下の入力表で本体・オプション・別途工事の行を確認し、必要に応じて編集して発行してください。
+              下の入力表で本体・オプション・別途工事の行を確認し、必要に応じて内容を更新して改訂見積を発行してください。
             </Alert>
           )}
           {revised && (
@@ -493,7 +493,7 @@ export async function CaseWorkspace({
           )}
           {from === 'mail' && canRevise && (
             <Alert tone="info" title="メールからお越しの方へ">
-              この案件の見積を編集し、次の版を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。
+              この案件の見積内容を更新し、改訂見積を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。
             </Alert>
           )}
 
@@ -509,7 +509,7 @@ export async function CaseWorkspace({
 
           <p className="text-xs leading-5 text-muted">
             金額は発行時点の確定内容です。マスター価格を変更しても変わりません。
-            別途工事・フリー商品を入れる場合は、書き換えではなく次の版として発行します。
+            別途工事・フリー商品を入れる場合は、書き換えではなく改訂見積として発行します。
           </p>
 
           {quote.status === 'superseded' && <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>}

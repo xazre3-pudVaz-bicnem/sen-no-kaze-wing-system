@@ -100,7 +100,7 @@ function CasePageHeading({ role, caseCount }: { role: keyof typeof ROLE_LABELS; 
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">案件管理</h1>
         <p className="mt-0.5 text-xs text-ink-soft">
-          見積依頼を起点にした案件 {caseCount} 件。案件を選択すると下に作業領域を表示します。
+          Web見積依頼と、対面・電話・紹介で受け付けた案件 {caseCount} 件をまとめて管理します。案件を選択すると下に作業領域を表示します。
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -109,7 +109,7 @@ function CasePageHeading({ role, caseCount }: { role: keyof typeof ROLE_LABELS; 
           className="inline-flex items-center rounded-lg bg-[#2f6b4f] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#285d45]"
           data-testid="new-quote-link"
         >
-          ＋新規案件／見積作成
+          ＋対面・電話・紹介の案件受付
         </Link>
         <span className="rounded-lg bg-[#edf3f6] px-3 py-2 text-[0.68rem] font-semibold text-[#365467]">{ROLE_LABELS[role]}</span>
       </div>
@@ -638,7 +638,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </div>
             <p className="mt-1 text-xs leading-5 text-ink-soft">
               この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
-              右上の「新規案件／見積作成」は別の見積依頼を新規作成するため、この受付の引継ぎには使用しません。
+              右上の「対面・電話・紹介の案件受付」は別の案件を新規作成するため、このWeb受付の引継ぎには使用しません。
             </p>
           </section>
         </section>

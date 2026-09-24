@@ -20,7 +20,7 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
       <input type="hidden" name="quote_id" value={quote.id} />
       <p className="font-semibold">担当代理店</p>
       <p className="text-xs text-muted">
-        割り当てると、その代理店は本体を閲覧しながら、オプション・別途工事等を編集して確定見積（次の版）を発行できます。
+        割り当てると、その代理店は本体を閲覧しながら、現地確認後の施工金額やオプション・別途工事等を見積に反映し、改訂見積を発行できます。
       </p>
       <Status state={state} />
       <Field label="代理店・工務店" htmlFor="dealer_id">
@@ -261,12 +261,12 @@ export function DealerRevisionForm({
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 border-b border-line bg-[#fafbf9] px-3 py-2' : ''}>
         <div>
           <p className={sheetMode ? 'text-xs font-semibold text-[#315745]' : 'font-semibold'}>
-            {sheetMode ? `第${quote.revision + 1}版を編集中` : '案件見積の編集'}
+            {sheetMode ? `見積内容を編集中（第${quote.revision + 1}版）` : '案件見積の編集'}
           </p>
           <p className={sheetMode ? 'mt-0.5 text-[0.65rem] text-muted' : 'mt-1 text-xs text-muted'}>
             {sheetMode
-              ? '表示中の見積書と同じ並びのまま、セルを直接編集できます。Tabで右、Enterで同じ列の次行へ移動します。'
-              : '入力して発行すると次の版が作られ、現在の版は履歴として残ります。'}
+              ? '現地確認後の施工金額や商品変更を、表示中の見積と同じ並びで反映できます。Tabで右、Enterで同じ列の次行へ移動します。'
+              : '入力内容を反映して改訂見積を発行すると次の版が作られ、現在の版は履歴として残ります。'}
           </p>
         </div>
         {sheetMode && onCancel && (
@@ -742,13 +742,13 @@ export function DealerRevisionForm({
             <div className="flex justify-between text-muted"><dt>オプション価格計</dt><dd>{formatYen(optionTotal)}</dd></div>
             <div className="flex justify-between"><dt>別途工事・フリー商品</dt><dd>{formatYen(entered)}</dd></div>
             <div className="flex justify-between text-muted"><dt>消費税</dt><dd>{formatYen(tax)}</dd></div>
-            <div className="flex justify-between border-t border-line pt-1 font-semibold"><dt>確定見積の合計（税込）</dt><dd>{formatYen(subtotal + tax)}</dd></div>
+            <div className="flex justify-between border-t border-line pt-1 font-semibold"><dt>改訂後の見積合計（税込）</dt><dd>{formatYen(subtotal + tax)}</dd></div>
           </dl>
         )}
       </div>
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 bg-[#f7f9f8] px-3 py-2' : ''}>
         {sheetMode && <p className="text-[0.67rem] text-muted">発行すると現在の版は上書きされず、履歴として残ります。</p>}
-        <SubmitButton pending={pending} label={`第${quote.revision + 1}版として発行する`} />
+        <SubmitButton pending={pending} label={`改訂見積を発行する（第${quote.revision + 1}版）`} />
       </div>
 
       {pickerOpen && (

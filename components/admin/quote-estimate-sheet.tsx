@@ -54,7 +54,7 @@ export function QuoteEstimateSheet({
             className="inline-flex items-center gap-1.5 rounded-md border border-[#9eb6a9] bg-white px-3 py-1.5 text-xs font-semibold text-[#315745] hover:bg-[#f1f7f3]"
             data-testid="quote-edit-toggle"
           >
-            ＋新しい見積書
+            見積内容を更新
           </button>
         </div>
       )}

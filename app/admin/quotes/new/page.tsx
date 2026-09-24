@@ -14,8 +14,8 @@ export default async function AdminNewQuotePage() {
   const models = await store.listModels();
   return (
     <AdminPage
-      title="新規案件／見積作成"
-      lead="電話・来店・紹介など、スタッフ起点で新しい案件の見積を作成します。既存の見積作成処理をそのまま利用します。"
+      title="対面・電話・紹介の案件受付"
+      lead="Web以外で受けた案件を登録し、概算見積を作成します。作成後はWeb経由の案件と同じ案件管理で進めます。"
     >
       <CaseManagementNav role={actor.role} active="cases" />
       <BackLink href="/admin/quotes" label="案件一覧へ戻る" />

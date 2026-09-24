@@ -12,7 +12,7 @@ describe('Admin quote Excel-like editor', () => {
   it('switches the quote between read mode and edit mode in the same place', () => {
     expect(sheet).toContain("const [editing, setEditing] = useState");
     expect(sheet).toContain('data-testid="quote-edit-toggle"');
-    expect(sheet).toContain('＋新しい見積書');
+    expect(sheet).toContain('見積内容を更新');
     expect(sheet).toContain('<QuoteTable');
     expect(sheet).toContain('quote={quote}');
     expect(sheet).toContain('showSelectedImages={false}');
@@ -24,12 +24,12 @@ describe('Admin quote Excel-like editor', () => {
   it('does not render a second standalone revision form below the quote in the case workspace', () => {
     expect(workspace).toContain('<QuoteEstimateSheet');
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
-    expect(workspace).toContain('正式見積書');
+    expect(workspace).toContain('見積書');
   });
 
   it('keeps the edit table visually aligned with the read-only quote table', () => {
     expect(form).toContain("data-sheet-mode={sheetMode ? 'true' : undefined}");
-    expect(form).toContain('表示中の見積書と同じ並びのまま、セルを直接編集できます。');
+    expect(form).toContain('現地確認後の施工金額や商品変更を、表示中の見積と同じ並びで反映できます。');
     expect(form).toContain('Tabで右、Enterで同じ列の次行へ移動します。');
     expect(form).toContain('sticky top-0 z-10');
     expect(form).toContain('min-w-[70rem] text-sm');
@@ -97,7 +97,7 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('changeKind');
     expect(form).toContain('formatYen(amountOf(r))');
     expect(form).toContain('data-testid="revision-preview"');
-    expect(form).toContain('第${quote.revision + 1}版として発行する');
+    expect(form).toContain('改訂見積を発行する（第${quote.revision + 1}版）');
   });
 
   it('keeps the immutable issued-quote lifecycle wording in edit mode', () => {

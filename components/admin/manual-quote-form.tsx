@@ -68,9 +68,9 @@ export function ManualQuoteForm({ models }: { models: ManualQuoteModel[] }) {
       </Field>
       <p className="text-xs text-muted">
         作成すると、選んだ仕様の標準構成で第1版（概算見積）が発行されます。
-        続けて開く編集画面（エクセル表）で本体・オプション・別途工事の行を直し、確定版を発行してください。
+        現地確認後は「見積内容を更新」から施工金額や商品変更を反映し、必要に応じて改訂見積を発行してください。
       </p>
-      <SubmitButton pending={pending} label="見積を作成する" />
+      <SubmitButton pending={pending} label="案件を登録して概算見積を作成" />
     </form>
   );
 }

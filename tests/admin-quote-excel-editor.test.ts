@@ -86,6 +86,8 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain("event.key !== 'Enter'");
     expect(form).toContain('明細を編集前に戻す');
     expect(form).toContain('computeQuoteRevisionTotals(subRaw, quote.adjustment, quote.tax_rate)');
+    expect(form).toContain('computeQuoteRevisionItemAmount');
+    expect(form).toContain('items.${i}.source_item_id');
     expect(form).toContain('値引き等調整額（前版から引継ぎ）');
     expect(form).toContain('（前版から引継ぎ）');
     expect(quoteTable).toContain('値引き等調整額');

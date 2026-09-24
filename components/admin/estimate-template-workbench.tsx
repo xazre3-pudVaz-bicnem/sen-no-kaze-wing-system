@@ -23,6 +23,7 @@ export interface EstimateTemplateWorkbenchLine {
 export interface EstimateTemplateWorkbenchProduct {
   id: string;
   categoryId: string;
+  categoryCode: string;
   categoryName: string;
   name: string;
   manufacturer: string;
@@ -41,6 +42,36 @@ export interface EstimateTemplateWorkbenchSection {
 }
 
 type CollapsibleSection = 'base' | SectionCode;
+
+const SECTION_PRODUCT_CATEGORY_CODES: Record<SectionCode, readonly string[]> = {
+  interior_exterior: [
+    'roof',
+    'exterior-wall',
+    'floor',
+    'wall-ceiling',
+    'entrance-door',
+    'sash',
+    'interior-door',
+    'carpentry',
+    'fireproof',
+    'insulation',
+  ],
+  option: [
+    'ub',
+    'kitchen',
+    'washbasin',
+    'toilet',
+    'boiler',
+    'aircon',
+    'lighting',
+    'furniture',
+    'appliances',
+    'smartlock',
+    'exterior-parts',
+    'office-supplies',
+  ],
+  sitework: ['sitework', 'free-product'],
+};
 
 export function EstimateTemplateWorkbench({
   templateId,
@@ -136,15 +167,23 @@ export function EstimateTemplateWorkbench({
   const tax = Math.floor(subtotal * taxRate);
   const total = subtotal + tax;
 
-  const categories = useMemo(() => {
+  const pickerCategories = useMemo(() => {
+    if (!pickerSection) return [];
+    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection]);
     const map = new Map<string, string>();
-    for (const product of products) map.set(product.categoryId, product.categoryName);
+    for (const product of products) {
+      if (!allowedCodes.has(product.categoryCode)) continue;
+      map.set(product.categoryId, product.categoryName);
+    }
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
-  }, [products]);
+  }, [pickerSection, products]);
 
   const pickerProducts = useMemo(() => {
+    if (!pickerSection) return [];
+    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection]);
     const query = pickerQuery.trim().toLowerCase();
     return products.filter((product) => {
+      if (!allowedCodes.has(product.categoryCode)) return false;
       if (pickerCategory && product.categoryId !== pickerCategory) return false;
       if (!query) return true;
       return [
@@ -155,7 +194,14 @@ export function EstimateTemplateWorkbench({
         product.categoryName,
       ].join(' ').toLowerCase().includes(query);
     });
-  }, [products, pickerCategory, pickerQuery]);
+  }, [pickerSection, products, pickerCategory, pickerQuery]);
+
+  const pickerSectionLabel = pickerSection
+    ? sections.find((section) => section.code === pickerSection)?.label ?? pickerSection
+    : '';
+  const pickerCategoryName = pickerCategory
+    ? pickerCategories.find(([id]) => id === pickerCategory)?.[1] ?? ''
+    : '';
 
   const visibleColumnCount = showCost ? 13 : 10;
   const grandLabelSpan = showCost ? 8 : 6;
@@ -757,6 +803,16 @@ export function EstimateTemplateWorkbench({
                 <p className="mt-1 text-xs text-muted">
                   {pickerTargetRowId ? '選択した明細行へ商品情報を反映します。' : '選択した区分へ商品を追加します。'}
                 </p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
+                    追加先：{pickerSectionLabel}
+                  </span>
+                  {pickerCategoryName && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+                      カテゴリー：{pickerCategoryName}
+                    </span>
+                  )}
+                </div>
               </div>
               <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
@@ -764,8 +820,8 @@ export function EstimateTemplateWorkbench({
             <div className="space-y-5 p-5">
               <div className="grid gap-3 sm:grid-cols-[14rem_1fr]">
                 <Select value={pickerCategory} onChange={(event) => setPickerCategory(event.target.value)}>
-                  <option value="">すべてのカテゴリー</option>
-                  {categories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                  <option value="">この区分のすべてのカテゴリー</option>
+                  {pickerCategories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                 </Select>
                 <Input
                   type="search"
@@ -775,6 +831,10 @@ export function EstimateTemplateWorkbench({
                 />
               </div>
 
+              <p className="text-[11px] text-muted">
+                「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。
+              </p>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 {pickerProducts.map((product) => (
                   <article key={product.id} className="rounded-xl border border-line p-4">
@@ -783,7 +843,9 @@ export function EstimateTemplateWorkbench({
                         {product.imageUrl ? <span>画像登録済み</span> : <span>画像なし</span>}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted">{product.manufacturer || product.categoryName}</p>
+                        <p className="text-xs text-muted">
+                          {product.categoryName} ／ {product.manufacturer || 'メーカー未登録'}
+                        </p>
                         <h3 className="font-semibold">{product.name}</h3>
                         <p className="mt-1 text-xs text-muted">
                           {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
@@ -804,7 +866,7 @@ export function EstimateTemplateWorkbench({
 
               {pickerProducts.length === 0 && (
                 <div className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">
-                  条件に一致する商品がありません。
+                  この区分・カテゴリーの条件に一致する商品がありません。
                 </div>
               )}
 

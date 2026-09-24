@@ -151,7 +151,14 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
     expect(newForm).toContain("samplePreview ? '画面確認用サンプル' : '画面内プレビュー'");
-    expect(newForm).toContain('旧見積の表示用データを使ってExcel形式の操作を確認しています。');
+    expect(newForm).toContain('旧見積の表示用データと編集確認用の仮明細を使っています。');
+    expect(newForm).toContain('黄色いセルの編集・商品変更・商品追加・削除・折り畳みを試せます。');
+    expect(newForm).toContain('const SAMPLE_EDIT_LINES');
+    expect(newForm).toContain("name: 'ユニットバス 1216（浴槽付）'");
+    expect(newForm).toContain("name: 'ガス給湯器 16号'");
+    expect(newForm).toContain("name: 'エアコン'");
+    expect(newForm).toContain("name: '運送費'");
+    expect(newForm).toContain('initialLines={samplePreview ? SAMPLE_EDIT_LINES : []}');
     expect(newForm).toContain('将来は設置予定地から自動判定する想定です');
     expect(newForm).toContain('基準本体を選ぶ');
     expect(newForm).toContain('明細を見る');

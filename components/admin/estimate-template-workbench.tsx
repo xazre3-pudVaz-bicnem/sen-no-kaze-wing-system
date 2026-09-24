@@ -106,7 +106,17 @@ export function EstimateTemplateWorkbench({
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
+  const [salesExpenseRate, setSalesExpenseRate] = useState(100);
+  const [expenseRate, setExpenseRate] = useState(15);
+  const [markupRate, setMarkupRate] = useState(150);
+  const [localAdjustment, setLocalAdjustment] = useState(adjustment);
   const [collapsedSections, setCollapsedSections] = useState<Set<CollapsibleSection>>(() => new Set());
+  const rateSettingsDirty =
+    salesExpenseRate !== 100 ||
+    expenseRate !== 15 ||
+    markupRate !== 150 ||
+    localAdjustment !== adjustment;
+  const hasLocalChanges = isDirty || rateSettingsDirty;
 
   const totals = useMemo(() => {
     const result: Record<SectionCode, number> = {
@@ -122,7 +132,7 @@ export function EstimateTemplateWorkbench({
   }, [rows, sections]);
 
   const subtotalRaw = baseTotal + totals.interior_exterior + totals.option + totals.sitework;
-  const subtotal = Math.max(0, subtotalRaw + adjustment);
+  const subtotal = Math.max(0, subtotalRaw + localAdjustment);
   const tax = Math.floor(subtotal * taxRate);
   const total = subtotal + tax;
 
@@ -170,6 +180,10 @@ export function EstimateTemplateWorkbench({
     setPickerCategory('');
     setPickerQuery('');
     setCollapsedSections(new Set());
+    setSalesExpenseRate(100);
+    setExpenseRate(15);
+    setMarkupRate(150);
+    setLocalAdjustment(adjustment);
     setIsDirty(false);
   };
 
@@ -310,25 +324,20 @@ export function EstimateTemplateWorkbench({
               onKeyDown={handleGridKeyDown}
               onDoubleClick={() => openProductPicker(row.section, row.id)}
               onChange={(event) => updateRow(row.id, { name: event.target.value })}
-              className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1.5 shadow-none focus:ring-2 focus:ring-emerald-700/30"
+              className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
             />
             <button
               type="button"
               title="商品マスターから選び直す"
               aria-label={row.name + 'の商品を変更'}
-              className="flex size-7 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-sm font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
+              className="flex size-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-xs font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
               onClick={() => openProductPicker(row.section, row.id)}
             >
               …
             </button>
           </div>
-          {(row.groupLabel || row.source === 'product') && (
-            <div className="truncate px-1.5 pb-1 text-[10px] text-slate-500">
-              {row.groupLabel || '商品'}
-            </div>
-          )}
         </td>
-        <td className="w-20 border-r border-slate-200 bg-amber-50 px-0.5">
+        <td className="w-16 border-r border-slate-200 bg-amber-50 px-0.5">
           <Input
             type="number"
             min={0.0001}
@@ -337,16 +346,16 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="quantity"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { quantity: Number(event.target.value) })}
-            className="h-8 w-full border-0 bg-transparent px-1.5 text-right shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-7 w-full border-0 bg-transparent px-1 text-right text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
-        <td className="w-20 border-r border-slate-200 bg-amber-50 px-0.5">
+        <td className="w-16 border-r border-slate-200 bg-amber-50 px-0.5">
           <Input
             value={row.unit}
             data-estimate-grid-col="unit"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { unit: event.target.value })}
-            className="h-8 w-full border-0 bg-transparent px-1.5 shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-7 w-full border-0 bg-transparent px-1 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
         {showCost && (
@@ -355,7 +364,7 @@ export function EstimateTemplateWorkbench({
             <td className="w-28 border-r border-slate-200 bg-slate-50 px-3 text-right text-slate-400">—</td>
           </>
         )}
-        <td className="w-32 border-r border-slate-200 bg-amber-50 px-0.5">
+        <td className="w-28 border-r border-slate-200 bg-amber-50 px-0.5">
           <Input
             type="number"
             min={0}
@@ -364,10 +373,10 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="sale"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { saleUnitPrice: Number(event.target.value) })}
-            className="h-8 w-full border-0 bg-transparent px-1.5 text-right shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-7 w-full border-0 bg-transparent px-1 text-right text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
-        <td className="w-28 border-r border-slate-200 bg-slate-50 px-3 text-right font-semibold tabular-nums">
+        <td className="w-24 border-r border-slate-200 bg-slate-50 px-2 text-right text-xs font-semibold tabular-nums">
           {formatYen(amount)}
         </td>
         {showCost && (
@@ -379,7 +388,7 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="remark"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { remark: event.target.value })}
-            className="h-8 w-full border-0 bg-transparent px-1.5 shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-7 w-full border-0 bg-transparent px-1 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
         <td className="w-40 border-r border-slate-200 bg-amber-50 px-1">
@@ -389,7 +398,7 @@ export function EstimateTemplateWorkbench({
               data-estimate-grid-col="selection"
               onKeyDown={handleGridKeyDown}
               onChange={(event) => updateRow(row.id, { customerSelection: event.target.value })}
-              className="h-8 min-h-8 w-full border-0 bg-transparent px-1 text-xs shadow-none"
+              className="h-7 min-h-7 w-full border-0 bg-transparent px-1 text-[11px] shadow-none"
             >
               <option>標準・変更可</option>
               <option>標準・固定</option>
@@ -421,20 +430,19 @@ export function EstimateTemplateWorkbench({
           {displayRowNumber}
         </th>
         <td className="sticky left-[2.75rem] z-10 w-9 border-r border-slate-200 bg-slate-100"></td>
-        <td className="sticky left-[5rem] z-10 min-w-[20rem] border-r border-slate-200 bg-slate-100 px-2 py-1.5">
-          <div className="font-medium">{line.name}</div>
-          <div className="mt-0.5 text-[10px] text-slate-500">{line.section}</div>
+        <td className="sticky left-[5rem] z-10 min-w-[20rem] border-r border-slate-200 bg-slate-100 px-2 py-1">
+          <div className="truncate text-xs font-medium" title={line.name}>{line.name}</div>
         </td>
-        <td className="w-20 border-r border-slate-200 px-2 text-right">{line.quantity}</td>
-        <td className="w-20 border-r border-slate-200 px-2">{line.unit}</td>
+        <td className="w-16 border-r border-slate-200 px-2 text-right text-xs">{line.quantity}</td>
+        <td className="w-16 border-r border-slate-200 px-2 text-xs">{line.unit}</td>
         {showCost && (
           <>
             <td className="w-28 border-r border-slate-200 px-3 text-right text-slate-400">—</td>
             <td className="w-28 border-r border-slate-200 px-3 text-right text-slate-400">—</td>
           </>
         )}
-        <td className="w-32 border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(line.unitPrice)}</td>
-        <td className="w-28 border-r border-slate-200 px-3 text-right font-semibold tabular-nums">{formatYen(line.amount)}</td>
+        <td className="w-28 border-r border-slate-200 px-2 text-right text-xs tabular-nums">{formatYen(line.unitPrice)}</td>
+        <td className="w-24 border-r border-slate-200 px-2 text-right text-xs font-semibold tabular-nums">{formatYen(line.amount)}</td>
         {showCost && <td className="w-28 border-r border-slate-200 px-3 text-right text-slate-400">—</td>}
         <td className="min-w-48 border-r border-slate-200 px-2 text-xs">{line.remark}</td>
         <td className="w-40 border-r border-slate-200 px-2 text-xs text-slate-400">—</td>
@@ -465,7 +473,7 @@ export function EstimateTemplateWorkbench({
         <td className="sticky left-[2.75rem] z-20 w-9 border-r border-emerald-800 bg-emerald-900 px-1 text-center">
           <button
             type="button"
-            className="my-1 flex size-6 items-center justify-center rounded border border-white/60 bg-white text-sm font-bold text-slate-800"
+            className="my-0.5 flex size-5 items-center justify-center rounded border border-white/60 bg-white text-xs font-bold text-slate-800"
             aria-expanded={!collapsed}
             aria-label={collapsed ? label + 'の明細を開く' : label + 'の明細を閉じる'}
             onClick={() => toggleSection(key)}
@@ -473,9 +481,9 @@ export function EstimateTemplateWorkbench({
             {collapsed ? '+' : '−'}
           </button>
         </td>
-        <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-3 py-1.5">
+        <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <strong className="text-[13px]">{label}</strong>
+            <strong className="text-xs">{label}</strong>
             <span className="text-[11px] text-white/75">{rowCount}行</span>
             {editable && !collapsed && (
               <span className="flex items-center gap-2">
@@ -497,7 +505,7 @@ export function EstimateTemplateWorkbench({
             )}
           </div>
         </td>
-        <td colSpan={visibleColumnCount - 3} className="bg-emerald-900 px-3 py-1.5">
+        <td colSpan={visibleColumnCount - 3} className="bg-emerald-900 px-2 py-1">
           <div className="flex items-center justify-end gap-3">
             {expenseText && <span className="text-[11px] text-white/75">{expenseText}</span>}
             <span className="text-xs font-semibold">{formatYen(totalAmount)}</span>
@@ -527,15 +535,15 @@ export function EstimateTemplateWorkbench({
           </div>
           <span
             className={
-              isDirty
+              hasLocalChanges
                 ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[0.68rem] font-semibold text-amber-800'
                 : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
             }
           >
-            {isDirty ? (demoMode ? '画面内の変更あり' : '未保存の変更あり') : (demoMode ? '初期状態' : '編集前と同じ')}
+            {hasLocalChanges ? (demoMode ? '画面内の変更あり' : '未保存の変更あり') : (demoMode ? '初期状態' : '編集前と同じ')}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetRows} disabled={!isDirty}>
+            <Button type="button" variant="secondary" size="sm" onClick={resetRows} disabled={!hasLocalChanges}>
               {demoMode ? '最初の状態に戻す' : '編集前に戻す'}
             </Button>
             {!demoMode && (
@@ -549,20 +557,78 @@ export function EstimateTemplateWorkbench({
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 bg-amber-50/45 px-3 py-1.5 text-[11px]">
+          <span className="font-semibold text-slate-700">計算条件</span>
+          <label className="flex items-center gap-1">
+            <span className="text-slate-600">販売費</span>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={salesExpenseRate}
+              onChange={(event) => setSalesExpenseRate(Math.max(0, Number(event.target.value)))}
+              className="h-7 w-16 px-1.5 text-right text-xs"
+              aria-label="販売費率"
+            />
+            <span>%</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <span className="text-slate-600">経費</span>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={expenseRate}
+              onChange={(event) => setExpenseRate(Math.max(0, Number(event.target.value)))}
+              className="h-7 w-16 px-1.5 text-right text-xs"
+              aria-label="経費率"
+            />
+            <span>%</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <span className="text-slate-600">掛率</span>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={markupRate}
+              onChange={(event) => setMarkupRate(Math.max(0, Number(event.target.value)))}
+              className="h-7 w-16 px-1.5 text-right text-xs"
+              aria-label="掛率"
+            />
+            <span>%</span>
+          </label>
+          <span className="border-l border-slate-300 pl-3 text-slate-600">
+            粗利 <strong className="ml-1 text-slate-400">—</strong>
+          </span>
+          <span className="text-slate-600">
+            粗利率 <strong className="ml-1 text-slate-400">—</strong>
+          </span>
+          <span className="ml-auto text-[10px] text-slate-500">画面内設定。明細金額への反映は正式原価接続後です。</span>
+        </div>
+
         <div className="flex flex-wrap items-center divide-x divide-slate-200 border-b border-slate-200 text-xs">
-          <span className="px-3 py-2">
+          <span className="px-3 py-1.5">
             税別小計 <strong className="ml-1 text-sm text-slate-900">{formatYen(subtotalRaw)}</strong>
           </span>
-          <span className="px-3 py-2">
-            調整額 <strong className="ml-1 text-sm text-slate-900">{formatYen(adjustment)}</strong>
-          </span>
-          <span className="px-3 py-2">
+          <label className="flex items-center gap-1 px-3 py-1">
+            <span className="whitespace-nowrap text-slate-600">値引き等調整額</span>
+            <Input
+              type="number"
+              step={1}
+              value={localAdjustment}
+              onChange={(event) => setLocalAdjustment(Number(event.target.value) || 0)}
+              className="h-7 w-24 px-1.5 text-right text-xs"
+              aria-label="値引き等調整額"
+            />
+          </label>
+          <span className="px-3 py-1.5">
             消費税 <strong className="ml-1 text-sm text-slate-900">{formatYen(tax)}</strong>
           </span>
-          <span className="px-3 py-2">
+          <span className="px-3 py-1.5">
             税込合計 <strong className="ml-1 text-base text-slate-900">{formatYen(total)}</strong>
           </span>
-          <span className="px-3 py-2 text-slate-500">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
+          <span className="px-3 py-1.5 text-slate-500">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
         </div>
 
         <div className="flex items-end gap-1 bg-slate-100 px-3 pt-1.5">
@@ -593,28 +659,28 @@ export function EstimateTemplateWorkbench({
 
       <section className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="estimate-excel-grid">
         <div className="max-h-[68vh] overflow-auto">
-          <table className={showCost ? 'min-w-[92rem] w-full border-collapse text-sm' : 'min-w-[72rem] w-full border-collapse text-sm'}>
+          <table className={showCost ? 'min-w-[86rem] w-full border-collapse text-xs' : 'min-w-[66rem] w-full border-collapse text-xs'}>
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-40 w-11 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-semibold text-slate-600">#</th>
-                <th className="sticky left-[2.75rem] top-0 z-40 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1.5"></th>
-                <th className="sticky left-[5rem] top-0 z-40 min-w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">品名</th>
-                <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">数量</th>
-                <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">単位</th>
+                <th className="sticky left-0 top-0 z-40 w-11 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-[11px] font-semibold text-slate-600">#</th>
+                <th className="sticky left-[2.75rem] top-0 z-40 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
+                <th className="sticky left-[5rem] top-0 z-40 min-w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">品名</th>
+                <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">数量</th>
+                <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">単位</th>
                 {showCost && (
                   <>
-                    <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">原価</th>
-                    <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">原価金額</th>
+                    <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">原価</th>
+                    <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">原価金額</th>
                   </>
                 )}
-                <th className="sticky top-0 z-20 w-32 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">売価</th>
-                <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">売価金額</th>
+                <th className="sticky top-0 z-20 w-32 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">売価</th>
+                <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">売価金額</th>
                 {showCost && (
-                  <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">粗利</th>
+                  <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">粗利</th>
                 )}
-                <th className="sticky top-0 z-20 min-w-48 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">備考</th>
-                <th className="sticky top-0 z-20 w-40 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">お客様選択</th>
-                <th className="sticky top-0 z-20 w-16 border-b border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-semibold text-slate-600">操作</th>
+                <th className="sticky top-0 z-20 min-w-48 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">備考</th>
+                <th className="sticky top-0 z-20 w-40 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">お客様選択</th>
+                <th className="sticky top-0 z-20 w-16 border-b border-slate-300 bg-slate-100 px-2 py-1 text-center text-[11px] font-semibold text-slate-600">操作</th>
               </tr>
             </thead>
 
@@ -658,8 +724,8 @@ export function EstimateTemplateWorkbench({
                 <td colSpan={grandTailSpan}></td>
               </tr>
               <tr className="border-t border-slate-300 bg-amber-50">
-                <td colSpan={grandLabelSpan} className="px-3 py-2 text-right">調整額</td>
-                <td className="border-l border-slate-300 px-3 py-2 text-right tabular-nums">{formatYen(adjustment)}</td>
+                <td colSpan={grandLabelSpan} className="px-3 py-2 text-right">値引き等調整額</td>
+                <td className="border-l border-slate-300 px-3 py-2 text-right tabular-nums">{formatYen(localAdjustment)}</td>
                 <td colSpan={grandTailSpan}></td>
               </tr>
               <tr className="border-t border-slate-300 bg-slate-50">
@@ -678,7 +744,7 @@ export function EstimateTemplateWorkbench({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-500">
           <span>本体は参照専用。内外装工事・オプション・別途はセルで編集できます。</span>
-          <span>原価比較・保存・公開機能は準備中です。</span>
+          <span>販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。</span>
         </div>
       </section>
 

@@ -206,7 +206,21 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('sticky left-[5rem] z-10');
     expect(workbench).toContain('sticky left-[5rem] top-0 z-40');
     expect(workbench).toContain('colSpan={visibleColumnCount - 3}');
-    expect(workbench).toContain('原価比較・保存・公開機能は準備中です');
+    expect(workbench).toContain('販売費');
+    expect(workbench).toContain('経費');
+    expect(workbench).toContain('掛率');
+    expect(workbench).toContain('粗利率');
+    expect(workbench).toContain('値引き等調整額');
+    expect(workbench).toContain('salesExpenseRate');
+    expect(workbench).toContain('expenseRate');
+    expect(workbench).toContain('markupRate');
+    expect(workbench).toContain('localAdjustment');
+    expect(workbench).toContain('画面内設定。明細金額への反映は正式原価接続後です');
+    expect(workbench).toContain('販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です');
+    expect(workbench).toContain('min-w-[66rem] w-full border-collapse text-xs');
+    expect(workbench).toContain('className="h-7');
+    expect(workbench).toContain('className="flex size-6');
+    expect(workbench).not.toContain("row.groupLabel || '商品'");
   });
 
   it('見積テンプレートから商品登録へ移動して戻れる', () => {

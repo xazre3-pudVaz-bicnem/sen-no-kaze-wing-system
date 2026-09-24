@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -102,6 +102,8 @@ export function EstimateTemplateWorkbench({
   const [pickerSection, setPickerSection] = useState<SectionCode | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
+  const [collapsedSections, setCollapsedSections] = useState<Set<'base' | SectionCode>>(() => new Set());
 
   const expenseBySection = useMemo(
     () => new Map(sections.map((section) => [section.code, section.expenseAmount])),
@@ -152,10 +154,38 @@ export function EstimateTemplateWorkbench({
     setPickerSection(null);
     setPickerCategory('');
     setPickerQuery('');
+    setCollapsedSections(new Set());
+    setIsDirty(false);
+  };
+
+  const toggleSection = (section: 'base' | SectionCode) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  };
+
+  const handleGridKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
+    const col = event.currentTarget.dataset.estimateGridCol;
+    if (!col) return;
+
+    event.preventDefault();
+    const cells = Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(`[data-estimate-grid-col="${col}"]`)
+    ).filter((element) => !element.disabled && element.offsetParent !== null);
+    const index = cells.indexOf(event.currentTarget);
+    const target = cells[event.shiftKey ? index - 1 : index + 1];
+    if (!target) return;
+    target.focus();
+    if (target instanceof HTMLInputElement) target.select();
   };
 
   const updateRow = (id: string, patch: Partial<EstimateTemplateWorkbenchLine>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setIsDirty(true);
   };
 
   const addProduct = (product: EstimateTemplateWorkbenchProduct) => {
@@ -176,6 +206,7 @@ export function EstimateTemplateWorkbench({
       },
     ]);
     setPickerSection(null);
+    setIsDirty(true);
   };
 
   const addFreeLine = (section: SectionCode) => {
@@ -194,6 +225,12 @@ export function EstimateTemplateWorkbench({
         customerSelection: '—',
       },
     ]);
+    setIsDirty(true);
+  };
+
+  const removeRow = (id: string) => {
+    setRows((current) => current.filter((item) => item.id !== id));
+    setIsDirty(true);
   };
 
   const renderSection = (section: EstimateTemplateWorkbenchSection) => {

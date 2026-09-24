@@ -252,11 +252,13 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).not.toContain("row.groupLabel || '商品'");
   });
 
-  it('見積テンプレートから商品登録へ移動して戻れる', () => {
+  it('見積テンプレートから商品登録へ移動し、公開後に戻って追加できる', () => {
     expect(workbench).toContain('/admin/options/new?return_to=');
     expect(optionNew).toContain('見積テンプレートの商品追加から移動しています');
     expect(optionNew).toContain('returnTo={returnTo}');
-    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
-    expect(adminActions).toContain("returnUrl.pathname.startsWith('/admin/')");
+    expect(adminActions).toContain("const returnTo = safeAdminReturnTo(formData.get('return_to'))");
+    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?' + params.toString())");
+    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', id)");
+    expect(adminActions).toContain("url.pathname.startsWith('/admin/')");
   });
 });

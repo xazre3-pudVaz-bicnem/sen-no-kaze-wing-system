@@ -423,6 +423,31 @@ export function EstimateTemplateWorkbench({
         </div>
       )}
 
+      <section
+        className="sticky top-0 z-30 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur"
+        data-testid="estimate-workbench-sticky-summary"
+      >
+        <span
+          className={
+            isDirty
+              ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[0.68rem] font-semibold text-amber-800'
+              : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
+          }
+        >
+          {isDirty ? '未保存の変更あり' : '編集前と同じ'}
+        </span>
+        <span className="text-xs text-muted">
+          税別小計 <strong className="ml-1 text-sm text-ink">{formatYen(subtotalRaw)}</strong>
+        </span>
+        <span className="text-xs text-muted">
+          調整額 <strong className="ml-1 text-sm text-ink">{formatYen(adjustment)}</strong>
+        </span>
+        <span className="text-xs text-muted">
+          税込合計 <strong className="ml-1 text-base text-ink">{formatYen(total)}</strong>
+        </span>
+        <span className="ml-auto text-[0.68rem] text-muted">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
+      </section>
+
       <section className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
           <p className="text-sm font-semibold">{demoMode ? '操作確認用テンプレート' : '明細編集'}</p>
@@ -447,9 +472,10 @@ export function EstimateTemplateWorkbench({
           >
             原価＋販売価格
           </button>
-          {demoMode ? (
-            <Button type="button" variant="secondary" onClick={resetRows}>最初の状態に戻す</Button>
-          ) : (
+          <Button type="button" variant="secondary" onClick={resetRows} disabled={!isDirty}>
+            {demoMode ? '最初の状態に戻す' : '編集前に戻す'}
+          </Button>
+          {!demoMode && (
             <>
               <Button type="button" variant="secondary" disabled>下書きを保存</Button>
               <Button type="button" disabled>
@@ -461,45 +487,65 @@ export function EstimateTemplateWorkbench({
       </section>
 
       <section className="card overflow-hidden">
-        <div className="border-b border-line px-5 py-4">
-          <h2 className="font-semibold">本体</h2>
-          <p className="mt-1 text-xs text-muted">本体マスターの公開中の版を参照します。見積テンプレート上では直接変更しません。</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="flex size-6 shrink-0 items-center justify-center rounded border border-line bg-white text-sm font-semibold"
+              aria-expanded={!collapsedSections.has('base')}
+              aria-label={collapsedSections.has('base') ? '本体の明細を開く' : '本体の明細を閉じる'}
+              onClick={() => toggleSection('base')}
+            >
+              {collapsedSections.has('base') ? '+' : '−'}
+            </button>
+            <div>
+              <h2 className="font-semibold">本体</h2>
+              <p className="mt-0.5 text-xs text-muted">本体マスターの公開中の版を参照します。見積テンプレート上では直接変更しません。</p>
+            </div>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[52rem] text-sm">
-            <thead className="bg-sand/60 text-left text-xs text-muted">
-              <tr>
-                <th className="px-3 py-2 font-semibold">工事区分</th>
-                <th className="px-3 py-2 font-semibold">項目</th>
-                <th className="px-3 py-2 text-right font-semibold">数量</th>
-                <th className="px-3 py-2 font-semibold">単位</th>
-                <th className="px-3 py-2 text-right font-semibold">販売単価</th>
-                <th className="px-3 py-2 text-right font-semibold">販売金額</th>
-                <th className="px-3 py-2 font-semibold">備考</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {baseLines.map((line) => (
-                <tr key={line.id}>
-                  <td className="px-3 py-2">{line.section}</td>
-                  <td className="px-3 py-2 font-medium">{line.name}</td>
-                  <td className="px-3 py-2 text-right">{line.quantity}</td>
-                  <td className="px-3 py-2">{line.unit}</td>
-                  <td className="px-3 py-2 text-right">{formatYen(line.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatYen(line.amount)}</td>
-                  <td className="px-3 py-2 text-xs text-muted">{line.remark}</td>
+        {collapsedSections.has('base') ? (
+          <div className="flex items-center justify-between gap-4 bg-ivory px-5 py-3 text-sm font-semibold">
+            <span>本体 計</span>
+            <span className="tabular-nums">{formatYen(baseTotal)}</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[52rem] text-sm">
+              <thead className="bg-sand/60 text-left text-xs text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">工事区分</th>
+                  <th className="px-3 py-2 font-semibold">項目</th>
+                  <th className="px-3 py-2 text-right font-semibold">数量</th>
+                  <th className="px-3 py-2 font-semibold">単位</th>
+                  <th className="px-3 py-2 text-right font-semibold">販売単価</th>
+                  <th className="px-3 py-2 text-right font-semibold">販売金額</th>
+                  <th className="px-3 py-2 font-semibold">備考</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-line bg-ivory font-semibold">
-                <td colSpan={5} className="px-3 py-3 text-right">本体計</td>
-                <td className="px-3 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {baseLines.map((line) => (
+                  <tr key={line.id}>
+                    <td className="px-3 py-2">{line.section}</td>
+                    <td className="px-3 py-2 font-medium">{line.name}</td>
+                    <td className="px-3 py-2 text-right">{line.quantity}</td>
+                    <td className="px-3 py-2">{line.unit}</td>
+                    <td className="px-3 py-2 text-right">{formatYen(line.unitPrice)}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatYen(line.amount)}</td>
+                    <td className="px-3 py-2 text-xs text-muted">{line.remark}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-line bg-ivory font-semibold">
+                  <td colSpan={5} className="px-3 py-3 text-right">本体計</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </section>
 
       {sections.map(renderSection)}

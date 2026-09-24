@@ -97,6 +97,7 @@ export function DealerRevisionForm({
   canEditBase,
   sheetMode = false,
   onCancel,
+  siteHref,
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -109,6 +110,8 @@ export function DealerRevisionForm({
   sheetMode?: boolean;
   /** sheetMode時の編集終了 */
   onCancel?: () => void;
+  /** 現地条件タブへの参照リンク。正式な現地確認完了状態の代用にはしない。 */
+  siteHref?: string;
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
   const editable = (k: QuoteItem['kind']): k is RevisionItemKind =>
@@ -850,8 +853,11 @@ export function DealerRevisionForm({
             id="dealer_note"
             name="dealer_note"
             rows={sheetMode ? 3 : 3}
-            defaultValue={quote.dealer_note ?? ''}
-            onChange={markDirty}
+            value={dealerNote}
+            onChange={(event) => {
+              setDealerNote(event.target.value);
+              markDirty();
+            }}
             className={sheetMode ? 'min-h-20 text-xs' : undefined}
           />
         </Field>

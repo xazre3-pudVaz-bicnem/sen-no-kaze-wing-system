@@ -10,7 +10,7 @@ import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
-import { OptionVariantManager, OptionVariantPricing } from '@/components/admin/option-variant-manager';
+import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import {
   OptionRegistrationPreviewButton,
@@ -152,8 +152,6 @@ export default async function EditOptionPage({
           <OptionMediaManager option={option} />
 
           {catalogEditor && <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />}
-
-          {catalogEditor && <OptionVariantPricing option={option} groups={variants.groups} choices={variants.choices} />}
 
           <section className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>

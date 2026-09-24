@@ -16,7 +16,7 @@ export default async function NewEstimateTemplatePage() {
   return (
     <AdminPage
       title="標準見積を新規作成"
-      lead="商品モデル・仕様・防火仕様・利用地域を設定し、Excel形式の明細編集へ進みます。"
+      lead="商品モデル・仕様・防火仕様・適用地域を設定し、Excel形式の明細編集へ進みます。"
     >
       <BackLink href="/admin/estimate-templates" label="標準見積一覧へ戻る" />
 

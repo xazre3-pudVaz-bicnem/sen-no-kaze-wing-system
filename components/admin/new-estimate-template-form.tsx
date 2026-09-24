@@ -69,37 +69,33 @@ function SelectWithArrow({
 
 function StepIndicator({ current }: { current: 'setup' | 'edit' }) {
   return (
-    <div className="flex max-w-[560px] items-center gap-2 text-xs" aria-label="新規標準見積の作成手順">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className="flex w-full max-w-[420px] items-center gap-3 text-sm" aria-label="新規標準見積の作成手順">
+      <div className="flex shrink-0 items-center gap-2">
         <span
           className={
             current === 'setup'
-              ? 'flex size-7 shrink-0 items-center justify-center rounded-full bg-ink font-semibold text-white'
-              : 'flex size-7 shrink-0 items-center justify-center rounded-full border border-line bg-white font-semibold text-ink'
+              ? 'flex size-7 items-center justify-center rounded-full bg-ink text-xs font-semibold text-white'
+              : 'flex size-7 items-center justify-center rounded-full border border-line bg-white text-xs font-semibold text-ink'
           }
         >
           1
         </span>
-        <div className="min-w-0">
-          <p className="font-semibold text-ink">初期設定</p>
-          <p className="truncate text-[11px] text-muted">モデル・仕様・地域</p>
-        </div>
+        <span className="whitespace-nowrap font-semibold text-ink">初期設定</span>
       </div>
       <div className="h-px min-w-8 flex-1 bg-line" />
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <span
           className={
             current === 'edit'
-              ? 'flex size-7 shrink-0 items-center justify-center rounded-full bg-ink font-semibold text-white'
-              : 'flex size-7 shrink-0 items-center justify-center rounded-full border border-line bg-white font-semibold text-muted'
+              ? 'flex size-7 items-center justify-center rounded-full bg-ink text-xs font-semibold text-white'
+              : 'flex size-7 items-center justify-center rounded-full border border-line bg-white text-xs font-semibold text-muted'
           }
         >
           2
         </span>
-        <div className="min-w-0">
-          <p className={current === 'edit' ? 'font-semibold text-ink' : 'font-semibold text-muted'}>明細編集</p>
-          <p className="truncate text-[11px] text-muted">Excel形式</p>
-        </div>
+        <span className={current === 'edit' ? 'whitespace-nowrap font-semibold text-ink' : 'whitespace-nowrap font-semibold text-muted'}>
+          明細編集
+        </span>
       </div>
     </div>
   );
@@ -177,9 +173,6 @@ export function NewEstimateTemplateForm({
                 <span className="text-xs text-muted">新規標準見積</span>
               </div>
               <h2 className="mt-2 truncate text-lg font-semibold">{name || '名称未設定'}</h2>
-              <p className="mt-1 text-xs text-muted">
-                {modelName || '—'} ／ {specLabel || '—'} ／ {fireLabel || '—'} ／ {regionLabel || '—'}
-              </p>
             </div>
           </div>
 
@@ -188,7 +181,7 @@ export function NewEstimateTemplateForm({
               ['商品モデル', modelName || '—'],
               ['仕様', specLabel || '—'],
               ['防火仕様', fireLabel || '—'],
-              ['利用地域', regionLabel || '—'],
+              ['適用地域', regionLabel || '—'],
             ].map(([label, value]) => (
               <div key={label} className="bg-white px-4 py-3">
                 <p className="text-[11px] text-muted">{label}</p>
@@ -199,8 +192,8 @@ export function NewEstimateTemplateForm({
         </section>
 
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-relaxed text-ink-soft">
-          <strong className="font-semibold text-ink">この画面はUI確認用です。</strong>
-          この段階ではDBに標準見積・下書き・Revisionを作成しません。参照本体、正式原価、掛率、保存、公開は正式なDraft / RPC接続後に有効化します。
+          <strong className="font-semibold text-ink">現在は画面確認用です。</strong>
+          編集内容は保存されません。保存・公開機能は準備中です。
         </div>
 
         <EstimateTemplateWorkbench
@@ -270,14 +263,14 @@ export function NewEstimateTemplateForm({
             </label>
 
             <label className="block">
-              <span className="label">利用地域</span>
+              <span className="label">適用地域</span>
               <SelectWithArrow value={region} onChange={(value) => setRegion(value as typeof region)}>
                 {REGION_OPTIONS.map((item) => (
                   <option key={item.value} value={item.value}>{item.label}</option>
                 ))}
               </SelectWithArrow>
               <span className="mt-1 block text-[11px] text-muted">
-                将来、設置予定地から設備・見積条件を切り替えるための地域条件として利用します。
+                お客様の設置予定地から、将来自動判定する想定です。
               </span>
             </label>
           </div>
@@ -300,21 +293,21 @@ export function NewEstimateTemplateForm({
             <div>
               <h2 className="font-semibold">基準となる本体</h2>
               <p className="mt-1 text-xs text-muted">
-                正式実装では、条件に一致する公開中の本体Revisionをここで固定します。
+                条件に一致する公開中の本体を選ぶ欄です。正式登録時に利用できるようになります。
               </p>
             </div>
             <span className="rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-semibold text-muted">
-              正式接続待ち
+              保存機能準備中
             </span>
           </div>
           <div className="px-4 py-4">
             <label className="block max-w-[620px]">
               <span className="label">参照本体</span>
               <SelectWithArrow value="" disabled>
-                <option value="">正式なDraft接続後に公開中の本体から選択</option>
+                <option value="">公開中の本体から選択（準備中）</option>
               </SelectWithArrow>
               <span className="mt-1 block text-[11px] text-muted">
-                現在はUI確認のため未接続です。DB/RPC実装時に正式な選択へ切り替えます。
+                現在は選択できません。正式登録時に利用できるようになります。
               </span>
             </label>
           </div>
@@ -322,7 +315,7 @@ export function NewEstimateTemplateForm({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
           <p className="text-xs text-muted">
-            次の画面ではExcel形式の明細編集を試せます。まだDBには保存されません。
+            次の画面ではExcel形式の明細編集を試せます。編集内容はまだ保存されません。
           </p>
           <div className="flex flex-wrap gap-3">
             <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">キャンセル</Link>

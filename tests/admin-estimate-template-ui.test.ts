@@ -126,10 +126,13 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('<EstimateTemplateWorkbench');
     expect(newForm).toContain('new-standard-estimate-preview');
     expect(newForm).toContain('demoMode');
-    expect(newForm).toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
-    expect(newForm).toContain('将来、設置予定地から設備・見積条件を切り替えるための地域条件として利用します');
-    expect(newForm).toContain('正式接続待ち');
-    expect(newForm).toContain('正式なDraft接続後に公開中の本体から選択');
+    expect(newForm).toContain('現在は画面確認用です');
+    expect(newForm).toContain('編集内容は保存されません。保存・公開機能は準備中です');
+    expect(newForm).toContain('お客様の設置予定地から、将来自動判定する想定です');
+    expect(newForm).toContain('保存機能準備中');
+    expect(newForm).toContain('公開中の本体から選択（準備中）');
+    expect(newForm).toContain('適用地域');
+    expect(newForm).not.toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
     expect(newPage).toContain('title="標準見積を新規作成"');
     expect(newPage).toContain('label="標準見積一覧へ戻る"');
     expect(newPage).toContain('model.presets.map');
@@ -175,13 +178,17 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
     expect(workbench).toContain('売価表');
-    expect(workbench).toContain('原価・売価比較');
+    expect(workbench).toContain('原価・売価比較（準備中）');
+    expect(workbench).toContain('title="正式原価の接続後に利用できます"');
+    expect(workbench).toContain('cursor-not-allowed');
     expect(workbench).toContain('品名');
     expect(workbench).toContain('原価金額');
     expect(workbench).toContain('売価金額');
     expect(workbench).toContain('黄色＝入力');
     expect(workbench).toContain('グレー＝参照・自動表示');
     expect(workbench).toContain('未保存の変更あり');
+    expect(workbench).toContain('画面内の変更あり');
+    expect(workbench).toContain('初期状態');
     expect(workbench).toContain('編集前と同じ');
     expect(workbench).toContain('編集前に戻す');
     expect(workbench).toContain("collapsedSections.has('base')");
@@ -194,6 +201,12 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain("event.key !== 'Enter'");
     expect(workbench).toContain('Shift+Enter＝上へ');
     expect(workbench).toContain('税込合計');
+    expect(workbench).toContain('sticky left-0 z-10');
+    expect(workbench).toContain('sticky left-[2.75rem] z-10');
+    expect(workbench).toContain('sticky left-[5rem] z-10');
+    expect(workbench).toContain('sticky left-[5rem] top-0 z-40');
+    expect(workbench).toContain('colSpan={visibleColumnCount - 3}');
+    expect(workbench).toContain('原価比較・保存・公開機能は準備中です');
   });
 
   it('見積テンプレートから商品登録へ移動して戻れる', () => {

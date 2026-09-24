@@ -38,6 +38,14 @@ const adminActions = fs.readFileSync(
   path.resolve(process.cwd(), 'lib/actions/admin.ts'),
   'utf8'
 );
+const catalogSeed = fs.readFileSync(
+  path.resolve(process.cwd(), 'lib/seed/catalog.ts'),
+  'utf8'
+);
+const roofCategoryMigration = fs.readFileSync(
+  path.resolve(process.cwd(), 'supabase/migrations/20260924085700_roof_product_category.sql'),
+  'utf8'
+);
 
 describe('商品登録管理画面の業務フロー', () => {
   it('商品登録を入力とお客様表示確認の2つの大きな作業単位にまとめる', () => {
@@ -129,6 +137,7 @@ describe('商品登録管理画面の業務フロー', () => {
 
   it('残りの商品カテゴリーにも既存設計の入力支援を広げる', () => {
     for (const categoryCode of [
+      'roof: {',
       "'exterior-wall': {",
       'floor: {',
       "'wall-ceiling': {",
@@ -140,6 +149,15 @@ describe('商品登録管理画面の業務フロー', () => {
     ]) {
       expect(forms).toContain(categoryCode);
     }
+    expect(forms).toContain("manufacturers: ['ケイミュー', 'アイジー工業', 'セキノ興産', '稲垣商事']");
+    expect(forms).toContain("'金属屋根'");
+    expect(forms).toContain('屋根材は外壁と分けて登録します。');
+    expect(catalogSeed).toContain("roof: cid(23)");
+    expect(catalogSeed).toContain("cat(C.roof, 'roof', '屋根'");
+    expect(catalogSeed).toContain('外壁とは別に商品を選択します');
+    expect(roofCategoryMigration).toContain("'roof'");
+    expect(roofCategoryMigration).toContain("'20000000-0000-4000-8000-000000000023'::uuid");
+    expect(roofCategoryMigration).toContain("where code = 'exterior-wall'");
     expect(forms).toContain("manufacturers: ['ニチハ', 'ケイミュー', 'アイジー工業', '旭トステム外装']");
     expect(forms).toContain("manufacturers: ['DAIKEN', '朝日ウッドテック', 'Panasonic', 'LIXIL', 'EIDAI', 'ウッドワン']");
     expect(forms).toContain("manufacturers: ['サンゲツ', 'リリカラ', 'シンコール', 'トキワ', 'ルノン', 'DAIKEN']");

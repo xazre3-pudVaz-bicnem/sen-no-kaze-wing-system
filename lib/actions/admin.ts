@@ -556,6 +556,85 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
   }
 }
 
+export async function deleteVariantChoiceAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireCatalogEditor();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  const groupId = String(formData.get('group_id') ?? '').trim();
+  const choiceId = String(formData.get('id') ?? '').trim();
+  if (!optionId || !groupId || !choiceId) return { ok: false, error: '削除する選択肢が指定されていません。' };
+
+  try {
+    const store = await getStore();
+    const option = await store.getOption(optionId);
+    if (!option) return { ok: false, error: '商品が見つかりません。' };
+
+    const variants = await store.getOptionVariants(optionId);
+    const group = variants.groups.find((row) => row.id === groupId);
+    const choice = variants.choices.find((row) => row.id === choiceId && row.group_id === groupId);
+    if (!group || !choice) return { ok: false, error: '選択肢が見つかりません。' };
+
+    const dependentGroup = variants.groups.find(
+      (row) =>
+        row.depends_on_group_code === group.code &&
+        (row.depends_on_choice_codes ?? []).includes(choice.code)
+    );
+    if (dependentGroup) {
+      return {
+        ok: false,
+        error: `「${dependentGroup.name}」の表示条件に使われているため削除できません。先に表示条件を変更してください。`,
+      };
+    }
+
+    await store.deleteVariantChoice(choiceId);
+    revalidatePath(`/admin/options/${optionId}`);
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: `「${choice.name}」を削除しました。` };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+export async function deleteVariantGroupAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireCatalogEditor();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  const groupId = String(formData.get('id') ?? '').trim();
+  if (!optionId || !groupId) return { ok: false, error: '削除する色・仕様が指定されていません。' };
+
+  try {
+    const store = await getStore();
+    const option = await store.getOption(optionId);
+    if (!option) return { ok: false, error: '商品が見つかりません。' };
+
+    const variants = await store.getOptionVariants(optionId);
+    const group = variants.groups.find((row) => row.id === groupId);
+    if (!group) return { ok: false, error: '色・仕様が見つかりません。' };
+
+    const groupChoices = variants.choices.filter((choice) => choice.group_id === group.id);
+    if (groupChoices.length > 0) {
+      return { ok: false, error: '選択肢が残っているため削除できません。先に不要な選択肢を削除してください。' };
+    }
+
+    const dependentGroup = variants.groups.find(
+      (row) => row.id !== group.id && row.depends_on_group_code === group.code
+    );
+    if (dependentGroup) {
+      return {
+        ok: false,
+        error: `「${dependentGroup.name}」の表示条件に使われているため削除できません。先に表示条件を解除してください。`,
+      };
+    }
+
+    await store.deleteVariantGroup(groupId);
+    revalidatePath(`/admin/options/${optionId}`);
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: `「${group.name}」を削除しました。` };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
 export async function addOptionImageAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const actor = await requireStaff();
   const optionId = String(formData.get('option_id') ?? '').trim();

@@ -153,10 +153,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('/admin/quotes?');
   });
 
-  it('guides dealer users to the next concrete task without inventing completion state', () => {
-    expect(workspace).toContain("const isDealer = actor.role === 'dealer'");
-    expect(workspace).toContain('data-testid="dealer-next-action"');
-    expect(workspace).toContain('data-testid="dealer-next-action-link"');
+  it('guides all case-management roles to the next concrete task without role-specific labels', () => {
+    expect(workspace).toContain('data-testid="case-next-action"');
+    expect(workspace).toContain('data-testid="case-next-action-link"');
     expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
     expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。');
     expect(workspace).toContain('現地確認の完了状態そのものはまだ保存されません。');
@@ -164,13 +163,12 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('次にやること：見積内容を確認');
     expect(workspace).toContain('見積を確認・更新');
     expect(workspace).toContain('次にやること：契約内容を確認');
-    expect(workspace).toContain('契約・資料を確認');
-    expect(workspace).toContain("plan: '図面・仕様'");
-    expect(workspace).toContain("site: '現地確認'");
-    expect(workspace).toContain("documents: '契約・資料'");
-    expect(workspace).toContain('const displayLabel = isDealer ? DEALER_TAB_LABELS[tabItem.key] : tabItem.label;');
+    expect(workspace).toContain('契約・図面・資料を確認');
+    expect(workspace).not.toContain("const isDealer = actor.role === 'dealer'");
+    expect(workspace).not.toContain('DEALER_TAB_LABELS');
+    expect(workspace).not.toContain('displayLabel = isDealer');
     expect(workspace).toContain('const referenceLabel =');
-    expect(workspace).toContain('? null');
+    expect(workspace).toContain("tabItem.key === 'documents'");
     expect(workspace).toContain("quote.status === 'issued' && quote.revision === 1");
     expect(workspace).toContain('施工金額を見積へ反映');
     expect(workspace).toContain('お客様へ見積内容を案内');

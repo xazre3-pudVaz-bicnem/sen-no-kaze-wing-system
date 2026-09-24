@@ -42,7 +42,7 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
-import { computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
+import { computeQuoteRevisionItemAmount, computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
 import {
@@ -1117,6 +1117,9 @@ export class LocalStore implements DataStore {
       if (parent.status !== 'issued') {
         throw new StoreError('LOCKED', '改訂できるのは発行中（issued）の見積だけです。');
       }
+      const parentItems = new Map(
+        db.quoteItems.filter((item) => item.quote_id === parent.id).map((item) => [item.id, item])
+      );
       for (const it of input.items) {
         if (!hasRoleAtLeast(actor.role, 'dealer')) {
           throw new StoreError('FORBIDDEN', '見積を編集できるのは代理店以上です');
@@ -1124,14 +1127,26 @@ export class LocalStore implements DataStore {
         if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
           throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
+        if (it.source_item_id && !parentItems.has(it.source_item_id)) {
+          throw new StoreError('VALIDATION', '親見積に存在しない明細が指定されています');
+        }
         const isStandardDelta = it.name === '選択商品の変更差額';
         if ((!isStandardDelta && it.unit_price < 0) || it.quantity <= 0) {
           throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
         }
       }
 
-      // 本体内訳は 17.6㎡ のような小数の数量を持つ
-      const amount = (it: DealerRevisionItem) => Math.round(it.unit_price * Math.max(0.01, it.quantity));
+      // 既存行で単価・数量が未変更なら、親Revisionに確定保存された amount を引き継ぐ。
+      const amount = (it: DealerRevisionItem) => {
+        const source = it.source_item_id ? parentItems.get(it.source_item_id) : null;
+        return computeQuoteRevisionItemAmount(
+          it.unit_price,
+          it.quantity,
+          source
+            ? { unit_price: source.unit_price, quantity: source.quantity, amount: source.amount }
+            : null
+        );
+      };
       const sumOf = (...kinds: DealerRevisionItem['kind'][]) =>
         input.items.filter((it) => kinds.includes(it.kind)).reduce((sum, it) => sum + amount(it), 0);
       const installation = sumOf('installation', 'free');

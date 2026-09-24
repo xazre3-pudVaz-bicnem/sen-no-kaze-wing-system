@@ -274,7 +274,7 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Pr
                 {displayModelName} / {specName}
               </h2>
               <p className="mt-1 text-xs text-muted">
-                シミュレーターの標準状態を基準に、商品変更を画面内で試算できます。ここでの変更は保存されません。
+                見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -288,17 +288,13 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Pr
                   標準見積を編集
                 </Link>
               )}
-              <Link href={`/simulator/${model.slug}`} className="btn-secondary btn-sm">
-                シミュレーターで確認
-              </Link>
             </div>
           </div>
 
           <div className="px-4 py-4 sm:px-5">
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
               <strong className="font-semibold text-ink">画面内試算：</strong>
-              見積書内の「商品を変更」からユニットバス・トイレなどを選び直すと、商品変更差額とプランボードへ即時反映します。
-              正式保存・掛率・原価／粗利の確定は「標準見積を編集」側で行います。
+              見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。
             </div>
             <QuoteSheet
               modelName={displayModelName}
@@ -317,10 +313,7 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Pr
 
         <section className="card mx-auto w-full max-w-5xl overflow-hidden">
           <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
-            <h2 className="text-base font-semibold">プランボード</h2>
-            <p className="mt-1 text-xs text-muted">
-              シミュレーターと同じ構成で、平面図・完成イメージ・立面図・標準設備及び仕上げ表を確認できます。
-            </p>
+            <h2 className="text-base font-semibold">プランボード確認</h2>
           </div>
 
           <div className="p-4 sm:p-5">

@@ -126,58 +126,63 @@ export default async function EstimateTemplatesPage({
         </div>
 
         <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
-          <div className="flex flex-wrap items-center gap-2" aria-label="商品モデル">
-            <Link
-              href={filterHref('', qRaw)}
-              aria-current={!modelId ? 'page' : undefined}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                !modelId
-                  ? 'border-ink bg-ink text-white'
-                  : 'border-line bg-white text-ink hover:bg-sand'
-              }`}
-            >
-              すべて
-            </Link>
-            {simulatorModels.map((model) => {
-              const active = model.id === modelId;
-              return (
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-5">
+            <div className="shrink-0">
+              <p className="mb-1.5 text-xs font-semibold text-ink-soft">商品モデル</p>
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
                 <Link
-                  key={model.id}
-                  href={filterHref(model.id, qRaw)}
-                  aria-current={active ? 'page' : undefined}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                    active
-                      ? 'border-forest bg-forest text-white'
+                  href={filterHref('', qRaw)}
+                  aria-current={!modelId ? 'page' : undefined}
+                  className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                    !modelId
+                      ? 'border-ink bg-ink text-white'
                       : 'border-line bg-white text-ink hover:bg-sand'
                   }`}
                 >
-                  {model.name === 'フラット' ? 'Flat' : model.name}
+                  すべて
                 </Link>
-              );
-            })}
-          </div>
-
-          <form method="get" className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-            {modelId && <input type="hidden" name="model" value={modelId} />}
-            <label className="block min-w-0 flex-1">
-              <span className="label">検索</span>
-              <Input
-                type="search"
-                name="q"
-                defaultValue={sp.q ?? ''}
-                placeholder="見積名を検索"
-                className="mt-1 w-full"
-              />
-            </label>
-            <div className="flex gap-2">
-              <button type="submit" className="btn-secondary btn-sm">絞り込む</button>
-              {hasFilters && (
-                <Link href="/admin/estimate-templates" className="btn-ghost btn-sm">
-                  条件をクリア
-                </Link>
-              )}
+                {simulatorModels.map((model) => {
+                  const active = model.id === modelId;
+                  return (
+                    <Link
+                      key={model.id}
+                      href={filterHref(model.id, qRaw)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                        active
+                          ? 'border-forest bg-forest text-white'
+                          : 'border-line bg-white text-ink hover:bg-sand'
+                      }`}
+                    >
+                      {model.name === 'フラット' ? 'Flat' : model.name}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </form>
+
+            <form method="get" className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end lg:justify-end">
+              {modelId && <input type="hidden" name="model" value={modelId} />}
+              <label className="block min-w-0 flex-1 lg:max-w-xl">
+                <span className="mb-1.5 block text-xs font-semibold text-ink-soft">見積名</span>
+                <Input
+                  type="search"
+                  name="q"
+                  defaultValue={sp.q ?? ''}
+                  placeholder="見積名を検索"
+                  className="h-10 min-h-10 w-full px-3 text-sm"
+                />
+              </label>
+              <div className="flex shrink-0 gap-1.5">
+                <button type="submit" className="btn-secondary btn-sm min-h-10 px-4">絞り込む</button>
+                {hasFilters && (
+                  <Link href="/admin/estimate-templates" className="btn-ghost btn-sm min-h-10 px-3">
+                    クリア
+                  </Link>
+                )}
+              </div>
+            </form>
+          </div>
         </div>
 
         <div className="border-b border-line bg-blue-50/60 px-4 py-2.5 text-xs text-navy sm:px-5">

@@ -41,7 +41,7 @@ describe('Admin case management UI', () => {
     expect(dealerForms).toContain('現地確認後の施工金額やオプション・別途工事等を見積に反映し、改訂見積を発行できます。');
     expect(dealerForms).toContain('見積内容を編集中');
     expect(dealerForms).toContain('改訂後の見積合計（税込）');
-    expect(dealerForms).toContain('改訂見積を発行する（第');
+    expect(dealerForms).toContain('この内容で改訂見積を発行');
   });
 
   it('keeps the overview focused on case work', () => {

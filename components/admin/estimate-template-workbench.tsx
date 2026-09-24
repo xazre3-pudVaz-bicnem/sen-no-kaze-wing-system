@@ -172,6 +172,21 @@ export function EstimateTemplateWorkbench({
     return result;
   }, [rows, sections]);
 
+  const priceOnRequestSections = useMemo(() => {
+    const result: Record<SectionCode, boolean> = {
+      interior_exterior: false,
+      option: false,
+      sitework: false,
+    };
+    for (const row of rows) {
+      if (row.saleUnitPrice === 0 && row.remark.trim() === '別途見積') {
+        result[row.section] = true;
+      }
+    }
+    return result;
+  }, [rows]);
+  const hasAnyPriceOnRequest = Object.values(priceOnRequestSections).some(Boolean);
+
   const subtotalRaw = baseTotal + totals.interior_exterior + totals.option + totals.sitework;
   const subtotal = Math.max(0, subtotalRaw + localAdjustment);
   const tax = Math.floor(subtotal * taxRate);
@@ -539,6 +554,7 @@ export function EstimateTemplateWorkbench({
     rowCount,
     expenseText,
     editable,
+    hasPriceOnRequest = false,
   }: {
     key: CollapsibleSection;
     label: string;
@@ -546,9 +562,13 @@ export function EstimateTemplateWorkbench({
     rowCount: number;
     expenseText?: string;
     editable: boolean;
+    hasPriceOnRequest?: boolean;
   }) => {
     const collapsed = collapsedSections.has(key);
-    const summaryRemark = expenseText ?? `${rowCount}行の明細を集約`;
+    const collapsedAmountText = hasPriceOnRequest ? '別途見積' : formatYen(totalAmount);
+    const summaryRemark = hasPriceOnRequest
+      ? [expenseText, '別途見積を含む'].filter(Boolean).join(' ／ ')
+      : expenseText ?? `${rowCount}行の明細を集約`;
 
     if (collapsed) {
       return (
@@ -584,10 +604,10 @@ export function EstimateTemplateWorkbench({
             </>
           )}
           <td className="w-28 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">
-            {formatYen(totalAmount)}
+            {collapsedAmountText}
           </td>
           <td className="w-24 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">
-            {formatYen(totalAmount)}
+            {collapsedAmountText}
           </td>
           {showCost && (
             <td className="w-28 border-r border-emerald-800 px-3 text-right text-white/60">—</td>
@@ -844,6 +864,7 @@ export function EstimateTemplateWorkbench({
                       rowCount: sectionRows.length,
                       expenseText,
                       editable: true,
+                      hasPriceOnRequest: priceOnRequestSections[section.code],
                     })}
                     {!collapsedSections.has(section.code) && sectionRows.map(editableRow)}
                   </Fragment>
@@ -877,7 +898,10 @@ export function EstimateTemplateWorkbench({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-500">
-          <span>本体は参照専用。内外装工事・オプション・別途はセルで編集できます。</span>
+          <span>
+            本体は参照専用。内外装工事・オプション・別途はセルで編集できます。
+            {hasAnyPriceOnRequest && <strong className="ml-2 text-amber-800">※別途見積を含むため合計は確定額ではありません。</strong>}
+          </span>
           <span>販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。</span>
         </div>
       </section>

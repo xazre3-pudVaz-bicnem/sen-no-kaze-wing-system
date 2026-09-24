@@ -259,6 +259,10 @@ export async function CaseWorkspace({
     ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
   ].join(' ');
   const siteConditionCandidates = buildSiteConditionCandidates(siteAddress, siteEvidenceText);
+  const installationItems = items
+    .filter((item) => item.kind === 'installation')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const installationSubtotal = installationItems.reduce((sum, item) => sum + item.amount, 0);
 
   let planBundle: CatalogBundle | null = null;
   let planEstimateTemplate: EstimateTemplateBundle | null = null;
@@ -855,9 +859,126 @@ export async function CaseWorkspace({
       )}
 
       {activeTab === 'production' && (
-        <FuturePanel title="製造・施工">
-          製造指示、製造個体、工程日、搬入・施工進捗を保存する正式機能はまだありません。架空の製造状態・施工日・担当者は表示しません。
-        </FuturePanel>
+        <section className="space-y-4" data-testid="case-tab-production">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">製造・施工</h2>
+                <Badge tone="neutral">参考表示</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                現在の見積・保存済み仕様から製造前提と施工範囲を確認します。製造開始・完了、搬入日、施工進捗などの正式な工程管理はまだ行いません。
+              </p>
+            </div>
+            <Link href={tabHref('plan')} className="btn-secondary btn-sm">
+              プランボードを確認
+            </Link>
+          </div>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-production-reference">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-semibold">製造前提</h3>
+                <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
+                  未確定
+                </span>
+              </div>
+              <span className="text-[0.65rem] text-muted">既存データからの参考表示</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              以下は製造指示書や製造確定仕様ではありません。正式な契約・製造指示と対象Revisionの固定は次工程です。
+            </p>
+
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">モデル</dt>
+                <dd className="mt-1 font-semibold">{quote.base_model_name}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">棟数</dt>
+                <dd className="mt-1 font-semibold">{caseUnitCount ?? '未登録'}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">防火仕様</dt>
+                <dd className="mt-1 font-semibold">{fireSelection}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">設置予定地</dt>
+                <dd className="mt-1 font-semibold">{siteAddress}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">注文範囲</dt>
+                <dd className="mt-1 font-semibold">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">参照見積</dt>
+                <dd className="mt-1 font-semibold">{quote.quote_no}</dd>
+                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／製造用には未固定</p>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3 sm:col-span-2">
+                <dt className="text-xs text-muted">案件構成・申し送り</dt>
+                <dd className="mt-1 text-sm font-semibold leading-5">{caseStructureNote ?? '未登録'}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-line bg-white shadow-sm" data-testid="case-installation-scope">
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-line px-4 py-3">
+              <div>
+                <h3 className="font-semibold">見積に含まれる施工・搬入範囲</h3>
+                <p className="mt-0.5 text-xs text-muted">
+                  現在の見積明細で「現場工事」として保存されている項目を表示しています。実施済み・発注済みを意味しません。
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[0.65rem] text-muted">{installationItems.length}項目</p>
+                <p className="text-sm font-semibold">{formatYen(installationSubtotal)}</p>
+              </div>
+            </div>
+
+            {installationItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[44rem] text-left text-sm">
+                  <thead className="bg-[#f7f8f8] text-xs text-muted">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">項目</th>
+                      <th className="px-3 py-2 font-semibold">数量</th>
+                      <th className="px-3 py-2 font-semibold">単位</th>
+                      <th className="px-3 py-2 text-right font-semibold">見積金額</th>
+                      <th className="px-3 py-2 font-semibold">備考</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {installationItems.map((item) => (
+                      <tr key={item.id} className="border-t border-line align-top">
+                        <td className="px-3 py-2 font-medium text-ink">{item.name}</td>
+                        <td className="px-3 py-2">{item.quantity.toLocaleString('ja-JP')}</td>
+                        <td className="px-3 py-2">{item.unit ?? '—'}</td>
+                        <td className="px-3 py-2 text-right font-medium">{formatYen(item.amount)}</td>
+                        <td className="px-3 py-2 text-xs leading-5 text-ink-soft">{item.remark ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-5 text-sm text-muted">
+                現在の見積には、施工・搬入範囲として表示できる現場工事項目がありません。
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-production-future">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">正式な工程管理</h3>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">
+              製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を保存する正式機能はまだありません。
+              見積に項目があることを、製造済み・搬入済み・施工済みとは扱いません。
+            </p>
+          </section>
+        </section>
       )}
 
       {activeTab === 'handover' && (

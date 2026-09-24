@@ -10,6 +10,7 @@ import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager, OptionVariantPricing } from '@/components/admin/option-variant-manager';
+import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 
 type RegistrationStep = 'info' | 'preview';
 
@@ -42,6 +43,7 @@ export default async function EditOptionPage({
   const category = categories.find((row) => row.id === option.category_id);
   const canEditThisOption = canEditCatalog(actor.role) || (category?.code === FREE_PRODUCT_CATEGORY_CODE && option.owner_id === actor.id);
   const catalogEditor = canEditCatalog(actor.role);
+  const needsZeroPriceConfirmation = requiresZeroPriceConfirmation(option);
 
   const deps: OptionDependency[] = [];
   const confs: OptionConflict[] = [];
@@ -208,10 +210,32 @@ export default async function EditOptionPage({
               )}
             </div>
             {canEditThisOption && option.status === 'draft' && category && (
-              <form action={publishOptionAction}>
+              <form action={publishOptionAction} className="space-y-3">
                 <input type="hidden" name="id" value={option.id} />
+                {needsZeroPriceConfirmation && (
+                  <div className="max-w-xl rounded-xl border border-[#d9a441] bg-[#fff8e8] p-3 text-sm">
+                    <p className="font-semibold text-ink">商品価格が0円です</p>
+                    <p className="mt-1 text-xs leading-5 text-ink-soft">
+                      価格未確認の場合は公開せず、商品情報に戻って価格を確定してください。
+                      正式な0円商品として公開する場合だけ、次の確認欄にチェックしてください。
+                    </p>
+                    <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-ink">
+                      <input
+                        type="checkbox"
+                        name="confirm_zero_price"
+                        className="mt-0.5 h-4 w-4 rounded border-line"
+                        required
+                      />
+                      商品価格0円が正式な登録値であることを確認しました
+                    </label>
+                  </div>
+                )}
                 <ConfirmSubmit
-                  message={`「${option.name}」をお客様向けに公開しますか？`}
+                  message={
+                    needsZeroPriceConfirmation
+                      ? `「${option.name}」を商品価格0円でお客様向けに公開しますか？`
+                      : `「${option.name}」をお客様向けに公開しますか？`
+                  }
                   className="btn-primary"
                 >
                   この内容で公開

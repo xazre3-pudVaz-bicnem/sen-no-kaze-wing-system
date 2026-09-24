@@ -46,6 +46,7 @@ function seedIssuedKameariRevisionCase() {
   const items: DealerRevisionItem[] = db.quoteItems
     .filter((item) => item.quote_id === parent.id)
     .map((item) => ({
+      source_item_id: item.id,
       kind: item.kind as DealerRevisionItem['kind'],
       name: item.name,
       description: item.description,

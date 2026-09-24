@@ -42,6 +42,9 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
 interface Row {
   key: string;
   source_item_id: string | null;
+  source_kind: RevisionItemKind | null;
+  source_name: string | null;
+  source_unit: string | null;
   source_unit_price: number | null;
   source_quantity: number | null;
   source_amount: number | null;
@@ -123,6 +126,9 @@ export function DealerRevisionForm({
       .map((i, n) => ({
         key: `${i.id}-${n}`,
         source_item_id: i.id,
+        source_kind: i.kind as RevisionItemKind,
+        source_name: i.name,
+        source_unit: i.unit ?? '式',
         source_unit_price: i.unit_price,
         source_quantity: i.quantity,
         source_amount: i.amount,
@@ -143,7 +149,13 @@ export function DealerRevisionForm({
     computeQuoteRevisionItemAmount(
       r.unit_price,
       r.quantity,
-      r.source_item_id && r.source_unit_price !== null && r.source_quantity !== null && r.source_amount !== null
+      r.source_item_id &&
+      r.source_kind === r.kind &&
+      r.source_name === r.name &&
+      r.source_unit === r.unit &&
+      r.source_unit_price !== null &&
+      r.source_quantity !== null &&
+      r.source_amount !== null
         ? { unit_price: r.source_unit_price, quantity: r.source_quantity, amount: r.source_amount }
         : null
     );
@@ -216,6 +228,9 @@ export function DealerRevisionForm({
       insertByKind(cur, {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
         source_item_id: null,
+        source_kind: null,
+        source_name: null,
+        source_unit: null,
         source_unit_price: null,
         source_quantity: null,
         source_amount: null,

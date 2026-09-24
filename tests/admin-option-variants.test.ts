@@ -77,12 +77,22 @@ describe('管理画面の色・仕様管理', () => {
     expect(manager).not.toContain('色・仕様ごとの追加金額');
   });
 
-  it('履歴保護のため物理削除ではなくお客様非表示を使う', () => {
-    expect(manager).toContain('物理削除を行いません');
+  it('未使用の色・仕様は削除でき、使用済みはサーバー側で保護する', () => {
+    expect(manager).toContain('この選択肢を削除');
+    expect(manager).toContain('この色・仕様を削除');
+    expect(manager).toContain('保存済み仕様や表示条件で使用中のものは削除できない');
     expect(manager).toContain('label="お客様に表示する"');
     expect(manager).toContain("value={customerVisible ? 'published' : 'draft'}");
-    expect(actions).not.toContain('deleteVariantChoiceAction');
-    expect(actions).not.toContain('deleteVariantGroupAction');
+    expect(actions).toContain('deleteVariantChoiceAction');
+    expect(actions).toContain('deleteVariantGroupAction');
+    expect(actions).toContain('await store.deleteVariantChoice(choiceId)');
+    expect(actions).toContain('await store.deleteVariantGroup(groupId)');
+  });
+
+  it('色・仕様の画像プレビューは小さい固定サムネイルにする', () => {
+    expect(manager).toContain('w-28 max-w-full');
+    expect(manager).toContain('sm:grid-cols-[minmax(0,1fr)_7rem]');
+    expect(manager).toContain('sizes="112px"');
   });
 
   it('技術コードを内部生成・既存保持し、複数標準もサーバー側で防ぐ', () => {

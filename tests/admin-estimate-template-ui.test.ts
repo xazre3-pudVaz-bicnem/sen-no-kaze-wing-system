@@ -150,9 +150,8 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('画面確認用サンプルでExcel明細編集を見る');
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
-    expect(newForm).toContain("samplePreview ? '画面確認用サンプル' : '画面内プレビュー'");
-    expect(newForm).toContain('旧見積の表示用データと編集確認用の仮明細を使っています。');
-    expect(newForm).toContain('黄色いセルの編集・商品変更・商品追加・削除・折り畳みを試せます。');
+    expect(newForm).toContain("samplePreview ? '画面確認用' : '新規標準見積'");
+    expect(newForm).toContain('黄色いセルを編集できます。変更内容は保存されません。');
     expect(newForm).toContain('const SAMPLE_EDIT_LINES');
     expect(newForm).toContain("name: 'ユニットバス 1216（浴槽付）'");
     expect(newForm).toContain("name: 'ガス給湯器 16号'");
@@ -164,6 +163,10 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('明細を見る');
     expect(newForm).toContain('この本体を選択');
     expect(newForm).toContain('適用地域');
+    expect(newForm).toContain('基準本体：{selectedBaseMaster ? selectedBaseMaster.name');
+    expect(newForm).toContain('防火：{selectedFireLabel || \'—\'}');
+    expect(newForm).toContain('地域：{regionLabel || \'—\'}');
+    expect(newForm).not.toContain('lg:grid-cols-5');
     expect(newForm).not.toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
     expect(newPage).toContain('title="標準見積を新規作成"');
     expect(newPage).toContain('label="標準見積一覧へ戻る"');
@@ -199,8 +202,8 @@ describe('見積テンプレート管理UI', () => {
 
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
-    expect(workbench).toContain('標準見積編集 ― Excel形式');
-    expect(workbench).toContain('シミュレーター見積書のレイアウトは使用しません');
+    expect(workbench).toContain('標準見積編集');
+    expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋商品');
     expect(workbench).toContain('＋自由明細');
     expect(workbench).toContain('商品マスターから選び直す');
@@ -275,6 +278,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('未保存の変更あり');
     expect(workbench).toContain('画面内の変更あり');
     expect(workbench).toContain('初期状態');
+    expect(workbench).toContain("demoMode ? '元に戻す' : '編集前に戻す'");
     expect(workbench).toContain('編集前と同じ');
     expect(workbench).toContain('編集前に戻す');
     expect(workbench).toContain("collapsedSections.has('base')");
@@ -301,7 +305,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('expenseRate');
     expect(workbench).toContain('markupRate');
     expect(workbench).toContain('localAdjustment');
-    expect(workbench).toContain('画面内設定。明細金額への反映は正式原価接続後です');
+    expect(workbench).toContain('※画面内確認用。正式計算は未接続です。');
     expect(workbench).toContain('販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です');
     expect(workbench).toContain('min-w-[66rem] w-full border-collapse text-xs');
     expect(workbench).toContain('className="h-7');

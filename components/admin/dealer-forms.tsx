@@ -1051,75 +1051,89 @@ export function DealerRevisionForm({
           </table>
         </div>
       )}
-      <div className={sheetMode ? 'border-b border-line bg-[#fafbf9] px-3 py-2' : 'space-y-2'}>
-        <div className="flex flex-wrap items-center gap-2">
+      {sheetMode ? (
+        scopeChangeMode ? (
+          <div className="border-b border-line bg-[#fafbf9] px-3 py-2" data-testid="scope-change-actions">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={toggleScopeChangeMode}>
+                通常入力に戻す
+              </Button>
+              <span className="text-[0.65rem] font-semibold text-[#765d1f]">商品・仕様変更</span>
+              {catalog.length > 0 && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+                  <Plus className="size-4" aria-hidden="true" />
+                  商品台帳から追加
+                </Button>
+              )}
+              {canEditBase && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
+                  <Plus className="size-4" aria-hidden="true" />
+                  本体の行を追加
+                </Button>
+              )}
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
+                <Plus className="size-4" aria-hidden="true" />
+                内外装工事を追加
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
+                <Plus className="size-4" aria-hidden="true" />
+                オプションを追加
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation-detail">
+                <Plus className="size-4" aria-hidden="true" />
+                現地工事を追加
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
+                <Plus className="size-4" aria-hidden="true" />
+                フリー商品を追加
+              </Button>
+              {freeProducts.map((item) => (
+                <Button
+                  key={item.code}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => addRow('free', { name: item.name, price: item.price })}
+                  data-testid={`add-free-${item.code}`}
+                >
+                  ＋ {item.name}（{formatYen(item.price)}）
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {catalog.length > 0 && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+              <Plus className="size-4" aria-hidden="true" />
+              商品台帳から追加
+            </Button>
+          )}
           <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation">
             <Plus className="size-4" aria-hidden="true" />
-            現地工事を追加
+            別途工事を追加
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={toggleScopeChangeMode}
-            data-testid="toggle-scope-change"
-          >
-            {scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'}
-          </Button>
-          {!scopeChangeMode && (
-            <span className="text-[0.65rem] text-muted">
-              本体・内外装・オプションは確認表示です。変更が必要な場合だけ「見積内容を変更」を開きます。
-            </span>
+          {canEditBase && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
+              <Plus className="size-4" aria-hidden="true" />
+              本体の行を追加
+            </Button>
           )}
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
+            <Plus className="size-4" aria-hidden="true" />
+            内外装工事の行を追加
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
+            <Plus className="size-4" aria-hidden="true" />
+            オプションの行を追加
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
+            <Plus className="size-4" aria-hidden="true" />
+            フリー商品を追加
+          </Button>
         </div>
-
-        {scopeChangeMode && (
-          <div
-            className="mt-2 flex flex-wrap gap-1.5 rounded-lg border border-[#ead6a9] bg-[#fffaf0] p-2"
-            data-testid="scope-change-actions"
-          >
-            <span className="w-full text-[0.65rem] font-semibold text-[#765d1f]">
-              商品・仕様変更
-            </span>
-            {catalog.length > 0 && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
-                <Plus className="size-4" aria-hidden="true" />
-                商品台帳から追加
-              </Button>
-            )}
-            {canEditBase && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
-                <Plus className="size-4" aria-hidden="true" />
-                本体の行を追加
-              </Button>
-            )}
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
-              <Plus className="size-4" aria-hidden="true" />
-              内外装工事を追加
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
-              <Plus className="size-4" aria-hidden="true" />
-              オプションを追加
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
-              <Plus className="size-4" aria-hidden="true" />
-              フリー商品を追加
-            </Button>
-            {freeProducts.map((f) => (
-              <Button
-                key={f.code}
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => addRow('free', { name: f.name, price: f.price })}
-                data-testid={`add-free-${f.code}`}
-              >
-                ＋ {f.name}（{formatYen(f.price)}）
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       <div className={sheetMode ? 'border-b border-line px-3 py-3' : 'space-y-5'}>
         <Field label="お客様への申し送り（任意）" htmlFor="dealer_note" hint="現地条件・工期・注意事項など。見積書の備考に入ります">

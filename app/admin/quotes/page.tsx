@@ -100,7 +100,7 @@ function CasePageHeading({ role, caseCount }: { role: keyof typeof ROLE_LABELS; 
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">案件管理</h1>
         <p className="mt-0.5 text-xs text-ink-soft">
-          Web見積依頼と、対面・電話・紹介で受け付けた案件をまとめて管理します。案件を選択すると下に作業領域を表示します。
+          Web見積依頼と、対面・電話・紹介で受け付けた案件 {caseCount} 件をまとめて管理します。案件を選択すると下に作業領域を表示します。
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">

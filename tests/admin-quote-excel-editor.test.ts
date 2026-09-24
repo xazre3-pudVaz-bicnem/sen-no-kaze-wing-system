@@ -51,7 +51,7 @@ describe('Admin quote Excel-like editor', () => {
     expect(quoteTable).toContain('const baseSections: { section: string; items: QuoteItem[] }[] = [];');
     expect(form).toContain("item.kind === 'option' && item.name.includes('防火')");
     expect(form).toContain("section.key === 'base'");
-    expect(form).toContain('防火仕様は閲覧時と同じく本体欄に表示');
+    expect(form).toContain('防火仕様を含む');
     expect(form).toContain('showBaseGroupHeading');
     expect(form).toContain('showBaseGroupSubtotal');
   });

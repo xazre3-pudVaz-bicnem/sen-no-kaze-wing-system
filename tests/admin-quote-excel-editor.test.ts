@@ -78,7 +78,13 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain(".filter(({ row }) => row.kind !== 'installation')");
     expect(form).toContain('simple-hidden-');
     expect(form).toContain('name={`items.${index}.unit_price`} value={row.unit_price}');
-    expect(form).toContain("const COMMON_SITEWORK_ITEMS = ['運搬費', '基礎工事', '電気工事', '給排水工事', '設置工事']");
+    expect(form).toContain("key: 'transport', label: '運搬費'");
+    expect(form).toContain("key: 'foundation', label: '基礎工事'");
+    expect(form).toContain("key: 'electric', label: '電気工事'");
+    expect(form).toContain("key: 'plumbing', label: '給排水工事'");
+    expect(form).toContain("key: 'installation', label: '設置工事'");
+    expect(form).toContain("/運搬|運送/.test(normalized)");
+    expect(form).toContain("/現場設置|^設置工事/.test(normalized)");
     expect(form).toContain("exists ? '入力あり' : '未追加'");
     expect(form).not.toContain("exists ? '確定' :");
   });

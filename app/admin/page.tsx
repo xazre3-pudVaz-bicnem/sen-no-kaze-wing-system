@@ -72,7 +72,15 @@ export default async function AdminDashboard() {
                 <Td className="font-mono">{r.quote_no ?? '—'}</Td>
                 <Td>{r.contact.full_name}{r.contact.company_name ? `（${r.contact.company_name}）` : ''}<br /><span className="text-xs text-muted">{r.user_email}</span></Td>
                 <Td><Badge tone={r.status === 'new' ? 'danger' : r.status === 'closed' ? 'success' : 'neutral'}>{QUOTE_REQUEST_STATUS_LABELS[r.status]}</Badge></Td>
-                <Td right>{r.quote_id && <Link href={`/admin/quotes/${r.quote_id}`} className="btn-ghost btn-sm">案件を開く</Link>}</Td>
+                <Td right>
+                  {r.quote_id ? (
+                    <Link href={`/admin/quotes/${r.quote_id}`} className="btn-ghost btn-sm">案件を開く</Link>
+                  ) : (
+                    <Link href={`/admin/quotes?request=${encodeURIComponent(r.id)}#pending-quote-request`} className="btn-ghost btn-sm">
+                      依頼を開く
+                    </Link>
+                  )}
+                </Td>
               </tr>
             ))}
             {requests.length === 0 && <tr><Td className="text-center text-muted">見積依頼はまだありません</Td></tr>}

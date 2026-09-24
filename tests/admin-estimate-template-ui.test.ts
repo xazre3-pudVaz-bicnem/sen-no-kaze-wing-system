@@ -97,7 +97,7 @@ describe('見積テンプレート管理UI', () => {
     expect(simulatorPreview).toContain('baselineVariantIds');
     expect(simulatorPreview).toContain('平面図・完成イメージ・立面図・標準設備及び仕上げ表');
     expect(simulatorPreview).toContain('readOnly');
-    expect(simulatorPreview).toContain('シミュレーターの標準状態と同じ選択内容');
+    expect(simulatorPreview).toContain('シミュレーターの標準状態を基準に、商品変更を画面内で試算できます');
     expect(simulatorPreview).toContain('標準見積を編集');
     expect(simulatorPreview).toContain('シミュレーターで確認');
     expect(simulatorPreview).toContain('<OptionPickerDialog');

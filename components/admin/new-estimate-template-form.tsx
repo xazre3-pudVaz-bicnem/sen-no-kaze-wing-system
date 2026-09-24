@@ -313,18 +313,15 @@ export function NewEstimateTemplateForm({
               <span className="mx-2">｜</span>
               地域：{regionLabel || '—'}
             </p>
-            {samplePreview && (
-              <p className="mt-1 text-[11px] text-muted">※画面確認用です。変更内容は保存・公開されません。</p>
-            )}
           </div>
         </section>
 
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-2 text-xs leading-relaxed text-ink-soft">
-          <strong className="font-semibold text-ink">{samplePreview ? '画面確認用です。' : '現在は画面確認用です。'}</strong>
-          {samplePreview
-            ? ' 黄色いセルを編集できます。変更内容は保存されません。'
-            : ' 編集内容は保存されません。保存・公開機能は準備中です。'}
-        </div>
+        {!samplePreview && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-2 text-xs leading-relaxed text-ink-soft">
+            <strong className="font-semibold text-ink">現在は画面確認用です。</strong>
+            {' 編集内容は保存されません。保存・公開機能は準備中です。'}
+          </div>
+        )}
 
         <EstimateTemplateWorkbench
           templateId="new-standard-estimate-preview"

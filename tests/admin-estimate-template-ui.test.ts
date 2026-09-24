@@ -151,7 +151,8 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
     expect(newForm).toContain("samplePreview ? '画面確認用' : '新規標準見積'");
-    expect(newForm).toContain('黄色いセルを編集できます。変更内容は保存されません。');
+    expect(newForm).not.toContain('※画面確認用です。変更内容は保存・公開されません。');
+    expect(newForm).not.toContain('黄色いセルを編集できます。変更内容は保存されません。');
     expect(newForm).toContain('const SAMPLE_EDIT_LINES');
     expect(newForm).toContain("name: 'ユニットバス 1216（浴槽付）'");
     expect(newForm).toContain("name: 'ガス給湯器 16号'");
@@ -203,6 +204,7 @@ describe('見積テンプレート管理UI', () => {
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
     expect(workbench).toContain('標準見積編集');
+    expect(workbench).toContain('bg-amber-50/35 px-3 py-1.5');
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋商品');
     expect(workbench).toContain('＋自由明細');
@@ -274,7 +276,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('原価金額');
     expect(workbench).toContain('売価金額');
     expect(workbench).toContain('黄色＝入力');
-    expect(workbench).toContain('グレー＝参照・自動表示');
+    expect(workbench).toContain('グレー＝参照');
     expect(workbench).toContain('未保存の変更あり');
     expect(workbench).toContain('画面内の変更あり');
     expect(workbench).toContain('初期状態');
@@ -289,7 +291,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('event.nativeEvent.isComposing');
     expect(workbench).toContain('event.keyCode === 229');
     expect(workbench).toContain("event.key !== 'Enter'");
-    expect(workbench).toContain('Shift+Enter＝上へ');
+    expect(workbench).toContain('Shift+Enter↑');
     expect(workbench).toContain('税込合計');
     expect(workbench).toContain('sticky left-0 z-10');
     expect(workbench).toContain('sticky left-[2.75rem] z-10');
@@ -302,16 +304,18 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('経費');
     expect(workbench).toContain('掛率');
     expect(workbench).toContain('粗利率');
-    expect(workbench).toContain('値引き等調整額');
+    expect(workbench).toContain('aria-label="値引き等調整額"');
     expect(workbench).toContain('salesExpenseRate');
     expect(workbench).toContain('expenseRate');
     expect(workbench).toContain('markupRate');
     expect(workbench).toContain('localAdjustment');
-    expect(workbench).toContain('※画面内確認用。正式計算は未接続です。');
+    expect(workbench).toContain('正式計算は未接続');
     expect(workbench).toContain('販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です');
     expect(workbench).toContain('min-w-[62rem] w-full border-collapse text-xs');
     expect(workbench).toContain('min-w-[82rem] w-full border-collapse text-xs');
     expect(workbench).toContain('className="h-6 min-h-6');
+    expect(workbench).toContain('w-14 px-1 text-right text-xs');
+    expect(workbench).toContain('w-20 px-1 text-right text-xs');
     expect(workbench).toContain('className="flex size-5');
     expect(workbench).not.toContain("row.groupLabel || '商品'");
   });

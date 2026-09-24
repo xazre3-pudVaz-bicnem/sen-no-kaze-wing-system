@@ -151,6 +151,18 @@ export function EstimateTemplateWorkbench({
   const grandLabelSpan = showCost ? 8 : 6;
   const grandTailSpan = showCost ? 4 : 3;
 
+  const rowNumberByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    let number = 0;
+    for (const line of baseLines) map.set('base:' + line.id, ++number);
+    for (const section of sections) {
+      for (const row of rows) {
+        if (row.section === section.code) map.set('row:' + row.id, ++number);
+      }
+    }
+    return map;
+  }, [baseLines, rows, sections]);
+
   const resetRows = () => {
     setRows([...initialLines]);
     setPickerSection(null);
@@ -281,15 +293,13 @@ export function EstimateTemplateWorkbench({
     setIsDirty(true);
   };
 
-  let rowNumber = 0;
-
   const editableRow = (row: EstimateTemplateWorkbenchLine) => {
-    rowNumber += 1;
+    const displayRowNumber = rowNumberByKey.get('row:' + row.id) ?? 0;
     const amount = Math.round(row.quantity * row.saleUnitPrice);
     return (
       <tr key={row.id} className="border-b border-slate-200 bg-white">
         <th className="w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
-          {rowNumber}
+          {displayRowNumber}
         </th>
         <td className="w-9 border-r border-slate-200"></td>
         <td className="min-w-[20rem] border-r border-slate-200 bg-amber-50 px-0.5">
@@ -404,11 +414,11 @@ export function EstimateTemplateWorkbench({
   };
 
   const baseRow = (line: (typeof baseLines)[number]) => {
-    rowNumber += 1;
+    const displayRowNumber = rowNumberByKey.get('base:' + line.id) ?? 0;
     return (
       <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-600">
         <th className="w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
-          {rowNumber}
+          {displayRowNumber}
         </th>
         <td className="w-9 border-r border-slate-200"></td>
         <td className="min-w-[20rem] border-r border-slate-200 px-2 py-1.5">

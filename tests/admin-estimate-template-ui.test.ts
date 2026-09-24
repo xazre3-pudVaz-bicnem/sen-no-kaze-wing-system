@@ -111,7 +111,7 @@ describe('見積テンプレート管理UI', () => {
     expect(quoteSheet).toContain("category.code === 'ub' ? 'ユニットバス'");
   });
 
-  it('新規作成画面は選択項目と参照本体を分かりやすくする', () => {
+  it('新規作成画面は初期設定からExcel形式の明細編集へ進める', () => {
     expect(newForm).toContain('▼');
     expect(newForm).toContain('基準となる本体');
     expect(newForm).toContain('商品モデル・仕様・防火仕様から自動入力');
@@ -120,7 +120,18 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('max-w-[700px]');
     expect(newForm).toContain('max-w-[600px]');
     expect(newForm).toContain('キャンセル');
+    expect(newForm).toContain("setStep('edit')");
+    expect(newForm).toContain('明細編集へ進む');
+    expect(newForm).toContain('初期設定へ戻る');
+    expect(newForm).toContain('<EstimateTemplateWorkbench');
+    expect(newForm).toContain('new-standard-estimate-preview');
+    expect(newForm).toContain('demoMode');
+    expect(newForm).toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
+    expect(newForm).toContain('正式なDraft接続後に公開中の本体から選択');
     expect(newPage).toContain('model.presets.map');
+    expect(newPage).toContain('store.listOptions()');
+    expect(newPage).toContain('store.listCategories()');
+    expect(newPage).toContain("option.status === 'published'");
     expect(adminForms).toContain('仕様（推奨構成）');
     expect(adminForms).toContain('見積テンプレートの「仕様」もここから選ばれます');
   });

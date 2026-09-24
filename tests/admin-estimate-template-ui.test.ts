@@ -68,6 +68,11 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('min-w-[40rem]');
     expect(listPage).toContain('grid-cols-[minmax(9rem,2fr)_4.25rem_5.75rem_7rem_4.25rem_7.5rem]');
     expect(listPage).not.toContain('min-w-[58rem]');
+    expect(listPage).toContain('商品モデル');
+    expect(listPage).toContain('見積名');
+    expect(listPage).toContain('lg:flex-row lg:items-end lg:gap-5');
+    expect(listPage).toContain('h-10 min-h-10 w-full px-3 text-sm');
+    expect(listPage).toContain('クリア');
   });
 
   it('選択した標準見積の下にシミュレーターと同じ見積書とプランボードを表示する', () => {

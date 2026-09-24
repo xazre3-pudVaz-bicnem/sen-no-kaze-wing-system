@@ -40,6 +40,7 @@ export interface AdminFormState {
   error?: string;
   fieldErrors?: FieldErrors;
   message?: string;
+  savedImageUrl?: string;
 }
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
@@ -295,7 +296,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     }
     redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
-  return { ok: true, message: '保存しました' };
+  return { ok: true, message: '保存しました', savedImageUrl: image_url };
 }
 
 export async function publishOptionAction(formData: FormData): Promise<void> {

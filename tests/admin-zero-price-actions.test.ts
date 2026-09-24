@@ -167,6 +167,54 @@ describe('0円商品のServer Actionガード', () => {
     }));
   });
 
+  it('見積からの新規商品は下書き作成後も商品登録STEP1を継続する', async () => {
+    const store = {
+      upsertOption: vi.fn(async (value: unknown) => ({
+        ...option({ status: 'draft', price: 100_000 }),
+        ...(value as object),
+        id: OPTION_ID,
+      })),
+      setOptionRelations: vi.fn(async () => undefined),
+    };
+    mocks.getStore.mockResolvedValue(store);
+    const fd = validOptionForm();
+    fd.set('id', '');
+    fd.set('price', '100000');
+    fd.set('return_to', '/admin/estimate-templates/template-1?return_section=option');
+
+    await expect(saveOptionAction({ ok: false }, fd)).rejects.toThrow('REDIRECT:');
+
+    expect(store.upsertOption).toHaveBeenCalledWith(expect.objectContaining({
+      id: null,
+      price: 100_000,
+      status: 'draft',
+    }));
+    const redirectUrl = decodeURIComponent(String(mocks.redirect.mock.calls[0]?.[0] ?? ''));
+    expect(redirectUrl).toContain('/admin/options/' + OPTION_ID + '?step=info&saved=1&return_to=');
+    expect(redirectUrl).toContain('/admin/estimate-templates/template-1?return_section=option');
+    expect(redirectUrl).not.toContain('created_option=');
+  });
+
+  it('見積からの商品はPublished化した後にcreated_option付きで元の見積へ戻る', async () => {
+    const store = {
+      getOption: vi.fn(async () => option({ status: 'draft', price: 100_000 })),
+      upsertOption: vi.fn(async (value: unknown) => value),
+    };
+    mocks.getStore.mockResolvedValue(store);
+    const fd = new FormData();
+    fd.set('id', OPTION_ID);
+    fd.set('return_to', '/admin/estimate-templates/template-1?return_section=option');
+
+    await expect(publishOptionAction(fd)).rejects.toThrow('REDIRECT:');
+
+    expect(store.upsertOption).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'published',
+    }));
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      '/admin/estimate-templates/template-1?return_section=option&created_option=' + OPTION_ID
+    );
+  });
+
   it('saveOptionActionはPublished正価格→通常価格0円を拒否し、新規アップロード画像だけ後始末する', async () => {
     const store = {
       getOption: vi.fn(async () => option()),

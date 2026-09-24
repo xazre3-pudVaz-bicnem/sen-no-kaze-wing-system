@@ -291,9 +291,9 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
         saved: '1',
         return_to: returnTo,
       });
-      redirect('/admin/options/' + createdId + '?' + params.toString());
+      redirect('/admin/options/' + createdId + '?' + params.toString() + '#product-main-media');
     }
-    redirect('/admin/options/' + createdId + '?step=info&saved=1');
+    redirect('/admin/options/' + createdId + '?step=info&saved=1#product-main-media');
   }
   return { ok: true, message: '保存しました' };
 }

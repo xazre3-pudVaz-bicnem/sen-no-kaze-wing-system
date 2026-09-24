@@ -69,7 +69,7 @@ export default async function AdminNotificationsPage({ searchParams }: { searchP
               </div>
               {n.link && (
                 <Link href={n.link} className="btn-secondary btn-sm shrink-0">
-                  {n.kind === 'quote_assigned' ? '別途工事を入力' : '開く'}
+                  {n.kind === 'quote_assigned' ? '施工金額を入力' : '開く'}
                 </Link>
               )}
             </div>

@@ -17,6 +17,7 @@ const casePlanBoard = fs.readFileSync(path.join(root, 'components/admin/case-pla
 const newQuote = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
 const configurations = fs.readFileSync(path.join(root, 'app/admin/configurations/page.tsx'), 'utf8');
 const contacts = fs.readFileSync(path.join(root, 'app/admin/contacts/page.tsx'), 'utf8');
+const notifications = fs.readFileSync(path.join(root, 'app/admin/notifications/page.tsx'), 'utf8');
 const adminActions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
 
 describe('Admin case management UI', () => {
@@ -329,5 +330,22 @@ describe('Admin case management UI', () => {
     expect(newQuote).toContain('title="対面・電話・紹介の案件受付"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');
+  });
+
+  it('aligns assignment notifications with the current site-work flow', () => {
+    expect(notifications).toContain("n.kind === 'quote_assigned' ? '施工金額を入力' : '開く'");
+    expect(notifications).not.toContain('別途工事を入力');
+  });
+
+  it('prioritizes the saved installation location in the saved-configuration list', () => {
+    expect(configurations).toContain('configuration.site_location_undecided');
+    expect(configurations).toContain('configuration.site_prefecture');
+    expect(configurations).toContain('configuration.site_municipality');
+    expect(configurations).toContain('設置予定地');
+    expect(configurations).toContain('顧客住所から参考表示');
+    expect(configurations).toContain('未登録時のみ顧客住所で判定');
+    expect(configurations).toContain('「未定」は地域絞り込みの対象外です。');
+    expect(configurations).not.toContain('parseAddress(c.user_address)');
+    expect(configurations).not.toContain('matchesRegion(c.user_address, filter)');
   });
 });

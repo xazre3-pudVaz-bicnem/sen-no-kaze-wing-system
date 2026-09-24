@@ -27,23 +27,18 @@ describe('Admin quote Excel-like editor', () => {
     expect(workspace).toContain('見積書');
   });
 
-  it('keeps the case editor simple and estimate-like', () => {
-    expect(form).toContain("data-sheet-mode={sheetMode ? 'true' : undefined}");
-    expect(form).toContain('現地確認後に決まる運送・基礎・電気・給排水・設置などの金額を入力します。');
-    expect(form).toContain('シミュレーターで確定した内容は通常は確認表示です。');
-    expect(form).toContain('sticky top-0 z-10');
-    expect(form).toContain('min-w-[52rem] text-sm');
-    for (const label of ['品名', '数量', '単位', '売価', '売価金額', '備考']) {
-      expect(form).toContain(label);
-    }
-    expect(form).not.toContain('>原価</th>');
-    expect(form).not.toContain('>原価金額</th>');
-    expect(form).not.toContain('>粗利</th>');
-    expect(form).toContain('【本体価格計】');
-    expect(form).toContain('【内外装価格計】');
-    expect(form).toContain('【オプション価格計】');
-    expect(form).toContain('【別途工事計】');
-    expect(form).toContain('合　計（税込）');
+  it('uses a separate simple structure for normal case editing', () => {
+    expect(form).toContain('data-testid="revision-simple-editor"');
+    expect(form).toContain('data-testid="confirmed-estimate-summary"');
+    expect(form).toContain('確定済みの見積内容');
+    expect(form).toContain('シミュレーター・前版で決まっている内容です。通常の現地工事入力では変更しません。');
+    expect(form).toContain('data-testid="site-work-editor"');
+    expect(form).toContain('data-testid="site-work-table"');
+    expect(form).toContain('必要な項目だけ追加し、数量・売価・備考を入力します。');
+    expect(form).toContain('data-testid="revision-change-preview"');
+    expect(form).toContain('今回の変更');
+    expect(form).toContain('{scopeChangeMode ? (');
+    expect(form).toContain('data-testid="revision-sheet-scroll"');
   });
 
   it('keeps the same base grouping and fire-item placement between read and edit modes', () => {
@@ -54,6 +49,14 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('防火仕様を含む');
     expect(form).toContain('showBaseGroupHeading');
     expect(form).toContain('showBaseGroupSubtotal');
+  });
+
+  it('links the normal editor to the existing site-condition reference without inventing completion state', () => {
+    expect(workspace).toContain("siteHref={tabHref('site')}");
+    expect(sheet).toContain('siteHref={siteHref}');
+    expect(form).toContain('data-testid="site-work-reference"');
+    expect(form).toContain('現地確認の正式な完了状態はまだ保存されません。');
+    expect(form).toContain('現地条件を見る');
   });
 
   it('keeps quote reference details visible while editing', () => {
@@ -69,45 +72,40 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('<LockKeyhole');
   });
 
-  it('focuses normal editing on site work while preserving confirmed rows', () => {
-    expect(form).toContain('data-testid="revision-sticky-summary"');
-    expect(form).toContain('未保存の変更あり');
-    expect(form).toContain('編集前と同じ');
-    expect(form).toContain('前版');
-    expect(form).toContain('編集中');
-    expect(form).toContain('差額');
-    expect(form).toContain("new Set<string>(['base', 'interior', 'option', 'free'])");
-    expect(form).toContain("const rowEditable = section.key === 'sitework' || scopeChangeMode");
-    expect(form).toContain('readOnly={!rowEditable}');
-    expect(form).toContain('disabled={!rowEditable}');
-    expect(form).toContain('現地確認後に入力');
-    expect(form).toContain('確定済み・確認のみ');
-    expect(form).toContain('isCollapsed && editableRows.map');
-    expect(form).toContain('name={`items.${i}.unit_price`} value={r.unit_price}');
-    expect(form).toContain('!element.readOnly');
-    expect(form).toContain("isCollapsed ? '+' : '−'");
-    expect(form).toContain('data-revision-col="quantity"');
-    expect(form).toContain('handleSheetKeyDown');
-    expect(form).toContain('明細を編集前に戻す');
+  it('preserves confirmed rows while normal editing only exposes site-work inputs', () => {
+    expect(form).toContain("const siteworkRows = rows");
+    expect(form).toContain(".filter(({ row }) => row.kind === 'installation')");
+    expect(form).toContain(".filter(({ row }) => row.kind !== 'installation')");
+    expect(form).toContain('simple-hidden-');
+    expect(form).toContain('name={`items.${index}.unit_price`} value={row.unit_price}');
+    expect(form).toContain("const COMMON_SITEWORK_ITEMS = ['運搬費', '基礎工事', '電気工事', '給排水工事', '設置工事']");
+    expect(form).toContain("exists ? '入力あり' : '未追加'");
+    expect(form).toContain('0円');
+    expect(form).not.toContain("exists ? '確定' :");
   });
 
-  it('keeps advanced product changes explicit and separate from site-work entry', () => {
-    expect(form).toContain('data-testid="add-installation"');
-    expect(form).toContain('現地工事を追加');
+  it('shows a pre-issue change preview without making it the revision source of truth', () => {
+    expect(form).toContain('const changePreview: { key: string; label: string; delta: number | null }[] = [];');
+    expect(form).toContain('source_id: i.id');
+    expect(form).toContain('source_id: null');
+    expect(form).toContain('を削除');
+    expect(form).toContain('を変更');
+    expect(form).toContain('を追加');
+    expect(form).toContain('お客様への申し送りを変更');
+    expect(form).toContain('第{quote.revision + 1}版を発行する前の確認用です。');
+  });
+
+  it('keeps product and specification changes behind an explicit detail mode', () => {
     expect(form).toContain('data-testid="toggle-scope-change"');
-    expect(form).toContain("scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'");
+    expect(form).toContain('見積内容を変更');
     expect(form).toContain('data-testid="scope-change-actions"');
+    expect(form).toContain('通常入力に戻す');
     expect(form).toContain('商品・仕様変更');
     expect(form).toContain('data-testid="open-catalog-picker"');
     expect(form).toContain('data-testid="add-interior-exterior"');
     expect(form).toContain('data-testid="add-option"');
     expect(form).toContain('data-testid="add-free"');
-    expect(form).toContain('insertByKind');
-    expect(form).toContain('changeKind');
-    expect(form).toContain('formatYen(amountOf(r))');
-    expect(form).toContain('data-testid="revision-preview"');
-    expect(form).toContain('この内容で改訂見積を発行');
-    expect(form).toContain('この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。');
+    expect(form).toContain('data-testid="add-installation-detail"');
   });
 
   it('keeps the immutable issued-quote lifecycle wording in edit mode', () => {

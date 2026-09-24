@@ -12,6 +12,10 @@ import { OptionCustomerPreview } from '@/components/admin/option-customer-previe
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager, OptionVariantPricing } from '@/components/admin/option-variant-manager';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
+import {
+  OptionRegistrationPreviewButton,
+  OptionRegistrationSaveBoundary,
+} from '@/components/admin/option-registration-save-boundary';
 
 type RegistrationStep = 'info' | 'preview';
 
@@ -67,6 +71,7 @@ export default async function EditOptionPage({
 
   return (
     <AdminPage title={option.name} lead={option.product_no ?? '商品管理番号はDB反映後に表示'}>
+      <OptionRegistrationSaveBoundary>
       <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
       {sp.created && (
@@ -97,19 +102,30 @@ export default async function EditOptionPage({
             <span className="mt-1 block text-sm font-semibold">商品情報</span>
             <span className="mt-1 block text-[0.7rem] leading-5 text-muted">基本情報・画像・資料・お客様選択・価格を設定</span>
           </Link>
-          <Link
-            href={stepHref('preview')}
-            aria-current={step === 'preview' ? 'step' : undefined}
-            className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
-              step === 'preview'
-                ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
-                : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
-            }`}
-          >
-            <span className="text-xs font-semibold text-brown">STEP 2</span>
-            <span className="mt-1 block text-sm font-semibold">登録内容確認</span>
-            <span className="mt-1 block text-[0.7rem] leading-5 text-muted">シミュレーターと同じ商品詳細で確認</span>
-          </Link>
+          {step === 'info' && canEditThisOption ? (
+            <OptionRegistrationPreviewButton
+              href={stepHref('preview')}
+              className="block min-h-24 rounded-xl border border-line bg-white px-3 py-3 text-left transition hover:border-brown hover:bg-ivory/30"
+            >
+              <span className="text-xs font-semibold text-brown">STEP 2</span>
+              <span className="mt-1 block text-sm font-semibold">登録内容確認</span>
+              <span className="mt-1 block text-[0.7rem] leading-5 text-muted">シミュレーターと同じ商品詳細で確認</span>
+            </OptionRegistrationPreviewButton>
+          ) : (
+            <Link
+              href={stepHref('preview')}
+              aria-current={step === 'preview' ? 'step' : undefined}
+              className={`block min-h-24 rounded-xl border px-3 py-3 transition ${
+                step === 'preview'
+                  ? 'border-brown bg-ivory/80 ring-1 ring-brown/20'
+                  : 'border-line bg-white hover:border-brown hover:bg-ivory/30'
+              }`}
+            >
+              <span className="text-xs font-semibold text-brown">STEP 2</span>
+              <span className="mt-1 block text-sm font-semibold">登録内容確認</span>
+              <span className="mt-1 block text-[0.7rem] leading-5 text-muted">シミュレーターと同じ商品詳細で確認</span>
+            </Link>
+          )}
         </nav>
       </section>
 
@@ -118,7 +134,7 @@ export default async function EditOptionPage({
           <div>
             <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
             <p className="mt-1 text-sm text-muted">
-              必要な商品情報を登録し、最後にSTEP 2でお客様表示を確認します。
+              商品情報はSTEP 2へ進むときや、画像・資料など別の登録操作の前に自動保存されます。
             </p>
           </div>
 
@@ -142,9 +158,11 @@ export default async function EditOptionPage({
           <section className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>
               <h3 className="font-semibold">登録内容を確認</h3>
-              <p className="mt-1 text-xs text-muted">保存した内容を、シミュレーターと同じ商品詳細画面で確認します。</p>
+              <p className="mt-1 text-xs text-muted">入力内容を保存して、シミュレーターと同じ商品詳細画面で確認します。</p>
             </div>
-            <Link href={stepHref('preview')} className="btn-primary shrink-0">STEP 2 登録内容確認へ</Link>
+            <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
+              STEP 2 登録内容確認へ
+            </OptionRegistrationPreviewButton>
           </section>
 
           {catalogEditor && (
@@ -152,7 +170,7 @@ export default async function EditOptionPage({
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-muted">その他の操作</summary>
               <div className="border-t border-line px-4 py-4">
                 <p className="mb-3 text-xs text-muted">削除は通常の編集では使用しません。保存済みの仕様で使用中の商品は削除できません。</p>
-                <form action={deleteOptionAction}>
+                <form action={deleteOptionAction} data-skip-option-autosave="true">
                   <input type="hidden" name="id" value={option.id} />
                   <ConfirmSubmit
                     message={`「${option.name}」を削除しますか？保存済みの仕様で使用中の場合は削除できません。`}
@@ -242,6 +260,7 @@ export default async function EditOptionPage({
           </section>
         </section>
       )}
+      </OptionRegistrationSaveBoundary>
     </AdminPage>
   );
 }

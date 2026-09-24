@@ -30,6 +30,10 @@ const customerPreview = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-customer-preview.tsx'),
   'utf8'
 );
+const saveBoundary = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-registration-save-boundary.tsx'),
+  'utf8'
+);
 const variants = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-variant-manager.tsx'),
   'utf8'
@@ -62,7 +66,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('mode="all"');
     expect(editPage).not.toContain('mode="product"');
     expect(editPage).not.toContain('mode="pricing"');
-    expect(editPage).toContain('必要な商品情報を登録し、最後にSTEP 2でお客様表示を確認します。');
+    expect(editPage).toContain('商品情報はSTEP 2へ進むときや、画像・資料など別の登録操作の前に自動保存されます。');
     expect(editPage).toContain('STEP 2 登録内容確認へ');
     expect(editPage).toContain('data-testid="option-registration-info"');
     expect(editPage).toContain('data-testid="option-customer-preview"');
@@ -83,7 +87,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('name="selection_type" value="radio"');
     expect(forms).toContain('id="size_note-create"');
     expect(forms).toContain("mode === 'all' && option");
-    expect(forms).toContain("'商品情報を保存'");
+    expect(forms).toContain("id={autoSaveEnabled ? 'option-main-form' : undefined}");
+    expect(forms).toContain("!(mode === 'all' && option)");
     expect(adminActions).toContain("const returnTo = safeAdminReturnTo(formData.get('return_to'))");
     expect(adminActions).toContain("return_to: returnTo");
     expect(adminActions).toContain("created: '1'");
@@ -93,6 +98,24 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('name="return_to" value={returnTo}');
     expect(media).toContain('サブ画像・メーカー資料');
     expect(variants).toContain('お客様選択');
+  });
+
+  it('既存商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {
+    expect(editPage).toContain('OptionRegistrationSaveBoundary');
+    expect(editPage).toContain('OptionRegistrationPreviewButton');
+    expect(forms).toContain('registerSaveHandler');
+    expect(forms).toContain('saveOptionAction(initial, new FormData(form))');
+    expect(forms).toContain('変更内容を自動保存しました。');
+    expect(forms).toContain("id={autoSaveEnabled ? 'option-main-form' : undefined}");
+    expect(forms).toContain("!(mode === 'all' && option)");
+    expect(saveBoundary).toContain('onSubmitCapture={handleSubmitCapture}');
+    expect(saveBoundary).toContain('onClickCapture={handleClickCapture}');
+    expect(saveBoundary).toContain("form.id === 'option-main-form'");
+    expect(saveBoundary).toContain("target.closest('a[href]')");
+    expect(saveBoundary).toContain('form.requestSubmit');
+    expect(saveBoundary).toContain('saveIfDirty');
+    expect(adminActions).toContain('savedImageUrl?: string');
+    expect(adminActions).toContain("savedImageUrl: image_url");
   });
 
   it('新規商品の初回画面は基本情報だけに絞り、次へで商品IDを作成する', () => {

@@ -69,7 +69,7 @@ describe('注文範囲（本体のみ／本体＋設備／フル装備）', () =
   const catCodesIn = (level: FinishLevel) => categoriesInScope(seedCategories, level).map((c) => c.code).sort();
 
   it('本体のみでは本体に含まれるカテゴリーだけが対象になる', () => {
-    expect(catCodesIn('shell')).toEqual(['exterior-wall', 'fireproof', 'insulation', 'sash', 'sitework']);
+    expect(catCodesIn('shell')).toEqual(['entrance-door', 'exterior-wall', 'fireproof', 'insulation', 'roof', 'sash', 'sitework']);
   });
 
   it('本体＋設備では設備・照明・家具が加わり、内装と造作は含まれない', () => {

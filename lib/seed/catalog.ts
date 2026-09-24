@@ -318,6 +318,8 @@ export const C = {
   sitework: cid(20),
   insulation: cid(21),
   freeProduct: cid(22),
+  roof: cid(23),
+  entranceDoor: cid(24),
 };
 
 const cat = (
@@ -348,6 +350,7 @@ const cat = (
 const G = {
   fireproof: ['fireproof', '防火仕様', 1] as [string, string, number],
   finish: ['finish', '内外装仕上げ', 2] as [string, string, number],
+  entranceDoor: ['entrance-door', '玄関ドア', 3] as [string, string, number],
   door: ['interior-door', '内部建具', 3] as [string, string, number],
   sash: ['sash', 'サッシ', 4] as [string, string, number],
   equipment: ['equipment', '設備機器', 5] as [string, string, number],
@@ -359,9 +362,21 @@ const G = {
 };
 
 export const seedCategories: OptionCategory[] = [
-  cat(C.exteriorWall, 'exterior-wall', '外壁', G.finish, 1, { finish_level: 'shell', is_required: true, description: '外壁の仕上げ材（屋根はガルバリウム鋼板で本体に含まれます）' }),
+  cat(C.roof, 'roof', '屋根', G.finish, 0, {
+    finish_level: 'shell',
+    is_required: true,
+    description: '屋根の仕上げ材。外壁とは別に商品を選択します',
+  }),
+  cat(C.exteriorWall, 'exterior-wall', '外壁', G.finish, 1, { finish_level: 'shell', is_required: true, description: '外壁の仕上げ材' }),
   cat(C.floor, 'floor', '床材', G.finish, 2, { is_required: true, description: '床の仕上げ材（カラーを選択）' }),
   cat(C.wallCeiling, 'wall-ceiling', '壁・天井', G.finish, 3, { is_required: true, description: '壁・天井の仕上げ' }),
+  cat(C.entranceDoor, 'entrance-door', '玄関ドア', G.entranceDoor, 1, {
+    finish_level: 'shell',
+    selection_mode: 'single',
+    is_required: false,
+    customer_visible: true,
+    description: '玄関ドア。対象モデル・仕様で使用する場合に1つ選択します',
+  }),
   // サッシはエンドユーザーに選ばせない（本体の内訳に含める）。台帳・代理店の見積編集では使う
   cat(C.sash, 'sash', 'サッシ', G.sash, 1, { finish_level: 'shell', customer_visible: false, description: '本体に含まれるため、お客様の画面には表示しません' }),
   cat(C.interiorDoor, 'interior-door', '内部建具', G.door, 1, { is_required: true }),

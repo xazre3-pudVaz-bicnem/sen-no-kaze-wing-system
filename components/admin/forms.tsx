@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addProductImageAction,
   updateContactStatusAction,
@@ -32,6 +32,7 @@ import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from
 import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
+import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
 
 const initial: AdminFormState = { ok: false };
 
@@ -630,7 +631,17 @@ export function OptionForm({
   returnTo,
 }: OptionFormProps) {
   const [state, action, pending] = useActionState(saveOptionAction, initial);
-  const e = state.fieldErrors ?? {};
+  const [autoSaveState, setAutoSaveState] = useState<AdminFormState>(initial);
+  const formRef = useRef<HTMLFormElement>(null);
+  const {
+    registerSaveHandler,
+    markDirty,
+    markClean,
+  } = useOptionRegistrationSave();
+  const autoSaveEnabled = mode === 'all' && Boolean(option);
+  const hasAutoSaveState = autoSaveState.ok || Boolean(autoSaveState.error) || Boolean(autoSaveState.fieldErrors);
+  const displayState = hasAutoSaveState ? autoSaveState : state;
+  const e = displayState.fieldErrors ?? {};
   const others = allOptions.filter((o) => o.id !== option?.id);
   const depMap = new Map(dependencies.map((d) => [d.requires_option_id, d]));
   const confMap = new Map(conflicts.map((c) => [c.conflicts_with_option_id, c]));
@@ -682,6 +693,36 @@ export function OptionForm({
   const showDetails = mode === 'all' || mode === 'product' || mode === 'details';
   const showMedia = mode === 'all' || mode === 'product' || mode === 'media';
   const showSales = mode === 'all' || mode === 'sales' || mode === 'pricing';
+
+  const markOptionDirty = () => {
+    if (!autoSaveEnabled) return;
+    markDirty();
+    if (hasAutoSaveState) setAutoSaveState(initial);
+  };
+
+  useEffect(() => {
+    if (!autoSaveEnabled) return;
+    return registerSaveHandler(async () => {
+      const form = formRef.current;
+      if (!form) return false;
+
+      const result = await saveOptionAction(initial, new FormData(form));
+      if (result.ok) {
+        const imageUrlInput = form.elements.namedItem('image_url');
+        if (imageUrlInput instanceof HTMLInputElement && result.savedImageUrl !== undefined) {
+          imageUrlInput.value = result.savedImageUrl;
+        }
+        const imageFileInput = form.elements.namedItem('image_file');
+        if (imageFileInput instanceof HTMLInputElement) imageFileInput.value = '';
+        setAutoSaveState({ ...result, message: '変更内容を自動保存しました。' });
+        markClean();
+        return true;
+      }
+
+      setAutoSaveState(result);
+      return false;
+    });
+  }, [autoSaveEnabled, markClean, registerSaveHandler]);
 
   const preserveIdentifyFields = !showIdentify && option ? (
     <>
@@ -750,7 +791,14 @@ export function OptionForm({
   ) : null;
 
   return (
-    <form action={action} className="space-y-6" noValidate>
+    <form
+      ref={formRef}
+      id={autoSaveEnabled ? 'option-main-form' : undefined}
+      action={action}
+      className="space-y-6"
+      noValidate
+      onChangeCapture={autoSaveEnabled ? markOptionDirty : undefined}
+    >
       <input type="hidden" name="id" value={option?.id ?? ''} />
       <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
       {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
@@ -759,7 +807,7 @@ export function OptionForm({
       {preserveMediaFields}
       {preserveSalesFields}
       {createDefaults}
-      <Status state={state} />
+      <Status state={displayState} />
 
       {showIdentify && (
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
@@ -854,7 +902,10 @@ export function OptionForm({
                         key={value}
                         type="button"
                         className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
-                        onClick={() => setSizeNoteValue(value)}
+                        onClick={() => {
+                          setSizeNoteValue(value);
+                          markOptionDirty();
+                        }}
                       >
                         {value}
                       </button>
@@ -949,7 +1000,10 @@ export function OptionForm({
                       key={value}
                       type="button"
                       className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
-                      onClick={() => setSizeNoteValue(value)}
+                      onClick={() => {
+                        setSizeNoteValue(value);
+                        markOptionDirty();
+                      }}
                     >
                       {value}
                     </button>
@@ -1149,18 +1203,18 @@ export function OptionForm({
             </div>
           </details>
 
-          <SubmitButton
-            pending={pending}
-            label={
-              mode === 'pricing'
-                ? '価格・公開設定を保存'
-                : mode === 'all' && option
-                  ? '商品情報を保存'
+          {!(mode === 'all' && option) && (
+            <SubmitButton
+              pending={pending}
+              label={
+                mode === 'pricing'
+                  ? '価格・公開設定を保存'
                   : mode === 'all'
                     ? '下書きを作成してSTEP 1を続ける'
                     : '販売・詳細設定を保存'
-            }
-          />
+              }
+            />
+          )}
         </section>
       )}
     </form>

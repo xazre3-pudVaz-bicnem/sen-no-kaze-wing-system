@@ -34,7 +34,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('min-w-0 md:hidden');
     expect(client).toContain('sticky top-0');
     expect(client).toContain('data-testid="ledger-card-grid"');
-    expect(client).toContain('grid grid-cols-1 gap-2.5 lg:grid-cols-2');
+    expect(client).toContain('grid grid-cols-1 gap-2.5 min-[1120px]:grid-cols-2');
     expect(client).toContain('カテゴリー未設定');
     expect(client).toContain('productAttentionReasons');
     expect(client).toContain("要確認：{attentionReasons.join('・')}");

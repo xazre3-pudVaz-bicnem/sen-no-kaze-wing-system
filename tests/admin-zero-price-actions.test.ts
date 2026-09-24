@@ -283,6 +283,30 @@ describe('0円商品のServer Actionガード', () => {
     expect(store.deleteUploadedImage).toHaveBeenCalledWith('https://example.invalid/new.png');
   });
 
+  it('saveOptionActionは既存Draftを保存し、保存後のメイン画像URLを返す', async () => {
+    const store = {
+      getOption: vi.fn(async () => option({ status: 'draft', price: 100_000 })),
+      upsertOption: vi.fn(async (value: unknown) => value),
+      setOptionRelations: vi.fn(async () => undefined),
+    };
+    mocks.getStore.mockResolvedValue(store);
+    const fd = validOptionForm();
+    fd.set('price', '100000');
+    fd.set('image_url', 'https://example.invalid/main.png');
+
+    const result = await saveOptionAction({ ok: false }, fd);
+
+    expect(result.ok).toBe(true);
+    expect(result.savedImageUrl).toBe('https://example.invalid/main.png');
+    expect(store.upsertOption).toHaveBeenCalledWith(expect.objectContaining({
+      id: OPTION_ID,
+      status: 'draft',
+      price: 100_000,
+      image_url: 'https://example.invalid/main.png',
+    }));
+    expect(store.setOptionRelations).toHaveBeenCalledWith(OPTION_ID, [], []);
+  });
+
   it('saveOptionActionはURL入力だけなら既存画像を削除しない', async () => {
     const store = {
       getOption: vi.fn(async () => option()),

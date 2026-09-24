@@ -177,7 +177,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">状態</th>
                   <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                   <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                  <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積額</th>
                   <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">担当</th>
                 </tr>
               </thead>
@@ -426,7 +426,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">状態</th>
                 <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                 <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積・契約額</th>
+                <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積額</th>
                 <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
               </tr>
             </thead>

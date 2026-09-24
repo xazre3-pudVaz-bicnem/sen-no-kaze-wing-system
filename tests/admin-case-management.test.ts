@@ -65,7 +65,7 @@ describe('Admin case management UI', () => {
     expect(list).toContain('data-testid="case-row-meta"');
     expect(list).not.toContain('min-w-[56rem]');
     expect(list).toContain('colSpan={6}');
-    for (const label of ['棟数', '見積・契約額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
+    for (const label of ['棟数', '見積額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
       expect(list).toContain(label);
     }
     expect(list).toContain('未登録');
@@ -96,8 +96,10 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('md:block');
     expect(workspace).toContain('案件設定');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
+    expect(workspace).toContain("quote.status === 'accepted' ? '契約確認' : '正式見積'");
     expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName");
     expect(workspace).toContain('契約条件の確認');
+    expect(workspace).toContain("value: quote.status === 'accepted' ? '正式状態未登録' : '未対応'");
     expect(workspace).toContain('未集計');
     expect(workspace).toContain("caseStructureNote ?? '未登録'");
     expect(workspace).toContain('extractCaseUnitCount');
@@ -121,7 +123,8 @@ describe('Admin case management UI', () => {
     for (const label of ['見積書', 'プランボード', '現地条件', '契約・図面・資料', '製造・施工', '引渡し・アフター', '災害時提供']) {
       expect(workspace).toContain(label);
     }
-    expect(workspace).toContain('今後対応予定');
+    expect(workspace).toContain('参考表示');
+    expect(workspace).toContain('未判定');
     expect(workspace).toContain('<QuoteEstimateSheet');
     expect(workspace).toContain('startInEditMode={Boolean(created)}');
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
@@ -148,7 +151,9 @@ describe('Admin case management UI', () => {
 
   it('does not present unsupported downstream workflow data as implemented', () => {
     expect(workspace).toContain('案件受付・現地メモ');
+    expect(workspace).toContain('data-testid="case-tab-site"');
     expect(workspace).toContain('data-testid="case-site-condition-candidates"');
+    expect(workspace).toContain('保存済み住所・案件受付メモ・案件資料から、正式確認前の候補情報を表示します。');
     expect(workspace).toContain('正式登録候補');
     expect(workspace).toContain('都市計画区域');
     expect(workspace).toContain('用途地域');

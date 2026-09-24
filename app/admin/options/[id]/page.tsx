@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
+import { Alert } from '@/components/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
@@ -68,6 +69,11 @@ export default async function EditOptionPage({
     <AdminPage title={option.name} lead={option.product_no ?? '商品管理番号はDB反映後に表示'}>
       <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       <FlashMessages sp={sp} />
+      {sp.created && (
+        <Alert tone="success">
+          基本情報を登録しました。続けて必要な画像・資料・お客様選択・価格を登録してください。
+        </Alert>
+      )}
 
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -112,22 +118,8 @@ export default async function EditOptionPage({
           <div>
             <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
             <p className="mt-1 text-sm text-muted">
-              上から順に登録してください。基本情報・メイン画像・価格公開は1つの保存ボタンで保存し、サブ画像や選択肢は必要な項目だけ個別に保存します。
+              必要な商品情報を登録し、最後にSTEP 2でお客様表示を確認します。
             </p>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3" aria-label="商品情報の入力順">
-            {[
-              ['1', '商品本体', '基本情報・詳細・メイン画像・価格公開'],
-              ['2', 'お客様資料', 'サブ画像・メーカー資料'],
-              ['3', 'お客様選択', '色・柄・仕様と追加金額'],
-            ].map(([no, label, note]) => (
-              <div key={no} className="rounded-xl border border-line bg-white px-4 py-3">
-                <p className="text-xs font-semibold text-brown">入力 {no}</p>
-                <p className="mt-1 text-sm font-semibold">{label}</p>
-                <p className="mt-1 text-xs leading-5 text-muted">{note}</p>
-              </div>
-            ))}
           </div>
 
           <OptionForm

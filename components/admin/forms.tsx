@@ -447,6 +447,7 @@ function productSizeMeta(categoryCode: string): { label: string; placeholder: st
     kitchen: { label: '間口', placeholder: '例：1200mm' },
     boiler: { label: '号数・ガス種・給湯機能・設置方式', placeholder: '例：16号／LPガス／給湯専用／屋外壁掛型' },
     aircon: { label: '能力クラス・電源', placeholder: '例：2.2kW（6畳程度）／単相100V' },
+    roof: { label: '屋根材種類・主な仕様', placeholder: '例：金属屋根／ガルバリウム鋼板／立平葺き' },
     'exterior-wall': { label: '種類・主な仕様', placeholder: '例：窯業系サイディング／16mm／ヨコ張り' },
     floor: { label: '床材種類・主な仕様', placeholder: '例：複合フローリング／12mm／耐水' },
     'wall-ceiling': { label: '内装材種類・主な仕様', placeholder: '例：ビニル壁紙／準不燃' },
@@ -515,6 +516,12 @@ function productRegistrationGuidance(categoryCode: string): ProductRegistrationG
       example: 'ダイキン / ルームエアコン / Eシリーズ / 2.2kW（6畳程度） / 単相100V / S225ATES-W',
       fixedInfo: ['能力クラス', '電源', '室内機・室外機', '寒冷地対応（必要な場合）'],
     },
+    roof: {
+      manufacturers: ['ケイミュー', 'アイジー工業', 'セキノ興産', '稲垣商事'],
+      sizeCandidates: ['金属屋根', 'ガルバリウム鋼板', '立平葺き', 'スレート系'],
+      example: 'アイジー工業 / 屋根材シリーズ / 金属屋根 / ガルバリウム鋼板 / 代表品番',
+      fixedInfo: ['材質', '板厚', '葺き方', '表面処理', '防火性能', '寒冷地域対応'],
+    },
     'exterior-wall': {
       manufacturers: ['ニチハ', 'ケイミュー', 'アイジー工業', '旭トステム外装'],
       sizeCandidates: ['窯業系サイディング', '金属サイディング', 'ガルバリウム鋼板'],
@@ -575,6 +582,7 @@ function categoryRegistrationHint(categoryCode: string): string | null {
     kitchen: '間口など固定情報はここで入力し、扉色・ワークトップなど選択できる内容は下の「お客様選択」で登録します。',
     boiler: '号数・ガス種・給湯機能・設置方式を確認し、この欄には商品を判別できる主要仕様をまとめて入力します。',
     aircon: '能力クラスと電源を確認します。お客様が比較するときに必要な仕様を優先して入力します。',
+    roof: '屋根材は外壁と分けて登録します。材質・板厚・葺き方など固定情報を入力し、色などを選べる場合だけ下の「お客様選択」で登録します。',
     'exterior-wall': '材質・厚み・張り方など施工判断に必要な固定情報を入力し、色・柄はお客様が選べる場合だけ下の「お客様選択」で登録します。',
     floor: '床材種類・厚みなど固定情報を入力し、色・柄など選択できる内容は下の「お客様選択」で登録します。',
     'wall-ceiling': '材質・防火性能など固定情報を入力し、色・柄など選択できる内容は下の「お客様選択」で登録します。',

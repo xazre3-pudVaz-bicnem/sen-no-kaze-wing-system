@@ -437,7 +437,7 @@ export function OptionVariantManager({
       </details>
 
       <p className="text-xs text-muted">
-        使用済みの見積・保存仕様との整合を守るため、不要になった項目や選択肢は削除ではなく「お客様に表示する」をOFFにして管理します。
+        使用済みの見積・保存仕様との整合を守るため、物理削除を行いません。不要になった項目や選択肢は「お客様に表示する」をOFFにして管理します。
       </p>
     </section>
   );

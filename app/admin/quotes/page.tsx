@@ -127,6 +127,16 @@ function caseSelectionHref(quoteId: string, sp: Record<string, string | undefine
   return `/admin/quotes?${query.toString()}`;
 }
 
+function requestSelectionHref(requestId: string, sp: Record<string, string | undefined>) {
+  const query = new URLSearchParams();
+  for (const key of ['q', 'status', 'dealer', 'pref', 'city']) {
+    const value = sp[key];
+    if (value) query.set(key, value);
+  }
+  query.set('request', requestId);
+  return `/admin/quotes?${query.toString()}#pending-quote-request`;
+}
+
 export default async function AdminQuotesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
   const sp = await searchParams;
@@ -332,8 +342,23 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const inquiryCount = contacts.filter((contact) => contact.status === 'new').length;
 
   const selectableQuoteIds = new Set(shownQuotes.map((quote) => quote.id));
+  const selectablePendingRequestIds = new Set(shown.filter((request) => !request.quote_id).map((request) => request.id));
   const requestedCase = sp.case && selectableQuoteIds.has(sp.case) ? sp.case : null;
-  const selectedQuoteId = requestedCase ?? shownQuotes[0]?.id ?? null;
+  const requestedPendingRequestId =
+    sp.request && selectablePendingRequestIds.has(sp.request) ? sp.request : null;
+  const selectedPendingRequest = requestedPendingRequestId
+    ? shown.find((request) => request.id === requestedPendingRequestId && !request.quote_id) ?? null
+    : null;
+  const selectedQuoteId = selectedPendingRequest ? null : requestedCase ?? shownQuotes[0]?.id ?? null;
+  const selectedPendingConfiguration = selectedPendingRequest
+    ? configurationById.get(selectedPendingRequest.configuration_id)
+    : undefined;
+  const selectedPendingModelName = selectedPendingConfiguration
+    ? modelNameById.get(selectedPendingConfiguration.base_model_id)
+    : undefined;
+  const selectedPendingSpecName = selectedPendingConfiguration?.spec_code
+    ? (SPEC_LABELS[selectedPendingConfiguration.spec_code] ?? selectedPendingConfiguration.spec_code)
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
@@ -441,7 +466,9 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 const dealer = quote?.dealer_id ? profileById.get(quote.dealer_id) : undefined;
                 const dealerName = dealer?.company_name ?? dealer?.full_name;
                 const updatedAt = quote?.updated_at ?? request.updated_at;
-                const selected = quote?.id === selectedQuoteId;
+                const selected =
+                  quote?.id === selectedQuoteId ||
+                  (!quote && request.id === selectedPendingRequest?.id);
 
                 return [
                   <tr
@@ -461,7 +488,18 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                           )}
                         </div>
                       ) : (
-                        <strong>{request.contact.full_name}</strong>
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            href={requestSelectionHref(request.id, sp)}
+                            className="min-w-0 truncate font-semibold text-ink hover:underline"
+                            data-testid="pending-request-link"
+                          >
+                            {request.contact.full_name}
+                          </Link>
+                          {selected && (
+                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.56rem] font-semibold text-white">選択中</span>
+                          )}
+                        </div>
                       )}
                       {request.contact.company_name && <span className="ml-1 text-[0.64rem] text-muted">{request.contact.company_name}</span>}
                       <span className="mt-0.5 block font-mono text-[0.62rem] text-muted">
@@ -532,10 +570,82 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           embedded
           listSearchParams={sp}
         />
+      ) : selectedPendingRequest ? (
+        <section
+          id="pending-quote-request"
+          className="scroll-mt-3 space-y-3 rounded-lg border border-line bg-white p-4 shadow-sm"
+          data-testid="pending-quote-request-workspace"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">見積依頼</h2>
+                <Badge tone={selectedPendingRequest.status === 'new' ? 'danger' : 'neutral'}>
+                  {QUOTE_REQUEST_STATUS_LABELS[selectedPendingRequest.status]}
+                </Badge>
+                <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
+                  見積未発行
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                受付 {formatDate(selectedPendingRequest.created_at, true)}／更新 {formatDate(selectedPendingRequest.updated_at, true)}
+              </p>
+            </div>
+            <span className="rounded-full bg-sand px-2 py-1 text-[0.65rem] font-semibold text-muted">
+              次工程：見積作成
+            </span>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <section className="rounded-lg border border-line bg-[#fbfcfb] p-3" data-testid="pending-request-customer">
+              <h3 className="text-sm font-semibold">お客様・設置先</h3>
+              <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs text-muted">お客様名</dt><dd className="mt-0.5 font-semibold">{selectedPendingRequest.contact.full_name}</dd></div>
+                <div><dt className="text-xs text-muted">会社名</dt><dd className="mt-0.5 font-semibold">{selectedPendingRequest.contact.company_name || '—'}</dd></div>
+                <div><dt className="text-xs text-muted">メール</dt><dd className="mt-0.5 break-all">{selectedPendingRequest.contact.email || selectedPendingRequest.user_email || '—'}</dd></div>
+                <div><dt className="text-xs text-muted">電話</dt><dd className="mt-0.5">{selectedPendingRequest.contact.phone || '—'}</dd></div>
+                <div className="sm:col-span-2"><dt className="text-xs text-muted">設置予定地</dt><dd className="mt-0.5 font-semibold">{selectedPendingRequest.contact.site_address || '未登録'}</dd></div>
+              </dl>
+            </section>
+
+            <section className="rounded-lg border border-line bg-[#fbfcfb] p-3" data-testid="pending-request-configuration">
+              <h3 className="text-sm font-semibold">保存済み仕様</h3>
+              <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs text-muted">案件・仕様名</dt><dd className="mt-0.5 font-semibold">{selectedPendingConfiguration?.name || '詳細未取得'}</dd></div>
+                <div><dt className="text-xs text-muted">本体</dt><dd className="mt-0.5 font-semibold">{selectedPendingModelName || '詳細未取得'}</dd></div>
+                <div><dt className="text-xs text-muted">仕様</dt><dd className="mt-0.5">{selectedPendingSpecName || '未登録'}</dd></div>
+                <div><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-0.5">{selectedPendingConfiguration ? FINISH_LEVEL_INFO[selectedPendingConfiguration.finish_level].name : '詳細未取得'}</dd></div>
+              </dl>
+              {!selectedPendingConfiguration && (
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  この権限では保存済み仕様の詳細を一覧から取得していません。見積依頼との紐付け自体は保持されています。
+                </p>
+              )}
+            </section>
+          </div>
+
+          <section className="rounded-lg border border-line bg-white p-3" data-testid="pending-request-message">
+            <h3 className="text-sm font-semibold">ご要望・受付メモ</h3>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-soft">
+              {selectedPendingRequest.message?.trim() || 'メモはありません。'}
+            </p>
+          </section>
+
+          <section className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3" data-testid="pending-request-next-step">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-[#765d1f]">この依頼から見積を作成</h3>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">正式処理は未実装</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-ink-soft">
+              この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
+              右上の「新規案件／見積作成」は別の見積依頼を新規作成するため、この受付の引継ぎには使用しません。
+            </p>
+          </section>
+        </section>
       ) : (
         shown.length > 0 && (
           <div className="rounded-lg border border-line bg-white px-4 py-3 text-xs text-muted">
-            見積書が作成されている案件を選択すると、案件ワークスペースを表示します。
+            案件または見積依頼を選択すると、下に作業領域を表示します。
           </div>
         )
       )}

@@ -296,6 +296,19 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(media).not.toContain('<details id="product-media"');
   });
 
+  it('サブ画像は複数選択で自動保存し、メーカーPDFも選択時に自動保存する', () => {
+    expect(media).toContain('multiple');
+    expect(media).toContain('複数選択可・1枚10MBまで。選択すると自動で保存します。');
+    expect(media).toContain('handleSubImages');
+    expect(media).toContain("formData.set('file', file)");
+    expect(media).toContain("formData.set('sort_order', String(images.length + index))");
+    expect(media).toContain('saveIfDirty');
+    expect(media).toContain('handleManufacturerDocument');
+    expect(media).toContain('ファイルを選択すると自動で保存します。');
+    expect(media).not.toContain('>サブ画像を追加</PendingButton>');
+    expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
+  });
+
   it('お客様選択は画像なし文字カードを許容し、価格設定と同じSTEP2内で管理する', () => {
     expect(variants).toContain('お客様選択');
     expect(variants).toContain('文字カードとして表示');

@@ -145,6 +145,7 @@ export function EstimateTemplateWorkbench({
   const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [collapsedPickerCategories, setCollapsedPickerCategories] = useState<Set<string>>(() => new Set());
   const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
   const [salesExpenseRate, setSalesExpenseRate] = useState(100);
   const [expenseRate, setExpenseRate] = useState(15);
@@ -204,6 +205,18 @@ export function EstimateTemplateWorkbench({
       ].join(' ').toLowerCase().includes(query);
     });
   }, [pickerSection, products, pickerCategory, pickerQuery]);
+
+  const pickerProductGroups = useMemo(
+    () =>
+      pickerCategories
+        .map(([categoryId, categoryName]) => ({
+          categoryId,
+          categoryName,
+          products: pickerProducts.filter((product) => product.categoryId === categoryId),
+        }))
+        .filter((group) => group.products.length > 0),
+    [pickerCategories, pickerProducts]
+  );
 
   const pickerSectionLabel = pickerSection
     ? sections.find((section) => section.code === pickerSection)?.label ?? pickerSection
@@ -284,6 +297,7 @@ export function EstimateTemplateWorkbench({
     setPickerTargetRowId(rowId);
     setPickerCategory(currentCategoryId);
     setPickerQuery('');
+    setCollapsedPickerCategories(new Set());
   };
 
   const closeProductPicker = () => {
@@ -291,6 +305,16 @@ export function EstimateTemplateWorkbench({
     setPickerTargetRowId(null);
     setPickerCategory('');
     setPickerQuery('');
+    setCollapsedPickerCategories(new Set());
+  };
+
+  const togglePickerCategory = (categoryId: string) => {
+    setCollapsedPickerCategories((current) => {
+      const next = new Set(current);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
   };
 
   const addProduct = (product: EstimateTemplateWorkbenchProduct) => {
@@ -830,7 +854,20 @@ export function EstimateTemplateWorkbench({
 
             <div className="space-y-5 p-5">
               <div className="grid gap-3 sm:grid-cols-[14rem_1fr]">
-                <Select value={pickerCategory} onChange={(event) => setPickerCategory(event.target.value)}>
+                <Select
+                  value={pickerCategory}
+                  onChange={(event) => {
+                    const categoryId = event.target.value;
+                    setPickerCategory(categoryId);
+                    if (categoryId) {
+                      setCollapsedPickerCategories((current) => {
+                        const next = new Set(current);
+                        next.delete(categoryId);
+                        return next;
+                      });
+                    }
+                  }}
+                >
                   <option value="">この区分のすべてのカテゴリー</option>
                   {pickerCategories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                 </Select>
@@ -846,33 +883,68 @@ export function EstimateTemplateWorkbench({
                 「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。
               </p>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {pickerProducts.map((product) => (
-                  <article key={product.id} className="rounded-xl border border-line p-4">
-                    <div className="flex gap-3">
-                      <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand text-xs text-muted">
-                        {product.imageUrl ? <span>画像登録済み</span> : <span>画像なし</span>}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-muted">
-                          {product.categoryName} ／ {product.manufacturer || 'メーカー未登録'}
-                        </p>
-                        <h3 className="font-semibold">{product.name}</h3>
-                        <p className="mt-1 text-xs text-muted">
-                          {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
-                        </p>
-                        <p className="mt-2 text-sm font-semibold">
-                          {product.priceOnRequest ? '別途見積' : '追加金額 ' + formatYen(product.price)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex justify-end">
-                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>
-                        {pickerTargetRowId ? 'この商品に変更' : '追加'}
+              <div className="space-y-3">
+                {pickerProductGroups.map((group) => {
+                  const collapsed = collapsedPickerCategories.has(group.categoryId);
+                  return (
+                    <section key={group.categoryId} className="overflow-hidden rounded-xl border border-line bg-white">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
+                        aria-expanded={!collapsed}
+                        aria-label={collapsed ? group.categoryName + 'を開く' : group.categoryName + 'を閉じる'}
+                        onClick={() => togglePickerCategory(group.categoryId)}
+                      >
+                        <span className="flex size-5 items-center justify-center rounded border border-slate-300 bg-white text-[11px] font-bold text-slate-700">
+                          {collapsed ? '+' : '−'}
+                        </span>
+                        <strong className="text-sm">{group.categoryName}</strong>
+                        <span className="text-[11px] text-muted">{group.products.length}件</span>
                       </button>
-                    </div>
-                  </article>
-                ))}
+
+                      {!collapsed && (
+                        <div className="divide-y divide-line">
+                          {group.products.map((product) => (
+                            <div key={product.id} className="flex items-center gap-3 px-3 py-2.5">
+                              <div
+                                className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand bg-cover bg-center text-[10px] text-muted"
+                                style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
+                                aria-label={product.imageUrl ? product.name + 'の商品画像' : product.name + 'は画像なし'}
+                              >
+                                {!product.imageUrl && <span>画像なし</span>}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                  <h3 className="truncate text-sm font-semibold">{product.name}</h3>
+                                  <span className="text-[11px] text-muted">{product.manufacturer || 'メーカー未登録'}</span>
+                                </div>
+                                <p className="mt-0.5 truncate text-[11px] text-muted">
+                                  {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
+                                </p>
+                              </div>
+
+                              <div className="w-28 shrink-0 text-right">
+                                <p className="text-[10px] text-muted">追加金額</p>
+                                <p className="text-sm font-semibold">
+                                  {product.priceOnRequest ? '別途見積' : formatYen(product.price)}
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="btn-primary btn-sm shrink-0"
+                                onClick={() => addProduct(product)}
+                              >
+                                {pickerTargetRowId ? '変更' : '追加'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
 
               {pickerProducts.length === 0 && (

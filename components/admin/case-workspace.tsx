@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getStore, type SessionUser } from '@/lib/data/store';
@@ -46,18 +45,6 @@ type TabKey = (typeof TABS)[number]['key'];
 
 function isTabKey(value: string | undefined): value is TabKey {
   return TABS.some((tab) => tab.key === value);
-}
-
-function FuturePanel({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-semibold">{title}</h2>
-        <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
-      </div>
-      <div className="mt-2 text-sm leading-6 text-ink-soft">{children}</div>
-    </section>
-  );
 }
 
 function buildInlineTabHref(
@@ -253,7 +240,7 @@ export async function CaseWorkspace({
   const contractDocuments = caseDocuments.filter((row) => row.kind === 'contract');
   const nonContractDocuments = caseDocuments.filter((row) => row.kind !== 'contract');
   const drawingDocuments = nonContractDocuments.filter((row) => row.preview_url);
-  const currentPhaseLabel = quote.status === 'accepted' ? '契約' : '正式見積';
+  const currentPhaseLabel = quote.status === 'accepted' ? '契約確認' : '正式見積';
   const siteEvidenceText = [
     request?.message ?? '',
     ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
@@ -317,7 +304,7 @@ export async function CaseWorkspace({
     },
     {
       label: '契約',
-      value: '未対応',
+      value: quote.status === 'accepted' ? '正式状態未登録' : '未対応',
       state: quote.status === 'accepted' ? 'current' : 'pending',
     },
     { label: '製造', value: '未対応', state: 'pending' },
@@ -327,7 +314,7 @@ export async function CaseWorkspace({
   ] as const;
 
   const currentWorkflowLabel =
-    quote.status === 'accepted' ? '契約' : `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+    quote.status === 'accepted' ? '契約確認' : `正式見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
     quote.status === 'accepted'
       ? '契約条件の確認'
@@ -428,7 +415,14 @@ export async function CaseWorkspace({
         <div className="flex flex-wrap">
           {TABS.map((tabItem) => {
             const active = activeTab === tabItem.key;
-            const future = ['site', 'production', 'handover', 'disaster'].includes(tabItem.key);
+            const referenceLabel =
+              tabItem.key === 'documents'
+                ? '参照'
+                : tabItem.key === 'disaster'
+                  ? '未判定'
+                  : ['site', 'production', 'handover'].includes(tabItem.key)
+                    ? '参考'
+                    : null;
             return (
               <Link
                 key={tabItem.key}
@@ -442,8 +436,9 @@ export async function CaseWorkspace({
               >
                 {tabItem.label}
                 {tabItem.key === 'estimate' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">第{quote.revision}版</span>}
-                {tabItem.key === 'documents' && <span className="ml-1 text-[0.56rem] text-[#2f6b4f]">参照</span>}
-                {future && <span className="ml-1 text-[0.56rem] text-muted">未対応</span>}
+                {referenceLabel && (
+                  <span className="ml-1 text-[0.56rem] text-muted">{referenceLabel}</span>
+                )}
               </Link>
             );
           })}
@@ -578,8 +573,23 @@ export async function CaseWorkspace({
       )}
 
       {activeTab === 'site' && (
-        <FuturePanel title="現地条件">
-          <div className="space-y-4" data-testid="case-site-condition-candidates">
+        <section className="space-y-4" data-testid="case-tab-site">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">現地条件</h2>
+                <Badge tone="neutral">参考表示</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                保存済み住所・案件受付メモ・案件資料から、正式確認前の候補情報を表示します。
+              </p>
+            </div>
+            <Link href={tabHref('documents')} className="btn-secondary btn-sm">
+              現地資料を確認
+            </Link>
+          </div>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-site-condition-candidates">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="font-semibold text-ink">正式登録候補</p>
@@ -587,9 +597,6 @@ export async function CaseWorkspace({
                   現在は保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式項目化は次工程です。
                 </p>
               </div>
-              <Link href={tabHref('documents')} className="btn-secondary btn-sm">
-                現地資料を確認
-              </Link>
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -631,8 +638,8 @@ export async function CaseWorkspace({
                 </p>
               </div>
             </div>
-          </div>
-        </FuturePanel>
+          </section>
+        </section>
       )}
 
       {activeTab === 'documents' && (

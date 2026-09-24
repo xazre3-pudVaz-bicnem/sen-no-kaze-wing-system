@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -625,7 +625,7 @@ export function EstimateTemplateWorkbench({
                     ? (section.expenseLabel ?? '諸費用') + ' ' + formatYen(section.expenseAmount)
                     : undefined;
                 return (
-                  <tbody key={section.code}>
+                  <Fragment key={section.code}>
                     {sectionHeader({
                       key: section.code,
                       label: section.label,
@@ -635,7 +635,7 @@ export function EstimateTemplateWorkbench({
                       editable: true,
                     })}
                     {!collapsedSections.has(section.code) && sectionRows.map(editableRow)}
-                  </tbody>
+                  </Fragment>
                 );
               })}
             </tbody>

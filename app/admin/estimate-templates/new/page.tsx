@@ -11,7 +11,7 @@ export default async function NewEstimateTemplatePage() {
     store.listOptions(),
     store.listCategories(),
   ]);
-  const categoryMap = new Map(categories.map((category) => [category.id, category]));
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
 
   return (
     <AdminPage

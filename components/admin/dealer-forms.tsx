@@ -398,6 +398,7 @@ export function DealerRevisionForm({
             </button>
           </div>
 
+          {scopeChangeMode ? (
           <div className="max-h-[40rem] overflow-auto [scrollbar-width:thin]" data-testid="revision-sheet-scroll">
             <table className="w-full min-w-[52rem] text-sm" data-testid="revision-preview">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-left text-xs text-[#536771]">
@@ -724,6 +725,279 @@ export function DealerRevisionForm({
               </tfoot>
             </table>
           </div>
+          ) : (
+<div className="space-y-3 px-3 pb-3" data-testid="revision-simple-editor">
+              {rows
+                .map((row, index) => ({ row, index }))
+                .filter(({ row }) => row.kind !== 'installation')
+                .map(({ row, index }) => (
+                  <Fragment key={\`simple-hidden-\${row.key}\`}>
+                    <input type="hidden" name={\`items.\${index}.kind\`} value={row.kind} />
+                    <input type="hidden" name={\`items.\${index}.name\`} value={row.name} />
+                    <input type="hidden" name={\`items.\${index}.description\`} value={row.description} />
+                    <input type="hidden" name={\`items.\${index}.unit\`} value={row.unit} />
+                    <input type="hidden" name={\`items.\${index}.remark\`} value={row.remark} />
+                    <input type="hidden" name={\`items.\${index}.unit_price\`} value={row.unit_price} />
+                    <input type="hidden" name={\`items.\${index}.quantity\`} value={row.quantity} />
+                    <input type="hidden" name={\`items.\${index}.image_url\`} value={row.image_url ?? ''} />
+                  </Fragment>
+                ))}
+
+              <section
+                className="overflow-hidden rounded-lg border border-line bg-white"
+                data-testid="confirmed-estimate-summary"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-[#f6f8f7] px-3 py-2">
+                  <div>
+                    <p className="text-xs font-semibold text-ink">確定済みの見積内容</p>
+                    <p className="mt-0.5 text-[0.62rem] text-muted">
+                      シミュレーター・前版で決まっている内容です。通常の現地工事入力では変更しません。
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleScopeChangeMode}
+                    data-testid="toggle-scope-change"
+                  >
+                    見積内容を変更
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 divide-x divide-y divide-line/70 sm:grid-cols-4">
+                  {[
+                    ['本体', baseTotal],
+                    ['内外装工事', interiorExteriorTotal],
+                    ['オプション', optionTotal],
+                    ['フリー商品', freeTotal],
+                  ].map(([label, amount]) => (
+                    <div key={String(label)} className="px-3 py-2">
+                      <p className="text-[0.62rem] text-muted">{label}</p>
+                      <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{formatYen(Number(amount))}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section
+                className="rounded-lg border border-[#d8c787] bg-[#fffaf0] px-3 py-2.5"
+                data-testid="site-work-reference"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-[#6f5518]">現地確認をもとに入力</p>
+                    <p className="mt-0.5 text-[0.62rem] leading-5 text-ink-soft">
+                      搬入、基礎、電気、給排水、設置などを確認して入力します。現地確認の正式な完了状態はまだ保存されません。
+                    </p>
+                  </div>
+                  {siteHref && (
+                    <a href={siteHref} className="text-[0.68rem] font-semibold text-[#2f6b4f] underline underline-offset-2">
+                      現地条件を見る
+                    </a>
+                  )}
+                </div>
+              </section>
+
+              <section
+                className="overflow-hidden rounded-lg border border-[#9eb6a9] bg-white"
+                data-testid="site-work-editor"
+              >
+                <div className="border-b border-line bg-[#eef7f1] px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-[#245c45]">現地工事</p>
+                      <p className="mt-0.5 text-[0.62rem] text-muted">必要な項目だけ追加し、数量・売価・備考を入力します。</p>
+                    </div>
+                    <span className="rounded-full bg-white px-2 py-1 text-[0.62rem] font-semibold text-[#315745]">
+                      {siteworkRows.length > 0 ? \`\${siteworkRows.length}項目\` : 'まだ入力なし'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5" data-testid="site-work-checklist">
+                    {COMMON_SITEWORK_ITEMS.map((name) => {
+                      const exists = siteworkNames.has(name);
+                      return (
+                        <span
+                          key={name}
+                          className={
+                            exists
+                              ? 'rounded-full border border-[#b8d3c4] bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-[#2f6b4f]'
+                              : 'rounded-full border border-line bg-[#f7f8f8] px-2 py-0.5 text-[0.6rem] text-muted'
+                          }
+                        >
+                          {name}：{exists ? '入力あり' : '未追加'}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {siteworkRows.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[48rem] text-xs" data-testid="site-work-table">
+                      <thead className="bg-[#f7f9f8] text-left text-[0.64rem] text-muted">
+                        <tr>
+                          <th className="min-w-[14rem] px-2 py-1.5 font-semibold">品名</th>
+                          <th className="w-16 px-2 py-1.5 text-right font-semibold">数量</th>
+                          <th className="w-16 px-2 py-1.5 font-semibold">単位</th>
+                          <th className="w-24 px-2 py-1.5 text-right font-semibold">売価</th>
+                          <th className="w-28 px-2 py-1.5 text-right font-semibold">金額</th>
+                          <th className="w-40 px-2 py-1.5 font-semibold">備考</th>
+                          <th className="w-8 px-1 py-1.5"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line/70">
+                        {siteworkRows.map(({ row: r, index: i }) => (
+                          <tr key={r.key} className="bg-white" data-testid={\`site-work-row-\${i}\`}>
+                            <td className="p-0">
+                              <input type="hidden" name={\`items.\${i}.kind\`} value={r.kind} />
+                              <input type="hidden" name={\`items.\${i}.description\`} value={r.description} />
+                              <input type="hidden" name={\`items.\${i}.image_url\`} value={r.image_url ?? ''} />
+                              <Input
+                                name={\`items.\${i}.name\`}
+                                value={r.name}
+                                onChange={(event) => update(r.key, { name: event.target.value })}
+                                className={cellInputClass}
+                                data-revision-col="name"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                                required
+                              />
+                            </td>
+                            <td className="p-0">
+                              <Input
+                                name={\`items.\${i}.quantity\`}
+                                type="number"
+                                min={0.01}
+                                step="any"
+                                value={r.quantity}
+                                onChange={(event) => update(r.key, { quantity: Number(event.target.value) })}
+                                className={\`\${cellInputClass} text-right\`}
+                                data-revision-col="quantity"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="p-0">
+                              <Input
+                                name={\`items.\${i}.unit\`}
+                                value={r.unit}
+                                onChange={(event) => update(r.key, { unit: event.target.value })}
+                                className={cellInputClass}
+                                data-revision-col="unit"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="p-0">
+                              <Input
+                                name={\`items.\${i}.unit_price\`}
+                                type="number"
+                                min={0}
+                                step={1000}
+                                value={r.unit_price}
+                                onChange={(event) => update(r.key, { unit_price: Number(event.target.value) })}
+                                className={\`\${cellInputClass} text-right\`}
+                                data-revision-col="sale"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="bg-[#fafbf9] px-2 py-1 text-right font-semibold tabular-nums">{formatYen(amountOf(r))}</td>
+                            <td className="p-0">
+                              <Input
+                                name={\`items.\${i}.remark\`}
+                                value={r.remark}
+                                onChange={(event) => update(r.key, { remark: event.target.value })}
+                                className={cellInputClass}
+                                data-revision-col="remark"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="px-1 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRows((current) => current.filter((item) => item.key !== r.key));
+                                  markDirty();
+                                }}
+                                className="rounded p-1 text-muted hover:bg-sand hover:text-warn"
+                                aria-label={\`\${r.name || '現地工事'}を削除\`}
+                              >
+                                <Trash2 className="size-3.5" aria-hidden="true" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t border-[#9eb6a9] bg-[#eef7f1] font-semibold">
+                          <td colSpan={4} className="px-2 py-1.5">現地工事計</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{formatYen(siteworkTotal)}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-muted">
+                    現地工事はまだ追加されていません。必要な項目だけ下から追加してください。
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-line bg-[#fafbf9] px-3 py-2">
+                  {COMMON_SITEWORK_ITEMS.filter((name) => !siteworkNames.has(name)).map((name) => (
+                    <Button
+                      key={name}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => addRow('installation', { name, price: 0 })}
+                    >
+                      <Plus className="size-3.5" aria-hidden="true" />
+                      {name}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => addRow('installation')}
+                    data-testid="add-installation"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    その他の現地工事
+                  </Button>
+                </div>
+              </section>
+
+              <section
+                className="overflow-hidden rounded-lg border border-line bg-white"
+                data-testid="revision-change-preview"
+              >
+                <div className="border-b border-line bg-[#f7f9f8] px-3 py-2">
+                  <p className="text-xs font-semibold text-ink">今回の変更</p>
+                  <p className="mt-0.5 text-[0.62rem] text-muted">第{quote.revision + 1}版を発行する前の確認用です。</p>
+                </div>
+                {changePreview.length > 0 ? (
+                  <div className="divide-y divide-line/70">
+                    {changePreview.map((change) => (
+                      <div key={change.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+                        <span className="min-w-0 text-ink-soft">{change.label}</span>
+                        {change.delta !== null && (
+                          <span className="shrink-0 font-semibold tabular-nums text-ink">
+                            {change.delta > 0 ? '+' : ''}{formatYen(change.delta)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="px-3 py-3 text-xs text-muted">まだ変更はありません。</p>
+                )}
+              </section>
+            </div>
+          )}
         </>
       ): (
         <div className="overflow-x-auto">

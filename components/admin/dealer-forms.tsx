@@ -169,7 +169,7 @@ export function DealerRevisionForm({
   const toggleScopeChangeMode = () => {
     const next = !scopeChangeMode;
     setScopeChangeMode(next);
-    setCollapsedSections(next ? new Set<string>() : defaultCollapsedSections());
+    if (!next) setCollapsedSections(defaultCollapsedSections());
   };
   const handleSheetKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
@@ -202,6 +202,13 @@ export function DealerRevisionForm({
     });
     markDirty();
   };
+  const sectionKeyForKind = (kind: Row['kind']) => {
+    if (kind === 'base' || kind === 'base_expense') return 'base';
+    if (kind === 'interior_exterior' || kind === 'interior_exterior_expense') return 'interior';
+    if (kind === 'option' || kind === 'option_expense') return 'option';
+    if (kind === 'installation') return 'sitework';
+    return 'free';
+  };
   const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) => {
     setRows((cur) =>
       insertByKind(cur, {
@@ -216,6 +223,11 @@ export function DealerRevisionForm({
         image_url: preset?.image_url ?? null,
       })
     );
+    setCollapsedSections((current) => {
+      const next = new Set(current);
+      next.delete(sectionKeyForKind(kind));
+      return next;
+    });
     markDirty();
   };
   const [pickerOpen, setPickerOpen] = useState(false);

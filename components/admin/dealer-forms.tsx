@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useActionState, useState } from 'react';
+import { Fragment, useActionState, useState, type KeyboardEvent } from 'react';
 import { LockKeyhole, Plus, Trash2, X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
@@ -112,7 +112,7 @@ export function DealerRevisionForm({
     (canEditBase ? FULL_KINDS : DEALER_KINDS).includes(k as RevisionItemKind);
 
   const lockedItems = sheetMode ? items.filter((i) => !editable(i.kind)) : [];
-  const [rows, setRows] = useState<Row[]>(() =>
+  const buildInitialRows = () =>
     items
       .filter((i) => editable(i.kind))
       .map((i, n) => ({
@@ -125,8 +125,10 @@ export function DealerRevisionForm({
         unit_price: i.unit_price,
         quantity: i.quantity,
         image_url: i.image_url ?? null,
-      }))
-  );
+      }));
+  const [rows, setRows] = useState<Row[]>(buildInitialRows);
+  const [isDirty, setIsDirty] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
@@ -140,8 +142,41 @@ export function DealerRevisionForm({
   const subRaw = baseTotal + interiorExteriorTotal + optionTotal + entered;
   const subtotal = Math.floor(subRaw / 1000) * 1000;
   const tax = Math.floor(subtotal * quote.tax_rate);
+  const editingTotal = subtotal + tax;
+  const revisionDifference = editingTotal - quote.total;
 
-  const update = (key: string, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const markDirty = () => setIsDirty(true);
+  const update = (key: string, patch: Partial<Row>) => {
+    setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    markDirty();
+  };
+  const toggleSection = (key: string) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const resetRows = () => {
+    setRows(buildInitialRows());
+    setCollapsedSections(new Set());
+    setIsDirty(false);
+  };
+  const handleSheetKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
+    const col = event.currentTarget.dataset.revisionCol;
+    if (!col) return;
+    event.preventDefault();
+    const cells = Array.from(
+      document.querySelectorAll<HTMLInputElement>(`[data-revision-col="${col}"]`)
+    ).filter((element) => !element.disabled && element.offsetParent !== null);
+    const index = cells.indexOf(event.currentTarget);
+    const target = cells[event.shiftKey ? index - 1 : index + 1];
+    if (!target) return;
+    target.focus();
+    target.select();
+  };
   const rowKinds = canEditBase ? FULL_KINDS : DEALER_KINDS;
   const insertByKind = (cur: Row[], next: Row) => {
     const lastSameKind = cur.reduce((last, row, index) => (row.kind === next.kind ? index : last), -1);
@@ -151,13 +186,15 @@ export function DealerRevisionForm({
     if (nextGroup < 0) return [...cur, next];
     return [...cur.slice(0, nextGroup), next, ...cur.slice(nextGroup)];
   };
-  const changeKind = (key: string, kind: RevisionItemKind) =>
+  const changeKind = (key: string, kind: RevisionItemKind) => {
     setRows((cur) => {
       const row = cur.find((item) => item.key === key);
       if (!row) return cur;
       return insertByKind(cur.filter((item) => item.key !== key), { ...row, kind });
     });
-  const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) =>
+    markDirty();
+  };
+  const addRow = (kind: Row['kind'], preset?: { name: string; price: number; description?: string; unit?: string; image_url?: string | null }) => {
     setRows((cur) =>
       insertByKind(cur, {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
@@ -171,6 +208,8 @@ export function DealerRevisionForm({
         image_url: preset?.image_url ?? null,
       })
     );
+    markDirty();
+  };
   const [pickerOpen, setPickerOpen] = useState(false);
   const cellInputClass = sheetMode
     ? 'h-7 w-full rounded-none border-transparent bg-transparent px-2 py-0.5 text-xs shadow-none focus:border-[#6d9480] focus:bg-white focus:ring-1 focus:ring-[#6d9480]/30'

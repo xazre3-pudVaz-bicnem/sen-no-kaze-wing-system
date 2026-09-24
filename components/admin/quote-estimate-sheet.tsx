@@ -14,6 +14,7 @@ export function QuoteEstimateSheet({
   canEditBase,
   canRevise,
   startInEditMode = false,
+  siteHref,
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -22,6 +23,7 @@ export function QuoteEstimateSheet({
   canEditBase: boolean;
   canRevise: boolean;
   startInEditMode?: boolean;
+  siteHref?: string;
 }) {
   const [editing, setEditing] = useState(startInEditMode && canRevise);
 
@@ -36,6 +38,7 @@ export function QuoteEstimateSheet({
           canEditBase={canEditBase}
           sheetMode
           onCancel={() => setEditing(false)}
+          siteHref={siteHref}
         />
         <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
           <QuoteReferenceDetails quote={quote} items={items} showSelectedImages={false} />

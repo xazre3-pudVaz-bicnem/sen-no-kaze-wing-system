@@ -308,7 +308,9 @@ export async function saveVariantGroupAction(_prev: AdminFormState, formData: Fo
   const parsed = variantGroupSchema.safeParse({
     id: nullableId(formData.get('id')),
     option_id: formData.get('option_id'),
-    code: formData.get('code'),
+    // 選択項目コードは表示条件・Import互換の技術キー。通常の登録担当者には入力させず、
+    // 新規手入力時だけ内部生成し、既存値は下で必ず保持する。
+    code: `vg-${randomUUID()}`,
     name: formData.get('name'),
     note: formData.get('note'),
     depends_on_group_code: formData.get('depends_on_group_code'),
@@ -326,11 +328,9 @@ export async function saveVariantGroupAction(_prev: AdminFormState, formData: Fo
     const variants = await store.getOptionVariants(option.id);
     const existing = parsed.data.id ? variants.groups.find((group) => group.id === parsed.data.id) : null;
     if (parsed.data.id && !existing) return { ok: false, error: '選択項目が見つかりません。' };
-    if (existing && existing.code !== parsed.data.code) {
-      return { ok: false, fieldErrors: { code: ['登録後のコードは変更できません。表示名を変更してください。'] } };
-    }
-    if (variants.groups.some((group) => group.code === parsed.data.code && group.id !== parsed.data.id)) {
-      return { ok: false, fieldErrors: { code: ['この商品では同じ選択項目コードが既に使われています。'] } };
+    const internalCode = existing?.code ?? parsed.data.code;
+    if (variants.groups.some((group) => group.code === internalCode && group.id !== parsed.data.id)) {
+      return { ok: false, fieldErrors: { _form: ['選択項目を追加できませんでした。もう一度お試しください。'] } };
     }
 
     const dependencyCode = parsed.data.depends_on_group_code;
@@ -370,7 +370,7 @@ export async function saveVariantGroupAction(_prev: AdminFormState, formData: Fo
     await store.upsertVariantGroup({
       id: parsed.data.id ?? randomUUID(),
       option_id: option.id,
-      code: parsed.data.code,
+      code: internalCode,
       name: parsed.data.name,
       note: parsed.data.note,
       depends_on_group_code: dependencyCode,
@@ -420,7 +420,8 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       id,
       option_id: optionId,
       group_id: groupId,
-      code: formData.get('code'),
+      // 選択肢コードも内部技術キー。新規手入力時だけ生成し、既存値は下で保持する。
+      code: `vc-${randomUUID()}`,
       name: formData.get('name'),
       kind: formData.get('kind') || 'option',
       extra_price: formData.get('extra_price') || 0,
@@ -434,15 +435,11 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
       return { ok: false, fieldErrors: flattenErrors(parsed.error) };
     }
-    if (existing && existing.code !== parsed.data.code) {
-      if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
-      return { ok: false, fieldErrors: { code: ['登録後のコードは変更できません。表示名を変更してください。'] } };
-    }
-
+    const internalCode = existing?.code ?? parsed.data.code;
     const groupChoices = variants.choices.filter((choice) => choice.group_id === group.id);
-    if (groupChoices.some((choice) => choice.code === parsed.data.code && choice.id !== id)) {
+    if (groupChoices.some((choice) => choice.code === internalCode && choice.id !== id)) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
-      return { ok: false, fieldErrors: { code: ['この選択項目では同じ選択肢コードが既に使われています。'] } };
+      return { ok: false, fieldErrors: { _form: ['選択肢を追加できませんでした。もう一度お試しください。'] } };
     }
     if (parsed.data.kind === 'standard' && groupChoices.some((choice) => choice.id !== id && choice.kind === 'standard')) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
@@ -477,7 +474,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     await store.upsertVariantChoice({
       id: parsed.data.id ?? randomUUID(),
       group_id: group.id,
-      code: parsed.data.code,
+      code: internalCode,
       name: parsed.data.name,
       kind: parsed.data.kind,
       extra_price: parsed.data.extra_price,

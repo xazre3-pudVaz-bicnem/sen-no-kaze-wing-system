@@ -81,8 +81,10 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
-  it('登録後のコード変更と複数標準をサーバー側でも防ぐ', () => {
-    expect(actions).toContain('登録後のコードは変更できません');
+  it('技術コードを内部生成・既存保持し、複数標準もサーバー側で防ぐ', () => {
+    expect(actions).toContain('code: `vg-${randomUUID()}`');
+    expect(actions).toContain('code: `vc-${randomUUID()}`');
+    expect(actions.match(/const internalCode = existing\?\.code \?\? parsed\.data\.code;/g)).toHaveLength(2);
     expect(actions).toContain('標準の選択肢は1項目につき1つだけです');
     expect(actions).toContain('表示条件に使われているため');
   });

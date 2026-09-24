@@ -67,28 +67,6 @@ function GroupFields({
             required
           />
         </Field>
-        <Field
-          label="コード"
-          htmlFor={`variant-group-code-${group?.id ?? 'new'}`}
-          required
-          hint={isNew ? '英小文字・数字・ハイフン。登録後は変更できません' : '登録後は変更できません'}
-          errors={e.code}
-        >
-          {isNew ? (
-            <Input
-              id="variant-group-code-new"
-              name="code"
-              placeholder="例：wall-color"
-              pattern="[a-z0-9-]+"
-              required
-            />
-          ) : (
-            <>
-              <input type="hidden" name="code" value={group.code} />
-              <Input id={`variant-group-code-${group.id}`} value={group.code} readOnly />
-            </>
-          )}
-        </Field>
         <Field label="表示順" htmlFor={`variant-group-sort-${group?.id ?? 'new'}`} errors={e.sort_order}>
           <Input
             id={`variant-group-sort-${group?.id ?? 'new'}`}
@@ -202,7 +180,7 @@ function ChoiceEditor({
       <input type="hidden" name="group_id" value={group.id} />
       <ActionStatus state={state} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="選択肢名" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} required errors={e.name}>
           <Input
             id={`variant-choice-name-${choice?.id ?? group.id}`}
@@ -211,28 +189,6 @@ function ChoiceEditor({
             placeholder="例：ホワイト"
             required
           />
-        </Field>
-        <Field
-          label="コード"
-          htmlFor={`variant-choice-code-${choice?.id ?? group.id}`}
-          required
-          hint={isNew ? '登録後は変更できません' : '登録後は変更できません'}
-          errors={e.code}
-        >
-          {isNew ? (
-            <Input
-              id={`variant-choice-code-new-${group.id}`}
-              name="code"
-              placeholder="例：white"
-              pattern="[a-z0-9-]+"
-              required
-            />
-          ) : (
-            <>
-              <input type="hidden" name="code" value={choice.code} />
-              <Input id={`variant-choice-code-${choice.id}`} value={choice.code} readOnly />
-            </>
-          )}
         </Field>
         <Field label="区分" htmlFor={`variant-choice-kind-${choice?.id ?? group.id}`} errors={e.kind}>
           <Select id={`variant-choice-kind-${choice?.id ?? group.id}`} name="kind" defaultValue={choice?.kind ?? 'option'}>
@@ -362,7 +318,7 @@ export function OptionVariantManager({
                   <div>
                     <h3 className="font-semibold">{group.name}</h3>
                     <p className="mt-1 text-xs text-muted">
-                      {group.code}・{groupChoices.length}選択肢・{group.status === 'published' ? '公開' : '非公開'}
+                      {groupChoices.length}選択肢・{group.status === 'published' ? '公開' : '非公開'}
                     </p>
                   </div>
                   {group.depends_on_group_code && (
@@ -441,7 +397,6 @@ function ChoicePriceEditor({
       <input type="hidden" name="option_id" value={optionId} />
       <input type="hidden" name="group_id" value={group.id} />
       <input type="hidden" name="name" value={choice.name} />
-      <input type="hidden" name="code" value={choice.code} />
       <input type="hidden" name="kind" value={choice.kind} />
       <input type="hidden" name="sort_order" value={choice.sort_order} />
       <input type="hidden" name="status" value={choice.status} />

@@ -18,3 +18,4 @@
 | 2026-09-21T04:58:40.694Z | published | combination-plan-basics: 本体を組み合わせて広さをつくる考え方 入力 1920 / 出力 1956 トークン |
 | 2026-09-22T04:59:05.258Z | published | what-is-shell-spec: 本体に含まれるものと含まれないもの 入力 2186 / 出力 1885 トークン |
 | 2026-09-23T04:47:39.018Z | published | maintenance-basics: 設置後の維持管理でやることを整理する 入力 2121 / 出力 2257 トークン |
+| 2026-09-24T04:54:22.749Z | published | prefab-vs-wooden-container: プレハブと木造コンテナを比べるときの観点 入力 2267 / 出力 1873 トークン |

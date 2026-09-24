@@ -958,7 +958,7 @@ export function OptionForm({
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <p className="font-semibold">価格</p>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="この商品の登録済み価格。標準品との差額は別途の計算で扱います" errors={e.price}>
+              <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。標準品との差額は別途の計算で扱います" errors={e.price}>
                 <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
               </Field>
               <Field label="メーカー参考価格（税別・表示のみ）" htmlFor={`list_price-${mode}`} errors={e.list_price}>
@@ -967,6 +967,9 @@ export function OptionForm({
             </div>
             <div className="mt-4">
               <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
+              <p className="mt-2 text-xs leading-5 text-muted">
+                単に価格が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。
+              </p>
             </div>
           </div>
 

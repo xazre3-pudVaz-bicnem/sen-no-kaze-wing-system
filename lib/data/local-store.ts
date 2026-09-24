@@ -1120,6 +1120,7 @@ export class LocalStore implements DataStore {
       const parentItems = new Map(
         db.quoteItems.filter((item) => item.quote_id === parent.id).map((item) => [item.id, item])
       );
+      const seenSourceItemIds = new Set<string>();
       for (const it of input.items) {
         if (!hasRoleAtLeast(actor.role, 'dealer')) {
           throw new StoreError('FORBIDDEN', '見積を編集できるのは代理店以上です');
@@ -1127,8 +1128,14 @@ export class LocalStore implements DataStore {
         if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
           throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
-        if (it.source_item_id && !parentItems.has(it.source_item_id)) {
-          throw new StoreError('VALIDATION', '親見積に存在しない明細が指定されています');
+        if (it.source_item_id) {
+          if (!parentItems.has(it.source_item_id)) {
+            throw new StoreError('VALIDATION', '親見積に存在しない明細が指定されています');
+          }
+          if (seenSourceItemIds.has(it.source_item_id)) {
+            throw new StoreError('VALIDATION', '同じ親見積明細を複数行へ再利用することはできません');
+          }
+          seenSourceItemIds.add(it.source_item_id);
         }
         const isStandardDelta = it.name === '選択商品の変更差額';
         if ((!isStandardDelta && it.unit_price < 0) || it.quantity <= 0) {
@@ -1139,10 +1146,15 @@ export class LocalStore implements DataStore {
       // 既存行で単価・数量が未変更なら、親Revisionに確定保存された amount を引き継ぐ。
       const amount = (it: DealerRevisionItem) => {
         const source = it.source_item_id ? parentItems.get(it.source_item_id) : null;
+        const canReuseSnapshot =
+          source &&
+          source.kind === it.kind &&
+          source.name === it.name &&
+          (source.unit ?? '式') === (it.unit || '式');
         return computeQuoteRevisionItemAmount(
           it.unit_price,
           it.quantity,
-          source
+          canReuseSnapshot
             ? { unit_price: source.unit_price, quantity: source.quantity, amount: source.amount }
             : null
         );

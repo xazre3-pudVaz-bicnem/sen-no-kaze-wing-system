@@ -13,7 +13,9 @@ describe('Admin quote Excel-like editor', () => {
     expect(sheet).toContain("const [editing, setEditing] = useState");
     expect(sheet).toContain('data-testid="quote-edit-toggle"');
     expect(sheet).toContain('＋新しい見積書');
-    expect(sheet).toContain('<QuoteTable quote={quote}');
+    expect(sheet).toContain('<QuoteTable');
+    expect(sheet).toContain('quote={quote}');
+    expect(sheet).toContain('showSelectedImages={false}');
     expect(sheet).toContain('<DealerRevisionForm');
     expect(sheet).toContain('sheetMode');
     expect(sheet).toContain('onCancel={() => setEditing(false)}');
@@ -54,7 +56,7 @@ describe('Admin quote Excel-like editor', () => {
 
   it('keeps quote reference details visible while editing', () => {
     expect(quoteTable).toContain('export function QuoteReferenceDetails');
-    expect(sheet).toContain('<QuoteReferenceDetails quote={quote} items={items} />');
+    expect(sheet).toContain('<QuoteReferenceDetails quote={quote} items={items} showSelectedImages={false} />');
     expect(sheet).toContain('data-testid="quote-estimate-editing"');
   });
 

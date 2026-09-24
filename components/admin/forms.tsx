@@ -1101,7 +1101,7 @@ export function OptionForm({
                   : mode === 'all' && returnTo
                     ? '下書き登録して見積テンプレートへ戻る'
                     : mode === 'all'
-                      ? '下書き保存してSTEP 2へ'
+                      ? '下書きを作成してSTEP 1を続ける'
                       : '販売・詳細設定を保存'
             }
           />

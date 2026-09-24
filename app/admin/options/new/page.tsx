@@ -33,7 +33,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       {returnTo && (
         <Alert tone="info">
-          見積テンプレートの商品追加から移動しています。下の保存ボタンは「下書き登録して見積テンプレートへ戻る」と表示され、既存の return_to 導線で元の画面へ戻ります。
+          見積テンプレートの商品追加から移動しています。まず下書きを作成してSTEP 1を続け、STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。
         </Alert>
       )}
 

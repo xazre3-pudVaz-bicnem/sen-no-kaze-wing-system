@@ -91,8 +91,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(adminActions).toContain("returnUrl.searchParams.set('created_option', id)");
     expect(editPage).toContain('returnTo={returnTo}');
     expect(editPage).toContain('name="return_to" value={returnTo}');
-    expect(editPage).toContain('サブ画像・メーカー資料');
-    expect(editPage).toContain('お客様選択');
+    expect(media).toContain('サブ画像・メーカー資料');
+    expect(variants).toContain('お客様選択');
   });
 
   it('新規商品の初回画面は基本情報だけに絞り、次へで商品IDを作成する', () => {

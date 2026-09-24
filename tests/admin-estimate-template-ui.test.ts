@@ -150,6 +150,23 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('お客様には表示しない');
   });
 
+  it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {
+    expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
+    expect(workbench).toContain('未保存の変更あり');
+    expect(workbench).toContain('編集前と同じ');
+    expect(workbench).toContain('編集前に戻す');
+    expect(workbench).toContain("collapsedSections.has('base')");
+    expect(workbench).toContain('toggleSection(section.code)');
+    expect(workbench).toContain("isCollapsed ? '+' : '−'");
+    expect(workbench).toContain('data-estimate-grid-col="quantity"');
+    expect(workbench).toContain('handleGridKeyDown');
+    expect(workbench).toContain('event.nativeEvent.isComposing');
+    expect(workbench).toContain('event.keyCode === 229');
+    expect(workbench).toContain("event.key !== 'Enter'");
+    expect(workbench).toContain('Shift+Enter＝上へ');
+    expect(workbench).toContain('税込合計');
+  });
+
   it('見積テンプレートから商品登録へ移動して戻れる', () => {
     expect(workbench).toContain('/admin/options/new?return_to=');
     expect(optionNew).toContain('見積テンプレートの商品追加から移動しています');

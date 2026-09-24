@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -102,6 +102,8 @@ export function EstimateTemplateWorkbench({
   const [pickerSection, setPickerSection] = useState<SectionCode | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
+  const [collapsedSections, setCollapsedSections] = useState<Set<'base' | SectionCode>>(() => new Set());
 
   const expenseBySection = useMemo(
     () => new Map(sections.map((section) => [section.code, section.expenseAmount])),
@@ -152,10 +154,38 @@ export function EstimateTemplateWorkbench({
     setPickerSection(null);
     setPickerCategory('');
     setPickerQuery('');
+    setCollapsedSections(new Set());
+    setIsDirty(false);
+  };
+
+  const toggleSection = (section: 'base' | SectionCode) => {
+    setCollapsedSections((current) => {
+      const next = new Set(current);
+      if (next.has(section)) next.delete(section);
+      else next.add(section);
+      return next;
+    });
+  };
+
+  const handleGridKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
+    const col = event.currentTarget.dataset.estimateGridCol;
+    if (!col) return;
+
+    event.preventDefault();
+    const cells = Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(`[data-estimate-grid-col="${col}"]`)
+    ).filter((element) => !element.disabled && element.offsetParent !== null);
+    const index = cells.indexOf(event.currentTarget);
+    const target = cells[event.shiftKey ? index - 1 : index + 1];
+    if (!target) return;
+    target.focus();
+    if (target instanceof HTMLInputElement) target.select();
   };
 
   const updateRow = (id: string, patch: Partial<EstimateTemplateWorkbenchLine>) => {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setIsDirty(true);
   };
 
   const addProduct = (product: EstimateTemplateWorkbenchProduct) => {
@@ -176,6 +206,7 @@ export function EstimateTemplateWorkbench({
       },
     ]);
     setPickerSection(null);
+    setIsDirty(true);
   };
 
   const addFreeLine = (section: SectionCode) => {
@@ -194,155 +225,195 @@ export function EstimateTemplateWorkbench({
         customerSelection: '—',
       },
     ]);
+    setIsDirty(true);
+  };
+
+  const removeRow = (id: string) => {
+    setRows((current) => current.filter((item) => item.id !== id));
+    setIsDirty(true);
   };
 
   const renderSection = (section: EstimateTemplateWorkbenchSection) => {
     const sectionRows = rows.filter((row) => row.section === section.code);
+    const isCollapsed = collapsedSections.has(section.code);
     return (
       <section key={section.code} className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
-          <div>
-            <h2 className="font-semibold">{section.label}</h2>
-            <p className="mt-1 text-xs text-muted">
-              {sectionRows.length}行
-              {section.expenseAmount > 0 && '・' + (section.expenseLabel ?? '諸費用') + ' ' + formatYen(section.expenseAmount)}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary btn-sm" onClick={() => setPickerSection(section.code)}>
-              ＋ 商品から追加
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="flex size-6 shrink-0 items-center justify-center rounded border border-line bg-white text-sm font-semibold"
+              aria-expanded={!isCollapsed}
+              aria-label={isCollapsed ? section.label + 'の明細を開く' : section.label + 'の明細を閉じる'}
+              onClick={() => toggleSection(section.code)}
+            >
+              {isCollapsed ? '+' : '−'}
             </button>
-            <button type="button" className="btn-ghost btn-sm" onClick={() => addFreeLine(section.code)}>
-              ＋ 自由項目を追加
-            </button>
+            <div className="min-w-0">
+              <h2 className="font-semibold">{section.label}</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                {sectionRows.length}行
+                {section.expenseAmount > 0 && '・' + (section.expenseLabel ?? '諸費用') + ' ' + formatYen(section.expenseAmount)}
+              </p>
+            </div>
           </div>
+          {!isCollapsed && (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary btn-sm" onClick={() => setPickerSection(section.code)}>
+                ＋ 商品から追加
+              </button>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => addFreeLine(section.code)}>
+                ＋ 自由項目を追加
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className={showCost ? 'w-full min-w-[82rem] text-sm' : 'w-full min-w-[66rem] text-sm'}>
-            <thead className="bg-sand/60 text-left text-xs text-muted">
-              <tr>
-                <th className="px-3 py-2 font-semibold">種別</th>
-                <th className="px-3 py-2 font-semibold">グループ</th>
-                <th className="px-3 py-2 font-semibold">項目</th>
-                <th className="px-2 py-2 text-right font-semibold">数量</th>
-                <th className="px-2 py-2 font-semibold">単位</th>
-                {showCost && <th className="px-3 py-2 text-right font-semibold">自組織原価</th>}
-                {showCost && <th className="px-3 py-2 text-right font-semibold">原価金額</th>}
-                <th className="px-3 py-2 text-right font-semibold">販売単価</th>
-                <th className="px-3 py-2 text-right font-semibold">販売金額</th>
-                <th className="px-3 py-2 font-semibold">備考</th>
-                <th className="px-3 py-2 font-semibold">お客様選択</th>
-                <th className="px-2 py-2"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line/70">
-              {sectionRows.map((row) => (
-                <tr key={row.id} className="bg-white">
-                  <td className="px-3 py-2 text-xs text-muted">
-                    {row.source === 'product' ? '商品' : row.source === 'free' ? '自由項目' : '移行明細'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      value={row.groupLabel}
-                      onChange={(event) => updateRow(row.id, { groupLabel: event.target.value })}
-                      className="min-w-28"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      value={row.name}
-                      onChange={(event) => updateRow(row.id, { name: event.target.value })}
-                      className="min-w-48"
-                    />
-                  </td>
-                  <td className="px-2 py-2">
-                    <Input
-                      type="number"
-                      min={0.0001}
-                      step={0.1}
-                      value={row.quantity}
-                      onChange={(event) => updateRow(row.id, { quantity: Number(event.target.value) })}
-                      className="w-24 text-right"
-                    />
-                  </td>
-                  <td className="px-2 py-2">
-                    <Input
-                      value={row.unit}
-                      onChange={(event) => updateRow(row.id, { unit: event.target.value })}
-                      className="w-20"
-                    />
-                  </td>
-                  {showCost && <td className="px-3 py-2 text-right text-muted">—</td>}
-                  {showCost && <td className="px-3 py-2 text-right text-muted">—</td>}
-                  <td className="px-3 py-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1}
-                      value={row.saleUnitPrice}
-                      onChange={(event) => updateRow(row.id, { saleUnitPrice: Number(event.target.value) })}
-                      className="w-32 text-right"
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    {formatYen(Math.round(row.quantity * row.saleUnitPrice))}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      value={row.remark}
-                      onChange={(event) => updateRow(row.id, { remark: event.target.value })}
-                      className="min-w-36"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    {row.source === 'product' ? (
-                      <Select
-                        value={row.customerSelection}
-                        onChange={(event) => updateRow(row.id, { customerSelection: event.target.value })}
-                        className="min-w-36"
-                      >
-                        <option>標準・変更可</option>
-                        <option>標準・固定</option>
-                        <option>任意オプション</option>
-                        <option>お客様には表示しない</option>
-                      </Select>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    <button
-                      type="button"
-                      className="text-xs text-danger underline underline-offset-4"
-                      onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}
-                    >
-                      削除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {sectionRows.length === 0 && (
+        {isCollapsed ? (
+          <div className="flex items-center justify-between gap-4 bg-ivory px-5 py-3 text-sm font-semibold">
+            <span>{section.label} 計</span>
+            <span className="tabular-nums">{formatYen(totals[section.code])}</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className={showCost ? 'w-full min-w-[82rem] text-sm' : 'w-full min-w-[66rem] text-sm'}>
+              <thead className="bg-sand/60 text-left text-xs text-muted">
                 <tr>
-                  <td colSpan={showCost ? 12 : 10} className="px-5 py-8 text-center text-sm text-muted">
-                    明細はありません。「商品から追加」または「自由項目を追加」から登録できます。
-                  </td>
+                  <th className="px-3 py-2 font-semibold">種別</th>
+                  <th className="px-3 py-2 font-semibold">グループ</th>
+                  <th className="px-3 py-2 font-semibold">項目</th>
+                  <th className="px-2 py-2 text-right font-semibold">数量</th>
+                  <th className="px-2 py-2 font-semibold">単位</th>
+                  {showCost && <th className="px-3 py-2 text-right font-semibold">自組織原価</th>}
+                  {showCost && <th className="px-3 py-2 text-right font-semibold">原価金額</th>}
+                  <th className="px-3 py-2 text-right font-semibold">販売単価</th>
+                  <th className="px-3 py-2 text-right font-semibold">販売金額</th>
+                  <th className="px-3 py-2 font-semibold">備考</th>
+                  <th className="px-3 py-2 font-semibold">お客様選択</th>
+                  <th className="px-2 py-2"></th>
                 </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-line bg-ivory font-semibold">
-                <td colSpan={showCost ? 8 : 6} className="px-3 py-3 text-right">{section.label} 計</td>
-                <td className="px-3 py-3 text-right tabular-nums">{formatYen(totals[section.code])}</td>
-                <td colSpan={3}></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-line/70">
+                {sectionRows.map((row) => (
+                  <tr key={row.id} className="bg-white">
+                    <td className="px-3 py-2 text-xs text-muted">
+                      {row.source === 'product' ? '商品' : row.source === 'free' ? '自由項目' : '移行明細'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        value={row.groupLabel}
+                        data-estimate-grid-col="group"
+                        onKeyDown={handleGridKeyDown}
+                        onChange={(event) => updateRow(row.id, { groupLabel: event.target.value })}
+                        className="min-w-28"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        value={row.name}
+                        data-estimate-grid-col="name"
+                        onKeyDown={handleGridKeyDown}
+                        onChange={(event) => updateRow(row.id, { name: event.target.value })}
+                        className="min-w-48"
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <Input
+                        type="number"
+                        min={0.0001}
+                        step={0.1}
+                        value={row.quantity}
+                        data-estimate-grid-col="quantity"
+                        onKeyDown={handleGridKeyDown}
+                        onChange={(event) => updateRow(row.id, { quantity: Number(event.target.value) })}
+                        className="w-24 text-right"
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <Input
+                        value={row.unit}
+                        data-estimate-grid-col="unit"
+                        onKeyDown={handleGridKeyDown}
+                        onChange={(event) => updateRow(row.id, { unit: event.target.value })}
+                        className="w-20"
+                      />
+                    </td>
+                    {showCost && <td className="px-3 py-2 text-right text-muted">—</td>}
+                    {showCost && <td className="px-3 py-2 text-right text-muted">—</td>}
+                    <td className="px-3 py-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={row.saleUnitPrice}
+                        data-estimate-grid-col="sale"
+                        onKeyDown={handleGridKeyDown}
+                        onChange={(event) => updateRow(row.id, { saleUnitPrice: Number(event.target.value) })}
+                        className="w-32 text-right"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {formatYen(Math.round(row.quantity * row.saleUnitPrice))}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Input
+                        value={row.remark}
+                        data-estimate-grid-col="remark"
+                        onKeyDown={handleGridKeyDown}
+                        onChange={(event) => updateRow(row.id, { remark: event.target.value })}
+                        className="min-w-36"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      {row.source === 'product' ? (
+                        <Select
+                          value={row.customerSelection}
+                          data-estimate-grid-col="selection"
+                          onKeyDown={handleGridKeyDown}
+                          onChange={(event) => updateRow(row.id, { customerSelection: event.target.value })}
+                          className="min-w-36"
+                        >
+                          <option>標準・変更可</option>
+                          <option>標準・固定</option>
+                          <option>任意オプション</option>
+                          <option>お客様には表示しない</option>
+                        </Select>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        type="button"
+                        className="text-xs text-danger underline underline-offset-4"
+                        onClick={() => removeRow(row.id)}
+                      >
+                        削除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {sectionRows.length === 0 && (
+                  <tr>
+                    <td colSpan={showCost ? 12 : 10} className="px-5 py-8 text-center text-sm text-muted">
+                      明細はありません。「商品から追加」または「自由項目を追加」から登録できます。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-line bg-ivory font-semibold">
+                  <td colSpan={showCost ? 8 : 6} className="px-3 py-3 text-right">{section.label} 計</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{formatYen(totals[section.code])}</td>
+                  <td colSpan={3}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </section>
     );
   };
-
   return (
     <div className="space-y-6">
       {createdProduct && (
@@ -351,6 +422,31 @@ export function EstimateTemplateWorkbench({
           画面確認用として「{returnSection === 'interior_exterior' ? '内外装工事' : returnSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
         </div>
       )}
+
+      <section
+        className="sticky top-0 z-30 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur"
+        data-testid="estimate-workbench-sticky-summary"
+      >
+        <span
+          className={
+            isDirty
+              ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[0.68rem] font-semibold text-amber-800'
+              : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
+          }
+        >
+          {isDirty ? '未保存の変更あり' : '編集前と同じ'}
+        </span>
+        <span className="text-xs text-muted">
+          税別小計 <strong className="ml-1 text-sm text-ink">{formatYen(subtotalRaw)}</strong>
+        </span>
+        <span className="text-xs text-muted">
+          調整額 <strong className="ml-1 text-sm text-ink">{formatYen(adjustment)}</strong>
+        </span>
+        <span className="text-xs text-muted">
+          税込合計 <strong className="ml-1 text-base text-ink">{formatYen(total)}</strong>
+        </span>
+        <span className="ml-auto text-[0.68rem] text-muted">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
+      </section>
 
       <section className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div>
@@ -376,9 +472,10 @@ export function EstimateTemplateWorkbench({
           >
             原価＋販売価格
           </button>
-          {demoMode ? (
-            <Button type="button" variant="secondary" onClick={resetRows}>最初の状態に戻す</Button>
-          ) : (
+          <Button type="button" variant="secondary" onClick={resetRows} disabled={!isDirty}>
+            {demoMode ? '最初の状態に戻す' : '編集前に戻す'}
+          </Button>
+          {!demoMode && (
             <>
               <Button type="button" variant="secondary" disabled>下書きを保存</Button>
               <Button type="button" disabled>
@@ -390,45 +487,65 @@ export function EstimateTemplateWorkbench({
       </section>
 
       <section className="card overflow-hidden">
-        <div className="border-b border-line px-5 py-4">
-          <h2 className="font-semibold">本体</h2>
-          <p className="mt-1 text-xs text-muted">本体マスターの公開中の版を参照します。見積テンプレート上では直接変更しません。</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="flex size-6 shrink-0 items-center justify-center rounded border border-line bg-white text-sm font-semibold"
+              aria-expanded={!collapsedSections.has('base')}
+              aria-label={collapsedSections.has('base') ? '本体の明細を開く' : '本体の明細を閉じる'}
+              onClick={() => toggleSection('base')}
+            >
+              {collapsedSections.has('base') ? '+' : '−'}
+            </button>
+            <div>
+              <h2 className="font-semibold">本体</h2>
+              <p className="mt-0.5 text-xs text-muted">本体マスターの公開中の版を参照します。見積テンプレート上では直接変更しません。</p>
+            </div>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[52rem] text-sm">
-            <thead className="bg-sand/60 text-left text-xs text-muted">
-              <tr>
-                <th className="px-3 py-2 font-semibold">工事区分</th>
-                <th className="px-3 py-2 font-semibold">項目</th>
-                <th className="px-3 py-2 text-right font-semibold">数量</th>
-                <th className="px-3 py-2 font-semibold">単位</th>
-                <th className="px-3 py-2 text-right font-semibold">販売単価</th>
-                <th className="px-3 py-2 text-right font-semibold">販売金額</th>
-                <th className="px-3 py-2 font-semibold">備考</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {baseLines.map((line) => (
-                <tr key={line.id}>
-                  <td className="px-3 py-2">{line.section}</td>
-                  <td className="px-3 py-2 font-medium">{line.name}</td>
-                  <td className="px-3 py-2 text-right">{line.quantity}</td>
-                  <td className="px-3 py-2">{line.unit}</td>
-                  <td className="px-3 py-2 text-right">{formatYen(line.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right font-semibold">{formatYen(line.amount)}</td>
-                  <td className="px-3 py-2 text-xs text-muted">{line.remark}</td>
+        {collapsedSections.has('base') ? (
+          <div className="flex items-center justify-between gap-4 bg-ivory px-5 py-3 text-sm font-semibold">
+            <span>本体 計</span>
+            <span className="tabular-nums">{formatYen(baseTotal)}</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[52rem] text-sm">
+              <thead className="bg-sand/60 text-left text-xs text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">工事区分</th>
+                  <th className="px-3 py-2 font-semibold">項目</th>
+                  <th className="px-3 py-2 text-right font-semibold">数量</th>
+                  <th className="px-3 py-2 font-semibold">単位</th>
+                  <th className="px-3 py-2 text-right font-semibold">販売単価</th>
+                  <th className="px-3 py-2 text-right font-semibold">販売金額</th>
+                  <th className="px-3 py-2 font-semibold">備考</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-line bg-ivory font-semibold">
-                <td colSpan={5} className="px-3 py-3 text-right">本体計</td>
-                <td className="px-3 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {baseLines.map((line) => (
+                  <tr key={line.id}>
+                    <td className="px-3 py-2">{line.section}</td>
+                    <td className="px-3 py-2 font-medium">{line.name}</td>
+                    <td className="px-3 py-2 text-right">{line.quantity}</td>
+                    <td className="px-3 py-2">{line.unit}</td>
+                    <td className="px-3 py-2 text-right">{formatYen(line.unitPrice)}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatYen(line.amount)}</td>
+                    <td className="px-3 py-2 text-xs text-muted">{line.remark}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-line bg-ivory font-semibold">
+                  <td colSpan={5} className="px-3 py-3 text-right">本体計</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </section>
 
       {sections.map(renderSection)}

@@ -167,6 +167,53 @@ describe('0円商品のServer Actionガード', () => {
     }));
   });
 
+  it('基本情報だけの初回入力からDraftを作成し画像登録位置へ進める', async () => {
+    const store = {
+      upsertOption: vi.fn(async (value: unknown) => ({
+        ...option({ status: 'draft', price: 0 }),
+        ...(value as object),
+        id: OPTION_ID,
+      })),
+      setOptionRelations: vi.fn(async () => undefined),
+    };
+    mocks.getStore.mockResolvedValue(store);
+
+    const fd = new FormData();
+    fd.set('id', '');
+    fd.set('owner_id', '');
+    fd.set('base_model_id', '');
+    fd.set('category_id', CATEGORY_ID);
+    fd.set('manufacturer', 'TOTO');
+    fd.set('name', 'サザナ');
+    fd.set('model_no', 'HTV1616USX5');
+    fd.set('size_note', '1616');
+    fd.set('description', '');
+    fd.set('highlight', '');
+    fd.set('image_url', '');
+    fd.set('price', '0');
+    fd.set('selection_type', 'radio');
+    fd.set('preview_key', '');
+    fd.set('list_price', '');
+    fd.set('sort_order', '0');
+    fd.set('status', 'draft');
+
+    await expect(saveOptionAction({ ok: false }, fd)).rejects.toThrow('REDIRECT:');
+
+    expect(store.upsertOption).toHaveBeenCalledWith(expect.objectContaining({
+      id: null,
+      category_id: CATEGORY_ID,
+      manufacturer: 'TOTO',
+      name: 'サザナ',
+      model_no: 'HTV1616USX5',
+      size_note: '1616',
+      price: 0,
+      status: 'draft',
+    }));
+    expect(mocks.redirect).toHaveBeenCalledWith(
+      '/admin/options/' + OPTION_ID + '?step=info&saved=1#product-main-media'
+    );
+  });
+
   it('見積からの新規商品は下書き作成後も商品登録STEP1を継続する', async () => {
     const store = {
       upsertOption: vi.fn(async (value: unknown) => ({
@@ -192,6 +239,7 @@ describe('0円商品のServer Actionガード', () => {
     const redirectUrl = decodeURIComponent(String(mocks.redirect.mock.calls[0]?.[0] ?? ''));
     expect(redirectUrl).toContain('/admin/options/' + OPTION_ID + '?step=info&saved=1&return_to=');
     expect(redirectUrl).toContain('/admin/estimate-templates/template-1?return_section=option');
+    expect(redirectUrl).toContain('#product-main-media');
     expect(redirectUrl).not.toContain('created_option=');
   });
 

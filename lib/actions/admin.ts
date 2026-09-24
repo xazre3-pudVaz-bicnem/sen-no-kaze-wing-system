@@ -288,12 +288,12 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     if (returnTo) {
       const params = new URLSearchParams({
         step: 'info',
-        saved: '1',
+        created: '1',
         return_to: returnTo,
       });
-      redirect('/admin/options/' + createdId + '?' + params.toString() + '#product-main-media');
+      redirect('/admin/options/' + createdId + '?' + params.toString());
     }
-    redirect('/admin/options/' + createdId + '?step=info&saved=1#product-main-media');
+    redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
   return { ok: true, message: '保存しました' };
 }

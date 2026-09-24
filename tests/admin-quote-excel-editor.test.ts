@@ -97,11 +97,13 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('changeKind');
     expect(form).toContain('formatYen(amountOf(r))');
     expect(form).toContain('data-testid="revision-preview"');
-    expect(form).toContain('改訂見積を発行する（第${quote.revision + 1}版）');
+    expect(form).toContain('この内容で改訂見積を発行');
+    expect(form).toContain('この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。');
+    expect(form).not.toContain('改訂見積を発行する（第${quote.revision + 1}版）');
   });
 
   it('keeps the immutable issued-quote lifecycle wording in edit mode', () => {
+    expect(form).toContain('この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。');
     expect(form).toContain('現在の版は履歴として残ります。');
-    expect(form).toContain('発行すると現在の版は上書きされず、履歴として残ります。');
   });
 });

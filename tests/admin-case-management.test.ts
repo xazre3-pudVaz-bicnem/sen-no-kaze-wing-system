@@ -170,6 +170,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('const referenceLabel =');
     expect(workspace).toContain("tabItem.key === 'documents'");
     expect(workspace).toContain("quote.status === 'issued' && quote.revision === 1");
+    expect(workspace).toContain("href: tabHref('estimate', true)");
+    expect(workspace).toContain("if (edit) query.set('edit', '1')");
+    expect(workspace).toContain("key === 'edit'");
     expect(workspace).toContain('施工金額を見積へ反映');
     expect(workspace).toContain('お客様へ見積内容を案内');
   });
@@ -184,7 +187,10 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('参考表示');
     expect(workspace).toContain('未判定');
     expect(workspace).toContain('<QuoteEstimateSheet');
-    expect(workspace).toContain('startInEditMode={Boolean(created)}');
+    expect(workspace).toContain("key={edit === '1' ? 'edit' : 'view'}");
+    expect(workspace).toContain("startInEditMode={Boolean(created) || edit === '1'}");
+    expect(list).toContain('edit={sp.edit}');
+    expect(detail).toContain('edit={sp.edit}');
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
     expect(quoteEstimateSheet).toContain('showSelectedImages={false}');
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');

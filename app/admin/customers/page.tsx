@@ -30,7 +30,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
 
   return (
     <AdminPage
-      title="ユーザー・権限"
+      title="ユーザー・担当者"
       lead={`登録 ${profiles.length} 名（管理者 ${byRole('admin')}／総代理店 ${byRole('master_dealer')}／代理店 ${byRole('dealer')}／顧客 ${byRole('customer')}）`}
     >
       <div className="card p-4 text-xs text-ink-soft">

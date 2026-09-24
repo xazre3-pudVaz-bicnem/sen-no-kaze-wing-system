@@ -44,7 +44,7 @@ const sections: NavSection[] = [
     items: [
       { href: '/admin/settings', label: '設定一覧', exact: true },
       { href: '/admin/manual', label: '操作マニュアル' },
-      { href: '/admin/customers', label: 'ユーザー・権限', need: 'admin' },
+      { href: '/admin/customers', label: 'ユーザー・担当者', need: 'admin' },
       { href: '/admin/audit', label: '変更履歴', need: 'admin' },
     ],
   },

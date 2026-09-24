@@ -4,6 +4,7 @@ import { Fragment, useActionState, useState, type KeyboardEvent } from 'react';
 import { LockKeyhole, Plus, Trash2, X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
+import { computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
@@ -140,9 +141,10 @@ export function DealerRevisionForm({
   const freeTotal = sumOf('free');
   const entered = siteworkTotal + freeTotal;
   const subRaw = baseTotal + interiorExteriorTotal + optionTotal + entered;
-  const subtotal = Math.floor(subRaw / 1000) * 1000;
-  const tax = Math.floor(subtotal * quote.tax_rate);
-  const editingTotal = subtotal + tax;
+  const revisionTotals = computeQuoteRevisionTotals(subRaw, quote.adjustment, quote.tax_rate);
+  const subtotal = revisionTotals.subtotal;
+  const tax = revisionTotals.tax;
+  const editingTotal = revisionTotals.total;
   const revisionDifference = editingTotal - quote.total;
 
   const markDirty = () => setIsDirty(true);
@@ -319,6 +321,9 @@ export function DealerRevisionForm({
               原価：未登録
             </span>
             <span className="text-[0.65rem] text-muted">粗利：—</span>
+            <span className="text-[0.65rem] text-muted">
+              調整額 <strong className="ml-1 text-xs text-ink">{formatYen(quote.adjustment)}</strong>（前版から引継ぎ）
+            </span>
             <button
               type="button"
               className="ml-auto rounded border border-line bg-white px-2 py-1 text-[0.65rem] font-semibold text-ink-soft disabled:opacity-40"
@@ -602,8 +607,8 @@ export function DealerRevisionForm({
                   <td></td><td></td>
                 </tr>
                 <tr className="text-sm text-ink-soft">
-                  <td colSpan={6} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal - subRaw)}</td>
+                  <td colSpan={6} className="px-3 py-1">値引き等調整額（前版から引継ぎ）</td>
+                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(quote.adjustment)}</td>
                   <td></td><td></td>
                 </tr>
                 <tr className="text-sm">

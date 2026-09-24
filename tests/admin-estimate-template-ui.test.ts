@@ -147,6 +147,11 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('demoMode');
     expect(newForm).toContain('現在は画面確認用です');
     expect(newForm).toContain('編集内容は保存されません。保存・公開機能は準備中です');
+    expect(newForm).toContain('画面確認用サンプルでExcel明細編集を見る');
+    expect(newForm).toContain('openSampleEditor');
+    expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
+    expect(newForm).toContain("samplePreview ? '画面確認用サンプル' : '画面内プレビュー'");
+    expect(newForm).toContain('旧見積の表示用データを使ってExcel形式の操作を確認しています。');
     expect(newForm).toContain('将来は設置予定地から自動判定する想定です');
     expect(newForm).toContain('基準本体を選ぶ');
     expect(newForm).toContain('明細を見る');
@@ -157,6 +162,11 @@ describe('見積テンプレート管理UI', () => {
     expect(newPage).toContain('label="標準見積一覧へ戻る"');
     expect(newPage).toContain('model.presets.map');
     expect(newPage).toContain('loadPublishedBaseMasters()');
+    expect(newPage).toContain('BASE_BREAKDOWN_ITEMS');
+    expect(newPage).toContain("BASE_BREAKDOWN_TOTALS['wing-01:hotel']");
+    expect(newPage).toContain("model.slug === 'wing-01'");
+    expect(newPage).toContain("line.model_slug === 'wing-01' && line.spec_code === 'hotel'");
+    expect(newPage).toContain('sampleBaseMaster={sampleBaseMaster}');
     expect(newPage).toContain('store.listOptions()');
     expect(newPage).toContain('store.listCategories()');
     expect(newPage).toContain("option.status === 'published'");

@@ -50,15 +50,17 @@ function isTabKey(value: string | undefined): value is TabKey {
 function buildInlineTabHref(
   quoteId: string,
   tab: TabKey,
-  searchParams: Record<string, string | undefined> | undefined
+  searchParams: Record<string, string | undefined> | undefined,
+  edit = false
 ) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams ?? {})) {
-    if (!value || key === 'tab' || key === 'created' || key === 'revised' || key === 'from') continue;
+    if (!value || key === 'tab' || key === 'created' || key === 'revised' || key === 'from' || key === 'edit') continue;
     query.set(key, value);
   }
   query.set('case', quoteId);
   query.set('tab', tab);
+  if (edit) query.set('edit', '1');
   return `/admin/quotes?${query.toString()}#case-workspace`;
 }
 
@@ -150,6 +152,7 @@ export async function CaseWorkspace({
   created,
   revised,
   from,
+  edit,
   embedded = false,
   listSearchParams,
 }: {
@@ -159,6 +162,7 @@ export async function CaseWorkspace({
   created?: string;
   revised?: string;
   from?: string;
+  edit?: string;
   embedded?: boolean;
   listSearchParams?: Record<string, string | undefined>;
 }) {
@@ -338,10 +342,10 @@ export async function CaseWorkspace({
           ? 'お客様へ見積内容を案内'
           : '—';
 
-  const tabHref = (nextTab: TabKey) =>
+  const tabHref = (nextTab: TabKey, openEditor = false) =>
     embedded
-      ? buildInlineTabHref(quote.id, nextTab, listSearchParams)
-      : `/admin/quotes/${quote.id}?tab=${nextTab}`;
+      ? buildInlineTabHref(quote.id, nextTab, listSearchParams, openEditor)
+      : `/admin/quotes/${quote.id}?tab=${nextTab}${openEditor ? '&edit=1' : ''}`;
 
   const nextAction =
     quote.status === 'accepted'
@@ -357,7 +361,7 @@ export async function CaseWorkspace({
             title: '次にやること：現地を確認して施工金額を入力',
             description:
               '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
-            href: tabHref('estimate'),
+            href: tabHref('estimate', true),
             action: '施工金額を入力する',
           }
         : quote.status === 'issued'
@@ -365,7 +369,7 @@ export async function CaseWorkspace({
               title: '次にやること：見積内容を確認',
               description:
                 '現地で決めた施工金額や変更内容を確認してください。修正があれば「見積内容を更新」から反映し、内容がよければお客様へ見積をご案内します。',
-              href: tabHref('estimate'),
+              href: tabHref('estimate', true),
               action: '見積を確認・更新',
             }
           : {
@@ -571,7 +575,7 @@ export async function CaseWorkspace({
             catalog={catalog}
             canEditBase={canEditBase}
             canRevise={canRevise}
-            startInEditMode={Boolean(created)}
+            startInEditMode={Boolean(created) || edit === '1'}
           />
 
           <p className="text-xs leading-5 text-muted">

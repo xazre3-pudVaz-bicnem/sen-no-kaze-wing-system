@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   addOptionImageAction,
   deleteOptionImageAction,
@@ -12,6 +13,7 @@ import {
 import type { OptionImage, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
+import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
 
 const initial: AdminFormState = { ok: false };
 
@@ -67,9 +69,98 @@ function OptionImageEditor({ optionId, image }: { optionId: string; image: Optio
 }
 
 export function OptionMediaManager({ option }: { option: ProductOption }) {
+  const router = useRouter();
+  const { saveIfDirty } = useOptionRegistrationSave();
   const images = option.gallery_images ?? [];
-  const [imageState, imageAction, imagePending] = useActionState(addOptionImageAction, initial);
-  const [docState, docAction, docPending] = useActionState(uploadOptionManufacturerDocumentAction, initial);
+  const [imageState, setImageState] = useState<AdminFormState>(initial);
+  const [docState, setDocState] = useState<AdminFormState>(initial);
+  const [imagePending, setImagePending] = useState(false);
+  const [docPending, setDocPending] = useState(false);
+
+  const handleSubImages = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []);
+    if (!files.length || imagePending) return;
+
+    setImagePending(true);
+    setImageState(initial);
+    let savedCount = 0;
+
+    try {
+      const mainSaved = await saveIfDirty();
+      if (!mainSaved) {
+        setImageState({ ok: false, error: '商品情報を保存できなかったため、サブ画像の登録を中止しました。' });
+        return;
+      }
+
+      for (const [index, file] of files.entries()) {
+        const formData = new FormData();
+        formData.set('option_id', option.id);
+        formData.set('file', file);
+        formData.set('caption', '');
+        formData.set('sort_order', String(images.length + index));
+
+        const result = await addOptionImageAction(initial, formData);
+        if (!result.ok) {
+          if (savedCount > 0) {
+            const detail = result.error ?? result.fieldErrors?.file?.[0] ?? '残りの画像を保存できませんでした。';
+            setImageState({
+              ok: false,
+              error: `${savedCount}枚は保存済みです。続く画像の保存に失敗しました。 ${detail}`,
+            });
+            router.refresh();
+          } else {
+            setImageState(result);
+          }
+          return;
+        }
+        savedCount += 1;
+      }
+
+      setImageState({ ok: true, message: `${savedCount}枚のサブ画像を保存しました。` });
+      router.refresh();
+    } catch {
+      setImageState({
+        ok: false,
+        error: savedCount > 0
+          ? `${savedCount}枚は保存済みです。続く画像の保存中にエラーが発生しました。`
+          : 'サブ画像の保存中にエラーが発生しました。',
+      });
+      if (savedCount > 0) router.refresh();
+    } finally {
+      input.value = '';
+      setImagePending(false);
+    }
+  };
+
+  const handleManufacturerDocument = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file || docPending) return;
+
+    setDocPending(true);
+    setDocState(initial);
+
+    try {
+      const mainSaved = await saveIfDirty();
+      if (!mainSaved) {
+        setDocState({ ok: false, error: '商品情報を保存できなかったため、メーカー資料の登録を中止しました。' });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.set('option_id', option.id);
+      formData.set('file', file);
+      const result = await uploadOptionManufacturerDocumentAction(initial, formData);
+      setDocState(result);
+      if (result.ok) router.refresh();
+    } catch {
+      setDocState({ ok: false, error: 'メーカー資料PDFの保存中にエラーが発生しました。' });
+    } finally {
+      input.value = '';
+      setDocPending(false);
+    }
+  };
 
   return (
     <section id="product-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
@@ -127,21 +218,31 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
         <div className="border-t border-line pt-5">
           <ActionStatus state={imageState} />
-          <form action={imageAction} className="mt-3 grid gap-4 sm:grid-cols-2">
-            <input type="hidden" name="option_id" value={option.id} />
-            <Field label="サブ画像ファイル" htmlFor="option-sub-image" required errors={imageState.fieldErrors?.file}>
-              <Input id="option-sub-image" name="file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="py-2" required />
+          <div className="mt-3">
+            <Field
+              label="サブ画像ファイル"
+              htmlFor="option-sub-image"
+              hint="複数選択可・1枚10MBまで。選択すると自動で保存します。説明と表示順は保存後に各画像から変更できます。"
+              errors={imageState.fieldErrors?.file}
+            >
+              <Input
+                id="option-sub-image"
+                name="file"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="py-2"
+                multiple
+                disabled={imagePending}
+                onChange={(event) => void handleSubImages(event)}
+              />
             </Field>
-            <Field label="画像の説明" htmlFor="option-sub-caption" hint="任意。例：水栓側／収納部分" errors={imageState.fieldErrors?.caption}>
-              <Input id="option-sub-caption" name="caption" />
-            </Field>
-            <Field label="表示順" htmlFor="option-sub-sort" errors={imageState.fieldErrors?.sort_order}>
-              <Input id="option-sub-sort" name="sort_order" type="number" min={0} defaultValue={images.length} />
-            </Field>
-            <div className="flex items-end">
-              <PendingButton pending={imagePending}>サブ画像を追加</PendingButton>
-            </div>
-          </form>
+            {imagePending && (
+              <p className="mt-2 flex items-center gap-2 text-xs text-muted">
+                <Spinner />
+                サブ画像を保存しています…
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -180,18 +281,30 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         )}
 
         <ActionStatus state={docState} />
-        <form action={docAction} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <input type="hidden" name="option_id" value={option.id} />
+        <div>
           <Field
             label={option.manufacturer_document_url ? 'メーカー資料PDFを差し替える' : 'メーカー資料PDFを登録'}
             htmlFor="manufacturer-document"
-            hint="PDFのみ・20MBまで"
+            hint="PDFのみ・20MBまで。ファイルを選択すると自動で保存します。"
             errors={docState.fieldErrors?.file}
           >
-            <Input id="manufacturer-document" name="file" type="file" accept="application/pdf,.pdf" className="py-2" required />
+            <Input
+              id="manufacturer-document"
+              name="file"
+              type="file"
+              accept="application/pdf,.pdf"
+              className="py-2"
+              disabled={docPending}
+              onChange={(event) => void handleManufacturerDocument(event)}
+            />
           </Field>
-          <PendingButton pending={docPending}>{option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'}</PendingButton>
-        </form>
+          {docPending && (
+            <p className="mt-2 flex items-center gap-2 text-xs text-muted">
+              <Spinner />
+              メーカー資料PDFを保存しています…
+            </p>
+          )}
+        </div>
       </div>
       </div>
     </section>

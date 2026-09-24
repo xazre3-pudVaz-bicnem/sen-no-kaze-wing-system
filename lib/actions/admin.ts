@@ -33,6 +33,7 @@ import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset'
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 import { withPlanDisplaySize } from '@/lib/domain/plan-display';
+import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 
 export interface AdminFormState {
   ok: boolean;
@@ -181,6 +182,8 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   // options.code は既存Preset / Import互換の技術キー。登録担当者には入力させず、
   // 既存商品では必ず保持し、新規手入力商品だけ内部で一意な値を作る。
   const internalCode = existingOption?.code ?? `opt-${randomUUID()}`;
+  const imageFile = formData.get('image_file');
+  const uploadedNewImage = imageFile instanceof File && imageFile.size > 0;
   let image_url: string;
   try {
     image_url = await resolveImageUrl(formData, 'options', 'image_url', 'image_file');
@@ -227,6 +230,19 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     if (existingOption && existingOption.owner_id !== actor.id) {
       return { ok: false, error: '他の代理店が登録した商品は編集できません。' };
     }
+  }
+  if (
+    existingOption?.status === 'published' &&
+    parsed.data.status === 'published' &&
+    introducesUnconfirmedZeroPrice(existingOption, parsed.data)
+  ) {
+    if (uploadedNewImage && image_url) {
+      await store.deleteUploadedImage(image_url).catch(() => undefined);
+    }
+    return {
+      ok: false,
+      error: '公開中の商品を通常価格0円へ変更する場合は、いったん「下書きへ戻す」で保存し、STEP 2で0円が正式価格であることを確認して再公開してください。',
+    };
   }
   const dependencies = formData
     .getAll('requires')
@@ -281,6 +297,18 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     redirect(`/admin/options/${id}?step=preview&error=${encodeURIComponent(errState(e).error ?? '公開できませんでした。')}`);
   }
   const { store, option } = context;
+
+  if (
+    option.status !== 'published' &&
+    requiresZeroPriceConfirmation(option) &&
+    formData.get('confirm_zero_price') !== 'on'
+  ) {
+    redirect(
+      `/admin/options/${id}?step=preview&error=${encodeURIComponent(
+        '商品価格が0円です。正式な0円として公開する場合は確認欄にチェックしてください。価格未確認なら商品情報へ戻り、価格確定後に公開してください。'
+      )}`
+    );
+  }
 
   if (option.status !== 'published') {
     const {
@@ -1353,6 +1381,24 @@ export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formDa
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
   try {
     const store = await getStore();
+    const existingById = new Map((await store.listOptions()).map((option) => [option.id, option]));
+    const blocked = parsed.data.items.find((item) => {
+      const existing = existingById.get(item.id);
+      return (
+        existing?.status === 'published' &&
+        introducesUnconfirmedZeroPrice(existing, {
+          price: item.price,
+          price_on_request: existing.price_on_request,
+        })
+      );
+    });
+    if (blocked) {
+      const existing = existingById.get(blocked.id);
+      return {
+        ok: false,
+        error: `公開中の商品「${existing?.name ?? blocked.id}」を一括価格更新から通常価格0円へ変更することはできません。商品登録画面でいったん下書きへ戻し、STEP 2で0円が正式価格であることを確認して再公開してください。`,
+      };
+    }
     await store.updateOptionPrices(parsed.data.items);
     revalidatePath('/admin/base-breakdown');
     revalidatePath('/', 'layout');

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { seedCatalog } from '../lib/seed/catalog';
+import { computeQuoteRevisionTotals } from '../lib/domain/quote-revision';
 
 const root = process.cwd();
 const tempDirs: string[] = [];
@@ -67,6 +68,13 @@ describe('亀有実受注案件ローカルfixture', () => {
       sum('option_expense') +
       sum('installation');
     expect(raw).toBe(8_369_798);
+    expect(computeQuoteRevisionTotals(raw, db.quotes[0].adjustment, db.quotes[0].tax_rate)).toEqual({
+      subtotal_raw: 8_369_798,
+      adjustment: -9_798,
+      subtotal: 8_360_000,
+      tax: 836_000,
+      total: 9_196_000,
+    });
   });
 
   it('保存Configurationへ防火・設備・外壁4面・設置地を持たせる', () => {

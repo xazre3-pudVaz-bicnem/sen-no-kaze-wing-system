@@ -263,6 +263,10 @@ export const assignDealerSchema = z.object({
 
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({
+  source_item_id: z.preprocess(
+    (value) => (value === '' || value === undefined ? null : value),
+    z.uuid().nullable()
+  ),
   kind: z.enum([
     'base',
     'base_expense',

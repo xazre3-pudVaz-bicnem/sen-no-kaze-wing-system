@@ -84,6 +84,8 @@ export type RevisionItemKind =
   | 'free';
 
 export interface DealerRevisionItem {
+  /** 親Revisionの既存明細。新規追加行は null / 未指定。 */
+  source_item_id?: string | null;
   kind: RevisionItemKind;
   name: string;
   description: string | null;

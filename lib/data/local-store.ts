@@ -42,7 +42,7 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
-import { ROUNDING_UNIT } from '@/lib/domain/pricing';
+import { computeQuoteRevisionItemAmount, computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
 import {
@@ -1117,6 +1117,10 @@ export class LocalStore implements DataStore {
       if (parent.status !== 'issued') {
         throw new StoreError('LOCKED', '改訂できるのは発行中（issued）の見積だけです。');
       }
+      const parentItems = new Map(
+        db.quoteItems.filter((item) => item.quote_id === parent.id).map((item) => [item.id, item])
+      );
+      const seenSourceItemIds = new Set<string>();
       for (const it of input.items) {
         if (!hasRoleAtLeast(actor.role, 'dealer')) {
           throw new StoreError('FORBIDDEN', '見積を編集できるのは代理店以上です');
@@ -1124,14 +1128,37 @@ export class LocalStore implements DataStore {
         if (!canEditBase && (it.kind === 'base' || it.kind === 'base_expense')) {
           throw new StoreError('FORBIDDEN', '本体を編集できるのは総代理店・本部だけです');
         }
+        if (it.source_item_id) {
+          if (!parentItems.has(it.source_item_id)) {
+            throw new StoreError('VALIDATION', '親見積に存在しない明細が指定されています');
+          }
+          if (seenSourceItemIds.has(it.source_item_id)) {
+            throw new StoreError('VALIDATION', '同じ親見積明細を複数行へ再利用することはできません');
+          }
+          seenSourceItemIds.add(it.source_item_id);
+        }
         const isStandardDelta = it.name === '選択商品の変更差額';
         if ((!isStandardDelta && it.unit_price < 0) || it.quantity <= 0) {
           throw new StoreError('VALIDATION', '金額・数量の入力が正しくありません');
         }
       }
 
-      // 本体内訳は 17.6㎡ のような小数の数量を持つ
-      const amount = (it: DealerRevisionItem) => Math.round(it.unit_price * Math.max(0.01, it.quantity));
+      // 既存行で単価・数量が未変更なら、親Revisionに確定保存された amount を引き継ぐ。
+      const amount = (it: DealerRevisionItem) => {
+        const source = it.source_item_id ? parentItems.get(it.source_item_id) : null;
+        const canReuseSnapshot =
+          source &&
+          source.kind === it.kind &&
+          source.name === it.name &&
+          (source.unit ?? '式') === (it.unit || '式');
+        return computeQuoteRevisionItemAmount(
+          it.unit_price,
+          it.quantity,
+          canReuseSnapshot
+            ? { unit_price: source.unit_price, quantity: source.quantity, amount: source.amount }
+            : null
+        );
+      };
       const sumOf = (...kinds: DealerRevisionItem['kind'][]) =>
         input.items.filter((it) => kinds.includes(it.kind)).reduce((sum, it) => sum + amount(it), 0);
       const installation = sumOf('installation', 'free');
@@ -1148,8 +1175,10 @@ export class LocalStore implements DataStore {
       const optionExpense = interiorExpense + optionExpenseLines;
       const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
-      const subtotal = Math.floor(subRaw / ROUNDING_UNIT) * ROUNDING_UNIT;
-      const tax = Math.floor(subtotal * parent.tax_rate);
+      const totals = computeQuoteRevisionTotals(subRaw, parent.adjustment, parent.tax_rate);
+      if (totals.subtotal < 0) {
+        throw new StoreError('VALIDATION', '調整額を引き継ぐと税抜請負額が0円未満になります。明細を確認してください');
+      }
       const issued = new Date();
 
       const next: Quote = {
@@ -1164,10 +1193,10 @@ export class LocalStore implements DataStore {
         option_subtotal: optionSubtotal,
         option_expense: optionExpense,
         installation_subtotal: installation,
-        adjustment: subtotal - subRaw,
-        subtotal,
-        tax,
-        total: subtotal + tax,
+        adjustment: totals.adjustment,
+        subtotal: totals.subtotal,
+        tax: totals.tax,
+        total: totals.total,
         notes: '本見積書は標準見積を基に、担当者が案件内容を反映して作成した確定見積です。',
         dealer_id: parent.dealer_id ?? (actor.role === 'dealer' ? actor.id : null),
         dealer_note: input.dealer_note,

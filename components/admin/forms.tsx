@@ -451,6 +451,7 @@ function productSizeMeta(categoryCode: string): { label: string; placeholder: st
     'exterior-wall': { label: '種類・主な仕様', placeholder: '例：窯業系サイディング／16mm／ヨコ張り' },
     floor: { label: '床材種類・主な仕様', placeholder: '例：複合フローリング／12mm／耐水' },
     'wall-ceiling': { label: '内装材種類・主な仕様', placeholder: '例：ビニル壁紙／準不燃' },
+    'entrance-door': { label: 'サイズ・開き勝手・防火仕様', placeholder: '例：W900×H2000／右吊元／防火戸' },
     sash: { label: '窓種・サイズ・呼称', placeholder: '例：引違い窓／16520／Low-E複層' },
     'interior-door': { label: '建具種類・主な仕様', placeholder: '例：引戸／木質系／表示錠' },
     lighting: { label: '照明種別・電源', placeholder: '例：ダウンライト／AC100V／電球色' },
@@ -540,6 +541,12 @@ function productRegistrationGuidance(categoryCode: string): ProductRegistrationG
       example: 'サンゲツ / 壁紙シリーズ / ビニル壁紙 / 準不燃 / 代表品番',
       fixedInfo: ['材質', '厚み', '防火性能', '表面仕上げ'],
     },
+    'entrance-door': {
+      manufacturers: ['LIXIL', 'YKK AP', '三協アルミ'],
+      sizeCandidates: ['片開き', '親子ドア', '引戸', 'ガラス框ドア'],
+      example: 'LIXIL / 玄関ドアシリーズ / 片開き / W900×H2000 / 防火戸 / 代表品番',
+      fixedInfo: ['本体寸法', '開き勝手', '防火性能', '断熱性能', 'ハンドル・錠'],
+    },
     sash: {
       manufacturers: ['LIXIL', 'YKK AP', '三協アルミ'],
       sizeCandidates: ['引違い窓', 'FIX窓', '縦すべり出し窓', '横すべり出し窓', '上げ下げ窓'],
@@ -586,6 +593,7 @@ function categoryRegistrationHint(categoryCode: string): string | null {
     'exterior-wall': '材質・厚み・張り方など施工判断に必要な固定情報を入力し、色・柄はお客様が選べる場合だけ下の「お客様選択」で登録します。',
     floor: '床材種類・厚みなど固定情報を入力し、色・柄など選択できる内容は下の「お客様選択」で登録します。',
     'wall-ceiling': '材質・防火性能など固定情報を入力し、色・柄など選択できる内容は下の「お客様選択」で登録します。',
+    'entrance-door': '玄関ドアはサッシ・室内建具と分けて登録します。色・ハンドルなどを選べる場合は下の「お客様選択」で登録し、スマートキーは別オプションとして扱います。',
     sash: '窓種・呼称・ガラス仕様など固定情報を入力します。現在のサッシカテゴリーはお客様画面非表示のため、台帳・見積用の情報を優先します。',
     'interior-door': '建具種類・材質・錠など固定情報を入力し、建具カラーやハンドルを選べる場合だけ下の「お客様選択」で登録します。',
     lighting: '照明種別・電源・取付場所を確認します。屋外照明は防水性能やセンサー有無も確認します。',

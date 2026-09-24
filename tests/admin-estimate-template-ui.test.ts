@@ -167,7 +167,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('＋自由明細');
     expect(workbench).toContain('商品マスターから選び直す');
     expect(workbench).toContain("pickerTargetRowId ? '商品を変更' : '商品を追加'");
-    expect(workbench).toContain("pickerTargetRowId ? 'この商品に変更' : '追加'");
+    expect(workbench).toContain("pickerTargetRowId ? '変更' : '追加'");
     expect(workbench).toContain('標準・変更可');
     expect(workbench).toContain('標準・固定');
     expect(workbench).toContain('任意オプション');
@@ -188,6 +188,19 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。');
     expect(detailPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
     expect(newPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
+  });
+
+  it('商品選択はカテゴリ別の折り畳み一覧でコンパクトに比較できる', () => {
+    expect(workbench).toContain('pickerProductGroups');
+    expect(workbench).toContain('collapsedPickerCategories');
+    expect(workbench).toContain('togglePickerCategory');
+    expect(workbench).toContain("group.categoryName + 'を開く'");
+    expect(workbench).toContain("group.categoryName + 'を閉じる'");
+    expect(workbench).toContain('{group.products.length}件');
+    expect(workbench).toContain('divide-y divide-line');
+    expect(workbench).toContain('size-12 shrink-0');
+    expect(workbench).toContain("product.priceOnRequest ? '別途見積' : formatYen(product.price)");
+    expect(workbench).not.toContain('grid gap-3 sm:grid-cols-2');
   });
 
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {

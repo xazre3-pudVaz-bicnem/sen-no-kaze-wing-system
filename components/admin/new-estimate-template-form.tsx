@@ -299,40 +299,30 @@ export function NewEstimateTemplateForm({
             </button>
           </div>
 
-          <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                  {samplePreview ? '画面確認用サンプル' : '画面内プレビュー'}
-                </span>
-                <span className="text-xs text-muted">{samplePreview ? '保存・公開されません' : '新規標準見積'}</span>
-              </div>
-              <h2 className="mt-1 truncate text-lg font-semibold">{name || '名称未設定'}</h2>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-semibold">{name || '名称未設定'}</h2>
+              <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                {samplePreview ? '画面確認用' : '新規標準見積'}
+              </span>
             </div>
-          </div>
-
-          <div className="grid gap-px border-t border-line bg-line text-xs sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              ['基準本体', selectedBaseMaster ? selectedBaseMaster.name + (samplePreview ? '' : ' v' + selectedBaseMaster.revisionVersion) : '—'],
-              ['商品モデル', modelName || '—'],
-              ['仕様', specLabel || '—'],
-              ['防火仕様', selectedFireLabel || '—'],
-              ['適用地域', regionLabel || '—'],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-white px-3 py-2.5">
-                <p className="text-[10px] text-muted">{label}</p>
-                <p className="mt-0.5 truncate font-semibold text-ink">{value}</p>
-              </div>
-            ))}
+            <p className="mt-1 text-xs text-muted">
+              基準本体：{selectedBaseMaster ? selectedBaseMaster.name + (samplePreview ? '' : ' v' + selectedBaseMaster.revisionVersion) : '—'}
+              <span className="mx-2">｜</span>
+              防火：{selectedFireLabel || '—'}
+              <span className="mx-2">｜</span>
+              地域：{regionLabel || '—'}
+            </p>
+            {samplePreview && (
+              <p className="mt-1 text-[11px] text-muted">※画面確認用です。変更内容は保存・公開されません。</p>
+            )}
           </div>
         </section>
 
-        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-relaxed text-ink-soft">
-          <strong className="font-semibold text-ink">
-            {samplePreview ? '画面確認用サンプルです。' : '現在は画面確認用です。'}
-          </strong>
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-2 text-xs leading-relaxed text-ink-soft">
+          <strong className="font-semibold text-ink">{samplePreview ? '画面確認用です。' : '現在は画面確認用です。'}</strong>
           {samplePreview
-            ? ' 旧見積の表示用データと編集確認用の仮明細を使っています。黄色いセルの編集・商品変更・商品追加・削除・折り畳みを試せます。変更内容は保存・公開されません。'
+            ? ' 黄色いセルを編集できます。変更内容は保存されません。'
             : ' 編集内容は保存されません。保存・公開機能は準備中です。'}
         </div>
 

@@ -75,11 +75,13 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(newPage).toContain('下書き登録して見積テンプレートへ戻る');
     expect(newPage).toContain('return_to');
     expect(forms).toContain('下書き登録して見積テンプレートへ戻る');
-    expect(forms).toContain('下書き保存してSTEP 2へ');
+    expect(forms).toContain('下書きを作成してSTEP 1を続ける');
     expect(forms).toContain("mode === 'all' && option");
     expect(forms).toContain("'商品情報を保存'");
-    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?step=preview&saved=1')");
+    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?step=info&saved=1')");
     expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
+    expect(editPage).toContain('サブ画像・メーカー資料');
+    expect(editPage).toContain('お客様選択');
   });
 
   it('新規商品は下書きで作成し、お客様表示確認後に明示公開する', () => {
@@ -93,6 +95,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('publishOptionAction');
     expect(editPage).toContain('現在は下書きです。上のお客様表示に問題がなければ公開してください。');
     expect(editPage).toContain('この内容で公開');
+    expect(newPage).toContain('続くSTEP 1でサブ画像・メーカー資料・お客様選択まで整えます。');
     expect(newPage).toContain('STEP 2で実際のお客様表示を確認してから公開します。');
     expect(forms).toContain("option?.status === 'published'");
     expect(forms).toContain('下書き商品の公開はSTEP 2のお客様表示を確認してから行います。');

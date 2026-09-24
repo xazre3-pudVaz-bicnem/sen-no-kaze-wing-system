@@ -42,7 +42,7 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
-import { ROUNDING_UNIT } from '@/lib/domain/pricing';
+import { computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
 import {
@@ -1148,8 +1148,10 @@ export class LocalStore implements DataStore {
       const optionExpense = interiorExpense + optionExpenseLines;
       const optionTotal = optionSubtotal + optionExpense;
       const subRaw = baseTotal + optionTotal + installation;
-      const subtotal = Math.floor(subRaw / ROUNDING_UNIT) * ROUNDING_UNIT;
-      const tax = Math.floor(subtotal * parent.tax_rate);
+      const totals = computeQuoteRevisionTotals(subRaw, parent.adjustment, parent.tax_rate);
+      if (totals.subtotal < 0) {
+        throw new StoreError('VALIDATION', '調整額を引き継ぐと税抜請負額が0円未満になります。明細を確認してください');
+      }
       const issued = new Date();
 
       const next: Quote = {
@@ -1164,10 +1166,10 @@ export class LocalStore implements DataStore {
         option_subtotal: optionSubtotal,
         option_expense: optionExpense,
         installation_subtotal: installation,
-        adjustment: subtotal - subRaw,
-        subtotal,
-        tax,
-        total: subtotal + tax,
+        adjustment: totals.adjustment,
+        subtotal: totals.subtotal,
+        tax: totals.tax,
+        total: totals.total,
         notes: '本見積書は標準見積を基に、担当者が案件内容を反映して作成した確定見積です。',
         dealer_id: parent.dealer_id ?? (actor.role === 'dealer' ? actor.id : null),
         dealer_note: input.dealer_note,

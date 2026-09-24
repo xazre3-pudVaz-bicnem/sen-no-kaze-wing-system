@@ -128,7 +128,9 @@ export function DealerRevisionForm({
       }));
   const [rows, setRows] = useState<Row[]>(buildInitialRows);
   const [isDirty, setIsDirty] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
+  const defaultCollapsedSections = () => new Set<string>(['base', 'interior', 'option', 'free']);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(defaultCollapsedSections);
+  const [scopeChangeMode, setScopeChangeMode] = useState(false);
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
@@ -160,8 +162,14 @@ export function DealerRevisionForm({
   };
   const resetRows = () => {
     setRows(buildInitialRows());
-    setCollapsedSections(new Set());
+    setCollapsedSections(defaultCollapsedSections());
+    setScopeChangeMode(false);
     setIsDirty(false);
+  };
+  const toggleScopeChangeMode = () => {
+    const next = !scopeChangeMode;
+    setScopeChangeMode(next);
+    setCollapsedSections(next ? new Set<string>() : defaultCollapsedSections());
   };
   const handleSheetKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
@@ -227,9 +235,9 @@ export function DealerRevisionForm({
     amount: number;
     always?: boolean;
   }[] = [
-    { key: 'base', label: '本体価格', kinds: ['base', 'base_expense'], subtotalLabel: '【本体価格計】', amount: baseTotal, always: true },
+    { key: 'base', label: '本体', kinds: ['base', 'base_expense'], subtotalLabel: '【本体価格計】', amount: baseTotal, always: true },
     { key: 'interior', label: '内外装工事', kinds: ['interior_exterior', 'interior_exterior_expense'], subtotalLabel: '【内外装価格計】', amount: interiorExteriorTotal },
-    { key: 'option', label: 'オプション価格', kinds: ['option', 'option_expense'], subtotalLabel: '【オプション価格計】', amount: optionTotal, always: true },
+    { key: 'option', label: 'オプション', kinds: ['option', 'option_expense'], subtotalLabel: '【オプション価格計】', amount: optionTotal, always: true },
     { key: 'sitework', label: '別途工事（運送費・現地工事）', kinds: ['installation'], subtotalLabel: '【別途工事計】', amount: siteworkTotal, always: true },
     { key: 'free', label: 'フリー商品', kinds: ['free'], subtotalLabel: '【フリー商品計】', amount: freeTotal },
   ];
@@ -265,7 +273,7 @@ export function DealerRevisionForm({
           </p>
           <p className={sheetMode ? 'mt-0.5 text-[0.65rem] text-muted' : 'mt-1 text-xs text-muted'}>
             {sheetMode
-              ? '現地確認後の施工金額や商品変更を、表示中の見積と同じ並びで反映できます。Tabで右、Enterで同じ列の次行へ移動します。'
+              ? '現地確認後に決まる運送・基礎・電気・給排水・設置などの金額を入力します。シミュレーターで確定した内容は通常は確認表示です。'
               : '入力内容を反映して改訂見積を発行すると次の版が作られ、現在の版は履歴として残ります。'}
           </p>
         </div>
@@ -312,13 +320,6 @@ export function DealerRevisionForm({
                 {revisionDifference > 0 ? '+' : ''}{formatYen(revisionDifference)}
               </strong>
             </span>
-            <span
-              className="rounded-full border border-line bg-sand/50 px-2 py-1 text-[0.65rem] font-semibold text-muted"
-              title="Quote Revisionに発行時点の原価スナップショットがまだ保存されていないため、実額は表示しません。"
-            >
-              原価：未登録
-            </span>
-            <span className="text-[0.65rem] text-muted">粗利：—</span>
             <button
               type="button"
               className="ml-auto rounded border border-line bg-white px-2 py-1 text-[0.65rem] font-semibold text-ink-soft disabled:opacity-40"
@@ -330,18 +331,15 @@ export function DealerRevisionForm({
           </div>
 
           <div className="max-h-[40rem] overflow-auto [scrollbar-width:thin]" data-testid="revision-sheet-scroll">
-            <table className="w-full min-w-[70rem] text-sm" data-testid="revision-preview">
-              <thead className="sticky top-0 z-10 bg-sand/60 text-left text-xs text-muted">
+            <table className="w-full min-w-[52rem] text-sm" data-testid="revision-preview">
+              <thead className="sticky top-0 z-10 bg-[#eef3f2] text-left text-xs text-[#536771]">
                 <tr>
-                  <th className="min-w-[18rem] px-3 py-2 font-semibold">品名</th>
-                  <th className="w-16 px-2 py-2 text-right font-semibold">数量</th>
-                  <th className="w-16 px-2 py-2 font-semibold whitespace-nowrap">単位</th>
-                  <th className="w-24 px-2 py-2 text-right font-semibold">原価</th>
-                  <th className="w-28 px-2 py-2 text-right font-semibold">原価金額</th>
-                  <th className="w-24 px-2 py-2 text-right font-semibold">売価</th>
-                  <th className="w-28 px-3 py-2 text-right font-semibold">売価金額</th>
-                  <th className="w-24 px-2 py-2 text-right font-semibold">粗利</th>
-                  <th className="w-36 px-3 py-2 font-semibold">備考</th>
+                  <th className="min-w-[20rem] px-3 py-1.5 font-semibold">品名</th>
+                  <th className="w-16 px-2 py-1.5 text-right font-semibold">数量</th>
+                  <th className="w-16 px-2 py-1.5 font-semibold whitespace-nowrap">単位</th>
+                  <th className="w-24 px-2 py-1.5 text-right font-semibold">売価</th>
+                  <th className="w-28 px-3 py-1.5 text-right font-semibold">売価金額</th>
+                  <th className="w-40 px-3 py-1.5 font-semibold">備考</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -362,7 +360,7 @@ export function DealerRevisionForm({
                   return (
                     <Fragment key={section.label}>
                       <tr className="bg-ivory">
-                        <td colSpan={9} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
+                        <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
                           <span className="inline-flex items-center gap-2">
                             <button
                               type="button"
@@ -374,8 +372,15 @@ export function DealerRevisionForm({
                               {isCollapsed ? '+' : '−'}
                             </button>
                             <span>{section.label}</span>
+                            {section.key === 'sitework' ? (
+                              <span className="rounded-full bg-[#e8f3ec] px-2 py-0.5 font-normal text-[0.6rem] text-[#315745]">現地確認後に入力</span>
+                            ) : scopeChangeMode ? (
+                              <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 font-normal text-[0.6rem] text-[#8a6416]">変更モード</span>
+                            ) : (
+                              <span className="font-normal text-[0.62rem] text-muted">確定済み・確認のみ</span>
+                            )}
                             {section.key === 'base' && rows.some(isFireDisplayItem) && (
-                              <span className="font-normal text-[0.62rem] text-muted">防火仕様は閲覧時と同じく本体欄に表示</span>
+                              <span className="font-normal text-[0.62rem] text-muted">防火仕様を含む</span>
                             )}
                           </span>
                         </td>
@@ -415,18 +420,14 @@ export function DealerRevisionForm({
                               </td>
                               <td className="w-16 px-2 py-1 text-right tabular-nums">{formatQty(item.quantity)}</td>
                               <td className="w-16 px-2 py-1 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
-                              <td className="w-24 px-2 py-1 text-right text-muted" title="原価未登録">—</td>
-                              <td className="w-28 px-2 py-1 text-right text-muted" title="原価未登録">—</td>
                               <td className="w-24 px-2 py-1 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
                               <td className="w-28 px-3 py-1 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
-                              <td className="w-24 px-2 py-1 text-right text-muted" title="原価未登録">—</td>
-                              <td className="w-36 px-3 py-1 text-[0.68rem] text-muted">{item.remark ?? ''}</td>
+                              <td className="w-40 px-3 py-1 text-[0.68rem] text-muted">{item.remark ?? ''}</td>
                             </tr>
                             {showBaseGroupSubtotal && (
                               <tr className="bg-white text-[0.68rem] text-ink-soft">
-                                <td colSpan={6} className="px-3 py-1 text-right font-semibold">{item.description}　計</td>
+                                <td colSpan={4} className="px-3 py-1 text-right font-semibold">{item.description}　計</td>
                                 <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
-                                <td></td>
                                 <td></td>
                               </tr>
                             )}
@@ -452,6 +453,13 @@ export function DealerRevisionForm({
                               .filter(({ row }) => row.kind === 'base' && row.description === r.description)
                               .reduce((sum, { row }) => sum + amountOf(row), 0)
                           : 0;
+                        const rowEditable = section.key === 'sitework' || scopeChangeMode;
+                        const rowInputClass = rowEditable
+                          ? cellInputClass
+                          : `${cellInputClass} cursor-default bg-[#f7f8f8] text-ink-soft`;
+                        const rowMetaInputClass = rowEditable
+                          ? compactMetaInputClass
+                          : `${compactMetaInputClass} cursor-default bg-[#f7f8f8] text-muted`;
                         return (
                           <Fragment key={r.key}>
                             {showBaseGroupHeading && (
@@ -459,7 +467,11 @@ export function DealerRevisionForm({
                                 <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
                               </tr>
                             )}
-                            <tr className="group bg-white text-xs" data-testid={`revision-row-${i}`}>
+                            <tr
+                              className={rowEditable ? 'group bg-white text-xs' : 'group bg-[#fbfcfb] text-xs'}
+                              data-testid={`revision-row-${i}`}
+                              data-editable={rowEditable ? 'true' : 'false'}
+                            >
                               <td className="relative px-0 py-0 align-top">
                                 <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
                                 <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
@@ -470,7 +482,8 @@ export function DealerRevisionForm({
                                       value={r.name}
                                       onChange={(e) => update(r.key, { name: e.target.value })}
                                       aria-label={`${i + 1} 行目の項目名`}
-                                      className={cellInputClass}
+                                      className={rowInputClass}
+                                      readOnly={!rowEditable}
                                       data-revision-col="name"
                                       onKeyDown={handleSheetKeyDown}
                                       onFocus={(event) => event.currentTarget.select()}
@@ -481,7 +494,8 @@ export function DealerRevisionForm({
                                         value={r.kind}
                                         onChange={(e) => changeKind(r.key, e.target.value as RevisionItemKind)}
                                         aria-label={`${i + 1} 行目の区分`}
-                                        className="h-5 w-28 border-0 bg-transparent px-1 text-[0.6rem] text-muted outline-none focus:bg-white"
+                                        className="h-5 w-28 border-0 bg-transparent px-1 text-[0.6rem] text-muted outline-none focus:bg-white disabled:cursor-default disabled:opacity-70"
+                                        disabled={!rowEditable}
                                       >
                                         {(canEditBase ? FULL_KINDS : DEALER_KINDS).map((kind) => (
                                           <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>
@@ -493,22 +507,25 @@ export function DealerRevisionForm({
                                         onChange={(e) => update(r.key, { description: e.target.value })}
                                         placeholder="摘要"
                                         aria-label={`${i + 1} 行目の摘要`}
-                                        className={`${compactMetaInputClass} min-w-0 flex-1`}
+                                        className={`${rowMetaInputClass} min-w-0 flex-1`}
+                                        readOnly={!rowEditable}
                                         onFocus={(event) => event.currentTarget.select()}
                                       />
                                     </div>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setRows((cur) => cur.filter((x) => x.key !== r.key));
-                                      markDirty();
-                                    }}
-                                    className="mt-1 mr-1 rounded p-1 text-muted opacity-35 hover:bg-sand hover:text-warn group-hover:opacity-100 focus:opacity-100"
-                                    aria-label={`${i + 1} 行目を削除`}
-                                  >
-                                    <Trash2 className="size-3.5" aria-hidden="true" />
-                                  </button>
+                                  {rowEditable && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRows((cur) => cur.filter((x) => x.key !== r.key));
+                                        markDirty();
+                                      }}
+                                      className="mt-1 mr-1 rounded p-1 text-muted opacity-35 hover:bg-sand hover:text-warn group-hover:opacity-100 focus:opacity-100"
+                                      aria-label={`${i + 1} 行目を削除`}
+                                    >
+                                      <Trash2 className="size-3.5" aria-hidden="true" />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                               <td className="w-16 p-0 align-top">
@@ -520,7 +537,8 @@ export function DealerRevisionForm({
                                   value={r.quantity}
                                   onChange={(e) => update(r.key, { quantity: Number(e.target.value) })}
                                   aria-label={`${i + 1} 行目の数量`}
-                                  className={`${cellInputClass} text-right`}
+                                  className={`${rowInputClass} text-right`}
+                                  readOnly={!rowEditable}
                                   data-revision-col="quantity"
                                   onKeyDown={handleSheetKeyDown}
                                   onFocus={(event) => event.currentTarget.select()}
@@ -533,14 +551,13 @@ export function DealerRevisionForm({
                                   onChange={(e) => update(r.key, { unit: e.target.value })}
                                   aria-label={`${i + 1} 行目の単位`}
                                   placeholder="式"
-                                  className={cellInputClass}
+                                  className={rowInputClass}
+                                  readOnly={!rowEditable}
                                   data-revision-col="unit"
                                   onKeyDown={handleSheetKeyDown}
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-24 bg-[#fafbf9] px-2 py-1 text-right text-muted" title="Quote Revisionに原価スナップショットが未保存">—</td>
-                              <td className="w-28 bg-[#fafbf9] px-2 py-1 text-right text-muted" title="Quote Revisionに原価スナップショットが未保存">—</td>
                               <td className="w-24 p-0 align-top">
                                 <Input
                                   name={`items.${i}.unit_price`}
@@ -550,21 +567,22 @@ export function DealerRevisionForm({
                                   value={r.unit_price}
                                   onChange={(e) => update(r.key, { unit_price: Number(e.target.value) })}
                                   aria-label={`${i + 1} 行目の売価`}
-                                  className={`${cellInputClass} text-right`}
+                                  className={`${rowInputClass} text-right`}
+                                  readOnly={!rowEditable}
                                   data-revision-col="sale"
                                   onKeyDown={handleSheetKeyDown}
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
                               <td className="w-28 bg-[#fafbf9] px-3 py-1 text-right tabular-nums">{formatYen(amountOf(r))}</td>
-                              <td className="w-24 bg-[#fafbf9] px-2 py-1 text-right text-muted" title="原価未登録のため粗利は算出しません">—</td>
                               <td className="w-36 p-0 align-top">
                                 <Input
                                   name={`items.${i}.remark`}
                                   value={r.remark}
                                   onChange={(e) => update(r.key, { remark: e.target.value })}
                                   aria-label={`${i + 1} 行目の備考`}
-                                  className={cellInputClass}
+                                  className={rowInputClass}
+                                  readOnly={!rowEditable}
                                   data-revision-col="remark"
                                   onKeyDown={handleSheetKeyDown}
                                   onFocus={(event) => event.currentTarget.select()}
@@ -573,9 +591,8 @@ export function DealerRevisionForm({
                             </tr>
                             {showBaseGroupSubtotal && (
                               <tr className="bg-white text-[0.68rem] text-ink-soft">
-                                <td colSpan={6} className="px-3 py-1 text-right font-semibold">{r.description}　計</td>
+                                <td colSpan={4} className="px-3 py-1 text-right font-semibold">{r.description}　計</td>
                                 <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
-                                <td></td>
                                 <td></td>
                               </tr>
                             )}
@@ -583,12 +600,11 @@ export function DealerRevisionForm({
                         );
                       })}
 
-                      <tr className="border-y border-brown/40 bg-brown/10 font-semibold">
-                        <td colSpan={6} className="px-3 py-2 text-sm">{section.subtotalLabel}</td>
-                        <td className="px-3 py-2 text-right text-sm tabular-nums">
+                      <tr className="border-y border-[#d8e1dd] bg-[#f4f7f5] font-semibold">
+                        <td colSpan={4} className="px-3 py-1.5 text-xs">{section.subtotalLabel}</td>
+                        <td className="px-3 py-1.5 text-right text-xs tabular-nums">
                           {section.label.startsWith('別途工事') && section.amount === 0 ? '別途' : formatYen(section.amount)}
                         </td>
-                        <td className="text-right text-muted">—</td>
                         <td></td>
                       </tr>
                     </Fragment>
@@ -597,33 +613,33 @@ export function DealerRevisionForm({
               </tbody>
               <tfoot>
                 <tr className="text-sm">
-                  <td colSpan={6} className="px-3 pt-3 pb-1">小　計</td>
+                  <td colSpan={4} className="px-3 pt-3 pb-1">小　計</td>
                   <td className="px-3 pt-3 pb-1 text-right tabular-nums">{formatYen(subRaw)}</td>
-                  <td></td><td></td>
+                  <td></td>
                 </tr>
                 <tr className="text-sm text-ink-soft">
-                  <td colSpan={6} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
+                  <td colSpan={4} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
                   <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal - subRaw)}</td>
-                  <td></td><td></td>
+                  <td></td>
                 </tr>
                 <tr className="text-sm">
-                  <td colSpan={6} className="px-3 py-1">税抜請負額</td>
+                  <td colSpan={4} className="px-3 py-1">税抜請負額</td>
                   <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal)}</td>
-                  <td></td><td></td>
+                  <td></td>
                 </tr>
                 <tr className="text-sm text-ink-soft">
-                  <td colSpan={6} className="px-3 py-1">消費税（{Math.round(quote.tax_rate * 100)}%）</td>
+                  <td colSpan={4} className="px-3 py-1">消費税（{Math.round(quote.tax_rate * 100)}%）</td>
                   <td className="px-3 py-1 text-right tabular-nums">{formatYen(tax)}</td>
-                  <td></td><td></td>
+                  <td></td>
                 </tr>
                 <tr className="border-t-2 border-ink bg-ivory">
-                  <td colSpan={6} className="px-3 py-3 font-serif text-lg">合　計（税込）</td>
+                  <td colSpan={4} className="px-3 py-3 font-serif text-lg">合　計（税込）</td>
                   <td className="px-3 py-3 text-right">
                     <span className="font-serif text-2xl tabular-nums" data-testid="revision-total">
                       {formatYen(editingTotal)}
                     </span>
                   </td>
-                  <td></td><td></td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>
@@ -681,47 +697,74 @@ export function DealerRevisionForm({
           </table>
         </div>
       )}
-      <div className={sheetMode ? 'flex flex-wrap gap-1.5 border-b border-line bg-[#fafbf9] px-3 py-2' : 'flex flex-wrap gap-2'}>
-        {catalog.length > 0 && (
-          <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+      <div className={sheetMode ? 'border-b border-line bg-[#fafbf9] px-3 py-2' : 'space-y-2'}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation">
             <Plus className="size-4" aria-hidden="true" />
-            商品台帳から追加
+            現地工事を追加
           </Button>
-        )}
-        <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation">
-          <Plus className="size-4" aria-hidden="true" />
-          別途工事を追加
-        </Button>
-        {canEditBase && (
-          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
-            <Plus className="size-4" aria-hidden="true" />
-            本体の行を追加
-          </Button>
-        )}
-        <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
-          <Plus className="size-4" aria-hidden="true" />
-          内外装工事の行を追加
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
-          <Plus className="size-4" aria-hidden="true" />
-          オプションの行を追加
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
-          <Plus className="size-4" aria-hidden="true" />
-          フリー商品を追加
-        </Button>
-        {freeProducts.map((f) => (
           <Button
-            key={f.code}
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => addRow('free', { name: f.name, price: f.price })}
-            data-testid={`add-free-${f.code}`}
+            onClick={toggleScopeChangeMode}
+            data-testid="toggle-scope-change"
           >
-            ＋ {f.name}（{formatYen(f.price)}）
+            {scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'}
           </Button>
-        ))}
+          {!scopeChangeMode && (
+            <span className="text-[0.65rem] text-muted">
+              本体・内外装・オプションは確認表示です。変更が必要な場合だけ「見積内容を変更」を開きます。
+            </span>
+          )}
+        </div>
+
+        {scopeChangeMode && (
+          <div
+            className="mt-2 flex flex-wrap gap-1.5 rounded-lg border border-[#ead6a9] bg-[#fffaf0] p-2"
+            data-testid="scope-change-actions"
+          >
+            <span className="w-full text-[0.65rem] font-semibold text-[#765d1f]">
+              商品・仕様変更
+            </span>
+            {catalog.length > 0 && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+                <Plus className="size-4" aria-hidden="true" />
+                商品台帳から追加
+              </Button>
+            )}
+            {canEditBase && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
+                <Plus className="size-4" aria-hidden="true" />
+                本体の行を追加
+              </Button>
+            )}
+            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
+              <Plus className="size-4" aria-hidden="true" />
+              内外装工事を追加
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
+              <Plus className="size-4" aria-hidden="true" />
+              オプションを追加
+            </Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
+              <Plus className="size-4" aria-hidden="true" />
+              フリー商品を追加
+            </Button>
+            {freeProducts.map((f) => (
+              <Button
+                key={f.code}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => addRow('free', { name: f.name, price: f.price })}
+                data-testid={`add-free-${f.code}`}
+              >
+                ＋ {f.name}（{formatYen(f.price)}）
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className={sheetMode ? 'border-b border-line px-3 py-3' : 'space-y-5'}>

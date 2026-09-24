@@ -165,7 +165,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('要登録・確認');
     expect(workspace).toContain('都市計画資料は参考図として扱い');
     expect(workspace).toContain("tabHref('documents')");
-    expect(workspace).toContain('正式なアップロード・差替え・版管理は次工程です。');
+    expect(workspace).toContain('正式な契約保存・アップロード・版管理は次工程です。');
     expect(workspace).toContain('data-testid="case-drawing-grid"');
     expect(workspace).toContain('data-testid="case-document-list"');
     expect(workspace).toContain('data-testid="case-document-notes"');
@@ -176,6 +176,26 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('製造指示、製造個体、工程日、搬入・施工進捗を保存する正式機能はまだありません。');
     expect(workspace).toContain('引渡し日、完了確認、保証、点検、アフター対応を保存する正式機能はまだありません。');
     expect(workspace).toContain('現在は供給可否を判定・集計しません。');
+  });
+
+  it('shows contract information only as reference data until a formal contract model exists', () => {
+    expect(workspace).toContain('extractContractReference');
+    expect(workspace).toContain('data-testid="case-contract-reference"');
+    expect(workspace).toContain('契約情報');
+    expect(workspace).toContain('正式保存前');
+    expect(workspace).toContain('既存データからの参考表示');
+    expect(workspace).toContain('ここに表示する内容は正式な契約レコードではありません。');
+    expect(workspace).toContain('正式な契約状態は未登録');
+    expect(workspace).toContain('受注契約日（メモ）');
+    expect(workspace).toContain('承諾見積額（参考）');
+    expect(workspace).toContain('契約対象見積候補');
+    expect(workspace).toContain('第{quote.revision}版／未固定');
+    expect(workspace).toContain('支払条件（メモ）');
+    expect(workspace).toContain("caseDocuments.filter((row) => row.kind === 'contract')");
+    expect(workspace).toContain('data-testid="case-contract-documents"');
+    expect(workspace).toContain('契約書はまだ正式保管されていません。アップロード・版管理は次工程で実装します。');
+    expect(workspace).toContain('data-testid="case-drawings-and-documents"');
+    expect(workspace).toContain("caseDocuments.filter((row) => row.kind !== 'contract')");
   });
 
   it('keeps the existing case-related URLs and aligns their user-facing names', () => {

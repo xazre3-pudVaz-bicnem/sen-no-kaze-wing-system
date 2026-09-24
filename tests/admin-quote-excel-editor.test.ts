@@ -85,6 +85,11 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('event.keyCode === 229');
     expect(form).toContain("event.key !== 'Enter'");
     expect(form).toContain('明細を編集前に戻す');
+    expect(form).toContain('computeQuoteRevisionTotals(subRaw, quote.adjustment, quote.tax_rate)');
+    expect(form).toContain('値引き等調整額（前版から引継ぎ）');
+    expect(form).toContain('（前版から引継ぎ）');
+    expect(quoteTable).toContain('値引き等調整額');
+    expect(quoteTable).not.toContain('値引き等調整額（千円未満切捨て）');
   });
 
   it('keeps existing row actions, product picker, live totals and next-revision issuance', () => {

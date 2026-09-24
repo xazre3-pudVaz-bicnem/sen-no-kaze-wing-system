@@ -309,13 +309,18 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
   });
 
-  it('お客様選択は画像なし文字カードを許容し、価格設定と同じSTEP2内で管理する', () => {
-    expect(variants).toContain('お客様選択');
-    expect(variants).toContain('文字カードとして表示');
-    expect(variants).toContain('価格・公開設定');
-    expect(variants).toContain('色・仕様ごとの追加金額');
-    expect(variants).toContain('ChoicePriceEditor');
+  it('お客様選択は色・仕様を直感的に登録し、選択肢ごとに価格と表示をまとめて管理する', () => {
+    expect(variants).toContain('お客様が選べる色・仕様');
+    expect(variants).toContain('＋ 色・仕様を追加');
+    expect(variants).toContain('何を選びますか？');
+    expect(variants).toContain('文字カードで表示');
     expect(variants).toContain('name="extra_price"');
+    expect(variants).toContain('標準の選択肢にする');
+    expect(variants).toContain('お客様に表示する');
+    expect(variants).toContain('詳細設定');
+    expect(variants).not.toContain('色・仕様ごとの追加金額');
+    expect(variants).not.toContain('ChoicePriceEditor');
+    expect(editPage).not.toContain('OptionVariantPricing');
   });
 
   it('既存の商品保存フィールドを維持する', () => {

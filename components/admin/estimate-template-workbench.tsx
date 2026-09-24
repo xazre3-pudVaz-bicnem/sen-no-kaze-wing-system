@@ -298,11 +298,11 @@ export function EstimateTemplateWorkbench({
     const amount = Math.round(row.quantity * row.saleUnitPrice);
     return (
       <tr key={row.id} className="border-b border-slate-200 bg-white">
-        <th className="w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
+        <th className="sticky left-0 z-10 w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
           {displayRowNumber}
         </th>
-        <td className="w-9 border-r border-slate-200"></td>
-        <td className="min-w-[20rem] border-r border-slate-200 bg-amber-50 px-0.5">
+        <td className="sticky left-[2.75rem] z-10 w-9 border-r border-slate-200 bg-white"></td>
+        <td className="sticky left-[5rem] z-10 min-w-[20rem] border-r border-slate-200 bg-amber-50 px-0.5">
           <div className="flex items-center gap-0.5">
             <Input
               value={row.name}
@@ -417,11 +417,11 @@ export function EstimateTemplateWorkbench({
     const displayRowNumber = rowNumberByKey.get('base:' + line.id) ?? 0;
     return (
       <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-600">
-        <th className="w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
+        <th className="sticky left-0 z-10 w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
           {displayRowNumber}
         </th>
-        <td className="w-9 border-r border-slate-200"></td>
-        <td className="min-w-[20rem] border-r border-slate-200 px-2 py-1.5">
+        <td className="sticky left-[2.75rem] z-10 w-9 border-r border-slate-200 bg-slate-100"></td>
+        <td className="sticky left-[5rem] z-10 min-w-[20rem] border-r border-slate-200 bg-slate-100 px-2 py-1.5">
           <div className="font-medium">{line.name}</div>
           <div className="mt-0.5 text-[10px] text-slate-500">{line.section}</div>
         </td>
@@ -461,8 +461,8 @@ export function EstimateTemplateWorkbench({
     const collapsed = collapsedSections.has(key);
     return (
       <tr key={'section-' + key} className="border-b border-emerald-950 bg-emerald-900 text-white">
-        <th className="bg-slate-100"></th>
-        <td className="border-r border-emerald-800 px-1 text-center">
+        <th className="sticky left-0 z-20 w-11 bg-slate-100"></th>
+        <td className="sticky left-[2.75rem] z-20 w-9 border-r border-emerald-800 bg-emerald-900 px-1 text-center">
           <button
             type="button"
             className="my-1 flex size-6 items-center justify-center rounded border border-white/60 bg-white text-sm font-bold text-slate-800"
@@ -473,12 +473,10 @@ export function EstimateTemplateWorkbench({
             {collapsed ? '+' : '−'}
           </button>
         </td>
-        <td colSpan={visibleColumnCount - 2} className="px-3 py-1.5">
+        <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-3 py-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <strong className="text-[13px]">{label}</strong>
             <span className="text-[11px] text-white/75">{rowCount}行</span>
-            {expenseText && <span className="text-[11px] text-white/75">{expenseText}</span>}
-            <span className="ml-auto text-xs font-semibold">{formatYen(totalAmount)}</span>
             {editable && !collapsed && (
               <span className="flex items-center gap-2">
                 <button
@@ -497,6 +495,12 @@ export function EstimateTemplateWorkbench({
                 </button>
               </span>
             )}
+          </div>
+        </td>
+        <td colSpan={visibleColumnCount - 3} className="bg-emerald-900 px-3 py-1.5">
+          <div className="flex items-center justify-end gap-3">
+            {expenseText && <span className="text-[11px] text-white/75">{expenseText}</span>}
+            <span className="text-xs font-semibold">{formatYen(totalAmount)}</span>
           </div>
         </td>
       </tr>
@@ -528,7 +532,7 @@ export function EstimateTemplateWorkbench({
                 : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
             }
           >
-            {isDirty ? '未保存の変更あり' : '編集前と同じ'}
+            {isDirty ? (demoMode ? '画面内の変更あり' : '未保存の変更あり') : (demoMode ? '初期状態' : '編集前と同じ')}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" size="sm" onClick={resetRows} disabled={!isDirty}>
@@ -575,14 +579,11 @@ export function EstimateTemplateWorkbench({
           </button>
           <button
             type="button"
-            className={
-              showCost
-                ? 'rounded-t border border-b-white border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800'
-                : 'rounded-t border border-slate-300 bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-600'
-            }
-            onClick={() => setShowCost(true)}
+            disabled
+            title="正式原価の接続後に利用できます"
+            className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-400"
           >
-            原価・売価比較
+            原価・売価比較（準備中）
           </button>
           <span className="ml-auto pb-2 text-[10px] text-slate-500">
             黄色＝入力 ／ グレー＝参照・自動表示 ／ 商品名の「…」＝商品選択
@@ -595,9 +596,9 @@ export function EstimateTemplateWorkbench({
           <table className={showCost ? 'min-w-[92rem] w-full border-collapse text-sm' : 'min-w-[72rem] w-full border-collapse text-sm'}>
             <thead>
               <tr>
-                <th className="sticky top-0 z-20 w-11 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-semibold text-slate-600">#</th>
-                <th className="sticky top-0 z-20 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1.5"></th>
-                <th className="sticky top-0 z-20 min-w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">品名</th>
+                <th className="sticky left-0 top-0 z-40 w-11 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-semibold text-slate-600">#</th>
+                <th className="sticky left-[2.75rem] top-0 z-40 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1.5"></th>
+                <th className="sticky left-[5rem] top-0 z-40 min-w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">品名</th>
                 <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">数量</th>
                 <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">単位</th>
                 {showCost && (
@@ -677,7 +678,7 @@ export function EstimateTemplateWorkbench({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-500">
           <span>本体は参照専用。内外装工事・オプション・別途はセルで編集できます。</span>
-          <span>正式な原価・掛率・粗利・保存／公開はDB/RPC接続後に有効化します。</span>
+          <span>原価比較・保存・公開機能は準備中です。</span>
         </div>
       </section>
 

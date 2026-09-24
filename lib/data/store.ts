@@ -272,6 +272,10 @@ export interface DataStore {
   getOptionVariants(optionId: string): Promise<{ groups: OptionVariantGroup[]; choices: OptionVariantChoice[] }>;
   upsertVariantGroup(input: OptionVariantGroup): Promise<OptionVariantGroup>;
   upsertVariantChoice(input: OptionVariantChoice): Promise<OptionVariantChoice>;
+  /** 未使用の選択項目だけを削除する。選択肢や依存先がある場合は拒否する。 */
+  deleteVariantGroup(id: string): Promise<void>;
+  /** 保存済み仕様で未使用の選択肢だけを削除する。 */
+  deleteVariantChoice(id: string): Promise<void>;
   /** 商品・選択項目・選択肢を全件成功時だけ反映する。 */
   applyCatalogImport(batch: CatalogImportBatch): Promise<void>;
 

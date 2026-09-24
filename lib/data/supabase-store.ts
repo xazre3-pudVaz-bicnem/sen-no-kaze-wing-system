@@ -685,6 +685,7 @@ export class SupabaseStore implements DataStore {
       .maybeSingle();
     if (existing.error) mapPgError(existing.error);
     if (!existing.data) return;
+    const existingChoice = existing.data;
 
     const used = await db
       .from('configuration_items')
@@ -698,7 +699,7 @@ export class SupabaseStore implements DataStore {
     const parent = await db
       .from('option_variant_groups')
       .select('option_id, code')
-      .eq('id', existing.data.group_id)
+      .eq('id', existingChoice.group_id)
       .maybeSingle();
     if (parent.error) mapPgError(parent.error);
     if (parent.data) {
@@ -709,7 +710,7 @@ export class SupabaseStore implements DataStore {
         .eq('depends_on_group_code', parent.data.code);
       if (dependentGroups.error) mapPgError(dependentGroups.error);
       const referenced = ((dependentGroups.data ?? []) as { depends_on_choice_codes?: string[] | null }[]).some(
-        (group) => (group.depends_on_choice_codes ?? []).includes(existing.data.code)
+        (group) => (group.depends_on_choice_codes ?? []).includes(existingChoice.code)
       );
       if (referenced) {
         throw new StoreError('VALIDATION', '別の選択項目の表示条件に使われているため削除できません。先に表示条件を変更してください。');

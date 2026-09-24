@@ -40,7 +40,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          新規商品は下書きで保存し、STEP 2で実際のお客様表示を確認してから公開します。
+          まず下書きを作成し、続くSTEP 1でサブ画像・メーカー資料・お客様選択まで整えます。その後、STEP 2で実際のお客様表示を確認してから公開します。
         </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[

@@ -876,6 +876,7 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
     if (!m) continue;
     const i = m[1];
     rows.push({
+      source_item_id: formData.get(`items.${i}.source_item_id`),
       kind: value,
       name: formData.get(`items.${i}.name`),
       description: formData.get(`items.${i}.description`),

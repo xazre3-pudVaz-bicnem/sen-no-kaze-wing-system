@@ -30,6 +30,14 @@ function selectionHref(
   return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
 }
 
+function sampleHref(model: string, q: string) {
+  const params = new URLSearchParams();
+  if (model) params.set('model', model);
+  if (q) params.set('q', q);
+  params.set('sample', '1');
+  return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
+}
+
 const LIST_GRID =
   'grid grid-cols-[minmax(10rem,2fr)_6rem_7rem_5rem_6.5rem] items-center';
 
@@ -89,6 +97,10 @@ export default async function EstimateTemplatesPage({
     })
     .filter((group) => group.choices.length > 0);
 
+  const sampleSelected = sp.sample === '1';
+  const sampleModel = simulatorModels.find((model) => model.slug === 'wing-01') ?? null;
+  const sampleSpecCode = sampleModel?.presets.some((preset) => preset.code === 'hotel') ? 'hotel' : null;
+
   const requestedModelId = sp.selected_model ?? '';
   const requestedSpecCode = sp.selected_spec ?? '';
   const requestedSelection = groups
@@ -101,10 +113,13 @@ export default async function EstimateTemplatesPage({
     );
   const firstSelection =
     groups[0]?.choices[0] ? { model: groups[0].model, choice: groups[0].choices[0] } : null;
-  const selected = requestedSelection ?? firstSelection;
-  const selectedCatalog = selected
-    ? await store.getCatalogBundle(selected.model.id)
-    : null;
+  const selected = sampleSelected ? null : requestedSelection ?? firstSelection;
+  const [selectedCatalog, sampleCatalog] = await Promise.all([
+    selected ? store.getCatalogBundle(selected.model.id) : Promise.resolve(null),
+    sampleSelected && sampleModel && sampleSpecCode
+      ? store.getCatalogBundle(sampleModel.id)
+      : Promise.resolve(null),
+  ]);
 
   const totalChoices = groups.reduce((sum, group) => sum + group.choices.length, 0);
 
@@ -121,7 +136,7 @@ export default async function EstimateTemplatesPage({
       <section className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <h2 className="text-base font-semibold">標準見積一覧</h2>
-          <span className="text-xs text-muted">{totalChoices}件</span>
+          <span className="text-xs text-muted">{totalChoices}件 + 動作確認サンプル1件</span>
         </div>
 
         <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
@@ -184,25 +199,36 @@ export default async function EstimateTemplatesPage({
           </div>
         </div>
 
-        <div className="border-b border-line bg-sand/10 px-4 py-2 text-[11px] text-muted sm:px-5">
-          <span className="font-semibold text-ink-soft">表示例（サンプル）</span>
-          <span className="ml-3">原価税込 {formatYen(SAMPLE_PRICING.costTaxIncluded)}</span>
-          <span className="ml-3">売価税込 {formatYen(SAMPLE_PRICING.saleTaxIncluded)}</span>
-          <span className="ml-3">粗利率 {SAMPLE_PRICING.marginRate}</span>
-        </div>
+        <div className="overflow-x-auto">
+          <div className="min-w-[40rem]">
+            <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-2 py-2 text-xs font-semibold text-ink-soft`}>
+              <div>見積名</div>
+              <div className="text-right">原価税込</div>
+              <div className="text-right">売価税込</div>
+              <div className="text-right">粗利率</div>
+              <div>状態</div>
+            </div>
 
-        {groups.length > 0 ? (
-          <div className="overflow-x-auto">
-            <div className="min-w-[40rem]">
-              <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-2 py-2 text-xs font-semibold text-ink-soft`}>
-                <div>見積名</div>
-                <div className="text-right">原価税込</div>
-                <div className="text-right">売価税込</div>
-                <div className="text-right">粗利率</div>
-                <div>状態</div>
+            <Link
+              href={sampleHref(modelId, qRaw)}
+              aria-current={sampleSelected ? 'true' : undefined}
+              className={`${LIST_GRID} min-h-12 border-b border-line px-2 py-2 text-sm transition ${
+                sampleSelected
+                  ? 'border-l-4 border-l-amber-500 bg-amber-50 pl-1'
+                  : 'bg-amber-50/50 hover:bg-amber-50'
+              }`}
+            >
+              <div className="min-w-0">
+                <span className="font-semibold text-ink">動作確認サンプル（Wing ホテル仕様）</span>
+                <p className="mt-0.5 text-[10px] text-muted">保存されない画面確認用データ</p>
               </div>
+              <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
+              <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
+              <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
+              <div><Badge tone="neutral">サンプル</Badge></div>
+            </Link>
 
-              {groups.map((group, groupIndex) => {
+            {groups.length > 0 ? groups.map((group, groupIndex) => {
                 const displayModelName = group.model.name === 'フラット' ? 'Flat' : group.model.name;
                 const selectedGroup = selected?.model.id === group.model.id;
                 return (
@@ -261,32 +287,31 @@ export default async function EstimateTemplatesPage({
                     </div>
                   </details>
                 );
-              })}
-            </div>
+              }) : (
+                <div className="col-span-5 px-6 py-8 text-center">
+                  <p className="text-sm font-semibold">条件に一致する正式な標準見積がありません</p>
+                  <p className="mt-1 text-xs text-muted">上の動作確認サンプルは引き続き確認できます。</p>
+                </div>
+              )}
           </div>
-        ) : (
-          <div className="px-6 py-12 text-center">
-            <h2 className="text-lg font-semibold">条件に一致する標準見積がありません</h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
-              検索条件を変更するか、条件をクリアしてもう一度確認してください。
-            </p>
-            <div className="mt-5 flex justify-center">
-              <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">
-                条件をクリア
-              </Link>
-            </div>
-          </div>
-        )}
+        </div>
 
       </section>
 
-      {selected && selectedCatalog && (
+      {sampleSelected && sampleCatalog && sampleSpecCode ? (
+        <StandardEstimateSimulatorPreview
+          bundle={sampleCatalog}
+          specCode={sampleSpecCode}
+          template={null}
+          sampleMode
+        />
+      ) : selected && selectedCatalog ? (
         <StandardEstimateSimulatorPreview
           bundle={selectedCatalog}
           specCode={selected.choice.code}
           template={selected.choice.template}
         />
-      )}
+      ) : null}
     </AdminPage>
   );
 }

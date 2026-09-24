@@ -46,6 +46,10 @@ const roofCategoryMigration = fs.readFileSync(
   path.resolve(process.cwd(), 'supabase/migrations/20260924085700_roof_product_category.sql'),
   'utf8'
 );
+const entranceDoorCategoryMigration = fs.readFileSync(
+  path.resolve(process.cwd(), 'supabase/migrations/20260924092000_entrance_door_product_category.sql'),
+  'utf8'
+);
 
 describe('商品登録管理画面の業務フロー', () => {
   it('商品登録を入力とお客様表示確認の2つの大きな作業単位にまとめる', () => {
@@ -141,6 +145,7 @@ describe('商品登録管理画面の業務フロー', () => {
       "'exterior-wall': {",
       'floor: {',
       "'wall-ceiling': {",
+      "'entrance-door': {",
       'sash: {',
       "'interior-door': {",
       'lighting: {',
@@ -162,6 +167,15 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain("manufacturers: ['DAIKEN', '朝日ウッドテック', 'Panasonic', 'LIXIL', 'EIDAI', 'ウッドワン']");
     expect(forms).toContain("manufacturers: ['サンゲツ', 'リリカラ', 'シンコール', 'トキワ', 'ルノン', 'DAIKEN']");
     expect(forms).toContain("manufacturers: ['LIXIL', 'YKK AP', '三協アルミ']");
+    expect(forms).toContain("'片開き'");
+    expect(forms).toContain('玄関ドアはサッシ・室内建具と分けて登録します。');
+    expect(catalogSeed).toContain("entranceDoor: cid(24)");
+    expect(catalogSeed).toContain("cat(C.entranceDoor, 'entrance-door', '玄関ドア'");
+    expect(catalogSeed).toContain("is_required: false");
+    expect(entranceDoorCategoryMigration).toContain("'entrance-door'");
+    expect(entranceDoorCategoryMigration).toContain("'20000000-0000-4000-8000-000000000024'::uuid");
+    expect(entranceDoorCategoryMigration).toContain("'single'");
+    expect(entranceDoorCategoryMigration).toContain("'shell'");
     expect(forms).toContain("manufacturers: ['Panasonic', 'オーデリック', 'コイズミ照明', '大光電機', '東芝ライテック']");
     expect(forms).toContain("manufacturers: ['LIXIL', 'YKK AP', '美和ロック', 'GOAL', 'SwitchBot']");
     expect(forms).toContain("'窯業系サイディング'");

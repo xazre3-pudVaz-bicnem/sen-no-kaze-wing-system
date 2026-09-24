@@ -54,7 +54,7 @@ describe('標準見積の基準本体選択UI', () => {
     expect(newForm).toContain('baseLines={selectedBaseMaster?.lines ?? []}');
     expect(newForm).toContain('baseTotal={selectedBaseMaster?.total ?? 0}');
     expect(newForm).toContain('基準本体');
-    expect(newForm).toContain("selectedBaseMaster.name + ' v' + selectedBaseMaster.revisionVersion");
+    expect(newForm).toContain("selectedBaseMaster.name + (samplePreview ? '' : ' v' + selectedBaseMaster.revisionVersion)");
   });
 
   it('初期設定画面を縦方向にコンパクト化する', () => {

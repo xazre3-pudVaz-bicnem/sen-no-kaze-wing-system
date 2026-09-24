@@ -35,6 +35,8 @@ describe('Admin case management UI', () => {
     expect(dashboard).toContain('未対応のお問い合わせ');
     expect(dashboard).toContain('最近の案件受付');
     expect(dashboard).toContain('案件を開く');
+    expect(dashboard).toContain('依頼を開く');
+    expect(dashboard).toContain('/admin/quotes?request=${encodeURIComponent(r.id)}#pending-quote-request');
     expect(dashboard).not.toContain('findMissingPreviewCombos');
     expect(dashboard).not.toContain('公開中モデル');
     expect(dashboard).not.toContain('自社のフリー商品');
@@ -52,6 +54,8 @@ describe('Admin case management UI', () => {
     expect(list).toContain('data-selected={selected ? \'true\' : undefined}');
     expect(list).toContain("selected ? 'bg-[#fff7df]");
     expect(list).toContain('caseSelectionHref');
+    expect(list).toContain('requestSelectionHref');
+    expect(list).toContain('data-testid="pending-request-link"');
     expect(list).toContain('<CaseWorkspace');
     expect(list).toContain('embedded');
     expect(list).toContain('listSearchParams={sp}');
@@ -71,6 +75,24 @@ describe('Admin case management UI', () => {
     expect(list).toContain('未登録');
     expect(list).toContain('更新 {formatDate(updatedAt, true)}');
     expect(list).not.toContain('>更新</th>');
+  });
+
+  it('opens quote requests that do not have a quote yet without creating a duplicate request', () => {
+    expect(list).toContain("query.set('request', requestId)");
+    expect(list).toContain('#pending-quote-request');
+    expect(list).toContain('selectablePendingRequestIds');
+    expect(list).toContain('selectedPendingRequest');
+    expect(list).toContain('data-testid="pending-quote-request-workspace"');
+    expect(list).toContain('見積未発行');
+    expect(list).toContain('次工程：見積作成');
+    expect(list).toContain('data-testid="pending-request-customer"');
+    expect(list).toContain('data-testid="pending-request-configuration"');
+    expect(list).toContain('data-testid="pending-request-message"');
+    expect(list).toContain('data-testid="pending-request-next-step"');
+    expect(list).toContain('正式処理は未実装');
+    expect(list).toContain('Quote lifecycle用のDB/RPC対応が必要です。');
+    expect(list).toContain('この受付の引継ぎには使用しません。');
+    expect(list).not.toContain('href={`/admin/quotes/new?request=');
   });
 
   it('uses the 千の風プロジェクト name in the admin shell and browser title', () => {

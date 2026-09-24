@@ -7,7 +7,7 @@ import { ProductDetail } from '@/components/simulator/product-detail';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Badge, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
-import { needsProductAttention, optionMatchesLedgerFilters, selectedOptionAfterFilter, type LedgerQuickFilter } from '@/lib/domain/product-ledger';
+import { needsProductAttention, optionMatchesLedgerFilters, productAttentionReasons, selectedOptionAfterFilter, type LedgerQuickFilter } from '@/lib/domain/product-ledger';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 
@@ -118,9 +118,11 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
         <div>
           <h2 className="text-lg font-semibold">商品一覧</h2>
-          <p className="mt-1 text-xs text-muted">商品名の下にメーカー・型番をまとめて表示します。行から商品詳細を開けます。</p>
+          <p className="mt-1 text-xs text-muted">商品をカードで見渡し、カテゴリー・状態・要確認理由を一覧で確認できます。カードから商品詳細を開けます。</p>
         </div>
-        <p className="text-xs text-muted">{filtered.length} / {options.length} 商品</p>
+        <p className="text-xs font-medium text-muted">
+          {filtered.length ? `${filtered.length}件中 ${firstShown}〜${lastShown}件を表示` : '0件'}
+        </p>
       </div>
       <div className="sticky top-0 z-20 grid gap-2 border-b border-line bg-white/95 p-3 shadow-sm backdrop-blur sm:grid-cols-2 sm:p-4 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_minmax(9rem,.34fr)_minmax(11rem,.42fr)_auto]">
         <label className="min-w-0 sm:col-span-2 xl:col-span-1">
@@ -162,49 +164,71 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
         </label>
         <button type="button" className="btn-ghost btn-sm hidden xl:inline-flex" onClick={resetFilters} disabled={!query && !categoryId && !status && quick === 'all' && sort === 'updated'}>条件をクリア</button>
       </div>
-      <div className="overflow-x-auto md:overflow-x-visible">
-        <table className="w-full table-fixed text-left text-sm">
-          <thead className="bg-forest/5 text-xs text-muted md:sticky md:top-[8.5rem] md:z-10 xl:top-20">
-            <tr>
-              <th className="w-auto px-4 py-3 xl:w-[43%]">商品</th>
-              <th className="hidden px-4 py-3 xl:table-cell xl:w-[20%]">カテゴリー</th>
-              <th className="hidden px-4 py-3 text-right xl:table-cell xl:w-[14%]">自社仕入原価</th>
-              <th className="hidden px-4 py-3 xl:table-cell xl:w-[8%]">単位</th>
-              <th className="w-24 px-4 py-3 sm:w-28 xl:w-[11%]">状態</th>
-              <th className="w-14 px-3 py-3 text-right xl:w-[4%]">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {pageOptions.map((o) => {
-              const attention = needsProductAttention(o);
-              return <tr key={o.id} className={selectedId === o.id ? 'bg-ivory/65' : 'bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
-                <td className="px-4 py-2.5">
-                  <button type="button" aria-haspopup="dialog" className="flex w-full items-center gap-3 text-left" onClick={(event) => openDetail(o.id, event.currentTarget)}>
-                    <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">
-                      {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="48px" className="object-contain" /> : '画像'}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-semibold">{o.name}</span>
-                        {attention && <Badge tone="warn">要確認</Badge>}
+      <div className="p-3 sm:p-4" data-testid="ledger-card-grid-wrap">
+        <div className="grid grid-cols-1 gap-2.5 min-[1120px]:grid-cols-2" data-testid="ledger-card-grid">
+          {pageOptions.map((o) => {
+            const attentionReasons = productAttentionReasons(o);
+            const attention = attentionReasons.length > 0;
+            const itemCategory = categoryMap.get(o.category_id);
+            return (
+              <article
+                key={o.id}
+                className={`group relative overflow-hidden rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ${selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line'}`}
+                data-testid={'ledger-option-' + o.code}
+              >
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-label={o.name + 'の商品詳細を表示'}
+                  className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset"
+                  onClick={(event) => openDetail(o.id, event.currentTarget)}
+                >
+                  <span className="sr-only">{o.name}の商品詳細を表示</span>
+                </button>
+
+                <div className="pointer-events-none relative z-20 flex min-h-[6.75rem] gap-3 p-3">
+                  <span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">
+                    {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5 pr-10">
+                      <span className="max-w-full truncate rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-medium text-ink-soft">
+                        {itemCategory?.name ?? 'カテゴリー未設定'}
                       </span>
-                      <span className="mt-0.5 block truncate text-xs text-muted">{[o.product_no, o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</span>
-                    </span>
-                  </button>
-                </td>
-                <td className="hidden truncate px-4 py-2.5 xl:table-cell">{categoryMap.get(o.category_id)?.name ?? dash}</td>
-                <td className="hidden px-4 py-2.5 text-right text-muted xl:table-cell">{dash}</td>
-                <td className="hidden px-4 py-2.5 text-muted xl:table-cell">{dash}</td>
-                <td className="px-4 py-2.5"><Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge></td>
-                <td className="px-3 py-2.5 text-right">
-                  <button type="button" aria-haspopup="dialog" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-9 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={(event) => openDetail(o.id, event.currentTarget)}>
+                      <Badge tone={o.status === 'published' ? 'success' : 'neutral'}>
+                        {o.status === 'published' ? '公開中' : '下書き'}
+                      </Badge>
+                      {attention && <Badge tone="warn">要確認</Badge>}
+                    </div>
+
+                    <h3 className="mt-1.5 line-clamp-2 pr-8 text-sm font-semibold leading-snug text-ink">{o.name}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
+                      {[o.product_no, o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}
+                    </p>
+
+                    {attention && (
+                      <p className="mt-1.5 text-[0.68rem] font-medium text-warn" data-testid={'ledger-attention-reasons-' + o.code}>
+                        要確認：{attentionReasons.join('・')}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-label={o.name + 'の詳細を表示'}
+                    title="詳細を表示"
+                    className="pointer-events-auto absolute top-3 right-3 z-30 inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand"
+                    onClick={(event) => openDetail(o.id, event.currentTarget)}
+                  >
                     <Ellipsis className="size-4" aria-hidden="true" />
                   </button>
-                </td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
       {!filtered.length && <p className="px-5 py-10 text-center text-sm text-muted">条件に一致する商品がありません。</p>}
       {!!filtered.length && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-5">

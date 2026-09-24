@@ -97,7 +97,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('returnTo={returnTo}');
     expect(editPage).toContain('name="return_to" value={returnTo}');
     expect(media).toContain('サブ画像・メーカー資料');
-    expect(variants).toContain('お客様選択');
+    expect(variants).toContain('お客様が選べる色・仕様');
   });
 
   it('既存商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {

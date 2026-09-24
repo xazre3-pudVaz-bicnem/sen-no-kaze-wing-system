@@ -682,36 +682,19 @@ export function EstimateTemplateWorkbench({
         className="sticky top-0 z-30 overflow-hidden rounded-lg border border-slate-300 bg-white/95 shadow-sm backdrop-blur"
         data-testid="estimate-workbench-sticky-summary"
       >
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
-          <div className="mr-2">
-            <p className="text-sm font-semibold">標準見積編集</p>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[11px]">
+          <span className="mr-1 text-sm font-semibold text-slate-900">標準見積編集</span>
           <span
             className={
               hasLocalChanges
-                ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[0.68rem] font-semibold text-amber-800'
-                : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
+                ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-800'
+                : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800'
             }
           >
             {hasLocalChanges ? (demoMode ? '画面内の変更あり' : '未保存の変更あり') : (demoMode ? '初期状態' : '編集前と同じ')}
           </span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetRows} disabled={!hasLocalChanges}>
-              {demoMode ? '元に戻す' : '編集前に戻す'}
-            </Button>
-            {!demoMode && (
-              <>
-                <Button type="button" variant="secondary" size="sm" disabled>下書きを保存</Button>
-                <Button type="button" size="sm" disabled>
-                  {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-200 bg-amber-50/45 px-3 py-1.5 text-[11px]">
-          <span className="font-semibold text-slate-700">計算条件</span>
+          <span className="ml-1 font-semibold text-slate-700">計算条件</span>
           <label className="flex items-center gap-1">
             <span className="text-slate-600">販売費</span>
             <Input
@@ -720,7 +703,7 @@ export function EstimateTemplateWorkbench({
               step={1}
               value={salesExpenseRate}
               onChange={(event) => setSalesExpenseRate(Math.max(0, Number(event.target.value)))}
-              className="h-7 w-16 px-1.5 text-right text-xs"
+              className="h-6 min-h-6 w-14 px-1 text-right text-xs"
               aria-label="販売費率"
             />
             <span>%</span>
@@ -733,7 +716,7 @@ export function EstimateTemplateWorkbench({
               step={1}
               value={expenseRate}
               onChange={(event) => setExpenseRate(Math.max(0, Number(event.target.value)))}
-              className="h-7 w-16 px-1.5 text-right text-xs"
+              className="h-6 min-h-6 w-14 px-1 text-right text-xs"
               aria-label="経費率"
             />
             <span>%</span>
@@ -746,51 +729,72 @@ export function EstimateTemplateWorkbench({
               step={1}
               value={markupRate}
               onChange={(event) => setMarkupRate(Math.max(0, Number(event.target.value)))}
-              className="h-7 w-16 px-1.5 text-right text-xs"
+              className="h-6 min-h-6 w-14 px-1 text-right text-xs"
               aria-label="掛率"
             />
             <span>%</span>
           </label>
-          <span className="border-l border-slate-300 pl-3 text-slate-600">
+          <span className="border-l border-slate-300 pl-2 text-slate-600">
             粗利 <strong className="ml-1 text-slate-400">—</strong>
           </span>
           <span className="text-slate-600">
             粗利率 <strong className="ml-1 text-slate-400">—</strong>
           </span>
-          <span className="ml-auto text-[10px] text-slate-500">※画面内確認用。正式計算は未接続です。</span>
+
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 min-h-7 px-3"
+              onClick={resetRows}
+              disabled={!hasLocalChanges}
+            >
+              {demoMode ? '元に戻す' : '編集前に戻す'}
+            </Button>
+            {!demoMode && (
+              <>
+                <Button type="button" variant="secondary" size="sm" className="h-7 min-h-7 px-3" disabled>
+                  下書きを保存
+                </Button>
+                <Button type="button" size="sm" className="h-7 min-h-7 px-3" disabled>
+                  {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center divide-x divide-slate-200 border-b border-slate-200 text-xs">
-          <span className="px-3 py-1.5">
-            税別小計 <strong className="ml-1 text-sm text-slate-900">{formatYen(subtotalRaw)}</strong>
+        <div className="flex flex-wrap items-center divide-x divide-slate-200 border-b border-slate-200 text-[11px]">
+          <span className="px-3 py-1">
+            税別 <strong className="ml-1 text-sm text-slate-900">{formatYen(subtotalRaw)}</strong>
           </span>
-          <label className="flex items-center gap-1 px-3 py-1">
-            <span className="whitespace-nowrap text-slate-600">値引き等調整額</span>
+          <label className="flex items-center gap-1 px-3 py-0.5">
+            <span className="whitespace-nowrap text-slate-600">調整</span>
             <Input
               type="number"
               step={1}
               value={localAdjustment}
               onChange={(event) => setLocalAdjustment(Number(event.target.value) || 0)}
-              className="h-7 w-24 px-1.5 text-right text-xs"
+              className="h-6 min-h-6 w-20 px-1 text-right text-xs"
               aria-label="値引き等調整額"
             />
           </label>
-          <span className="px-3 py-1.5">
+          <span className="px-3 py-1">
             消費税 <strong className="ml-1 text-sm text-slate-900">{formatYen(tax)}</strong>
           </span>
-          <span className="px-3 py-1.5">
-            税込合計 <strong className="ml-1 text-base text-slate-900">{formatYen(total)}</strong>
+          <span className="px-3 py-1">
+            税込 <strong className="ml-1 text-base text-slate-900">{formatYen(total)}</strong>
           </span>
-          <span className="px-3 py-1.5 text-slate-500">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
         </div>
 
-        <div className="flex items-end gap-1 bg-slate-100 px-3 pt-1.5">
+        <div className="flex items-end gap-1 bg-slate-100 px-3 pt-1">
           <button
             type="button"
             className={
               showCost
-                ? 'rounded-t border border-slate-300 bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-600'
-                : 'rounded-t border border-b-white border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800'
+                ? 'rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600'
+                : 'rounded-t border border-b-white border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800'
             }
             onClick={() => setShowCost(false)}
           >
@@ -800,12 +804,12 @@ export function EstimateTemplateWorkbench({
             type="button"
             disabled
             title="正式原価の接続後に利用できます"
-            className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-400"
+            className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-400"
           >
             原価・売価比較（準備中）
           </button>
-          <span className="ml-auto pb-2 text-[10px] text-slate-500">
-            黄色＝入力 ／ グレー＝参照・自動表示 ／ 商品名の「…」＝商品選択
+          <span className="ml-auto pb-1.5 text-[9px] text-slate-500">
+            Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ／ 「…」＝商品選択 ｜ 正式計算は未接続
           </span>
         </div>
       </section>

@@ -218,7 +218,7 @@ function ChoiceEditor({
         </Field>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_10rem]">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_7rem] sm:items-start">
         <div className="space-y-4">
           <Field label="画像" htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} hint="任意。色見本・柄・仕様が分かる画像を登録できます">
             <Input
@@ -247,10 +247,10 @@ function ChoiceEditor({
           </div>
         </div>
 
-        <div className="rounded-lg border border-line bg-sand/40 p-2">
+        <div className="w-28 max-w-full justify-self-start rounded-lg border border-line bg-sand/40 p-2 sm:justify-self-end">
           {choice?.image_url ? (
             <div className="relative aspect-square overflow-hidden rounded-md bg-white">
-              <SmartImage src={choice.image_url} alt={choice.name} fill sizes="160px" className="object-contain" />
+              <SmartImage src={choice.image_url} alt={choice.name} fill sizes="112px" className="object-contain" />
             </div>
           ) : (
             <div className="flex aspect-square items-center justify-center rounded-md border border-dashed border-line bg-white px-2 text-center text-xs text-muted">

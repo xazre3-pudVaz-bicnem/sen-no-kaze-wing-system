@@ -85,6 +85,12 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
+  it('色・仕様の画像プレビューは小さい固定サムネイルにする', () => {
+    expect(manager).toContain('w-28 max-w-full');
+    expect(manager).toContain('sm:grid-cols-[minmax(0,1fr)_7rem]');
+    expect(manager).toContain('sizes="112px"');
+  });
+
   it('技術コードを内部生成・既存保持し、複数標準もサーバー側で防ぐ', () => {
     expect(actions).toContain('code: `vg-${randomUUID()}`');
     expect(actions).toContain('code: `vc-${randomUUID()}`');

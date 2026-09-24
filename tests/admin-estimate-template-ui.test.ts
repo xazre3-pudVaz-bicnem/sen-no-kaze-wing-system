@@ -216,6 +216,14 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain("aria-label={label + 'の明細を閉じる'}");
   });
 
+  it('別途見積の商品を含む折り畳み区分は0円ではなく別途見積と表示する', () => {
+    expect(workbench).toContain('priceOnRequestSections');
+    expect(workbench).toContain("row.saleUnitPrice === 0 && row.remark.trim() === '別途見積'");
+    expect(workbench).toContain("const collapsedAmountText = hasPriceOnRequest ? '別途見積' : formatYen(totalAmount);");
+    expect(workbench).toContain("hasPriceOnRequest: priceOnRequestSections[section.code]");
+    expect(workbench).toContain('※別途見積を含むため合計は確定額ではありません。');
+  });
+
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
     expect(workbench).toContain('data-testid="estimate-excel-grid"');

@@ -4,7 +4,7 @@ import { Fragment, useActionState, useState, type KeyboardEvent } from 'react';
 import { LockKeyhole, Plus, Trash2, X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
-import { computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
+import { computeQuoteRevisionItemAmount, computeQuoteRevisionTotals } from '@/lib/domain/quote-revision';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
@@ -41,6 +41,10 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
 
 interface Row {
   key: string;
+  source_item_id: string | null;
+  source_unit_price: number | null;
+  source_quantity: number | null;
+  source_amount: number | null;
   kind: RevisionItemKind;
   name: string;
   description: string;
@@ -118,6 +122,10 @@ export function DealerRevisionForm({
       .filter((i) => editable(i.kind))
       .map((i, n) => ({
         key: `${i.id}-${n}`,
+        source_item_id: i.id,
+        source_unit_price: i.unit_price,
+        source_quantity: i.quantity,
+        source_amount: i.amount,
         kind: i.kind as RevisionItemKind,
         name: i.name,
         description: i.description ?? '',
@@ -131,7 +139,14 @@ export function DealerRevisionForm({
   const [isDirty, setIsDirty] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set());
 
-  const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
+  const amountOf = (r: Row) =>
+    computeQuoteRevisionItemAmount(
+      r.unit_price,
+      r.quantity,
+      r.source_item_id && r.source_unit_price !== null && r.source_quantity !== null && r.source_amount !== null
+        ? { unit_price: r.source_unit_price, quantity: r.source_quantity, amount: r.source_amount }
+        : null
+    );
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
   // 代理店は本体を変更できないため親見積の本体金額を固定で使う。オプションは代理店でも編集できる。
   const baseTotal = canEditBase ? sumOf('base', 'base_expense') : quote.base_price + quote.base_expense;
@@ -200,6 +215,10 @@ export function DealerRevisionForm({
     setRows((cur) =>
       insertByKind(cur, {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
+        source_item_id: null,
+        source_unit_price: null,
+        source_quantity: null,
+        source_amount: null,
         kind,
         name: preset?.name ?? '',
         description: preset?.description ?? '',
@@ -466,6 +485,7 @@ export function DealerRevisionForm({
                             )}
                             <tr className="group bg-white text-xs" data-testid={`revision-row-${i}`}>
                               <td className="relative px-0 py-0 align-top">
+                                <input type="hidden" name={`items.${i}.source_item_id`} value={r.source_item_id ?? ''} />
                                 <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
                                 <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
                                 <div className="flex items-start">
@@ -653,6 +673,7 @@ export function DealerRevisionForm({
               {rows.map((r, i) => (
                 <tr key={r.key} data-testid={`revision-row-${i}`}>
                   <td className="px-3 py-2">
+                    <input type="hidden" name={`items.${i}.source_item_id`} value={r.source_item_id ?? ''} />
                     <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
                     <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
                     <Select

@@ -210,7 +210,7 @@ describe('0円商品のServer Actionガード', () => {
       status: 'draft',
     }));
     expect(mocks.redirect).toHaveBeenCalledWith(
-      '/admin/options/' + OPTION_ID + '?step=info&saved=1#product-main-media'
+      '/admin/options/' + OPTION_ID + '?step=info&created=1'
     );
   });
 
@@ -237,9 +237,9 @@ describe('0円商品のServer Actionガード', () => {
       status: 'draft',
     }));
     const redirectUrl = decodeURIComponent(String(mocks.redirect.mock.calls[0]?.[0] ?? ''));
-    expect(redirectUrl).toContain('/admin/options/' + OPTION_ID + '?step=info&saved=1&return_to=');
+    expect(redirectUrl).toContain('/admin/options/' + OPTION_ID + '?step=info&created=1&return_to=');
     expect(redirectUrl).toContain('/admin/estimate-templates/template-1?return_section=option');
-    expect(redirectUrl).toContain('#product-main-media');
+    expect(redirectUrl).not.toContain('#product-main-media');
     expect(redirectUrl).not.toContain('created_option=');
   });
 

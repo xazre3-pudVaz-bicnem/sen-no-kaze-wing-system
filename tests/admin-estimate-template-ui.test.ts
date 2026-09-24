@@ -208,7 +208,8 @@ describe('見積テンプレート管理UI', () => {
 
   it('区分を折り畳むと数量1・単位式・区分計を1行で表示する', () => {
     expect(workbench).toContain("data-testid={'estimate-section-summary-' + key}");
-    expect(workbench).toContain('const summaryRemark = expenseText ?? \`\${rowCount}行の明細を集約\`;');
+    expect(workbench).toContain('const summaryRemark = hasPriceOnRequest');
+    expect(workbench).toContain('expenseText ?? \`\${rowCount}行の明細を集約\`;');
     expect(workbench).toContain('>1</td>');
     expect(workbench).toContain('>式</td>');
     expect(workbench).toContain('{formatYen(totalAmount)}');

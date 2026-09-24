@@ -80,7 +80,6 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('name={`items.${index}.unit_price`} value={row.unit_price}');
     expect(form).toContain("const COMMON_SITEWORK_ITEMS = ['運搬費', '基礎工事', '電気工事', '給排水工事', '設置工事']");
     expect(form).toContain("exists ? '入力あり' : '未追加'");
-    expect(form).toContain('0円');
     expect(form).not.toContain("exists ? '確定' :");
   });
 

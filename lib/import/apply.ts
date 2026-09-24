@@ -2,6 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { getStore, StoreError, type CatalogImportBatch } from '@/lib/data/store';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
+import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { slugify, type ImportPlan } from './catalog-import';
 
 /**
@@ -111,6 +112,33 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     if (!category) throw new StoreError('VALIDATION', `商品「${p.code}」のカテゴリーを解決できませんでした`);
     const code = slugify(p.code, p.code);
     const existing = optionByCode.get(code);
+    const importedPriceState = {
+      price: p.price ?? 0,
+      price_on_request: p.price == null,
+    };
+
+    // Excel一括登録でも、Published商品を新たに「通常価格0円」へ移行させない。
+    // 既存Published商品を自動でDraftへ落とすと公開中カタログを突然非公開にするため、
+    // このケースは一括登録全体を止め、商品登録STEP 1→Draft→STEP 2確認を要求する。
+    if (
+      existing?.status === 'published' &&
+      introducesUnconfirmedZeroPrice(existing, importedPriceState)
+    ) {
+      throw new StoreError(
+        'VALIDATION',
+        `公開中の商品「${existing.name}」をExcel一括登録から通常価格0円へ変更することはできません。商品登録画面でいったん下書きへ戻し、STEP 2で0円が正式価格であることを確認して再公開してください。`
+      );
+    }
+
+    const requiresZeroConfirmation = requiresZeroPriceConfirmation(importedPriceState);
+    const status: ProductOption['status'] =
+      requiresZeroConfirmation && existing?.status !== 'published' ? 'draft' : 'published';
+    if (status === 'draft') {
+      result.warnings.push(
+        `商品「${p.name}」は通常価格0円のため下書きで登録しました。STEP 2で0円が正式価格であることを確認してから公開してください。`
+      );
+    }
+
     const url = imageUrl(p.imageFile);
     if (p.imageFile && !url) result.warnings.push(`画像「${p.imageFile}」が見つかりませんでした（${p.name}）。`);
     if (url) result.imagesLinked++;
@@ -122,8 +150,8 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       code,
       name: p.manufacturer ? `${p.manufacturer} ${p.name}` : p.name,
       description: p.description,
-      price: p.price ?? 0,
-      price_on_request: p.price == null,
+      price: importedPriceState.price,
+      price_on_request: importedPriceState.price_on_request,
       image_url: url ?? existing?.image_url ?? null,
       selection_type: category.selection_mode === 'single' ? 'radio' : 'checkbox',
       is_required: existing?.is_required ?? false,
@@ -139,7 +167,7 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       preview_key: existing?.preview_key ?? null,
       affects_views: existing?.affects_views ?? [],
       sort_order: 100 + p.sortOrder,
-      status: 'published',
+      status,
     } as Omit<ProductOption, 'created_at' | 'updated_at'>;
 
     batch.options.push({ ...saved, import_operation: existing ? 'UPDATE' : 'INSERT' });

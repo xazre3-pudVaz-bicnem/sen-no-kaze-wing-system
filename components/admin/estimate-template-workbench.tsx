@@ -110,10 +110,19 @@ export function EstimateTemplateWorkbench({
   demoMode?: boolean;
 }) {
   const createdProduct = createdOptionId ? products.find((product) => product.id === createdOptionId) : null;
+  const createdProductSection = createdProduct
+    ? (
+        returnSection && SECTION_PRODUCT_CATEGORY_CODES[returnSection].includes(createdProduct.categoryCode)
+          ? returnSection
+          : (Object.entries(SECTION_PRODUCT_CATEGORY_CODES).find(([, codes]) => codes.includes(createdProduct.categoryCode))?.[0] as SectionCode | undefined)
+            ?? returnSection
+            ?? 'option'
+      )
+    : null;
   const [rows, setRows] = useState<EstimateTemplateWorkbenchLine[]>(() => {
     const base = [...initialLines];
-    if (!createdProduct) return base;
-    const section = returnSection ?? 'option';
+    if (!createdProduct || !createdProductSection) return base;
+    const section = createdProductSection;
     if (base.some((row) => row.source === 'product' && row.id === createdProduct.id)) return base;
     return [
       ...base,
@@ -265,13 +274,15 @@ export function EstimateTemplateWorkbench({
 
   const openProductPicker = (section: SectionCode, rowId: string | null = null) => {
     const target = rowId ? rows.find((row) => row.id === rowId) : null;
+    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[section]);
+    const currentCategoryId = target
+      ? products.find(
+          (product) => product.categoryName === target.groupLabel && allowedCodes.has(product.categoryCode)
+        )?.categoryId ?? ''
+      : '';
     setPickerSection(section);
     setPickerTargetRowId(rowId);
-    setPickerCategory(
-      target
-        ? products.find((product) => product.categoryName === target.groupLabel)?.categoryId ?? ''
-        : ''
-    );
+    setPickerCategory(currentCategoryId);
     setPickerQuery('');
   };
 
@@ -566,7 +577,7 @@ export function EstimateTemplateWorkbench({
       {createdProduct && (
         <div className="rounded-lg border border-forest/30 bg-forest/5 px-4 py-3 text-sm">
           「{createdProduct.name}」を商品登録し、標準見積へ戻りました。
-          画面確認用として「{returnSection === 'interior_exterior' ? '内外装工事' : returnSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
+          画面確認用として「{createdProductSection === 'interior_exterior' ? '内外装工事' : createdProductSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
         </div>
       )}
 

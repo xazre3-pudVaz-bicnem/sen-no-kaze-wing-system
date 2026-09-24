@@ -111,13 +111,14 @@ describe('見積テンプレート管理UI', () => {
     expect(quoteSheet).toContain("category.code === 'ub' ? 'ユニットバス'");
   });
 
-  it('新規作成画面は初期設定からExcel形式の明細編集へ進める', () => {
+  it('新規作成画面は基準本体を先に選びExcel形式の明細編集へ進める', () => {
     expect(newForm).toContain('▼');
-    expect(newForm).toContain('基準となる本体');
+    expect(newForm).toContain('基準本体');
+    expect(newForm).toContain('先に基準本体を選びます。商品モデルと防火仕様は、選んだ本体から自動設定されます。');
     expect(newForm).toContain('商品モデル・仕様・防火仕様から自動入力');
-    expect(newForm).toContain('商品モデルに登録されている仕様を表示します');
+    expect(newForm).toContain('現在の本体マスターでは仕様は別項目のため、ここで選択します。');
     expect(newForm).not.toContain('SPEC_OPTIONS');
-    expect(newForm).toContain('max-w-[760px]');
+    expect(newForm).toContain('space-y-4 p-4 sm:p-5');
     expect(newForm).toContain('max-w-[620px]');
     expect(newForm).toContain('キャンセル');
     expect(newForm).toContain("setStep('edit')");
@@ -128,14 +129,16 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('demoMode');
     expect(newForm).toContain('現在は画面確認用です');
     expect(newForm).toContain('編集内容は保存されません。保存・公開機能は準備中です');
-    expect(newForm).toContain('お客様の設置予定地から、将来自動判定する想定です');
-    expect(newForm).toContain('保存機能準備中');
-    expect(newForm).toContain('公開中の本体から選択（準備中）');
+    expect(newForm).toContain('将来は設置予定地から自動判定する想定です');
+    expect(newForm).toContain('基準本体を選ぶ');
+    expect(newForm).toContain('明細を見る');
+    expect(newForm).toContain('この本体を選択');
     expect(newForm).toContain('適用地域');
     expect(newForm).not.toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
     expect(newPage).toContain('title="標準見積を新規作成"');
     expect(newPage).toContain('label="標準見積一覧へ戻る"');
     expect(newPage).toContain('model.presets.map');
+    expect(newPage).toContain('loadPublishedBaseMasters()');
     expect(newPage).toContain('store.listOptions()');
     expect(newPage).toContain('store.listCategories()');
     expect(newPage).toContain("option.status === 'published'");
@@ -252,11 +255,13 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).not.toContain("row.groupLabel || '商品'");
   });
 
-  it('見積テンプレートから商品登録へ移動して戻れる', () => {
+  it('見積テンプレートから商品登録へ移動し、公開後に戻って追加できる', () => {
     expect(workbench).toContain('/admin/options/new?return_to=');
     expect(optionNew).toContain('見積テンプレートの商品追加から移動しています');
     expect(optionNew).toContain('returnTo={returnTo}');
-    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', createdId)");
-    expect(adminActions).toContain("returnUrl.pathname.startsWith('/admin/')");
+    expect(adminActions).toContain("const returnTo = safeAdminReturnTo(formData.get('return_to'))");
+    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?' + params.toString())");
+    expect(adminActions).toContain("returnUrl.searchParams.set('created_option', id)");
+    expect(adminActions).toContain("url.pathname.startsWith('/admin/')");
   });
 });

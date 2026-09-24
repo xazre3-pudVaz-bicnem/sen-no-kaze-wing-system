@@ -294,6 +294,15 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(adminActions).toContain('opt-${randomUUID()}');
   });
 
+  it('お客様選択の技術コードも通常入力から外して内部生成する', () => {
+    expect(variants).not.toContain('label="コード"');
+    expect(variants).not.toContain('name="code"');
+    expect(adminActions).toContain('`vg-${randomUUID()}`');
+    expect(adminActions).toContain('`vc-${randomUUID()}`');
+    expect(adminActions.match(/const internalCode = existing\?\.code \?\? parsed\.data\.code;/g)).toHaveLength(2);
+    expect(adminActions).toContain('code: internalCode');
+  });
+
   it('商品価格と標準品との差額を混同しない', () => {
     expect(forms).toContain('価格・公開設定');
     expect(forms).toContain('商品価格（税別・円）');

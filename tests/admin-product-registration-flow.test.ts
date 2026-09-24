@@ -97,7 +97,20 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('returnTo={returnTo}');
     expect(editPage).toContain('name="return_to" value={returnTo}');
     expect(media).toContain('サブ画像・メーカー資料');
-    expect(variants).toContain('お客様選択');
+    expect(variants).toContain('お客様が選べる色・仕様');
+  });
+
+  it('STEP2直前に保存済み内容の基本チェック結果を表示する', () => {
+    expect(editPage).toContain('STEP 2前の自動チェック');
+    expect(editPage).toContain('option-registration-check');
+    expect(editPage).toContain('registrationCheckIssues');
+    expect(editPage).toContain('基本チェックOK');
+    expect(editPage).toContain('要確認：');
+    expect(editPage).toContain('既存商品に重複候補があります');
+    expect(editPage).toContain('メイン画像が未登録です');
+    expect(editPage).toContain('商品価格が0円です');
+    expect(editPage).toContain('お客様へ表示する選択肢がありません');
+    expect(editPage).toContain('未保存の変更はSTEP 2へ進むときに先に自動保存されます。');
   });
 
   it('既存商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {
@@ -163,10 +176,13 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain("'/admin/free-products'");
     expect(listPage).toContain('catalogOptions');
   });
-  it('商品登録中に既存商品の重複候補を自動表示する', () => {
+  it('商品登録中に既存商品の重複状態を常時表示する', () => {
     expect(forms).toContain('findProductDuplicateCandidates');
+    expect(forms).toContain('option-duplicate-status');
+    expect(forms).toContain('既存商品チェック');
+    expect(forms).toContain('重複候補なし');
+    expect(forms).toContain('要確認：重複候補あり');
     expect(forms).toContain('option-duplicate-warning');
-    expect(forms).toContain('既存商品に重複候補があります');
     expect(forms).toContain('登録を止める判定ではありません');
     expect(forms).toContain('メーカー＋シリーズ・型番／品番が一致');
     expect(forms).toContain('同一カテゴリー＋メーカー＋商品名が一致');
@@ -309,13 +325,18 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
   });
 
-  it('お客様選択は画像なし文字カードを許容し、価格設定と同じSTEP2内で管理する', () => {
-    expect(variants).toContain('お客様選択');
-    expect(variants).toContain('文字カードとして表示');
-    expect(variants).toContain('価格・公開設定');
-    expect(variants).toContain('色・仕様ごとの追加金額');
-    expect(variants).toContain('ChoicePriceEditor');
+  it('お客様選択は色・仕様を直感的に登録し、選択肢ごとに価格と表示をまとめて管理する', () => {
+    expect(variants).toContain('お客様が選べる色・仕様');
+    expect(variants).toContain('＋ 色・仕様を追加');
+    expect(variants).toContain('何を選びますか？');
+    expect(variants).toContain('文字カードで表示');
     expect(variants).toContain('name="extra_price"');
+    expect(variants).toContain('標準の選択肢にする');
+    expect(variants).toContain('お客様に表示する');
+    expect(variants).toContain('詳細設定');
+    expect(variants).not.toContain('色・仕様ごとの追加金額');
+    expect(variants).not.toContain('ChoicePriceEditor');
+    expect(editPage).not.toContain('OptionVariantPricing');
   });
 
   it('既存の商品保存フィールドを維持する', () => {

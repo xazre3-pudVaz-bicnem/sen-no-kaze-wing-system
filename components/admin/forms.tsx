@@ -688,6 +688,9 @@ export function OptionForm({
       }).slice(0, 3),
     [allOptions, manufacturerValue, modelNoValue, nameValue, option?.id, selectedCategoryId]
   );
+  const duplicateCheckReady = Boolean(
+    manufacturerValue.trim() && (modelNoValue.trim() || nameValue.trim())
+  );
 
   const showIdentify = mode === 'all' || mode === 'product' || mode === 'create' || mode === 'identify';
   const showDetails = mode === 'all' || mode === 'product' || mode === 'details';
@@ -925,30 +928,51 @@ export function OptionForm({
             )}
           </div>
 
-          {duplicateCandidates.length > 0 && (
-            <div className="rounded-xl border border-[#d9a441] bg-[#fff8e8] p-4" data-testid="option-duplicate-warning">
-              <p className="font-semibold text-ink">既存商品に重複候補があります</p>
-              <p className="mt-1 text-xs leading-5 text-ink-soft">
-                登録を止める判定ではありません。新規商品かどうかを確認してから保存してください。
-              </p>
-              <ul className="mt-3 space-y-2">
-                {duplicateCandidates.map(({ option: candidate, reason }) => (
-                  <li key={candidate.id} className="rounded-lg border border-[#ead6a7] bg-white px-3 py-2 text-sm">
-                    <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">
-                      {candidate.name}
-                    </a>
-                    <span className="ml-2 text-xs text-muted">{candidate.product_no ?? '商品番号未反映'}</span>
-                    <p className="mt-1 text-xs text-muted">
-                      {reason === 'manufacturer-model'
-                        ? 'メーカー＋シリーズ・型番／品番が一致'
-                        : '同一カテゴリー＋メーカー＋商品名が一致'}
-                      {candidate.model_no ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.model_no}` : ''}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+          <div
+            className={`rounded-xl border px-4 py-3 ${duplicateCandidates.length > 0 ? 'border-[#d9a441] bg-[#fff8e8]' : 'border-line bg-ivory/30'}`}
+            data-testid="option-duplicate-status"
+            aria-live="polite"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-ink">既存商品チェック</p>
+              <span className={`text-xs font-semibold ${duplicateCandidates.length > 0 ? 'text-[#8a641d]' : 'text-muted'}`}>
+                {duplicateCandidates.length > 0
+                  ? '要確認：重複候補あり'
+                  : duplicateCheckReady
+                    ? '重複候補なし'
+                    : '確認に必要な情報を入力'}
+              </span>
             </div>
-          )}
+            {duplicateCandidates.length > 0 ? (
+              <div className="mt-2" data-testid="option-duplicate-warning">
+                <p className="text-xs leading-5 text-ink-soft">
+                  登録を止める判定ではありません。新規商品かどうかを確認してから保存してください。
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {duplicateCandidates.map(({ option: candidate, reason }) => (
+                    <li key={candidate.id} className="rounded-lg border border-[#ead6a7] bg-white px-3 py-2 text-sm">
+                      <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">
+                        {candidate.name}
+                      </a>
+                      <span className="ml-2 text-xs text-muted">{candidate.product_no ?? '商品番号未反映'}</span>
+                      <p className="mt-1 text-xs text-muted">
+                        {reason === 'manufacturer-model'
+                          ? 'メーカー＋シリーズ・型番／品番が一致'
+                          : '同一カテゴリー＋メーカー＋商品名が一致'}
+                        {candidate.model_no ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.model_no}` : ''}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-muted">
+                {duplicateCheckReady
+                  ? 'メーカーと商品名・型番から、登録済み商品の重複候補は見つかっていません。'
+                  : 'メーカーと商品名または型番を入力すると、自動で重複候補を確認します。'}
+              </p>
+            )}
+          </div>
 
           {mode === 'create' && <SubmitButton pending={pending} label="次へ：画像・資料" />}
           {mode === 'identify' && <SubmitButton pending={pending} label="商品特定を保存" />}

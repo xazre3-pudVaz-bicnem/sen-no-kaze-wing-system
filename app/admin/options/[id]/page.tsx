@@ -10,8 +10,9 @@ import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
-import { OptionVariantManager, OptionVariantPricing } from '@/components/admin/option-variant-manager';
+import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
+import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import {
   OptionRegistrationPreviewButton,
   OptionRegistrationSaveBoundary,
@@ -49,6 +50,23 @@ export default async function EditOptionPage({
   const canEditThisOption = canEditCatalog(actor.role) || (category?.code === FREE_PRODUCT_CATEGORY_CODE && option.owner_id === actor.id);
   const catalogEditor = canEditCatalog(actor.role);
   const needsZeroPriceConfirmation = requiresZeroPriceConfirmation(option);
+  const duplicateCandidates = findProductDuplicateCandidates(options, {
+    categoryId: option.category_id,
+    manufacturer: option.manufacturer ?? '',
+    name: option.name,
+    modelNo: option.model_no ?? '',
+    excludeId: option.id,
+  });
+  const incompleteVisibleGroups = variants.groups.filter((group) => {
+    if (group.status !== 'published') return false;
+    return !variants.choices.some((choice) => choice.group_id === group.id && choice.status === 'published');
+  });
+  const registrationCheckIssues = [
+    ...(duplicateCandidates.length > 0 ? ['既存商品に重複候補があります'] : []),
+    ...(!option.image_url ? ['メイン画像が未登録です'] : []),
+    ...(!option.price_on_request && option.price === 0 ? ['商品価格が0円です'] : []),
+    ...incompleteVisibleGroups.map((group) => `「${group.name}」にお客様へ表示する選択肢がありません`),
+  ];
 
   const deps: OptionDependency[] = [];
   const confs: OptionConflict[] = [];
@@ -153,16 +171,35 @@ export default async function EditOptionPage({
 
           {catalogEditor && <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />}
 
-          {catalogEditor && <OptionVariantPricing option={option} groups={variants.groups} choices={variants.choices} />}
-
-          <section className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-            <div>
-              <h3 className="font-semibold">登録内容を確認</h3>
-              <p className="mt-1 text-xs text-muted">入力内容を保存して、シミュレーターと同じ商品詳細画面で確認します。</p>
+          <section className="card space-y-4 p-4 sm:p-5" data-testid="option-registration-check">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="font-semibold">STEP 2前の自動チェック</h3>
+                <p className="mt-1 text-xs text-muted">
+                  現在保存されている内容を確認しています。未保存の変更はSTEP 2へ進むときに先に自動保存されます。
+                </p>
+              </div>
+              <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${registrationCheckIssues.length > 0 ? 'bg-[#fff1cf] text-[#7c5a18]' : 'bg-[#eaf6f1] text-[#245a48]'}`}>
+                {registrationCheckIssues.length > 0 ? `要確認：${registrationCheckIssues.length}件` : '基本チェックOK'}
+              </span>
             </div>
-            <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
-              STEP 2 登録内容確認へ
-            </OptionRegistrationPreviewButton>
+
+            {registrationCheckIssues.length > 0 ? (
+              <ul className="space-y-1 rounded-xl border border-[#ead6a7] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-ink-soft">
+                {registrationCheckIssues.map((issue) => <li key={issue}>・{issue}</li>)}
+              </ul>
+            ) : (
+              <p className="rounded-xl border border-line bg-ivory/30 px-4 py-3 text-xs leading-5 text-muted">
+                重複候補・メイン画像・商品価格・お客様選択の基本項目に、現在の保存内容では要確認事項はありません。
+              </p>
+            )}
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted">STEP 2では、シミュレーターと同じ商品詳細画面で最終表示を確認します。</p>
+              <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
+                STEP 2 登録内容確認へ
+              </OptionRegistrationPreviewButton>
+            </div>
           </section>
 
           {catalogEditor && (

@@ -7,7 +7,6 @@ import {
   type AdminFormState,
 } from '@/lib/actions/admin';
 import {
-  VARIANT_KIND_LABELS,
   type OptionVariantChoice,
   type OptionVariantGroup,
   type ProductOption,
@@ -46,6 +45,7 @@ function GroupFields({
 }) {
   const [state, action, pending] = useActionState(saveVariantGroupAction, initial);
   const [parentCode, setParentCode] = useState(group?.depends_on_group_code ?? '');
+  const [customerVisible, setCustomerVisible] = useState(group?.status !== 'draft');
   const e = state.fieldErrors ?? {};
   const parent = groups.find((row) => row.code === parentCode && row.id !== group?.id) ?? null;
   const parentChoices = parent ? choices.filter((choice) => choice.group_id === parent.id) : [];
@@ -55,105 +55,118 @@ function GroupFields({
     <form action={action} className="space-y-4" noValidate>
       <input type="hidden" name="id" value={group?.id ?? ''} />
       <input type="hidden" name="option_id" value={optionId} />
+      <input type="hidden" name="status" value={customerVisible ? 'published' : 'draft'} />
       <ActionStatus state={state} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="選択項目名" htmlFor={`variant-group-name-${group?.id ?? 'new'}`} required errors={e.name}>
-          <Input
-            id={`variant-group-name-${group?.id ?? 'new'}`}
-            name="name"
-            defaultValue={group?.name ?? ''}
-            placeholder="例：壁色／扉色／カラー"
-            required
-          />
-        </Field>
-        <Field label="表示順" htmlFor={`variant-group-sort-${group?.id ?? 'new'}`} errors={e.sort_order}>
-          <Input
-            id={`variant-group-sort-${group?.id ?? 'new'}`}
-            name="sort_order"
-            type="number"
-            min={0}
-            defaultValue={group?.sort_order ?? groups.length}
-          />
-        </Field>
-        <Field label="公開状態" htmlFor={`variant-group-status-${group?.id ?? 'new'}`} errors={e.status}>
-          <Select
-            id={`variant-group-status-${group?.id ?? 'new'}`}
-            name="status"
-            defaultValue={group?.status ?? 'published'}
-          >
-            <option value="published">公開</option>
-            <option value="draft">非公開</option>
-          </Select>
-        </Field>
-      </div>
-
-      <Field label="補足" htmlFor={`variant-group-note-${group?.id ?? 'new'}`} hint="お客様画面の選択項目の下に表示します" errors={e.note}>
-        <Textarea
-          id={`variant-group-note-${group?.id ?? 'new'}`}
-          name="note"
-          defaultValue={group?.note ?? ''}
-          className="min-h-20"
-          placeholder="例：アクセント壁を選んだ場合だけ選択できます"
+      <Field
+        label="何を選びますか？"
+        htmlFor={`variant-group-name-${group?.id ?? 'new'}`}
+        hint="例：カラー／扉色／浴槽色／水栓仕様"
+        required
+        errors={e.name}
+      >
+        <Input
+          id={`variant-group-name-${group?.id ?? 'new'}`}
+          name="name"
+          defaultValue={group?.name ?? ''}
+          placeholder="例：カラー"
+          required
         />
       </Field>
 
-      <Checkbox
-        name="is_required"
-        defaultChecked={group?.is_required ?? true}
-        label="この選択項目を必須にする"
-      />
-
-      <details className="rounded-xl border border-line bg-ivory/40 p-4">
-        <summary className="cursor-pointer text-sm font-semibold">表示条件（必要な場合だけ）</summary>
+      <details className="rounded-xl border border-line bg-ivory/30 p-4">
+        <summary className="cursor-pointer text-sm font-semibold">詳細設定</summary>
         <p className="mt-2 text-xs text-muted">
-          例：「壁プラン」で「アクセント1面」を選んだときだけ「壁色」を表示する、といった条件です。
+          通常は変更不要です。表示順・必須・表示条件などを調整するときだけ使用します。
         </p>
         <div className="mt-4 space-y-4">
-          <Field
-            label="条件となる選択項目"
-            htmlFor={`variant-group-parent-${group?.id ?? 'new'}`}
-            errors={e.depends_on_group_code}
-          >
-            <Select
-              id={`variant-group-parent-${group?.id ?? 'new'}`}
-              name="depends_on_group_code"
-              value={parentCode}
-              onChange={(event) => setParentCode(event.target.value)}
-            >
-              <option value="">条件なし</option>
-              {groups
-                .filter((row) => row.id !== group?.id)
-                .map((row) => (
-                  <option key={row.id} value={row.code}>{row.name}</option>
-                ))}
-            </Select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="表示順" htmlFor={`variant-group-sort-${group?.id ?? 'new'}`} errors={e.sort_order}>
+              <Input
+                id={`variant-group-sort-${group?.id ?? 'new'}`}
+                name="sort_order"
+                type="number"
+                min={0}
+                defaultValue={group?.sort_order ?? groups.length}
+              />
+            </Field>
+            <div className="flex items-end">
+              <Checkbox
+                checked={customerVisible}
+                onChange={(event) => setCustomerVisible(event.target.checked)}
+                label="お客様に表示する"
+              />
+            </div>
+          </div>
+
+          <Field label="補足" htmlFor={`variant-group-note-${group?.id ?? 'new'}`} hint="お客様画面の選択項目の下に表示します" errors={e.note}>
+            <Textarea
+              id={`variant-group-note-${group?.id ?? 'new'}`}
+              name="note"
+              defaultValue={group?.note ?? ''}
+              className="min-h-20"
+              placeholder="任意"
+            />
           </Field>
-          {parent && (
-            <div>
-              <p className="label">この選択肢のとき表示</p>
-              {e.depends_on_choice_codes && <p className="mt-1 text-xs text-danger">{e.depends_on_choice_codes[0]}</p>}
-              {parentChoices.length ? (
-                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-                  {parentChoices.map((choice) => (
-                    <Checkbox
-                      key={choice.id}
-                      name="depends_on_choice_codes"
-                      value={choice.code}
-                      defaultChecked={(group?.depends_on_choice_codes ?? []).includes(choice.code)}
-                      label={choice.name}
-                    />
-                  ))}
+
+          <Checkbox
+            name="is_required"
+            defaultChecked={group?.is_required ?? true}
+            label="この選択項目を必須にする"
+          />
+
+          <details className="rounded-xl border border-line bg-white p-4">
+            <summary className="cursor-pointer text-sm font-semibold">表示条件（必要な場合だけ）</summary>
+            <p className="mt-2 text-xs text-muted">
+              例：「壁プラン」で「アクセント1面」を選んだときだけ「壁色」を表示する、といった条件です。
+            </p>
+            <div className="mt-4 space-y-4">
+              <Field
+                label="条件となる選択項目"
+                htmlFor={`variant-group-parent-${group?.id ?? 'new'}`}
+                errors={e.depends_on_group_code}
+              >
+                <Select
+                  id={`variant-group-parent-${group?.id ?? 'new'}`}
+                  name="depends_on_group_code"
+                  value={parentCode}
+                  onChange={(event) => setParentCode(event.target.value)}
+                >
+                  <option value="">条件なし</option>
+                  {groups
+                    .filter((row) => row.id !== group?.id)
+                    .map((row) => (
+                      <option key={row.id} value={row.code}>{row.name}</option>
+                    ))}
+                </Select>
+              </Field>
+              {parent && (
+                <div>
+                  <p className="label">この選択肢のとき表示</p>
+                  {e.depends_on_choice_codes && <p className="mt-1 text-xs text-danger">{e.depends_on_choice_codes[0]}</p>}
+                  {parentChoices.length ? (
+                    <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                      {parentChoices.map((choice) => (
+                        <Checkbox
+                          key={choice.id}
+                          name="depends_on_choice_codes"
+                          value={choice.code}
+                          defaultChecked={(group?.depends_on_choice_codes ?? []).includes(choice.code)}
+                          label={choice.name}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted">条件元の選択肢がまだありません。</p>
+                  )}
                 </div>
-              ) : (
-                <p className="mt-2 text-xs text-muted">条件元の選択肢がまだありません。</p>
               )}
             </div>
-          )}
+          </details>
         </div>
       </details>
 
-      <PendingButton pending={pending}>{isNew ? '選択項目を追加' : '選択項目を更新'}</PendingButton>
+      <PendingButton pending={pending}>{isNew ? 'この選択項目を作成' : '選択項目を保存'}</PendingButton>
     </form>
   );
 }
@@ -170,6 +183,8 @@ function ChoiceEditor({
   choiceCount: number;
 }) {
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
+  const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
+  const [customerVisible, setCustomerVisible] = useState(choice?.status !== 'draft');
   const e = state.fieldErrors ?? {};
   const isNew = !choice;
 
@@ -178,10 +193,11 @@ function ChoiceEditor({
       <input type="hidden" name="id" value={choice?.id ?? ''} />
       <input type="hidden" name="option_id" value={optionId} />
       <input type="hidden" name="group_id" value={group.id} />
+      <input type="hidden" name="status" value={customerVisible ? 'published' : 'draft'} />
       <ActionStatus state={state} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="選択肢名" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} required errors={e.name}>
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
+        <Field label="選択肢" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} hint="例：ホワイト／ベージュ／ブラック" required errors={e.name}>
           <Input
             id={`variant-choice-name-${choice?.id ?? group.id}`}
             name="name"
@@ -190,38 +206,21 @@ function ChoiceEditor({
             required
           />
         </Field>
-        <Field label="区分" htmlFor={`variant-choice-kind-${choice?.id ?? group.id}`} errors={e.kind}>
-          <Select id={`variant-choice-kind-${choice?.id ?? group.id}`} name="kind" defaultValue={choice?.kind ?? 'option'}>
-            <option value="standard">標準</option>
-            <option value="option">追加</option>
-            <option value="fixed">固定（変更不可）</option>
-          </Select>
-        </Field>
-        <input type="hidden" name="extra_price" value={choice?.extra_price ?? 0} />
-        <Field label="表示順" htmlFor={`variant-choice-sort-${choice?.id ?? group.id}`} errors={e.sort_order}>
+        <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} errors={e.extra_price}>
           <Input
-            id={`variant-choice-sort-${choice?.id ?? group.id}`}
-            name="sort_order"
+            id={`variant-choice-price-${choice?.id ?? group.id}`}
+            name="extra_price"
             type="number"
             min={0}
-            defaultValue={choice?.sort_order ?? choiceCount}
+            step={100}
+            defaultValue={choice?.extra_price ?? 0}
           />
-        </Field>
-        <Field label="公開状態" htmlFor={`variant-choice-status-${choice?.id ?? group.id}`} errors={e.status}>
-          <Select
-            id={`variant-choice-status-${choice?.id ?? group.id}`}
-            name="status"
-            defaultValue={choice?.status ?? 'published'}
-          >
-            <option value="published">公開</option>
-            <option value="draft">非公開</option>
-          </Select>
         </Field>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_10rem]">
         <div className="space-y-4">
-          <Field label="画像" htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} hint="任意。色見本・柄・仕様画像など">
+          <Field label="画像" htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} hint="任意。色見本・柄・仕様が分かる画像を登録できます">
             <Input
               id={`variant-choice-image-${choice?.id ?? group.id}`}
               name="image_file"
@@ -231,17 +230,23 @@ function ChoiceEditor({
             />
             <input type="hidden" name="image_url" value={choice?.image_url ?? ''} />
           </Field>
-          <Field label="補足" htmlFor={`variant-choice-note-${choice?.id ?? group.id}`} errors={e.note}>
-            <Input
-              id={`variant-choice-note-${choice?.id ?? group.id}`}
-              name="note"
-              defaultValue={choice?.note ?? ''}
-              placeholder="任意"
+
+          <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl border border-line bg-ivory/30 px-4 py-3">
+            <Checkbox
+              checked={kind === 'standard'}
+              disabled={kind === 'fixed'}
+              onChange={(event) => setKind(event.target.checked ? 'standard' : 'option')}
+              label="標準の選択肢にする"
             />
-          </Field>
-          {choice?.price_on_request && <input type="hidden" name="price_on_request" value="on" />}
-          <p className="text-xs text-muted">追加金額・別途見積の設定は、下の「価格・公開設定」で行います。</p>
+            <Checkbox
+              checked={customerVisible}
+              onChange={(event) => setCustomerVisible(event.target.checked)}
+              label="お客様に表示する"
+            />
+            <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
+          </div>
         </div>
+
         <div className="rounded-lg border border-line bg-sand/40 p-2">
           {choice?.image_url ? (
             <div className="relative aspect-square overflow-hidden rounded-md bg-white">
@@ -255,7 +260,47 @@ function ChoiceEditor({
         </div>
       </div>
 
-      <PendingButton pending={pending}>{isNew ? '選択肢を追加' : '選択肢を更新'}</PendingButton>
+      <details className="rounded-xl border border-line bg-ivory/30 p-4">
+        <summary className="cursor-pointer text-sm font-semibold">詳細設定</summary>
+        <p className="mt-2 text-xs text-muted">
+          通常は変更不要です。固定仕様・表示順・補足を設定するときだけ使用します。
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="扱い" htmlFor={`variant-choice-kind-${choice?.id ?? group.id}`} errors={e.kind}>
+            <Select
+              id={`variant-choice-kind-${choice?.id ?? group.id}`}
+              name="kind"
+              value={kind}
+              onChange={(event) => setKind(event.target.value as OptionVariantChoice['kind'])}
+            >
+              <option value="standard">標準</option>
+              <option value="option">追加・変更可能</option>
+              <option value="fixed">固定（変更不可）</option>
+            </Select>
+          </Field>
+          <Field label="表示順" htmlFor={`variant-choice-sort-${choice?.id ?? group.id}`} errors={e.sort_order}>
+            <Input
+              id={`variant-choice-sort-${choice?.id ?? group.id}`}
+              name="sort_order"
+              type="number"
+              min={0}
+              defaultValue={choice?.sort_order ?? choiceCount}
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field label="補足" htmlFor={`variant-choice-note-${choice?.id ?? group.id}`} errors={e.note}>
+              <Input
+                id={`variant-choice-note-${choice?.id ?? group.id}`}
+                name="note"
+                defaultValue={choice?.note ?? ''}
+                placeholder="任意"
+              />
+            </Field>
+          </div>
+        </div>
+      </details>
+
+      <PendingButton pending={pending}>{isNew ? 'この選択肢を追加' : '選択肢を保存'}</PendingButton>
     </form>
   );
 
@@ -266,13 +311,13 @@ function ChoiceEditor({
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="font-semibold text-ink">{choice.name}</span>
-          <span className="ml-2 text-xs text-muted">{VARIANT_KIND_LABELS[choice.kind]}</span>
+          {choice.kind === 'standard' && <span className="ml-2 text-xs text-success">標準</span>}
           {!choice.price_on_request && choice.extra_price > 0 && (
             <span className="ml-2 text-xs text-ink-soft">+¥{choice.extra_price.toLocaleString('ja-JP')}</span>
           )}
           {choice.price_on_request && <span className="ml-2 text-xs text-warn">別途見積</span>}
         </span>
-        <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? '公開' : '非公開'}・編集</span>
+        <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? 'お客様に表示' : '非表示'}・編集</span>
       </summary>
       <div className="border-t border-line p-4">{form}</div>
     </details>
@@ -293,18 +338,21 @@ export function OptionVariantManager({
   return (
     <section id="customer-selection" className="space-y-6 scroll-mt-6">
       <div>
-        <h2 className="text-xl font-semibold">お客様選択</h2>
+        <h2 className="text-xl font-semibold">お客様が選べる色・仕様</h2>
         <p className="mt-1 text-sm text-muted">
-          お客様が商品詳細で選ぶ色・柄・仕様を管理します。画像は任意で、画像を登録しない選択肢は文字カードとして表示できます。
+          商品詳細でお客様が選ぶ内容を登録します。例：「カラー」を作り、その中に「ホワイト」「ベージュ」などの選択肢を追加します。
         </p>
         <p className="mt-2 text-xs text-muted">
-          使用済みの見積・保存仕様との整合を守るため、この画面では物理削除を行いません。不要になった項目・選択肢は「非公開」にしてください。
+          画像は任意です。画像がない選択肢は文字カードで表示します。追加金額・標準・お客様表示も各選択肢でまとめて設定できます。
         </p>
       </div>
 
       {orderedGroups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-white px-5 py-8 text-center text-sm text-muted">
-          色・仕様はまだ登録されていません。下の「選択項目を追加」から登録できます。
+        <div className="rounded-xl border border-dashed border-line bg-white px-5 py-7">
+          <p className="font-semibold">色・仕様はまだ登録されていません。</p>
+          <p className="mt-2 text-sm text-muted">
+            下の「＋ 色・仕様を追加」から、まず「カラー」「扉色」などお客様が選ぶ項目を作成してください。
+          </p>
         </div>
       ) : (
         <div className="space-y-5">
@@ -316,9 +364,10 @@ export function OptionVariantManager({
               <article key={group.id} className="card space-y-5 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold">{group.name}</h3>
+                    <p className="text-xs font-semibold text-muted">お客様が選ぶ項目</p>
+                    <h3 className="mt-1 text-lg font-semibold">{group.name}</h3>
                     <p className="mt-1 text-xs text-muted">
-                      {groupChoices.length}選択肢・{group.status === 'published' ? '公開' : '非公開'}
+                      {groupChoices.length}選択肢・{group.status === 'published' ? 'お客様に表示' : '非表示'}
                     </p>
                   </div>
                   {group.depends_on_group_code && (
@@ -328,27 +377,30 @@ export function OptionVariantManager({
                   )}
                 </div>
 
-                <details className="rounded-xl border border-line bg-ivory/30 p-4">
-                  <summary className="cursor-pointer text-sm font-semibold">選択項目の設定を編集</summary>
-                  <div className="mt-4">
-                    <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
-                  </div>
-                </details>
-
                 <div className="space-y-3">
                   <div>
                     <h4 className="text-sm font-semibold">選択肢</h4>
-                    <p className="mt-1 text-xs text-muted">標準・追加・固定、画像または文字カード、公開状態を設定します。追加金額は下の「価格・公開設定」で設定します。</p>
+                    <p className="mt-1 text-xs text-muted">
+                      選択肢ごとに画像・追加金額・標準・お客様への表示を設定します。
+                    </p>
                   </div>
-                  {groupChoices.map((choice) => (
-                    <ChoiceEditor
-                      key={choice.id}
-                      optionId={option.id}
-                      group={group}
-                      choice={choice}
-                      choiceCount={groupChoices.length}
-                    />
-                  ))}
+
+                  {groupChoices.length > 0 ? (
+                    groupChoices.map((choice) => (
+                      <ChoiceEditor
+                        key={choice.id}
+                        optionId={option.id}
+                        group={group}
+                        choice={choice}
+                        choiceCount={groupChoices.length}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-line bg-ivory/20 px-4 py-5 text-sm text-muted">
+                      選択肢がありません。「＋ 選択肢を追加」から最初の選択肢を登録してください。
+                    </div>
+                  )}
+
                   <details className="rounded-xl border border-dashed border-line bg-ivory/20">
                     <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">＋ 選択肢を追加</summary>
                     <div className="border-t border-line p-4">
@@ -361,6 +413,13 @@ export function OptionVariantManager({
                     </div>
                   </details>
                 </div>
+
+                <details className="rounded-xl border border-line bg-ivory/30 p-4">
+                  <summary className="cursor-pointer text-sm font-semibold">この選択項目の名前・詳細設定</summary>
+                  <div className="mt-4">
+                    <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
+                  </div>
+                </details>
               </article>
             );
           })}
@@ -368,111 +427,18 @@ export function OptionVariantManager({
       )}
 
       <details className="card p-5">
-        <summary className="cursor-pointer font-semibold">＋ 選択項目を追加</summary>
+        <summary className="cursor-pointer font-semibold">＋ 色・仕様を追加</summary>
         <p className="mt-2 text-xs text-muted">
-          「色」「壁プラン」「扉色」など、お客様が選ぶ単位を追加します。
+          「カラー」「扉色」「浴槽色」など、お客様が選ぶ項目を追加します。
         </p>
         <div className="mt-5">
           <GroupFields optionId={option.id} group={null} groups={groups} choices={choices} />
         </div>
       </details>
-    </section>
-  );
-}
-function ChoicePriceEditor({
-  optionId,
-  group,
-  choice,
-}: {
-  optionId: string;
-  group: OptionVariantGroup;
-  choice: OptionVariantChoice;
-}) {
-  const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
-  const e = state.fieldErrors ?? {};
 
-  return (
-    <form action={action} className="grid gap-4 rounded-xl border border-line bg-white p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end" noValidate>
-      <input type="hidden" name="id" value={choice.id} />
-      <input type="hidden" name="option_id" value={optionId} />
-      <input type="hidden" name="group_id" value={group.id} />
-      <input type="hidden" name="name" value={choice.name} />
-      <input type="hidden" name="kind" value={choice.kind} />
-      <input type="hidden" name="sort_order" value={choice.sort_order} />
-      <input type="hidden" name="status" value={choice.status} />
-      <input type="hidden" name="image_url" value={choice.image_url ?? ''} />
-      <input type="hidden" name="note" value={choice.note ?? ''} />
-
-      <div>
-        <ActionStatus state={state} />
-        <p className="font-semibold text-ink">{choice.name}</p>
-        <p className="mt-1 text-xs text-muted">{group.name}・{VARIANT_KIND_LABELS[choice.kind]}</p>
-      </div>
-      <div className="space-y-2">
-        <Field label="追加金額（税別・円）" htmlFor={`variant-price-only-${choice.id}`} errors={e.extra_price}>
-          <Input
-            id={`variant-price-only-${choice.id}`}
-            name="extra_price"
-            type="number"
-            min={0}
-            step={100}
-            defaultValue={choice.extra_price}
-          />
-        </Field>
-        <Checkbox name="price_on_request" defaultChecked={choice.price_on_request} label="別途見積" />
-      </div>
-      <PendingButton pending={pending}>保存</PendingButton>
-    </form>
-  );
-}
-
-export function OptionVariantPricing({
-  option,
-  groups,
-  choices,
-}: {
-  option: ProductOption;
-  groups: OptionVariantGroup[];
-  choices: OptionVariantChoice[];
-}) {
-  const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
-
-  return (
-    <section id="variant-pricing" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
-      <div>
-        <h2 className="text-lg font-semibold">色・仕様ごとの追加金額</h2>
-        <p className="mt-1 text-sm text-muted">
-          上で登録した文字カード・画像カードごとの追加金額を設定します。0円の標準選択肢も明示しておくと確認しやすくなります。
-        </p>
-      </div>
-
-      {choices.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line px-4 py-7 text-center text-sm text-muted">
-          価格を設定する選択肢がありません。先に「お客様選択」で色・仕様を登録してください。
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {orderedGroups.map((group) => {
-            const rows = choices
-              .filter((choice) => choice.group_id === group.id)
-              .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
-            if (rows.length === 0) return null;
-            return (
-              <div key={group.id} className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="font-semibold">{group.name}</h3>
-                  <span className="text-xs text-muted">{rows.length}選択肢</span>
-                </div>
-                <div className="space-y-2">
-                  {rows.map((choice) => (
-                    <ChoicePriceEditor key={choice.id} optionId={option.id} group={group} choice={choice} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <p className="text-xs text-muted">
+        使用済みの見積・保存仕様との整合を守るため、物理削除を行いません。不要になった項目や選択肢は「お客様に表示する」をOFFにして管理します。
+      </p>
     </section>
   );
 }

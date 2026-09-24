@@ -65,18 +65,22 @@ describe('管理画面の色・仕様管理', () => {
     expect(variantChoiceSchema.safeParse({ ...base, extra_price: -1 }).success).toBe(false);
   });
 
-  it('商品編集画面から色・仕様管理へ接続する', () => {
+  it('商品編集画面から分かりやすい色・仕様管理へ接続する', () => {
     expect(editPage).toContain('OptionVariantManager');
     expect(editPage).toContain('store.getOptionVariants(id)');
-    expect(manager).toContain('お客様選択');
-    expect(manager).toContain('色・仕様ごとの追加金額');
+    expect(manager).toContain('お客様が選べる色・仕様');
+    expect(manager).toContain('＋ 色・仕様を追加');
+    expect(manager).toContain('何を選びますか？');
     expect(manager).toContain('追加金額（税別・円）');
+    expect(manager).toContain('標準の選択肢にする');
     expect(manager).toContain('表示条件（必要な場合だけ）');
+    expect(manager).not.toContain('色・仕様ごとの追加金額');
   });
 
-  it('履歴保護のため物理削除ではなく非公開を使う', () => {
+  it('履歴保護のため物理削除ではなくお客様非表示を使う', () => {
     expect(manager).toContain('物理削除を行いません');
-    expect(manager).toContain('<option value="draft">非公開</option>');
+    expect(manager).toContain('label="お客様に表示する"');
+    expect(manager).toContain("value={customerVisible ? 'published' : 'draft'}");
     expect(actions).not.toContain('deleteVariantChoiceAction');
     expect(actions).not.toContain('deleteVariantGroupAction');
   });

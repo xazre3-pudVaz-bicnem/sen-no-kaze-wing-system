@@ -31,6 +31,7 @@ export default async function AdminQuoteDetailPage({
         created={sp.created}
         revised={sp.revised}
         from={sp.from}
+        edit={sp.edit}
       />
     </div>
   );

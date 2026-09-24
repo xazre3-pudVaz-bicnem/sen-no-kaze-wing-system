@@ -684,8 +684,7 @@ export function EstimateTemplateWorkbench({
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
           <div className="mr-2">
-            <p className="text-sm font-semibold">標準見積編集 ― Excel形式</p>
-            <p className="text-[11px] text-slate-500">明細を1枚の表で連続編集します。シミュレーター見積書のレイアウトは使用しません。</p>
+            <p className="text-sm font-semibold">標準見積編集</p>
           </div>
           <span
             className={
@@ -698,7 +697,7 @@ export function EstimateTemplateWorkbench({
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" size="sm" onClick={resetRows} disabled={!hasLocalChanges}>
-              {demoMode ? '最初の状態に戻す' : '編集前に戻す'}
+              {demoMode ? '元に戻す' : '編集前に戻す'}
             </Button>
             {!demoMode && (
               <>
@@ -758,7 +757,7 @@ export function EstimateTemplateWorkbench({
           <span className="text-slate-600">
             粗利率 <strong className="ml-1 text-slate-400">—</strong>
           </span>
-          <span className="ml-auto text-[10px] text-slate-500">画面内設定。明細金額への反映は正式原価接続後です。</span>
+          <span className="ml-auto text-[10px] text-slate-500">※画面内確認用。正式計算は未接続です。</span>
         </div>
 
         <div className="flex flex-wrap items-center divide-x divide-slate-200 border-b border-slate-200 text-xs">

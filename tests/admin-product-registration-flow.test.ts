@@ -66,7 +66,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('mode="all"');
     expect(editPage).not.toContain('mode="product"');
     expect(editPage).not.toContain('mode="pricing"');
-    expect(editPage).toContain('必要な商品情報を登録し、最後にSTEP 2でお客様表示を確認します。');
+    expect(editPage).toContain('商品情報はSTEP 2へ進むときや、画像・資料など別の登録操作の前に自動保存されます。');
     expect(editPage).toContain('STEP 2 登録内容確認へ');
     expect(editPage).toContain('data-testid="option-registration-info"');
     expect(editPage).toContain('data-testid="option-customer-preview"');

@@ -548,6 +548,59 @@ export function EstimateTemplateWorkbench({
     editable: boolean;
   }) => {
     const collapsed = collapsedSections.has(key);
+    const summaryRemark = expenseText ?? `${rowCount}行の明細を集約`;
+
+    if (collapsed) {
+      return (
+        <tr
+          key={'section-' + key}
+          className="border-b border-emerald-950 bg-emerald-900 text-white"
+          data-testid={'estimate-section-summary-' + key}
+        >
+          <th className="sticky left-0 z-20 w-11 bg-slate-100"></th>
+          <td className="sticky left-[2.75rem] z-20 w-9 border-r border-emerald-800 bg-emerald-900 px-1 text-center">
+            <button
+              type="button"
+              className="my-0.5 flex size-5 items-center justify-center rounded border border-white/60 bg-white text-xs font-bold text-slate-800"
+              aria-expanded={false}
+              aria-label={label + 'の明細を開く'}
+              onClick={() => toggleSection(key)}
+            >
+              +
+            </button>
+          </td>
+          <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
+            <div className="flex items-center gap-2">
+              <strong className="text-xs">{label}</strong>
+              <span className="text-[11px] text-white/75">{rowCount}行</span>
+            </div>
+          </td>
+          <td className="w-16 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">1</td>
+          <td className="w-16 border-r border-emerald-800 px-2 text-xs font-semibold">式</td>
+          {showCost && (
+            <>
+              <td className="w-28 border-r border-emerald-800 px-3 text-right text-white/60">—</td>
+              <td className="w-28 border-r border-emerald-800 px-3 text-right text-white/60">—</td>
+            </>
+          )}
+          <td className="w-28 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">
+            {formatYen(totalAmount)}
+          </td>
+          <td className="w-24 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">
+            {formatYen(totalAmount)}
+          </td>
+          {showCost && (
+            <td className="w-28 border-r border-emerald-800 px-3 text-right text-white/60">—</td>
+          )}
+          <td className="min-w-48 border-r border-emerald-800 px-2 text-[11px] text-white/75">
+            {summaryRemark}
+          </td>
+          <td className="w-40 border-r border-emerald-800 px-2 text-xs text-white/60">—</td>
+          <td className="w-16 px-1 text-center text-[10px] text-white/60">—</td>
+        </tr>
+      );
+    }
+
     return (
       <tr key={'section-' + key} className="border-b border-emerald-950 bg-emerald-900 text-white">
         <th className="sticky left-0 z-20 w-11 bg-slate-100"></th>
@@ -555,18 +608,18 @@ export function EstimateTemplateWorkbench({
           <button
             type="button"
             className="my-0.5 flex size-5 items-center justify-center rounded border border-white/60 bg-white text-xs font-bold text-slate-800"
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? label + 'の明細を開く' : label + 'の明細を閉じる'}
+            aria-expanded={true}
+            aria-label={label + 'の明細を閉じる'}
             onClick={() => toggleSection(key)}
           >
-            {collapsed ? '+' : '−'}
+            −
           </button>
         </td>
         <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <strong className="text-xs">{label}</strong>
             <span className="text-[11px] text-white/75">{rowCount}行</span>
-            {editable && !collapsed && (
+            {editable && (
               <span className="flex items-center gap-2">
                 <button
                   type="button"

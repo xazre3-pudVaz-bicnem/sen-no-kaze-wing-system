@@ -911,8 +911,8 @@ export function EstimateTemplateWorkbench({
 
       {pickerSection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を選択">
-          <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-white px-5 py-4">
+          <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="shrink-0 flex items-center justify-between border-b border-line bg-white px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品を変更' : '商品を追加'}</h2>
                 <p className="mt-1 text-xs text-muted">
@@ -932,7 +932,7 @@ export function EstimateTemplateWorkbench({
               <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
-            <div className="space-y-5 p-5">
+            <div className="shrink-0 space-y-3 border-b border-line px-5 py-4">
               <div className="grid gap-3 sm:grid-cols-[14rem_1fr]">
                 <Select
                   value={pickerCategory}
@@ -948,7 +948,7 @@ export function EstimateTemplateWorkbench({
                     }
                   }}
                 >
-                  <option value="">この区分のすべてのカテゴリー</option>
+                  <option value="">すべてのカテゴリー</option>
                   {pickerCategories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                 </Select>
                 <Input
@@ -962,7 +962,9 @@ export function EstimateTemplateWorkbench({
               <p className="text-[11px] text-muted">
                 「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。
               </p>
+            </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 pt-4">
               <div className="space-y-3">
                 {pickerProductGroups.map((group) => {
                   const collapsed = collapsedPickerCategories.has(group.categoryId);
@@ -985,7 +987,7 @@ export function EstimateTemplateWorkbench({
                       {!collapsed && (
                         <div className="divide-y divide-line">
                           {group.products.map((product) => (
-                            <div key={product.id} className="flex items-center gap-3 px-3 py-2.5">
+                            <div key={product.id} className="flex items-center gap-3 px-3 py-2">
                               <div
                                 className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand bg-cover bg-center text-[10px] text-muted"
                                 style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}

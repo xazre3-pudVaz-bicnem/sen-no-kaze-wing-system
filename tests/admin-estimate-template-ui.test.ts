@@ -225,7 +225,8 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain("'sitework'");
     expect(workbench).toContain("'free-product'");
     expect(workbench).toContain('allowedCodes.has(product.categoryCode)');
-    expect(workbench).toContain('この区分のすべてのカテゴリー');
+    expect(workbench).toContain('すべてのカテゴリー');
+    expect(workbench).not.toContain('この区分のすべてのカテゴリー');
     expect(workbench).toContain('追加先：{pickerSectionLabel}');
     expect(workbench).toContain('カテゴリー：{pickerCategoryName}');
     expect(workbench).toContain('「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。');
@@ -241,6 +242,10 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain("group.categoryName + 'を閉じる'");
     expect(workbench).toContain('{group.products.length}件');
     expect(workbench).toContain('divide-y divide-line');
+    expect(workbench).toContain('flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden');
+    expect(workbench).toContain('shrink-0 space-y-3 border-b border-line px-5 py-4');
+    expect(workbench).toContain('min-h-0 flex-1 overflow-y-auto p-5 pt-4');
+    expect(workbench).toContain('flex items-center gap-3 px-3 py-2');
     expect(workbench).toContain('size-12 shrink-0');
     expect(workbench).toContain("product.priceOnRequest ? '別途見積' : formatYen(product.price)");
     expect(workbench).not.toContain('grid gap-3 sm:grid-cols-2');

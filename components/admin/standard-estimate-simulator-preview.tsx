@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -35,7 +35,12 @@ interface Props {
   template: EstimateTemplateBundle | null;
 }
 
-export function StandardEstimateSimulatorPreview({ bundle, specCode, template }: Props) {
+export function StandardEstimateSimulatorPreview(props: Props) {
+  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}`;
+  return <StandardEstimateSimulatorPreviewBody key={previewKey} {...props} />;
+}
+
+function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
   const [picker, setPicker] = useState<string | null>(null);
   const { model } = bundle;
@@ -101,13 +106,6 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
   const [selected, setSelected] = useState(initialSelected);
   const [variantIds, setVariantIds] = useState(initialVariantIds);
   const [exteriorFaces, setExteriorFaces] = useState(initialExteriorFaces);
-
-  useEffect(() => {
-    setSelected(initialSelected);
-    setVariantIds(initialVariantIds);
-    setExteriorFaces(initialExteriorFaces);
-    setPicker(null);
-  }, [initialExteriorFaces, initialSelected, initialVariantIds]);
 
   const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
   const sameIds = (left: string[], right: string[]) => {

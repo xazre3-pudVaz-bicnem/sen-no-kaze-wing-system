@@ -1339,6 +1339,11 @@ export class LocalStore implements DataStore {
     this.mutate((db) => {
       const group = db.variantGroups.find((row) => row.id === id);
       if (!group) return;
+      const option = db.options.find((row) => row.id === group.option_id);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
+      if (option.status !== 'draft') {
+        throw new StoreError('VALIDATION', '公開中の商品では色・仕様を削除できません。商品を下書きへ戻すか、「お客様に表示する」をOFFにしてください。');
+      }
       if (db.variantChoices.some((choice) => choice.group_id === id)) {
         throw new StoreError('VALIDATION', '選択肢が残っているため削除できません。先に不要な選択肢を削除してください。');
       }
@@ -1356,12 +1361,17 @@ export class LocalStore implements DataStore {
     this.mutate((db) => {
       const choice = db.variantChoices.find((row) => row.id === id);
       if (!choice) return;
+      const parent = db.variantGroups.find((row) => row.id === choice.group_id);
+      if (!parent) throw new StoreError('NOT_FOUND', '選択項目が見つかりません。');
+      const option = db.options.find((row) => row.id === parent.option_id);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
+      if (option.status !== 'draft') {
+        throw new StoreError('VALIDATION', '公開中の商品では選択肢を削除できません。商品を下書きへ戻すか、「お客様に表示する」をOFFにしてください。');
+      }
       if (db.configurationItems.some((item) => item.variant_choice_ids.includes(id))) {
         throw new StoreError('VALIDATION', '保存済みの仕様で使用されているため削除できません。「お客様に表示する」をOFFにしてください。');
       }
-      const parent = db.variantGroups.find((row) => row.id === choice.group_id);
       if (
-        parent &&
         db.variantGroups.some(
           (row) =>
             row.option_id === parent.option_id &&

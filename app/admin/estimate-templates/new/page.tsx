@@ -6,6 +6,7 @@ import {
   NewEstimateTemplateForm,
   type EstimateBaseMasterChoice,
 } from '@/components/admin/new-estimate-template-form';
+import { BASE_BREAKDOWN_ITEMS, BASE_BREAKDOWN_TOTALS } from '@/lib/seed/base-breakdown';
 
 async function loadPublishedBaseMasters(): Promise<{
   items: EstimateBaseMasterChoice[];
@@ -107,6 +108,37 @@ export default async function NewEstimateTemplatePage() {
   ]);
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
 
+  const sampleWing = models.find((model) => model.slug === 'wing-01') ?? null;
+  const sampleTotals = BASE_BREAKDOWN_TOTALS['wing-01:hotel'] ?? null;
+  const sampleBaseMaster: EstimateBaseMasterChoice | null =
+    sampleWing && sampleTotals
+      ? {
+          id: 'sample-wing-hotel-base',
+          revisionId: 'sample-wing-hotel-revision',
+          revisionVersion: 0,
+          modelId: sampleWing.id,
+          ownerName: '画面確認用・保存なし',
+          name: 'Wing ホテル仕様（画面確認用）',
+          fireSpec: 'non_fire',
+          lineSubtotal: sampleTotals.lines,
+          expenseAmount: sampleTotals.expense,
+          total: sampleTotals.total,
+          lines: BASE_BREAKDOWN_ITEMS
+            .filter((line) => line.model_slug === 'wing-01' && line.spec_code === 'hotel')
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((line) => ({
+              id: 'sample-' + line.id,
+              section: line.section,
+              name: line.name,
+              quantity: line.quantity,
+              unit: line.unit ?? '',
+              unitPrice: line.unit_price,
+              amount: line.amount,
+              remark: line.remark ?? '',
+            })),
+        }
+      : null;
+
   return (
     <AdminPage
       title="標準見積を新規作成"
@@ -123,6 +155,7 @@ export default async function NewEstimateTemplatePage() {
         }))}
         baseMasters={baseMasterResult.items}
         baseMasterSourceReady={baseMasterResult.sourceReady}
+        sampleBaseMaster={sampleBaseMaster}
         products={options
           .filter((option) => option.status === 'published')
           .map((option) => ({

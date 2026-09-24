@@ -33,14 +33,14 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
       {returnTo && (
         <Alert tone="info">
-          見積テンプレートの商品追加から移動しています。まず下書きを作成してSTEP 1を続け、STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。
+          見積テンプレートの商品追加から移動しています。まず基本情報を入力して「次へ：画像・資料」へ進み、STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。
         </Alert>
       )}
 
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          まず下書きを作成し、続くSTEP 1でサブ画像・メーカー資料・お客様選択まで整えます。その後、STEP 2で実際のお客様表示を確認してから公開します。
+          最初は基本情報だけ入力します。「次へ：画像・資料」で商品を作成し、そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。最後にSTEP 2でお客様表示を確認して公開します。
         </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
@@ -64,6 +64,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         dependencies={[]}
         conflicts={[]}
         defaultCategoryId={defaultCategoryId}
+        mode="create"
         returnTo={returnTo}
       />
     </AdminPage>

@@ -58,6 +58,7 @@ describe('商品登録管理画面の業務フロー', () => {
       expect(newPage).toContain(label);
     }
     expect(editPage).toContain('aria-label="商品登録の2ステップ"');
+    expect(newPage).toContain('mode="create"');
     expect(editPage).toContain('mode="all"');
     expect(editPage).not.toContain('mode="product"');
     expect(editPage).not.toContain('mode="pricing"');
@@ -70,23 +71,38 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(newPage).not.toContain('内容確認・登録');
     expect(editPage).not.toContain('商品登録の7ステップ');
   });
-  it('見積テンプレートからの新規登録も2STEPを完了してから戻る', () => {
+  it('見積テンプレートからの新規登録も基本情報→詳細登録→STEP2公開後に戻る', () => {
     expect(newPage).toContain('商品登録の2ステップ');
-    expect(newPage).toContain('まず下書きを作成してSTEP 1を続け');
+    expect(newPage).toContain('まず基本情報を入力して「次へ：画像・資料」へ進み');
     expect(newPage).toContain('STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。');
     expect(newPage).toContain('return_to');
-    expect(forms).not.toContain('下書き登録して見積テンプレートへ戻る');
-    expect(forms).toContain('下書きを作成してSTEP 1を続ける');
+    expect(newPage).toContain('mode="create"');
+    expect(forms).toContain('次へ：画像・資料');
+    expect(forms).toContain("mode === 'create' && !option");
+    expect(forms).toContain('name="price" value="0"');
+    expect(forms).toContain('name="selection_type" value="radio"');
+    expect(forms).toContain('id="size_note-create"');
     expect(forms).toContain("mode === 'all' && option");
     expect(forms).toContain("'商品情報を保存'");
     expect(adminActions).toContain("const returnTo = safeAdminReturnTo(formData.get('return_to'))");
     expect(adminActions).toContain("return_to: returnTo");
-    expect(adminActions).toContain("redirect('/admin/options/' + createdId + '?' + params.toString())");
+    expect(adminActions).toContain("params.toString() + '#product-main-media'");
     expect(adminActions).toContain("returnUrl.searchParams.set('created_option', id)");
     expect(editPage).toContain('returnTo={returnTo}');
     expect(editPage).toContain('name="return_to" value={returnTo}');
     expect(editPage).toContain('サブ画像・メーカー資料');
     expect(editPage).toContain('お客様選択');
+  });
+
+  it('新規商品の初回画面は基本情報だけに絞り、次へで商品IDを作成する', () => {
+    expect(newPage).toContain('mode="create"');
+    expect(forms).toContain("mode?: 'all' | 'product' | 'create'");
+    expect(forms).toContain("mode === 'create' && !option");
+    expect(forms).toContain('次へ：画像・資料');
+    expect(forms).toContain('id="size_note-create"');
+    expect(forms).toContain('name="price" value="0"');
+    expect(forms).toContain('name="selection_type" value="radio"');
+    expect(adminActions).toContain("?step=info&saved=1#product-main-media");
   });
 
   it('新規商品は下書きで作成し、お客様表示確認後に明示公開する', () => {
@@ -100,8 +116,9 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('publishOptionAction');
     expect(editPage).toContain('現在は下書きです。上のお客様表示に問題がなければ公開してください。');
     expect(editPage).toContain('この内容で公開');
-    expect(newPage).toContain('続くSTEP 1でサブ画像・メーカー資料・お客様選択まで整えます。');
-    expect(newPage).toContain('STEP 2で実際のお客様表示を確認してから公開します。');
+    expect(newPage).toContain('最初は基本情報だけ入力します。');
+    expect(newPage).toContain('そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。');
+    expect(newPage).toContain('最後にSTEP 2でお客様表示を確認して公開します。');
     expect(forms).toContain("option?.status === 'published'");
     expect(forms).toContain('下書き商品の公開はSTEP 2のお客様表示を確認してから行います。');
     expect(forms).toContain('下書きへ戻す');

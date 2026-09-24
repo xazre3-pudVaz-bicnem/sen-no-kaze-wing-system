@@ -613,7 +613,7 @@ interface OptionFormProps {
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
   /** 必要に応じて商品情報の一部だけを編集するための表示モード */
-  mode?: 'all' | 'product' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
+  mode?: 'all' | 'product' | 'create' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
   returnTo?: string;
 }
@@ -678,7 +678,7 @@ export function OptionForm({
     [allOptions, manufacturerValue, modelNoValue, nameValue, option?.id, selectedCategoryId]
   );
 
-  const showIdentify = mode === 'all' || mode === 'product' || mode === 'identify';
+  const showIdentify = mode === 'all' || mode === 'product' || mode === 'create' || mode === 'identify';
   const showDetails = mode === 'all' || mode === 'product' || mode === 'details';
   const showMedia = mode === 'all' || mode === 'product' || mode === 'media';
   const showSales = mode === 'all' || mode === 'sales' || mode === 'pricing';
@@ -734,6 +734,21 @@ export function OptionForm({
     </>
   ) : null;
 
+  const createDefaults = mode === 'create' && !option ? (
+    <>
+      <input type="hidden" name="base_model_id" value="" />
+      <input type="hidden" name="description" value="" />
+      <input type="hidden" name="highlight" value="" />
+      <input type="hidden" name="image_url" value="" />
+      <input type="hidden" name="price" value="0" />
+      <input type="hidden" name="selection_type" value="radio" />
+      <input type="hidden" name="preview_key" value="" />
+      <input type="hidden" name="list_price" value="" />
+      <input type="hidden" name="sort_order" value="0" />
+      <input type="hidden" name="status" value="draft" />
+    </>
+  ) : null;
+
   return (
     <form action={action} className="space-y-6" noValidate>
       <input type="hidden" name="id" value={option?.id ?? ''} />
@@ -743,13 +758,18 @@ export function OptionForm({
       {preserveDetailFields}
       {preserveMediaFields}
       {preserveSalesFields}
+      {createDefaults}
       <Status state={state} />
 
       {showIdentify && (
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
             <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。</p>
+            <p className="mt-1 text-sm text-muted">
+              {mode === 'create'
+                ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
+                : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
+            </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2">
@@ -809,6 +829,40 @@ export function OptionForm({
                 {modelNoSuggestions.map((value) => <option key={value} value={value} />)}
               </datalist>
             </Field>
+            {mode === 'create' && (
+              <Field
+                label={sizeMeta.label}
+                htmlFor="size_note-create"
+                hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined}
+                errors={e.size_note}
+              >
+                <Input
+                  id="size_note-create"
+                  name="size_note"
+                  list="option-size-note-suggestions-create"
+                  value={sizeNoteValue}
+                  onChange={(event) => setSizeNoteValue(event.target.value)}
+                  placeholder={sizeMeta.placeholder}
+                />
+                <datalist id="option-size-note-suggestions-create">
+                  {sizeSuggestions.map((value) => <option key={value} value={value} />)}
+                </datalist>
+                {guidance.sizeCandidates.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
+                    {guidance.sizeCandidates.slice(0, 10).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+                        onClick={() => setSizeNoteValue(value)}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Field>
+            )}
             {mode === 'all' && (
               <div>
                 <p className="label">商品管理番号</p>
@@ -845,6 +899,7 @@ export function OptionForm({
             </div>
           )}
 
+          {mode === 'create' && <SubmitButton pending={pending} label="次へ：画像・資料" />}
           {mode === 'identify' && <SubmitButton pending={pending} label="商品特定を保存" />}
         </section>
       )}

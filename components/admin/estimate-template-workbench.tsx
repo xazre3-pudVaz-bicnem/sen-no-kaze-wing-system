@@ -507,7 +507,7 @@ export function EstimateTemplateWorkbench({
     <div className="space-y-4">
       {createdProduct && (
         <div className="rounded-lg border border-forest/30 bg-forest/5 px-4 py-3 text-sm">
-          「{createdProduct.name}」を商品登録し、見積テンプレートへ戻りました。
+          「{createdProduct.name}」を商品登録し、標準見積へ戻りました。
           画面確認用として「{returnSection === 'interior_exterior' ? '内外装工事' : returnSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
         </div>
       )}
@@ -518,7 +518,7 @@ export function EstimateTemplateWorkbench({
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
           <div className="mr-2">
-            <p className="text-sm font-semibold">見積テンプレート編集 ― Excel形式</p>
+            <p className="text-sm font-semibold">標準見積編集 ― Excel形式</p>
             <p className="text-[11px] text-slate-500">明細を1枚の表で連続編集します。シミュレーター見積書のレイアウトは使用しません。</p>
           </div>
           <span
@@ -745,7 +745,7 @@ export function EstimateTemplateWorkbench({
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                   <div>
                     <p className="font-semibold">商品が見つからない場合</p>
-                    <p className="mt-1 text-xs text-muted">商品登録後、この見積テンプレートへ戻れます。</p>
+                    <p className="mt-1 text-xs text-muted">商品登録後、この標準見積へ戻れます。</p>
                   </div>
                   <Link
                     href={'/admin/options/new?return_to=' + encodeURIComponent('/admin/estimate-templates/' + templateId + '?return_section=' + pickerSection)}

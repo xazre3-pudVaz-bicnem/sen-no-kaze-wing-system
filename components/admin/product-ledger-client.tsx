@@ -165,7 +165,7 @@ export function ProductLedgerClient({ canEdit, categories, options, variantsByOp
         <button type="button" className="btn-ghost btn-sm hidden xl:inline-flex" onClick={resetFilters} disabled={!query && !categoryId && !status && quick === 'all' && sort === 'updated'}>条件をクリア</button>
       </div>
       <div className="p-3 sm:p-4" data-testid="ledger-card-grid-wrap">
-        <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2" data-testid="ledger-card-grid">
+        <div className="grid grid-cols-1 gap-2.5 min-[1120px]:grid-cols-2" data-testid="ledger-card-grid">
           {pageOptions.map((o) => {
             const attentionReasons = productAttentionReasons(o);
             const attention = attentionReasons.length > 0;

@@ -265,7 +265,7 @@ export function DealerRevisionForm({
           </p>
           <p className={sheetMode ? 'mt-0.5 text-[0.65rem] text-muted' : 'mt-1 text-xs text-muted'}>
             {sheetMode
-              ? '表示中の見積書と同じ並びのまま、セルを直接編集できます。Tabキーで次のセルへ移動します。'
+              ? '表示中の見積書と同じ並びのまま、セルを直接編集できます。Tabで右、Enterで同じ列の次行へ移動します。'
               : '入力して発行すると次の版が作られ、現在の版は履歴として残ります。'}
           </p>
         </div>
@@ -731,6 +731,7 @@ export function DealerRevisionForm({
             name="dealer_note"
             rows={sheetMode ? 3 : 3}
             defaultValue={quote.dealer_note ?? ''}
+            onChange={markDirty}
             className={sheetMode ? 'min-h-20 text-xs' : undefined}
           />
         </Field>

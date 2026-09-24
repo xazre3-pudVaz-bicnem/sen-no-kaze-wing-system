@@ -15,6 +15,14 @@ const editPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'),
   'utf8'
 );
+const supabaseStore = fs.readFileSync(
+  path.resolve(process.cwd(), 'lib/data/supabase-store.ts'),
+  'utf8'
+);
+const localStore = fs.readFileSync(
+  path.resolve(process.cwd(), 'lib/data/local-store.ts'),
+  'utf8'
+);
 
 describe('管理画面の色・仕様管理', () => {
   it('選択項目の入力を検証する', () => {
@@ -87,6 +95,10 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).toContain('deleteVariantGroupAction');
     expect(actions).toContain('await store.deleteVariantChoice(choiceId)');
     expect(actions).toContain('await store.deleteVariantGroup(groupId)');
+    expect(supabaseStore).toContain(".contains('variant_choice_ids', [id])");
+    expect(supabaseStore).toContain('選択肢が残っているため削除できません');
+    expect(supabaseStore).toContain('別の選択項目の表示条件に使われているため削除できません');
+    expect(localStore).toContain('item.variant_choice_ids.includes(id)');
   });
 
   it('色・仕様の画像プレビューは小さい固定サムネイルにする', () => {

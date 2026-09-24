@@ -569,6 +569,7 @@ export async function CaseWorkspace({
           )}
 
           <QuoteEstimateSheet
+            key={edit === '1' ? 'edit' : 'view'}
             quote={quote}
             items={items}
             freeProducts={freeProducts}

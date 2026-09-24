@@ -117,17 +117,21 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('商品モデル・仕様・防火仕様から自動入力');
     expect(newForm).toContain('商品モデルに登録されている仕様を表示します');
     expect(newForm).not.toContain('SPEC_OPTIONS');
-    expect(newForm).toContain('max-w-[700px]');
-    expect(newForm).toContain('max-w-[600px]');
+    expect(newForm).toContain('max-w-[760px]');
+    expect(newForm).toContain('max-w-[620px]');
     expect(newForm).toContain('キャンセル');
     expect(newForm).toContain("setStep('edit')");
-    expect(newForm).toContain('明細編集へ進む');
+    expect(newForm).toContain('Excel明細編集へ進む');
     expect(newForm).toContain('初期設定へ戻る');
     expect(newForm).toContain('<EstimateTemplateWorkbench');
     expect(newForm).toContain('new-standard-estimate-preview');
     expect(newForm).toContain('demoMode');
     expect(newForm).toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
+    expect(newForm).toContain('将来、設置予定地から設備・見積条件を切り替えるための地域条件として利用します');
+    expect(newForm).toContain('正式接続待ち');
     expect(newForm).toContain('正式なDraft接続後に公開中の本体から選択');
+    expect(newPage).toContain('title="標準見積を新規作成"');
+    expect(newPage).toContain('label="標準見積一覧へ戻る"');
     expect(newPage).toContain('model.presets.map');
     expect(newPage).toContain('store.listOptions()');
     expect(newPage).toContain('store.listCategories()');
@@ -154,7 +158,7 @@ describe('見積テンプレート管理UI', () => {
 
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
-    expect(workbench).toContain('見積テンプレート編集 ― Excel形式');
+    expect(workbench).toContain('標準見積編集 ― Excel形式');
     expect(workbench).toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋商品');
     expect(workbench).toContain('＋自由明細');

@@ -174,6 +174,22 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('お客様には表示しない');
   });
 
+  it('商品選択は追加先区分に対応するカテゴリーだけを表示する', () => {
+    expect(workbench).toContain('SECTION_PRODUCT_CATEGORY_CODES');
+    expect(workbench).toContain("'roof'");
+    expect(workbench).toContain("'exterior-wall'");
+    expect(workbench).toContain("'ub'");
+    expect(workbench).toContain("'sitework'");
+    expect(workbench).toContain("'free-product'");
+    expect(workbench).toContain('allowedCodes.has(product.categoryCode)');
+    expect(workbench).toContain('この区分のすべてのカテゴリー');
+    expect(workbench).toContain('追加先：{pickerSectionLabel}');
+    expect(workbench).toContain('カテゴリー：{pickerCategoryName}');
+    expect(workbench).toContain('「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。');
+    expect(detailPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
+    expect(newPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
+  });
+
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
     expect(workbench).toContain('data-testid="estimate-excel-grid"');

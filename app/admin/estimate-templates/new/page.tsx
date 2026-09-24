@@ -11,7 +11,7 @@ export default async function NewEstimateTemplatePage() {
     store.listOptions(),
     store.listCategories(),
   ]);
-  const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
 
   return (
     <AdminPage
@@ -32,7 +32,8 @@ export default async function NewEstimateTemplatePage() {
           .map((option) => ({
             id: option.id,
             categoryId: option.category_id,
-            categoryName: categoryMap.get(option.category_id) ?? '未分類',
+            categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+            categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
             name: option.name,
             manufacturer: option.manufacturer ?? '',
             modelNo: option.model_no ?? '',

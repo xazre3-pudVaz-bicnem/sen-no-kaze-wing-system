@@ -141,9 +141,15 @@ describe('見積テンプレート管理UI', () => {
     expect(detailPage).toContain('複製して新規作成');
   });
 
-  it('商品追加と自由項目追加、お客様選択設定を確認できる', () => {
-    expect(workbench).toContain('＋ 商品から追加');
-    expect(workbench).toContain('＋ 自由項目を追加');
+  it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
+    expect(workbench).toContain('data-testid="estimate-excel-grid"');
+    expect(workbench).toContain('見積テンプレート編集 ― Excel形式');
+    expect(workbench).toContain('シミュレーター見積書のレイアウトは使用しません');
+    expect(workbench).toContain('＋商品');
+    expect(workbench).toContain('＋自由明細');
+    expect(workbench).toContain('商品マスターから選び直す');
+    expect(workbench).toContain("pickerTargetRowId ? '商品を変更' : '商品を追加'");
+    expect(workbench).toContain("pickerTargetRowId ? 'この商品に変更' : '追加'");
     expect(workbench).toContain('標準・変更可');
     expect(workbench).toContain('標準・固定');
     expect(workbench).toContain('任意オプション');
@@ -152,12 +158,20 @@ describe('見積テンプレート管理UI', () => {
 
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
+    expect(workbench).toContain('data-testid="estimate-excel-grid"');
+    expect(workbench).toContain('売価表');
+    expect(workbench).toContain('原価・売価比較');
+    expect(workbench).toContain('品名');
+    expect(workbench).toContain('原価金額');
+    expect(workbench).toContain('売価金額');
+    expect(workbench).toContain('黄色＝入力');
+    expect(workbench).toContain('グレー＝参照・自動表示');
     expect(workbench).toContain('未保存の変更あり');
     expect(workbench).toContain('編集前と同じ');
     expect(workbench).toContain('編集前に戻す');
     expect(workbench).toContain("collapsedSections.has('base')");
-    expect(workbench).toContain('toggleSection(section.code)');
-    expect(workbench).toContain("isCollapsed ? '+' : '−'");
+    expect(workbench).toContain('toggleSection(key)');
+    expect(workbench).toContain("collapsed ? '+' : '−'");
     expect(workbench).toContain('data-estimate-grid-col="quantity"');
     expect(workbench).toContain('handleGridKeyDown');
     expect(workbench).toContain('event.nativeEvent.isComposing');

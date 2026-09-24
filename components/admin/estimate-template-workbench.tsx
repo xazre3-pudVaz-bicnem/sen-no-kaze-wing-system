@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -39,6 +39,8 @@ export interface EstimateTemplateWorkbenchSection {
   expenseLabel: string | null;
   expenseAmount: number;
 }
+
+type CollapsibleSection = 'base' | SectionCode;
 
 export function EstimateTemplateWorkbench({
   templateId,
@@ -91,8 +93,8 @@ export function EstimateTemplateWorkbench({
         name: createdProduct.name,
         quantity: 1,
         unit: '式',
-        saleUnitPrice: createdProduct.price,
-        remark: '',
+        saleUnitPrice: createdProduct.priceOnRequest ? 0 : createdProduct.price,
+        remark: createdProduct.priceOnRequest ? '別途見積' : '',
         source: 'product',
         customerSelection: '標準・変更可',
       },
@@ -100,15 +102,11 @@ export function EstimateTemplateWorkbench({
   });
   const [showCost, setShowCost] = useState(false);
   const [pickerSection, setPickerSection] = useState<SectionCode | null>(null);
+  const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
-  const [collapsedSections, setCollapsedSections] = useState<Set<'base' | SectionCode>>(() => new Set());
-
-  const expenseBySection = useMemo(
-    () => new Map(sections.map((section) => [section.code, section.expenseAmount])),
-    [sections]
-  );
+  const [collapsedSections, setCollapsedSections] = useState<Set<CollapsibleSection>>(() => new Set());
 
   const totals = useMemo(() => {
     const result: Record<SectionCode, number> = {
@@ -149,16 +147,33 @@ export function EstimateTemplateWorkbench({
     });
   }, [products, pickerCategory, pickerQuery]);
 
+  const visibleColumnCount = showCost ? 13 : 10;
+  const grandLabelSpan = showCost ? 8 : 6;
+  const grandTailSpan = showCost ? 4 : 3;
+
+  const rowNumberByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    let number = 0;
+    for (const line of baseLines) map.set('base:' + line.id, ++number);
+    for (const section of sections) {
+      for (const row of rows) {
+        if (row.section === section.code) map.set('row:' + row.id, ++number);
+      }
+    }
+    return map;
+  }, [baseLines, rows, sections]);
+
   const resetRows = () => {
     setRows([...initialLines]);
     setPickerSection(null);
+    setPickerTargetRowId(null);
     setPickerCategory('');
     setPickerQuery('');
     setCollapsedSections(new Set());
     setIsDirty(false);
   };
 
-  const toggleSection = (section: 'base' | SectionCode) => {
+  const toggleSection = (section: CollapsibleSection) => {
     setCollapsedSections((current) => {
       const next = new Set(current);
       if (next.has(section)) next.delete(section);
@@ -188,25 +203,70 @@ export function EstimateTemplateWorkbench({
     setIsDirty(true);
   };
 
+  const openProductPicker = (section: SectionCode, rowId: string | null = null) => {
+    const target = rowId ? rows.find((row) => row.id === rowId) : null;
+    setPickerSection(section);
+    setPickerTargetRowId(rowId);
+    setPickerCategory(
+      target
+        ? products.find((product) => product.categoryName === target.groupLabel)?.categoryId ?? ''
+        : ''
+    );
+    setPickerQuery('');
+  };
+
+  const closeProductPicker = () => {
+    setPickerSection(null);
+    setPickerTargetRowId(null);
+    setPickerCategory('');
+    setPickerQuery('');
+  };
+
   const addProduct = (product: EstimateTemplateWorkbenchProduct) => {
     if (!pickerSection) return;
-    setRows((current) => [
-      ...current,
-      {
-        id: 'product-' + product.id + '-' + Date.now(),
-        section: pickerSection,
-        groupLabel: product.categoryName,
-        name: product.name,
-        quantity: 1,
-        unit: '式',
-        saleUnitPrice: product.priceOnRequest ? 0 : product.price,
-        remark: product.priceOnRequest ? '別途見積' : '',
-        source: 'product',
-        customerSelection: '標準・変更可',
-      },
-    ]);
-    setPickerSection(null);
+
+    if (pickerTargetRowId) {
+      setRows((current) =>
+        current.map((row) =>
+          row.id === pickerTargetRowId
+            ? {
+                ...row,
+                groupLabel: product.categoryName,
+                name: product.name,
+                unit: row.unit || '式',
+                saleUnitPrice: product.priceOnRequest ? 0 : product.price,
+                remark: product.priceOnRequest
+                  ? '別途見積'
+                  : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
+                source: 'product',
+                customerSelection:
+                  row.customerSelection === '—' ? '標準・変更可' : row.customerSelection,
+              }
+            : row
+        )
+      );
+    } else {
+      setRows((current) => [
+        ...current,
+        {
+          id: 'product-' + product.id + '-' + Date.now(),
+          section: pickerSection,
+          groupLabel: product.categoryName,
+          name: product.name,
+          quantity: 1,
+          unit: '式',
+          saleUnitPrice: product.priceOnRequest ? 0 : product.price,
+          remark: product.priceOnRequest
+            ? '別途見積'
+            : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
+          source: 'product',
+          customerSelection: '標準・変更可',
+        },
+      ]);
+    }
+
     setIsDirty(true);
+    closeProductPicker();
   };
 
   const addFreeLine = (section: SectionCode) => {
@@ -233,347 +293,405 @@ export function EstimateTemplateWorkbench({
     setIsDirty(true);
   };
 
-  const renderSection = (section: EstimateTemplateWorkbenchSection) => {
-    const sectionRows = rows.filter((row) => row.section === section.code);
-    const isCollapsed = collapsedSections.has(section.code);
+  const editableRow = (row: EstimateTemplateWorkbenchLine) => {
+    const displayRowNumber = rowNumberByKey.get('row:' + row.id) ?? 0;
+    const amount = Math.round(row.quantity * row.saleUnitPrice);
     return (
-      <section key={section.code} className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-          <div className="flex min-w-0 items-center gap-2">
+      <tr key={row.id} className="border-b border-slate-200 bg-white">
+        <th className="w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
+          {displayRowNumber}
+        </th>
+        <td className="w-9 border-r border-slate-200"></td>
+        <td className="min-w-[20rem] border-r border-slate-200 bg-amber-50 px-0.5">
+          <div className="flex items-center gap-0.5">
+            <Input
+              value={row.name}
+              data-estimate-grid-col="name"
+              onKeyDown={handleGridKeyDown}
+              onDoubleClick={() => openProductPicker(row.section, row.id)}
+              onChange={(event) => updateRow(row.id, { name: event.target.value })}
+              className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1.5 shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            />
             <button
               type="button"
-              className="flex size-6 shrink-0 items-center justify-center rounded border border-line bg-white text-sm font-semibold"
-              aria-expanded={!isCollapsed}
-              aria-label={isCollapsed ? section.label + 'の明細を開く' : section.label + 'の明細を閉じる'}
-              onClick={() => toggleSection(section.code)}
+              title="商品マスターから選び直す"
+              aria-label={row.name + 'の商品を変更'}
+              className="flex size-7 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-sm font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
+              onClick={() => openProductPicker(row.section, row.id)}
             >
-              {isCollapsed ? '+' : '−'}
+              …
             </button>
-            <div className="min-w-0">
-              <h2 className="font-semibold">{section.label}</h2>
-              <p className="mt-0.5 text-xs text-muted">
-                {sectionRows.length}行
-                {section.expenseAmount > 0 && '・' + (section.expenseLabel ?? '諸費用') + ' ' + formatYen(section.expenseAmount)}
-              </p>
-            </div>
           </div>
-          {!isCollapsed && (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-secondary btn-sm" onClick={() => setPickerSection(section.code)}>
-                ＋ 商品から追加
-              </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => addFreeLine(section.code)}>
-                ＋ 自由項目を追加
-              </button>
+          {(row.groupLabel || row.source === 'product') && (
+            <div className="truncate px-1.5 pb-1 text-[10px] text-slate-500">
+              {row.groupLabel || '商品'}
             </div>
           )}
-        </div>
-
-        {isCollapsed ? (
-          <div className="flex items-center justify-between gap-4 bg-ivory px-5 py-3 text-sm font-semibold">
-            <span>{section.label} 計</span>
-            <span className="tabular-nums">{formatYen(totals[section.code])}</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className={showCost ? 'w-full min-w-[82rem] text-sm' : 'w-full min-w-[66rem] text-sm'}>
-              <thead className="bg-sand/60 text-left text-xs text-muted">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">種別</th>
-                  <th className="px-3 py-2 font-semibold">グループ</th>
-                  <th className="px-3 py-2 font-semibold">項目</th>
-                  <th className="px-2 py-2 text-right font-semibold">数量</th>
-                  <th className="px-2 py-2 font-semibold">単位</th>
-                  {showCost && <th className="px-3 py-2 text-right font-semibold">自組織原価</th>}
-                  {showCost && <th className="px-3 py-2 text-right font-semibold">原価金額</th>}
-                  <th className="px-3 py-2 text-right font-semibold">販売単価</th>
-                  <th className="px-3 py-2 text-right font-semibold">販売金額</th>
-                  <th className="px-3 py-2 font-semibold">備考</th>
-                  <th className="px-3 py-2 font-semibold">お客様選択</th>
-                  <th className="px-2 py-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line/70">
-                {sectionRows.map((row) => (
-                  <tr key={row.id} className="bg-white">
-                    <td className="px-3 py-2 text-xs text-muted">
-                      {row.source === 'product' ? '商品' : row.source === 'free' ? '自由項目' : '移行明細'}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={row.groupLabel}
-                        data-estimate-grid-col="group"
-                        onKeyDown={handleGridKeyDown}
-                        onChange={(event) => updateRow(row.id, { groupLabel: event.target.value })}
-                        className="min-w-28"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={row.name}
-                        data-estimate-grid-col="name"
-                        onKeyDown={handleGridKeyDown}
-                        onChange={(event) => updateRow(row.id, { name: event.target.value })}
-                        className="min-w-48"
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <Input
-                        type="number"
-                        min={0.0001}
-                        step={0.1}
-                        value={row.quantity}
-                        data-estimate-grid-col="quantity"
-                        onKeyDown={handleGridKeyDown}
-                        onChange={(event) => updateRow(row.id, { quantity: Number(event.target.value) })}
-                        className="w-24 text-right"
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <Input
-                        value={row.unit}
-                        data-estimate-grid-col="unit"
-                        onKeyDown={handleGridKeyDown}
-                        onChange={(event) => updateRow(row.id, { unit: event.target.value })}
-                        className="w-20"
-                      />
-                    </td>
-                    {showCost && <td className="px-3 py-2 text-right text-muted">—</td>}
-                    {showCost && <td className="px-3 py-2 text-right text-muted">—</td>}
-                    <td className="px-3 py-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={row.saleUnitPrice}
-                        data-estimate-grid-col="sale"
-                        onKeyDown={handleGridKeyDown}
-                        onChange={(event) => updateRow(row.id, { saleUnitPrice: Number(event.target.value) })}
-                        className="w-32 text-right"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                      {formatYen(Math.round(row.quantity * row.saleUnitPrice))}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        value={row.remark}
-                        data-estimate-grid-col="remark"
-                        onKeyDown={handleGridKeyDown}
-                        onChange={(event) => updateRow(row.id, { remark: event.target.value })}
-                        className="min-w-36"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.source === 'product' ? (
-                        <Select
-                          value={row.customerSelection}
-                          data-estimate-grid-col="selection"
-                          onKeyDown={handleGridKeyDown}
-                          onChange={(event) => updateRow(row.id, { customerSelection: event.target.value })}
-                          className="min-w-36"
-                        >
-                          <option>標準・変更可</option>
-                          <option>標準・固定</option>
-                          <option>任意オプション</option>
-                          <option>お客様には表示しない</option>
-                        </Select>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <button
-                        type="button"
-                        className="text-xs text-danger underline underline-offset-4"
-                        onClick={() => removeRow(row.id)}
-                      >
-                        削除
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {sectionRows.length === 0 && (
-                  <tr>
-                    <td colSpan={showCost ? 12 : 10} className="px-5 py-8 text-center text-sm text-muted">
-                      明細はありません。「商品から追加」または「自由項目を追加」から登録できます。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-line bg-ivory font-semibold">
-                  <td colSpan={showCost ? 8 : 6} className="px-3 py-3 text-right">{section.label} 計</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatYen(totals[section.code])}</td>
-                  <td colSpan={3}></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+        </td>
+        <td className="w-20 border-r border-slate-200 bg-amber-50 px-0.5">
+          <Input
+            type="number"
+            min={0.0001}
+            step={0.1}
+            value={row.quantity}
+            data-estimate-grid-col="quantity"
+            onKeyDown={handleGridKeyDown}
+            onChange={(event) => updateRow(row.id, { quantity: Number(event.target.value) })}
+            className="h-8 w-full border-0 bg-transparent px-1.5 text-right shadow-none focus:ring-2 focus:ring-emerald-700/30"
+          />
+        </td>
+        <td className="w-20 border-r border-slate-200 bg-amber-50 px-0.5">
+          <Input
+            value={row.unit}
+            data-estimate-grid-col="unit"
+            onKeyDown={handleGridKeyDown}
+            onChange={(event) => updateRow(row.id, { unit: event.target.value })}
+            className="h-8 w-full border-0 bg-transparent px-1.5 shadow-none focus:ring-2 focus:ring-emerald-700/30"
+          />
+        </td>
+        {showCost && (
+          <>
+            <td className="w-28 border-r border-slate-200 bg-slate-50 px-3 text-right text-slate-400">—</td>
+            <td className="w-28 border-r border-slate-200 bg-slate-50 px-3 text-right text-slate-400">—</td>
+          </>
         )}
-      </section>
+        <td className="w-32 border-r border-slate-200 bg-amber-50 px-0.5">
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={row.saleUnitPrice}
+            data-estimate-grid-col="sale"
+            onKeyDown={handleGridKeyDown}
+            onChange={(event) => updateRow(row.id, { saleUnitPrice: Number(event.target.value) })}
+            className="h-8 w-full border-0 bg-transparent px-1.5 text-right shadow-none focus:ring-2 focus:ring-emerald-700/30"
+          />
+        </td>
+        <td className="w-28 border-r border-slate-200 bg-slate-50 px-3 text-right font-semibold tabular-nums">
+          {formatYen(amount)}
+        </td>
+        {showCost && (
+          <td className="w-28 border-r border-slate-200 bg-slate-50 px-3 text-right text-slate-400">—</td>
+        )}
+        <td className="min-w-48 border-r border-slate-200 bg-amber-50 px-0.5">
+          <Input
+            value={row.remark}
+            data-estimate-grid-col="remark"
+            onKeyDown={handleGridKeyDown}
+            onChange={(event) => updateRow(row.id, { remark: event.target.value })}
+            className="h-8 w-full border-0 bg-transparent px-1.5 shadow-none focus:ring-2 focus:ring-emerald-700/30"
+          />
+        </td>
+        <td className="w-40 border-r border-slate-200 bg-amber-50 px-1">
+          {row.source === 'product' ? (
+            <Select
+              value={row.customerSelection}
+              data-estimate-grid-col="selection"
+              onKeyDown={handleGridKeyDown}
+              onChange={(event) => updateRow(row.id, { customerSelection: event.target.value })}
+              className="h-8 min-h-8 w-full border-0 bg-transparent px-1 text-xs shadow-none"
+            >
+              <option>標準・変更可</option>
+              <option>標準・固定</option>
+              <option>任意オプション</option>
+              <option>お客様には表示しない</option>
+            </Select>
+          ) : (
+            <span className="px-2 text-xs text-slate-400">—</span>
+          )}
+        </td>
+        <td className="w-16 px-1 text-center">
+          <button
+            type="button"
+            className="text-[11px] text-red-700 underline underline-offset-2"
+            onClick={() => removeRow(row.id)}
+          >
+            削除
+          </button>
+        </td>
+      </tr>
     );
   };
+
+  const baseRow = (line: (typeof baseLines)[number]) => {
+    const displayRowNumber = rowNumberByKey.get('base:' + line.id) ?? 0;
+    return (
+      <tr key={line.id} className="border-b border-slate-200 bg-slate-100 text-slate-600">
+        <th className="w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
+          {displayRowNumber}
+        </th>
+        <td className="w-9 border-r border-slate-200"></td>
+        <td className="min-w-[20rem] border-r border-slate-200 px-2 py-1.5">
+          <div className="font-medium">{line.name}</div>
+          <div className="mt-0.5 text-[10px] text-slate-500">{line.section}</div>
+        </td>
+        <td className="w-20 border-r border-slate-200 px-2 text-right">{line.quantity}</td>
+        <td className="w-20 border-r border-slate-200 px-2">{line.unit}</td>
+        {showCost && (
+          <>
+            <td className="w-28 border-r border-slate-200 px-3 text-right text-slate-400">—</td>
+            <td className="w-28 border-r border-slate-200 px-3 text-right text-slate-400">—</td>
+          </>
+        )}
+        <td className="w-32 border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(line.unitPrice)}</td>
+        <td className="w-28 border-r border-slate-200 px-3 text-right font-semibold tabular-nums">{formatYen(line.amount)}</td>
+        {showCost && <td className="w-28 border-r border-slate-200 px-3 text-right text-slate-400">—</td>}
+        <td className="min-w-48 border-r border-slate-200 px-2 text-xs">{line.remark}</td>
+        <td className="w-40 border-r border-slate-200 px-2 text-xs text-slate-400">—</td>
+        <td className="w-16 px-1 text-center text-[10px] text-slate-500">参照</td>
+      </tr>
+    );
+  };
+
+  const sectionHeader = ({
+    key,
+    label,
+    totalAmount,
+    rowCount,
+    expenseText,
+    editable,
+  }: {
+    key: CollapsibleSection;
+    label: string;
+    totalAmount: number;
+    rowCount: number;
+    expenseText?: string;
+    editable: boolean;
+  }) => {
+    const collapsed = collapsedSections.has(key);
+    return (
+      <tr key={'section-' + key} className="border-b border-emerald-950 bg-emerald-900 text-white">
+        <th className="bg-slate-100"></th>
+        <td className="border-r border-emerald-800 px-1 text-center">
+          <button
+            type="button"
+            className="my-1 flex size-6 items-center justify-center rounded border border-white/60 bg-white text-sm font-bold text-slate-800"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? label + 'の明細を開く' : label + 'の明細を閉じる'}
+            onClick={() => toggleSection(key)}
+          >
+            {collapsed ? '+' : '−'}
+          </button>
+        </td>
+        <td colSpan={visibleColumnCount - 2} className="px-3 py-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <strong className="text-[13px]">{label}</strong>
+            <span className="text-[11px] text-white/75">{rowCount}行</span>
+            {expenseText && <span className="text-[11px] text-white/75">{expenseText}</span>}
+            <span className="ml-auto text-xs font-semibold">{formatYen(totalAmount)}</span>
+            {editable && !collapsed && (
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold underline underline-offset-2"
+                  onClick={() => openProductPicker(key as SectionCode)}
+                >
+                  ＋商品
+                </button>
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold underline underline-offset-2"
+                  onClick={() => addFreeLine(key as SectionCode)}
+                >
+                  ＋自由明細
+                </button>
+              </span>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {createdProduct && (
-        <div className="rounded-xl border border-forest/30 bg-forest/5 px-4 py-3 text-sm">
+        <div className="rounded-lg border border-forest/30 bg-forest/5 px-4 py-3 text-sm">
           「{createdProduct.name}」を商品登録し、見積テンプレートへ戻りました。
           画面確認用として「{returnSection === 'interior_exterior' ? '内外装工事' : returnSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
         </div>
       )}
 
       <section
-        className="sticky top-0 z-30 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-line bg-white/95 px-4 py-2.5 shadow-sm backdrop-blur"
+        className="sticky top-0 z-30 overflow-hidden rounded-lg border border-slate-300 bg-white/95 shadow-sm backdrop-blur"
         data-testid="estimate-workbench-sticky-summary"
       >
-        <span
-          className={
-            isDirty
-              ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[0.68rem] font-semibold text-amber-800'
-              : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
-          }
-        >
-          {isDirty ? '未保存の変更あり' : '編集前と同じ'}
-        </span>
-        <span className="text-xs text-muted">
-          税別小計 <strong className="ml-1 text-sm text-ink">{formatYen(subtotalRaw)}</strong>
-        </span>
-        <span className="text-xs text-muted">
-          調整額 <strong className="ml-1 text-sm text-ink">{formatYen(adjustment)}</strong>
-        </span>
-        <span className="text-xs text-muted">
-          税込合計 <strong className="ml-1 text-base text-ink">{formatYen(total)}</strong>
-        </span>
-        <span className="ml-auto text-[0.68rem] text-muted">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
-      </section>
-
-      <section className="card flex flex-wrap items-center justify-between gap-4 p-5">
-        <div>
-          <p className="text-sm font-semibold">{demoMode ? '操作確認用テンプレート' : '明細編集'}</p>
-          <p className="mt-1 text-xs text-muted">
-            {demoMode
-              ? 'この画面の変更は保存されません。数量・単価・商品追加・自由項目追加・削除などを自由に試せます。'
-              : '既存データを使ったUI確認版です。この画面での変更はまだDBへ保存されません。'}
-          </p>
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2">
+          <div className="mr-2">
+            <p className="text-sm font-semibold">見積テンプレート編集 ― Excel形式</p>
+            <p className="text-[11px] text-slate-500">明細を1枚の表で連続編集します。シミュレーター見積書のレイアウトは使用しません。</p>
+          </div>
+          <span
+            className={
+              isDirty
+                ? 'rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[0.68rem] font-semibold text-amber-800'
+                : 'rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[0.68rem] font-semibold text-emerald-800'
+            }
+          >
+            {isDirty ? '未保存の変更あり' : '編集前と同じ'}
+          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={resetRows} disabled={!isDirty}>
+              {demoMode ? '最初の状態に戻す' : '編集前に戻す'}
+            </Button>
+            {!demoMode && (
+              <>
+                <Button type="button" variant="secondary" size="sm" disabled>下書きを保存</Button>
+                <Button type="button" size="sm" disabled>
+                  {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        <div className="flex flex-wrap items-center divide-x divide-slate-200 border-b border-slate-200 text-xs">
+          <span className="px-3 py-2">
+            税別小計 <strong className="ml-1 text-sm text-slate-900">{formatYen(subtotalRaw)}</strong>
+          </span>
+          <span className="px-3 py-2">
+            調整額 <strong className="ml-1 text-sm text-slate-900">{formatYen(adjustment)}</strong>
+          </span>
+          <span className="px-3 py-2">
+            消費税 <strong className="ml-1 text-sm text-slate-900">{formatYen(tax)}</strong>
+          </span>
+          <span className="px-3 py-2">
+            税込合計 <strong className="ml-1 text-base text-slate-900">{formatYen(total)}</strong>
+          </span>
+          <span className="px-3 py-2 text-slate-500">Tab＝右へ ／ Enter＝下へ ／ Shift+Enter＝上へ</span>
+        </div>
+
+        <div className="flex items-end gap-1 bg-slate-100 px-3 pt-1.5">
           <button
             type="button"
-            className={showCost ? 'btn-secondary btn-sm' : 'btn-primary btn-sm'}
+            className={
+              showCost
+                ? 'rounded-t border border-slate-300 bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-600'
+                : 'rounded-t border border-b-white border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800'
+            }
             onClick={() => setShowCost(false)}
           >
-            販売価格のみ
+            売価表
           </button>
           <button
             type="button"
-            className={showCost ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+            className={
+              showCost
+                ? 'rounded-t border border-b-white border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-emerald-800'
+                : 'rounded-t border border-slate-300 bg-slate-200 px-4 py-2 text-xs font-semibold text-slate-600'
+            }
             onClick={() => setShowCost(true)}
           >
-            原価＋販売価格
+            原価・売価比較
           </button>
-          <Button type="button" variant="secondary" onClick={resetRows} disabled={!isDirty}>
-            {demoMode ? '最初の状態に戻す' : '編集前に戻す'}
-          </Button>
-          {!demoMode && (
-            <>
-              <Button type="button" variant="secondary" disabled>下書きを保存</Button>
-              <Button type="button" disabled>
-                {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
-              </Button>
-            </>
-          )}
+          <span className="ml-auto pb-2 text-[10px] text-slate-500">
+            黄色＝入力 ／ グレー＝参照・自動表示 ／ 商品名の「…」＝商品選択
+          </span>
         </div>
       </section>
 
-      <section className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              className="flex size-6 shrink-0 items-center justify-center rounded border border-line bg-white text-sm font-semibold"
-              aria-expanded={!collapsedSections.has('base')}
-              aria-label={collapsedSections.has('base') ? '本体の明細を開く' : '本体の明細を閉じる'}
-              onClick={() => toggleSection('base')}
-            >
-              {collapsedSections.has('base') ? '+' : '−'}
-            </button>
-            <div>
-              <h2 className="font-semibold">本体</h2>
-              <p className="mt-0.5 text-xs text-muted">本体マスターの公開中の版を参照します。見積テンプレート上では直接変更しません。</p>
-            </div>
-          </div>
+      <section className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="estimate-excel-grid">
+        <div className="max-h-[68vh] overflow-auto">
+          <table className={showCost ? 'min-w-[92rem] w-full border-collapse text-sm' : 'min-w-[72rem] w-full border-collapse text-sm'}>
+            <thead>
+              <tr>
+                <th className="sticky top-0 z-20 w-11 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-semibold text-slate-600">#</th>
+                <th className="sticky top-0 z-20 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1.5"></th>
+                <th className="sticky top-0 z-20 min-w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">品名</th>
+                <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">数量</th>
+                <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">単位</th>
+                {showCost && (
+                  <>
+                    <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">原価</th>
+                    <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">原価金額</th>
+                  </>
+                )}
+                <th className="sticky top-0 z-20 w-32 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">売価</th>
+                <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">売価金額</th>
+                {showCost && (
+                  <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-xs font-semibold text-slate-600">粗利</th>
+                )}
+                <th className="sticky top-0 z-20 min-w-48 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">備考</th>
+                <th className="sticky top-0 z-20 w-40 border-b border-r border-slate-300 bg-slate-100 px-2 py-1.5 text-left text-xs font-semibold text-slate-600">お客様選択</th>
+                <th className="sticky top-0 z-20 w-16 border-b border-slate-300 bg-slate-100 px-2 py-1.5 text-center text-xs font-semibold text-slate-600">操作</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {sectionHeader({
+                key: 'base',
+                label: '本体',
+                totalAmount: baseTotal,
+                rowCount: baseLines.length,
+                expenseText: '本体マスター参照・読取専用',
+                editable: false,
+              })}
+              {!collapsedSections.has('base') && baseLines.map(baseRow)}
+
+              {sections.map((section) => {
+                const sectionRows = rows.filter((row) => row.section === section.code);
+                const expenseText =
+                  section.expenseAmount > 0
+                    ? (section.expenseLabel ?? '諸費用') + ' ' + formatYen(section.expenseAmount)
+                    : undefined;
+                return (
+                  <Fragment key={section.code}>
+                    {sectionHeader({
+                      key: section.code,
+                      label: section.label,
+                      totalAmount: totals[section.code],
+                      rowCount: sectionRows.length,
+                      expenseText,
+                      editable: true,
+                    })}
+                    {!collapsedSections.has(section.code) && sectionRows.map(editableRow)}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+
+            <tfoot>
+              <tr className="border-t-2 border-slate-500 bg-slate-50 font-semibold">
+                <td colSpan={grandLabelSpan} className="px-3 py-2 text-right">税別小計</td>
+                <td className="border-l border-slate-300 px-3 py-2 text-right tabular-nums">{formatYen(subtotalRaw)}</td>
+                <td colSpan={grandTailSpan}></td>
+              </tr>
+              <tr className="border-t border-slate-300 bg-amber-50">
+                <td colSpan={grandLabelSpan} className="px-3 py-2 text-right">調整額</td>
+                <td className="border-l border-slate-300 px-3 py-2 text-right tabular-nums">{formatYen(adjustment)}</td>
+                <td colSpan={grandTailSpan}></td>
+              </tr>
+              <tr className="border-t border-slate-300 bg-slate-50">
+                <td colSpan={grandLabelSpan} className="px-3 py-2 text-right">消費税</td>
+                <td className="border-l border-slate-300 px-3 py-2 text-right tabular-nums">{formatYen(tax)}</td>
+                <td colSpan={grandTailSpan}></td>
+              </tr>
+              <tr className="border-t-2 border-emerald-800 bg-emerald-50 text-base font-bold">
+                <td colSpan={grandLabelSpan} className="px-3 py-2.5 text-right">税込合計</td>
+                <td className="border-l border-emerald-300 px-3 py-2.5 text-right tabular-nums">{formatYen(total)}</td>
+                <td colSpan={grandTailSpan}></td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-        {collapsedSections.has('base') ? (
-          <div className="flex items-center justify-between gap-4 bg-ivory px-5 py-3 text-sm font-semibold">
-            <span>本体 計</span>
-            <span className="tabular-nums">{formatYen(baseTotal)}</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-sm">
-              <thead className="bg-sand/60 text-left text-xs text-muted">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">工事区分</th>
-                  <th className="px-3 py-2 font-semibold">項目</th>
-                  <th className="px-3 py-2 text-right font-semibold">数量</th>
-                  <th className="px-3 py-2 font-semibold">単位</th>
-                  <th className="px-3 py-2 text-right font-semibold">販売単価</th>
-                  <th className="px-3 py-2 text-right font-semibold">販売金額</th>
-                  <th className="px-3 py-2 font-semibold">備考</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {baseLines.map((line) => (
-                  <tr key={line.id}>
-                    <td className="px-3 py-2">{line.section}</td>
-                    <td className="px-3 py-2 font-medium">{line.name}</td>
-                    <td className="px-3 py-2 text-right">{line.quantity}</td>
-                    <td className="px-3 py-2">{line.unit}</td>
-                    <td className="px-3 py-2 text-right">{formatYen(line.unitPrice)}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{formatYen(line.amount)}</td>
-                    <td className="px-3 py-2 text-xs text-muted">{line.remark}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-line bg-ivory font-semibold">
-                  <td colSpan={5} className="px-3 py-3 text-right">本体計</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{formatYen(baseTotal)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </section>
 
-      {sections.map(renderSection)}
-
-      <section className="card ml-auto max-w-xl space-y-2 p-5 text-sm">
-        <div className="flex justify-between gap-4"><span>本体</span><strong>{formatYen(baseTotal)}</strong></div>
-        <div className="flex justify-between gap-4"><span>内外装工事</span><strong>{formatYen(totals.interior_exterior)}</strong></div>
-        <div className="flex justify-between gap-4"><span>オプション</span><strong>{formatYen(totals.option)}</strong></div>
-        <div className="flex justify-between gap-4"><span>別途</span><strong>{formatYen(totals.sitework)}</strong></div>
-        <div className="flex justify-between gap-4 border-t border-line pt-2"><span>税別小計</span><strong>{formatYen(subtotalRaw)}</strong></div>
-        <div className="flex justify-between gap-4"><span>調整額</span><strong>{formatYen(adjustment)}</strong></div>
-        <div className="flex justify-between gap-4"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
-        <div className="flex justify-between gap-4 border-t-2 border-ink pt-3 text-lg">
-          <span>税込合計</span><strong>{formatYen(total)}</strong>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-500">
+          <span>本体は参照専用。内外装工事・オプション・別途はセルで編集できます。</span>
+          <span>正式な原価・掛率・粗利・保存／公開はDB/RPC接続後に有効化します。</span>
         </div>
       </section>
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を追加">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を選択">
           <div className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">商品を追加</h2>
+                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品を変更' : '商品を追加'}</h2>
                 <p className="mt-1 text-xs text-muted">
-                  追加先：{pickerSection === 'interior_exterior' ? '内外装工事' : pickerSection === 'option' ? 'オプション' : '別途'}
+                  {pickerTargetRowId ? '選択した明細行へ商品情報を反映します。' : '選択した区分へ商品を追加します。'}
                 </p>
               </div>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setPickerSection(null)}>閉じる</button>
+              <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
             <div className="space-y-5 p-5">
@@ -609,7 +727,9 @@ export function EstimateTemplateWorkbench({
                       </div>
                     </div>
                     <div className="mt-4 flex justify-end">
-                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>追加</button>
+                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>
+                        {pickerTargetRowId ? 'この商品に変更' : '追加'}
+                      </button>
                     </div>
                   </article>
                 ))}

@@ -2,8 +2,16 @@ import type { ProductOption } from './types';
 
 export type LedgerQuickFilter = 'all' | 'draft' | 'needs-attention';
 
+export function productAttentionReasons(option: ProductOption): string[] {
+  const reasons: string[] = [];
+  if (option.status === 'draft') reasons.push('下書き');
+  if (!option.model_no?.trim()) reasons.push('型番未設定');
+  if (!option.image_url) reasons.push('画像未登録');
+  return reasons;
+}
+
 export function needsProductAttention(option: ProductOption): boolean {
-  return option.status === 'draft' || !option.model_no?.trim() || !option.image_url;
+  return productAttentionReasons(option).length > 0;
 }
 
 export function optionMatchesLedgerFilters(option: ProductOption, filters: { query: string; categoryId: string; status: string; quick: LedgerQuickFilter }): boolean {

@@ -173,9 +173,26 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('受注・契約メモ');
     expect(workspace).toContain('現在の見積書PDF');
     expect(workspace).toContain('原本保管は未実装');
-    expect(workspace).toContain('製造指示、製造個体、工程日、搬入・施工進捗を保存する正式機能はまだありません。');
+    expect(workspace).toContain('製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を保存する正式機能はまだありません。');
     expect(workspace).toContain('引渡し日、完了確認、保証、点検、アフター対応を保存する正式機能はまだありません。');
     expect(workspace).toContain('現在は供給可否を判定・集計しません。');
+  });
+
+  it('shows production and installation scope only from existing quote data', () => {
+    expect(workspace).toContain("items");
+    expect(workspace).toContain("item.kind === 'installation'");
+    expect(workspace).toContain('data-testid="case-tab-production"');
+    expect(workspace).toContain('data-testid="case-production-reference"');
+    expect(workspace).toContain('製造前提');
+    expect(workspace).toContain('既存データからの参考表示');
+    expect(workspace).toContain('製造指示書や製造確定仕様ではありません。');
+    expect(workspace).toContain('第{quote.revision}版／製造用には未固定');
+    expect(workspace).toContain('data-testid="case-installation-scope"');
+    expect(workspace).toContain('見積に含まれる施工・搬入範囲');
+    expect(workspace).toContain('実施済み・発注済みを意味しません。');
+    expect(workspace).toContain('installationItems.map');
+    expect(workspace).toContain('data-testid="case-production-future"');
+    expect(workspace).toContain('見積に項目があることを、製造済み・搬入済み・施工済みとは扱いません。');
   });
 
   it('shows contract information only as reference data until a formal contract model exists', () => {

@@ -134,7 +134,7 @@ export default async function EditOptionPage({
           <div>
             <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
             <p className="mt-1 text-sm text-muted">
-              必要な商品情報を登録し、最後にSTEP 2でお客様表示を確認します。
+              商品情報はSTEP 2へ進むときや、画像・資料など別の登録操作の前に自動保存されます。
             </p>
           </div>
 
@@ -158,7 +158,7 @@ export default async function EditOptionPage({
           <section className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div>
               <h3 className="font-semibold">登録内容を確認</h3>
-              <p className="mt-1 text-xs text-muted">保存した内容を、シミュレーターと同じ商品詳細画面で確認します。</p>
+              <p className="mt-1 text-xs text-muted">入力内容を保存して、シミュレーターと同じ商品詳細画面で確認します。</p>
             </div>
             <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
               STEP 2 登録内容確認へ

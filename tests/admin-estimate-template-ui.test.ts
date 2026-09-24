@@ -295,6 +295,8 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('sticky left-[2.75rem] z-10');
     expect(workbench).toContain('sticky left-[5rem] z-10');
     expect(workbench).toContain('sticky left-[5rem] top-0 z-40');
+    expect(workbench).toContain('w-[16rem] min-w-[16rem] max-w-[16rem]');
+    expect(workbench).not.toContain('min-w-[20rem]');
     expect(workbench).toContain('colSpan={visibleColumnCount - 3}');
     expect(workbench).toContain('販売費');
     expect(workbench).toContain('経費');
@@ -307,9 +309,10 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('localAdjustment');
     expect(workbench).toContain('※画面内確認用。正式計算は未接続です。');
     expect(workbench).toContain('販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です');
-    expect(workbench).toContain('min-w-[66rem] w-full border-collapse text-xs');
-    expect(workbench).toContain('className="h-7');
-    expect(workbench).toContain('className="flex size-6');
+    expect(workbench).toContain('min-w-[62rem] w-full border-collapse text-xs');
+    expect(workbench).toContain('min-w-[82rem] w-full border-collapse text-xs');
+    expect(workbench).toContain('className="h-6 min-h-6');
+    expect(workbench).toContain('className="flex size-5');
     expect(workbench).not.toContain("row.groupLabel || '商品'");
   });
 

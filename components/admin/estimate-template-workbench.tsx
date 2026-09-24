@@ -412,7 +412,7 @@ export function EstimateTemplateWorkbench({
           {displayRowNumber}
         </th>
         <td className="sticky left-[2.75rem] z-10 w-9 border-r border-slate-200 bg-white"></td>
-        <td className="sticky left-[5rem] z-10 min-w-[20rem] border-r border-slate-200 bg-amber-50 px-0.5">
+        <td className="sticky left-[5rem] z-10 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-slate-200 bg-amber-50 px-0.5">
           <div className="flex items-center gap-0.5">
             <Input
               value={row.name}
@@ -420,13 +420,13 @@ export function EstimateTemplateWorkbench({
               onKeyDown={handleGridKeyDown}
               onDoubleClick={() => openProductPicker(row.section, row.id)}
               onChange={(event) => updateRow(row.id, { name: event.target.value })}
-              className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
+              className="h-6 min-h-6 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
             />
             <button
               type="button"
               title="商品マスターから選び直す"
               aria-label={row.name + 'の商品を変更'}
-              className="flex size-6 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-xs font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
+              className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
               onClick={() => openProductPicker(row.section, row.id)}
             >
               …
@@ -442,7 +442,7 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="quantity"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { quantity: Number(event.target.value) })}
-            className="h-7 w-full border-0 bg-transparent px-1 text-right text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-right text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
         <td className="w-16 border-r border-slate-200 bg-amber-50 px-0.5">
@@ -451,7 +451,7 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="unit"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { unit: event.target.value })}
-            className="h-7 w-full border-0 bg-transparent px-1 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
         {showCost && (
@@ -469,7 +469,7 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="sale"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { saleUnitPrice: Number(event.target.value) })}
-            className="h-7 w-full border-0 bg-transparent px-1 text-right text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-right text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
         <td className="w-24 border-r border-slate-200 bg-slate-50 px-2 text-right text-xs font-semibold tabular-nums">
@@ -484,7 +484,7 @@ export function EstimateTemplateWorkbench({
             data-estimate-grid-col="remark"
             onKeyDown={handleGridKeyDown}
             onChange={(event) => updateRow(row.id, { remark: event.target.value })}
-            className="h-7 w-full border-0 bg-transparent px-1 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
+            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
           />
         </td>
         <td className="w-40 border-r border-slate-200 bg-amber-50 px-1">
@@ -494,7 +494,7 @@ export function EstimateTemplateWorkbench({
               data-estimate-grid-col="selection"
               onKeyDown={handleGridKeyDown}
               onChange={(event) => updateRow(row.id, { customerSelection: event.target.value })}
-              className="h-7 min-h-7 w-full border-0 bg-transparent px-1 text-[11px] shadow-none"
+              className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-[10px] shadow-none"
             >
               <option>標準・変更可</option>
               <option>標準・固定</option>
@@ -526,7 +526,7 @@ export function EstimateTemplateWorkbench({
           {displayRowNumber}
         </th>
         <td className="sticky left-[2.75rem] z-10 w-9 border-r border-slate-200 bg-slate-100"></td>
-        <td className="sticky left-[5rem] z-10 min-w-[20rem] border-r border-slate-200 bg-slate-100 px-2 py-1">
+        <td className="sticky left-[5rem] z-10 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-slate-200 bg-slate-100 px-2 py-1">
           <div className="truncate text-xs font-medium" title={line.name}>{line.name}</div>
         </td>
         <td className="w-16 border-r border-slate-200 px-2 text-right text-xs">{line.quantity}</td>
@@ -589,7 +589,7 @@ export function EstimateTemplateWorkbench({
               +
             </button>
           </td>
-          <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
+          <td className="sticky left-[5rem] z-20 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
             <div className="flex items-center gap-2">
               <strong className="text-xs">{label}</strong>
               <span className="text-[11px] text-white/75">{rowCount}行</span>
@@ -635,7 +635,7 @@ export function EstimateTemplateWorkbench({
             −
           </button>
         </td>
-        <td className="sticky left-[5rem] z-20 min-w-[20rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
+        <td className="sticky left-[5rem] z-20 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <strong className="text-xs">{label}</strong>
             <span className="text-[11px] text-white/75">{rowCount}行</span>
@@ -812,12 +812,12 @@ export function EstimateTemplateWorkbench({
 
       <section className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="estimate-excel-grid">
         <div className="max-h-[68vh] overflow-auto">
-          <table className={showCost ? 'min-w-[86rem] w-full border-collapse text-xs' : 'min-w-[66rem] w-full border-collapse text-xs'}>
+          <table className={showCost ? 'min-w-[82rem] w-full border-collapse text-xs' : 'min-w-[62rem] w-full border-collapse text-xs'}>
             <thead>
               <tr>
                 <th className="sticky left-0 top-0 z-40 w-11 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-[11px] font-semibold text-slate-600">#</th>
                 <th className="sticky left-[2.75rem] top-0 z-40 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
-                <th className="sticky left-[5rem] top-0 z-40 min-w-[20rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">品名</th>
+                <th className="sticky left-[5rem] top-0 z-40 w-[16rem] min-w-[16rem] max-w-[16rem] border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">品名</th>
                 <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-[11px] font-semibold text-slate-600">数量</th>
                 <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-[11px] font-semibold text-slate-600">単位</th>
                 {showCost && (

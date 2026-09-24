@@ -29,6 +29,24 @@ describe('Quote revision adjustment carry-forward corrective', () => {
     expect(body).not.toContain('v_sub - v_sub_raw, v_sub');
   });
 
+  it('未変更の親明細だけ保存済みamountを再利用し、親外IDや重複IDを拒否する', () => {
+    const body = functionBody(migration, 'create_quote_revision');
+
+    expect(body).toContain("coalesce(r ->> 'source_item_id', '') <> ''");
+    expect(body).toContain('qi.quote_id = parent.id');
+    expect(body).toContain('v_source_id = any(v_seen_source_ids)');
+    expect(body).toContain('同じ親見積明細を複数行へ再利用することはできません');
+    expect(body).toContain('親見積に存在しない明細が指定されています');
+    expect(body).toContain('v_source_kind = v_kind');
+    expect(body).toContain("v_source_name = coalesce(nullif(r ->> 'name', ''), '（名称未設定）')");
+    expect(body).toContain("v_source_unit = coalesce(nullif(r ->> 'unit', ''), '式')");
+    expect(body).toContain('v_source_unit_price = v_unit_price');
+    expect(body).toContain('v_source_quantity = v_qty');
+    expect(body).toContain('v_amount := v_source_amount;');
+    expect(body).toContain('v_amount := round(v_unit_price * v_qty)::integer;');
+    expect(body).toContain('v_qty,\n      v_amount,');
+  });
+
   it('引継いだ調整額で税抜請負額が負になるRevisionを拒否する', () => {
     const body = functionBody(migration, 'create_quote_revision');
 

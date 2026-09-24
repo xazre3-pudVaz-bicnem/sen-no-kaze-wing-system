@@ -115,7 +115,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('<QuoteEstimateSheet');
     expect(workspace).toContain('startInEditMode={Boolean(created)}');
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
-    expect(quoteEstimateSheet).toContain('<QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />');
+    expect(quoteEstimateSheet).toContain('showSelectedImages={false}');
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
     expect(workspace).toContain('<AssignDealerForm quote={quote} dealers={dealers} />');
     expect(workspace).toContain('<QuoteStatusForm quote={quote} request={request} compact />');
@@ -125,6 +125,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('見積番号 {quote.quote_no}／発行');
     expect(workspace).toContain('data-testid="admin-pdf-link"');
     expect(workspace).toContain('PDF再生成');
+    expect(workspace).not.toContain('この見積のPDF・画像');
     expect(workspace).toContain('金額は発行時点の確定内容です。');
     expect(workspace).not.toContain('金額は発行時点のスナップショットです。');
   });

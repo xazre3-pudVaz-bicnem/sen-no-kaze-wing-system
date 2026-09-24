@@ -69,7 +69,15 @@ function ItemRow({ it, showImage = false }: { it: QuoteItem; showImage?: boolean
   );
 }
 
-export function QuoteReferenceDetails({ quote, items }: { quote: Quote; items: QuoteItem[] }) {
+export function QuoteReferenceDetails({
+  quote,
+  items,
+  showSelectedImages = true,
+}: {
+  quote: Quote;
+  items: QuoteItem[];
+  showSelectedImages?: boolean;
+}) {
   const withImages = items.filter((item) => item.image_url);
   const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
 
@@ -92,7 +100,7 @@ export function QuoteReferenceDetails({ quote, items }: { quote: Quote; items: Q
         </Link>
       </div>
 
-      {withImages.length > 0 && (
+      {showSelectedImages && withImages.length > 0 && (
         <div className="border-t border-line px-6 py-5 sm:px-8" data-testid="quote-selected-images">
           <p className="text-xs font-semibold text-muted">選択いただいた商品（画像一覧）</p>
           <ul className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5">
@@ -120,12 +128,15 @@ export function QuoteTable({
   items,
   totalTestId = 'quote-total',
   showBaseDetail = false,
+  showSelectedImages = true,
 }: {
   quote: Quote;
   items: QuoteItem[];
   totalTestId?: string;
   /** 本体の明細行を出すか。管理画面（本部・総代理店・代理店）のみ true。エンドユーザーは計のみ */
   showBaseDetail?: boolean;
+  /** 選択商品画像一覧を表示するか。案件管理ではプランボードへ一本化するため false。 */
+  showSelectedImages?: boolean;
 }) {
   const baseItems = items.filter((i) => i.kind === 'base');
   const baseExpense = items.find((i) => i.kind === 'base_expense') ?? null;
@@ -303,7 +314,7 @@ export function QuoteTable({
         </table>
       </div>
 
-      <QuoteReferenceDetails quote={quote} items={items} />
+      <QuoteReferenceDetails quote={quote} items={items} showSelectedImages={showSelectedImages} />
     </div>
   );
 }

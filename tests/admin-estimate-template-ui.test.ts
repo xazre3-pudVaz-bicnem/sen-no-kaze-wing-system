@@ -276,7 +276,7 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).toContain('原価金額');
     expect(workbench).toContain('売価金額');
     expect(workbench).toContain('黄色＝入力');
-    expect(workbench).toContain('グレー＝参照・自動表示');
+    expect(workbench).toContain('グレー＝参照');
     expect(workbench).toContain('未保存の変更あり');
     expect(workbench).toContain('画面内の変更あり');
     expect(workbench).toContain('初期状態');

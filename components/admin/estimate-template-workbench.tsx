@@ -909,7 +909,8 @@ export function EstimateTemplateWorkbench({
                               <div
                                 className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand bg-cover bg-center text-[10px] text-muted"
                                 style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
-                                aria-label={product.imageUrl ? product.name + 'の商品画像' : product.name + 'は画像なし'}
+                                role={product.imageUrl ? 'img' : undefined}
+                                aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
                               >
                                 {!product.imageUrl && <span>画像なし</span>}
                               </div>

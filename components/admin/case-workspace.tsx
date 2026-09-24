@@ -982,9 +982,99 @@ export async function CaseWorkspace({
       )}
 
       {activeTab === 'handover' && (
-        <FuturePanel title="引渡し・アフター">
-          引渡し日、完了確認、保証、点検、アフター対応を保存する正式機能はまだありません。今後の工程で対応予定です。
-        </FuturePanel>
+        <section className="space-y-4" data-testid="case-tab-handover">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">引渡し・アフター</h2>
+                <Badge tone="neutral">参考表示</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                現在の案件情報から引渡し対象の前提だけを確認します。引渡し完了・保証開始・点検実施などの正式な状態はまだ管理していません。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <Link href={tabHref('production')} className="btn-secondary btn-sm">
+                製造・施工を確認
+              </Link>
+              <Link href={tabHref('documents')} className="btn-secondary btn-sm">
+                契約・資料を確認
+              </Link>
+            </div>
+          </div>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-handover-reference">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-semibold">引渡し対象の前提</h3>
+                <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
+                  未確定
+                </span>
+              </div>
+              <span className="text-[0.65rem] text-muted">既存データからの参考表示</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              以下は引渡し確定情報ではありません。正式な契約、製造・施工完了、引渡し対象Revisionの固定後に確定する想定です。
+            </p>
+
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">顧客</dt>
+                <dd className="mt-1 font-semibold">{customerCompany || customerName}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">設置予定地</dt>
+                <dd className="mt-1 font-semibold">{siteAddress}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">モデル・棟数</dt>
+                <dd className="mt-1 font-semibold">
+                  {quote.base_model_name}／{caseUnitCount ?? '棟数未登録'}
+                </dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">参照見積</dt>
+                <dd className="mt-1 font-semibold">{quote.quote_no}</dd>
+                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／引渡し用には未固定</p>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-handover-readiness">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">完了確認・引渡し</h3>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">正式管理は未実装</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              現在は保存先がないため、未登録を「未完了」とは判定しません。正式実装時に、完了確認と引渡しを施工進捗から独立した記録として扱います。
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ['完了確認', '正式保存先なし'],
+                ['引渡し日', '正式保存先なし'],
+                ['引渡し確認', '正式保存先なし'],
+                ['引渡し資料', '正式保存先なし'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
+                  <p className="text-xs font-semibold text-muted">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-aftercare-future">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">保証・点検・アフター対応</h3>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">
+              保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を保存する正式機能はまだありません。
+              現在の見積承諾や案件メモを、引渡し済み・保証中・点検済みとは扱いません。
+            </p>
+          </section>
+        </section>
       )}
 
       {activeTab === 'disaster' && (

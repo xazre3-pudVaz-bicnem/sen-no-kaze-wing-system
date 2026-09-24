@@ -310,7 +310,7 @@ export async function saveVariantGroupAction(_prev: AdminFormState, formData: Fo
     option_id: formData.get('option_id'),
     // 選択項目コードは表示条件・Import互換の技術キー。通常の登録担当者には入力させず、
     // 新規手入力時だけ内部生成し、既存値は下で必ず保持する。
-    code: String(formData.get('code') ?? '').trim() || `vg-${randomUUID()}`,
+    code: `vg-${randomUUID()}`,
     name: formData.get('name'),
     note: formData.get('note'),
     depends_on_group_code: formData.get('depends_on_group_code'),
@@ -421,7 +421,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       option_id: optionId,
       group_id: groupId,
       // 選択肢コードも内部技術キー。新規手入力時だけ生成し、既存値は下で保持する。
-      code: String(formData.get('code') ?? '').trim() || `vc-${randomUUID()}`,
+      code: `vc-${randomUUID()}`,
       name: formData.get('name'),
       kind: formData.get('kind') || 'option',
       extra_price: formData.get('extra_price') || 0,

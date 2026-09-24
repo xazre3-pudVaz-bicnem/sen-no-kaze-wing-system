@@ -7,7 +7,6 @@ import {
   type AdminFormState,
 } from '@/lib/actions/admin';
 import {
-  VARIANT_KIND_LABELS,
   type OptionVariantChoice,
   type OptionVariantGroup,
   type ProductOption,

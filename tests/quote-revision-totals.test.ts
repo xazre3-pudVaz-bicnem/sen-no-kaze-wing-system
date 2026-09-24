@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeQuoteRevisionItemAmount, computeQuoteRevisionTotals } from '../lib/domain/quote-revision';
+import { computeQuoteRevisionItemAmount, computeQuoteRevisionTotals, roundQuoteRevisionAmount } from '../lib/domain/quote-revision';
 
 describe('Quote Revision totals', () => {
   it('単価・数量が未変更の既存明細は親Revisionの確定amountを再利用する', () => {
@@ -10,6 +10,12 @@ describe('Quote Revision totals', () => {
         amount: 153_356,
       })
     ).toBe(153_356);
+  });
+
+  it('負の0.5はPostgreSQL round(numeric)と同じく0から遠ざけて-1円に丸める', () => {
+    expect(roundQuoteRevisionAmount(-0.5)).toBe(-1);
+    expect(computeQuoteRevisionItemAmount(-1, 0.5)).toBe(-1);
+    expect(roundQuoteRevisionAmount(0.5)).toBe(1);
   });
 
   it('単価または数量を変更した明細は現在の計算式で再計算する', () => {

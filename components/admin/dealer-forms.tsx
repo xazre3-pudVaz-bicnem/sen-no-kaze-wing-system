@@ -178,7 +178,7 @@ export function DealerRevisionForm({
     event.preventDefault();
     const cells = Array.from(
       document.querySelectorAll<HTMLInputElement>(`[data-revision-col="${col}"]`)
-    ).filter((element) => !element.disabled && element.offsetParent !== null);
+    ).filter((element) => !element.disabled && !element.readOnly && element.offsetParent !== null);
     const index = cells.indexOf(event.currentTarget);
     const target = cells[event.shiftKey ? index - 1 : index + 1];
     if (!target) return;
@@ -359,6 +359,18 @@ export function DealerRevisionForm({
                   const isCollapsed = collapsedSections.has(section.key);
                   return (
                     <Fragment key={section.label}>
+                      {isCollapsed && editableRows.map(({ row: r, index: i }) => (
+                        <Fragment key={`collapsed-${r.key}`}>
+                          <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
+                          <input type="hidden" name={`items.${i}.name`} value={r.name} />
+                          <input type="hidden" name={`items.${i}.description`} value={r.description} />
+                          <input type="hidden" name={`items.${i}.unit`} value={r.unit} />
+                          <input type="hidden" name={`items.${i}.remark`} value={r.remark} />
+                          <input type="hidden" name={`items.${i}.unit_price`} value={r.unit_price} />
+                          <input type="hidden" name={`items.${i}.quantity`} value={r.quantity} />
+                          <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
+                        </Fragment>
+                      ))}
                       <tr className="bg-ivory">
                         <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
                           <span className="inline-flex items-center gap-2">
@@ -408,7 +420,7 @@ export function DealerRevisionForm({
                           <Fragment key={item.id}>
                             {showBaseGroupHeading && (
                               <tr className="bg-sand/40">
-                                <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{item.description}</td>
+                                <td colSpan={6} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{item.description}</td>
                               </tr>
                             )}
                             <tr className="bg-white text-xs" data-testid={`revision-locked-row-${index}`}>
@@ -464,7 +476,7 @@ export function DealerRevisionForm({
                           <Fragment key={r.key}>
                             {showBaseGroupHeading && (
                               <tr className="bg-sand/40">
-                                <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
+                                <td colSpan={6} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
                               </tr>
                             )}
                             <tr

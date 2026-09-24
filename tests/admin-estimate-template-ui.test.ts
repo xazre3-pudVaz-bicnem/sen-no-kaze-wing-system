@@ -203,6 +203,16 @@ describe('見積テンプレート管理UI', () => {
     expect(workbench).not.toContain('grid gap-3 sm:grid-cols-2');
   });
 
+  it('区分を折り畳むと数量1・単位式・区分計を1行で表示する', () => {
+    expect(workbench).toContain("data-testid={'estimate-section-summary-' + key}");
+    expect(workbench).toContain('const summaryRemark = expenseText ?? `${rowCount}行の明細を集約`;');
+    expect(workbench).toContain('>1</td>');
+    expect(workbench).toContain('>式</td>');
+    expect(workbench).toContain('{formatYen(totalAmount)}');
+    expect(workbench).toContain("aria-label={label + 'の明細を開く'}");
+    expect(workbench).toContain("aria-label={label + 'の明細を閉じる'}");
+  });
+
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
     expect(workbench).toContain('data-testid="estimate-excel-grid"');

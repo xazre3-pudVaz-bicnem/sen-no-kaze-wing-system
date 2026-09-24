@@ -33,14 +33,15 @@ interface Props {
   bundle: CatalogBundle;
   specCode: string;
   template: EstimateTemplateBundle | null;
+  sampleMode?: boolean;
 }
 
 export function StandardEstimateSimulatorPreview(props: Props) {
-  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}`;
+  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}:${props.sampleMode ? 'sample' : 'normal'}`;
   return <StandardEstimateSimulatorPreviewBody key={previewKey} {...props} />;
 }
 
-function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Props) {
+function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, sampleMode = false }: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
   const [picker, setPicker] = useState<string | null>(null);
   const { model } = bundle;
@@ -269,12 +270,16 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Pr
         <section className="card overflow-hidden" id="estimate-preview">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-sand/20 px-4 py-4 sm:px-5">
             <div>
-              <p className="text-xs font-semibold text-forest">選択中の標準見積</p>
+              <p className="text-xs font-semibold text-forest">
+                {sampleMode ? '動作確認サンプル' : '選択中の標準見積'}
+              </p>
               <h2 className="mt-1 text-lg font-semibold">
                 {displayModelName} / {specName}
               </h2>
               <p className="mt-1 text-xs text-muted">
-                見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。
+                {sampleMode
+                  ? '見積書とプランボードの動作確認用です。変更内容や金額は保存・公開されません。'
+                  : '見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -293,8 +298,10 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Pr
 
           <div className="px-4 py-4 sm:px-5">
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
-              <strong className="font-semibold text-ink">画面内試算：</strong>
-              見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。
+              <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
+              {sampleMode
+                ? '見積書の商品を変更して、金額表示とプランボードへの反映を確認できます。正式データには反映されません。'
+                : '見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。'}
             </div>
             <QuoteSheet
               modelName={displayModelName}

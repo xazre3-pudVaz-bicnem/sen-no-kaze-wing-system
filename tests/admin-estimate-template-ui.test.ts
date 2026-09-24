@@ -73,12 +73,28 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('lg:flex-row lg:items-end lg:gap-5');
     expect(listPage).toContain('h-10 min-h-10 w-full px-3 text-sm');
     expect(listPage).toContain('クリア');
-    expect(listPage).toContain('表示例（サンプル）');
+    expect(listPage).not.toContain('表示例（サンプル）');
+    expect(listPage).toContain('動作確認サンプル（Wing ホテル仕様）');
+    expect(listPage).toContain('保存されない画面確認用データ');
     expect(listPage).toContain('costTaxIncluded: 2_100_000');
     expect(listPage).toContain('saleTaxIncluded: 2_822_600');
     expect(listPage).toContain("marginRate: '25.6%'");
+    expect(listPage).toContain("params.set('sample', '1')");
+    expect(listPage).toContain('sampleMode');
     expect(listPage).not.toContain('クリックで展開');
     expect(listPage).not.toContain('別選択');
+  });
+
+  it('動作確認サンプル行から見積書とプランボードを表示できる', () => {
+    expect(listPage).toContain("const sampleSelected = sp.sample === '1'");
+    expect(listPage).toContain("model.slug === 'wing-01'");
+    expect(listPage).toContain("preset.code === 'hotel'");
+    expect(listPage).toContain('template={null}');
+    expect(listPage).toContain('sampleMode');
+    expect(simulatorPreview).toContain('sampleMode?: boolean');
+    expect(simulatorPreview).toContain("sampleMode ? '動作確認サンプル' : '選択中の標準見積'");
+    expect(simulatorPreview).toContain('見積書とプランボードの動作確認用です');
+    expect(simulatorPreview).toContain('正式データには反映されません');
   });
 
   it('選択した標準見積の下にシミュレーターと同じ見積書とプランボードを表示する', () => {

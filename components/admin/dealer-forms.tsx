@@ -82,7 +82,25 @@ const DEALER_KINDS: RevisionItemKind[] = [
   'free',
 ];
 
-const COMMON_SITEWORK_ITEMS = ['運搬費', '基礎工事', '電気工事', '給排水工事', '設置工事'] as const;
+const COMMON_SITEWORK_ITEMS = [
+  { key: 'transport', label: '運搬費' },
+  { key: 'foundation', label: '基礎工事' },
+  { key: 'electric', label: '電気工事' },
+  { key: 'plumbing', label: '給排水工事' },
+  { key: 'installation', label: '設置工事' },
+] as const;
+
+type CommonSiteworkKey = (typeof COMMON_SITEWORK_ITEMS)[number]['key'];
+
+function commonSiteworkKey(name: string): CommonSiteworkKey | null {
+  const normalized = name.replace(/\s+/g, '');
+  if (/運搬|運送/.test(normalized)) return 'transport';
+  if (/基礎/.test(normalized)) return 'foundation';
+  if (/電気/.test(normalized)) return 'electric';
+  if (/給排水/.test(normalized)) return 'plumbing';
+  if (/現場設置|^設置工事/.test(normalized)) return 'installation';
+  return null;
+}
 
 /**
  * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
@@ -157,7 +175,11 @@ export function DealerRevisionForm({
   const siteworkRows = rows
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => row.kind === 'installation');
-  const siteworkNames = new Set(siteworkRows.map(({ row }) => row.name.trim()).filter(Boolean));
+  const siteworkKeys = new Set(
+    siteworkRows
+      .map(({ row }) => commonSiteworkKey(row.name))
+      .filter((key): key is CommonSiteworkKey => Boolean(key))
+  );
   const originalEditableItems = items.filter((item) => editable(item.kind));
   const currentBySourceId = new Map(
     rows.filter((row) => row.source_id).map((row) => [row.source_id as string, row])
@@ -813,18 +835,18 @@ export function DealerRevisionForm({
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5" data-testid="site-work-checklist">
-                    {COMMON_SITEWORK_ITEMS.map((name) => {
-                      const exists = siteworkNames.has(name);
+                    {COMMON_SITEWORK_ITEMS.map((item) => {
+                      const exists = siteworkKeys.has(item.key);
                       return (
                         <span
-                          key={name}
+                          key={item.key}
                           className={
                             exists
                               ? 'rounded-full border border-[#b8d3c4] bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-[#2f6b4f]'
                               : 'rounded-full border border-line bg-[#f7f8f8] px-2 py-0.5 text-[0.6rem] text-muted'
                           }
                         >
-                          {name}：{exists ? '入力あり' : '未追加'}
+                          {item.label}：{exists ? '入力あり' : '未追加'}
                         </span>
                       );
                     })}
@@ -946,16 +968,16 @@ export function DealerRevisionForm({
                 )}
 
                 <div className="flex flex-wrap items-center gap-1.5 border-t border-line bg-[#fafbf9] px-3 py-2">
-                  {COMMON_SITEWORK_ITEMS.filter((name) => !siteworkNames.has(name)).map((name) => (
+                  {COMMON_SITEWORK_ITEMS.filter((item) => !siteworkKeys.has(item.key)).map((item) => (
                     <Button
-                      key={name}
+                      key={item.key}
                       type="button"
                       variant="secondary"
                       size="sm"
-                      onClick={() => addRow('installation', { name, price: 0 })}
+                      onClick={() => addRow('installation', { name: item.label, price: 0 })}
                     >
                       <Plus className="size-3.5" aria-hidden="true" />
-                      {name}
+                      {item.label}
                     </Button>
                   ))}
                   <Button

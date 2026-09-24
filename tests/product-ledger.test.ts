@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findProductDuplicateCandidates, needsProductAttention, optionMatchesLedgerFilters, selectedOptionAfterFilter } from '@/lib/domain/product-ledger';
+import { findProductDuplicateCandidates, needsProductAttention, optionMatchesLedgerFilters, productAttentionReasons, selectedOptionAfterFilter } from '@/lib/domain/product-ledger';
 import type { ProductOption } from '@/lib/domain/types';
 
 const option = (overrides: Partial<ProductOption> = {}): ProductOption => ({ id: 'o1', base_model_id: null, category_id: 'c1', code: 'test', name: 'テスト商品', description: null, price: 0, image_url: 'https://example.test/a.png', selection_type: 'radio', is_required: false, is_default: false, is_installation: false, price_on_request: false, spec_codes: [], owner_id: null, manufacturer: 'メーカー', model_no: 'A-1', size_note: null, list_price: null, highlight: null, preview_key: null, affects_views: [], sort_order: 0, status: 'published', created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', ...overrides });
@@ -10,6 +10,15 @@ describe('商品台帳の絞り込み', () => {
     expect(needsProductAttention(option({ image_url: null }))).toBe(true);
     expect(needsProductAttention(option())).toBe(false);
   });
+  it('要確認の理由を一覧表示用に返す', () => {
+    expect(productAttentionReasons(option())).toEqual([]);
+    expect(productAttentionReasons(option({ status: 'draft', model_no: null, image_url: null }))).toEqual([
+      '下書き',
+      '型番未設定',
+      '画像未登録',
+    ]);
+  });
+
   it('フィルター後に選択中の商品がなければ未選択へ戻す', () => {
     expect(selectedOptionAfterFilter('o1', ['o2'])).toBeNull();
     expect(selectedOptionAfterFilter('o1', ['o1'])).toBe('o1');

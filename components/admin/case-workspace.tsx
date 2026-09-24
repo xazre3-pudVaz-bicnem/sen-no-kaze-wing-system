@@ -1078,9 +1078,101 @@ export async function CaseWorkspace({
       )}
 
       {activeTab === 'disaster' && (
-        <FuturePanel title="災害時提供">
-          災害時の提供意思、完成個体、現在の供給可否、供給可能棟数を管理する正式データはまだありません。現在は供給可否を判定・集計しません。
-        </FuturePanel>
+        <section className="space-y-4" data-testid="case-tab-disaster">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">災害時提供</h2>
+                <Badge tone="neutral">未判定</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                案件情報から災害時提供を検討するための前提だけを確認します。現在は提供可否・供給可能棟数を判定しません。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <Link href={tabHref('handover')} className="btn-secondary btn-sm">
+                引渡し・アフターを確認
+              </Link>
+              <Link href={tabHref('production')} className="btn-secondary btn-sm">
+                製造・施工を確認
+              </Link>
+            </div>
+          </div>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-disaster-reference">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-semibold">提供検討の前提</h3>
+                <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
+                  参考情報
+                </span>
+              </div>
+              <span className="text-[0.65rem] text-muted">既存案件データから表示</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              以下は完成個体の在庫情報や現在地ではありません。案件の見積・設置予定情報を、災害時提供の検討材料として表示しています。
+            </p>
+
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">モデル</dt>
+                <dd className="mt-1 font-semibold">{quote.base_model_name}</dd>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">案件上の棟数</dt>
+                <dd className="mt-1 font-semibold">{caseUnitCount ?? '未登録'}</dd>
+                <p className="mt-1 text-[0.65rem] text-muted">供給可能棟数ではありません</p>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">設置予定地</dt>
+                <dd className="mt-1 font-semibold">{siteAddress}</dd>
+                <p className="mt-1 text-[0.65rem] text-muted">完成個体の現在地ではありません</p>
+              </div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3">
+                <dt className="text-xs text-muted">顧客・案件先</dt>
+                <dd className="mt-1 font-semibold">{customerCompany || customerName}</dd>
+                <p className="mt-1 text-[0.65rem] text-muted">提供意思は未登録</p>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-disaster-readiness">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">供給可否の確認項目</h3>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">正式管理は未実装</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              未登録を「提供不可」とは扱いません。正式実装時に、所有・契約関係、完成状態、現在地、移動可否などを確認したうえで供給可否を判定します。
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ['災害時の提供意思', '正式保存先なし'],
+                ['完成個体', '正式保存先なし'],
+                ['現在地', '正式保存先なし'],
+                ['移動・運搬可否', '正式保存先なし'],
+                ['即時提供可否', '正式保存先なし'],
+                ['供給可能棟数', '正式保存先なし'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
+                  <p className="text-xs font-semibold text-muted">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-disaster-future">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">正式な災害時供給管理</h3>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-ink-soft">
+              提供意思の同意・撤回、対象となる完成個体、現在地、移動・運搬条件、即時提供可否、供給可能棟数を保存・集計する正式機能はまだありません。
+              現在の案件棟数や設置予定地だけから「供給可能」と判定しません。
+            </p>
+          </section>
+        </section>
       )}
     </div>
   );

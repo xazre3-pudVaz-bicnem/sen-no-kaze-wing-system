@@ -175,7 +175,27 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('原本保管は未実装');
     expect(workspace).toContain('製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を保存する正式機能はまだありません。');
     expect(workspace).toContain('保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を保存する正式機能はまだありません。');
-    expect(workspace).toContain('現在は供給可否を判定・集計しません。');
+    expect(workspace).toContain('現在は提供可否・供給可能棟数を判定しません。');
+  });
+
+  it('shows disaster-supply prerequisites without inventing availability', () => {
+    expect(workspace).toContain('data-testid="case-tab-disaster"');
+    expect(workspace).toContain('data-testid="case-disaster-reference"');
+    expect(workspace).toContain('提供検討の前提');
+    expect(workspace).toContain('完成個体の在庫情報や現在地ではありません。');
+    expect(workspace).toContain('供給可能棟数ではありません');
+    expect(workspace).toContain('完成個体の現在地ではありません');
+    expect(workspace).toContain('提供意思は未登録');
+    expect(workspace).toContain('data-testid="case-disaster-readiness"');
+    expect(workspace).toContain('未登録を「提供不可」とは扱いません。');
+    expect(workspace).toContain("['災害時の提供意思', '正式保存先なし']");
+    expect(workspace).toContain("['完成個体', '正式保存先なし']");
+    expect(workspace).toContain("['現在地', '正式保存先なし']");
+    expect(workspace).toContain("['移動・運搬可否', '正式保存先なし']");
+    expect(workspace).toContain("['即時提供可否', '正式保存先なし']");
+    expect(workspace).toContain("['供給可能棟数', '正式保存先なし']");
+    expect(workspace).toContain('data-testid="case-disaster-future"');
+    expect(workspace).toContain('現在の案件棟数や設置予定地だけから「供給可能」と判定しません。');
   });
 
   it('shows handover prerequisites without inventing completion or aftercare records', () => {

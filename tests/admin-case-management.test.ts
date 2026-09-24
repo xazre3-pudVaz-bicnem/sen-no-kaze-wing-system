@@ -168,7 +168,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("plan: '図面・仕様'");
     expect(workspace).toContain("site: '現地確認'");
     expect(workspace).toContain("documents: '契約・資料'");
-    expect(workspace).toContain('isDealer ? null');
+    expect(workspace).toContain('const displayLabel = isDealer ? DEALER_TAB_LABELS[tabItem.key] : tabItem.label;');
+    expect(workspace).toContain('const referenceLabel =');
+    expect(workspace).toContain('? null');
     expect(workspace).toContain("quote.status === 'issued' && quote.revision === 1");
     expect(workspace).toContain('施工金額を見積へ反映');
     expect(workspace).toContain('お客様へ見積内容を案内');

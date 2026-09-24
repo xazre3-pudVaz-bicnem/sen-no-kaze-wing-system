@@ -41,6 +41,16 @@ const TABS = [
   { key: 'disaster', label: '災害時提供' },
 ] as const;
 
+const DEALER_TAB_LABELS: Record<(typeof TABS)[number]['key'], string> = {
+  estimate: '見積書',
+  plan: '図面・仕様',
+  site: '現地確認',
+  documents: '契約・資料',
+  production: '製造・施工',
+  handover: '引渡し・アフター',
+  disaster: '災害時提供',
+};
+
 type TabKey = (typeof TABS)[number]['key'];
 
 function isTabKey(value: string | undefined): value is TabKey {
@@ -168,6 +178,7 @@ export async function CaseWorkspace({
 
   const { quote, items, request } = detail;
   const isAdmin = actor.role === 'admin';
+  const isDealer = actor.role === 'dealer';
   const canManageAllQuotes = canEditCatalog(actor.role);
   const canEditBase = canEditCatalog(actor.role);
   if (!canManageAllQuotes && quote.dealer_id !== actor.id) notFound();
@@ -292,40 +303,89 @@ export async function CaseWorkspace({
       state: request ? 'done' : 'pending',
     },
     {
+      label: '概算見積',
+      value: '発行済み',
+      state: 'done',
+    },
+    {
       label: '担当決定',
       value: quote.dealer_id ? '割当済み' : '未割当',
       state: quote.dealer_id ? 'done' : 'pending',
     },
-    { label: '現地確認', value: '未対応', state: 'pending' },
     {
-      label: '見積',
-      value: QUOTE_STATUS_LABELS[quote.status],
-      state: quote.status === 'accepted' ? 'done' : 'current',
+      label: '現地確認',
+      value: quote.revision > 1 ? '完了記録なし' : '要確認',
+      state: quote.status === 'issued' && quote.revision === 1 && quote.dealer_id ? 'current' : 'pending',
+    },
+    {
+      label: '見積更新',
+      value: quote.status === 'accepted' ? '承諾済み' : `第${quote.revision}版`,
+      state: quote.status === 'accepted' ? 'done' : quote.status === 'issued' && quote.revision > 1 ? 'current' : 'pending',
     },
     {
       label: '契約',
       value: quote.status === 'accepted' ? '正式状態未登録' : '未対応',
       state: quote.status === 'accepted' ? 'current' : 'pending',
     },
-    { label: '製造', value: '未対応', state: 'pending' },
-    { label: '施工', value: '未対応', state: 'pending' },
+    { label: '製造・施工', value: '未対応', state: 'pending' },
     { label: '引渡し', value: '未対応', state: 'pending' },
     { label: 'アフター', value: '未対応', state: 'pending' },
   ] as const;
 
   const currentWorkflowLabel =
-    quote.status === 'accepted' ? '契約確認' : `見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+    quote.status === 'accepted'
+      ? '契約確認'
+      : quote.status === 'issued' && quote.revision === 1
+        ? '現地確認・施工金額入力'
+        : quote.status === 'issued'
+          ? '見積内容の確認・更新'
+          : `見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
     quote.status === 'accepted'
       ? '契約条件の確認'
-      : quote.status === 'issued'
-        ? '見積内容の判断'
-        : '—';
+      : quote.status === 'issued' && quote.revision === 1
+        ? '施工金額を見積へ反映'
+        : quote.status === 'issued'
+          ? 'お客様へ見積内容を案内'
+          : '—';
 
   const tabHref = (nextTab: TabKey) =>
     embedded
       ? buildInlineTabHref(quote.id, nextTab, listSearchParams)
       : `/admin/quotes/${quote.id}?tab=${nextTab}`;
+
+  const dealerNextAction = isDealer
+    ? quote.status === 'accepted'
+      ? {
+          title: '次にやること：契約内容を確認',
+          description:
+            'お客様は見積を承諾済みです。契約条件と資料を確認し、本部と次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
+          href: tabHref('documents'),
+          action: '契約・資料を確認',
+        }
+      : quote.status === 'issued' && quote.revision === 1
+        ? {
+            title: '次にやること：現地を確認して施工金額を入力',
+            description:
+              '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
+            href: tabHref('estimate'),
+            action: '施工金額を入力する',
+          }
+        : quote.status === 'issued'
+          ? {
+              title: '次にやること：見積内容を確認',
+              description:
+                '現地で決めた施工金額や変更内容を確認してください。修正があれば「見積内容を更新」から反映し、内容がよければお客様へ見積をご案内します。',
+              href: tabHref('estimate'),
+              action: '見積を確認・更新',
+            }
+          : {
+              title: '次にやること：案件の状態を確認',
+              description: `この案件は現在「${QUOTE_STATUS_LABELS[quote.status]}」です。見積内容と本部からの案内を確認してください。`,
+              href: tabHref('estimate'),
+              action: '見積書を確認',
+            }
+    : null;
 
   return (
     <div id="case-workspace" className="scroll-mt-3 space-y-2" data-testid="case-workspace">
@@ -380,6 +440,27 @@ export async function CaseWorkspace({
         </div>
       </section>
 
+      {dealerNextAction && (
+        <section
+          className="rounded-lg border-2 border-[#d9b65f] bg-[#fff9e9] p-4 shadow-sm"
+          data-testid="dealer-next-action"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-[#6f5518]">{dealerNextAction.title}</p>
+              <p className="mt-1 max-w-4xl text-sm leading-6 text-ink-soft">{dealerNextAction.description}</p>
+            </div>
+            <Link
+              href={dealerNextAction.href}
+              className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+              data-testid="dealer-next-action-link"
+            >
+              {dealerNextAction.action}
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" aria-label="案件工程" data-testid="case-workflow">
         <div className="grid grid-cols-3 gap-1 p-2 md:grid-cols-9">
           {workflow.map((step, index) => {
@@ -415,8 +496,11 @@ export async function CaseWorkspace({
         <div className="flex flex-wrap">
           {TABS.map((tabItem) => {
             const active = activeTab === tabItem.key;
+            const displayLabel = isDealer ? DEALER_TAB_LABELS[tabItem.key] : tabItem.label;
             const referenceLabel =
-              tabItem.key === 'documents'
+              isDealer
+                ? null
+                : tabItem.key === 'documents'
                 ? '参照'
                 : tabItem.key === 'disaster'
                   ? '未判定'
@@ -434,7 +518,7 @@ export async function CaseWorkspace({
                     : 'border-b-2 border-transparent px-3 py-2 text-[0.68rem] font-medium text-ink-soft hover:bg-sand/50'
                 }
               >
-                {tabItem.label}
+                {displayLabel}
                 {tabItem.key === 'estimate' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">第{quote.revision}版</span>}
                 {referenceLabel && (
                   <span className="ml-1 text-[0.56rem] text-muted">{referenceLabel}</span>

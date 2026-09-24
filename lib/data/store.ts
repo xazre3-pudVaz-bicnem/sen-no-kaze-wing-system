@@ -111,6 +111,8 @@ export interface QuoteDetail {
 
 export interface CasePlanConfigurationHeader {
   id: string;
+  /** 保存済みConfiguration名。案件タイトルとして使える場合だけ返す。 */
+  name?: string | null;
   base_model_id: string;
   status: Configuration['status'];
   finish_level: Configuration['finish_level'];

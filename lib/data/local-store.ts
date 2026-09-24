@@ -480,6 +480,7 @@ export class LocalStore implements DataStore {
       return {
         configuration: {
           id: configuration.id,
+          name: configuration.name,
           base_model_id: configuration.base_model_id,
           status: configuration.status,
           finish_level: configuration.finish_level,

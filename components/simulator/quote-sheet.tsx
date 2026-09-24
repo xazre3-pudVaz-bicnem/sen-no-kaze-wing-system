@@ -18,6 +18,8 @@ interface Props {
   options: ProductOption[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
+  /** 標準見積の管理プレビューで、現在選択中の商品カテゴリーを見積書から変更できるようにする */
+  allowStandardEstimateCategoryPick?: boolean;
   /** お客様向け見積シミュレーターでだけ、代理店検索の導線を表示する */
   showDealerFinder?: boolean;
 }
@@ -127,6 +129,7 @@ export function QuoteSheet({
   options,
   readOnly,
   onPickCategory,
+  allowStandardEstimateCategoryPick = false,
   showDealerFinder = false,
 }: Props) {
   const isMobile = useSyncExternalStore(
@@ -242,6 +245,47 @@ export function QuoteSheet({
     ? standardSectionHasDetails('sitework')
     : sitework.length > 0;
   const freeProductsHasDetails = freeLines.length > 0;
+
+  const standardPickerCategories = (lines: PricingResult['lines']) => {
+    const categoryIds = new Set(
+      lines
+        .map((line) => byOption.get(line.option_id)?.category_id)
+        .filter((categoryId): categoryId is string => Boolean(categoryId))
+    );
+    return categories.filter(
+      (category) =>
+        categoryIds.has(category.id) &&
+        category.code !== 'fireproof' &&
+        category.code !== 'exterior-wall'
+    );
+  };
+
+  const standardPickerRow = (lines: PricingResult['lines']) => {
+    if (!standardEstimate || readOnly || !allowStandardEstimateCategoryPick) return null;
+    const pickerCategories = standardPickerCategories(lines);
+    if (pickerCategories.length === 0) return null;
+
+    return (
+      <tr className="border-b border-line bg-amber-50/45">
+        <td colSpan={6} className="px-3 py-2 sm:px-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[0.68rem] font-semibold text-ink-soft">商品を変更</span>
+            {pickerCategories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => onPickCategory(category.id)}
+                className="inline-flex min-h-7 items-center rounded-full border border-amber-300 bg-white px-2.5 text-xs font-semibold text-ink-soft transition hover:border-brown hover:text-brown"
+              >
+                {category.code === 'ub' ? 'ユニットバス' : category.name}
+                <Pencil className="ml-1 size-3" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </td>
+      </tr>
+    );
+  };
 
   const standardLineRows = (code: 'interior_exterior' | 'option' | 'sitework') => {
     const section = standardSection(code);
@@ -362,6 +406,7 @@ export function QuoteSheet({
               />
             )}
             {interiorExteriorHasDetails && expandedSections.interiorExterior && standardEstimate && standardLineRows('interior_exterior')}
+            {interiorExteriorHasDetails && expandedSections.interiorExterior && standardPickerRow(displayInteriorExteriorLines)}
             {interiorExteriorHasDetails && expandedSections.interiorExterior && !standardEstimate && displayInteriorExteriorLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace =
@@ -417,6 +462,7 @@ export function QuoteSheet({
               />
             )}
             {optionHasDetails && expandedSections.options && standardEstimate && standardLineRows('option')}
+            {optionHasDetails && expandedSections.options && standardPickerRow(optionLines)}
             {optionHasDetails && expandedSections.options && !standardEstimate && optionLines.map((l) => {
               const cat = categories.find((c) => c.id === byOption.get(l.option_id)?.category_id);
               const isExteriorFace = l.category_code === 'exterior-wall' && l.code.includes('__face_');

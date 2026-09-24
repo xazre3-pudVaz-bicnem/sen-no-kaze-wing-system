@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -12,7 +12,7 @@ import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-di
 import { baseBreakdownTotal, buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
 import { computePricing } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
-import { categoriesInScope, defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
+import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, type RuleContext } from '@/lib/domain/rules';
 import { computeStandardEstimatePricing } from '@/lib/domain/standard-estimate-pricing';
 import { makeDefaultExteriorFaces } from '@/lib/domain/exterior-wall';
 import {
@@ -27,6 +27,7 @@ import { EquipmentBoard } from '@/components/simulator/equipment-board';
 import { ElevationStrip, PlanBoard } from '@/components/simulator/plan-board';
 import { PreviewStage } from '@/components/simulator/preview-stage';
 import { QuoteSheet } from '@/components/simulator/quote-sheet';
+import { OptionPickerDialog } from '@/components/simulator/option-picker-dialog';
 
 interface Props {
   bundle: CatalogBundle;
@@ -34,42 +35,143 @@ interface Props {
   template: EstimateTemplateBundle | null;
 }
 
-export function StandardEstimateSimulatorPreview({ bundle, specCode, template }: Props) {
+export function StandardEstimateSimulatorPreview(props: Props) {
+  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}`;
+  return <StandardEstimateSimulatorPreviewBody key={previewKey} {...props} />;
+}
+
+function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template }: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
+  const [picker, setPicker] = useState<string | null>(null);
   const { model } = bundle;
-  const ctx: RuleContext = {
-    options: bundle.options,
-    categories: bundle.categories,
-    dependencies: bundle.dependencies,
-    conflicts: bundle.conflicts,
-  };
-  const defaults = defaultSelection(ctx);
-  const choices = simulatorEstimateChoices(model, template ? [template] : []);
+  const ctx = useMemo<RuleContext>(
+    () => ({
+      options: bundle.options,
+      categories: bundle.categories,
+      dependencies: bundle.dependencies,
+      conflicts: bundle.conflicts,
+    }),
+    [bundle.categories, bundle.conflicts, bundle.dependencies, bundle.options]
+  );
+  const defaults = useMemo(() => defaultSelection(ctx), [ctx]);
+  const choices = useMemo(
+    () => simulatorEstimateChoices(model, template ? [template] : []),
+    [model, template]
+  );
   const choice = choices.find((row) => row.code === specCode) ?? null;
   const preset = choice?.preset ?? model.presets.find((row) => row.code === specCode) ?? null;
   const finishLevel = finishLevelForEstimateSpec(specCode);
 
-  const baselineIds = template
-    ? buildEstimateBaselineSelection(ctx, model, template)
-    : preset
-      ? buildPresetSelection(ctx, preset, defaults)
-      : buildEstimateSpecSelection(ctx, model, specCode);
-
-  const selected = pruneToScope(ctx, baselineIds, finishLevel);
-  const variantIds = defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, selected);
-  const baselineVariantIds = defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);
+  const baselineIds = useMemo(
+    () =>
+      template
+        ? buildEstimateBaselineSelection(ctx, model, template)
+        : preset
+          ? buildPresetSelection(ctx, preset, defaults)
+          : buildEstimateSpecSelection(ctx, model, specCode),
+    [ctx, defaults, model, preset, specCode, template]
+  );
+  const initialSelected = useMemo(
+    () => pruneToScope(ctx, baselineIds, finishLevel),
+    [baselineIds, ctx, finishLevel]
+  );
+  const initialVariantIds = useMemo(
+    () => defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, initialSelected),
+    [bundle.variantChoices, bundle.variantGroups, initialSelected]
+  );
+  const baselineVariantIds = useMemo(
+    () => defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds),
+    [baselineIds, bundle.variantChoices, bundle.variantGroups]
+  );
 
   const exteriorCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
-  const exteriorOptions = bundle.options
-    .filter((option) => option.category_id === exteriorCategory?.id && option.status === 'published')
-    .sort((a, b) => a.sort_order - b.sort_order);
-  const exteriorFaces = makeDefaultExteriorFaces(
-    exteriorOptions,
-    bundle.variantGroups,
-    bundle.variantChoices,
-    selected,
-    variantIds
+  const exteriorOptions = useMemo(
+    () =>
+      bundle.options
+        .filter((option) => option.category_id === exteriorCategory?.id && option.status === 'published')
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [bundle.options, exteriorCategory?.id]
   );
+  const initialExteriorFaces = useMemo(
+    () =>
+      makeDefaultExteriorFaces(
+        exteriorOptions,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        initialSelected,
+        initialVariantIds
+      ),
+    [bundle.variantChoices, bundle.variantGroups, exteriorOptions, initialSelected, initialVariantIds]
+  );
+  const [selected, setSelected] = useState(initialSelected);
+  const [variantIds, setVariantIds] = useState(initialVariantIds);
+  const [exteriorFaces, setExteriorFaces] = useState(initialExteriorFaces);
+
+  const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
+  const sameIds = (left: string[], right: string[]) => {
+    const a = [...new Set(left)].sort();
+    const b = [...new Set(right)].sort();
+    return a.length === b.length && a.every((id, index) => id === b[index]);
+  };
+  const previewChanged =
+    !sameIds(selected, initialSelected) || !sameIds(variantIds, initialVariantIds);
+
+  const openPicker = (categoryId: string) => {
+    const category = bundle.categories.find((row) => row.id === categoryId);
+    if (!category || category.code === 'fireproof' || category.code === 'exterior-wall') return;
+    setPicker(categoryId);
+  };
+
+  const applyPicker = (categoryId: string, nextInCategory: string[], nextVariants: string[] = []) => {
+    const inCategory = bundle.options.filter((option) => option.category_id === categoryId).map((option) => option.id);
+    let current = selected;
+
+    let pending = inCategory.filter((id) => current.includes(id) && !nextInCategory.includes(id));
+    while (pending.length > 0) {
+      const rest: string[] = [];
+      let progressed = false;
+      for (const id of pending) {
+        const result = toggleOption(ctx, current, id);
+        if (result.rejected) rest.push(id);
+        else {
+          current = result.next;
+          progressed = true;
+        }
+      }
+      if (!progressed) break;
+      pending = rest;
+    }
+
+    for (const id of inCategory) {
+      if (!nextInCategory.includes(id) || current.includes(id)) continue;
+      const result = toggleOption(ctx, current, id);
+      if (!result.rejected) current = result.next;
+    }
+
+    setSelected(current);
+
+    const categoryOptionIds = new Set(inCategory);
+    const categoryGroupIds = new Set(
+      bundle.variantGroups
+        .filter((group) => categoryOptionIds.has(group.option_id))
+        .map((group) => group.id)
+    );
+    setVariantIds((currentVariants) => [
+      ...currentVariants.filter((choiceId) => {
+        const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
+        return !groupId || !categoryGroupIds.has(groupId);
+      }),
+      ...nextVariants,
+    ]);
+    setPicker(null);
+  };
+
+  const resetPreview = () => {
+    setSelected(initialSelected);
+    setVariantIds(initialVariantIds);
+    setExteriorFaces(initialExteriorFaces);
+    setPicker(null);
+  };
 
   const standardEstimate = template
     ? computeStandardEstimatePricing(
@@ -172,10 +274,15 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
                 {displayModelName} / {specName}
               </h2>
               <p className="mt-1 text-xs text-muted">
-                シミュレーターの標準状態と同じ選択内容で、見積書を読み取り専用表示しています。
+                シミュレーターの標準状態を基準に、商品変更を画面内で試算できます。ここでの変更は保存されません。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {previewChanged && (
+                <button type="button" onClick={resetPreview} className="btn-ghost btn-sm">
+                  試算をリセット
+                </button>
+              )}
               {template && (
                 <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
                   標準見積を編集
@@ -188,6 +295,11 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
           </div>
 
           <div className="px-4 py-4 sm:px-5">
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
+              <strong className="font-semibold text-ink">画面内試算：</strong>
+              見積書内の「商品を変更」からユニットバス・トイレなどを選び直すと、商品変更差額とプランボードへ即時反映します。
+              正式保存・掛率・原価／粗利の確定は「標準見積を編集」側で行います。
+            </div>
             <QuoteSheet
               modelName={displayModelName}
               specName={specName}
@@ -196,8 +308,9 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
               standardEstimate={standardEstimate}
               categories={bundle.categories}
               options={bundle.options}
-              readOnly
-              onPickCategory={() => undefined}
+              readOnly={false}
+              allowStandardEstimateCategoryPick
+              onPickCategory={openPicker}
             />
           </div>
         </section>
@@ -264,6 +377,26 @@ export function StandardEstimateSimulatorPreview({ bundle, specCode, template }:
           </div>
         </section>
       </div>
+
+      {picker && (() => {
+        const category = bundle.categories.find((row) => row.id === picker);
+        if (!category) return null;
+        return (
+          <OptionPickerDialog
+            category={category}
+            options={scopedOptions.filter((option) => option.category_id === picker)}
+            selectedIds={selected}
+            baselineSelectedIds={baselineIds}
+            blocked={blocked}
+            variantGroups={bundle.variantGroups}
+            variantChoices={bundle.variantChoices}
+            selectedVariantIds={variantIds}
+            baselineVariantIds={baselineVariantIds}
+            onClose={() => setPicker(null)}
+            onApply={(nextSelected, nextVariants) => applyPicker(picker, nextSelected, nextVariants)}
+          />
+        );
+      })()}
     </SimulatorCaseImagesProvider>
   );
 }

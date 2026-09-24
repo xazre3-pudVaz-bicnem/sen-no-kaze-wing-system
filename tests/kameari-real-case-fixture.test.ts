@@ -72,6 +72,7 @@ describe('亀有実受注案件ローカルfixture', () => {
   it('保存Configurationへ防火・設備・外壁4面・設置地を持たせる', () => {
     const db = seedFixture();
     const configuration = db.configurations[0];
+    expect(configuration.name).toBe('パパマハロ様 葛飾2丁目貸家新築工事');
     expect(configuration.base_model_id).toBe('10000000-0000-4000-8000-000000000002');
     expect(configuration.spec_code).toBe('hotel-single');
     expect(configuration.status).toBe('closed');

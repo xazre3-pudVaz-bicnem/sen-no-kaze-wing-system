@@ -52,7 +52,7 @@ export default async function EstimateTemplateDetailPage({
   if (!bundle) notFound();
 
   const model = models.find((row) => row.id === template.base_model_id);
-  const categoryMap = new Map(categories.map((category) => [category.id, category]));
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
   const baseSection = bundle.sections.find((section) => section.code === 'base');
   const baseTotal = baseSection?.total ?? bundle.base_breakdown_items.reduce((sum, row) => sum + row.amount, 0);
 

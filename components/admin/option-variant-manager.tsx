@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from 'react';
 import {
+  deleteVariantChoiceAction,
+  deleteVariantGroupAction,
   saveVariantChoiceAction,
   saveVariantGroupAction,
   type AdminFormState,
@@ -13,6 +15,7 @@ import {
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 
 const initial: AdminFormState = { ok: false };
 
@@ -44,14 +47,17 @@ function GroupFields({
   choices: OptionVariantChoice[];
 }) {
   const [state, action, pending] = useActionState(saveVariantGroupAction, initial);
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteVariantGroupAction, initial);
   const [parentCode, setParentCode] = useState(group?.depends_on_group_code ?? '');
   const [customerVisible, setCustomerVisible] = useState(group?.status !== 'draft');
   const e = state.fieldErrors ?? {};
   const parent = groups.find((row) => row.code === parentCode && row.id !== group?.id) ?? null;
   const parentChoices = parent ? choices.filter((choice) => choice.group_id === parent.id) : [];
   const isNew = !group;
+  const groupChoiceCount = group ? choices.filter((choice) => choice.group_id === group.id).length : 0;
 
   return (
+    <div className="space-y-4">
     <form action={action} className="space-y-4" noValidate>
       <input type="hidden" name="id" value={group?.id ?? ''} />
       <input type="hidden" name="option_id" value={optionId} />
@@ -168,6 +174,36 @@ function GroupFields({
 
       <PendingButton pending={pending}>{isNew ? 'この選択項目を作成' : '選択項目を保存'}</PendingButton>
     </form>
+
+    {group && (
+      <div className="border-t border-line pt-4">
+        <ActionStatus state={deleteState} />
+        {groupChoiceCount === 0 ? (
+          <>
+            <p className="mb-3 text-xs text-muted">
+              選択肢がなく、保存済み仕様や別の表示条件で使われていない場合だけ削除できます。
+            </p>
+            <form action={deleteAction}>
+              <input type="hidden" name="option_id" value={optionId} />
+              <input type="hidden" name="id" value={group.id} />
+              <ConfirmSubmit
+                message={`「${group.name}」を削除しますか？`}
+                className="btn-ghost btn-sm text-danger"
+                disabled={deletePending}
+              >
+                {deletePending && <Spinner />}
+                この色・仕様を削除
+              </ConfirmSubmit>
+            </form>
+          </>
+        ) : (
+          <p className="text-xs text-muted">
+            この色・仕様を削除する場合は、先に不要な選択肢を削除してください。使用済みの選択肢は削除できません。
+          </p>
+        )}
+      </div>
+    )}
+    </div>
   );
 }
 
@@ -183,6 +219,7 @@ function ChoiceEditor({
   choiceCount: number;
 }) {
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteVariantChoiceAction, initial);
   const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
   const [customerVisible, setCustomerVisible] = useState(choice?.status !== 'draft');
   const e = state.fieldErrors ?? {};
@@ -218,7 +255,7 @@ function ChoiceEditor({
         </Field>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_10rem]">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_7rem] sm:items-start">
         <div className="space-y-4">
           <Field label="画像" htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} hint="任意。色見本・柄・仕様が分かる画像を登録できます">
             <Input
@@ -247,10 +284,10 @@ function ChoiceEditor({
           </div>
         </div>
 
-        <div className="rounded-lg border border-line bg-sand/40 p-2">
+        <div className="w-28 max-w-full justify-self-start rounded-lg border border-line bg-sand/40 p-2 sm:justify-self-end">
           {choice?.image_url ? (
             <div className="relative aspect-square overflow-hidden rounded-md bg-white">
-              <SmartImage src={choice.image_url} alt={choice.name} fill sizes="160px" className="object-contain" />
+              <SmartImage src={choice.image_url} alt={choice.name} fill sizes="112px" className="object-contain" />
             </div>
           ) : (
             <div className="flex aspect-square items-center justify-center rounded-md border border-dashed border-line bg-white px-2 text-center text-xs text-muted">
@@ -319,7 +356,28 @@ function ChoiceEditor({
         </span>
         <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? 'お客様に表示' : '非表示'}・編集</span>
       </summary>
-      <div className="border-t border-line p-4">{form}</div>
+      <div className="border-t border-line p-4">
+        {form}
+        <div className="mt-4 border-t border-line pt-4">
+          <ActionStatus state={deleteState} />
+          <p className="mb-3 text-xs text-muted">
+            保存済み仕様や別の表示条件で使われていない選択肢だけ削除できます。
+          </p>
+          <form action={deleteAction}>
+            <input type="hidden" name="option_id" value={optionId} />
+            <input type="hidden" name="group_id" value={group.id} />
+            <input type="hidden" name="id" value={choice.id} />
+            <ConfirmSubmit
+              message={`「${choice.name}」を削除しますか？`}
+              className="btn-ghost btn-sm text-danger"
+              disabled={deletePending}
+            >
+              {deletePending && <Spinner />}
+              この選択肢を削除
+            </ConfirmSubmit>
+          </form>
+        </div>
+      </div>
     </details>
   );
 }
@@ -437,7 +495,7 @@ export function OptionVariantManager({
       </details>
 
       <p className="text-xs text-muted">
-        使用済みの見積・保存仕様との整合を守るため、物理削除を行いません。不要になった項目や選択肢は「お客様に表示する」をOFFにして管理します。
+        未使用の色・仕様や選択肢は削除できます。保存済み仕様や表示条件で使用中のものは削除できないため、「お客様に表示する」をOFFにして管理します。
       </p>
     </section>
   );

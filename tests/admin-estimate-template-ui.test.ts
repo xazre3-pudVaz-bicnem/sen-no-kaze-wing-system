@@ -14,6 +14,10 @@ const simulatorPreview = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/standard-estimate-simulator-preview.tsx'),
   'utf8'
 );
+const quoteSheet = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/simulator/quote-sheet.tsx'),
+  'utf8'
+);
 const detailPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/[id]/page.tsx'),
   'utf8'
@@ -93,9 +97,18 @@ describe('見積テンプレート管理UI', () => {
     expect(simulatorPreview).toContain('baselineVariantIds');
     expect(simulatorPreview).toContain('平面図・完成イメージ・立面図・標準設備及び仕上げ表');
     expect(simulatorPreview).toContain('readOnly');
-    expect(simulatorPreview).toContain('シミュレーターの標準状態と同じ選択内容');
+    expect(simulatorPreview).toContain('シミュレーターの標準状態を基準に、商品変更を画面内で試算できます');
     expect(simulatorPreview).toContain('標準見積を編集');
     expect(simulatorPreview).toContain('シミュレーターで確認');
+    expect(simulatorPreview).toContain('<OptionPickerDialog');
+    expect(simulatorPreview).toContain('allowStandardEstimateCategoryPick');
+    expect(simulatorPreview).toContain('画面内試算');
+    expect(simulatorPreview).toContain('試算をリセット');
+    expect(simulatorPreview).toContain('explainBlocked');
+    expect(simulatorPreview).toContain('toggleOption');
+    expect(quoteSheet).toContain('allowStandardEstimateCategoryPick');
+    expect(quoteSheet).toContain('商品を変更');
+    expect(quoteSheet).toContain("category.code === 'ub' ? 'ユニットバス'");
   });
 
   it('新規作成画面は選択項目と参照本体を分かりやすくする', () => {

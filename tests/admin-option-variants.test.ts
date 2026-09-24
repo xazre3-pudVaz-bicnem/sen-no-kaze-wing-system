@@ -15,14 +15,6 @@ const editPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'),
   'utf8'
 );
-const supabaseStore = fs.readFileSync(
-  path.resolve(process.cwd(), 'lib/data/supabase-store.ts'),
-  'utf8'
-);
-const localStore = fs.readFileSync(
-  path.resolve(process.cwd(), 'lib/data/local-store.ts'),
-  'utf8'
-);
 
 describe('管理画面の色・仕様管理', () => {
   it('選択項目の入力を検証する', () => {
@@ -85,26 +77,12 @@ describe('管理画面の色・仕様管理', () => {
     expect(manager).not.toContain('色・仕様ごとの追加金額');
   });
 
-  it('未使用の色・仕様は削除でき、使用済みはサーバー側で保護する', () => {
-    expect(manager).toContain('この選択肢を削除');
-    expect(manager).toContain('この色・仕様を削除');
-    expect(manager).toContain("allowDelete={option.status === 'draft'}");
-    expect(manager).toContain('公開中の商品では選択肢を削除できません');
-    expect(manager).toContain('公開中の商品では色・仕様を削除できません');
-    expect(manager).toContain('公開中の商品、保存済み仕様、表示条件で使用中のものは削除できない');
+  it('履歴保護のため物理削除ではなくお客様非表示を使う', () => {
+    expect(manager).toContain('物理削除を行いません');
     expect(manager).toContain('label="お客様に表示する"');
     expect(manager).toContain("value={customerVisible ? 'published' : 'draft'}");
-    expect(actions).toContain('deleteVariantChoiceAction');
-    expect(actions).toContain('deleteVariantGroupAction');
-    expect(actions).toContain('await store.deleteVariantChoice(choiceId)');
-    expect(actions).toContain('await store.deleteVariantGroup(groupId)');
-    expect(supabaseStore).toContain(".contains('variant_choice_ids', [id])");
-    expect(supabaseStore).toContain("option.data.status !== 'draft'");
-    expect(supabaseStore).toContain('公開中の商品では選択肢を削除できません');
-    expect(supabaseStore).toContain('選択肢が残っているため削除できません');
-    expect(supabaseStore).toContain('別の選択項目の表示条件に使われているため削除できません');
-    expect(localStore).toContain('item.variant_choice_ids.includes(id)');
-    expect(localStore).toContain("option.status !== 'draft'");
+    expect(actions).not.toContain('deleteVariantChoiceAction');
+    expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
   it('色・仕様の画像プレビューは小さい固定サムネイルにする', () => {

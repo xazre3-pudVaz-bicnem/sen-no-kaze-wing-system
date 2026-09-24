@@ -103,7 +103,7 @@ describe('Admin quote Excel-like editor', () => {
   });
 
   it('keeps the immutable issued-quote lifecycle wording in edit mode', () => {
+    expect(form).toContain('この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。');
     expect(form).toContain('現在の版は履歴として残ります。');
-    expect(form).toContain('発行すると現在の版は上書きされず、履歴として残ります。');
   });
 });

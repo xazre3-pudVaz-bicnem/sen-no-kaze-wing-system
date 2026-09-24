@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
 import { QuoteReferenceDetails, QuoteTable } from '@/components/mypage/quote-table';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
@@ -24,6 +24,10 @@ export function QuoteEstimateSheet({
   startInEditMode?: boolean;
 }) {
   const [editing, setEditing] = useState(startInEditMode && canRevise);
+
+  useEffect(() => {
+    if (startInEditMode && canRevise) setEditing(true);
+  }, [startInEditMode, canRevise]);
 
   if (editing && canRevise) {
     return (

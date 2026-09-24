@@ -22,13 +22,20 @@ describe('管理画面の業務領域ナビゲーション', () => {
 
     expect(caseItems).toContain('問い合わせ受付');
     expect(settingItems).not.toContain('問い合わせ受付');
-    expect(settingItems).toEqual(['設定一覧', '操作マニュアル', 'ユーザー・権限', '変更履歴']);
+    expect(settingItems).toEqual(['設定一覧', '操作マニュアル', 'ユーザー・担当者', '変更履歴']);
   });
 
   it('管理設定ランディングにお問い合わせカードを残さない', () => {
     expect(settingsPage).not.toContain('href="/admin/contacts"');
-    for (const label of ['操作マニュアル', 'ユーザー・権限', '変更履歴']) {
+    for (const label of ['組織・代理店', 'ユーザー・担当者', '権限', '変更履歴', 'その他設定', '操作マニュアル']) {
       expect(settingsPage).toContain(label);
     }
+  });
+
+  it('管理設定の準備中項目を正式設定として誤表示しない', () => {
+    expect(settingsPage).toContain('準備中');
+    expect(settingsPage).toContain('正式な組織階層・地域権限の接続後に有効化します。');
+    expect(settingsPage).toContain('正式な権限テンプレートとRLS／ACL接続後に有効化します。');
+    expect(settingsPage).not.toContain('販売基準は「販売基準」から管理します。');
   });
 });

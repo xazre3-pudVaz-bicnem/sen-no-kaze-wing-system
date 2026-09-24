@@ -31,7 +31,13 @@ function selectionHref(
 }
 
 const LIST_GRID =
-  'grid grid-cols-[minmax(9rem,2fr)_4.25rem_5.75rem_7rem_4.25rem_7.5rem] items-center';
+  'grid grid-cols-[minmax(10rem,2fr)_6rem_7rem_5rem_6.5rem] items-center';
+
+const SAMPLE_PRICING = {
+  costTaxIncluded: 2_100_000,
+  saleTaxIncluded: 2_822_600,
+  marginRate: '25.6%',
+} as const;
 
 export default async function EstimateTemplatesPage({
   searchParams,
@@ -105,7 +111,7 @@ export default async function EstimateTemplatesPage({
   return (
     <AdminPage
       title="標準見積"
-      lead="シミュレーターで現在選択できる標準見積を一覧で確認し、登録済みの標準見積を管理します。"
+      lead="標準見積を一覧で確認・管理します。"
       actions={
         <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
           ＋ 新規標準見積を作成
@@ -113,16 +119,9 @@ export default async function EstimateTemplatesPage({
       }
     >
       <section className="card overflow-hidden">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
-          <div>
-            <h2 className="text-base font-semibold">標準見積一覧</h2>
-            <p className="mt-1 text-xs text-muted">
-              シミュレーターの「仕様を選ぶ」と同じ候補を、商品モデルごとに表示します。行を選ぶと下に見積書が表示されます。
-            </p>
-          </div>
-          <Link href="/admin/estimate-templates/demo" className="btn-secondary btn-sm">
-            操作確認用サンプル
-          </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+          <h2 className="text-base font-semibold">標準見積一覧</h2>
+          <span className="text-xs text-muted">{totalChoices}件</span>
         </div>
 
         <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
@@ -185,9 +184,11 @@ export default async function EstimateTemplatesPage({
           </div>
         </div>
 
-        <div className="border-b border-line bg-blue-50/60 px-4 py-2.5 text-xs text-navy sm:px-5">
-          防火仕様はシミュレーターでは標準見積とは別のプルダウンで選択するため、この一覧では「別選択」と表示します。
-          原価・粗利率は現在の旧標準見積データに正式値がないため推測しません。
+        <div className="border-b border-line bg-sand/10 px-4 py-2 text-[11px] text-muted sm:px-5">
+          <span className="font-semibold text-ink-soft">表示例（サンプル）</span>
+          <span className="ml-3">原価税込 {formatYen(SAMPLE_PRICING.costTaxIncluded)}</span>
+          <span className="ml-3">売価税込 {formatYen(SAMPLE_PRICING.saleTaxIncluded)}</span>
+          <span className="ml-3">粗利率 {SAMPLE_PRICING.marginRate}</span>
         </div>
 
         {groups.length > 0 ? (
@@ -195,7 +196,6 @@ export default async function EstimateTemplatesPage({
             <div className="min-w-[40rem]">
               <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-2 py-2 text-xs font-semibold text-ink-soft`}>
                 <div>見積名</div>
-                <div>防火</div>
                 <div className="text-right">原価税込</div>
                 <div className="text-right">売価税込</div>
                 <div className="text-right">粗利率</div>
@@ -217,9 +217,6 @@ export default async function EstimateTemplatesPage({
                         <span>{displayModelName}</span>
                         <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">
                           {group.choices.length}件
-                        </span>
-                        <span className="text-xs font-normal text-muted">
-                          {selectedGroup ? '選択中' : 'クリックで展開'}
                         </span>
                       </div>
                     </summary>
@@ -243,10 +240,6 @@ export default async function EstimateTemplatesPage({
                           >
                             <div className="min-w-0">
                               <span className="font-semibold text-ink">{choice.name}</span>
-                              <p className="mt-0.5 truncate text-xs text-muted">{choice.code}</p>
-                            </div>
-                            <div>
-                              <span className="text-xs text-muted">別選択</span>
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div className="text-right font-semibold">
@@ -258,7 +251,7 @@ export default async function EstimateTemplatesPage({
                                 <Badge tone="neutral">登録済み</Badge>
                               ) : (
                                 <span className="inline-flex rounded-full border border-line bg-sand/40 px-1.5 py-1 text-[0.7rem] font-semibold leading-tight text-muted">
-                                  シミュレーター候補
+                                  未登録
                                 </span>
                               )}
                             </div>
@@ -285,11 +278,6 @@ export default async function EstimateTemplatesPage({
           </div>
         )}
 
-        <div className="border-t border-line bg-sand/20 px-4 py-3 text-xs text-muted sm:px-5">
-          シミュレーター候補 {totalChoices}件。
-          「登録済み」は旧標準見積データが存在し、シミュレーターがその売価を基準に使用できる候補です。
-          未登録候補は現行シミュレーターの従来計算へフォールバックします。
-        </div>
       </section>
 
       {selected && selectedCatalog && (

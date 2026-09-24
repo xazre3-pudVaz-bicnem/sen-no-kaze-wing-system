@@ -731,15 +731,15 @@ export function DealerRevisionForm({
                 .map((row, index) => ({ row, index }))
                 .filter(({ row }) => row.kind !== 'installation')
                 .map(({ row, index }) => (
-                  <Fragment key={\`simple-hidden-\${row.key}\`}>
-                    <input type="hidden" name={\`items.\${index}.kind\`} value={row.kind} />
-                    <input type="hidden" name={\`items.\${index}.name\`} value={row.name} />
-                    <input type="hidden" name={\`items.\${index}.description\`} value={row.description} />
-                    <input type="hidden" name={\`items.\${index}.unit\`} value={row.unit} />
-                    <input type="hidden" name={\`items.\${index}.remark\`} value={row.remark} />
-                    <input type="hidden" name={\`items.\${index}.unit_price\`} value={row.unit_price} />
-                    <input type="hidden" name={\`items.\${index}.quantity\`} value={row.quantity} />
-                    <input type="hidden" name={\`items.\${index}.image_url\`} value={row.image_url ?? ''} />
+                  <Fragment key={`simple-hidden-${row.key}`}>
+                    <input type="hidden" name={`items.${index}.kind`} value={row.kind} />
+                    <input type="hidden" name={`items.${index}.name`} value={row.name} />
+                    <input type="hidden" name={`items.${index}.description`} value={row.description} />
+                    <input type="hidden" name={`items.${index}.unit`} value={row.unit} />
+                    <input type="hidden" name={`items.${index}.remark`} value={row.remark} />
+                    <input type="hidden" name={`items.${index}.unit_price`} value={row.unit_price} />
+                    <input type="hidden" name={`items.${index}.quantity`} value={row.quantity} />
+                    <input type="hidden" name={`items.${index}.image_url`} value={row.image_url ?? ''} />
                   </Fragment>
                 ))}
 
@@ -809,7 +809,7 @@ export function DealerRevisionForm({
                       <p className="mt-0.5 text-[0.62rem] text-muted">必要な項目だけ追加し、数量・売価・備考を入力します。</p>
                     </div>
                     <span className="rounded-full bg-white px-2 py-1 text-[0.62rem] font-semibold text-[#315745]">
-                      {siteworkRows.length > 0 ? \`\${siteworkRows.length}項目\` : 'まだ入力なし'}
+                      {siteworkRows.length > 0 ? `${siteworkRows.length}項目` : 'まだ入力なし'}
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5" data-testid="site-work-checklist">
@@ -847,13 +847,13 @@ export function DealerRevisionForm({
                       </thead>
                       <tbody className="divide-y divide-line/70">
                         {siteworkRows.map(({ row: r, index: i }) => (
-                          <tr key={r.key} className="bg-white" data-testid={\`site-work-row-\${i}\`}>
+                          <tr key={r.key} className="bg-white" data-testid={`site-work-row-${i}`}>
                             <td className="p-0">
-                              <input type="hidden" name={\`items.\${i}.kind\`} value={r.kind} />
-                              <input type="hidden" name={\`items.\${i}.description\`} value={r.description} />
-                              <input type="hidden" name={\`items.\${i}.image_url\`} value={r.image_url ?? ''} />
+                              <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
+                              <input type="hidden" name={`items.${i}.description`} value={r.description} />
+                              <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
                               <Input
-                                name={\`items.\${i}.name\`}
+                                name={`items.${i}.name`}
                                 value={r.name}
                                 onChange={(event) => update(r.key, { name: event.target.value })}
                                 className={cellInputClass}
@@ -865,13 +865,13 @@ export function DealerRevisionForm({
                             </td>
                             <td className="p-0">
                               <Input
-                                name={\`items.\${i}.quantity\`}
+                                name={`items.${i}.quantity`}
                                 type="number"
                                 min={0.01}
                                 step="any"
                                 value={r.quantity}
                                 onChange={(event) => update(r.key, { quantity: Number(event.target.value) })}
-                                className={\`\${cellInputClass} text-right\`}
+                                className={`${cellInputClass} text-right`}
                                 data-revision-col="quantity"
                                 onKeyDown={handleSheetKeyDown}
                                 onFocus={(event) => event.currentTarget.select()}
@@ -879,7 +879,7 @@ export function DealerRevisionForm({
                             </td>
                             <td className="p-0">
                               <Input
-                                name={\`items.\${i}.unit\`}
+                                name={`items.${i}.unit`}
                                 value={r.unit}
                                 onChange={(event) => update(r.key, { unit: event.target.value })}
                                 className={cellInputClass}
@@ -890,13 +890,13 @@ export function DealerRevisionForm({
                             </td>
                             <td className="p-0">
                               <Input
-                                name={\`items.\${i}.unit_price\`}
+                                name={`items.${i}.unit_price`}
                                 type="number"
                                 min={0}
                                 step={1000}
                                 value={r.unit_price}
                                 onChange={(event) => update(r.key, { unit_price: Number(event.target.value) })}
-                                className={\`\${cellInputClass} text-right\`}
+                                className={`${cellInputClass} text-right`}
                                 data-revision-col="sale"
                                 onKeyDown={handleSheetKeyDown}
                                 onFocus={(event) => event.currentTarget.select()}
@@ -905,7 +905,7 @@ export function DealerRevisionForm({
                             <td className="bg-[#fafbf9] px-2 py-1 text-right font-semibold tabular-nums">{formatYen(amountOf(r))}</td>
                             <td className="p-0">
                               <Input
-                                name={\`items.\${i}.remark\`}
+                                name={`items.${i}.remark`}
                                 value={r.remark}
                                 onChange={(event) => update(r.key, { remark: event.target.value })}
                                 className={cellInputClass}
@@ -922,7 +922,7 @@ export function DealerRevisionForm({
                                   markDirty();
                                 }}
                                 className="rounded p-1 text-muted hover:bg-sand hover:text-warn"
-                                aria-label={\`\${r.name || '現地工事'}を削除\`}
+                                aria-label={`${r.name || '現地工事'}を削除`}
                               >
                                 <Trash2 className="size-3.5" aria-hidden="true" />
                               </button>

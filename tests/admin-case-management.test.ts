@@ -153,8 +153,29 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('/admin/quotes?');
   });
 
+  it('guides dealer users to the next concrete task without inventing completion state', () => {
+    expect(workspace).toContain("const isDealer = actor.role === 'dealer'");
+    expect(workspace).toContain('data-testid="dealer-next-action"');
+    expect(workspace).toContain('data-testid="dealer-next-action-link"');
+    expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
+    expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。');
+    expect(workspace).toContain('現地確認の完了状態そのものはまだ保存されません。');
+    expect(workspace).toContain('施工金額を入力する');
+    expect(workspace).toContain('次にやること：見積内容を確認');
+    expect(workspace).toContain('見積を確認・更新');
+    expect(workspace).toContain('次にやること：契約内容を確認');
+    expect(workspace).toContain('契約・資料を確認');
+    expect(workspace).toContain("plan: '図面・仕様'");
+    expect(workspace).toContain("site: '現地確認'");
+    expect(workspace).toContain("documents: '契約・資料'");
+    expect(workspace).toContain('isDealer ? null');
+    expect(workspace).toContain("quote.status === 'issued' && quote.revision === 1");
+    expect(workspace).toContain('施工金額を見積へ反映');
+    expect(workspace).toContain('お客様へ見積内容を案内');
+  });
+
   it('keeps the HTML-style workflow and tabs without inventing downstream workflow data', () => {
-    for (const label of ['案件受付', '担当決定', '現地確認', '見積', '契約', '製造', '施工', '引渡し', 'アフター']) {
+    for (const label of ['案件受付', '概算見積', '担当決定', '現地確認', '見積更新', '契約', '製造・施工', '引渡し', 'アフター']) {
       expect(workspace).toContain(label);
     }
     for (const label of ['見積書', 'プランボード', '現地条件', '契約・図面・資料', '製造・施工', '引渡し・アフター', '災害時提供']) {

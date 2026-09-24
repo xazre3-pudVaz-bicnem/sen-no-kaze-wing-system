@@ -38,7 +38,7 @@ export function QuoteEstimateSheet({
           onCancel={() => setEditing(false)}
         />
         <div className="overflow-hidden rounded-lg border border-line bg-white shadow-sm">
-          <QuoteReferenceDetails quote={quote} items={items} />
+          <QuoteReferenceDetails quote={quote} items={items} showSelectedImages={false} />
         </div>
       </div>
     );
@@ -59,7 +59,13 @@ export function QuoteEstimateSheet({
         </div>
       )}
       <div className="overflow-x-auto">
-        <QuoteTable quote={quote} items={items} totalTestId="admin-quote-total" showBaseDetail />
+        <QuoteTable
+          quote={quote}
+          items={items}
+          totalTestId="admin-quote-total"
+          showBaseDetail
+          showSelectedImages={false}
+        />
       </div>
     </div>
   );

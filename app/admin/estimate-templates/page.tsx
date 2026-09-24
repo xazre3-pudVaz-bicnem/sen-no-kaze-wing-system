@@ -31,7 +31,7 @@ function selectionHref(
 }
 
 const LIST_GRID =
-  'grid grid-cols-[minmax(12rem,2fr)_8rem_9rem_9rem_6rem_9rem] items-center';
+  'grid grid-cols-[minmax(9rem,2fr)_4.25rem_5.75rem_7rem_4.25rem_7.5rem] items-center';
 
 export default async function EstimateTemplatesPage({
   searchParams,
@@ -126,58 +126,63 @@ export default async function EstimateTemplatesPage({
         </div>
 
         <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
-          <div className="flex flex-wrap items-center gap-2" aria-label="商品モデル">
-            <Link
-              href={filterHref('', qRaw)}
-              aria-current={!modelId ? 'page' : undefined}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                !modelId
-                  ? 'border-ink bg-ink text-white'
-                  : 'border-line bg-white text-ink hover:bg-sand'
-              }`}
-            >
-              すべて
-            </Link>
-            {simulatorModels.map((model) => {
-              const active = model.id === modelId;
-              return (
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-5">
+            <div className="shrink-0">
+              <p className="mb-1.5 text-xs font-semibold text-ink-soft">商品モデル</p>
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
                 <Link
-                  key={model.id}
-                  href={filterHref(model.id, qRaw)}
-                  aria-current={active ? 'page' : undefined}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                    active
-                      ? 'border-forest bg-forest text-white'
+                  href={filterHref('', qRaw)}
+                  aria-current={!modelId ? 'page' : undefined}
+                  className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                    !modelId
+                      ? 'border-ink bg-ink text-white'
                       : 'border-line bg-white text-ink hover:bg-sand'
                   }`}
                 >
-                  {model.name === 'フラット' ? 'Flat' : model.name}
+                  すべて
                 </Link>
-              );
-            })}
-          </div>
-
-          <form method="get" className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-            {modelId && <input type="hidden" name="model" value={modelId} />}
-            <label className="block min-w-0 flex-1">
-              <span className="label">検索</span>
-              <Input
-                type="search"
-                name="q"
-                defaultValue={sp.q ?? ''}
-                placeholder="見積名を検索"
-                className="mt-1 w-full"
-              />
-            </label>
-            <div className="flex gap-2">
-              <button type="submit" className="btn-secondary btn-sm">絞り込む</button>
-              {hasFilters && (
-                <Link href="/admin/estimate-templates" className="btn-ghost btn-sm">
-                  条件をクリア
-                </Link>
-              )}
+                {simulatorModels.map((model) => {
+                  const active = model.id === modelId;
+                  return (
+                    <Link
+                      key={model.id}
+                      href={filterHref(model.id, qRaw)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                        active
+                          ? 'border-forest bg-forest text-white'
+                          : 'border-line bg-white text-ink hover:bg-sand'
+                      }`}
+                    >
+                      {model.name === 'フラット' ? 'Flat' : model.name}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </form>
+
+            <form method="get" className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end lg:justify-end">
+              {modelId && <input type="hidden" name="model" value={modelId} />}
+              <label className="block min-w-0 flex-1 lg:max-w-xl">
+                <span className="mb-1.5 block text-xs font-semibold text-ink-soft">見積名</span>
+                <Input
+                  type="search"
+                  name="q"
+                  defaultValue={sp.q ?? ''}
+                  placeholder="見積名を検索"
+                  className="h-10 min-h-10 w-full px-3 text-sm"
+                />
+              </label>
+              <div className="flex shrink-0 gap-1.5">
+                <button type="submit" className="btn-secondary btn-sm min-h-10 px-4">絞り込む</button>
+                {hasFilters && (
+                  <Link href="/admin/estimate-templates" className="btn-ghost btn-sm min-h-10 px-3">
+                    クリア
+                  </Link>
+                )}
+              </div>
+            </form>
+          </div>
         </div>
 
         <div className="border-b border-line bg-blue-50/60 px-4 py-2.5 text-xs text-navy sm:px-5">
@@ -187,8 +192,8 @@ export default async function EstimateTemplatesPage({
 
         {groups.length > 0 ? (
           <div className="overflow-x-auto">
-            <div className="min-w-[58rem]">
-              <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-3 py-2 text-xs font-semibold text-ink-soft`}>
+            <div className="min-w-[40rem]">
+              <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-2 py-2 text-xs font-semibold text-ink-soft`}>
                 <div>見積名</div>
                 <div>防火</div>
                 <div className="text-right">原価税込</div>
@@ -230,9 +235,9 @@ export default async function EstimateTemplatesPage({
                             key={choice.code}
                             href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
                             aria-current={active ? 'true' : undefined}
-                            className={`${LIST_GRID} min-h-12 px-3 py-2 text-sm transition ${
+                            className={`${LIST_GRID} min-h-12 px-2 py-2 text-sm transition ${
                               active
-                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-2'
+                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-1'
                                 : 'bg-white hover:bg-sand/30'
                             }`}
                           >
@@ -245,14 +250,14 @@ export default async function EstimateTemplatesPage({
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div className="text-right font-semibold">
-                              {template ? formatYen(template.total) : <span className="text-xs font-normal text-muted">シミュレーターで算出</span>}
+                              {template ? formatYen(template.total) : <span className="text-xs font-normal leading-tight text-muted">シミュレーターで算出</span>}
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div>
                               {template ? (
                                 <Badge tone="neutral">登録済み</Badge>
                               ) : (
-                                <span className="inline-flex rounded-full border border-line bg-sand/40 px-2 py-1 text-xs font-semibold text-muted">
+                                <span className="inline-flex rounded-full border border-line bg-sand/40 px-1.5 py-1 text-[0.7rem] font-semibold leading-tight text-muted">
                                   シミュレーター候補
                                 </span>
                               )}

@@ -79,6 +79,11 @@ function matchSiteValue(text: string, pattern: RegExp, suffix = '') {
   return match?.[1] ? `${match[1]}${suffix}` : '未登録';
 }
 
+function extractCaseUnitCount(note: string | null) {
+  const match = note?.match(/([0-9]+)\s*(台|棟)/);
+  return match ? `${match[1]}${match[2]}` : null;
+}
+
 function buildSiteConditionCandidates(siteAddress: string, evidenceText: string) {
   const roadWidth = evidenceText.match(/道路幅員\s*[:：]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(mm|m)/i);
   const shadowRule =
@@ -179,7 +184,7 @@ export async function CaseWorkspace({
     store.listCategories(),
     store.listOptions(),
     store.getCasePlanConfiguration(quote.id, actor),
-    activeTab === 'documents' || activeTab === 'site'
+    activeTab === 'documents' || activeTab === 'site' || activeTab === 'plan'
       ? store.listCaseDocuments(quote.id, actor)
       : Promise.resolve([] as CaseDocument[]),
   ]);
@@ -226,7 +231,15 @@ export async function CaseWorkspace({
         (option.code === 'fire-proof' || option.code === 'fire-standard')
     )?.name ?? '未確認';
   const caseStructureNote = quote.dealer_note?.trim() || null;
-  const caseTitle = customerCompany || customerName;
+  const caseUnitCount = extractCaseUnitCount(caseStructureNote);
+  const caseTitle = casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName;
+  const caseFloorplanDocument =
+    caseDocuments.find((row) => row.kind === 'floorplan' && row.is_latest && row.preview_url) ??
+    caseDocuments.find((row) => row.kind === 'floorplan' && row.preview_url) ??
+    null;
+  const caseElevationDocuments = caseDocuments
+    .filter((row) => row.kind === 'elevation' && row.preview_url)
+    .sort((a, b) => a.sort_order - b.sort_order);
   const currentPhaseLabel = quote.status === 'accepted' ? '契約' : '正式見積';
   const siteEvidenceText = [
     request?.message ?? '',
@@ -244,6 +257,11 @@ export async function CaseWorkspace({
       if (specCode) {
         planEstimateTemplate = await store.getEstimateTemplateBundle(planBundle.model.id, specCode);
       }
+      const caseElevations = caseElevationDocuments.map((row) => ({
+        url: row.preview_url ?? '',
+        label: row.title,
+        alt: row.title,
+      }));
       const registeredElevations = planBundle.images
         .filter((image) => image.kind === 'elevation')
         .sort((a, b) => a.sort_order - b.sort_order)
@@ -253,11 +271,13 @@ export async function CaseWorkspace({
           alt: image.alt,
         }));
       planElevations =
-        registeredElevations.length > 0
-          ? registeredElevations
-          : planBundle.model.id === MODEL_WING01_ID
-            ? ELEVATIONS.map((row) => ({ ...row }))
-            : [];
+        caseElevations.length > 0
+          ? caseElevations
+          : registeredElevations.length > 0
+            ? registeredElevations
+            : planBundle.model.id === MODEL_WING01_ID
+              ? ELEVATIONS.map((row) => ({ ...row }))
+              : [];
     }
   }
 
@@ -349,6 +369,7 @@ export async function CaseWorkspace({
           <span><b className="text-white">担当</b> {assignedDealerName}</span>
           <span><b className="text-white">設置</b> {siteAddress}</span>
           <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
+          <span><b className="text-white">棟数</b> {caseUnitCount ?? '未登録'}</span>
           <span><b className="text-white">注文範囲</b> {FINISH_LEVEL_INFO[quote.finish_level].name}</span>
           <span><b className="text-white">防火仕様</b> {fireSelection}</span>
           <span className="min-w-0"><b className="text-white">案件構成</b> {caseStructureNote ?? '未登録'}</span>
@@ -525,6 +546,11 @@ export async function CaseWorkspace({
               exteriorFaces={casePlanConfiguration.exterior_faces}
               estimateTemplate={planEstimateTemplate}
               elevations={planElevations}
+              caseFloorplan={
+                caseFloorplanDocument?.preview_url
+                  ? { url: caseFloorplanDocument.preview_url, title: caseFloorplanDocument.title }
+                  : null
+              }
             />
           ) : (
             <Alert tone="warn">

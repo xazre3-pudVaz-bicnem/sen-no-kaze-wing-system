@@ -11,6 +11,7 @@ const list = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8
 const detail = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/page.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
+const casePlanBoard = fs.readFileSync(path.join(root, 'components/admin/case-plan-board.tsx'), 'utf8');
 const newQuote = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
 const configurations = fs.readFileSync(path.join(root, 'app/admin/configurations/page.tsx'), 'utf8');
 const contacts = fs.readFileSync(path.join(root, 'app/admin/contacts/page.tsx'), 'utf8');
@@ -95,10 +96,19 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('md:block');
     expect(workspace).toContain('案件設定');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
-    expect(workspace).toContain('const caseTitle = customerCompany || customerName');
+    expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName");
     expect(workspace).toContain('契約条件の確認');
     expect(workspace).toContain('未集計');
     expect(workspace).toContain("caseStructureNote ?? '未登録'");
+    expect(workspace).toContain('extractCaseUnitCount');
+    expect(workspace).toContain('<b className="text-white">棟数</b> {caseUnitCount ?? \'未登録\'}');
+    expect(workspace).toContain("activeTab === 'documents' || activeTab === 'site' || activeTab === 'plan'");
+    expect(workspace).toContain("row.kind === 'floorplan'");
+    expect(workspace).toContain("row.kind === 'elevation'");
+    expect(workspace).toContain('caseFloorplan={');
+    expect(casePlanBoard).toContain('caseFloorplan?: { url: string; title: string } | null');
+    expect(casePlanBoard).toContain("const planDisplayName = caseFloorplan ? '案件図面'");
+    expect(casePlanBoard).toContain('plan={displayedFloorplan}');
     expect(workspace).toContain('buildInlineTabHref');
     expect(workspace).toContain("query.set('case', quoteId)");
     expect(workspace).toContain('/admin/quotes?');

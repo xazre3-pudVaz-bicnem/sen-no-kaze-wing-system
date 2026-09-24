@@ -309,6 +309,19 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('標準品との差額は別途の計算で扱います');
   });
 
+  it('価格未確認の0円と正式な0円・別途見積を公開時に区別する', () => {
+    expect(forms).toContain('価格未確認なら0円のまま下書き保存できます');
+    expect(forms).toContain('単に価格が未確認なだけの場合は「別途見積」にせず');
+    expect(editPage).toContain('requiresZeroPriceConfirmation(option)');
+    expect(editPage).toContain('name="confirm_zero_price"');
+    expect(editPage).toContain('商品価格0円が正式な登録値であることを確認しました');
+    expect(adminActions).toContain("formData.get('confirm_zero_price') !== 'on'");
+    expect(adminActions).toContain('introducesUnconfirmedZeroPrice(existingOption, parsed.data)');
+    expect(adminActions).toContain('uploadedNewImage && image_url');
+    expect(adminActions).toContain('deleteUploadedImage(image_url)');
+    expect(adminActions).toContain('いったん「下書きへ戻す」で保存し、STEP 2で0円が正式価格であることを確認して再公開してください。');
+  });
+
   it('商品一覧は検索・カテゴリー・公開状態で絞り込める', () => {
     expect(listPage).toContain('name="q"');
     expect(listPage).toContain('name="category"');

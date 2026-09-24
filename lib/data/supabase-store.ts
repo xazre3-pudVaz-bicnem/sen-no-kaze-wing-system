@@ -654,6 +654,13 @@ export class SupabaseStore implements DataStore {
     if (existing.error) mapPgError(existing.error);
     if (!existing.data) return;
 
+    const option = await db.from('options').select('status').eq('id', existing.data.option_id).maybeSingle();
+    if (option.error) mapPgError(option.error);
+    if (!option.data) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
+    if (option.data.status !== 'draft') {
+      throw new StoreError('VALIDATION', '公開中の商品では色・仕様を削除できません。商品を下書きへ戻すか、「お客様に表示する」をOFFにしてください。');
+    }
+
     const choices = await db
       .from('option_variant_choices')
       .select('id', { count: 'exact', head: true })
@@ -703,6 +710,13 @@ export class SupabaseStore implements DataStore {
       .maybeSingle();
     if (parent.error) mapPgError(parent.error);
     if (parent.data) {
+      const option = await db.from('options').select('status').eq('id', parent.data.option_id).maybeSingle();
+      if (option.error) mapPgError(option.error);
+      if (!option.data) throw new StoreError('NOT_FOUND', '商品が見つかりません。');
+      if (option.data.status !== 'draft') {
+        throw new StoreError('VALIDATION', '公開中の商品では選択肢を削除できません。商品を下書きへ戻すか、「お客様に表示する」をOFFにしてください。');
+      }
+
       const dependentGroups = await db
         .from('option_variant_groups')
         .select('id, depends_on_choice_codes')

@@ -45,6 +45,14 @@ declare
   v_unit_price_raw numeric;
   v_unit_price integer;
   v_amount integer;
+  v_source_id uuid;
+  v_source_kind text;
+  v_source_name text;
+  v_source_unit text;
+  v_source_unit_price integer;
+  v_source_quantity numeric;
+  v_source_amount integer;
+  v_seen_source_ids uuid[] := '{}'::uuid[];
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -105,7 +113,60 @@ begin
     end if;
 
     v_unit_price := v_unit_price_raw::integer;
-    v_amount := round(v_unit_price * v_qty)::integer;
+
+    v_source_id := null;
+    v_source_kind := null;
+    v_source_name := null;
+    v_source_unit := null;
+    v_source_unit_price := null;
+    v_source_quantity := null;
+    v_source_amount := null;
+
+    if coalesce(r ->> 'source_item_id', '') <> '' then
+      begin
+        v_source_id := (r ->> 'source_item_id')::uuid;
+      exception when invalid_text_representation then
+        raise exception 'VALIDATION: 親明細IDが不正です' using errcode = 'P0001';
+      end;
+
+      if v_source_id = any(v_seen_source_ids) then
+        raise exception 'VALIDATION: 同じ親見積明細を複数行へ再利用することはできません' using errcode = 'P0001';
+      end if;
+      v_seen_source_ids := array_append(v_seen_source_ids, v_source_id);
+
+      select
+        qi.kind,
+        qi.name,
+        coalesce(nullif(qi.unit, ''), '式'),
+        qi.unit_price,
+        qi.quantity,
+        qi.amount
+      into
+        v_source_kind,
+        v_source_name,
+        v_source_unit,
+        v_source_unit_price,
+        v_source_quantity,
+        v_source_amount
+      from public.quote_items qi
+      where qi.id = v_source_id
+        and qi.quote_id = parent.id;
+
+      if not found then
+        raise exception 'VALIDATION: 親見積に存在しない明細が指定されています' using errcode = 'P0001';
+      end if;
+    end if;
+
+    if v_source_id is not null
+       and v_source_kind = v_kind
+       and v_source_name = coalesce(nullif(r ->> 'name', ''), '（名称未設定）')
+       and v_source_unit = coalesce(nullif(r ->> 'unit', ''), '式')
+       and v_source_unit_price = v_unit_price
+       and v_source_quantity = v_qty then
+      v_amount := v_source_amount;
+    else
+      v_amount := round(v_unit_price * v_qty)::integer;
+    end if;
 
     if v_unit_price < 0 and coalesce(r ->> 'name', '') <> '選択商品の変更差額' then
       raise exception 'VALIDATION: 通常明細の金額は0円以上で入力してください' using errcode = 'P0001';
@@ -192,6 +253,45 @@ begin
     v_qty := coalesce((r ->> 'quantity')::numeric, 1);
     v_unit_price := coalesce((r ->> 'unit_price')::numeric, 0)::integer;
 
+    v_source_id := nullif(r ->> 'source_item_id', '')::uuid;
+    v_source_kind := null;
+    v_source_name := null;
+    v_source_unit := null;
+    v_source_unit_price := null;
+    v_source_quantity := null;
+    v_source_amount := null;
+
+    if v_source_id is not null then
+      select
+        qi.kind,
+        qi.name,
+        coalesce(nullif(qi.unit, ''), '式'),
+        qi.unit_price,
+        qi.quantity,
+        qi.amount
+      into
+        v_source_kind,
+        v_source_name,
+        v_source_unit,
+        v_source_unit_price,
+        v_source_quantity,
+        v_source_amount
+      from public.quote_items qi
+      where qi.id = v_source_id
+        and qi.quote_id = parent.id;
+    end if;
+
+    if v_source_id is not null
+       and v_source_kind = (r ->> 'kind')
+       and v_source_name = coalesce(nullif(r ->> 'name', ''), '（名称未設定）')
+       and v_source_unit = coalesce(nullif(r ->> 'unit', ''), '式')
+       and v_source_unit_price = v_unit_price
+       and v_source_quantity = v_qty then
+      v_amount := v_source_amount;
+    else
+      v_amount := round(v_unit_price * v_qty)::integer;
+    end if;
+
     insert into public.quote_items(
       quote_id, kind, name, description, unit, remark, unit_price, quantity, amount, image_url, sort_order
     )
@@ -204,7 +304,7 @@ begin
       nullif(r ->> 'remark', ''),
       v_unit_price,
       v_qty,
-      round(v_unit_price * v_qty)::integer,
+      v_amount,
       nullif(r ->> 'image_url', ''),
       v_sort
     );

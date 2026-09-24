@@ -40,11 +40,13 @@ function GroupFields({
   group,
   groups,
   choices,
+  allowDelete,
 }: {
   optionId: string;
   group: OptionVariantGroup | null;
   groups: OptionVariantGroup[];
   choices: OptionVariantChoice[];
+  allowDelete: boolean;
 }) {
   const [state, action, pending] = useActionState(saveVariantGroupAction, initial);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteVariantGroupAction, initial);
@@ -178,7 +180,11 @@ function GroupFields({
     {group && (
       <div className="border-t border-line pt-4">
         <ActionStatus state={deleteState} />
-        {groupChoiceCount === 0 ? (
+        {!allowDelete ? (
+          <p className="text-xs text-muted">
+            公開中の商品では色・仕様を削除できません。不要な場合は「お客様に表示する」をOFFにするか、商品を下書きへ戻してから削除してください。
+          </p>
+        ) : groupChoiceCount === 0 ? (
           <>
             <p className="mb-3 text-xs text-muted">
               選択肢がなく、保存済み仕様や別の表示条件で使われていない場合だけ削除できます。
@@ -212,11 +218,13 @@ function ChoiceEditor({
   group,
   choice,
   choiceCount,
+  allowDelete,
 }: {
   optionId: string;
   group: OptionVariantGroup;
   choice: OptionVariantChoice | null;
   choiceCount: number;
+  allowDelete: boolean;
 }) {
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
   const [deleteState, deleteAction, deletePending] = useActionState(deleteVariantChoiceAction, initial);
@@ -360,22 +368,30 @@ function ChoiceEditor({
         {form}
         <div className="mt-4 border-t border-line pt-4">
           <ActionStatus state={deleteState} />
-          <p className="mb-3 text-xs text-muted">
-            保存済み仕様や別の表示条件で使われていない選択肢だけ削除できます。
-          </p>
-          <form action={deleteAction}>
-            <input type="hidden" name="option_id" value={optionId} />
-            <input type="hidden" name="group_id" value={group.id} />
-            <input type="hidden" name="id" value={choice.id} />
-            <ConfirmSubmit
-              message={`「${choice.name}」を削除しますか？`}
-              className="btn-ghost btn-sm text-danger"
-              disabled={deletePending}
-            >
-              {deletePending && <Spinner />}
-              この選択肢を削除
-            </ConfirmSubmit>
-          </form>
+          {allowDelete ? (
+            <>
+              <p className="mb-3 text-xs text-muted">
+                保存済み仕様や別の表示条件で使われていない選択肢だけ削除できます。
+              </p>
+              <form action={deleteAction}>
+                <input type="hidden" name="option_id" value={optionId} />
+                <input type="hidden" name="group_id" value={group.id} />
+                <input type="hidden" name="id" value={choice.id} />
+                <ConfirmSubmit
+                  message={`「${choice.name}」を削除しますか？`}
+                  className="btn-ghost btn-sm text-danger"
+                  disabled={deletePending}
+                >
+                  {deletePending && <Spinner />}
+                  この選択肢を削除
+                </ConfirmSubmit>
+              </form>
+            </>
+          ) : (
+            <p className="text-xs text-muted">
+              公開中の商品では選択肢を削除できません。不要な場合は「お客様に表示する」をOFFにするか、商品を下書きへ戻してから削除してください。
+            </p>
+          )}
         </div>
       </div>
     </details>
@@ -451,6 +467,7 @@ export function OptionVariantManager({
                         group={group}
                         choice={choice}
                         choiceCount={groupChoices.length}
+                        allowDelete={option.status === 'draft'}
                       />
                     ))
                   ) : (
@@ -467,6 +484,7 @@ export function OptionVariantManager({
                         group={group}
                         choice={null}
                         choiceCount={groupChoices.length}
+                        allowDelete={option.status === 'draft'}
                       />
                     </div>
                   </details>
@@ -475,7 +493,7 @@ export function OptionVariantManager({
                 <details className="rounded-xl border border-line bg-ivory/30 p-4">
                   <summary className="cursor-pointer text-sm font-semibold">この選択項目の名前・詳細設定</summary>
                   <div className="mt-4">
-                    <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
+                    <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} allowDelete={option.status === 'draft'} />
                   </div>
                 </details>
               </article>
@@ -490,12 +508,12 @@ export function OptionVariantManager({
           「カラー」「扉色」「浴槽色」など、お客様が選ぶ項目を追加します。
         </p>
         <div className="mt-5">
-          <GroupFields optionId={option.id} group={null} groups={groups} choices={choices} />
+          <GroupFields optionId={option.id} group={null} groups={groups} choices={choices} allowDelete={option.status === 'draft'} />
         </div>
       </details>
 
       <p className="text-xs text-muted">
-        未使用の色・仕様や選択肢は削除できます。保存済み仕様や表示条件で使用中のものは削除できないため、「お客様に表示する」をOFFにして管理します。
+        下書き商品の未使用の色・仕様や選択肢は削除できます。公開中の商品、保存済み仕様、表示条件で使用中のものは削除できないため、「お客様に表示する」をOFFにして管理します。
       </p>
     </section>
   );

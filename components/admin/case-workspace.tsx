@@ -41,16 +41,6 @@ const TABS = [
   { key: 'disaster', label: '災害時提供' },
 ] as const;
 
-const DEALER_TAB_LABELS: Record<(typeof TABS)[number]['key'], string> = {
-  estimate: '見積書',
-  plan: '図面・仕様',
-  site: '現地確認',
-  documents: '契約・資料',
-  production: '製造・施工',
-  handover: '引渡し・アフター',
-  disaster: '災害時提供',
-};
-
 type TabKey = (typeof TABS)[number]['key'];
 
 function isTabKey(value: string | undefined): value is TabKey {
@@ -178,7 +168,6 @@ export async function CaseWorkspace({
 
   const { quote, items, request } = detail;
   const isAdmin = actor.role === 'admin';
-  const isDealer = actor.role === 'dealer';
   const canManageAllQuotes = canEditCatalog(actor.role);
   const canEditBase = canEditCatalog(actor.role);
   if (!canManageAllQuotes && quote.dealer_id !== actor.id) notFound();
@@ -354,14 +343,14 @@ export async function CaseWorkspace({
       ? buildInlineTabHref(quote.id, nextTab, listSearchParams)
       : `/admin/quotes/${quote.id}?tab=${nextTab}`;
 
-  const dealerNextAction = isDealer
-    ? quote.status === 'accepted'
+  const nextAction =
+    quote.status === 'accepted'
       ? {
           title: '次にやること：契約内容を確認',
           description:
-            'お客様は見積を承諾済みです。契約条件と資料を確認し、本部と次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
+            'お客様は見積を承諾済みです。契約条件と資料を確認し、次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
           href: tabHref('documents'),
-          action: '契約・資料を確認',
+          action: '契約・図面・資料を確認',
         }
       : quote.status === 'issued' && quote.revision === 1
         ? {
@@ -381,11 +370,10 @@ export async function CaseWorkspace({
             }
           : {
               title: '次にやること：案件の状態を確認',
-              description: `この案件は現在「${QUOTE_STATUS_LABELS[quote.status]}」です。見積内容と本部からの案内を確認してください。`,
+              description: `この案件は現在「${QUOTE_STATUS_LABELS[quote.status]}」です。見積内容と案内を確認してください。`,
               href: tabHref('estimate'),
               action: '見積書を確認',
-            }
-    : null;
+            };
 
   return (
     <div id="case-workspace" className="scroll-mt-3 space-y-2" data-testid="case-workspace">
@@ -440,26 +428,24 @@ export async function CaseWorkspace({
         </div>
       </section>
 
-      {dealerNextAction && (
-        <section
-          className="rounded-lg border-2 border-[#d9b65f] bg-[#fff9e9] p-4 shadow-sm"
-          data-testid="dealer-next-action"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-base font-semibold text-[#6f5518]">{dealerNextAction.title}</p>
-              <p className="mt-1 max-w-4xl text-sm leading-6 text-ink-soft">{dealerNextAction.description}</p>
-            </div>
-            <Link
-              href={dealerNextAction.href}
-              className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
-              data-testid="dealer-next-action-link"
-            >
-              {dealerNextAction.action}
-            </Link>
+      <section
+        className="rounded-lg border-2 border-[#d9b65f] bg-[#fff9e9] p-4 shadow-sm"
+        data-testid="case-next-action"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-[#6f5518]">{nextAction.title}</p>
+            <p className="mt-1 max-w-4xl text-sm leading-6 text-ink-soft">{nextAction.description}</p>
           </div>
-        </section>
-      )}
+          <Link
+            href={nextAction.href}
+            className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+            data-testid="case-next-action-link"
+          >
+            {nextAction.action}
+          </Link>
+        </div>
+      </section>
 
       <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" aria-label="案件工程" data-testid="case-workflow">
         <div className="grid grid-cols-3 gap-1 p-2 md:grid-cols-9">
@@ -496,11 +482,8 @@ export async function CaseWorkspace({
         <div className="flex flex-wrap">
           {TABS.map((tabItem) => {
             const active = activeTab === tabItem.key;
-            const displayLabel = isDealer ? DEALER_TAB_LABELS[tabItem.key] : tabItem.label;
             const referenceLabel =
-              isDealer
-                ? null
-                : tabItem.key === 'documents'
+              tabItem.key === 'documents'
                 ? '参照'
                 : tabItem.key === 'disaster'
                   ? '未判定'
@@ -518,7 +501,7 @@ export async function CaseWorkspace({
                     : 'border-b-2 border-transparent px-3 py-2 text-[0.68rem] font-medium text-ink-soft hover:bg-sand/50'
                 }
               >
-                {displayLabel}
+                {tabItem.label}
                 {tabItem.key === 'estimate' && <span className="ml-1 text-[0.58rem] text-[#2f6b4f]">第{quote.revision}版</span>}
                 {referenceLabel && (
                   <span className="ml-1 text-[0.56rem] text-muted">{referenceLabel}</span>

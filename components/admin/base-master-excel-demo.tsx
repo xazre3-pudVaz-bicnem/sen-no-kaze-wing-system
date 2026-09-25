@@ -72,6 +72,12 @@ export function BaseMasterExcelDemo() {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [dirty, setDirty] = useState(false);
   const [selectedCell, setSelectedCell] = useState('選択したセルの内容を表示');
+  const [baseName, setBaseName] = useState('Wing ホテル仕様');
+  const [savedBaseName, setSavedBaseName] = useState('Wing ホテル仕様');
+  const [model, setModel] = useState('Wing');
+  const [savedModel, setSavedModel] = useState('Wing');
+  const [fireSpec, setFireSpec] = useState('非防火');
+  const [savedFireSpec, setSavedFireSpec] = useState('非防火');
   const [expenseRate, setExpenseRate] = useState(15);
   const [savedExpenseRate, setSavedExpenseRate] = useState(15);
 
@@ -113,6 +119,9 @@ export function BaseMasterExcelDemo() {
 
   const saveLocal = () => {
     setSavedSections(cloneSections(sections));
+    setSavedBaseName(baseName);
+    setSavedModel(model);
+    setSavedFireSpec(fireSpec);
     setSavedExpenseRate(expenseRate);
     setDirty(false);
   };
@@ -120,6 +129,9 @@ export function BaseMasterExcelDemo() {
   const resetToSaved = () => {
     if (dirty && !window.confirm('未保存の変更を破棄して、画面内の保存時点へ戻しますか？')) return;
     setSections(cloneSections(savedSections));
+    setBaseName(savedBaseName);
+    setModel(savedModel);
+    setFireSpec(savedFireSpec);
     setExpenseRate(savedExpenseRate);
     setCollapsed(new Set());
     setDirty(false);
@@ -257,14 +269,24 @@ export function BaseMasterExcelDemo() {
           <label className="flex min-w-[20rem] flex-1 items-center gap-2 px-4 py-2">
             <span className="whitespace-nowrap text-xs text-slate-500">本体名</span>
             <input
-              defaultValue="Wing ホテル仕様"
+              value={baseName}
               className="h-8 min-w-48 flex-1 rounded border border-slate-300 bg-white px-2 text-sm"
-              onChange={markDirty}
+              onChange={(event) => {
+                setBaseName(event.target.value);
+                markDirty();
+              }}
             />
           </label>
           <label className="flex items-center gap-2 px-4 py-2">
             <span className="whitespace-nowrap text-xs text-slate-500">モデル</span>
-            <select className="h-8 rounded border border-slate-300 bg-white px-2 text-sm" onChange={markDirty} defaultValue="Wing">
+            <select
+              className="h-8 rounded border border-slate-300 bg-white px-2 text-sm"
+              value={model}
+              onChange={(event) => {
+                setModel(event.target.value);
+                markDirty();
+              }}
+            >
               <option>Wing</option>
               <option>BOX</option>
               <option>Flat</option>
@@ -272,7 +294,14 @@ export function BaseMasterExcelDemo() {
           </label>
           <label className="flex items-center gap-2 px-4 py-2">
             <span className="whitespace-nowrap text-xs text-slate-500">防火仕様</span>
-            <select className="h-8 rounded border border-slate-300 bg-white px-2 text-sm" onChange={markDirty} defaultValue="非防火">
+            <select
+              className="h-8 rounded border border-slate-300 bg-white px-2 text-sm"
+              value={fireSpec}
+              onChange={(event) => {
+                setFireSpec(event.target.value);
+                markDirty();
+              }}
+            >
               <option>非防火</option>
               <option>防火</option>
             </select>
@@ -448,7 +477,8 @@ export function BaseMasterExcelDemo() {
                     <th className="bg-slate-100"></th>
                     <td></td>
                     <td className="px-3 py-1">{section.label} 計</td>
-                    <td></td><td></td>
+                    <td className="text-center">{isCollapsed ? '1' : ''}</td>
+                    <td className="text-center">{isCollapsed ? '式' : ''}</td>
                     <td className="px-3 text-right tabular-nums">{formatYen(sectionCost)}</td>
                     <td></td>
                     <td className="px-3 text-right tabular-nums">{formatYen(sectionSale)}</td>

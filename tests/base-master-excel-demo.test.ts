@@ -41,7 +41,15 @@ describe('本体マスター Excel風操作確認画面', () => {
     expect(demo).toContain('＋明細');
     expect(demo).toContain('保存時点に戻す');
     expect(demo).toContain('画面内でDraft保存');
+    expect(demo).toContain('setSavedBaseName(baseName)');
+    expect(demo).toContain('setSavedModel(model)');
+    expect(demo).toContain('setSavedFireSpec(fireSpec)');
+    expect(demo).toContain('setBaseName(savedBaseName)');
+    expect(demo).toContain('setModel(savedModel)');
+    expect(demo).toContain('setFireSpec(savedFireSpec)');
     expect(demo).toContain("isCollapsed ? '+' : '−'");
+    expect(demo).toContain("isCollapsed ? '1' : ''");
+    expect(demo).toContain("isCollapsed ? '式' : ''");
     expect(demo).toContain('UI確認版のため、公開・破棄は実行しません');
   });
 

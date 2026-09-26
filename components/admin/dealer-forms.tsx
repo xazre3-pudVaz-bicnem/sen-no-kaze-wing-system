@@ -40,6 +40,7 @@ export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Pr
 
 interface Row {
   key: string;
+  source_id: string | null;
   kind: RevisionItemKind;
   name: string;
   description: string;
@@ -81,6 +82,26 @@ const DEALER_KINDS: RevisionItemKind[] = [
   'free',
 ];
 
+const COMMON_SITEWORK_ITEMS = [
+  { key: 'transport', label: '運搬費' },
+  { key: 'foundation', label: '基礎工事' },
+  { key: 'electric', label: '電気工事' },
+  { key: 'plumbing', label: '給排水工事' },
+  { key: 'installation', label: '設置工事' },
+] as const;
+
+type CommonSiteworkKey = (typeof COMMON_SITEWORK_ITEMS)[number]['key'];
+
+function commonSiteworkKey(name: string): CommonSiteworkKey | null {
+  const normalized = name.replace(/\s+/g, '');
+  if (/運搬|運送/.test(normalized)) return 'transport';
+  if (/基礎/.test(normalized)) return 'foundation';
+  if (/電気/.test(normalized)) return 'electric';
+  if (/給排水/.test(normalized)) return 'plumbing';
+  if (/現場設置|^設置工事/.test(normalized)) return 'installation';
+  return null;
+}
+
 /**
  * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
  * 代理店は本体を閲覧のみ、オプション・別途等を編集可能。
@@ -94,6 +115,7 @@ export function DealerRevisionForm({
   canEditBase,
   sheetMode = false,
   onCancel,
+  siteHref,
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -106,6 +128,8 @@ export function DealerRevisionForm({
   sheetMode?: boolean;
   /** sheetMode時の編集終了 */
   onCancel?: () => void;
+  /** 現地条件タブへの参照リンク。正式な現地確認完了状態の代用にはしない。 */
+  siteHref?: string;
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
   const editable = (k: QuoteItem['kind']): k is RevisionItemKind =>
@@ -117,6 +141,7 @@ export function DealerRevisionForm({
       .filter((i) => editable(i.kind))
       .map((i, n) => ({
         key: `${i.id}-${n}`,
+        source_id: i.id,
         kind: i.kind as RevisionItemKind,
         name: i.name,
         description: i.description ?? '',
@@ -131,6 +156,7 @@ export function DealerRevisionForm({
   const defaultCollapsedSections = () => new Set<string>(['base', 'interior', 'option', 'free']);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(defaultCollapsedSections);
   const [scopeChangeMode, setScopeChangeMode] = useState(false);
+  const [dealerNote, setDealerNote] = useState(quote.dealer_note ?? '');
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
@@ -146,6 +172,56 @@ export function DealerRevisionForm({
   const tax = Math.floor(subtotal * quote.tax_rate);
   const editingTotal = subtotal + tax;
   const revisionDifference = editingTotal - quote.total;
+  const siteworkRows = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => row.kind === 'installation');
+  const siteworkKeys = new Set(
+    siteworkRows
+      .map(({ row }) => commonSiteworkKey(row.name))
+      .filter((key): key is CommonSiteworkKey => Boolean(key))
+  );
+  const originalEditableItems = items.filter((item) => editable(item.kind));
+  const currentBySourceId = new Map(
+    rows.filter((row) => row.source_id).map((row) => [row.source_id as string, row])
+  );
+  const changePreview: { key: string; label: string; delta: number | null }[] = [];
+
+  for (const original of originalEditableItems) {
+    const current = currentBySourceId.get(original.id);
+    if (!current) {
+      changePreview.push({
+        key: `removed-${original.id}`,
+        label: `${original.name}を削除`,
+        delta: -original.amount,
+      });
+      continue;
+    }
+    const changed =
+      current.kind !== original.kind ||
+      current.name !== original.name ||
+      current.description !== (original.description ?? '') ||
+      current.unit !== (original.unit ?? '式') ||
+      current.remark !== (original.remark ?? '') ||
+      current.unit_price !== original.unit_price ||
+      current.quantity !== original.quantity;
+    if (changed) {
+      changePreview.push({
+        key: `changed-${original.id}`,
+        label: `${current.name || original.name}を変更`,
+        delta: amountOf(current) - original.amount,
+      });
+    }
+  }
+  for (const row of rows.filter((item) => !item.source_id)) {
+    changePreview.push({
+      key: row.key,
+      label: `${row.name.trim() || '新しい項目'}を追加`,
+      delta: amountOf(row),
+    });
+  }
+  if (dealerNote !== (quote.dealer_note ?? '')) {
+    changePreview.push({ key: 'dealer-note', label: 'お客様への申し送りを変更', delta: null });
+  }
 
   const markDirty = () => setIsDirty(true);
   const update = (key: string, patch: Partial<Row>) => {
@@ -164,6 +240,7 @@ export function DealerRevisionForm({
     setRows(buildInitialRows());
     setCollapsedSections(defaultCollapsedSections());
     setScopeChangeMode(false);
+    setDealerNote(quote.dealer_note ?? '');
     setIsDirty(false);
   };
   const toggleScopeChangeMode = () => {
@@ -213,6 +290,7 @@ export function DealerRevisionForm({
     setRows((cur) =>
       insertByKind(cur, {
         key: `new-${cur.length}-${Date.now()}-${kind}`,
+        source_id: null,
         kind,
         name: preset?.name ?? '',
         description: preset?.description ?? '',
@@ -342,6 +420,7 @@ export function DealerRevisionForm({
             </button>
           </div>
 
+          {scopeChangeMode ? (
           <div className="max-h-[40rem] overflow-auto [scrollbar-width:thin]" data-testid="revision-sheet-scroll">
             <table className="w-full min-w-[52rem] text-sm" data-testid="revision-preview">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-left text-xs text-[#536771]">
@@ -668,6 +747,279 @@ export function DealerRevisionForm({
               </tfoot>
             </table>
           </div>
+          ) : (
+<div className="space-y-3 px-3 pb-3" data-testid="revision-simple-editor">
+              {rows
+                .map((row, index) => ({ row, index }))
+                .filter(({ row }) => row.kind !== 'installation')
+                .map(({ row, index }) => (
+                  <Fragment key={`simple-hidden-${row.key}`}>
+                    <input type="hidden" name={`items.${index}.kind`} value={row.kind} />
+                    <input type="hidden" name={`items.${index}.name`} value={row.name} />
+                    <input type="hidden" name={`items.${index}.description`} value={row.description} />
+                    <input type="hidden" name={`items.${index}.unit`} value={row.unit} />
+                    <input type="hidden" name={`items.${index}.remark`} value={row.remark} />
+                    <input type="hidden" name={`items.${index}.unit_price`} value={row.unit_price} />
+                    <input type="hidden" name={`items.${index}.quantity`} value={row.quantity} />
+                    <input type="hidden" name={`items.${index}.image_url`} value={row.image_url ?? ''} />
+                  </Fragment>
+                ))}
+
+              <section
+                className="overflow-hidden rounded-lg border border-line bg-white"
+                data-testid="confirmed-estimate-summary"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-[#f6f8f7] px-3 py-2">
+                  <div>
+                    <p className="text-xs font-semibold text-ink">確定済みの見積内容</p>
+                    <p className="mt-0.5 text-[0.62rem] text-muted">
+                      シミュレーター・前版で決まっている内容です。通常の現地工事入力では変更しません。
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleScopeChangeMode}
+                    data-testid="toggle-scope-change"
+                  >
+                    見積内容を変更
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 divide-x divide-y divide-line/70 sm:grid-cols-4">
+                  {[
+                    ['本体', baseTotal],
+                    ['内外装工事', interiorExteriorTotal],
+                    ['オプション', optionTotal],
+                    ['フリー商品', freeTotal],
+                  ].map(([label, amount]) => (
+                    <div key={String(label)} className="px-3 py-2">
+                      <p className="text-[0.62rem] text-muted">{label}</p>
+                      <p className="mt-0.5 text-sm font-semibold tabular-nums text-ink">{formatYen(Number(amount))}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section
+                className="rounded-lg border border-[#d8c787] bg-[#fffaf0] px-3 py-2.5"
+                data-testid="site-work-reference"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-[#6f5518]">現地確認をもとに入力</p>
+                    <p className="mt-0.5 text-[0.62rem] leading-5 text-ink-soft">
+                      搬入、基礎、電気、給排水、設置などを確認して入力します。現地確認の正式な完了状態はまだ保存されません。
+                    </p>
+                  </div>
+                  {siteHref && (
+                    <a href={siteHref} className="text-[0.68rem] font-semibold text-[#2f6b4f] underline underline-offset-2">
+                      現地条件を見る
+                    </a>
+                  )}
+                </div>
+              </section>
+
+              <section
+                className="overflow-hidden rounded-lg border border-[#9eb6a9] bg-white"
+                data-testid="site-work-editor"
+              >
+                <div className="border-b border-line bg-[#eef7f1] px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-[#245c45]">現地工事</p>
+                      <p className="mt-0.5 text-[0.62rem] text-muted">必要な項目だけ追加し、数量・売価・備考を入力します。</p>
+                    </div>
+                    <span className="rounded-full bg-white px-2 py-1 text-[0.62rem] font-semibold text-[#315745]">
+                      {siteworkRows.length > 0 ? `${siteworkRows.length}項目` : 'まだ入力なし'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5" data-testid="site-work-checklist">
+                    {COMMON_SITEWORK_ITEMS.map((item) => {
+                      const exists = siteworkKeys.has(item.key);
+                      return (
+                        <span
+                          key={item.key}
+                          className={
+                            exists
+                              ? 'rounded-full border border-[#b8d3c4] bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-[#2f6b4f]'
+                              : 'rounded-full border border-line bg-[#f7f8f8] px-2 py-0.5 text-[0.6rem] text-muted'
+                          }
+                        >
+                          {item.label}：{exists ? '入力あり' : '未追加'}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {siteworkRows.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[48rem] text-xs" data-testid="site-work-table">
+                      <thead className="bg-[#f7f9f8] text-left text-[0.64rem] text-muted">
+                        <tr>
+                          <th className="min-w-[14rem] px-2 py-1.5 font-semibold">品名</th>
+                          <th className="w-16 px-2 py-1.5 text-right font-semibold">数量</th>
+                          <th className="w-16 px-2 py-1.5 font-semibold">単位</th>
+                          <th className="w-24 px-2 py-1.5 text-right font-semibold">売価</th>
+                          <th className="w-28 px-2 py-1.5 text-right font-semibold">金額</th>
+                          <th className="w-40 px-2 py-1.5 font-semibold">備考</th>
+                          <th className="w-8 px-1 py-1.5"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line/70">
+                        {siteworkRows.map(({ row: r, index: i }) => (
+                          <tr key={r.key} className="bg-white" data-testid={`site-work-row-${i}`}>
+                            <td className="p-0">
+                              <input type="hidden" name={`items.${i}.kind`} value={r.kind} />
+                              <input type="hidden" name={`items.${i}.description`} value={r.description} />
+                              <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
+                              <Input
+                                name={`items.${i}.name`}
+                                value={r.name}
+                                onChange={(event) => update(r.key, { name: event.target.value })}
+                                className={cellInputClass}
+                                data-revision-col="name"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                                required
+                              />
+                            </td>
+                            <td className="p-0">
+                              <Input
+                                name={`items.${i}.quantity`}
+                                type="number"
+                                min={0.01}
+                                step="any"
+                                value={r.quantity}
+                                onChange={(event) => update(r.key, { quantity: Number(event.target.value) })}
+                                className={`${cellInputClass} text-right`}
+                                data-revision-col="quantity"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="p-0">
+                              <Input
+                                name={`items.${i}.unit`}
+                                value={r.unit}
+                                onChange={(event) => update(r.key, { unit: event.target.value })}
+                                className={cellInputClass}
+                                data-revision-col="unit"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="p-0">
+                              <Input
+                                name={`items.${i}.unit_price`}
+                                type="number"
+                                min={0}
+                                step={1000}
+                                value={r.unit_price}
+                                onChange={(event) => update(r.key, { unit_price: Number(event.target.value) })}
+                                className={`${cellInputClass} text-right`}
+                                data-revision-col="sale"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="bg-[#fafbf9] px-2 py-1 text-right font-semibold tabular-nums">{formatYen(amountOf(r))}</td>
+                            <td className="p-0">
+                              <Input
+                                name={`items.${i}.remark`}
+                                value={r.remark}
+                                onChange={(event) => update(r.key, { remark: event.target.value })}
+                                className={cellInputClass}
+                                data-revision-col="remark"
+                                onKeyDown={handleSheetKeyDown}
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                            </td>
+                            <td className="px-1 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRows((current) => current.filter((item) => item.key !== r.key));
+                                  markDirty();
+                                }}
+                                className="rounded p-1 text-muted hover:bg-sand hover:text-warn"
+                                aria-label={`${r.name || '現地工事'}を削除`}
+                              >
+                                <Trash2 className="size-3.5" aria-hidden="true" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t border-[#9eb6a9] bg-[#eef7f1] font-semibold">
+                          <td colSpan={4} className="px-2 py-1.5">現地工事計</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{formatYen(siteworkTotal)}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-muted">
+                    現地工事はまだ追加されていません。必要な項目だけ下から追加してください。
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-line bg-[#fafbf9] px-3 py-2">
+                  {COMMON_SITEWORK_ITEMS.filter((item) => !siteworkKeys.has(item.key)).map((item) => (
+                    <Button
+                      key={item.key}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => addRow('installation', { name: item.label, price: 0 })}
+                    >
+                      <Plus className="size-3.5" aria-hidden="true" />
+                      {item.label}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => addRow('installation')}
+                    data-testid="add-installation"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    その他の現地工事
+                  </Button>
+                </div>
+              </section>
+
+              <section
+                className="overflow-hidden rounded-lg border border-line bg-white"
+                data-testid="revision-change-preview"
+              >
+                <div className="border-b border-line bg-[#f7f9f8] px-3 py-2">
+                  <p className="text-xs font-semibold text-ink">今回の変更</p>
+                  <p className="mt-0.5 text-[0.62rem] text-muted">第{quote.revision + 1}版を発行する前の確認用です。</p>
+                </div>
+                {changePreview.length > 0 ? (
+                  <div className="divide-y divide-line/70">
+                    {changePreview.map((change) => (
+                      <div key={change.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+                        <span className="min-w-0 text-ink-soft">{change.label}</span>
+                        {change.delta !== null && (
+                          <span className="shrink-0 font-semibold tabular-nums text-ink">
+                            {change.delta > 0 ? '+' : ''}{formatYen(change.delta)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="px-3 py-3 text-xs text-muted">まだ変更はありません。</p>
+                )}
+              </section>
+            </div>
+          )}
         </>
       ): (
         <div className="overflow-x-auto">
@@ -721,75 +1073,89 @@ export function DealerRevisionForm({
           </table>
         </div>
       )}
-      <div className={sheetMode ? 'border-b border-line bg-[#fafbf9] px-3 py-2' : 'space-y-2'}>
-        <div className="flex flex-wrap items-center gap-2">
+      {sheetMode ? (
+        scopeChangeMode ? (
+          <div className="border-b border-line bg-[#fafbf9] px-3 py-2" data-testid="scope-change-actions">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={toggleScopeChangeMode}>
+                通常入力に戻す
+              </Button>
+              <span className="text-[0.65rem] font-semibold text-[#765d1f]">商品・仕様変更</span>
+              {catalog.length > 0 && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+                  <Plus className="size-4" aria-hidden="true" />
+                  商品台帳から追加
+                </Button>
+              )}
+              {canEditBase && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
+                  <Plus className="size-4" aria-hidden="true" />
+                  本体の行を追加
+                </Button>
+              )}
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
+                <Plus className="size-4" aria-hidden="true" />
+                内外装工事を追加
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
+                <Plus className="size-4" aria-hidden="true" />
+                オプションを追加
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation-detail">
+                <Plus className="size-4" aria-hidden="true" />
+                現地工事を追加
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
+                <Plus className="size-4" aria-hidden="true" />
+                フリー商品を追加
+              </Button>
+              {freeProducts.map((item) => (
+                <Button
+                  key={item.code}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => addRow('free', { name: item.name, price: item.price })}
+                  data-testid={`add-free-${item.code}`}
+                >
+                  ＋ {item.name}（{formatYen(item.price)}）
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {catalog.length > 0 && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+              <Plus className="size-4" aria-hidden="true" />
+              商品台帳から追加
+            </Button>
+          )}
           <Button type="button" variant="secondary" size="sm" onClick={() => addRow('installation')} data-testid="add-installation">
             <Plus className="size-4" aria-hidden="true" />
-            現地工事を追加
+            別途工事を追加
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={toggleScopeChangeMode}
-            data-testid="toggle-scope-change"
-          >
-            {scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'}
-          </Button>
-          {!scopeChangeMode && (
-            <span className="text-[0.65rem] text-muted">
-              本体・内外装・オプションは確認表示です。変更が必要な場合だけ「見積内容を変更」を開きます。
-            </span>
+          {canEditBase && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
+              <Plus className="size-4" aria-hidden="true" />
+              本体の行を追加
+            </Button>
           )}
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
+            <Plus className="size-4" aria-hidden="true" />
+            内外装工事の行を追加
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
+            <Plus className="size-4" aria-hidden="true" />
+            オプションの行を追加
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
+            <Plus className="size-4" aria-hidden="true" />
+            フリー商品を追加
+          </Button>
         </div>
-
-        {scopeChangeMode && (
-          <div
-            className="mt-2 flex flex-wrap gap-1.5 rounded-lg border border-[#ead6a9] bg-[#fffaf0] p-2"
-            data-testid="scope-change-actions"
-          >
-            <span className="w-full text-[0.65rem] font-semibold text-[#765d1f]">
-              商品・仕様変更
-            </span>
-            {catalog.length > 0 && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
-                <Plus className="size-4" aria-hidden="true" />
-                商品台帳から追加
-              </Button>
-            )}
-            {canEditBase && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => addRow('base')} data-testid="add-base">
-                <Plus className="size-4" aria-hidden="true" />
-                本体の行を追加
-              </Button>
-            )}
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('interior_exterior')} data-testid="add-interior-exterior">
-              <Plus className="size-4" aria-hidden="true" />
-              内外装工事を追加
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('option')} data-testid="add-option">
-              <Plus className="size-4" aria-hidden="true" />
-              オプションを追加
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => addRow('free')} data-testid="add-free">
-              <Plus className="size-4" aria-hidden="true" />
-              フリー商品を追加
-            </Button>
-            {freeProducts.map((f) => (
-              <Button
-                key={f.code}
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => addRow('free', { name: f.name, price: f.price })}
-                data-testid={`add-free-${f.code}`}
-              >
-                ＋ {f.name}（{formatYen(f.price)}）
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       <div className={sheetMode ? 'border-b border-line px-3 py-3' : 'space-y-5'}>
         <Field label="お客様への申し送り（任意）" htmlFor="dealer_note" hint="現地条件・工期・注意事項など。見積書の備考に入ります">
@@ -797,8 +1163,11 @@ export function DealerRevisionForm({
             id="dealer_note"
             name="dealer_note"
             rows={sheetMode ? 3 : 3}
-            defaultValue={quote.dealer_note ?? ''}
-            onChange={markDirty}
+            value={dealerNote}
+            onChange={(event) => {
+              setDealerNote(event.target.value);
+              markDirty();
+            }}
             className={sheetMode ? 'min-h-20 text-xs' : undefined}
           />
         </Field>

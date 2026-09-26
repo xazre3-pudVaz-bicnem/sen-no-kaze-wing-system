@@ -577,6 +577,7 @@ export async function CaseWorkspace({
             canEditBase={canEditBase}
             canRevise={canRevise}
             startInEditMode={Boolean(created) || edit === '1'}
+            siteHref={tabHref('site')}
           />
 
           <p className="text-xs leading-5 text-muted">

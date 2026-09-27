@@ -44,6 +44,12 @@ describe('Admin dashboard actions', () => {
     expect(dashboard).toContain("q.status === 'accepted' && q.revision > 1");
   });
 
+  it('routes revision 1 issued quotes to site confirmation before estimate editing', () => {
+    expect(dashboard).toContain("href: caseHref(siteWork[0].id, 'site')");
+    expect(dashboard).toContain("action: '現地確認を開く'");
+    expect(dashboard).not.toContain("href: caseHref(siteWork[0].id, 'estimate', true)");
+  });
+
   it('keeps accepted preliminary quotes out of contract confirmation and routes them back to site/final-quote work', () => {
     expect(dashboard).toContain("const acceptedPreliminary = mine.filter((q) => q.status === 'accepted' && q.revision === 1)");
     expect(dashboard).toContain("const accepted = mine.filter((q) => q.status === 'accepted' && q.revision > 1)");
@@ -51,7 +57,8 @@ describe('Admin dashboard actions', () => {
     expect(dashboard).toContain("const accepted = activeQuotes.filter((quote) => quote.status === 'accepted' && quote.revision > 1)");
     expect(dashboard).toContain("href: caseHref(acceptedPreliminary[0].id, 'site')");
     expect(dashboard).toContain("href: caseHref(accepted[0].id, 'documents')");
-    expect(dashboard).toContain('第1版の概算見積に承諾記録がありますが、契約工程には進めません。');
+    expect(dashboard).toContain('施工金額を反映した確定見積を作成します。');
+    expect(dashboard).not.toContain('施工金額を反映した改訂見積を作成します。');
   });
 
   it('does not invent unsupported deadlines or downstream workflow state', () => {

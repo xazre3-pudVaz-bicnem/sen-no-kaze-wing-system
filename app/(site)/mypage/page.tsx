@@ -252,7 +252,9 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                               <h3 className="text-xl">{configuration.name}</h3>
                               <Badge tone="navy">{quote ? quoteKindLabel(quote) : '見積依頼受付中'}</Badge>
                             </div>
-                            <p className="mt-1 text-sm text-muted">{nameOf.get(configuration.base_model_id) ?? quote?.base_model_name ?? '商品モデル'}</p>
+                            <p className="mt-1 text-sm text-muted">
+                              {nameOf.get(configuration.base_model_id) ?? quote?.base_model_name ?? '商品モデル'}
+                            </p>
                           </div>
                           {quote && (
                             <Link href={`/mypage/quotes/${quote.id}`} className="btn-primary btn-sm">
@@ -272,7 +274,9 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                           </div>
                           <div className="rounded-lg bg-[#f7f9f8] p-3">
                             <p className="text-xs text-muted">現在の見積</p>
-                            <p className="mt-1 font-semibold">{quote ? `${quoteKindLabel(quote)} ${formatYen(quote.total)}` : '準備中'}</p>
+                            <p className="mt-1 font-semibold">
+                              {quote ? `${quoteKindLabel(quote)} ${formatYen(quote.total)}` : '準備中'}
+                            </p>
                           </div>
                           <div className="rounded-lg bg-[#f7f9f8] p-3">
                             <p className="text-xs text-muted">担当代理店</p>
@@ -311,10 +315,9 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                   </article>
                 );
               })}
-              </div>
-            </details>
-          </section>
-        )}
+            </div>
+          )}
+        </section>
 
         <section className="mt-12" aria-labelledby="configs-heading" data-testid="saved-plan-section">
           <div className="flex items-center justify-between gap-3">
@@ -373,7 +376,11 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                         <span className="font-serif text-2xl">{formatYen(configuration.total)}</span>
                       </p>
                       <div className="mt-4 grid grid-cols-2 gap-2">
-                        <Link href={`/simulator/${slug}?c=${configuration.id}`} className="btn-primary btn-sm" data-testid="edit-link">
+                        <Link
+                          href={`/simulator/${slug}?c=${configuration.id}`}
+                          className="btn-primary btn-sm"
+                          data-testid="edit-link"
+                        >
                           <Pencil className="size-4" aria-hidden="true" />
                           編集を再開
                         </Link>
@@ -409,43 +416,53 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                 過去を含む見積を確認（{quotes.length}件）
               </summary>
               <div className="overflow-x-auto border-t border-line">
-              <table className="w-full min-w-[40rem] text-sm">
-                <thead className="bg-sand/60 text-left text-xs text-muted">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">見積番号</th>
-                    <th className="px-4 py-3 font-semibold">発行日</th>
-                    <th className="px-4 py-3 font-semibold">有効期限</th>
-                    <th className="px-4 py-3 font-semibold">モデル</th>
-                    <th className="px-4 py-3 text-right font-semibold">合計（税込）</th>
-                    <th className="px-4 py-3 font-semibold">状態</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {quotes.map((q) => (
-                    <tr key={q.id} data-testid="quote-row">
-                      <td className="px-4 py-3 font-mono">{q.quote_no}</td>
-                      <td className="px-4 py-3">{formatDate(q.issued_at)}</td>
-                      <td className="px-4 py-3">{formatDate(q.valid_until)}</td>
-                      <td className="px-4 py-3">{q.base_model_name}</td>
-                      <td className="px-4 py-3 text-right tabular-nums">{formatYen(q.total)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge tone={q.revision > 1 && q.status !== 'superseded' ? 'success' : 'neutral'}>{quoteKindLabel(q)}</Badge>
-                          <span className="text-xs text-ink-soft">{QUOTE_STATUS_LABELS[q.status]}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <Link href={`/mypage/quotes/${q.id}`} className="btn-ghost btn-sm">詳細</Link>
-                        <a href={`/api/quotes/${q.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm ml-1">PDF</a>
-                      </td>
+                <table className="w-full min-w-[40rem] text-sm">
+                  <thead className="bg-sand/60 text-left text-xs text-muted">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">見積番号</th>
+                      <th className="px-4 py-3 font-semibold">発行日</th>
+                      <th className="px-4 py-3 font-semibold">有効期限</th>
+                      <th className="px-4 py-3 font-semibold">モデル</th>
+                      <th className="px-4 py-3 text-right font-semibold">合計（税込）</th>
+                      <th className="px-4 py-3 font-semibold">状態</th>
+                      <th className="px-4 py-3"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {quotes.map((quote) => (
+                      <tr key={quote.id} data-testid="quote-row">
+                        <td className="px-4 py-3 font-mono">{quote.quote_no}</td>
+                        <td className="px-4 py-3">{formatDate(quote.issued_at)}</td>
+                        <td className="px-4 py-3">{formatDate(quote.valid_until)}</td>
+                        <td className="px-4 py-3">{quote.base_model_name}</td>
+                        <td className="px-4 py-3 text-right tabular-nums">{formatYen(quote.total)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge tone={quote.revision > 1 && quote.status !== 'superseded' ? 'success' : 'neutral'}>
+                              {quoteKindLabel(quote)}
+                            </Badge>
+                            <span className="text-xs text-ink-soft">{QUOTE_STATUS_LABELS[quote.status]}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <Link href={`/mypage/quotes/${quote.id}`} className="btn-ghost btn-sm">詳細</Link>
+                          <a
+                            href={`/api/quotes/${quote.id}/pdf`}
+                            target="_blank"
+                            rel="noopener"
+                            className="btn-secondary btn-sm ml-1"
+                          >
+                            PDF
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </section>
+        )}
       </Container>
     </Section>
   );

@@ -372,7 +372,7 @@ export async function CaseWorkspace({
           description:
             'お客様は見積を承諾済みです。契約条件と資料を確認し、次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
           href: tabHref('documents'),
-          action: '契約・図面・資料を確認',
+          action: '契約・資料を確認',
         }
       : isFormalAcceptedUnconfirmed
         ? {

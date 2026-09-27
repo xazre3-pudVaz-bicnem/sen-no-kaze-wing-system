@@ -136,24 +136,49 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
             </div>
 
             <div className="card mt-5 overflow-hidden">
-              <div className="grid grid-cols-2 gap-1 p-3 sm:grid-cols-4 lg:grid-cols-8">
-                {CUSTOMER_FLOW.map((label, index) => {
-                  const state = index < progress.index ? 'done' : index === progress.index ? 'current' : 'pending';
-                  const className =
-                    state === 'done'
-                      ? 'border-[#b8d3c4] bg-[#eef7f1] text-[#2f6b4f]'
-                      : state === 'current'
-                        ? 'border-[#e4c47f] bg-[#fff7df] text-[#8a5a20]'
-                        : 'border-line bg-[#f7f8f8] text-muted';
-                  return (
-                    <div key={label} className={`rounded-lg border px-2 py-2 text-center ${className}`}>
-                      <p className="text-xs font-semibold">
-                        {state === 'done' ? '✓ ' : state === 'current' ? '● ' : ''}
-                        {label}
-                      </p>
-                    </div>
-                  );
-                })}
+              <div className="overflow-x-auto p-3" data-testid="customer-progress-flow">
+                <div className="flex min-w-[50rem] items-stretch">
+                  {CUSTOMER_FLOW.map((label, index) => {
+                    const state = index < progress.index ? 'done' : index === progress.index ? 'current' : 'pending';
+                    const className =
+                      state === 'done'
+                        ? 'border-[#b8d3c4] bg-[#eef7f1] text-[#2f6b4f]'
+                        : state === 'current'
+                          ? 'border-[#d7aa4d] bg-[#fff4cf] text-[#765b11] ring-2 ring-[#e8cc88]/45'
+                          : 'border-line bg-[#f7f8f8] text-muted';
+                    const arrowClass =
+                      state === 'done'
+                        ? 'text-[#78a087]'
+                        : state === 'current'
+                          ? 'text-[#c59b43]'
+                          : 'text-[#c8cfcb]';
+                    return (
+                      <div key={label} className="flex min-w-0 flex-1 items-center">
+                        <div
+                          className={`flex min-h-[4.25rem] min-w-0 flex-1 flex-col items-center justify-center rounded-lg border px-2 py-2 text-center ${className}`}
+                          aria-current={state === 'current' ? 'step' : undefined}
+                        >
+                          <p className="text-xs font-semibold">
+                            {state === 'done' ? '✓ ' : state === 'current' ? '● ' : ''}
+                            {label}
+                          </p>
+                          {state === 'current' && (
+                            <span className="mt-1 rounded-full bg-white/75 px-2 py-0.5 text-[0.58rem] font-semibold">現在</span>
+                          )}
+                        </div>
+                        {index < CUSTOMER_FLOW.length - 1 && (
+                          <span
+                            className={`flex w-5 shrink-0 items-center justify-center text-base font-bold ${arrowClass}`}
+                            aria-hidden="true"
+                            data-testid="customer-progress-arrow"
+                          >
+                            →
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
               <div className="border-t border-line bg-[#fbfcfb] px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">

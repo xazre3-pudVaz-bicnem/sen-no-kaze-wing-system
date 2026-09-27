@@ -45,6 +45,19 @@ describe('Mypage customer progress flow', () => {
     expect(page).toContain('過去を含む見積を確認');
   });
 
+  it('prioritizes next action and progress before case summary, with a compact responsive image', () => {
+    expect(page).toContain('data-testid="active-case-image"');
+    expect(page).toContain('aspect-video');
+    expect(page).toContain('sm:aspect-[4/3]');
+    expect(page).toContain('sm:grid-cols-[15rem_minmax(0,1fr)]');
+    const nextActionIndex = page.indexOf('data-testid="active-case-next-action"');
+    const flowIndex = page.indexOf('data-testid="active-case-flow"');
+    const summaryIndex = page.indexOf('data-testid="active-case-summary"');
+    expect(nextActionIndex).toBeGreaterThan(-1);
+    expect(flowIndex).toBeGreaterThan(nextActionIndex);
+    expect(summaryIndex).toBeGreaterThan(flowIndex);
+  });
+
   it('shows only the saved installation location information that already exists', () => {
     expect(page).toContain('function siteLocationLabel');
     expect(page).toContain("if (configuration.site_location_undecided) return '未定'");

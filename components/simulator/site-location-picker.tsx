@@ -83,7 +83,7 @@ export function SiteLocationPicker({
         </select>
       </div>
       <p className="mt-1 text-[0.7rem] leading-relaxed text-ink-soft">
-        設置地域に応じて必要な仕様をご案内します。
+        設置予定地を選択してください。地域に応じた仕様は見積時に確認します。
       </p>
     </div>
   );

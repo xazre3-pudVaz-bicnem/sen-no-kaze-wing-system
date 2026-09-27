@@ -47,9 +47,9 @@ export const updatePasswordSchema = z
 export const profileSchema = z.object({
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: optional(20),
+  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
   postal_code: optional(10),
-  address: optional(200),
+  address: trimmed(200).min(1, '住所を入力してください'),
 });
 
 export const saveConfigurationSchema = z.object({

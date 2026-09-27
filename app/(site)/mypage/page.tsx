@@ -5,11 +5,63 @@ import { signOutAction } from '@/lib/actions/auth';
 import { duplicateConfigurationAction } from '@/lib/actions/configurations';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { ROLE_LABELS, canEditDealerItems, CONFIGURATION_STATUS_LABELS, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { ROLE_LABELS, canEditDealerItems, CONFIGURATION_STATUS_LABELS, QUOTE_STATUS_LABELS, type Quote } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge, ButtonLink, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { DeleteConfigurationButton } from '@/components/mypage/delete-button';
+
+const CUSTOMER_FLOW = [
+  'プラン作成',
+  '見積依頼',
+  '現地確認',
+  '確定見積',
+  'お客様確認',
+  '契約',
+  '製造・施工',
+  '引渡し・アフター',
+] as const;
+
+function customerProgress(quote: Quote | undefined) {
+  if (!quote) {
+    return {
+      index: 0,
+      title: 'プランを作成中です',
+      description: '仕様を確認し、内容が決まったら見積を依頼できます。',
+    };
+  }
+  if (quote.status === 'accepted') {
+    return {
+      index: 5,
+      title: '見積を承諾済みです',
+      description: '契約条件と必要資料について、担当からの案内をご確認ください。',
+    };
+  }
+  if (quote.status === 'declined' || quote.status === 'cancelled') {
+    return {
+      index: 4,
+      title: quote.status === 'declined' ? '今回は見送り済みです' : 'この見積はキャンセルされています',
+      description: '必要な場合は、保存したプランを複製して改めて検討できます。',
+    };
+  }
+  if (quote.revision > 1) {
+    return {
+      index: 4,
+      title: '確定見積をご確認ください',
+      description: '担当が現地条件と施工金額を反映した見積です。内容をご確認ください。',
+    };
+  }
+  return {
+    index: 2,
+    title: '現地条件を確認しています',
+    description: '現在は概算見積です。担当が現地条件を確認した後、施工金額を反映した確定見積をご案内します。',
+  };
+}
+
+function quoteKindLabel(quote: Quote) {
+  if (quote.status === 'superseded') return '旧版';
+  return quote.revision > 1 ? '確定見積' : '概算見積';
+}
 
 export default async function MypagePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser('/mypage');
@@ -24,6 +76,10 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
   ]);
   const slugOf = new Map(models.map((m) => [m.id, m.slug]));
   const nameOf = new Map(models.map((m) => [m.id, m.name]));
+  const latestQuote = quotes.find((quote) => quote.status !== 'superseded') ?? quotes[0];
+  const latestCaseConfiguration =
+    configurations.find((configuration) => configuration.id === latestQuote?.configuration_id) ?? configurations[0];
+  const progress = customerProgress(latestQuote);
 
   return (
     <Section className="py-10 sm:py-14">
@@ -63,17 +119,70 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
           {sp.error && <Alert tone="danger">{sp.error}</Alert>}
         </div>
 
+        {latestCaseConfiguration && (
+          <section className="mt-10" aria-labelledby="progress-heading" data-testid="customer-case-progress">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 id="progress-heading" className="text-2xl">案件の進み具合</h2>
+                <p className="mt-1 text-sm text-ink-soft">
+                  {latestCaseConfiguration.name} の現在地と、次に確認する内容です。
+                </p>
+              </div>
+              {latestQuote && (
+                <Link href={`/mypage/quotes/${latestQuote.id}`} className="btn-secondary btn-sm">
+                  見積を見る
+                </Link>
+              )}
+            </div>
+
+            <div className="card mt-5 overflow-hidden">
+              <div className="grid grid-cols-2 gap-1 p-3 sm:grid-cols-4 lg:grid-cols-8">
+                {CUSTOMER_FLOW.map((label, index) => {
+                  const state = index < progress.index ? 'done' : index === progress.index ? 'current' : 'pending';
+                  const className =
+                    state === 'done'
+                      ? 'border-[#b8d3c4] bg-[#eef7f1] text-[#2f6b4f]'
+                      : state === 'current'
+                        ? 'border-[#e4c47f] bg-[#fff7df] text-[#8a5a20]'
+                        : 'border-line bg-[#f7f8f8] text-muted';
+                  return (
+                    <div key={label} className={`rounded-lg border px-2 py-2 text-center ${className}`}>
+                      <p className="text-xs font-semibold">
+                        {state === 'done' ? '✓ ' : state === 'current' ? '● ' : ''}
+                        {label}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-line bg-[#fbfcfb] px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold text-ink">{progress.title}</p>
+                  {latestQuote && (
+                    <Badge tone={latestQuote.revision > 1 ? 'success' : 'neutral'}>
+                      {quoteKindLabel(latestQuote)}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-sm leading-6 text-ink-soft">{progress.description}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="mt-10" aria-labelledby="configs-heading">
           <div className="flex items-center justify-between">
-            <h2 id="configs-heading" className="text-2xl">保存したコンテナ</h2>
-            <ButtonLink href={models[0] ? `/simulator/${models[0].slug}` : '/products'} size="sm">
-              <Plus className="size-4" aria-hidden="true" />
-              新しく作る
-            </ButtonLink>
+            <h2 id="configs-heading" className="text-2xl">保存したプラン</h2>
+            {configurations.length > 0 && (
+              <ButtonLink href={models[0] ? `/simulator/${models[0].slug}` : '/products'} size="sm">
+                <Plus className="size-4" aria-hidden="true" />
+                新しく作る
+              </ButtonLink>
+            )}
           </div>
           {configurations.length === 0 ? (
             <div className="card mt-5 p-10 text-center">
-              <p className="text-ink-soft">保存したコンテナはまだありません。</p>
+              <p className="text-ink-soft">保存したプランはまだありません。</p>
               <ButtonLink href={models[0] ? `/simulator/${models[0].slug}` : '/products'} className="mt-5">見積シミュレーションを始める</ButtonLink>
             </div>
           ) : (
@@ -174,7 +283,12 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                       <td className="px-4 py-3">{formatDate(q.valid_until)}</td>
                       <td className="px-4 py-3">{q.base_model_name}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatYen(q.total)}</td>
-                      <td className="px-4 py-3"><Badge tone={q.status === 'issued' ? 'navy' : q.status === 'accepted' ? 'success' : 'neutral'}>{QUOTE_STATUS_LABELS[q.status]}</Badge></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge tone={q.revision > 1 && q.status !== 'superseded' ? 'success' : 'neutral'}>{quoteKindLabel(q)}</Badge>
+                          <span className="text-xs text-ink-soft">{QUOTE_STATUS_LABELS[q.status]}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <Link href={`/mypage/quotes/${q.id}`} className="btn-ghost btn-sm">詳細</Link>
                         <a href={`/api/quotes/${q.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm ml-1">PDF</a>

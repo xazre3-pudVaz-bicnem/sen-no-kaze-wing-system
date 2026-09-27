@@ -4,7 +4,6 @@ import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   canEditCatalog,
-  FINISH_LEVEL_INFO,
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
   ROLE_LABELS,
@@ -13,6 +12,7 @@ import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { CaseManagementNav } from '@/components/admin/case-management-nav';
 import { CaseWorkspace } from '@/components/admin/case-workspace';
+import { ClickableCaseRow } from '@/components/admin/clickable-case-row';
 import { matchesRegion, parseAddress, PREFECTURES, readRegionFilter } from '@/lib/domain/address';
 
 const SPEC_LABELS: Record<string, string> = {
@@ -196,11 +196,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   const request = requestByQuoteId.get(q.id);
                   const selected = q.id === selectedQuoteId;
                   return [
-                    <tr
+                    <ClickableCaseRow
                       key={`${q.id}-main`}
+                      href={caseSelectionHref(q.id, sp)}
                       className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
-                      data-testid="dealer-quote-row"
-                      data-selected={selected ? 'true' : undefined}
+                      testId="dealer-quote-row"
+                      selected={selected}
+                      ariaLabel={`${q.customer_name}の案件を開く`}
                     >
                       <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                         <div className="flex items-center gap-1.5">
@@ -222,11 +224,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request?.contact.site_address || '—'}</td>
                       <td className="px-2.5 py-1.5 align-top">
                         <strong>{q.base_model_name}</strong>
-                        <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[q.finish_level].name}</span>
                       </td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
-                    </tr>,
+                    </ClickableCaseRow>,
                     <tr
                       key={`${q.id}-meta`}
                       className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
@@ -472,11 +473,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   (!quote && request.id === selectedPendingRequest?.id);
 
                 return [
-                  <tr
+                  <ClickableCaseRow
                     key={`${request.id}-main`}
+                    href={quote ? caseSelectionHref(quote.id, sp) : requestSelectionHref(request.id, sp)}
                     className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
-                    data-testid="admin-quote-row"
-                    data-selected={selected ? 'true' : undefined}
+                    testId="admin-quote-row"
+                    selected={selected}
+                    ariaLabel={`${request.contact.full_name}の案件を開く`}
                   >
                     <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                       {quote ? (
@@ -524,11 +527,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request.contact.site_address || '—'}</td>
                     <td className="px-2.5 py-1.5 align-top">
                       <strong>{modelName ?? '—'}</strong>
-                      {specName ? (
-                        <span className="ml-1 text-[0.62rem] text-muted">{specName}</span>
-                      ) : quote ? (
-                        <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[quote.finish_level].name}</span>
-                      ) : null}
+                      {specName ? <span className="ml-1 text-[0.62rem] text-muted">{specName}</span> : null}
                     </td>
                     <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
@@ -536,7 +535,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">
                       {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
                     </td>
-                  </tr>,
+                  </ClickableCaseRow>,
                   <tr
                     key={`${request.id}-meta`}
                     className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
@@ -616,7 +615,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 <div><dt className="text-xs text-muted">案件・仕様名</dt><dd className="mt-0.5 font-semibold">{selectedPendingConfiguration?.name || '詳細未取得'}</dd></div>
                 <div><dt className="text-xs text-muted">本体</dt><dd className="mt-0.5 font-semibold">{selectedPendingModelName || '詳細未取得'}</dd></div>
                 <div><dt className="text-xs text-muted">仕様</dt><dd className="mt-0.5">{selectedPendingSpecName || '未登録'}</dd></div>
-                <div><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-0.5">{selectedPendingConfiguration ? FINISH_LEVEL_INFO[selectedPendingConfiguration.finish_level].name : '詳細未取得'}</dd></div>
               </dl>
               {!selectedPendingConfiguration && (
                 <p className="mt-2 text-xs leading-5 text-muted">

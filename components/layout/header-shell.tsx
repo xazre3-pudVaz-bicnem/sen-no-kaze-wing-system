@@ -64,7 +64,11 @@ export function HeaderShell({ items, user }: Props) {
   const solid = !overlay || scrolled || open;
   // isAdmin は「管理画面に入れる権限（代理店以上）」の意味
   const accountHref = user ? (user.isAdmin ? '/admin' : '/mypage') : '/login';
-  const accountLabel = user ? (user.isAdmin ? '管理画面' : 'マイページ') : '会員様ログイン';
+  const accountLabel = user
+    ? user.isAdmin
+      ? '管理画面'
+      : `${user.name}さん・マイページ`
+    : '会員様ログイン';
   const close = () => setOpen(false);
 
   return (
@@ -104,7 +108,7 @@ export function HeaderShell({ items, user }: Props) {
               Contact&nbsp;Us
             </Link>
             {/* 会員様ログインはヘッダー右端の金ボタン（2026-09-02 先方モック） */}
-            <Link href={accountHref} data-testid="hero-login" className="btn-gold btn-sm gap-1.5 px-3 text-[0.82rem] font-semibold whitespace-nowrap 2xl:text-sm" aria-label={accountLabel}>
+            <Link href={accountHref} data-testid="hero-login" className="btn-gold btn-sm max-w-[16rem] gap-1.5 px-3 text-[0.82rem] font-semibold whitespace-nowrap 2xl:text-sm" aria-label={accountLabel}>
               <UserRound className="size-4" aria-hidden="true" />
               {accountLabel}
             </Link>

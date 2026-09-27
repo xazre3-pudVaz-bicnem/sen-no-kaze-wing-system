@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Fragment } from 'react';
 import { ArrowRight, ImageOff } from 'lucide-react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
-import { FINISH_LEVEL_INFO, type Quote, type QuoteItem } from '@/lib/domain/types';
+import { type Quote, type QuoteItem } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 
 /**
@@ -79,7 +79,6 @@ export function QuoteReferenceDetails({
   showSelectedImages?: boolean;
 }) {
   const withImages = items.filter((item) => item.image_url);
-  const levelInfo = FINISH_LEVEL_INFO[quote.finish_level ?? 'full'];
 
   return (
     <>
@@ -90,9 +89,6 @@ export function QuoteReferenceDetails({
             {quote.dealer_note}
           </p>
         )}
-        <p data-testid="quote-scope">
-          <strong className="font-semibold">注文範囲：{levelInfo.name}（{levelInfo.short}）</strong> — {levelInfo.lead}
-        </p>
         <p>運搬、設置費など設置場所によって変動する費用は別途工事となっていて、現地の代理店、工務店にお問合せ下さい。</p>
         <Link href="/dealers" className="inline-flex items-center gap-1 font-semibold text-brown underline underline-offset-4">
           代理店・工務店を探す／お問い合わせ

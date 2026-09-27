@@ -146,15 +146,11 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   if (!canEditCatalog(actor.role)) {
     const mine = await store.listDealerQuotes(actor.id);
     const latest = mine.filter((q) => q.status !== 'superseded');
-    const details = await Promise.all(latest.map((q) => store.getQuote(q.id, actor)));
-    const requestByQuoteId = new Map(
-      details.flatMap((detail) => (detail?.request ? [[detail.quote.id, detail.request] as const] : []))
-    );
     const quoteTotal = latest.reduce((sum, quote) => sum + quote.total, 0);
-    const newCount = latest.filter((quote) => requestByQuoteId.get(quote.id)?.status === 'new').length;
+    const newCount = latest.filter((quote) => quote.request_status === 'new').length;
     const acceptedCount = latest.filter((quote) => quote.status === 'accepted').length;
     const requestedCase = sp.case && latest.some((quote) => quote.id === sp.case) ? sp.case : null;
-    const selectedQuoteId = requestedCase ?? latest[0]?.id ?? null;
+    const selectedQuoteId = requestedCase;
 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
@@ -193,7 +189,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               </thead>
               <tbody>
                 {latest.map((q) => {
-                  const request = requestByQuoteId.get(q.id);
                   const selected = q.id === selectedQuoteId;
                   return [
                     <ClickableCaseRow
@@ -218,10 +213,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       </td>
                       <td className="px-2.5 py-1.5 align-top">
                         <Badge tone={quoteStatusTone(q.status)}>{QUOTE_STATUS_LABELS[q.status]}</Badge>
-                        {request && <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</span>}
+                        {q.request_status && <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[q.request_status]}</span>}
                         <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(q.updated_at, true)}</span>
                       </td>
-                      <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request?.contact.site_address || '—'}</td>
+                      <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{q.site_address || '未登録'}</td>
                       <td className="px-2.5 py-1.5 align-top">
                         <strong>{q.base_model_name}</strong>
                       </td>
@@ -268,19 +263,15 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     );
   }
 
-  const [requests, quotes, configurations, models, profiles, contacts] = await Promise.all([
+  const [requests, quotes, dealers, savedCount, inquiryCount] = await Promise.all([
     store.listQuoteRequests(),
     store.listAllQuotes(),
-    actor.role === 'admin' ? store.listAllConfigurations() : Promise.resolve([]),
-    actor.role === 'admin' ? store.listModels({ includeDraft: true }) : Promise.resolve([]),
-    actor.role === 'admin' ? store.listProfiles() : Promise.resolve([]),
-    actor.role === 'admin' ? store.listContactMessages() : Promise.resolve([]),
+    actor.role === 'admin' ? store.listCaseDealers() : Promise.resolve([]),
+    actor.role === 'admin' ? store.getConfigurationCount() : Promise.resolve(0),
+    actor.role === 'admin' ? store.getNewContactMessageCount() : Promise.resolve(0),
   ]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
-  const configurationById = new Map(configurations.map((configuration) => [configuration.id, configuration]));
-  const modelNameById = new Map(models.map((model) => [model.id, model.name]));
-  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
-  const dealers = profiles.filter((profile) => profile.role_code === 'dealer' || profile.role_code === 'master_dealer');
+  const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer]));
 
   const filter = readRegionFilter(sp);
   const addrOf = (r: (typeof requests)[number]) => r.contact.site_address || r.contact.address || '';
@@ -301,9 +292,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     if (!matchesRegion(addrOf(request), filter)) return false;
 
     const quote = request.quote_id ? quoteById.get(request.quote_id) : undefined;
-    const configuration = configurationById.get(request.configuration_id);
-    const modelName = quote?.base_model_name ?? (configuration ? modelNameById.get(configuration.base_model_id) : undefined) ?? '';
-    const dealer = quote?.dealer_id ? profileById.get(quote.dealer_id) : undefined;
+    const modelName = quote?.base_model_name ?? request.configuration?.model_name ?? '';
+    const dealer = quote?.dealer_id ? dealerById.get(quote.dealer_id) : undefined;
     const dealerName = dealer?.company_name ?? dealer?.full_name ?? '';
 
     if (textQuery) {
@@ -340,8 +330,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const newCount = shown.filter((request) => request.status === 'new').length;
   const acceptedCount = shownQuotes.filter((quote) => quote.status === 'accepted').length;
   const filtersActive = Boolean(textQuery || statusFilter || dealerFilter || filter.block || filter.pref || filter.city);
-  const savedCount = configurations.length;
-  const inquiryCount = contacts.filter((contact) => contact.status === 'new').length;
 
   const selectableQuoteIds = new Set(shownQuotes.map((quote) => quote.id));
   const selectablePendingRequestIds = new Set(shown.filter((request) => !request.quote_id).map((request) => request.id));
@@ -351,13 +339,9 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const selectedPendingRequest = requestedPendingRequestId
     ? shown.find((request) => request.id === requestedPendingRequestId && !request.quote_id) ?? null
     : null;
-  const selectedQuoteId = selectedPendingRequest ? null : requestedCase ?? shownQuotes[0]?.id ?? null;
-  const selectedPendingConfiguration = selectedPendingRequest
-    ? configurationById.get(selectedPendingRequest.configuration_id)
-    : undefined;
-  const selectedPendingModelName = selectedPendingConfiguration
-    ? modelNameById.get(selectedPendingConfiguration.base_model_id)
-    : undefined;
+  const selectedQuoteId = selectedPendingRequest ? null : requestedCase;
+  const selectedPendingConfiguration = selectedPendingRequest?.configuration;
+  const selectedPendingModelName = selectedPendingConfiguration?.model_name;
   const selectedPendingSpecName = selectedPendingConfiguration?.spec_code
     ? (SPEC_LABELS[selectedPendingConfiguration.spec_code] ?? selectedPendingConfiguration.spec_code)
     : null;
@@ -460,12 +444,12 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             <tbody>
               {shown.map((request) => {
                 const quote = request.quote_id ? quoteById.get(request.quote_id) : undefined;
-                const configuration = configurationById.get(request.configuration_id);
-                const modelName = quote?.base_model_name ?? (configuration ? modelNameById.get(configuration.base_model_id) : undefined);
+                const configuration = request.configuration;
+                const modelName = quote?.base_model_name ?? configuration?.model_name;
                 const specName = configuration?.spec_code
                   ? (SPEC_LABELS[configuration.spec_code] ?? configuration.spec_code)
                   : null;
-                const dealer = quote?.dealer_id ? profileById.get(quote.dealer_id) : undefined;
+                const dealer = quote?.dealer_id ? dealerById.get(quote.dealer_id) : undefined;
                 const dealerName = dealer?.company_name ?? dealer?.full_name;
                 const updatedAt = quote?.updated_at ?? request.updated_at;
                 const selected =

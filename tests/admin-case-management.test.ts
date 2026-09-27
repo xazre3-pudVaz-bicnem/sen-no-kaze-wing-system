@@ -21,8 +21,62 @@ const configurations = fs.readFileSync(path.join(root, 'app/admin/configurations
 const contacts = fs.readFileSync(path.join(root, 'app/admin/contacts/page.tsx'), 'utf8');
 const notifications = fs.readFileSync(path.join(root, 'app/admin/notifications/page.tsx'), 'utf8');
 const adminActions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
+const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
+const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
+const schemaCompat = fs.readFileSync(path.join(root, 'lib/data/schema-compat.ts'), 'utf8');
+const dealerRequestMetaMigration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260927150000_dealer_quote_request_meta.sql'),
+  'utf8'
+);
 
 describe('Admin case management UI', () => {
+  it('keeps the case list payload small and defers case workspace loading until selection', () => {
+    expect(list).toContain('store.listQuoteRequests()');
+    expect(list).toContain('store.listAllQuotes()');
+    expect(list).toContain('store.listCaseDealers()');
+    expect(list).toContain('store.getConfigurationCount()');
+    expect(list).toContain('store.getNewContactMessageCount()');
+    expect(list).not.toContain('store.listAllConfigurations()');
+    expect(list).not.toContain('store.listModels({ includeDraft: true })');
+    expect(list).not.toContain('store.listProfiles()');
+    expect(list).not.toContain('store.listContactMessages()');
+    expect(list).not.toContain('latest.map((q) => store.getQuote(q.id, actor))');
+    expect(list).toContain('const selectedQuoteId = selectedPendingRequest ? null : requestedCase;');
+    expect(list).toContain('{selectedQuoteId ? (');
+  });
+
+  it('restores dealer request metadata through the list query without per-quote detail loading', () => {
+    expect(list).toContain("quote.request_status === 'new'");
+    expect(list).toContain('QUOTE_REQUEST_STATUS_LABELS[q.request_status]');
+    expect(list).toContain("q.site_address || '未登録'");
+    expect(list).not.toContain('q.address');
+    expect(list).not.toContain('latest.map((q) => store.getQuote(q.id, actor))');
+    expect(list).toContain("const selectedQuoteId = requestedCase;");
+    expect(store).toContain('export type DealerQuoteListItem');
+    expect(store).toContain('request_status: QuoteRequestStatus | null;');
+    expect(store).toContain('site_address: string | null;');
+    expect(supabaseStore).toContain("db.rpc('list_dealer_quote_request_meta')");
+    expect(supabaseStore).toContain('requestMetaByQuoteId');
+    expect(supabaseStore).toContain('if (requestMetaError && !isMissingFunction(requestMetaError)) mapPgError(requestMetaError);');
+    expect(supabaseStore).toContain('const requestMetaRows = requestMetaError ? [] : requestMeta ?? [];');
+    expect(supabaseStore).not.toContain('quote_requests!quotes_quote_request_id_fkey');
+    expect(schemaCompat).toContain('export function isMissingFunction');
+    expect(dealerRequestMetaMigration).toContain("security definer\nset search_path = ''");
+    expect(dealerRequestMetaMigration).toContain('q.dealer_id = (select auth.uid())');
+    expect(dealerRequestMetaMigration).toContain('(select public.is_dealer())');
+    expect(dealerRequestMetaMigration).toContain('join public.quote_requests as r on r.id = q.quote_request_id');
+    expect(dealerRequestMetaMigration).toContain("r.contact ->> 'site_address'");
+    expect(dealerRequestMetaMigration).not.toContain("r.contact ->> 'address'");
+    expect(dealerRequestMetaMigration).not.toContain('\n  address text');
+    expect(dealerRequestMetaMigration).not.toContain('r.message');
+    expect(dealerRequestMetaMigration).not.toContain('select r.*');
+    expect(dealerRequestMetaMigration).toContain('from public, anon, authenticated, service_role;');
+    expect(dealerRequestMetaMigration).toContain('alter function public.list_dealer_quote_request_meta() owner to postgres;');
+    expect(dealerRequestMetaMigration).toContain("'public.list_dealer_quote_request_meta()'::regprocedure");
+    expect(dealerRequestMetaMigration).toContain('DEALER_QUOTE_REQUEST_LIST_OWNER_INVALID');
+    expect(dealerRequestMetaMigration).toContain('grant execute on function public.list_dealer_quote_request_meta() to authenticated;');
+  });
+
   it('prioritizes the HTML case-management entrances while keeping existing routes', () => {
     for (const label of ['案件一覧', '保存済み仕様', '問い合わせ受付', 'お知らせ']) {
       expect(nav).toContain(label);

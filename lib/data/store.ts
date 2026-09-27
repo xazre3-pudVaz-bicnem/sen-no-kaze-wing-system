@@ -23,6 +23,7 @@ import type {
   CaseDocument,
   QuoteItem,
   QuoteRequest,
+  QuoteRequestStatus,
   RoleCode,
   ContactMessage,
   ContactStatus,
@@ -49,6 +50,19 @@ export class StoreError extends Error {
     this.name = 'StoreError';
   }
 }
+
+export type CaseDealer = Pick<Profile, 'id' | 'role_code' | 'full_name' | 'company_name'>;
+export type QuoteRequestListItem = QuoteRequest & {
+  quote_no: string | null;
+  user_email: string;
+  configuration: { name: string; spec_code: string | null; model_name: string | null } | null;
+};
+/** 代理店案件一覧用。依頼の状態と設置予定地だけを追加する。 */
+export type DealerQuoteListItem = Quote & {
+  user_email: string;
+  request_status: QuoteRequestStatus | null;
+  site_address: string | null;
+};
 
 export interface SaveConfigurationInput {
   id: string | null;
@@ -227,11 +241,18 @@ export interface DataStore {
   /** 案件資料のread-only一覧。正式な保存・版管理は別工程。 */
   listCaseDocuments(quoteId: string, actor: SessionUser): Promise<CaseDocument[]>;
   listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
-  listQuoteRequests(): Promise<(QuoteRequest & { quote_no: string | null; user_email: string })[]>;
+  /** 案件一覧に必要な保存済み仕様の表示項目だけを含む。 */
+  listQuoteRequests(): Promise<QuoteRequestListItem[]>;
+  /** 案件一覧の担当者表示・絞り込み用。プロフィール全列は取得しない。 */
+  listCaseDealers(): Promise<CaseDealer[]>;
+  /** 案件ナビの保存済み仕様バッジ用。仕様本体は取得しない。 */
+  getConfigurationCount(): Promise<number>;
+  /** 案件ナビの未対応問い合わせバッジ用。本文を取得しない。 */
+  getNewContactMessageCount(): Promise<number>;
   /** 管理者が見積の担当代理店を割り当てる */
   assignQuoteDealer(id: string, dealerId: string | null, actor: SessionUser): Promise<Quote>;
   /** 代理店に割り当てられた見積の一覧 */
-  listDealerQuotes(dealerId: string): Promise<(Quote & { user_email: string })[]>;
+  listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]>;
   /** 代理店が別途工事・フリー商品を入れた確定見積（次の版）を発行する。元の版は改訂済みとして残る */
   createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser): Promise<Quote>;
 

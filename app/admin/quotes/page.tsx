@@ -13,6 +13,7 @@ import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { CaseManagementNav } from '@/components/admin/case-management-nav';
 import { CaseWorkspace } from '@/components/admin/case-workspace';
+import { ClickableCaseRow } from '@/components/admin/clickable-case-row';
 import { matchesRegion, parseAddress, PREFECTURES, readRegionFilter } from '@/lib/domain/address';
 
 const SPEC_LABELS: Record<string, string> = {
@@ -196,11 +197,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   const request = requestByQuoteId.get(q.id);
                   const selected = q.id === selectedQuoteId;
                   return [
-                    <tr
+                    <ClickableCaseRow
                       key={`${q.id}-main`}
+                      href={caseSelectionHref(q.id, sp)}
                       className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
-                      data-testid="dealer-quote-row"
-                      data-selected={selected ? 'true' : undefined}
+                      testId="dealer-quote-row"
+                      selected={selected}
+                      ariaLabel={`${q.customer_name}の案件を開く`}
                     >
                       <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                         <div className="flex items-center gap-1.5">
@@ -226,7 +229,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       </td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
-                    </tr>,
+                    </ClickableCaseRow>,
                     <tr
                       key={`${q.id}-meta`}
                       className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
@@ -472,11 +475,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   (!quote && request.id === selectedPendingRequest?.id);
 
                 return [
-                  <tr
+                  <ClickableCaseRow
                     key={`${request.id}-main`}
+                    href={quote ? caseSelectionHref(quote.id, sp) : requestSelectionHref(request.id, sp)}
                     className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
-                    data-testid="admin-quote-row"
-                    data-selected={selected ? 'true' : undefined}
+                    testId="admin-quote-row"
+                    selected={selected}
+                    ariaLabel={`${request.contact.full_name}の案件を開く`}
                   >
                     <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                       {quote ? (
@@ -536,7 +541,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">
                       {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
                     </td>
-                  </tr>,
+                  </ClickableCaseRow>,
                   <tr
                     key={`${request.id}-meta`}
                     className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}

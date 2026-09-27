@@ -11,7 +11,7 @@ import { RegionFilter } from '@/components/admin/region-filter';
 
 export default async function AdminConfigurationsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const actor = await requireStaff('/admin/configurations');
+  await requireStaff('/admin/configurations');
   const store = await getStore();
   const [configurations, models] = await Promise.all([store.listAllConfigurations(), store.listModels({ includeDraft: true })]);
   const nameOf = new Map(models.map((m) => [m.id, m.name]));

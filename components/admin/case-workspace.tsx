@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import {
   CONFIGURATION_STATUS_LABELS,
-  FINISH_LEVEL_INFO,
   FREE_PRODUCT_CATEGORY_CODE,
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
@@ -20,6 +19,7 @@ import { QuoteStatusForm } from '@/components/admin/forms';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 import { CasePlanBoard } from '@/components/admin/case-plan-board';
+import { CaseAdminControls } from '@/components/admin/case-admin-controls';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 
 const CASE_DOCUMENT_KIND_LABELS: Record<CaseDocument['kind'], string> = {
@@ -398,21 +398,16 @@ export async function CaseWorkspace({
           </div>
 
           {isAdmin && (
-            <details className="relative text-xs" data-testid="case-admin-controls">
-              <summary className="cursor-pointer list-none rounded-md border border-white/35 px-2.5 py-1.5 font-semibold text-white hover:bg-white/10 [&::-webkit-details-marker]:hidden">
-                案件設定
-              </summary>
-              <div className="mt-2 grid min-w-[18rem] gap-3 rounded-lg border border-line bg-white p-3 text-ink shadow-lg sm:min-w-[34rem] sm:grid-cols-2">
-                <div>
-                  <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
-                  <AssignDealerForm quote={quote} dealers={dealers} />
-                </div>
-                <div>
-                  <p className="mb-1 text-[0.66rem] font-semibold text-muted">状態を変更</p>
-                  <QuoteStatusForm quote={quote} request={request} compact />
-                </div>
+            <CaseAdminControls>
+              <div>
+                <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
+                <AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />
               </div>
-            </details>
+              <div>
+                <p className="mb-1 text-[0.66rem] font-semibold text-muted">状態を変更</p>
+                <QuoteStatusForm quote={quote} request={request} compact />
+              </div>
+            </CaseAdminControls>
           )}
         </div>
 
@@ -426,7 +421,6 @@ export async function CaseWorkspace({
           <span><b className="text-white">設置</b> {siteAddress}</span>
           <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
           <span><b className="text-white">棟数</b> {caseUnitCount ?? '未登録'}</span>
-          <span><b className="text-white">注文範囲</b> {FINISH_LEVEL_INFO[quote.finish_level].name}</span>
           <span><b className="text-white">防火仕様</b> {fireSelection}</span>
           <span className="min-w-0"><b className="text-white">案件構成</b> {caseStructureNote ?? '未登録'}</span>
         </div>
@@ -610,7 +604,6 @@ export async function CaseWorkspace({
 
           <dl className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg bg-[#f7f9f8] p-2.5"><dt className="text-xs text-muted">本体</dt><dd className="mt-1 font-semibold">{quote.base_model_name}</dd></div>
-            <div className="rounded-lg bg-[#f7f9f8] p-2.5"><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-1 font-semibold">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd></div>
             <div className="rounded-lg bg-[#f7f9f8] p-2.5"><dt className="text-xs text-muted">設置予定地</dt><dd className="mt-1 font-semibold">{siteAddress}</dd></div>
             <div className="rounded-lg bg-[#f7f9f8] p-2.5">
               <dt className="text-xs text-muted">保存状態</dt>
@@ -984,10 +977,6 @@ export async function CaseWorkspace({
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">設置予定地</dt>
                 <dd className="mt-1 font-semibold">{siteAddress}</dd>
-              </div>
-              <div className="rounded-lg bg-[#f7f9f8] p-3">
-                <dt className="text-xs text-muted">注文範囲</dt>
-                <dd className="mt-1 font-semibold">{FINISH_LEVEL_INFO[quote.finish_level].name}</dd>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">参照見積</dt>

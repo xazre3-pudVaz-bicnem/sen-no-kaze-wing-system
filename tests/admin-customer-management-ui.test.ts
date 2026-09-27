@@ -43,8 +43,8 @@ describe('顧客管理UI', () => {
   });
 
   it('opens every quote revision through its direct detail route', () => {
-    expect(detail).toContain('href={\`/admin/quotes/\${encodeURIComponent(quote.id)}\`}');
-    expect(detail).not.toContain('href={\`/admin/quotes?case=\${encodeURIComponent(quote.id)}#case-workspace\`}');
+    expect(detail).toContain('href={`/admin/quotes/${encodeURIComponent(quote.id)}`}');
+    expect(detail).not.toContain('href={`/admin/quotes?case=${encodeURIComponent(quote.id)}#case-workspace`}');
   });
 
   it('shows the latest quote status before the request status', () => {

@@ -411,9 +411,10 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(listPage).toContain('商品名・メーカー・型番');
   });
 
-  it('管理画面では商品登録・編集として案内する', () => {
+  it('商品登録・編集は商品台帳配下の補助画面として残す', () => {
     expect(listPage).toContain('title="商品登録・編集"');
     expect(listPage).toContain('商品を追加');
-    expect(nav).toContain("label: '商品登録・編集'");
+    expect(nav).toContain('/admin/options');
+    expect(nav).not.toContain("label: '商品登録・編集'");
   });
 });

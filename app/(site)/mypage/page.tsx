@@ -230,18 +230,21 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                 const location = siteLocationLabel(configuration);
                 return (
                   <article key={configuration.id} className="card overflow-hidden" data-testid="active-case-card">
-                    <div className="grid lg:grid-cols-[14rem_1fr]">
-                      <div className="relative min-h-[11rem] bg-sand lg:min-h-full">
+                    <div className="grid sm:grid-cols-[15rem_minmax(0,1fr)]">
+                      <div
+                        className="relative aspect-video bg-sand sm:m-5 sm:mr-0 sm:aspect-[4/3] sm:overflow-hidden sm:rounded-lg"
+                        data-testid="active-case-image"
+                      >
                         {configuration.preview_image_url ? (
                           <SmartImage
                             src={configuration.preview_image_url}
                             alt={`${configuration.name} の完成イメージ`}
                             fill
-                            sizes="(min-width: 1024px) 14rem, 100vw"
+                            sizes="(min-width: 640px) 15rem, 100vw"
                             className="object-cover"
                           />
                         ) : (
-                          <div className="flex h-full min-h-[11rem] items-center justify-center text-sm text-muted">画像なし</div>
+                          <div className="flex h-full items-center justify-center text-sm text-muted">画像なし</div>
                         )}
                       </div>
 
@@ -263,7 +266,17 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                           )}
                         </div>
 
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="mt-4 rounded-lg border border-[#ead7a8] bg-[#fff9e9] px-4 py-3" data-testid="active-case-next-action">
+                          <p className="text-xs font-semibold text-[#8a6416]">次にすること</p>
+                          <p className="mt-1 font-semibold text-ink">{progress.nextAction}</p>
+                          <p className="mt-1 text-xs leading-5 text-ink-soft">{progress.description}</p>
+                        </div>
+
+                        <div className="mt-4" data-testid="active-case-flow">
+                          <CustomerProgressFlow progress={progress} />
+                        </div>
+
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" data-testid="active-case-summary">
                           <div className="rounded-lg bg-[#f7f9f8] p-3">
                             <p className="text-xs text-muted">今ここ</p>
                             <p className="mt-1 font-semibold text-[#765b11]">{CUSTOMER_FLOW[progress.index]}</p>
@@ -282,16 +295,6 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                             <p className="text-xs text-muted">担当代理店</p>
                             <p className="mt-1 font-semibold">{quote?.dealer_id ? '決定済み' : '調整中'}</p>
                           </div>
-                        </div>
-
-                        <div className="mt-4 rounded-lg border border-[#ead7a8] bg-[#fff9e9] px-4 py-3">
-                          <p className="text-xs font-semibold text-[#8a6416]">次にすること</p>
-                          <p className="mt-1 font-semibold text-ink">{progress.nextAction}</p>
-                          <p className="mt-1 text-xs leading-5 text-ink-soft">{progress.description}</p>
-                        </div>
-
-                        <div className="mt-4">
-                          <CustomerProgressFlow progress={progress} />
                         </div>
 
                         <div className="mt-4 flex flex-wrap gap-2">

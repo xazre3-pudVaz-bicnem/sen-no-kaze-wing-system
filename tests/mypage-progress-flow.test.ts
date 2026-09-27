@@ -28,4 +28,29 @@ describe('Mypage customer progress flow', () => {
     expect(page).toContain('概算見積の確認を受け付けました');
     expect(page).toContain('確定見積を確認済みです');
   });
+
+  it('separates progressing cases from saved draft plans without adding a new case data model', () => {
+    expect(page).toContain('data-testid="active-case-section"');
+    expect(page).toContain('data-testid="active-case-card"');
+    expect(page).toContain('進行中の案件');
+    expect(page).toContain('次にすること');
+    expect(page).toContain('設置場所');
+    expect(page).toContain('現在の見積');
+    expect(page).toContain('担当代理店');
+    expect(page).toContain("configuration.status === 'quote_requested' || configuration.status === 'quoted'");
+    expect(page).toContain('data-testid="saved-plan-section"');
+    expect(page).toContain("configuration.status === 'draft' && !quoteByConfig.has(configuration.id)");
+    expect(page).toContain('まだ見積を依頼していない、検討中のプランです。');
+    expect(page).toContain('見積履歴');
+    expect(page).toContain('過去を含む見積を確認');
+  });
+
+  it('shows only the saved installation location information that already exists', () => {
+    expect(page).toContain('function siteLocationLabel');
+    expect(page).toContain("if (configuration.site_location_undecided) return '未定'");
+    expect(page).toContain('configuration.site_prefecture');
+    expect(page).toContain('configuration.site_municipality');
+    expect(page).not.toContain('土地あり');
+    expect(page).not.toContain('土地なし');
+  });
 });

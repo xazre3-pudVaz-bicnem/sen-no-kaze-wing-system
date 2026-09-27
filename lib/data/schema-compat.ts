@@ -21,6 +21,12 @@ export function isMissingColumn(error: { code?: string } | null | undefined): bo
   return error?.code === '42703';
 }
 
+/** 未適用migrationによりPostgRESTのRPC定義が存在しない場合だけ互換fallbackする。 */
+export function isMissingFunction(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === 'PGRST202' || error.code === '42883' || /function .* does not exist|could not find the function .* schema cache/i.test(error.message ?? '');
+}
+
 export function normalizeOptions(rows: ProductOption[]): ProductOption[] {
   return rows.map((o) => (Array.isArray(o.spec_codes) ? o : { ...o, spec_codes: [] }));
 }

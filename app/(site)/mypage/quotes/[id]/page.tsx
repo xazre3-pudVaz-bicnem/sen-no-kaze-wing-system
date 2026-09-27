@@ -4,6 +4,12 @@ import { Download, FileText } from 'lucide-react';
 import { requireUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import {
+  getAcceptedQuoteCaseState,
+  isFormalQuote,
+  isQuoteAcceptanceEligible,
+  isQuoteDeclineEligible,
+} from '@/lib/domain/quote-lifecycle';
 import { respondToQuoteAction } from '@/lib/actions/configurations';
 import { COMPANY } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
@@ -19,6 +25,13 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
   const detail = await store.getQuote(id, user);
   if (!detail) notFound();
   const { quote, items, request } = detail;
+  const isFormal = isFormalQuote(quote);
+  const canAccept = isQuoteAcceptanceEligible(quote, request);
+  const canDecline = isQuoteDeclineEligible(quote, request);
+  const acceptedQuoteCaseState = getAcceptedQuoteCaseState(quote, request);
+  const isFormallyAccepted = acceptedQuoteCaseState === 'formal_current';
+  const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';
+  const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';
 
   return (
     <Section className="py-10 sm:py-14">
@@ -40,7 +53,7 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
               {quote.customer_no && <>　顧客番号 <span className="font-mono">{quote.customer_no}</span></>}
             </p>
             <p className="mt-1 text-sm" data-testid="quote-revision">
-              {quote.revision > 1 ? (
+              {isFormal ? (
                 <span className="font-semibold text-forest">第{quote.revision}版・現地条件と施工金額を反映済み</span>
               ) : (
                 <span className="text-muted">第1版・現地確認前</span>
@@ -48,8 +61,8 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={quote.revision > 1 && quote.status !== 'superseded' ? 'success' : 'neutral'} className="text-sm">
-              {quote.status === 'superseded' ? '旧版' : quote.revision > 1 ? '確定見積' : '概算見積'}
+            <Badge tone={isFormal && quote.status !== 'superseded' ? 'success' : 'neutral'} className="text-sm">
+              {quote.status === 'superseded' ? '旧版' : isFormal ? '確定見積' : '概算見積'}
             </Badge>
             <Badge tone={quote.status === 'issued' ? 'navy' : quote.status === 'accepted' ? 'success' : 'neutral'} className="text-sm">
               {QUOTE_STATUS_LABELS[quote.status]}
@@ -57,8 +70,8 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
           </div>
         </div>
 
-        <Alert tone={quote.revision > 1 ? 'success' : 'info'} className="mt-5">
-          {quote.revision > 1
+        <Alert tone={isFormal ? 'success' : 'info'} className="mt-5">
+          {isFormal
             ? '確定見積です。担当が現地条件と施工金額を反映しています。'
             : '概算見積です。運送・基礎・電気・給排水・設置工事など、現地確認後に確定する費用はまだ含まれていません。'}
         </Alert>
@@ -74,33 +87,54 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
           </a>
         </div>
 
-        {/* 顧客の回答。改訂前の版や回答済みには出さない */}
-        {quote.status === 'issued' && (
+        {/* 承諾は最新の確定見積だけ、辞退は最新の発行済み見積に限定する。 */}
+        {(canAccept || canDecline) && (
           <div className="card mt-6 flex flex-wrap items-center justify-between gap-4 p-5" data-testid="quote-respond">
             <p className="text-sm text-ink-soft">
-              内容にご納得いただけましたら「この見積で進める」を押してください。担当より次のご案内をいたします。
+              {canAccept
+                ? '内容にご納得いただけましたら「この見積で進める」を押してください。担当より次のご案内をいたします。'
+                : 'この概算見積はご確認用です。正式な承諾は現地条件と施工金額を反映した確定見積の発行後にお願いします。'}
             </p>
             <div className="flex gap-2">
-              <form action={respondToQuoteAction}>
-                <input type="hidden" name="quote_id" value={quote.id} />
-                <input type="hidden" name="status" value="accepted" />
-                <button type="submit" className="btn-primary btn-sm" data-testid="accept-quote">
-                  この見積で進める
-                </button>
-              </form>
-              <form action={respondToQuoteAction}>
-                <input type="hidden" name="quote_id" value={quote.id} />
-                <input type="hidden" name="status" value="declined" />
-                <button type="submit" className="btn-ghost btn-sm" data-testid="decline-quote">
-                  今回は見送る
-                </button>
-              </form>
+              {canAccept && (
+                <form action={respondToQuoteAction}>
+                  <input type="hidden" name="quote_id" value={quote.id} />
+                  <input type="hidden" name="status" value="accepted" />
+                  <button type="submit" className="btn-primary btn-sm" data-testid="accept-quote">
+                    この見積で進める
+                  </button>
+                </form>
+              )}
+              {canDecline && (
+                <form action={respondToQuoteAction}>
+                  <input type="hidden" name="quote_id" value={quote.id} />
+                  <input type="hidden" name="status" value="declined" />
+                  <button type="submit" className="btn-ghost btn-sm" data-testid="decline-quote">
+                    今回は見送る
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         )}
-        {quote.status === 'accepted' && (
+        {quote.status === 'issued' && !canAccept && !canDecline && (
+          <Alert tone="info" className="mt-6" data-testid="quote-response-pending">
+            この概算見積はご確認用です。現地条件と施工金額を反映した確定見積の発行後に、承諾または辞退をご回答いただけます。
+          </Alert>
+        )}
+        {isFormallyAccepted && (
           <Alert tone="success" className="mt-6">
             この見積で進めるご回答をいただきました。担当よりご連絡いたします。
+          </Alert>
+        )}
+        {isPreliminaryAccepted && (
+          <Alert tone="warn" className="mt-6">
+            この概算見積の承諾は過去の回答履歴です。正式な契約進行には使用されません。
+          </Alert>
+        )}
+        {isFormalAcceptedUnconfirmed && (
+          <Alert tone="warn" className="mt-6">
+            この確定見積は最新の見積であることを確認できません。正式な契約進行には使用されません。最新の見積状態を確認してください。
           </Alert>
         )}
         {quote.status === 'declined' && (

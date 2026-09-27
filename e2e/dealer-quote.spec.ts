@@ -21,6 +21,9 @@ test.describe('代理店による確定見積（改訂版）', () => {
     const { quoteId: firstQuoteId, total: estimate } = await requestQuoteAsCustomer(page, customer, '確定見積のテスト');
     const firstNo = (await page.getByTestId('quote-no').textContent())!.trim();
     await expect(page.getByTestId('quote-revision')).toContainText('第1版・概算見積');
+    await expect(page.getByTestId('quote-respond')).toBeVisible();
+    await expect(page.getByTestId('accept-quote')).toBeHidden();
+    await expect(page.getByTestId('decline-quote')).toBeVisible();
     expect(yen(await page.getByTestId('quote-total').textContent())).toBe(estimate);
     await logout(page);
 

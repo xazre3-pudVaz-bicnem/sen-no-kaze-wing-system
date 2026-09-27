@@ -18,7 +18,6 @@ import {
   variantChoiceSchema,
   previewRuleSchema,
   productImageSchema,
-  quoteStatusSchema,
   flattenErrors,
   type FieldErrors,
   assignDealerSchema,
@@ -872,25 +871,6 @@ export async function updateContactStatusAction(_prev: AdminFormState, formData:
     await store.updateContactStatus(id, status);
     revalidatePath('/admin/contacts');
     return { ok: true, message: '更新しました' };
-  } catch (e) {
-    return errState(e);
-  }
-}
-
-export async function updateQuoteStatusAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
-  await requireAdmin();
-  const parsed = quoteStatusSchema.safeParse({
-    quote_id: formData.get('quote_id'),
-    status: formData.get('status'),
-    request_status: formData.get('request_status'),
-  });
-  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
-  try {
-    const store = await getStore();
-    await store.updateQuoteStatus(parsed.data.quote_id, parsed.data.status, parsed.data.request_status);
-    revalidatePath('/admin/quotes');
-    revalidatePath('/mypage');
-    return { ok: true, message: 'ステータスを更新しました' };
   } catch (e) {
     return errState(e);
   }

@@ -13,6 +13,7 @@ import {
   type Configuration,
   type Quote,
 } from '@/lib/domain/types';
+import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge, ButtonLink, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -46,7 +47,7 @@ function customerProgress(quote: Quote | undefined, configurationStatus: Configu
       description: '仕様を確認し、内容が決まったら見積を依頼できます。',
     };
   }
-  if (quote.status === 'accepted' && quote.revision === 1) {
+  if (quote.status === 'accepted' && quote.parent_quote_id === null) {
     return {
       index: 2,
       title: '概算見積の確認を受け付けました',
@@ -70,7 +71,7 @@ function customerProgress(quote: Quote | undefined, configurationStatus: Configu
       description: 'この案件の進行は停止しています。',
     };
   }
-  if (quote.revision > 1) {
+  if (isFormalQuote(quote)) {
     return {
       index: 4,
       title: '確定見積をご確認ください',
@@ -88,7 +89,7 @@ function customerProgress(quote: Quote | undefined, configurationStatus: Configu
 
 function quoteKindLabel(quote: Quote) {
   if (quote.status === 'superseded') return '旧版';
-  return quote.revision > 1 ? '確定見積' : '概算見積';
+  return isFormalQuote(quote) ? '確定見積' : '概算見積';
 }
 
 function siteLocationLabel(configuration: Configuration) {
@@ -441,7 +442,7 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                         <td className="px-4 py-3 text-right tabular-nums">{formatYen(quote.total)}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <Badge tone={quote.revision > 1 && quote.status !== 'superseded' ? 'success' : 'neutral'}>
+                            <Badge tone={isFormalQuote(quote) && quote.status !== 'superseded' ? 'success' : 'neutral'}>
                               {quoteKindLabel(quote)}
                             </Badge>
                             <span className="text-xs text-ink-soft">{QUOTE_STATUS_LABELS[quote.status]}</span>

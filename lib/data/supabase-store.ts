@@ -26,8 +26,6 @@ import type {
   CaseDocument,
   QuoteItem,
   QuoteRequest,
-  QuoteRequestStatus,
-  QuoteStatus,
   ContactMessage,
   ContactStatus,
 } from '@/lib/domain/types';
@@ -58,12 +56,61 @@ import {
   type CatalogImportBatch,
   type EstimateTemplateImportInput,
 } from './store';
-import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
+import { isMissingFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
+
+export type DealerQuoteRequestCurrent = {
+  quote_request_id: string;
+  is_current: boolean;
+  request_status: QuoteRequest['status'];
+  site_address: string | null;
+};
+
+function dealerQuoteRequestCurrentToRequest(quote: Quote, current: DealerQuoteRequestCurrent): QuoteRequest {
+  return {
+    id: current.quote_request_id,
+    configuration_id: quote.configuration_id,
+    user_id: quote.user_id,
+    // The RPC never returns another revision's ID.  It states only whether
+    // the Quote being viewed is the request's current revision.
+    quote_id: current.is_current ? quote.id : null,
+    status: current.request_status,
+    // A dealer does not gain the customer's contact details or free-form
+    // request message through this current-pointer lookup.
+    message: null,
+    contact: {
+      full_name: quote.customer_name,
+      company_name: quote.customer_company,
+      email: '',
+      phone: '',
+      address: '',
+      site_address: current.site_address,
+    },
+    created_at: quote.created_at,
+    updated_at: quote.updated_at,
+  };
+}
+
+/**
+ * A deployment can reach the application before its migration creates the
+ * dealer metadata RPC.  Only an unequivocally missing function is tolerated;
+ * authorization and session errors must still fail the page request.
+ */
+export function dealerQuoteRequestFromRpcResult(
+  quote: Quote,
+  result: { data: DealerQuoteRequestCurrent[] | null; error: { code?: string; message?: string } | null }
+): QuoteRequest | null {
+  if (result.error) {
+    if (isMissingFunction(result.error)) return null;
+    mapPgError(result.error);
+  }
+  const current = result.data?.[0] ?? null;
+  return current ? dealerQuoteRequestCurrentToRequest(quote, current) : null;
+}
 
 function mapPgError(e: { code?: string; message?: string } | null): never {
   const msg = e?.message ?? '不明なエラー';
@@ -477,17 +524,26 @@ export class SupabaseStore implements DataStore {
     if (error) mapPgError(error);
     if (!data) return null;
     const quote = toQuote(data as Record<string, unknown>);
-    const [items, request, document, profile] = await Promise.all([
+    const [items, request, dealerRequestCurrent, document, profile] = await Promise.all([
       db.from('quote_items').select('*').eq('quote_id', id).order('sort_order'),
-      db.from('quote_requests').select('*').eq('id', quote.quote_request_id).maybeSingle(),
+      actor.role === 'dealer'
+        ? Promise.resolve({ data: null, error: null })
+        : db.from('quote_requests').select('*').eq('id', quote.quote_request_id).maybeSingle(),
+      actor.role === 'dealer'
+        ? db.rpc('get_dealer_quote_request_current', { p_quote_id: id })
+        : Promise.resolve({ data: null, error: null }),
       db.from('quote_documents').select('*').eq('quote_id', id).order('generated_at', { ascending: false }).limit(1).maybeSingle(),
       actor.role === 'admin' ? db.from('profiles').select('*').eq('id', quote.user_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     ]);
     if (items.error) mapPgError(items.error);
+    const dealerRequest = dealerQuoteRequestFromRpcResult(quote, {
+      data: dealerRequestCurrent.data as DealerQuoteRequestCurrent[] | null,
+      error: dealerRequestCurrent.error,
+    });
     return {
       quote,
       items: (items.data ?? []) as QuoteItem[],
-      request: (request.data as QuoteRequest | null) ?? null,
+      request: (request.data as QuoteRequest | null) ?? dealerRequest,
       document: (document.data as QuoteDocument | null) ?? null,
       profile: (profile.data as Profile | null) ?? null,
     };
@@ -551,22 +607,6 @@ export class SupabaseStore implements DataStore {
     const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', newId).single();
     if (e2) mapPgError(e2);
     return q as Quote;
-  }
-
-  async updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null) {
-    const db = await this.db();
-    const { data, error } = await db.from('quotes').update({ status }).eq('id', id).select('quote_request_id, configuration_id').single();
-    if (error) mapPgError(error);
-    const row = data as { quote_request_id: string; configuration_id: string };
-    if (requestStatus) {
-      const r = await db.from('quote_requests').update({ status: requestStatus }).eq('id', row.quote_request_id);
-      if (r.error) mapPgError(r.error);
-    }
-    const cfgStatus = status === 'issued' ? 'quoted' : status === 'expired' ? null : 'closed';
-    if (cfgStatus) {
-      const c = await db.from('configurations').update({ status: cfgStatus }).eq('id', row.configuration_id);
-      if (c.error) mapPgError(c.error);
-    }
   }
 
   // ---------- PDF（service role） ----------

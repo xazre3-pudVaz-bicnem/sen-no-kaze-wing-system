@@ -143,10 +143,11 @@ describe('Admin case management UI', () => {
     expect(caseAdminControls).toContain('案件設定');
     expect(caseAdminControls).toContain('案件設定を閉じる');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
-    expect(workspace).toContain("quote.status === 'accepted' ? '契約確認' : '見積'");
+    expect(workspace).toContain("const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';");
+    expect(workspace).toContain('確定見積の承諾履歴（最新状態要確認）');
     expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName");
     expect(workspace).toContain('契約条件の確認');
-    expect(workspace).toContain("value: quote.status === 'accepted' ? '正式状態未登録' : '未対応'");
+    expect(workspace).toContain("value: isFormalAccepted ? '正式状態未登録' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '未対応'");
     expect(workspace).toContain('未集計');
     expect(workspace).toContain("caseStructureNote ?? '未登録'");
     expect(workspace).toContain('extractCaseUnitCount');
@@ -179,7 +180,7 @@ describe('Admin case management UI', () => {
     expect(workspace).not.toContain('displayLabel = isDealer');
     expect(workspace).toContain('const referenceLabel =');
     expect(workspace).toContain("tabItem.key === 'documents'");
-    expect(workspace).toContain("quote.status === 'issued' && quote.revision === 1");
+    expect(workspace).toContain("quote.status === 'issued' && quote.parent_quote_id === null");
     expect(workspace).toContain("href: tabHref('estimate', true)");
     expect(workspace).toContain("if (edit) query.set('edit', '1')");
     expect(workspace).toContain("key === 'edit'");
@@ -205,9 +206,8 @@ describe('Admin case management UI', () => {
     expect(quoteEstimateSheet).toContain('showSelectedImages={false}');
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
     expect(workspace).toContain("<AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />");
-    expect(workspace).toContain('<QuoteStatusForm quote={quote} request={request} compact />');
+    expect(workspace).not.toContain('<QuoteStatusForm');
     expect(caseAdminControls).toContain('data-testid="case-admin-controls"');
-    expect(workspace).toContain('状態を変更');
     expect(workspace).toContain('見積書');
     expect(workspace).toContain('見積番号 {quote.quote_no}／発行');
     expect(workspace).toContain('data-testid="admin-pdf-link"');

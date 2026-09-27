@@ -12,8 +12,9 @@ import {
   QUOTE_STATUS_LABELS,
   type Configuration,
   type Quote,
+  type QuoteRequest,
 } from '@/lib/domain/types';
-import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
+import { getAcceptedQuoteCaseState, isFormalQuote } from '@/lib/domain/quote-lifecycle';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge, ButtonLink, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -30,7 +31,11 @@ const CUSTOMER_FLOW = [
   '引渡し・アフター',
 ] as const;
 
-function customerProgress(quote: Quote | undefined, configurationStatus: Configuration['status'] = 'draft') {
+function customerProgress(
+  quote: Quote | undefined,
+  request: Pick<QuoteRequest, 'quote_id'> | null,
+  configurationStatus: Configuration['status'] = 'draft'
+) {
   if (!quote && configurationStatus !== 'draft') {
     return {
       index: 1,
@@ -47,20 +52,30 @@ function customerProgress(quote: Quote | undefined, configurationStatus: Configu
       description: '仕様を確認し、内容が決まったら見積を依頼できます。',
     };
   }
-  if (quote.status === 'accepted' && quote.parent_quote_id === null) {
+
+  const acceptedState = getAcceptedQuoteCaseState(quote, request);
+  if (acceptedState === 'preliminary') {
     return {
       index: 2,
-      title: '概算見積の確認を受け付けました',
+      title: '概算見積の確認履歴があります',
       nextAction: '担当からの現地確認のご案内をお待ちください。',
-      description: 'この見積は現地確認前です。担当が現地条件を確認した後、施工金額を反映した確定見積をご案内します。',
+      description: 'この回答履歴は正式な契約承諾ではありません。現地条件を確認した後、確定見積をご案内します。',
     };
   }
-  if (quote.status === 'accepted') {
+  if (acceptedState === 'formal_current') {
     return {
       index: 5,
-      title: '確定見積を確認済みです',
+      title: '確定見積を承諾済みです',
       nextAction: '契約条件と必要資料について、担当からの案内をご確認ください。',
-      description: '契約手続きへ進む段階です。',
+      description: '現在の正式な確定見積への回答として、契約手続きへ進む段階です。',
+    };
+  }
+  if (acceptedState === 'formal_unconfirmed') {
+    return {
+      index: 4,
+      title: '見積状態を確認しています',
+      nextAction: '最新の見積状態をご確認ください。',
+      description: 'この承諾履歴は現在の正式見積として確認できないため、契約手続きには進みません。',
     };
   }
   if (quote.status === 'declined' || quote.status === 'cancelled') {
@@ -90,6 +105,16 @@ function customerProgress(quote: Quote | undefined, configurationStatus: Configu
 function quoteKindLabel(quote: Quote) {
   if (quote.status === 'superseded') return '旧版';
   return isFormalQuote(quote) ? '確定見積' : '概算見積';
+}
+
+function quoteCustomerStateLabel(quote: Quote, request: Pick<QuoteRequest, 'quote_id'> | null) {
+  const acceptedState = getAcceptedQuoteCaseState(quote, request);
+  if (acceptedState === 'formal_current') return '承諾済み';
+  if (acceptedState === 'preliminary') return '確認済み';
+  if (acceptedState === 'formal_unconfirmed') return '確認要';
+  if (quote.status === 'issued') return '確認待ち';
+  if (quote.status === 'expired') return '期限切れ';
+  return QUOTE_STATUS_LABELS[quote.status];
 }
 
 function siteLocationLabel(configuration: Configuration) {
@@ -160,6 +185,14 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
   ]);
   const slugOf = new Map(models.map((m) => [m.id, m.slug]));
   const nameOf = new Map(models.map((m) => [m.id, m.name]));
+  const configurationNameOf = new Map(configurations.map((configuration) => [configuration.id, configuration.name]));
+  const quoteRequestEntries = await Promise.all(
+    Array.from(quoteByConfig.values()).map(async (quote) => {
+      const detail = await store.getQuote(quote.id, user);
+      return [quote.id, detail?.request ?? null] as const;
+    })
+  );
+  const requestByQuoteId = new Map(quoteRequestEntries);
   const activeCases = configurations
     .map((configuration) => ({ configuration, quote: quoteByConfig.get(configuration.id) }))
     .filter(({ configuration, quote }) => {
@@ -226,7 +259,8 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
           ) : (
             <div className="mt-5 space-y-5">
               {activeCases.map(({ configuration, quote }) => {
-                const progress = customerProgress(quote, configuration.status);
+                const request = quote ? requestByQuoteId.get(quote.id) ?? null : null;
+                const progress = customerProgress(quote, request, configuration.status);
                 const slug = slugOf.get(configuration.base_model_id) ?? '';
                 const location = siteLocationLabel(configuration);
                 return (
@@ -262,7 +296,7 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                           </div>
                           {quote && (
                             <Link href={`/mypage/quotes/${quote.id}`} className="btn-primary btn-sm">
-                              案件の内容を見る
+                              見積の内容を見る
                             </Link>
                           )}
                         </div>
@@ -288,9 +322,18 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                           </div>
                           <div className="rounded-lg bg-[#f7f9f8] p-3">
                             <p className="text-xs text-muted">現在の見積</p>
-                            <p className="mt-1 font-semibold">
-                              {quote ? `${quoteKindLabel(quote)} ${formatYen(quote.total)}` : '準備中'}
-                            </p>
+                            {quote ? (
+                              <>
+                                <p className="mt-1 font-semibold">
+                                  {quoteKindLabel(quote)} {formatYen(quote.total)}
+                                </p>
+                                <p className="mt-1 text-xs text-ink-soft" data-testid="active-case-quote-status">
+                                  {quoteCustomerStateLabel(quote, request)}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="mt-1 font-semibold">準備中</p>
+                            )}
                           </div>
                           <div className="rounded-lg bg-[#f7f9f8] p-3">
                             <p className="text-xs text-muted">担当代理店</p>
@@ -420,10 +463,11 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                 過去を含む見積を確認（{quotes.length}件）
               </summary>
               <div className="overflow-x-auto border-t border-line">
-                <table className="w-full min-w-[40rem] text-sm">
+                <table className="w-full min-w-[48rem] text-sm">
                   <thead className="bg-sand/60 text-left text-xs text-muted">
                     <tr>
                       <th className="px-4 py-3 font-semibold">見積番号</th>
+                      <th className="px-4 py-3 font-semibold">案件</th>
                       <th className="px-4 py-3 font-semibold">発行日</th>
                       <th className="px-4 py-3 font-semibold">有効期限</th>
                       <th className="px-4 py-3 font-semibold">モデル</th>
@@ -436,6 +480,9 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                     {quotes.map((quote) => (
                       <tr key={quote.id} data-testid="quote-row">
                         <td className="px-4 py-3 font-mono">{quote.quote_no}</td>
+                        <td className="px-4 py-3" data-testid="quote-history-case-name">
+                          {configurationNameOf.get(quote.configuration_id) ?? '—'}
+                        </td>
                         <td className="px-4 py-3">{formatDate(quote.issued_at)}</td>
                         <td className="px-4 py-3">{formatDate(quote.valid_until)}</td>
                         <td className="px-4 py-3">{quote.base_model_name}</td>

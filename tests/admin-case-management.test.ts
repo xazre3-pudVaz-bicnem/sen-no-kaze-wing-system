@@ -14,6 +14,8 @@ const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quo
 const dealerForms = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const manualQuoteForm = fs.readFileSync(path.join(root, 'components/admin/manual-quote-form.tsx'), 'utf8');
 const casePlanBoard = fs.readFileSync(path.join(root, 'components/admin/case-plan-board.tsx'), 'utf8');
+const clickableCaseRow = fs.readFileSync(path.join(root, 'components/admin/clickable-case-row.tsx'), 'utf8');
+const caseAdminControls = fs.readFileSync(path.join(root, 'components/admin/case-admin-controls.tsx'), 'utf8');
 const newQuote = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
 const configurations = fs.readFileSync(path.join(root, 'app/admin/configurations/page.tsx'), 'utf8');
 const contacts = fs.readFileSync(path.join(root, 'app/admin/contacts/page.tsx'), 'utf8');
@@ -67,7 +69,10 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('契約・製造・原価・利益・災害時供給は今後対応予定');
     expect(list).toContain('案件を選択すると、下のワークスペースが切り替わります。');
     expect(list).not.toContain('max-h-[20rem] overflow-auto');
-    expect(list).toContain('data-selected={selected ? \'true\' : undefined}');
+    expect(list).toContain('<ClickableCaseRow');
+    expect(clickableCaseRow).toContain("data-selected={selected ? 'true' : undefined}");
+    expect(clickableCaseRow).toContain('tabIndex={0}');
+    expect(clickableCaseRow).toContain("event.key !== 'Enter' && event.key !== ' '");
     expect(list).toContain("selected ? 'bg-[#fff7df]");
     expect(list).toContain('caseSelectionHref');
     expect(list).toContain('requestSelectionHref');
@@ -132,7 +137,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-workflow-summary"');
     expect(workspace).toContain('md:grid-cols-9');
     expect(workspace).toContain('md:block');
-    expect(workspace).toContain('案件設定');
+    expect(workspace).toContain('<CaseAdminControls>');
+    expect(caseAdminControls).toContain('案件設定');
+    expect(caseAdminControls).toContain('案件設定を閉じる');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
     expect(workspace).toContain("quote.status === 'accepted' ? '契約確認' : '見積'");
     expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName");
@@ -195,9 +202,9 @@ describe('Admin case management UI', () => {
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
     expect(quoteEstimateSheet).toContain('showSelectedImages={false}');
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
-    expect(workspace).toContain('<AssignDealerForm quote={quote} dealers={dealers} />');
+    expect(workspace).toContain("<AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />");
     expect(workspace).toContain('<QuoteStatusForm quote={quote} request={request} compact />');
-    expect(workspace).toContain('data-testid="case-admin-controls"');
+    expect(caseAdminControls).toContain('data-testid="case-admin-controls"');
     expect(workspace).toContain('状態を変更');
     expect(workspace).toContain('見積書');
     expect(workspace).toContain('見積番号 {quote.quote_no}／発行');

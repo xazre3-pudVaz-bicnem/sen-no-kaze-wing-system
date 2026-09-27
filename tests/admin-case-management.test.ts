@@ -135,8 +135,10 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('案件構成・申し送り');
     expect(workspace).toContain('data-testid="case-workflow"');
     expect(workspace).toContain('data-testid="case-workflow-summary"');
-    expect(workspace).toContain('md:grid-cols-9');
-    expect(workspace).toContain('md:block');
+    expect(workspace).toContain('data-testid="case-workflow-flow"');
+    expect(workspace).toContain('data-testid="case-workflow-arrow"');
+    expect(workspace).toContain("aria-current={step.state === 'current' ? 'step' : undefined}");
+    expect(workspace).toContain('min-w-[58rem]');
     expect(workspace).toContain('<CaseAdminControls>');
     expect(caseAdminControls).toContain('案件設定');
     expect(caseAdminControls).toContain('案件設定を閉じる');

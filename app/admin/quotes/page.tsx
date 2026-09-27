@@ -4,7 +4,6 @@ import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   canEditCatalog,
-  FINISH_LEVEL_INFO,
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
   ROLE_LABELS,
@@ -225,7 +224,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request?.contact.site_address || '—'}</td>
                       <td className="px-2.5 py-1.5 align-top">
                         <strong>{q.base_model_name}</strong>
-                        <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[q.finish_level].name}</span>
                       </td>
                       <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
                       <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
@@ -529,11 +527,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request.contact.site_address || '—'}</td>
                     <td className="px-2.5 py-1.5 align-top">
                       <strong>{modelName ?? '—'}</strong>
-                      {specName ? (
-                        <span className="ml-1 text-[0.62rem] text-muted">{specName}</span>
-                      ) : quote ? (
-                        <span className="ml-1 text-[0.62rem] text-muted">{FINISH_LEVEL_INFO[quote.finish_level].name}</span>
-                      ) : null}
+                      {specName ? <span className="ml-1 text-[0.62rem] text-muted">{specName}</span> : null}
                     </td>
                     <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
@@ -621,7 +615,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 <div><dt className="text-xs text-muted">案件・仕様名</dt><dd className="mt-0.5 font-semibold">{selectedPendingConfiguration?.name || '詳細未取得'}</dd></div>
                 <div><dt className="text-xs text-muted">本体</dt><dd className="mt-0.5 font-semibold">{selectedPendingModelName || '詳細未取得'}</dd></div>
                 <div><dt className="text-xs text-muted">仕様</dt><dd className="mt-0.5">{selectedPendingSpecName || '未登録'}</dd></div>
-                <div><dt className="text-xs text-muted">注文範囲</dt><dd className="mt-0.5">{selectedPendingConfiguration ? FINISH_LEVEL_INFO[selectedPendingConfiguration.finish_level].name : '詳細未取得'}</dd></div>
               </dl>
               {!selectedPendingConfiguration && (
                 <p className="mt-2 text-xs leading-5 text-muted">

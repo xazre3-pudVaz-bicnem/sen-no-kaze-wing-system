@@ -355,9 +355,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('ここに表示する内容は正式な契約レコードではありません。');
     expect(workspace).toContain('正式な契約状態は未登録');
     expect(workspace).toContain('受注契約日（メモ）');
-    expect(workspace).toContain('承諾見積額（参考）');
-    expect(workspace).toContain('契約対象見積候補');
-    expect(workspace).toContain('第{quote.revision}版／未固定');
+    expect(workspace).toContain('現在の見積額（参考）');
+    expect(workspace).toContain('契約対象Revision');
+    expect(workspace).toContain('現在表示：{quote.quote_no} 第{quote.revision}版');
     expect(workspace).toContain('支払条件（メモ）');
     expect(workspace).toContain("caseDocuments.filter((row) => row.kind === 'contract')");
     expect(workspace).toContain('data-testid="case-contract-documents"');

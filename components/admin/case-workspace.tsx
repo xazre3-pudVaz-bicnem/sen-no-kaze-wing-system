@@ -20,7 +20,7 @@ import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 import { CasePlanBoard } from '@/components/admin/case-plan-board';
 import { CaseAdminControls } from '@/components/admin/case-admin-controls';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
-import { getAcceptedQuoteCaseState, isCurrentFormalQuote } from '@/lib/domain/quote-lifecycle';
+import { getAcceptedQuoteCaseState, isCurrentFormalQuote, isFormalQuote } from '@/lib/domain/quote-lifecycle';
 
 const CASE_DOCUMENT_KIND_LABELS: Record<CaseDocument['kind'], string> = {
   floorplan: '平面図',
@@ -32,10 +32,10 @@ const CASE_DOCUMENT_KIND_LABELS: Record<CaseDocument['kind'], string> = {
 };
 
 const TABS = [
-  { key: 'estimate', label: '見積書' },
-  { key: 'plan', label: 'プランボード' },
-  { key: 'site', label: '現地条件' },
-  { key: 'documents', label: '契約・図面・資料' },
+  { key: 'estimate', label: '見積' },
+  { key: 'plan', label: 'プラン' },
+  { key: 'site', label: '現地確認' },
+  { key: 'documents', label: '契約・資料' },
   { key: 'production', label: '製造・施工' },
   { key: 'handover', label: '引渡し・アフター' },
   { key: 'disaster', label: '災害時提供' },
@@ -171,6 +171,7 @@ export async function CaseWorkspace({
   if (!detail) notFound();
 
   const { quote, items, request } = detail;
+  const isFormal = isFormalQuote(quote);
   const isCurrentFormal = isCurrentFormalQuote(quote, request);
   const acceptedQuoteCaseState = getAcceptedQuoteCaseState(quote, request);
   const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';
@@ -316,7 +317,7 @@ export async function CaseWorkspace({
       state: quote.status === 'issued' && quote.parent_quote_id === null && quote.dealer_id ? 'current' : 'pending',
     },
     {
-      label: '見積更新',
+      label: '確定見積',
       value: isFormalAccepted
         ? '承諾済み'
         : isFormalAcceptedUnconfirmed
@@ -371,7 +372,7 @@ export async function CaseWorkspace({
           description:
             'お客様は見積を承諾済みです。契約条件と資料を確認し、次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
           href: tabHref('documents'),
-          action: '契約・図面・資料を確認',
+          action: '契約・資料を確認',
         }
       : isFormalAcceptedUnconfirmed
         ? {
@@ -525,6 +526,17 @@ export async function CaseWorkspace({
         </div>
       </section>
 
+      <section className="grid gap-2 rounded-lg border border-line bg-[#fbfcfb] p-3 text-xs sm:grid-cols-2" data-testid="case-data-status">
+        <div>
+          <p className="font-semibold text-ink">既存データで確認できる項目</p>
+          <p className="mt-1 leading-5 text-ink-soft">顧客、担当代理店、設置予定地、保存済みプラン、発行済み見積、登録済み案件資料</p>
+        </div>
+        <div>
+          <p className="font-semibold text-ink">正式状態が未実装の項目</p>
+          <p className="mt-1 leading-5 text-ink-soft">現地確認完了、契約Revision固定・契約成立、製造指示・個体ID・工程進捗、引渡し、保証・点検・修理履歴</p>
+        </div>
+      </section>
+
       <nav aria-label="案件内メニュー" className="border-y border-line bg-white">
         <div className="flex flex-wrap">
           {TABS.map((tabItem) => {
@@ -564,7 +576,10 @@ export async function CaseWorkspace({
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">見積書</h2>
+                <h2 className="text-lg font-semibold">見積</h2>
+                <Badge tone={isFormal ? 'success' : 'neutral'}>
+                  {isFormal ? '確定見積' : '概算見積'}
+                </Badge>
                 <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>
                   {QUOTE_STATUS_LABELS[quote.status]}
                 </Badge>
@@ -633,7 +648,7 @@ export async function CaseWorkspace({
           />
 
           <p className="text-xs leading-5 text-muted">
-            金額は発行時点の確定内容です。マスター価格を変更しても変わりません。
+            金額はこの見積版の発行時点で保存された内容です。マスター価格を変更しても変わりません。
             別途工事・フリー商品を入れる場合は、書き換えではなく改訂見積として発行します。
           </p>
 
@@ -701,17 +716,26 @@ export async function CaseWorkspace({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">現地条件</h2>
-                <Badge tone="neutral">参考表示</Badge>
+                <h2 className="text-lg font-semibold">現地確認</h2>
+                <Badge tone="neutral">正式完了状態は未登録</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
                 保存済み住所・案件受付メモ・案件資料から、正式確認前の候補情報を表示します。
               </p>
             </div>
-            <Link href={tabHref('documents')} className="btn-secondary btn-sm">
-              現地資料を確認
-            </Link>
+            <div className="flex flex-wrap gap-1.5">
+              <Link href={tabHref('documents')} className="btn-secondary btn-sm">
+                現地資料を確認
+              </Link>
+              <Link href={tabHref('estimate', true)} className="btn-primary btn-sm">
+                施工金額を見積へ反映
+              </Link>
+            </div>
           </div>
+
+          <Alert tone="info" title="現地確認の正式完了状態はまだ保存されません">
+            下の情報は確認作業の材料です。候補情報が埋まっていても「現地確認完了」にはなりません。正式な確認日・担当者・完了状態・写真等は別途バックエンド実装が必要です。
+          </Alert>
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-site-condition-candidates">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -771,7 +795,7 @@ export async function CaseWorkspace({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">契約・図面・資料</h2>
+                <h2 className="text-lg font-semibold">契約・資料</h2>
                 <Badge tone="neutral">参照のみ</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
@@ -817,14 +841,14 @@ export async function CaseWorkspace({
                 <p className="mt-1 text-[0.65rem] text-muted">Quoteメモから抽出</p>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3">
-                <dt className="text-xs text-muted">承諾見積額（参考）</dt>
+                <dt className="text-xs text-muted">現在の見積額（参考）</dt>
                 <dd className="mt-1 font-semibold">{formatYen(quote.total)}</dd>
                 <p className="mt-1 text-[0.65rem] text-muted">現在表示中の第{quote.revision}版</p>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3">
-                <dt className="text-xs text-muted">契約対象見積候補</dt>
-                <dd className="mt-1 font-semibold">{quote.quote_no}</dd>
-                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／未固定</p>
+                <dt className="text-xs text-muted">契約対象Revision</dt>
+                <dd className="mt-1 font-semibold">正式未固定</dd>
+                <p className="mt-1 text-[0.65rem] text-muted">現在表示：{quote.quote_no} 第{quote.revision}版</p>
               </div>
             </dl>
 
@@ -1110,6 +1134,20 @@ export async function CaseWorkspace({
               製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を保存する正式機能はまだありません。
               見積に項目があることを、製造済み・搬入済み・施工済みとは扱いません。
             </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {[
+                ['製造指示', '正式保存先なし'],
+                ['対象Revision', '正式未固定'],
+                ['個体ID', '未発行'],
+                ['製造進捗', '正式保存先なし'],
+                ['施工進捗', '正式保存先なし'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
+                  <p className="text-xs font-semibold text-muted">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+                </div>
+              ))}
+            </div>
           </section>
         </section>
       )}
@@ -1206,6 +1244,19 @@ export async function CaseWorkspace({
               保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を保存する正式機能はまだありません。
               現在の見積承諾や案件メモを、引渡し済み・保証中・点検済みとは扱いません。
             </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ['保証状態', '正式保存先なし'],
+                ['点検予定・履歴', '正式保存先なし'],
+                ['不具合・修理履歴', '正式保存先なし'],
+                ['問い合わせ履歴', '正式保存先なし'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
+                  <p className="text-xs font-semibold text-muted">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+                </div>
+              ))}
+            </div>
           </section>
         </section>
       )}

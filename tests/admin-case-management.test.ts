@@ -174,7 +174,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('次にやること：見積内容を確認');
     expect(workspace).toContain('見積を確認・更新');
     expect(workspace).toContain('次にやること：契約内容を確認');
-    expect(workspace).toContain('契約・図面・資料を確認');
+    expect(workspace).toContain('契約・資料を確認');
     expect(workspace).not.toContain("const isDealer = actor.role === 'dealer'");
     expect(workspace).not.toContain('DEALER_TAB_LABELS');
     expect(workspace).not.toContain('displayLabel = isDealer');
@@ -189,10 +189,10 @@ describe('Admin case management UI', () => {
   });
 
   it('keeps the HTML-style workflow and tabs without inventing downstream workflow data', () => {
-    for (const label of ['案件受付', '概算見積', '担当決定', '現地確認', '見積更新', '契約', '製造・施工', '引渡し', 'アフター']) {
+    for (const label of ['案件受付', '概算見積', '担当決定', '現地確認', '確定見積', '契約', '製造・施工', '引渡し', 'アフター']) {
       expect(workspace).toContain(label);
     }
-    for (const label of ['見積書', 'プランボード', '現地条件', '契約・図面・資料', '製造・施工', '引渡し・アフター', '災害時提供']) {
+    for (const label of ['見積', 'プラン', '現地確認', '契約・資料', '製造・施工', '引渡し・アフター', '災害時提供']) {
       expect(workspace).toContain(label);
     }
     expect(workspace).toContain('参考表示');
@@ -207,13 +207,21 @@ describe('Admin case management UI', () => {
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
     expect(workspace).toContain("<AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />");
     expect(workspace).not.toContain('<QuoteStatusForm');
+    expect(workspace).toContain("const isFormal = isFormalQuote(quote);");
+    expect(workspace).toContain("const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';");
+    expect(workspace).toContain("const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';");
+    expect(workspace).toContain("const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';");
+    expect(workspace).not.toContain("quote.revision === 1 ? '概算見積'");
+    expect(workspace).not.toContain("quote.revision > 1 ? '確定見積'");
     expect(caseAdminControls).toContain('data-testid="case-admin-controls"');
+    expect(workspace).toContain('<h2 className="text-lg font-semibold">見積</h2>');
+    expect(workspace).toContain("{isFormal ? '確定見積' : '概算見積'}");
     expect(workspace).toContain('見積書');
     expect(workspace).toContain('見積番号 {quote.quote_no}／発行');
     expect(workspace).toContain('data-testid="admin-pdf-link"');
     expect(workspace).toContain('PDF再生成');
     expect(workspace).not.toContain('この見積のPDF・画像');
-    expect(workspace).toContain('金額は発行時点の確定内容です。');
+    expect(workspace).toContain('金額はこの見積版の発行時点で保存された内容です。');
     expect(workspace).not.toContain('金額は発行時点のスナップショットです。');
   });
 
@@ -224,8 +232,16 @@ describe('Admin case management UI', () => {
   });
 
   it('does not present unsupported downstream workflow data as implemented', () => {
+    expect(workspace).toContain('data-testid="case-data-status"');
+    expect(workspace).toContain('既存データで確認できる項目');
+    expect(workspace).toContain('顧客、担当代理店、設置予定地、保存済みプラン、発行済み見積、登録済み案件資料');
+    expect(workspace).toContain('正式状態が未実装の項目');
+    expect(workspace).toContain('現地確認完了、契約Revision固定・契約成立、製造指示・個体ID・工程進捗、引渡し、保証・点検・修理履歴');
     expect(workspace).toContain('案件受付・現地メモ');
     expect(workspace).toContain('data-testid="case-tab-site"');
+    expect(workspace).toContain('現地確認の正式完了状態はまだ保存されません');
+    expect(workspace).toContain('候補情報が埋まっていても「現地確認完了」にはなりません。');
+    expect(workspace).toContain('施工金額を見積へ反映');
     expect(workspace).toContain('data-testid="case-site-condition-candidates"');
     expect(workspace).toContain('保存済み住所・案件受付メモ・案件資料から、正式確認前の候補情報を表示します。');
     expect(workspace).toContain('正式登録候補');
@@ -245,6 +261,14 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('都市計画資料は参考図として扱い');
     expect(workspace).toContain("tabHref('documents')");
     expect(workspace).toContain('正式な契約保存・アップロード・版管理は次工程です。');
+    expect(workspace).toContain('現在の見積状態');
+    expect(workspace).toContain('受注契約日（メモ）');
+    expect(workspace).toContain('現在の見積額（参考）');
+    expect(workspace).toContain('契約対象Revision');
+    expect(workspace).toContain('正式未固定');
+    expect(workspace).toContain('概算見積の承諾履歴');
+    expect(workspace).toContain('確定見積の承諾履歴（最新状態要確認）');
+    expect(workspace).toContain("'見積承諾済み'");
     expect(workspace).toContain('data-testid="case-drawing-grid"');
     expect(workspace).toContain('data-testid="case-document-list"');
     expect(workspace).toContain('data-testid="case-document-notes"');
@@ -253,7 +277,15 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('現在の見積書PDF');
     expect(workspace).toContain('原本保管は未実装');
     expect(workspace).toContain('製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を保存する正式機能はまだありません。');
+    expect(workspace).toContain("['製造指示', '正式保存先なし']");
+    expect(workspace).toContain("['対象Revision', '正式未固定']");
+    expect(workspace).toContain("['個体ID', '未発行']");
+    expect(workspace).toContain("['製造進捗', '正式保存先なし']");
+    expect(workspace).toContain("['施工進捗', '正式保存先なし']");
     expect(workspace).toContain('保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を保存する正式機能はまだありません。');
+    expect(workspace).toContain("['保証状態', '正式保存先なし']");
+    expect(workspace).toContain("['点検予定・履歴', '正式保存先なし']");
+    expect(workspace).toContain("['不具合・修理履歴', '正式保存先なし']");
     expect(workspace).toContain('現在は提供可否・供給可能棟数を判定しません。');
   });
 
@@ -292,6 +324,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("['引渡し資料', '正式保存先なし']");
     expect(workspace).toContain('data-testid="case-aftercare-future"');
     expect(workspace).toContain('現在の見積承諾や案件メモを、引渡し済み・保証中・点検済みとは扱いません。');
+    expect(workspace).toContain("['保証状態', '正式保存先なし']");
+    expect(workspace).toContain("['点検予定・履歴', '正式保存先なし']");
+    expect(workspace).toContain("['不具合・修理履歴', '正式保存先なし']");
   });
 
   it('shows production and installation scope only from existing quote data', () => {
@@ -320,9 +355,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('ここに表示する内容は正式な契約レコードではありません。');
     expect(workspace).toContain('正式な契約状態は未登録');
     expect(workspace).toContain('受注契約日（メモ）');
-    expect(workspace).toContain('承諾見積額（参考）');
-    expect(workspace).toContain('契約対象見積候補');
-    expect(workspace).toContain('第{quote.revision}版／未固定');
+    expect(workspace).toContain('現在の見積額（参考）');
+    expect(workspace).toContain('契約対象Revision');
+    expect(workspace).toContain('現在表示：{quote.quote_no} 第{quote.revision}版');
     expect(workspace).toContain('支払条件（メモ）');
     expect(workspace).toContain("caseDocuments.filter((row) => row.kind === 'contract')");
     expect(workspace).toContain('data-testid="case-contract-documents"');

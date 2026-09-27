@@ -1066,12 +1066,25 @@ export class LocalStore implements DataStore {
     return this.read((db) =>
       [...db.quoteRequests]
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .map((r) => ({
-          ...r,
-          quote_no: db.quotes.find((q) => q.id === r.quote_id)?.quote_no ?? null,
-          user_email: db.profiles.find((p) => p.id === r.user_id)?.email ?? '',
-        }))
+        .map((r) => {
+          const configuration = db.configurations.find((c) => c.id === r.configuration_id);
+          return {
+            ...r,
+            quote_no: db.quotes.find((q) => q.id === r.quote_id)?.quote_no ?? null,
+            user_email: db.profiles.find((p) => p.id === r.user_id)?.email ?? '',
+            configuration: configuration ? { name: configuration.name, spec_code: configuration.spec_code, model_name: db.models.find((m) => m.id === configuration.base_model_id)?.name ?? null } : null,
+          };
+        })
     );
+  }
+  async listCaseDealers() {
+    return this.read((db) => db.profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer').map(({ id, role_code, full_name, company_name }) => ({ id, role_code, full_name, company_name })).sort((a, b) => a.full_name.localeCompare(b.full_name)));
+  }
+  async getConfigurationCount() {
+    return this.read((db) => db.configurations.length);
+  }
+  async getNewContactMessageCount() {
+    return this.read((db) => db.contactMessages.filter((message) => message.status === 'new').length);
   }
   async assignQuoteDealer(id: string, dealerId: string | null, actor: SessionUser) {
     return this.mutate((db) => {
@@ -1108,7 +1121,15 @@ export class LocalStore implements DataStore {
       return db.quotes
         .filter((q) => q.dealer_id === dealerId)
         .sort((a, b) => b.issued_at.localeCompare(a.issued_at))
-        .map((q) => ({ ...q, user_email: email.get(q.user_id) ?? '' }));
+        .map((q) => {
+          const request = db.quoteRequests.find((r) => r.id === q.quote_request_id);
+          return {
+            ...q,
+            user_email: email.get(q.user_id) ?? '',
+            request_status: request?.status ?? null,
+            site_address: request?.contact.site_address ?? null,
+          };
+        });
     });
   }
 

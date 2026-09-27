@@ -1,5 +1,4 @@
 'use client';
-
 import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addProductImageAction,
@@ -8,12 +7,9 @@ import {
   saveModelAction,
   saveOptionAction,
   savePreviewRuleAction,
-  updateQuoteStatusAction,
   type AdminFormState,
 } from '@/lib/actions/admin';
 import {
-  QUOTE_REQUEST_STATUS_LABELS,
-  QUOTE_STATUS_LABELS,
   VIEW_KEYS,
   VIEW_LABELS,
   type BaseModel,
@@ -24,8 +20,6 @@ import {
   type PreviewImageRule,
   type ProductOption,
   type ProductImageKind,
-  type Quote,
-  type QuoteRequest,
   type ViewKey,
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
@@ -1397,48 +1391,6 @@ export function ContactStatusForm({ id, status }: { id: string; status: 'new' | 
         {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
       </button>
       {state.error && <span className="ml-2 text-xs text-danger">{state.error}</span>}
-    </form>
-  );
-}
-
-/* ---------- 見積ステータス ---------- */
-
-export function QuoteStatusForm({
-  quote,
-  request,
-  compact = false,
-}: {
-  quote: Quote;
-  request: QuoteRequest | null;
-  compact?: boolean;
-}) {
-  const [state, action, pending] = useActionState(updateQuoteStatusAction, initial);
-  return (
-    <form action={action} className={compact ? 'space-y-2' : 'card space-y-4 p-6'} noValidate>
-      <input type="hidden" name="quote_id" value={quote.id} />
-      {!compact && <p className="font-semibold">ステータス変更</p>}
-      <Status state={state} />
-      <div className={compact ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-4 sm:grid-cols-2'}>
-        <Field label="見積書の状態" htmlFor="q-status" required>
-          <Select id="q-status" name="status" defaultValue={quote.status} className={compact ? 'py-1 text-xs' : undefined}>
-            {Object.entries(QUOTE_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-        </Field>
-        <Field label="見積依頼の対応状況" htmlFor="q-req-status">
-          <Select id="q-req-status" name="request_status" defaultValue={request?.status ?? ''} className={compact ? 'py-1 text-xs' : undefined}>
-            <option value="">変更しない</option>
-            {Object.entries(QUOTE_REQUEST_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-        </Field>
-      </div>
-      {compact ? (
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending && <Spinner />}
-          更新する
-        </Button>
-      ) : (
-        <SubmitButton pending={pending} label="更新する" />
-      )}
     </form>
   );
 }

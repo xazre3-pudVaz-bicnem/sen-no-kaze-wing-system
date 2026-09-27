@@ -23,8 +23,6 @@ import type {
   CaseDocument,
   QuoteItem,
   QuoteRequest,
-  QuoteRequestStatus,
-  QuoteStatus,
   RoleCode,
   ContactMessage,
   ContactStatus,
@@ -230,7 +228,6 @@ export interface DataStore {
   listCaseDocuments(quoteId: string, actor: SessionUser): Promise<CaseDocument[]>;
   listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
   listQuoteRequests(): Promise<(QuoteRequest & { quote_no: string | null; user_email: string })[]>;
-  updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null): Promise<void>;
   /** 管理者が見積の担当代理店を割り当てる */
   assignQuoteDealer(id: string, dealerId: string | null, actor: SessionUser): Promise<Quote>;
   /** 代理店に割り当てられた見積の一覧 */

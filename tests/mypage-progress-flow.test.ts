@@ -23,7 +23,10 @@ describe('Mypage customer progress flow', () => {
     ]) {
       expect(page).toContain(label);
     }
-    expect(page).toContain("quote.status === 'accepted' && quote.revision === 1");
+    expect(page).toContain("quote.status === 'accepted' && quote.parent_quote_id === null");
+    expect(page).toContain('if (isFormalQuote(quote))');
+    expect(page).toContain("return isFormalQuote(quote) ? '確定見積' : '概算見積';");
+    expect(page).not.toContain('quote.revision > 1');
     expect(page).toContain("index: 2");
     expect(page).toContain('概算見積の確認を受け付けました');
     expect(page).toContain('確定見積を確認済みです');

@@ -15,12 +15,12 @@ import { formatDate } from '@/lib/utils';
 import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
-import { QuoteStatusForm } from '@/components/admin/forms';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 import { CasePlanBoard } from '@/components/admin/case-plan-board';
 import { CaseAdminControls } from '@/components/admin/case-admin-controls';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
+import { getAcceptedQuoteCaseState, isCurrentFormalQuote } from '@/lib/domain/quote-lifecycle';
 
 const CASE_DOCUMENT_KIND_LABELS: Record<CaseDocument['kind'], string> = {
   floorplan: '平面図',
@@ -171,6 +171,11 @@ export async function CaseWorkspace({
   if (!detail) notFound();
 
   const { quote, items, request } = detail;
+  const isCurrentFormal = isCurrentFormalQuote(quote, request);
+  const acceptedQuoteCaseState = getAcceptedQuoteCaseState(quote, request);
+  const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';
+  const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';
+  const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';
   const isAdmin = actor.role === 'admin';
   const canManageAllQuotes = canEditCatalog(actor.role);
   const canEditBase = canEditCatalog(actor.role);
@@ -244,7 +249,7 @@ export async function CaseWorkspace({
   const contractDocuments = caseDocuments.filter((row) => row.kind === 'contract');
   const nonContractDocuments = caseDocuments.filter((row) => row.kind !== 'contract');
   const drawingDocuments = nonContractDocuments.filter((row) => row.preview_url);
-  const currentPhaseLabel = quote.status === 'accepted' ? '契約確認' : '見積';
+  const currentPhaseLabel = isFormalAccepted ? '契約確認' : '見積';
   const siteEvidenceText = [
     request?.message ?? '',
     ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
@@ -307,18 +312,24 @@ export async function CaseWorkspace({
     },
     {
       label: '現地確認',
-      value: quote.revision > 1 ? '完了記録なし' : '要確認',
-      state: quote.status === 'issued' && quote.revision === 1 && quote.dealer_id ? 'current' : 'pending',
+      value: quote.parent_quote_id ? '完了記録なし' : '要確認',
+      state: quote.status === 'issued' && quote.parent_quote_id === null && quote.dealer_id ? 'current' : 'pending',
     },
     {
       label: '見積更新',
-      value: quote.status === 'accepted' ? '承諾済み' : `第${quote.revision}版`,
-      state: quote.status === 'accepted' ? 'done' : quote.status === 'issued' && quote.revision > 1 ? 'current' : 'pending',
+      value: isFormalAccepted
+        ? '承諾済み'
+        : isFormalAcceptedUnconfirmed
+          ? '確定見積の承諾履歴'
+          : isPreliminaryAccepted
+            ? '概算承諾履歴'
+            : `第${quote.revision}版`,
+      state: isFormalAccepted ? 'done' : quote.status === 'issued' && isCurrentFormal ? 'current' : 'pending',
     },
     {
       label: '契約',
-      value: quote.status === 'accepted' ? '正式状態未登録' : '未対応',
-      state: quote.status === 'accepted' ? 'current' : 'pending',
+      value: isFormalAccepted ? '正式状態未登録' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '未対応',
+      state: isFormalAccepted ? 'current' : 'pending',
     },
     { label: '製造・施工', value: '未対応', state: 'pending' },
     { label: '引渡し', value: '未対応', state: 'pending' },
@@ -326,17 +337,23 @@ export async function CaseWorkspace({
   ] as const;
 
   const currentWorkflowLabel =
-    quote.status === 'accepted'
+    isFormalAccepted
       ? '契約確認'
-      : quote.status === 'issued' && quote.revision === 1
+      : isFormalAcceptedUnconfirmed
+        ? '確定見積の承諾履歴（最新状態要確認）'
+        : isPreliminaryAccepted
+        ? '概算見積の回答履歴'
+      : quote.status === 'issued' && quote.parent_quote_id === null
         ? '現地確認・施工金額入力'
         : quote.status === 'issued'
           ? '見積内容の確認・更新'
           : `見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
-    quote.status === 'accepted'
+    isFormalAccepted
       ? '契約条件の確認'
-      : quote.status === 'issued' && quote.revision === 1
+      : isFormalAcceptedUnconfirmed
+        ? '最新の見積状態を確認'
+      : quote.status === 'issued' && quote.parent_quote_id === null
         ? '施工金額を見積へ反映'
         : quote.status === 'issued'
           ? 'お客様へ見積内容を案内'
@@ -348,7 +365,7 @@ export async function CaseWorkspace({
       : `/admin/quotes/${quote.id}?tab=${nextTab}${openEditor ? '&edit=1' : ''}`;
 
   const nextAction =
-    quote.status === 'accepted'
+    isFormalAccepted
       ? {
           title: '次にやること：契約内容を確認',
           description:
@@ -356,7 +373,23 @@ export async function CaseWorkspace({
           href: tabHref('documents'),
           action: '契約・図面・資料を確認',
         }
-      : quote.status === 'issued' && quote.revision === 1
+      : isFormalAcceptedUnconfirmed
+        ? {
+            title: '次にやること：最新の見積状態を確認',
+            description:
+              'この確定見積は承諾履歴ですが、現在の見積であることを確認できません。契約へは進めず、最新の見積Revisionと回答状態を確認してください。',
+            href: tabHref('estimate'),
+            action: '最新の見積状態を確認',
+          }
+        : isPreliminaryAccepted
+        ? {
+            title: '次にやること：確定見積を発行',
+            description:
+              'この概算見積の承諾は過去の回答履歴です。正式な契約には進めず、現地確認と施工金額を反映した確定見積を新たに発行してください。',
+            href: tabHref('estimate'),
+            action: '見積書を確認',
+          }
+      : quote.status === 'issued' && quote.parent_quote_id === null
         ? {
             title: '次にやること：現地を確認して施工金額を入力',
             description:
@@ -402,10 +435,6 @@ export async function CaseWorkspace({
               <div>
                 <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
                 <AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />
-              </div>
-              <div>
-                <p className="mb-1 text-[0.66rem] font-semibold text-muted">状態を変更</p>
-                <QuoteStatusForm quote={quote} request={request} compact />
               </div>
             </CaseAdminControls>
           )}
@@ -574,6 +603,16 @@ export async function CaseWorkspace({
           {revised && (
             <Alert tone="success" title={`第${quote.revision}版を発行しました`}>
               新しい版を案件ワークスペースへ反映しました。以前の版は履歴として残っています。
+            </Alert>
+          )}
+          {isPreliminaryAccepted && (
+            <Alert tone="warn" title="概算見積の承諾履歴">
+              この承諾は正式な契約進行の対象外です。現地確認と施工金額を反映した確定見積を発行してください。
+            </Alert>
+          )}
+          {isFormalAcceptedUnconfirmed && (
+            <Alert tone="warn" title="確定見積の承諾履歴（最新状態要確認）">
+              この確定見積が現在の見積であることを確認できません。契約へは進めず、最新の見積Revisionと回答状態を確認してください。
             </Alert>
           )}
           {from === 'mail' && canRevise && (
@@ -762,7 +801,13 @@ export async function CaseWorkspace({
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">現在の見積状態</dt>
                 <dd className="mt-1 font-semibold">
-                  {quote.status === 'accepted' ? '見積承諾済み' : QUOTE_STATUS_LABELS[quote.status]}
+                  {isFormalAccepted
+                    ? '見積承諾済み'
+                    : isFormalAcceptedUnconfirmed
+                      ? '確定見積の承諾履歴（最新状態要確認）'
+                      : isPreliminaryAccepted
+                        ? '概算見積の承諾履歴'
+                        : QUOTE_STATUS_LABELS[quote.status]}
                 </dd>
                 <p className="mt-1 text-[0.65rem] text-muted">正式な契約状態は未登録</p>
               </div>

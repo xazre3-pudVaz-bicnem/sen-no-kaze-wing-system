@@ -29,8 +29,6 @@ import type {
   QuoteDocument,
   CaseDocument,
   QuoteRequest,
-  QuoteRequestStatus,
-  QuoteStatus,
   ContactMessage,
   ContactStatus,
 } from '@/lib/domain/types';
@@ -42,6 +40,10 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
+import {
+  isCurrentIssuedQuote,
+  isQuoteAcceptanceEligible,
+} from '@/lib/domain/quote-lifecycle';
 import { ROUNDING_UNIT } from '@/lib/domain/pricing';
 import { COMPANY, QUOTE_VALID_DAYS } from '@/lib/site';
 import { addDays, yearMonthJst } from '@/lib/utils';
@@ -388,7 +390,13 @@ export class LocalStore implements DataStore {
       const q = db.quotes.find((x) => x.id === id);
       if (!q) throw new StoreError('NOT_FOUND', '見積が見つかりません');
       if (q.user_id !== actor.id) throw new StoreError('FORBIDDEN', '権限がありません');
-      if (q.status !== 'issued') throw new StoreError('LOCKED', 'この見積にはすでに回答済みです（または改訂されています）。');
+      const request = db.quoteRequests.find((row) => row.id === q.quote_request_id) ?? null;
+      if (!isCurrentIssuedQuote(q, request)) {
+        throw new StoreError('LOCKED', 'この見積にはすでに回答済みです（または改訂されています）。');
+      }
+      if (status === 'accepted' && !isQuoteAcceptanceEligible(q, request)) {
+        throw new StoreError('LOCKED', '現地条件と施工金額を反映した最新の確定見積にのみ承諾できます。');
+      }
       q.status = status;
       q.updated_at = nowIso();
       const cfg = db.configurations.find((c) => c.id === q.configuration_id);
@@ -1221,27 +1229,6 @@ export class LocalStore implements DataStore {
         req.updated_at = nowIso();
       }
       return next;
-    });
-  }
-
-  async updateQuoteStatus(id: string, status: QuoteStatus, requestStatus: QuoteRequestStatus | null) {
-    this.mutate((db) => {
-      const q = db.quotes.find((x) => x.id === id);
-      if (!q) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      q.status = status;
-      q.updated_at = nowIso();
-      if (requestStatus) {
-        const r = db.quoteRequests.find((x) => x.id === q.quote_request_id);
-        if (r) {
-          r.status = requestStatus;
-          r.updated_at = nowIso();
-        }
-      }
-      const cfg = db.configurations.find((c) => c.id === q.configuration_id);
-      if (cfg) {
-        if (status === 'issued') cfg.status = 'quoted';
-        if (status === 'accepted' || status === 'declined' || status === 'cancelled') cfg.status = 'closed';
-      }
     });
   }
 

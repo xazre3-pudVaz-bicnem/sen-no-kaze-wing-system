@@ -238,12 +238,6 @@ export const productImageSchema = z.object({
   sort_order: intFromForm,
 });
 
-export const quoteStatusSchema = z.object({
-  quote_id: z.uuid(),
-  status: z.enum(['issued', 'expired', 'accepted', 'declined', 'cancelled']),
-  request_status: z.preprocess((v) => (v === '' ? null : v), z.enum(['new', 'reviewing', 'sent', 'closed', 'cancelled']).nullable()),
-});
-
 export type FieldErrors = Record<string, string[] | undefined>;
 
 export function flattenErrors(error: z.ZodError): FieldErrors {

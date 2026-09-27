@@ -69,9 +69,9 @@ function configurationSiteAddress(configuration: Configuration | null): string |
 }
 
 function isOngoingCase(request: QuoteRequest | null, latestQuote: Quote | null): boolean {
-  if (request) return request.status === 'new' || request.status === 'reviewing' || request.status === 'sent';
-  if (!latestQuote) return false;
-  return latestQuote.status === 'issued' || latestQuote.status === 'accepted';
+  if (latestQuote) return latestQuote.status === 'issued' || latestQuote.status === 'accepted';
+  if (!request) return false;
+  return request.status === 'new' || request.status === 'reviewing' || request.status === 'sent';
 }
 
 function resolveCaseUserId(request: QuoteRequest | null, quotes: Quote[]): {

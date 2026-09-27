@@ -41,14 +41,27 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
             </p>
             <p className="mt-1 text-sm" data-testid="quote-revision">
               {quote.revision > 1 ? (
-                <span className="font-semibold text-forest">第{quote.revision}版・確定見積（代理店が別途工事を確認済み）</span>
+                <span className="font-semibold text-forest">第{quote.revision}版・現地条件と施工金額を反映済み</span>
               ) : (
-                <span className="text-muted">第1版・概算見積（別途工事は現地確認後に確定します）</span>
+                <span className="text-muted">第1版・現地確認前</span>
               )}
             </p>
           </div>
-          <Badge tone={quote.status === 'issued' ? 'navy' : quote.status === 'accepted' ? 'success' : 'neutral'} className="text-sm">{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={quote.revision > 1 && quote.status !== 'superseded' ? 'success' : 'neutral'} className="text-sm">
+              {quote.status === 'superseded' ? '旧版' : quote.revision > 1 ? '確定見積' : '概算見積'}
+            </Badge>
+            <Badge tone={quote.status === 'issued' ? 'navy' : quote.status === 'accepted' ? 'success' : 'neutral'} className="text-sm">
+              {QUOTE_STATUS_LABELS[quote.status]}
+            </Badge>
+          </div>
         </div>
+
+        <Alert tone={quote.revision > 1 ? 'success' : 'info'} className="mt-5">
+          {quote.revision > 1
+            ? '確定見積です。担当が現地条件と施工金額を反映しています。'
+            : '概算見積です。運送・基礎・電気・給排水・設置工事など、現地確認後に確定する費用はまだ含まれていません。'}
+        </Alert>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-primary" data-testid="pdf-view">

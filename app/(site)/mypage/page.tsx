@@ -12,12 +12,12 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { DeleteConfigurationButton } from '@/components/mypage/delete-button';
 
 const CUSTOMER_FLOW = [
-  'プラン作成',
-  '見積依頼',
-  '現地確認',
-  '確定見積',
-  'お客様確認',
-  '契約',
+  'プランを作る',
+  '見積を依頼',
+  '現地を確認',
+  '確定見積が届く',
+  '見積を確認',
+  '契約手続き',
   '製造・施工',
   '引渡し・アフター',
 ] as const;
@@ -30,10 +30,17 @@ function customerProgress(quote: Quote | undefined) {
       description: '仕様を確認し、内容が決まったら見積を依頼できます。',
     };
   }
+  if (quote.status === 'accepted' && quote.revision === 1) {
+    return {
+      index: 2,
+      title: '概算見積の確認を受け付けました',
+      description: 'この見積は現地確認前です。担当が現地条件を確認した後、施工金額を反映した確定見積をご案内します。',
+    };
+  }
   if (quote.status === 'accepted') {
     return {
       index: 5,
-      title: '見積を承諾済みです',
+      title: '確定見積を確認済みです',
       description: '契約条件と必要資料について、担当からの案内をご確認ください。',
     };
   }
@@ -163,7 +170,7 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                             {label}
                           </p>
                           {state === 'current' && (
-                            <span className="mt-1 rounded-full bg-white/75 px-2 py-0.5 text-[0.58rem] font-semibold">現在</span>
+                            <span className="mt-1 rounded-full bg-white/75 px-2 py-0.5 text-[0.58rem] font-semibold">今ここ</span>
                           )}
                         </div>
                         {index < CUSTOMER_FLOW.length - 1 && (

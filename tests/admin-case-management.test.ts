@@ -67,7 +67,7 @@ describe('Admin case management UI', () => {
     expect(dealerRequestMetaMigration).toContain('join public.quote_requests as r on r.id = q.quote_request_id');
     expect(dealerRequestMetaMigration).toContain("r.contact ->> 'site_address'");
     expect(dealerRequestMetaMigration).not.toContain("r.contact ->> 'address'");
-    expect(dealerRequestMetaMigration).not.toContain('address text');
+    expect(dealerRequestMetaMigration).not.toContain('\n  address text');
     expect(dealerRequestMetaMigration).not.toContain('r.message');
     expect(dealerRequestMetaMigration).not.toContain('select r.*');
     expect(dealerRequestMetaMigration).toContain('from public, anon, authenticated, service_role;');

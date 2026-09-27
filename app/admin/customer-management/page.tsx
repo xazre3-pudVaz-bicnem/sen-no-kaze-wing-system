@@ -12,9 +12,9 @@ import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { Badge, Button, Input } from '@/components/ui';
 
 function unlinkedReason(customerCase: CustomerCaseView): string {
-  if (customerCase.identityIssue === 'inconsistent_user_id') return 'user_id 不一致';
-  if (customerCase.identityIssue === 'non_customer_profile') return '担当者等の user_id に紐付く案件';
-  return '顧客Profileを確認できない案件';
+  if (customerCase.identityIssue === 'inconsistent_user_id') return '顧客情報の確認が必要';
+  if (customerCase.identityIssue === 'non_customer_profile') return '顧客アカウント未確定';
+  return '顧客アカウント未確認';
 }
 
 function unlinkedDisplayName(customerCase: CustomerCaseView): string {
@@ -62,13 +62,13 @@ export default async function AdminCustomerManagementPage({
   return (
     <AdminPage
       title="顧客管理"
-      lead="顧客を探し、既存の user_id で明確に紐づく案件・見積を確認するための参照画面です。"
+      lead="顧客を探し、案件・見積・設置予定地を確認するための参照画面です。"
       notice={
         <div className="space-y-1">
-          <p className="font-semibold text-ink">現在は read-only の顧客参照です。</p>
+          <p className="font-semibold text-ink">現在は参照専用です。</p>
           <p>
-            Profile と案件受付時の QuoteContact は別情報として扱い、どちらかを顧客情報の正本とは決めていません。
-            氏名やメールアドレスだけで別データを自動統合することもありません。
+            登録されている顧客情報と、案件受付時の情報を確認できます。ここでは情報の編集・統合は行いません。
+            同姓同名やメールアドレスの一致だけで、自動的に同じ顧客としてまとめることもありません。
           </p>
         </div>
       }
@@ -77,7 +77,7 @@ export default async function AdminCustomerManagementPage({
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ink-soft">
-              顧客名・法人名・連絡先・住所・案件で検索
+              顧客名・法人名・連絡先・住所・案件名で検索
             </span>
             <Input
               name="q"
@@ -106,27 +106,25 @@ export default async function AdminCustomerManagementPage({
           <div>
             <h2 id="customer-list-heading" className="text-lg font-semibold">顧客一覧</h2>
             <p className="mt-1 text-xs text-muted">
-              顧客アカウントの Profile と、同じ user_id を持つ案件だけを表示します。
+              顧客ごとに、連絡先と現在の案件状況を確認できます。
             </p>
           </div>
         </div>
 
-        <Table minWidth="76rem">
+        <Table minWidth="58rem">
           <thead className="bg-sand/60">
             <tr>
               <Th>顧客名 / 法人名</Th>
-              <Th>連絡先</Th>
-              <Th>住所</Th>
+              <Th>連絡先・住所</Th>
               <Th>進行中案件</Th>
               <Th>最近の案件</Th>
-              <Th>担当代理店</Th>
               <Th>詳細</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {shown.length === 0 ? (
               <tr>
-                <Td colSpan={7} className="py-10 text-center text-sm text-muted">
+                <Td colSpan={5} className="py-10 text-center text-sm text-muted">
                   条件に一致する顧客はいません。
                 </Td>
               </tr>
@@ -142,11 +140,11 @@ export default async function AdminCustomerManagementPage({
                         <p className="mt-1 text-[0.68rem] text-muted">顧客番号 {customer.profile.customer_no}</p>
                       )}
                     </Td>
-                    <Td className="text-xs">
+                    <Td className="max-w-64 text-xs">
                       <span className="block">{customer.profile.email || 'メール未登録'}</span>
                       <span className="mt-1 block text-muted">{customer.profile.phone ?? '電話未登録'}</span>
+                      <span className="mt-1 block text-muted">{customer.profile.address ?? '住所未登録'}</span>
                     </Td>
-                    <Td className="max-w-56 text-xs">{customer.profile.address ?? '未登録'}</Td>
                     <Td>
                       <span className="text-lg font-semibold tabular-nums">{customer.ongoingCases.length}</span>
                       <span className="ml-1 text-xs text-muted">件</span>
@@ -164,19 +162,12 @@ export default async function AdminCustomerManagementPage({
                           <p className="text-muted">
                             {recent.siteAddress ?? '設置予定地未登録'}／{formatDate(recent.activityAt)}
                           </p>
+                          <p className="text-muted">
+                            担当：{recent.dealer?.full_name ?? '未割り当て'}
+                          </p>
                         </div>
                       ) : (
                         <span className="text-muted">案件なし</span>
-                      )}
-                    </Td>
-                    <Td className="text-xs">
-                      {recent?.dealer ? (
-                        <>
-                          <span className="block font-semibold">{recent.dealer.full_name}</span>
-                          <span className="mt-1 block text-muted">{recent.dealer.company_name ?? recent.dealer.email}</span>
-                        </>
-                      ) : (
-                        <span className="text-muted">未割り当て</span>
                       )}
                     </Td>
                     <Td>
@@ -204,19 +195,18 @@ export default async function AdminCustomerManagementPage({
             </Badge>
           </div>
           <p className="mt-1 max-w-4xl text-xs leading-5 text-muted">
-            対面・電話・紹介でスタッフが登録した案件など、既存 user_id だけでは実顧客のidentityを確定できない案件です。
-            氏名・会社名・メールの一致だけで顧客へ統合せず、案件として個別に残しています。
+            顧客アカウントとの紐付けを確認できていない案件です。
+            同姓同名や会社名・メールアドレスの一致だけでは自動的に顧客へ統合せず、案件として個別に残しています。
           </p>
         </div>
 
         {view.unlinkedCases.length > 0 ? (
-          <Table minWidth="58rem">
+          <Table minWidth="48rem">
             <thead className="bg-[#fff8e8]">
               <tr>
                 <Th>案件上のお客様</Th>
-                <Th>紐付けない理由</Th>
-                <Th>案件</Th>
-                <Th>設置予定地</Th>
+                <Th>確認が必要な理由</Th>
+                <Th>案件・設置予定地</Th>
                 <Th>担当代理店</Th>
                 <Th>確認</Th>
               </tr>
@@ -236,8 +226,8 @@ export default async function AdminCustomerManagementPage({
                     <span className="mt-1 block text-muted">
                       {customerCase.latestQuote?.base_model_name ?? '見積未発行'}／{formatDate(customerCase.activityAt)}
                     </span>
+                    <span className="mt-1 block text-muted">設置予定地：{customerCase.siteAddress ?? '未登録'}</span>
                   </Td>
-                  <Td className="text-xs">{customerCase.siteAddress ?? '未登録'}</Td>
                   <Td className="text-xs">{customerCase.dealer?.full_name ?? '未割り当て'}</Td>
                   <Td>
                     <Link href={customerCaseHref(customerCase)} className="btn-secondary btn-sm">

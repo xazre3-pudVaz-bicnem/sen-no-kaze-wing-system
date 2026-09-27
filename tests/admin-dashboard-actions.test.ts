@@ -17,13 +17,15 @@ describe('Admin dashboard actions', () => {
     expect(dashboard).toContain("quote.status === 'issued' && quote.revision === 1 && !quote.dealer_id");
     expect(dashboard).toContain("quote.status === 'issued' && quote.revision === 1 && Boolean(quote.dealer_id)");
     expect(dashboard).toContain("quote.status === 'issued' && quote.revision > 1");
-    expect(dashboard).toContain("quote.status === 'accepted'");
+    expect(dashboard).toContain("quote.status === 'accepted' && quote.revision === 1");
+    expect(dashboard).toContain("quote.status === 'accepted' && quote.revision > 1");
     expect(dashboard).toContain("contact.status === 'new'");
 
     for (const label of [
       '新しい見積依頼',
       '担当代理店が未割当',
       '現地確認・施工金額確認',
+      '概算見積の承諾記録あり／現地確認・確定見積が必要',
       '確定見積の確認・案内',
       'お客様が見積を承諾',
       '未対応のお問い合わせ',
@@ -37,8 +39,19 @@ describe('Admin dashboard actions', () => {
     expect(dashboard).toContain('store.listDealerQuotes(actor.id)');
     expect(dashboard).not.toContain('store.listAllQuotes(actor.id)');
     expect(dashboard).toContain("q.status === 'issued' && q.revision === 1");
+    expect(dashboard).toContain("q.status === 'accepted' && q.revision === 1");
     expect(dashboard).toContain("q.status === 'issued' && q.revision > 1");
-    expect(dashboard).toContain("q.status === 'accepted'");
+    expect(dashboard).toContain("q.status === 'accepted' && q.revision > 1");
+  });
+
+  it('keeps accepted preliminary quotes out of contract confirmation and routes them back to site/final-quote work', () => {
+    expect(dashboard).toContain("const acceptedPreliminary = mine.filter((q) => q.status === 'accepted' && q.revision === 1)");
+    expect(dashboard).toContain("const accepted = mine.filter((q) => q.status === 'accepted' && q.revision > 1)");
+    expect(dashboard).toContain("const acceptedPreliminary = activeQuotes.filter((quote) => quote.status === 'accepted' && quote.revision === 1)");
+    expect(dashboard).toContain("const accepted = activeQuotes.filter((quote) => quote.status === 'accepted' && quote.revision > 1)");
+    expect(dashboard).toContain("href: caseHref(acceptedPreliminary[0].id, 'site')");
+    expect(dashboard).toContain("href: caseHref(accepted[0].id, 'documents')");
+    expect(dashboard).toContain('第1版の概算見積に承諾記録がありますが、契約工程には進めません。');
   });
 
   it('does not invent unsupported deadlines or downstream workflow state', () => {

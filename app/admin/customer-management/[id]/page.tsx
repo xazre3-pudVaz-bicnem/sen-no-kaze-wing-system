@@ -18,8 +18,8 @@ import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 import { Badge } from '@/components/ui';
 
 function caseStatus(customerCase: CustomerCaseView): string {
-  if (customerCase.request) return QUOTE_REQUEST_STATUS_LABELS[customerCase.request.status];
   if (customerCase.latestQuote) return QUOTE_STATUS_LABELS[customerCase.latestQuote.status];
+  if (customerCase.request) return QUOTE_REQUEST_STATUS_LABELS[customerCase.request.status];
   return '状態未登録';
 }
 
@@ -291,7 +291,7 @@ export default async function AdminCustomerDetailPage({
                   <Td right className="whitespace-nowrap">{formatYen(quote.total)}</Td>
                   <Td>
                     <Link
-                      href={`/admin/quotes?case=${encodeURIComponent(quote.id)}#case-workspace`}
+                      href={`/admin/quotes/${encodeURIComponent(quote.id)}`}
                       className="text-xs font-semibold underline-offset-4 hover:underline"
                     >
                       案件を見る

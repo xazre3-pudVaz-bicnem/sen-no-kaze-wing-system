@@ -17,15 +17,18 @@ describe('顧客管理UI', () => {
     expect(list).toContain("await requireAdmin('/admin/customer-management')");
   });
 
-  it('shows the requested customer list without treating profile as a formal customer master', () => {
-    for (const label of ['顧客名 / 法人名', '連絡先', '住所', '進行中案件', '最近の案件', '担当代理店', '顧客を見る']) {
+  it('keeps the customer list compact and explains the read-only identity boundary in business language', () => {
+    for (const label of ['顧客名 / 法人名', '連絡先・住所', '進行中案件', '最近の案件', '顧客を見る']) {
       expect(list).toContain(label);
     }
-    expect(list).toContain('Profile と案件受付時の QuoteContact は別情報として扱い');
-    expect(list).toContain('氏名やメールアドレスだけで別データを自動統合することもありません。');
+    expect(list).toContain('現在は参照専用です。');
+    expect(list).toContain('ここでは情報の編集・統合は行いません。');
+    expect(list).toContain('同姓同名やメールアドレスの一致だけで、自動的に同じ顧客としてまとめることもありません。');
     expect(list).toContain('顧客未紐付け案件');
-    expect(list).toContain('既存 user_id だけでは実顧客のidentityを確定できない案件');
+    expect(list).toContain('顧客アカウントとの紐付けを確認できていない案件です。');
+    expect(list).toContain('確認が必要な理由');
     expect(list).toContain('data-testid="unlinked-customer-case-row"');
+    expect(list).not.toContain('既存 user_id だけでは実顧客のidentityを確定できない案件');
   });
 
   it('shows customer details, cases, quotes, installation sites and honest future placeholders', () => {

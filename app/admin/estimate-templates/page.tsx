@@ -39,7 +39,7 @@ function sampleHref(model: string, q: string) {
 }
 
 const LIST_GRID =
-  'grid grid-cols-[minmax(10rem,2fr)_6rem_7rem_5rem_6.5rem] items-center';
+  'grid grid-cols-[minmax(14rem,2fr)_6.75rem_7rem_5.5rem_5.5rem_1.5rem] items-center gap-x-2';
 
 const SAMPLE_PRICING = {
   costTaxIncluded: 2_100_000,
@@ -136,96 +136,102 @@ export default async function EstimateTemplatesPage({
       <section className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <h2 className="text-base font-semibold">標準見積一覧</h2>
-          <span className="text-xs text-muted">{totalChoices}件 + 動作確認サンプル1件</span>
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <span>{totalChoices}件</span>
+            <span aria-hidden="true">・</span>
+            <span>動作確認用 1件</span>
+          </div>
         </div>
 
-        <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-5">
-            <div className="shrink-0">
-              <p className="mb-1.5 text-xs font-semibold text-ink-soft">商品モデル</p>
-              <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
-                <Link
-                  href={filterHref('', qRaw)}
-                  aria-current={!modelId ? 'page' : undefined}
-                  className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                    !modelId
-                      ? 'border-ink bg-ink text-white'
-                      : 'border-line bg-white text-ink hover:bg-sand'
-                  }`}
-                >
-                  すべて
-                </Link>
-                {simulatorModels.map((model) => {
-                  const active = model.id === modelId;
-                  return (
-                    <Link
-                      key={model.id}
-                      href={filterHref(model.id, qRaw)}
-                      aria-current={active ? 'page' : undefined}
-                      className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                        active
-                          ? 'border-forest bg-forest text-white'
-                          : 'border-line bg-white text-ink hover:bg-sand'
-                      }`}
-                    >
-                      {model.name === 'フラット' ? 'Flat' : model.name}
-                    </Link>
-                  );
-                })}
-              </div>
+        <div className="border-b border-line bg-sand/15 px-4 py-2.5 sm:px-5">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
+              <Link
+                href={filterHref('', qRaw)}
+                aria-current={!modelId ? 'page' : undefined}
+                className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                  !modelId
+                    ? 'border-ink bg-ink text-white'
+                    : 'border-line bg-white text-ink hover:bg-sand'
+                }`}
+              >
+                すべて
+              </Link>
+              {simulatorModels.map((model) => {
+                const active = model.id === modelId;
+                return (
+                  <Link
+                    key={model.id}
+                    href={filterHref(model.id, qRaw)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                      active
+                        ? 'border-forest bg-forest text-white'
+                        : 'border-line bg-white text-ink hover:bg-sand'
+                    }`}
+                  >
+                    {model.name === 'フラット' ? 'Flat' : model.name}
+                  </Link>
+                );
+              })}
             </div>
 
-            <form method="get" className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end lg:justify-end">
+            <form method="get" className="flex min-w-0 flex-1 items-center gap-1.5 lg:max-w-[34rem]">
               {modelId && <input type="hidden" name="model" value={modelId} />}
-              <label className="block min-w-0 flex-1 lg:max-w-xl">
-                <span className="mb-1.5 block text-xs font-semibold text-ink-soft">見積名</span>
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">見積名</span>
                 <Input
                   type="search"
                   name="q"
                   defaultValue={sp.q ?? ''}
                   placeholder="見積名を検索"
-                  className="h-10 min-h-10 w-full px-3 text-sm"
+                  className="h-9 min-h-9 w-full px-3 text-sm"
                 />
               </label>
-              <div className="flex shrink-0 gap-1.5">
-                <button type="submit" className="btn-secondary btn-sm min-h-10 px-4">絞り込む</button>
-                {hasFilters && (
-                  <Link href="/admin/estimate-templates" className="btn-ghost btn-sm min-h-10 px-3">
-                    クリア
-                  </Link>
-                )}
-              </div>
+              <button type="submit" className="btn-secondary btn-sm min-h-9 shrink-0 px-3.5">
+                絞り込む
+              </button>
+              {hasFilters && (
+                <Link href="/admin/estimate-templates" className="btn-ghost btn-sm min-h-9 shrink-0 px-2.5">
+                  クリア
+                </Link>
+              )}
             </form>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <div className="min-w-[40rem]">
-            <div className={`${LIST_GRID} border-b border-line bg-sand/40 px-2 py-2 text-xs font-semibold text-ink-soft`}>
+            <div className={`${LIST_GRID} border-b border-line bg-sand/35 px-3 py-2 text-xs font-semibold text-ink-soft`}>
               <div>見積名</div>
               <div className="text-right">原価税込</div>
               <div className="text-right">売価税込</div>
               <div className="text-right">粗利率</div>
-              <div>状態</div>
+              <div className="text-center">状態</div>
+              <div aria-hidden="true" />
             </div>
 
             <Link
               href={sampleHref(modelId, qRaw)}
               aria-current={sampleSelected ? 'true' : undefined}
-              className={`${LIST_GRID} min-h-12 border-b border-line px-2 py-2 text-sm transition ${
+              className={`${LIST_GRID} min-h-12 border-b border-line px-3 py-2 text-sm transition ${
                 sampleSelected
-                  ? 'border-l-4 border-l-amber-500 bg-amber-50 pl-1'
-                  : 'bg-amber-50/50 hover:bg-amber-50'
+                  ? 'border-l-4 border-l-amber-500 bg-amber-50/70 pl-2'
+                  : 'bg-sand/15 hover:bg-amber-50/50'
               }`}
             >
               <div className="min-w-0">
-                <span className="font-semibold text-ink">動作確認サンプル（Wing ホテル仕様）</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
+                  <Badge tone="warn" className="shrink-0">動作確認用</Badge>
+                </div>
                 <p className="mt-0.5 text-[10px] text-muted">保存されない画面確認用データ</p>
               </div>
               <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
               <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
               <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
-              <div><Badge tone="neutral">サンプル</Badge></div>
+              <div className="text-center"><Badge tone="neutral">サンプル</Badge></div>
+              <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
             </Link>
 
             {groups.length > 0 ? groups.map((group, groupIndex) => {
@@ -237,7 +243,7 @@ export default async function EstimateTemplatesPage({
                     open={Boolean(modelId) || groupIndex === 0 || selectedGroup}
                     className="group border-b border-line"
                   >
-                    <summary className="list-none cursor-pointer bg-[#eaf4ee] px-3 py-2 [&::-webkit-details-marker]:hidden">
+                    <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-2 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
                       <div className="flex items-center gap-2 text-sm font-semibold text-forest">
                         <span className="text-xs transition-transform group-open:rotate-90">▶</span>
                         <span>{displayModelName}</span>
@@ -258,9 +264,9 @@ export default async function EstimateTemplatesPage({
                             key={choice.code}
                             href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
                             aria-current={active ? 'true' : undefined}
-                            className={`${LIST_GRID} min-h-12 px-2 py-2 text-sm transition ${
+                            className={`${LIST_GRID} min-h-12 px-3 py-2 text-sm transition ${
                               active
-                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-1'
+                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-2'
                                 : 'bg-white hover:bg-sand/30'
                             }`}
                           >
@@ -269,18 +275,21 @@ export default async function EstimateTemplatesPage({
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div className="text-right font-semibold">
-                              {template ? formatYen(template.total) : <span className="text-xs font-normal leading-tight text-muted">シミュレーターで算出</span>}
-                            </div>
-                            <div className="text-right text-muted">—</div>
-                            <div>
                               {template ? (
-                                <Badge tone="neutral">登録済み</Badge>
+                                <span className="tabular-nums">{formatYen(template.total)}</span>
                               ) : (
-                                <span className="inline-flex rounded-full border border-line bg-sand/40 px-1.5 py-1 text-[0.7rem] font-semibold leading-tight text-muted">
-                                  未登録
-                                </span>
+                                <span className="text-xs font-normal leading-tight text-muted">シミュレーターで算出</span>
                               )}
                             </div>
+                            <div className="text-right text-muted">—</div>
+                            <div className="text-center">
+                              {template ? (
+                                <Badge tone="success">登録済み</Badge>
+                              ) : (
+                                <Badge tone="neutral">未登録</Badge>
+                              )}
+                            </div>
+                            <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
                           </Link>
                         );
                       })}
@@ -288,7 +297,7 @@ export default async function EstimateTemplatesPage({
                   </details>
                 );
               }) : (
-                <div className="col-span-5 px-6 py-8 text-center">
+                <div className="col-span-6 px-6 py-8 text-center">
                   <p className="text-sm font-semibold">条件に一致する正式な標準見積がありません</p>
                   <p className="mt-1 text-xs text-muted">上の動作確認サンプルは引き続き確認できます。</p>
                 </div>

@@ -26,6 +26,7 @@ import type {
   CaseDocument,
   QuoteItem,
   QuoteRequest,
+  QuoteRequestStatus,
   ContactMessage,
   ContactStatus,
 } from '@/lib/domain/types';
@@ -41,6 +42,8 @@ import {
   type ContactInput,
   type CategoryInput,
   type DataStore,
+  type CaseDealer,
+  type DealerQuoteListItem,
   type ModelInput,
   type OptionInput,
   type OptionImageInput,
@@ -567,12 +570,30 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { data, error } = await db
       .from('quote_requests')
-      .select('*, profiles!quote_requests_user_id_fkey(email), quotes!quote_requests_quote_fk(quote_no)')
+      .select('*, profiles!quote_requests_user_id_fkey(email), quotes!quote_requests_quote_fk(quote_no), configurations!quote_requests_configuration_id_fkey(name, spec_code, base_models!configurations_base_model_id_fkey(name))')
       .order('created_at', { ascending: false });
     if (error) mapPgError(error);
-    return ((data ?? []) as (QuoteRequest & { profiles: { email: string } | null; quotes: { quote_no: string } | null })[]).map(
-      ({ profiles, quotes, ...r }) => ({ ...r, quote_no: quotes?.quote_no ?? null, user_email: profiles?.email ?? '' })
+    return ((data ?? []) as (QuoteRequest & { profiles: { email: string } | null; quotes: { quote_no: string } | null; configurations: { name: string; spec_code: string | null; base_models: { name: string } | null } | null })[]).map(
+      ({ profiles, quotes, configurations, ...r }) => ({ ...r, quote_no: quotes?.quote_no ?? null, user_email: profiles?.email ?? '', configuration: configurations ? { name: configurations.name, spec_code: configurations.spec_code, model_name: configurations.base_models?.name ?? null } : null })
     );
+  }
+  async listCaseDealers(): Promise<CaseDealer[]> {
+    const db = await this.db();
+    const { data, error } = await db.from('profiles').select('id, role_code, full_name, company_name').in('role_code', ['dealer', 'master_dealer']).order('full_name');
+    if (error) mapPgError(error);
+    return (data ?? []) as CaseDealer[];
+  }
+  async getConfigurationCount() {
+    const db = await this.db();
+    const { count, error } = await db.from('configurations').select('*', { count: 'exact', head: true });
+    if (error) mapPgError(error);
+    return count ?? 0;
+  }
+  async getNewContactMessageCount() {
+    const db = await this.db();
+    const { count, error } = await db.from('contact_messages').select('*', { count: 'exact', head: true }).eq('status', 'new');
+    if (error) mapPgError(error);
+    return count ?? 0;
   }
   async assignQuoteDealer(id: string, dealerId: string | null) {
     const db = await this.db();
@@ -581,18 +602,37 @@ export class SupabaseStore implements DataStore {
     return data as Quote;
   }
 
-  async listDealerQuotes(dealerId: string) {
+  async listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]> {
     const db = await this.db();
-    const { data, error } = await db
-      .from('quotes')
-      .select('*, profiles!quotes_user_id_fkey(email)')
-      .eq('dealer_id', dealerId)
-      .order('issued_at', { ascending: false });
+    const [{ data, error }, { data: requestMeta, error: requestMetaError }] = await Promise.all([
+      db
+        .from('quotes')
+        .select('*, profiles!quotes_user_id_fkey(email)')
+        .eq('dealer_id', dealerId)
+        .order('issued_at', { ascending: false }),
+      db.rpc('list_dealer_quote_request_meta'),
+    ]);
     if (error) mapPgError(error);
-    return ((data ?? []) as (Quote & { profiles?: { email?: string } })[]).map((q) => ({
-      ...q,
-      user_email: q.profiles?.email ?? '',
-    })) as (Quote & { user_email: string })[];
+    if (requestMetaError && !isMissingFunction(requestMetaError)) mapPgError(requestMetaError);
+    const requestMetaRows = requestMetaError ? [] : requestMeta ?? [];
+    const requestMetaByQuoteId = new Map(
+      (requestMetaRows as Array<{
+        quote_id: string;
+        request_status: QuoteRequestStatus | null;
+        site_address: string | null;
+      }>).map((request) => [request.quote_id, request])
+    );
+    return ((data ?? []) as (Quote & {
+      profiles?: { email?: string };
+    })[]).map((q) => {
+      const request = requestMetaByQuoteId.get(q.id);
+      return {
+        ...q,
+        user_email: q.profiles?.email ?? '',
+        request_status: request?.request_status ?? null,
+        site_address: request?.site_address ?? null,
+      };
+    });
   }
 
   async createDealerRevision(id: string, input: DealerRevisionInput) {

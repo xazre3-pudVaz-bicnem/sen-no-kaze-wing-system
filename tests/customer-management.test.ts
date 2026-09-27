@@ -207,6 +207,80 @@ describe('customer management read model', () => {
     expect(view.customers.find((item) => item.profile.id === second.id)?.cases.map((item) => item.id)).toEqual(['request-2']);
   });
 
+  it('prioritizes accepted latest quote over a closed request', () => {
+    const customer = profile('customer-1', 'customer');
+    const req = request('request-accepted', customer.id, 'cfg-accepted', { status: 'closed' });
+    const acceptedQuote = quote('quote-accepted', req.id, customer.id, 1, {
+      configuration_id: 'cfg-accepted',
+      status: 'accepted',
+    });
+
+    const view = buildCustomerManagementView({
+      profiles: [customer],
+      requests: [req],
+      quotes: [acceptedQuote],
+      configurations: [configuration('cfg-accepted', customer.id)],
+    });
+
+    expect(view.customers[0].ongoingCases.map((item) => item.id)).toEqual([req.id]);
+    expect(view.customers[0].pastCases).toHaveLength(0);
+  });
+
+  it('prioritizes cancelled latest quote over a sent request', () => {
+    const customer = profile('customer-1', 'customer');
+    const req = request('request-cancelled', customer.id, 'cfg-cancelled', { status: 'sent' });
+    const cancelledQuote = quote('quote-cancelled', req.id, customer.id, 1, {
+      configuration_id: 'cfg-cancelled',
+      status: 'cancelled',
+    });
+
+    const view = buildCustomerManagementView({
+      profiles: [customer],
+      requests: [req],
+      quotes: [cancelledQuote],
+      configurations: [configuration('cfg-cancelled', customer.id)],
+    });
+
+    expect(view.customers[0].ongoingCases).toHaveLength(0);
+    expect(view.customers[0].pastCases.map((item) => item.id)).toEqual([req.id]);
+  });
+
+  it.each(['new', 'reviewing', 'sent'] as const)(
+    'treats quote-less request status %s as ongoing',
+    (status) => {
+      const customer = profile('customer-1', 'customer');
+      const req = request(`request-${status}`, customer.id, `cfg-${status}`, { status });
+
+      const view = buildCustomerManagementView({
+        profiles: [customer],
+        requests: [req],
+        quotes: [],
+        configurations: [configuration(`cfg-${status}`, customer.id)],
+      });
+
+      expect(view.customers[0].ongoingCases.map((item) => item.id)).toEqual([req.id]);
+      expect(view.customers[0].pastCases).toHaveLength(0);
+    }
+  );
+
+  it.each(['closed', 'cancelled'] as const)(
+    'treats quote-less request status %s as past',
+    (status) => {
+      const customer = profile('customer-1', 'customer');
+      const req = request(`request-${status}`, customer.id, `cfg-${status}`, { status });
+
+      const view = buildCustomerManagementView({
+        profiles: [customer],
+        requests: [req],
+        quotes: [],
+        configurations: [configuration(`cfg-${status}`, customer.id)],
+      });
+
+      expect(view.customers[0].ongoingCases).toHaveLength(0);
+      expect(view.customers[0].pastCases.map((item) => item.id)).toEqual([req.id]);
+    }
+  );
+
   it('separates a case when request and quote user_id disagree', () => {
     const first = profile('customer-1', 'customer');
     const second = profile('customer-2', 'customer');

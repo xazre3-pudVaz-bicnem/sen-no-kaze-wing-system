@@ -42,6 +42,18 @@ describe('顧客管理UI', () => {
     expect(detail).toContain('現在は正式データを表示しません。');
   });
 
+  it('opens every quote revision through its direct detail route', () => {
+    expect(detail).toContain('href={\`/admin/quotes/\${encodeURIComponent(quote.id)}\`}');
+    expect(detail).not.toContain('href={\`/admin/quotes?case=\${encodeURIComponent(quote.id)}#case-workspace\`}');
+  });
+
+  it('shows the latest quote status before the request status', () => {
+    const quoteCheck = detail.indexOf('if (customerCase.latestQuote) return QUOTE_STATUS_LABELS[customerCase.latestQuote.status];');
+    const requestCheck = detail.indexOf('if (customerCase.request) return QUOTE_REQUEST_STATUS_LABELS[customerCase.request.status];');
+    expect(quoteCheck).toBeGreaterThan(-1);
+    expect(requestCheck).toBeGreaterThan(quoteCheck);
+  });
+
   it('does not add customer management to shared navigation in this PR', () => {
     expect(nav).not.toContain('/admin/customer-management');
   });

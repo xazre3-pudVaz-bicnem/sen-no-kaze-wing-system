@@ -2,9 +2,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { LP_NAV } from '@/data/site-content';
 import { COMPANY, PROJECT_NAME } from '@/lib/site';
+import { getSessionUser } from '@/lib/auth/session';
 
 /** 先方サイトと同じ構成：3拠点の住所 ＋ Contact Us ＋ ナビ ＋ 規程リンク */
-export function Footer() {
+export async function Footer() {
+  const user = await getSessionUser();
   return (
     <footer className="border-t border-forest-line bg-forest-deep text-white">
       <div className="container-x grid gap-12 py-16 lg:grid-cols-[1.1fr_1fr]">
@@ -59,9 +61,11 @@ export function Footer() {
             <Link href="/mypage" className="text-white/80 hover:text-gold">
               マイページ
             </Link>
-            <Link href="/login" className="text-white/80 hover:text-gold">
-              ログイン
-            </Link>
+            {!user && (
+              <Link href="/login" className="text-white/80 hover:text-gold">
+                ログイン
+              </Link>
+            )}
             <Link href="/privacy" className="text-white/80 hover:text-gold">
               プライバシーポリシー
             </Link>

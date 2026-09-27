@@ -63,30 +63,30 @@ export default async function AdminDashboard() {
   if (actor.role !== 'admin') {
     const mineAll = await store.listDealerQuotes(actor.id);
     const mine = mineAll.filter((q) => q.status !== 'superseded');
-    const siteWork = mine.filter((q) => q.status === 'issued' && q.revision === 1);
-    const acceptedPreliminary = mine.filter((q) => q.status === 'accepted' && q.revision === 1);
-    const finalQuoteReview = mine.filter((q) => q.status === 'issued' && q.revision > 1);
-    const accepted = mine.filter((q) => q.status === 'accepted' && q.revision > 1);
+    const siteWork = mine.filter((q) => q.status === 'issued' && q.parent_quote_id === null);
+    const acceptedPreliminary = mine.filter((q) => q.status === 'accepted' && q.parent_quote_id === null);
+    const finalQuoteReview = mine.filter((q) => q.status === 'issued' && q.parent_quote_id !== null);
+    const accepted = mine.filter((q) => q.status === 'accepted' && q.parent_quote_id !== null);
 
     const actions = [
       siteWork[0] && {
         title: '現地確認・施工金額確認',
         count: siteWork.length,
-        reason: '第1版の概算見積が発行済みです。現地条件を確認し、必要な施工金額を見積へ反映します。',
+        reason: '概算見積が発行済みです。現地条件を確認し、必要な施工金額を見積へ反映します。',
         href: caseHref(siteWork[0].id, 'site'),
         action: '現地確認を開く',
       },
       acceptedPreliminary[0] && {
         title: '概算見積の承諾記録あり／現地確認・確定見積が必要',
         count: acceptedPreliminary.length,
-        reason: '第1版の概算見積に承諾記録がありますが、契約工程には進めません。現地条件を確認し、施工金額を反映した確定見積を作成します。',
+        reason: '概算見積に承諾記録がありますが、契約工程には進めません。現地条件を確認し、施工金額を反映した確定見積を作成します。',
         href: caseHref(acceptedPreliminary[0].id, 'site'),
         action: '現地確認を開く',
       },
       finalQuoteReview[0] && {
         title: '確定見積の確認・案内',
         count: finalQuoteReview.length,
-        reason: '第2版以降の見積が発行済みです。施工金額や変更内容を確認し、お客様への案内に進みます。',
+        reason: '現地条件と施工金額を反映した確定見積が発行済みです。内容を確認し、お客様への案内に進みます。',
         href: caseHref(finalQuoteReview[0].id, 'estimate', true),
         action: '見積内容を確認する',
       },
@@ -151,12 +151,25 @@ export default async function AdminDashboard() {
 
   const newRequests = requests.filter((request) => request.status === 'new');
   const newRequestQuoteIds = new Set(newRequests.flatMap((request) => (request.quote_id ? [request.quote_id] : [])));
-  const activeQuotes = quotes.filter((quote) => quote.status !== 'superseded' && !newRequestQuoteIds.has(quote.id));
-  const unassigned = activeQuotes.filter((quote) => quote.status === 'issued' && quote.revision === 1 && !quote.dealer_id);
-  const siteWork = activeQuotes.filter((quote) => quote.status === 'issued' && quote.revision === 1 && Boolean(quote.dealer_id));
-  const acceptedPreliminary = activeQuotes.filter((quote) => quote.status === 'accepted' && quote.revision === 1);
-  const finalQuoteReview = activeQuotes.filter((quote) => quote.status === 'issued' && quote.revision > 1);
-  const accepted = activeQuotes.filter((quote) => quote.status === 'accepted' && quote.revision > 1);
+  const currentQuoteIds = new Set(requests.flatMap((request) => (request.quote_id ? [request.quote_id] : [])));
+  const activeQuotes = quotes.filter(
+    (quote) => currentQuoteIds.has(quote.id) && quote.status !== 'superseded' && !newRequestQuoteIds.has(quote.id)
+  );
+  const unassigned = activeQuotes.filter(
+    (quote) => quote.status === 'issued' && quote.parent_quote_id === null && !quote.dealer_id
+  );
+  const siteWork = activeQuotes.filter(
+    (quote) => quote.status === 'issued' && quote.parent_quote_id === null && Boolean(quote.dealer_id)
+  );
+  const acceptedPreliminary = activeQuotes.filter(
+    (quote) => quote.status === 'accepted' && quote.parent_quote_id === null
+  );
+  const finalQuoteReview = activeQuotes.filter(
+    (quote) => quote.status === 'issued' && quote.parent_quote_id !== null
+  );
+  const accepted = activeQuotes.filter(
+    (quote) => quote.status === 'accepted' && quote.parent_quote_id !== null
+  );
   const newContacts = contacts.filter((contact) => contact.status === 'new');
 
   const actions = [
@@ -170,28 +183,28 @@ export default async function AdminDashboard() {
     unassigned[0] && {
       title: '担当代理店が未割当',
       count: unassigned.length,
-      reason: '第1版の概算見積は発行済みですが、現地確認を進める担当代理店がまだ設定されていません。',
+      reason: '概算見積は発行済みですが、現地確認を進める担当代理店がまだ設定されていません。',
       href: caseHref(unassigned[0].id),
       action: '担当を確認する',
     },
     siteWork[0] && {
       title: '現地確認・施工金額確認',
       count: siteWork.length,
-      reason: '第1版の概算見積が発行済みで、担当代理店が割り当てられています。施工金額の確認・反映が次の作業です。',
+      reason: '概算見積が発行済みで、担当代理店が割り当てられています。施工金額の確認・反映が次の作業です。',
       href: caseHref(siteWork[0].id, 'site'),
       action: '現地確認を開く',
     },
     acceptedPreliminary[0] && {
       title: '概算見積の承諾記録あり／現地確認・確定見積が必要',
       count: acceptedPreliminary.length,
-      reason: '第1版の概算見積に承諾記録がありますが、契約工程には進めません。現地条件を確認し、施工金額を反映した確定見積を作成します。',
+      reason: '概算見積に承諾記録がありますが、契約工程には進めません。現地条件を確認し、施工金額を反映した確定見積を作成します。',
       href: caseHref(acceptedPreliminary[0].id, 'site'),
       action: '現地確認を開く',
     },
     finalQuoteReview[0] && {
       title: '確定見積の確認・案内',
       count: finalQuoteReview.length,
-      reason: '第2版以降の見積が発行済みです。施工金額や変更内容を確認し、お客様への案内に進みます。',
+      reason: '現地条件と施工金額を反映した確定見積が発行済みです。内容を確認し、お客様への案内に進みます。',
       href: caseHref(finalQuoteReview[0].id, 'estimate', true),
       action: '見積内容を確認する',
     },

@@ -6,7 +6,7 @@ import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
 import { ContactStatusForm } from '@/components/admin/forms';
 
 export default async function AdminContactsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const actor = await requireAdmin();
+  await requireAdmin();
   const sp = await searchParams;
   const store = await getStore();
   const messages = await store.listContactMessages();

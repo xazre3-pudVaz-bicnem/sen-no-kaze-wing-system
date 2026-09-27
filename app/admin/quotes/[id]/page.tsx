@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
-import { CaseManagementNav } from '@/components/admin/case-management-nav';
 import { CaseWorkspace } from '@/components/admin/case-workspace';
 import { ROLE_LABELS } from '@/lib/domain/types';
 
@@ -23,7 +22,6 @@ export default async function AdminQuoteDetailPage({
         </Link>
         <span className="rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">{ROLE_LABELS[actor.role]}</span>
       </div>
-      <CaseManagementNav role={actor.role} active="cases" />
       <CaseWorkspace
         quoteId={id}
         actor={actor}

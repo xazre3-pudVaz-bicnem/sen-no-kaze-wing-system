@@ -5,9 +5,10 @@ import { getAdminNavSections } from '@/components/admin/admin-nav';
 
 const labelsFor = (role: 'admin' | 'master_dealer' | 'dealer') => getAdminNavSections(role).map((section) => section.label);
 const settingsPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/settings/page.tsx'), 'utf8');
+const navSource = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/admin-nav.tsx'), 'utf8');
 
 describe('管理画面の業務領域ナビゲーション', () => {
-  it('本部には4つの業務領域を表示する', () => {
+  it('本部には4つの業務領域だけを表示する', () => {
     expect(labelsFor('admin')).toEqual(['案件管理', '商品台帳', '標準見積', '管理設定']);
   });
 
@@ -15,14 +16,38 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
   });
 
-  it('問い合わせ受付は本部の案件管理に分類し、管理設定には含めない', () => {
+  it('補助画面は大分類のactive判定にだけ含め、二段目メニューを描画しない', () => {
     const sections = getAdminNavSections('admin');
-    const caseItems = sections.find((section) => section.label === '案件管理')?.items.map((item) => item.label);
-    const settingItems = sections.find((section) => section.label === '管理設定')?.items.map((item) => item.label);
+    const cases = sections.find((section) => section.label === '案件管理');
+    const ledger = sections.find((section) => section.label === '商品台帳');
+    const estimates = sections.find((section) => section.label === '標準見積');
 
-    expect(caseItems).toContain('問い合わせ受付');
-    expect(settingItems).not.toContain('問い合わせ受付');
-    expect(settingItems).toEqual(['設定一覧', '操作マニュアル', 'ユーザー・担当者', '変更履歴']);
+    expect(cases?.match).toEqual(expect.arrayContaining([
+      '/admin/quotes',
+      '/admin/configurations',
+      '/admin/contacts',
+      '/admin/notifications',
+      '/admin/customer-management',
+    ]));
+    expect(ledger?.match).toEqual(expect.arrayContaining([
+      '/admin/ledger',
+      '/admin/free-products',
+      '/admin/models',
+      '/admin/categories',
+      '/admin/options',
+      '/admin/import',
+      '/admin/preview-rules',
+    ]));
+    expect(estimates?.match).toEqual(expect.arrayContaining([
+      '/admin/base-masters',
+      '/admin/estimate-templates',
+      '/admin/base-breakdown',
+    ]));
+
+    expect(navSource).not.toContain('activeSection.items.map');
+    expect(navSource).not.toContain("label: '案件一覧'");
+    expect(navSource).not.toContain("label: '旧 標準見積Excel'");
+    expect(navSource).not.toContain("label: '商品登録・編集'");
   });
 
   it('管理設定ランディングにお問い合わせカードを残さない', () => {

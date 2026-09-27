@@ -34,8 +34,8 @@ describe('Admin case management UI', () => {
     expect(list).toContain('store.listQuoteRequests()');
     expect(list).toContain('store.listAllQuotes()');
     expect(list).toContain('store.listCaseDealers()');
-    expect(list).toContain('store.getConfigurationCount()');
-    expect(list).toContain('store.getNewContactMessageCount()');
+    expect(list).not.toContain('store.getConfigurationCount()');
+    expect(list).not.toContain('store.getNewContactMessageCount()');
     expect(list).not.toContain('store.listAllConfigurations()');
     expect(list).not.toContain('store.listModels({ includeDraft: true })');
     expect(list).not.toContain('store.listProfiles()');
@@ -77,13 +77,16 @@ describe('Admin case management UI', () => {
     expect(dealerRequestMetaMigration).toContain('grant execute on function public.list_dealer_quote_request_meta() to authenticated;');
   });
 
-  it('prioritizes the HTML case-management entrances while keeping existing routes', () => {
-    for (const label of ['案件一覧', '保存済み仕様', '問い合わせ受付', 'お知らせ']) {
-      expect(nav).toContain(label);
+  it('keeps case utilities contextual instead of rendering a fixed second-level menu', () => {
+    for (const route of ['/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
+      expect(nav).toContain(route);
     }
-    expect(nav).not.toContain("label: '見積依頼・見積書'");
-    expect(nav).not.toContain("label: '概要', exact: true");
-    expect(nav).not.toContain("href: '/admin/quotes/new', label:");
+    for (const label of ['案件一覧', '保存済み仕様', '問い合わせ受付']) {
+      expect(nav).not.toContain(`label: '${label}'`);
+    }
+    expect(list).toContain('href="/admin/customer-management"');
+    expect(list).toContain('href="/admin/contacts"');
+    expect(list).toContain('href="/admin/notifications"');
     expect(list).toContain('＋対面・電話・紹介の案件受付');
     expect(list).toContain('href="/admin/quotes/new"');
   });
@@ -101,17 +104,11 @@ describe('Admin case management UI', () => {
     expect(dealerForms).toContain('この内容で改訂見積を発行');
   });
 
-  it('keeps the overview focused on case work', () => {
-    expect(dashboard).toContain('title="案件管理"');
-    expect(dashboard).toContain('未対応の見積依頼');
-    expect(dashboard).toContain('未対応のお問い合わせ');
-    expect(dashboard).toContain('最近の案件受付');
-    expect(dashboard).toContain('案件を開く');
-    expect(dashboard).toContain('依頼を開く');
-    expect(dashboard).toContain('/admin/quotes?request=${encodeURIComponent(r.id)}#pending-quote-request');
-    expect(dashboard).not.toContain('findMissingPreviewCombos');
-    expect(dashboard).not.toContain('公開中モデル');
-    expect(dashboard).not.toContain('自社のフリー商品');
+  it('uses case management itself as the admin landing page', () => {
+    expect(dashboard).toContain("redirect('/admin/quotes')");
+    expect(dashboard).not.toContain('まず確認すること');
+    expect(dashboard).not.toContain('最近の案件受付');
+    expect(dashboard).not.toContain('getStore');
   });
 
   it('keeps the list dense and shows the selected case workspace on the same page', () => {
@@ -420,9 +417,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("caseDocuments.filter((row) => row.kind !== 'contract')");
   });
 
-  it('keeps the existing case-related URLs and aligns their user-facing names', () => {
-    for (const href of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications']) {
-      expect(nav).toContain(`href: '${href}'`);
+  it('keeps the existing case-related routes while removing their fixed submenu', () => {
+    for (const route of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
+      expect(nav).toContain(route);
     }
     expect(newQuote).toContain('<BackLink href="/admin/quotes" label="案件一覧へ戻る" />');
     expect(newQuote).toContain('title="対面・電話・紹介の案件受付"');

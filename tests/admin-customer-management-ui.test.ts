@@ -7,6 +7,7 @@ const list = fs.readFileSync(path.join(root, 'app/admin/customer-management/page
 const detail = fs.readFileSync(path.join(root, 'app/admin/customer-management/[id]/page.tsx'), 'utf8');
 const existingUsers = fs.readFileSync(path.join(root, 'app/admin/customers/page.tsx'), 'utf8');
 const nav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx'), 'utf8');
+const quotes = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8');
 
 describe('顧客管理UI', () => {
   it('keeps user and permission management separate from customer management', () => {
@@ -57,7 +58,10 @@ describe('顧客管理UI', () => {
     expect(requestCheck).toBeGreaterThan(quoteCheck);
   });
 
-  it('does not add customer management to shared navigation in this PR', () => {
-    expect(nav).not.toContain('/admin/customer-management');
+  it('keeps customer management as a case-management utility instead of a second-level menu', () => {
+    expect(nav).toContain('/admin/customer-management');
+    expect(quotes).toContain('href="/admin/customer-management"');
+    expect(quotes).toContain('顧客管理');
+    expect(nav).not.toContain("label: '顧客管理'");
   });
 });

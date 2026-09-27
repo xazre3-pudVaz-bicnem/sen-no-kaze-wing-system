@@ -8,11 +8,10 @@ import { Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { matchesRegion, parseAddress, readRegionFilter } from '@/lib/domain/address';
 import { RegionFilter } from '@/components/admin/region-filter';
-import { CaseManagementNav } from '@/components/admin/case-management-nav';
 
 export default async function AdminConfigurationsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const actor = await requireStaff('/admin/configurations');
+  await requireStaff('/admin/configurations');
   const store = await getStore();
   const [configurations, models] = await Promise.all([store.listAllConfigurations(), store.listModels({ includeDraft: true })]);
   const nameOf = new Map(models.map((m) => [m.id, m.name]));
@@ -44,7 +43,6 @@ export default async function AdminConfigurationsPage({ searchParams }: { search
 
   return (
     <AdminPage title="保存済み仕様" lead={`シミュレーター等で保存されている仕様 ${configurations.length} 件。状態は既存Configurationの値をそのまま表示します。`}>
-      <CaseManagementNav role={actor.role} active="saved" savedCount={configurations.length} />
       <RegionFilter value={filter} cities={cityPool} total={configurations.length} matched={shown.length} />
       <p className="text-xs text-muted">
         地域は設置予定地を優先し、未登録時のみ顧客住所で判定します。「未定」は地域絞り込みの対象外です。

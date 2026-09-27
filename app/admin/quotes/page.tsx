@@ -10,7 +10,6 @@ import {
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
-import { CaseManagementNav } from '@/components/admin/case-management-nav';
 import { CaseWorkspace } from '@/components/admin/case-workspace';
 import { ClickableCaseRow } from '@/components/admin/clickable-case-row';
 import { matchesRegion, parseAddress, PREFECTURES, readRegionFilter } from '@/lib/domain/address';
@@ -95,6 +94,8 @@ function CaseSummary({
 }
 
 function CasePageHeading({ role, caseCount }: { role: keyof typeof ROLE_LABELS; caseCount: number }) {
+  const isAdmin = role === 'admin';
+
   return (
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
@@ -104,6 +105,19 @@ function CasePageHeading({ role, caseCount }: { role: keyof typeof ROLE_LABELS; 
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {isAdmin && (
+          <Link href="/admin/customer-management" className="btn-ghost btn-sm">
+            顧客管理
+          </Link>
+        )}
+        {isAdmin && (
+          <Link href="/admin/contacts" className="btn-ghost btn-sm">
+            問い合わせ
+          </Link>
+        )}
+        <Link href="/admin/notifications" className="btn-ghost btn-sm">
+          お知らせ
+        </Link>
         <Link
           href="/admin/quotes/new"
           className="inline-flex items-center rounded-lg bg-[#2f6b4f] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#285d45]"
@@ -155,7 +169,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
         <CasePageHeading role={actor.role} caseCount={latest.length} />
-        <CaseManagementNav role={actor.role} active="cases" />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}
@@ -263,12 +276,10 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     );
   }
 
-  const [requests, quotes, dealers, savedCount, inquiryCount] = await Promise.all([
+  const [requests, quotes, dealers] = await Promise.all([
     store.listQuoteRequests(),
     store.listAllQuotes(),
     actor.role === 'admin' ? store.listCaseDealers() : Promise.resolve([]),
-    actor.role === 'admin' ? store.getConfigurationCount() : Promise.resolve(0),
-    actor.role === 'admin' ? store.getNewContactMessageCount() : Promise.resolve(0),
   ]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
   const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer]));
@@ -349,7 +360,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
       <CasePageHeading role={actor.role} caseCount={requests.length} />
-      <CaseManagementNav role={actor.role} active="cases" savedCount={savedCount} inquiryCount={inquiryCount} />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}

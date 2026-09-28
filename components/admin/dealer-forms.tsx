@@ -231,6 +231,25 @@ export function DealerRevisionForm({
     markDirty();
   };
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);
+  const pickerTargetRow = pickerTargetKey ? rows.find((row) => row.key === pickerTargetKey) ?? null : null;
+  const openCatalogForRow = (key: string) => {
+    setPickerTargetKey(key);
+    setPickerOpen(true);
+  };
+  const closeCatalogPicker = () => {
+    setPickerOpen(false);
+    setPickerTargetKey(null);
+  };
+  const applyCatalogItemToRow = (key: string, item: CatalogPickerItem) => {
+    update(key, {
+      name: item.name,
+      unit_price: item.price_on_request ? 0 : item.price,
+      description: item.category,
+      unit: item.unit ?? '式',
+      image_url: item.image_url,
+    });
+  };
   const cellInputClass = sheetMode
     ? 'h-7 w-full rounded-none border-transparent bg-transparent px-2 py-0.5 text-xs shadow-none focus:border-[#6d9480] focus:bg-white focus:ring-1 focus:ring-[#6d9480]/30'
     : '';
@@ -501,18 +520,31 @@ export function DealerRevisionForm({
                                 <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
                                 <div className="flex items-start">
                                   <div className="min-w-0 flex-1">
-                                    <Input
-                                      name={`items.${i}.name`}
-                                      value={r.name}
-                                      onChange={(e) => update(r.key, { name: e.target.value })}
-                                      aria-label={`${i + 1} 行目の項目名`}
-                                      className={rowInputClass}
-                                      readOnly={!rowEditable}
-                                      data-revision-col="name"
-                                      onKeyDown={handleSheetKeyDown}
-                                      onFocus={(event) => event.currentTarget.select()}
-                                      required
-                                    />
+                                    <div className="flex items-center">
+                                      <Input
+                                        name={`items.${i}.name`}
+                                        value={r.name}
+                                        onChange={(e) => update(r.key, { name: e.target.value })}
+                                        aria-label={`${i + 1} 行目の項目名`}
+                                        className={`${rowInputClass} min-w-0 flex-1`}
+                                        readOnly={!rowEditable}
+                                        data-revision-col="name"
+                                        onKeyDown={handleSheetKeyDown}
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        required
+                                      />
+                                      {rowEditable && catalog.length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => openCatalogForRow(r.key)}
+                                          className="h-7 shrink-0 border-l border-line/50 bg-[#f8faf9] px-2 text-[0.58rem] font-semibold text-[#315745] hover:bg-[#edf4ef]"
+                                          title="既存の商品から選択"
+                                          data-testid={`select-catalog-row-${i}`}
+                                        >
+                                          商品から選ぶ
+                                        </button>
+                                      )}
+                                    </div>
                                     <div className="flex border-t border-line/40">
                                       <select
                                         value={r.kind}
@@ -752,7 +784,16 @@ export function DealerRevisionForm({
               商品・仕様変更
             </span>
             {catalog.length > 0 && (
-              <Button type="button" variant="secondary" size="sm" onClick={() => setPickerOpen(true)} data-testid="open-catalog-picker">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setPickerTargetKey(null);
+                  setPickerOpen(true);
+                }}
+                data-testid="open-catalog-picker"
+              >
                 <Plus className="size-4" aria-hidden="true" />
                 商品台帳から追加
               </Button>
@@ -825,18 +866,23 @@ export function DealerRevisionForm({
       {pickerOpen && (
         <CatalogPickerDialog
           catalog={catalog}
-          kinds={canEditBase ? FULL_KINDS : DEALER_KINDS}
+          kinds={pickerTargetRow ? [pickerTargetRow.kind] : (canEditBase ? FULL_KINDS : DEALER_KINDS)}
           kindLabels={KIND_LABELS}
-          onPick={(item, kind) =>
+          mode={pickerTargetRow ? 'replace' : 'add'}
+          onPick={(item, kind) => {
+            if (pickerTargetRow) {
+              applyCatalogItemToRow(pickerTargetRow.key, item);
+              return;
+            }
             addRow(kind, {
               name: item.name,
               price: item.price_on_request ? 0 : item.price,
               description: item.category,
               unit: item.unit ?? '式',
               image_url: item.image_url,
-            })
-          }
-          onClose={() => setPickerOpen(false)}
+            });
+          }}
+          onClose={closeCatalogPicker}
         />
       )}
     </form>

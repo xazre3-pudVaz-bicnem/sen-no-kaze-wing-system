@@ -290,6 +290,7 @@ declare
   v_existing_item public.quote_draft_items;
   v_has_parent_item boolean;
   v_has_existing_item boolean;
+  v_lock_parent_base boolean := false;
   v_base_master_id uuid;
   v_count integer := 0;
   v_sort integer := 0;
@@ -483,12 +484,14 @@ begin
       v_has_parent_item := found;
     end if;
 
+    v_lock_parent_base :=
+      d.parent_quote_id is not null
+      and not v_can_edit_base
+      and v_has_parent_item
+      and v_parent_item.kind in ('base', 'base_expense');
+
     if d.parent_quote_id is not null and not v_can_edit_base then
-      if v_has_parent_item
-         and (
-           v_parent_item.kind in ('base', 'base_expense')
-           or v_kind in ('base', 'base_expense')
-         )
+      if v_lock_parent_base
          and (
            v_parent_item.kind is distinct from v_kind
            or v_parent_item.option_id is distinct from v_option_id
@@ -497,7 +500,7 @@ begin
          ) then
         raise exception 'FORBIDDEN: 本体明細を変更できるのは総代理店・本部だけです'
           using errcode = '42501';
-      elsif not v_has_parent_item and v_kind in ('base', 'base_expense') then
+      elsif not v_lock_parent_base and v_kind in ('base', 'base_expense') then
         raise exception 'FORBIDDEN: 本体明細を追加できるのは総代理店・本部だけです'
           using errcode = '42501';
       end if;
@@ -559,12 +562,30 @@ begin
       unit_price, quantity, amount, image_url, sort_order
     )
     values(
-      d.id, v_line_key, v_kind, v_option_id, v_name,
-      nullif(btrim(coalesce(row_json ->> 'description', '')), ''),
-      nullif(btrim(coalesce(row_json ->> 'unit', '')), ''),
-      nullif(btrim(coalesce(row_json ->> 'remark', '')), ''),
-      v_unit_price, v_qty, v_amount,
-      nullif(btrim(coalesce(row_json ->> 'image_url', '')), ''),
+      d.id,
+      v_line_key,
+      case when v_lock_parent_base then v_parent_item.kind else v_kind end,
+      case when v_lock_parent_base then v_parent_item.option_id else v_option_id end,
+      case when v_lock_parent_base then v_parent_item.name else v_name end,
+      case when v_lock_parent_base
+        then v_parent_item.description
+        else nullif(btrim(coalesce(row_json ->> 'description', '')), '')
+      end,
+      case when v_lock_parent_base
+        then v_parent_item.unit
+        else nullif(btrim(coalesce(row_json ->> 'unit', '')), '')
+      end,
+      case when v_lock_parent_base
+        then v_parent_item.remark
+        else nullif(btrim(coalesce(row_json ->> 'remark', '')), '')
+      end,
+      case when v_lock_parent_base then v_parent_item.unit_price else v_unit_price end,
+      case when v_lock_parent_base then v_parent_item.quantity else v_qty end,
+      case when v_lock_parent_base then v_parent_item.amount else v_amount end,
+      case when v_lock_parent_base
+        then v_parent_item.image_url
+        else nullif(btrim(coalesce(row_json ->> 'image_url', '')), '')
+      end,
       v_sort
     )
     on conflict (draft_id, line_key) do update
@@ -852,9 +873,14 @@ begin
          and (
            v_parent_item.kind is distinct from i.kind
            or v_parent_item.option_id is distinct from i.option_id
+           or v_parent_item.name is distinct from i.name
+           or v_parent_item.description is distinct from i.description
+           or v_parent_item.unit is distinct from i.unit
+           or v_parent_item.remark is distinct from i.remark
            or v_parent_item.unit_price is distinct from i.unit_price
            or v_parent_item.quantity is distinct from i.quantity
            or v_parent_item.amount is distinct from i.amount
+           or v_parent_item.image_url is distinct from i.image_url
          ) then
         raise exception 'FORBIDDEN: 本体明細を変更できるのは総代理店・本部だけです'
           using errcode = '42501';

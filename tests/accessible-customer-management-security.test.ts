@@ -7,9 +7,14 @@ const migration = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260928170000_accessible_customer_management.sql'),
   'utf8'
 );
+const corrective = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260928173000_master_dealer_case_access_corrective.sql'),
+  'utf8'
+);
 const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
 const localStore = fs.readFileSync(path.join(root, 'lib/data/local-store.ts'), 'utf8');
 const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
+const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 
 function functionBody(name: string): string {
   const start = migration.indexOf(`create or replace function public.${name}`);
@@ -53,6 +58,66 @@ describe('担当案件限定の顧客管理 security contract', () => {
     expect(migration).not.toMatch(/drop\s+policy/i);
     expect(migration).not.toMatch(/alter\s+table\s+public\.(profiles|quote_requests|configurations|quotes)\s+enable\s+row\s+level\s+security/i);
     expect(migration).not.toMatch(/grant\s+select\s+on\s+public\.(profiles|quote_requests|configurations|quotes)/i);
+  });
+
+  it('corrects legacy master-dealer SELECT policies without reusing catalog-edit permission', () => {
+    expect(corrective).toContain('drop policy if exists profiles_select_own on public.profiles;');
+    expect(corrective).toContain('drop policy if exists quotes_select on public.quotes;');
+    expect(corrective).toContain('drop policy if exists quote_items_select on public.quote_items;');
+    expect(corrective).toContain('drop policy if exists quote_requests_select on public.quote_requests;');
+    expect(corrective).not.toContain('public.can_edit_catalog()');
+
+    const profilesPolicy = corrective.slice(
+      corrective.indexOf('create policy profiles_select_own'),
+      corrective.indexOf('drop policy if exists quotes_select')
+    );
+    expect(profilesPolicy).toContain('id = auth.uid()');
+    expect(profilesPolicy).toContain('public.is_admin()');
+    expect(profilesPolicy).not.toContain('public.is_dealer()');
+
+    const requestsPolicy = corrective.slice(
+      corrective.indexOf('create policy quote_requests_select'),
+      corrective.indexOf('-- ---------- 案件プランボード ----------')
+    );
+    expect(requestsPolicy).toContain('user_id = auth.uid()');
+    expect(requestsPolicy).toContain('public.is_admin()');
+    expect(requestsPolicy).not.toContain('public.is_dealer()');
+
+    const quotesPolicy = corrective.slice(
+      corrective.indexOf('create policy quotes_select'),
+      corrective.indexOf('drop policy if exists quote_items_select')
+    );
+    expect(quotesPolicy).toContain('public.is_dealer() and dealer_id = auth.uid()');
+    expect(quotesPolicy).toContain('public.is_admin()');
+  });
+
+  it('restricts quote items and case-plan reads to admin or the assigned staff member', () => {
+    const itemPolicy = corrective.slice(
+      corrective.indexOf('create policy quote_items_select'),
+      corrective.indexOf('drop policy if exists quote_requests_select')
+    );
+    expect(itemPolicy).toContain('public.is_dealer() and q.dealer_id = auth.uid()');
+    expect(itemPolicy).toContain('public.is_admin()');
+
+    const planStart = corrective.indexOf('create or replace function public.get_case_plan_configuration');
+    const planTail = corrective.slice(planStart);
+    expect(planTail).toContain('v_rank >= 3 or (v_rank >= 1 and v_quote.dealer_id = v_uid)');
+    expect(planTail).not.toContain('v_rank >= 2 or');
+    expect(planTail).toContain("set search_path = ''");
+    expect(planTail).toContain('alter function public.get_case_plan_configuration(uuid) owner to postgres;');
+    expect(planTail).toContain('CASE_PLAN_CONFIGURATION_OWNER_INVALID');
+  });
+
+  it('does not let master dealer bypass assigned-quote checks in workspace or stores', () => {
+    expect(workspace).toContain('const canViewAllQuotes = isAdmin;');
+    expect(workspace).toContain('if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();');
+    expect(workspace).not.toContain('const canManageAllQuotes = canEditCatalog(actor.role);');
+
+    expect(supabaseStore).toContain("const staffScoped = actor.role === 'dealer' || actor.role === 'master_dealer';");
+    expect(supabaseStore).toContain("staffScoped\n        ? db.rpc('get_dealer_quote_request_current'");
+    expect(localStore).toContain("const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;");
+    expect(localStore).toContain("if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;");
+    expect(localStore).not.toContain("const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');");
   });
 
   it('limits customer identity linking to consistent customer user_ids and keeps ambiguous cases separate', () => {

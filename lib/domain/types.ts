@@ -39,6 +39,12 @@ export function canEditDealerItems(role: RoleCode | undefined | null): boolean {
 }
 /** 代理店が自分で登録する商品のカテゴリーコード（見積書では別途工事の下に別枠表示） */
 export const FREE_PRODUCT_CATEGORY_CODE = 'free-product';
+/**
+ * 旧実装で防火/非防火を商品オプションとして保持している互換用カテゴリー。
+ * 防火仕様は商品カテゴリーではなく、標準見積・本体仕様を決める条件軸として扱う。
+ * 既存Configuration互換のためデータ自体は当面残すが、商品台帳・商品登録には出さない。
+ */
+export const LEGACY_FIRE_SPEC_CATEGORY_CODE = 'fireproof';
 
 /**
  * 注文範囲（どこまで仕上げるか）。
@@ -151,7 +157,7 @@ export interface OptionCategory {
   id: string;
   code: string;
   name: string;
-  /** 商品台帳の分類フォルダ（内外装仕上げ／サッシ／内部建具／設備機器／照明器具／家具／その他／防火仕様／別途工事） */
+  /** 商品台帳の分類フォルダ（内外装仕上げ／建具・開口／設備機器／照明器具／家具・備品／その他／別途工事など） */
   group_code: string;
   group_name: string;
   group_sort: number;

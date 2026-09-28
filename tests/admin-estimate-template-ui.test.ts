@@ -76,7 +76,10 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).not.toContain('表示例（サンプル）');
     expect(listPage).toContain('Wing ホテル仕様');
     expect(listPage).toContain('動作確認用');
-    expect(listPage).toContain('保存されない画面確認用データ');
+    expect(listPage).not.toContain('保存されない画面確認用データ');
+    expect(listPage).toContain('const sampleGroup = sampleModel?.id === group.model.id;');
+    expect(listPage).toContain('＋確認用1件');
+    expect(listPage).toContain('sampleSelected && sampleGroup');
     expect(listPage).toContain('<Badge tone="success">登録済み</Badge>');
     expect(listPage).toContain('<Badge tone="neutral">未登録</Badge>');
     expect(listPage).toContain('aria-hidden="true">›</div>');

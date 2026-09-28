@@ -5,16 +5,16 @@ import type { ProductOption } from '@/lib/domain/types';
 const option = (overrides: Partial<ProductOption> = {}): ProductOption => ({ id: 'o1', base_model_id: null, category_id: 'c1', code: 'test', name: 'テスト商品', description: null, price: 0, image_url: 'https://example.test/a.png', selection_type: 'radio', is_required: false, is_default: false, is_installation: false, price_on_request: false, spec_codes: [], owner_id: null, manufacturer: 'メーカー', model_no: 'A-1', size_note: null, list_price: null, highlight: null, preview_key: null, affects_views: [], sort_order: 0, status: 'published', created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', ...overrides });
 
 describe('商品台帳の絞り込み', () => {
-  it('要確認は保存済みの未設定項目と下書きだけで判定し、非公開だけでは該当しない', () => {
-    expect(needsProductAttention(option({ status: 'draft' }))).toBe(true);
-    expect(needsProductAttention(option({ image_url: null }))).toBe(true);
+  it('要確認は公開中の画像未登録だけを対象にする', () => {
+    expect(needsProductAttention(option({ status: 'draft', image_url: null }))).toBe(false);
+    expect(needsProductAttention(option({ status: 'published', image_url: null }))).toBe(true);
+    expect(needsProductAttention(option({ status: 'published', model_no: null }))).toBe(false);
     expect(needsProductAttention(option())).toBe(false);
   });
-  it('要確認の理由を一覧表示用に返す', () => {
+  it('下書きや型番未設定は通常状態として要確認理由にしない', () => {
     expect(productAttentionReasons(option())).toEqual([]);
-    expect(productAttentionReasons(option({ status: 'draft', model_no: null, image_url: null }))).toEqual([
-      '下書き',
-      '型番未設定',
+    expect(productAttentionReasons(option({ status: 'draft', model_no: null, image_url: null }))).toEqual([]);
+    expect(productAttentionReasons(option({ status: 'published', model_no: null, image_url: null }))).toEqual([
       '画像未登録',
     ]);
   });
@@ -35,6 +35,12 @@ describe('商品台帳の絞り込み', () => {
     expect(optionMatchesLedgerFilters(modelOnly, { query: '', categoryId: '', status: '', quick: 'all', baseModelId: 'wing-01' })).toBe(true);
     expect(optionMatchesLedgerFilters(modelOnly, { query: '', categoryId: '', status: '', quick: 'all', baseModelId: '__shared__' })).toBe(false);
     expect(optionMatchesLedgerFilters(option({ base_model_id: null }), { query: '', categoryId: '', status: '', quick: 'all', baseModelId: '__shared__' })).toBe(true);
+  });
+
+  it('要確認フィルターは公開中の画像未登録だけを返す', () => {
+    expect(optionMatchesLedgerFilters(option({ status: 'published', image_url: null }), { query: '', categoryId: '', status: '', quick: 'needs-attention' })).toBe(true);
+    expect(optionMatchesLedgerFilters(option({ status: 'draft', image_url: null }), { query: '', categoryId: '', status: '', quick: 'needs-attention' })).toBe(false);
+    expect(optionMatchesLedgerFilters(option({ status: 'published', model_no: null }), { query: '', categoryId: '', status: '', quick: 'needs-attention' })).toBe(false);
   });
 
   it('使用中・非公開の重複クイックフィルターを持たない', () => {

@@ -50,6 +50,12 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).toContain("pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'");
   });
 
+  it('matches the latest staff access boundary for non-Web Drafts', () => {
+    expect(migration.match(/v_rank >= 3 or d\.created_by = v_uid/g)?.length).toBe(3);
+    expect(migration).not.toContain('v_rank >= 2 or d.created_by = v_uid');
+    expect(migration).toContain('admin: all Drafts / master_dealer+dealer: only Drafts they created.');
+  });
+
   it('uses optimistic locking and row locks for repeated Draft saves', () => {
     const saveStart = migration.indexOf('create or replace function public.save_quote_draft(');
     const finalizeStart = migration.indexOf('create or replace function public.finalize_quote_draft(');

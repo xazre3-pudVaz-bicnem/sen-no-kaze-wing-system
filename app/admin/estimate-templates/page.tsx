@@ -80,16 +80,16 @@ function SavedEstimateMenu({
         <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
           <div>
             <p className="text-sm font-semibold">見積書一覧</p>
-            <p className="mt-0.5 text-[11px] text-muted">シミュレーター標準と作成済み見積書をここで確認します。</p>
+            <p className="mt-0.5 text-[11px] text-muted">シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。</p>
           </div>
           <span className="text-[11px] text-muted">{totalCount}件</span>
         </div>
 
         <div className="mb-2 rounded-lg border border-line bg-sand/25 px-3 py-2">
           <p className="text-[10px] font-semibold tracking-wide text-muted">シミュレーター標準</p>
-          <p className="mt-1 text-xs font-semibold">正式見積書から指定</p>
+          <p className="mt-1 text-xs font-semibold">シミュレーターの選択対象</p>
           <p className="mt-0.5 text-[11px] text-muted">
-            正式保存した見積書を開き、「シミュレーターの標準に設定」から指定します。現在は指定機能の接続準備中です。
+            標準に指定された正式見積書だけを、見積シミュレーターの選択肢に表示します。初期表示を決める設定ではありません。現在は指定機能の接続準備中です。
           </p>
         </div>
 
@@ -329,9 +329,9 @@ export default async function EstimateTemplatesPage({
             type="button"
             className="btn-secondary btn-sm"
             disabled
-            title="シミュレーター標準の指定接続後に利用できます"
+            title="シミュレーターの選択対象となる標準指定の接続後に利用できます"
           >
-            シミュレーターの標準に設定
+            シミュレーター標準に設定
           </button>
         </div>
       }

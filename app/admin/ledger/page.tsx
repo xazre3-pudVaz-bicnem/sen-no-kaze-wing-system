@@ -9,7 +9,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
-  const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
+  const [options, categories, models] = await Promise.all([store.listOptions(), store.listCategories(), store.listModels({ includeDraft: true })]);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE);
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
   const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
@@ -24,6 +24,6 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
   >
     <FlashMessages sp={sp} />
-    <ProductLedgerClient canEdit={editor} categories={catalogCategories} options={catalogOptions} variantsByOptionId={Object.fromEntries(rows)} initiallySelectedId={selected} />
+    <ProductLedgerClient canEdit={editor} categories={catalogCategories} options={catalogOptions} models={models} variantsByOptionId={Object.fromEntries(rows)} initiallySelectedId={selected} />
   </AdminPage>;
 }

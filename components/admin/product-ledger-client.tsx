@@ -143,13 +143,13 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
             </div>
           </div>
 
-          <nav className="overflow-x-auto px-3 py-2 sm:px-4" aria-label="商品カテゴリー">
-            <div className="flex min-w-max items-center gap-1.5">
-              <button type="button" onClick={() => { setCategoryId(''); setPage(1); }} className={'rounded-full px-3 py-1.5 text-sm whitespace-nowrap ' + (categoryId === '' ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
-                すべて <span className="ml-1 text-xs opacity-75">{categoryTotal}</span>
+          <nav className="px-3 py-2 sm:px-4" aria-label="商品カテゴリー">
+            <div className="flex flex-wrap items-center gap-1">
+              <button type="button" onClick={() => { setCategoryId(''); setPage(1); }} className={'rounded-full px-2.5 py-1.5 text-xs whitespace-nowrap sm:text-sm ' + (categoryId === '' ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
+                すべて <span className="ml-1 text-[0.68rem] opacity-75">{categoryTotal}</span>
               </button>
-              {categories.map((item) => <button key={item.id} type="button" onClick={() => { setCategoryId(item.id); setPage(1); }} className={'rounded-full px-3 py-1.5 text-sm whitespace-nowrap ' + (categoryId === item.id ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
-                {item.name} <span className="ml-1 text-xs opacity-75">{categoryCounts.get(item.id) ?? 0}</span>
+              {categories.map((item) => <button key={item.id} type="button" onClick={() => { setCategoryId(item.id); setPage(1); }} className={'rounded-full px-2.5 py-1.5 text-xs whitespace-nowrap sm:text-sm ' + (categoryId === item.id ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
+                {item.name} <span className="ml-1 text-[0.68rem] opacity-75">{categoryCounts.get(item.id) ?? 0}</span>
               </button>)}
             </div>
           </nav>
@@ -168,22 +168,20 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
         {viewMode === 'list' ? (
           <div data-testid="ledger-table-view">
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[760px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[680px] table-fixed text-left text-sm">
                 <thead className="bg-forest/5 text-xs text-muted">
                   <tr>
-                    <th className="w-[31%] px-3 py-2.5">商品</th>
-                    <th className="w-[18%] px-3 py-2.5">メーカー・型番</th>
-                    <th className="w-[14%] px-3 py-2.5">カテゴリー</th>
-                    <th className="w-[12%] px-3 py-2.5">対象モデル</th>
+                    <th className="w-[36%] px-3 py-2.5">商品</th>
+                    <th className="w-[23%] px-3 py-2.5">メーカー・型番</th>
+                    <th className="w-[18%] px-3 py-2.5">カテゴリー</th>
                     <th className="w-[11%] px-3 py-2.5">状態</th>
-                    <th className="w-[9%] px-3 py-2.5">更新</th>
-                    <th className="w-[5%] px-2 py-2.5 text-right">操作</th>
+                    <th className="w-[8%] px-3 py-2.5">更新</th>
+                    <th className="w-[4%] px-2 py-2.5 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {pageOptions.map((o) => {
                     const attention = productAttentionReasons(o).length > 0;
-                    const targetModel = o.base_model_id ? modelMap.get(o.base_model_id)?.name ?? '特定モデル' : '全モデル';
                     return <tr key={o.id} className={selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
                       <td className="px-3 py-2">
                         <button type="button" aria-haspopup="dialog" className="flex w-full min-w-0 items-center gap-2.5 text-left" onClick={(event) => openDetail(o.id, event.currentTarget)}>
@@ -201,7 +199,6 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                         <span className="mt-0.5 block truncate text-xs text-muted">{o.model_no || '型番未設定'}</span>
                       </td>
                       <td className="truncate px-3 py-2">{categoryMap.get(o.category_id)?.name ?? dash}</td>
-                      <td className="truncate px-3 py-2 text-xs">{targetModel}</td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1">
                           <Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge>

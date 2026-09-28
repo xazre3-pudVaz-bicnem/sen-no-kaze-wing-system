@@ -211,41 +211,14 @@ export default async function EstimateTemplatesPage({
               <div aria-hidden="true" />
             </div>
 
-            <Link
-              href={sampleHref(modelId, qRaw)}
-              aria-current={sampleSelected ? 'true' : undefined}
-              className={`${LIST_GRID} min-h-11 border-b border-line px-3 py-1.5 text-sm transition ${
-                sampleSelected
-                  ? 'border-l-4 border-l-amber-500 bg-amber-50/80 shadow-[inset_0_0_0_1px_rgba(180,120,40,0.16)] pl-2'
-                  : 'bg-sand/15 hover:bg-amber-50/50'
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
-                  <Badge tone="warn" className="shrink-0">動作確認用</Badge>
-                  {sampleSelected && (
-                    <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      選択中
-                    </span>
-                  )}
-                </div>
-                <p className="mt-0.5 text-[10px] text-muted">保存されない画面確認用データ</p>
-              </div>
-              <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
-              <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
-              <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
-              <div className="text-center"><Badge tone="neutral">サンプル</Badge></div>
-              <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
-            </Link>
-
             {groups.length > 0 ? groups.map((group, groupIndex) => {
                 const displayModelName = group.model.name === 'フラット' ? 'Flat' : group.model.name;
                 const selectedGroup = selected?.model.id === group.model.id;
+                const sampleGroup = sampleModel?.id === group.model.id;
                 return (
                   <details
                     key={group.model.id}
-                    open={Boolean(modelId) || groupIndex === 0 || selectedGroup}
+                    open={Boolean(modelId) || groupIndex === 0 || selectedGroup || (sampleSelected && sampleGroup)}
                     className="group border-b border-line"
                   >
                     <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-1.5 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
@@ -255,10 +228,39 @@ export default async function EstimateTemplatesPage({
                         <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">
                           {group.choices.length}件
                         </span>
+                        {sampleGroup && (
+                          <span className="text-[10px] font-medium text-muted">＋確認用1件</span>
+                        )}
                       </div>
                     </summary>
 
                     <div className="divide-y divide-line">
+                      {sampleGroup && (
+                        <Link
+                          href={sampleHref(modelId, qRaw)}
+                          aria-current={sampleSelected ? 'true' : undefined}
+                          className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
+                            sampleSelected
+                              ? 'border-l-4 border-l-amber-500 bg-amber-50/90 shadow-[inset_0_0_0_1px_rgba(180,120,40,0.18)] pl-2'
+                              : 'bg-amber-50/35 hover:bg-amber-50/70'
+                          }`}
+                        >
+                          <div className="flex min-w-0 items-center gap-2 pl-4">
+                            <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
+                            <Badge tone="warn" className="shrink-0">動作確認用</Badge>
+                            {sampleSelected && (
+                              <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                選択中
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
+                          <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
+                          <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
+                          <div className="text-center"><Badge tone="neutral">サンプル</Badge></div>
+                          <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
+                        </Link>
+                      )}
                       {group.choices.map((choice) => {
                         const template = choice.template?.template ?? null;
                         const active =
@@ -309,7 +311,7 @@ export default async function EstimateTemplatesPage({
               }) : (
                 <div className="col-span-6 px-6 py-8 text-center">
                   <p className="text-sm font-semibold">条件に一致する正式な標準見積がありません</p>
-                  <p className="mt-1 text-xs text-muted">上の動作確認サンプルは引き続き確認できます。</p>
+                  <p className="mt-1 text-xs text-muted">商品モデルや検索条件を変更して確認してください。</p>
                 </div>
               )}
           </div>

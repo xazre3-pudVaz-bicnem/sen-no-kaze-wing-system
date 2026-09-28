@@ -23,6 +23,8 @@ import {
   assignDealerSchema,
   dealerRevisionSchema,
   manualQuoteSchema,
+  quoteDraftSaveSchema,
+  quoteDraftFinalizeSchema,
   baseBreakdownSchema,
   optionPricesSchema,
   userRoleSchema,
@@ -1168,42 +1170,42 @@ export async function saveQuoteDraftAction(
   formData: FormData
 ): Promise<QuoteDraftFormState> {
   const actor = await requireStaff();
-  const draftId = String(formData.get('draft_id') ?? '').trim();
-  const expectedLockVersion = Number(formData.get('expected_lock_version'));
-  const adjustment = Number(formData.get('adjustment') ?? 0);
 
-  if (!draftId) return { ok: false, error: 'Draftが指定されていません。' };
-  if (!Number.isInteger(expectedLockVersion) || expectedLockVersion < 0) {
-    return { ok: false, error: 'Draftの版情報が不正です。再読み込みしてください。' };
-  }
-  if (!Number.isInteger(adjustment)) {
-    return { ok: false, fieldErrors: { adjustment: ['調整額は1円単位の整数で入力してください。'] } };
-  }
-
-  let items: unknown;
+  let rawItems: unknown;
   try {
-    items = JSON.parse(String(formData.get('items_json') ?? '[]'));
+    rawItems = JSON.parse(String(formData.get('items_json') ?? '[]'));
   } catch {
     return { ok: false, error: '明細データを読み取れませんでした。' };
   }
-  if (!Array.isArray(items)) return { ok: false, error: '明細データが不正です。' };
+
+  const parsed = quoteDraftSaveSchema.safeParse({
+    draft_id: formData.get('draft_id'),
+    expected_lock_version: formData.get('expected_lock_version'),
+    base_master_revision_id: formData.get('base_master_revision_id'),
+    items: rawItems,
+    adjustment: formData.get('adjustment') ?? 0,
+    adjustment_reason: formData.get('adjustment_reason'),
+    dealer_note: formData.get('dealer_note'),
+    notes: formData.get('notes'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
   try {
     const store = await getStore();
     const savedVersion = await store.saveQuoteDraft(
-      draftId,
+      parsed.data.draft_id,
       {
-        expected_lock_version: expectedLockVersion,
-        base_master_revision_id: nullableId(formData.get('base_master_revision_id')),
-        items: items as Parameters<typeof store.saveQuoteDraft>[1]['items'],
-        adjustment,
-        adjustment_reason: nullableId(formData.get('adjustment_reason')),
-        dealer_note: nullableId(formData.get('dealer_note')),
-        notes: nullableId(formData.get('notes')),
+        expected_lock_version: parsed.data.expected_lock_version,
+        base_master_revision_id: parsed.data.base_master_revision_id,
+        items: parsed.data.items,
+        adjustment: parsed.data.adjustment,
+        adjustment_reason: parsed.data.adjustment_reason ?? null,
+        dealer_note: parsed.data.dealer_note ?? null,
+        notes: parsed.data.notes ?? null,
       },
       actor
     );
-    revalidatePath(`/admin/quotes/drafts/${draftId}`);
+    revalidatePath(`/admin/quotes/drafts/${parsed.data.draft_id}`);
     return { ok: true, message: 'Draftを保存しました。', savedVersion };
   } catch (e) {
     return errState(e);
@@ -1215,18 +1217,20 @@ export async function finalizeQuoteDraftAction(
   formData: FormData
 ): Promise<QuoteDraftFormState> {
   const actor = await requireStaff();
-  const draftId = String(formData.get('draft_id') ?? '').trim();
-  const expectedLockVersion = Number(formData.get('expected_lock_version'));
-
-  if (!draftId) return { ok: false, error: 'Draftが指定されていません。' };
-  if (!Number.isInteger(expectedLockVersion) || expectedLockVersion < 0) {
-    return { ok: false, error: 'Draftの版情報が不正です。再読み込みしてください。' };
-  }
+  const parsed = quoteDraftFinalizeSchema.safeParse({
+    draft_id: formData.get('draft_id'),
+    expected_lock_version: formData.get('expected_lock_version'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
   let quoteId: string;
   try {
     const store = await getStore();
-    const quote = await store.finalizeQuoteDraft(draftId, expectedLockVersion, actor);
+    const quote = await store.finalizeQuoteDraft(
+      parsed.data.draft_id,
+      parsed.data.expected_lock_version,
+      actor
+    );
     quoteId = quote.id;
     revalidatePath('/admin/quotes');
     revalidatePath(`/admin/quotes/${quoteId}`);

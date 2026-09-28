@@ -161,6 +161,8 @@ describe('Admin case management UI', () => {
     expect(list).toContain('全体フローのF5〜F15に対応');
     expect(list).not.toContain('概算見積 承諾履歴');
     expect(list).not.toContain('確定見積 承諾済み');
+    expect(list).not.toContain("<Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>");
+    expect(list).toContain('<span className="text-[0.64rem] font-semibold text-[#315745]">F5/15 見積依頼</span>');
     expect(list).toContain('{casePhaseLabel(quote)}');
     expect(list).toContain('{casePhaseLabel(q)}');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');

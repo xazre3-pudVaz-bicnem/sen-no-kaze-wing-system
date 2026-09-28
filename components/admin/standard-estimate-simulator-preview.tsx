@@ -29,21 +29,36 @@ import { PreviewStage } from '@/components/simulator/preview-stage';
 import { QuoteSheet } from '@/components/simulator/quote-sheet';
 import { OptionPickerDialog } from '@/components/simulator/option-picker-dialog';
 
+type ContentTab = 'estimate' | 'plan';
+
 interface Props {
   bundle: CatalogBundle;
   specCode: string;
   template: EstimateTemplateBundle | null;
   sampleMode?: boolean;
+  initialContentTab?: ContentTab;
+  showContentTabs?: boolean;
+  showEditLink?: boolean;
+  previewOnly?: boolean;
 }
 
 export function StandardEstimateSimulatorPreview(props: Props) {
-  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}:${props.sampleMode ? 'sample' : 'normal'}`;
+  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}:${props.sampleMode ? 'sample' : 'normal'}:${props.initialContentTab ?? 'estimate'}`;
   return <StandardEstimateSimulatorPreviewBody key={previewKey} {...props} />;
 }
 
-function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, sampleMode = false }: Props) {
+function StandardEstimateSimulatorPreviewBody({
+  bundle,
+  specCode,
+  template,
+  sampleMode = false,
+  initialContentTab = 'estimate',
+  showContentTabs = true,
+  showEditLink = true,
+  previewOnly = false,
+}: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
-  const [contentTab, setContentTab] = useState<'estimate' | 'plan'>('estimate');
+  const [contentTab, setContentTab] = useState<ContentTab>(initialContentTab);
   const [picker, setPicker] = useState<string | null>(null);
   const { model } = bundle;
   const ctx = useMemo<RuleContext>(
@@ -280,7 +295,9 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
               <p className="mt-1 text-xs text-muted">
                 {sampleMode
                   ? '見積書とプランボードの動作確認用です。変更内容や金額は保存・公開されません。'
-                  : '見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。'}
+                  : previewOnly
+                    ? '保存済み・取込済み内容の確認です。変更は「編集」タブで行います。'
+                    : '見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -289,7 +306,7 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
                   試算をリセット
                 </button>
               )}
-              {template && (
+              {template && showEditLink && (
                 <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
                   標準見積を編集
                 </Link>
@@ -297,43 +314,48 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
             </div>
           </div>
 
-          <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="標準見積の確認内容">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contentTab === 'estimate'}
-              onClick={() => setContentTab('estimate')}
-              className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
-                contentTab === 'estimate'
-                  ? 'border-line border-b-white bg-white text-forest'
-                  : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
-              }`}
-            >
-              見積書
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contentTab === 'plan'}
-              onClick={() => setContentTab('plan')}
-              className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
-                contentTab === 'plan'
-                  ? 'border-line border-b-white bg-white text-forest'
-                  : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
-              }`}
-            >
-              プランボード
-            </button>
-          </div>
+          {showContentTabs && (
+            <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="標準見積の確認内容">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={contentTab === 'estimate'}
+                onClick={() => setContentTab('estimate')}
+                className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
+                  contentTab === 'estimate'
+                    ? 'border-line border-b-white bg-white text-forest'
+                    : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
+                }`}
+              >
+                見積書
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={contentTab === 'plan'}
+                onClick={() => setContentTab('plan')}
+                className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
+                  contentTab === 'plan'
+                    ? 'border-line border-b-white bg-white text-forest'
+                    : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
+                }`}
+              >
+                プランボード
+              </button>
+            </div>
+  
+          )}
 
           {contentTab === 'estimate' && (
           <div className="px-4 py-4 sm:px-5">
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
-              <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
-              {sampleMode
-                ? '見積書の商品を変更して、金額表示とプランボードへの反映を確認できます。正式データには反映されません。'
-                : '見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。'}
-            </div>
+            {!previewOnly && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
+                <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
+                {sampleMode
+                  ? '見積書の商品を変更して、金額表示とプランボードへの反映を確認できます。正式データには反映されません。'
+                  : '見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。'}
+              </div>
+            )}
             <QuoteSheet
               modelName={displayModelName}
               specName={specName}
@@ -342,8 +364,8 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
               standardEstimate={standardEstimate}
               categories={bundle.categories}
               options={bundle.options}
-              readOnly={false}
-              allowStandardEstimateCategoryPick
+              readOnly={previewOnly}
+              allowStandardEstimateCategoryPick={!previewOnly}
               onPickCategory={openPicker}
             />
           </div>

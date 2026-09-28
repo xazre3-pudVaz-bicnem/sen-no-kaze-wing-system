@@ -9,6 +9,8 @@ import {
   type EstimateTemplateWorkbenchLine,
   type EstimateTemplateWorkbenchSection,
 } from '@/components/admin/estimate-template-workbench';
+import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
+import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -48,8 +50,11 @@ export default async function EstimateTemplateDetailPage({
   const template = templates.find((row) => row.id === id);
   if (!template) notFound();
 
-  const bundle = await store.getEstimateTemplateBundle(template.base_model_id, template.spec_code);
-  if (!bundle) notFound();
+  const [bundle, catalogBundle] = await Promise.all([
+    store.getEstimateTemplateBundle(template.base_model_id, template.spec_code),
+    store.getCatalogBundle(template.base_model_id),
+  ]);
+  if (!bundle || !catalogBundle) notFound();
 
   const model = models.find((row) => row.id === template.base_model_id);
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
@@ -153,10 +158,12 @@ export default async function EstimateTemplateDetailPage({
         </div>
       </section>
 
-      <EstimateTemplateWorkbench
-        templateId={template.id}
-        role={actor.role}
-        baseLines={bundle.base_breakdown_items.map((line) => ({
+      <EstimateTemplateDetailTabs
+        editContent={
+          <EstimateTemplateWorkbench
+          templateId={template.id}
+          role={actor.role}
+          baseLines={bundle.base_breakdown_items.map((line) => ({
           id: line.id,
           section: line.section,
           name: line.name,
@@ -165,15 +172,39 @@ export default async function EstimateTemplateDetailPage({
           unitPrice: line.unit_price,
           amount: line.amount,
           remark: line.remark ?? '',
-        }))}
-        baseTotal={baseTotal}
-        initialLines={initialLines}
-        sections={sections}
-        products={products}
-        createdOptionId={sp.created_option}
-        returnSection={returnSection}
-        taxRate={template.tax_rate}
-        adjustment={template.adjustment}
+          }))}
+          baseTotal={baseTotal}
+          initialLines={initialLines}
+          sections={sections}
+          products={products}
+          createdOptionId={sp.created_option}
+          returnSection={returnSection}
+          taxRate={template.tax_rate}
+          adjustment={template.adjustment}
+          />
+        }
+        estimateContent={
+          <StandardEstimateSimulatorPreview
+            bundle={catalogBundle}
+            specCode={template.spec_code}
+            template={bundle}
+            initialContentTab="estimate"
+            showContentTabs={false}
+            showEditLink={false}
+            previewOnly
+          />
+        }
+        planContent={
+          <StandardEstimateSimulatorPreview
+            bundle={catalogBundle}
+            specCode={template.spec_code}
+            template={bundle}
+            initialContentTab="plan"
+            showContentTabs={false}
+            showEditLink={false}
+            previewOnly
+          />
+        }
       />
     </AdminPage>
   );

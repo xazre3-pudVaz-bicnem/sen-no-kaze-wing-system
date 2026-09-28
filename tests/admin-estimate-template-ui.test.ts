@@ -14,6 +14,10 @@ const simulatorPreview = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/standard-estimate-simulator-preview.tsx'),
   'utf8'
 );
+const detailTabs = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/estimate-template-detail-tabs.tsx'),
+  'utf8'
+);
 const quoteSheet = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/quote-sheet.tsx'),
   'utf8'
@@ -136,7 +140,7 @@ describe('見積テンプレート管理UI', () => {
     expect(simulatorPreview).toContain('allowStandardEstimateCategoryPick');
     expect(simulatorPreview).toContain('画面内試算');
     expect(simulatorPreview).toContain('プランボード確認');
-    expect(simulatorPreview).toContain("useState<'estimate' | 'plan'>('estimate')");
+    expect(simulatorPreview).toContain('useState<ContentTab>(initialContentTab)');
     expect(simulatorPreview).toContain('role="tablist"');
     expect(simulatorPreview).toContain('aria-label="標準見積の確認内容"');
     expect(simulatorPreview).toContain("contentTab === 'estimate'");
@@ -219,6 +223,28 @@ describe('見積テンプレート管理UI', () => {
     expect(detailPage).toContain('別途');
     expect(detailPage).toContain('新しい下書き版を作る');
     expect(detailPage).toContain('複製して新規作成');
+    expect(detailPage).toContain('EstimateTemplateDetailTabs');
+    expect(detailPage).toContain('StandardEstimateSimulatorPreview');
+    expect(detailPage).toContain('store.getCatalogBundle(template.base_model_id)');
+    expect(detailPage).toContain('initialContentTab="estimate"');
+    expect(detailPage).toContain('initialContentTab="plan"');
+    expect(detailPage).toContain('showContentTabs={false}');
+    expect(detailPage).toContain('showEditLink={false}');
+    expect(detailPage).toContain('previewOnly');
+    expect(detailTabs).toContain("type DetailTab = 'edit' | 'estimate' | 'plan'");
+    expect(detailTabs).toContain('標準見積の表示切替');
+    expect(detailTabs).toContain('編集');
+    expect(detailTabs).toContain('見積書');
+    expect(detailTabs).toContain('プランボード');
+    expect(detailTabs).toContain("tab === 'edit' ? 'block' : 'hidden'");
+    expect(detailTabs).toContain('未保存変更は');
+    expect(simulatorPreview).toContain('initialContentTab?: ContentTab');
+    expect(simulatorPreview).toContain('showContentTabs?: boolean');
+    expect(simulatorPreview).toContain('showEditLink?: boolean');
+    expect(simulatorPreview).toContain('previewOnly?: boolean');
+    expect(simulatorPreview).toContain('readOnly={previewOnly}');
+    expect(simulatorPreview).toContain('allowStandardEstimateCategoryPick={!previewOnly}');
+    expect(simulatorPreview).toContain('変更は「編集」タブで行います');
   });
 
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {

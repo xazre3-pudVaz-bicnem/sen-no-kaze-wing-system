@@ -57,7 +57,7 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('開いたらすぐ明細を編集できる');
     expect(listPage).toContain('＋ 新しい見積書を作成');
     expect(listPage).toContain('見積書一覧（{totalCount}件）');
-    expect(listPage).toContain('開く見積書を選択します。');
+    expect(listPage).toContain('シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。');
     expect(listPage).toContain("active ? '表示中' : '開く'");
     expect(listPage).toContain('更新 {formatUpdatedAt(template.updated_at)}');
     expect(listPage).not.toContain('見積書を選ぶ');
@@ -83,7 +83,9 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('見積書一覧');
     expect(listPage).toContain('見積書一覧（{totalCount}件）');
     expect(listPage).toContain('シミュレーター標準');
-    expect(listPage).toContain('正式見積書から指定');
+    expect(listPage).toContain('シミュレーターの選択対象');
+    expect(listPage).toContain('標準に指定された正式見積書だけを、見積シミュレーターの選択肢に表示します。');
+    expect(listPage).toContain('初期表示を決める設定ではありません。');
     expect(listPage).toContain('作成済み見積書');
     expect(listPage).toContain('画面確認用サンプル');
     expect(listPage).toContain('sampleEstimateHref');
@@ -91,9 +93,9 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('<SavedEstimateMenu');
     expect(listPage).toContain('aria-current={active ? \'page\' : undefined}');
     expect(listPage).toContain('複製');
-    expect(listPage).toContain('シミュレーターの標準に設定');
+    expect(listPage).toContain('シミュレーター標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');
-    expect(listPage).toContain('シミュレーター標準の指定接続後に利用できます');
+    expect(listPage).toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
   });
 
   it('編集・見積書・プランボードを同じ見積書ワークスペースで切り替える', () => {

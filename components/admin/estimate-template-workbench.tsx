@@ -9,6 +9,8 @@ type SectionCode = 'interior_exterior' | 'option' | 'sitework';
 
 export interface EstimateTemplateWorkbenchLine {
   id: string;
+  lineKey?: string | null;
+  optionId?: string | null;
   section: SectionCode;
   groupLabel: string;
   name: string;
@@ -39,6 +41,17 @@ export interface EstimateTemplateWorkbenchSection {
   label: string;
   expenseLabel: string | null;
   expenseAmount: number;
+}
+
+export interface EstimateTemplateDraftSavePayload {
+  lines: EstimateTemplateWorkbenchLine[];
+  adjustment: number;
+  adjustmentReason: string;
+}
+
+export interface EstimateTemplateDraftSaveResult {
+  ok: boolean;
+  error?: string;
 }
 
 type CollapsibleSection = 'base' | SectionCode;
@@ -86,6 +99,11 @@ export function EstimateTemplateWorkbench({
   returnPath,
   taxRate,
   adjustment,
+  initialAdjustmentReason = '',
+  draftPersisted = false,
+  externalDirty = false,
+  onSaveDraft,
+  allowProductRegistration = true,
   demoMode = false,
 }: {
   templateId: string;
@@ -109,6 +127,11 @@ export function EstimateTemplateWorkbench({
   returnPath?: string;
   taxRate: number;
   adjustment: number;
+  initialAdjustmentReason?: string;
+  draftPersisted?: boolean;
+  externalDirty?: boolean;
+  onSaveDraft?: (payload: EstimateTemplateDraftSavePayload) => Promise<EstimateTemplateDraftSaveResult>;
+  allowProductRegistration?: boolean;
   demoMode?: boolean;
 }) {
   const createdProduct = createdOptionId ? products.find((product) => product.id === createdOptionId) : null;
@@ -130,6 +153,7 @@ export function EstimateTemplateWorkbench({
       ...base,
       {
         id: createdProduct.id,
+        lineKey: crypto.randomUUID(),
         section,
         groupLabel: createdProduct.categoryName,
         name: createdProduct.name,
@@ -138,6 +162,7 @@ export function EstimateTemplateWorkbench({
         saleUnitPrice: createdProduct.priceOnRequest ? 0 : createdProduct.price,
         remark: createdProduct.priceOnRequest ? '別途見積' : '',
         source: 'product',
+        optionId: createdProduct.id,
         customerSelection: '標準・変更可',
       },
     ];
@@ -153,13 +178,20 @@ export function EstimateTemplateWorkbench({
   const [expenseRate, setExpenseRate] = useState(15);
   const [markupRate, setMarkupRate] = useState(150);
   const [localAdjustment, setLocalAdjustment] = useState(adjustment);
+  const [adjustmentReason, setAdjustmentReason] = useState(initialAdjustmentReason);
+  const [savePending, setSavePending] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
   const [collapsedSections, setCollapsedSections] = useState<Set<CollapsibleSection>>(() => new Set());
-  const rateSettingsDirty =
+  const previewRateSettingsDirty =
     salesExpenseRate !== 100 ||
     expenseRate !== 15 ||
-    markupRate !== 150 ||
-    localAdjustment !== adjustment;
-  const hasLocalChanges = isDirty || rateSettingsDirty;
+    markupRate !== 150;
+  const adjustmentDirty =
+    localAdjustment !== adjustment ||
+    adjustmentReason !== initialAdjustmentReason;
+  const saveableDirty = isDirty || adjustmentDirty || externalDirty;
+  const hasLocalChanges = saveableDirty || previewRateSettingsDirty;
 
   const totals = useMemo(() => {
     const result: Record<SectionCode, number> = {
@@ -269,7 +301,38 @@ export function EstimateTemplateWorkbench({
     setExpenseRate(15);
     setMarkupRate(150);
     setLocalAdjustment(adjustment);
+    setAdjustmentReason(initialAdjustmentReason);
+    setSaveError('');
+    setSaveMessage('');
     setIsDirty(false);
+  };
+
+  const saveDraft = async () => {
+    if (!onSaveDraft || savePending) return;
+    if (localAdjustment !== 0 && !adjustmentReason.trim()) {
+      setSaveError('調整額がある場合は理由を入力してください。');
+      setSaveMessage('');
+      return;
+    }
+
+    setSavePending(true);
+    setSaveError('');
+    setSaveMessage('');
+    try {
+      const result = await onSaveDraft({
+        lines: rows,
+        adjustment: localAdjustment,
+        adjustmentReason,
+      });
+      if (!result.ok) {
+        setSaveError(result.error || '下書きの保存に失敗しました。');
+        return;
+      }
+      setIsDirty(false);
+      setSaveMessage('下書きを保存しました。');
+    } finally {
+      setSavePending(false);
+    }
   };
 
   const toggleSection = (section: CollapsibleSection) => {
@@ -351,6 +414,7 @@ export function EstimateTemplateWorkbench({
                   ? '別途見積'
                   : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
                 source: 'product',
+                optionId: product.id,
                 customerSelection:
                   row.customerSelection === '—' ? '標準・変更可' : row.customerSelection,
               }
@@ -362,6 +426,7 @@ export function EstimateTemplateWorkbench({
         ...current,
         {
           id: 'product-' + product.id + '-' + Date.now(),
+          lineKey: crypto.randomUUID(),
           section: pickerSection,
           groupLabel: product.categoryName,
           name: product.name,
@@ -372,6 +437,7 @@ export function EstimateTemplateWorkbench({
             ? '別途見積'
             : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
           source: 'product',
+          optionId: product.id,
           customerSelection: '標準・変更可',
         },
       ]);
@@ -386,6 +452,7 @@ export function EstimateTemplateWorkbench({
       ...current,
       {
         id: 'free-' + Date.now(),
+        lineKey: crypto.randomUUID(),
         section,
         groupLabel: '',
         name: '新しい自由項目',
@@ -756,8 +823,15 @@ export function EstimateTemplateWorkbench({
             </Button>
             {!demoMode && (
               <>
-                <Button type="button" variant="secondary" size="sm" className="h-7 min-h-7 px-3" disabled>
-                  下書きを保存
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 min-h-7 px-3"
+                  onClick={saveDraft}
+                  disabled={!onSaveDraft || savePending || (draftPersisted && !saveableDirty)}
+                >
+                  {savePending ? '保存中…' : '下書きを保存'}
                 </Button>
                 <Button type="button" size="sm" className="h-7 min-h-7 px-3" disabled>
                   {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
@@ -765,6 +839,15 @@ export function EstimateTemplateWorkbench({
               </>
             )}
           </div>
+          {(saveError || saveMessage) && (
+            <div className="ml-auto text-[11px]">
+              {saveError ? (
+                <span className="font-semibold text-red-700">{saveError}</span>
+              ) : (
+                <span className="font-semibold text-emerald-800">{saveMessage}</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center divide-x divide-slate-200 border-b border-slate-200 text-[11px]">
@@ -782,6 +865,18 @@ export function EstimateTemplateWorkbench({
               aria-label="値引き等調整額"
             />
           </label>
+          {onSaveDraft && localAdjustment !== 0 && (
+            <label className="flex min-w-[14rem] flex-1 items-center gap-1 px-3 py-0.5">
+              <span className="whitespace-nowrap text-slate-600">調整理由</span>
+              <Input
+                value={adjustmentReason}
+                onChange={(event) => setAdjustmentReason(event.target.value)}
+                className="h-6 min-h-6 min-w-0 flex-1 px-1 text-xs"
+                aria-label="値引き等調整理由"
+                placeholder="端数調整・値引き理由など"
+              />
+            </label>
+          )}
           <span className="px-3 py-1">
             消費税 <strong className="ml-1 text-sm text-slate-900">{formatYen(tax)}</strong>
           </span>
@@ -907,7 +1002,11 @@ export function EstimateTemplateWorkbench({
             本体は参照専用。内外装工事・オプション・別途はセルで編集できます。
             {hasAnyPriceOnRequest && <strong className="ml-2 text-amber-800">※別途見積を含むため合計は確定額ではありません。</strong>}
           </span>
-          <span>販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。</span>
+          <span>
+            {demoMode || !onSaveDraft
+              ? '販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。'
+              : '明細・調整額は下書き保存できます。販売費・経費・掛率は画面内試算のみで、公開は次工程です。'}
+          </span>
         </div>
       </section>
 
@@ -1038,7 +1137,7 @@ export function EstimateTemplateWorkbench({
                 </div>
               )}
 
-              {!demoMode && (
+              {!demoMode && allowProductRegistration && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                   <div>
                     <p className="font-semibold">商品が見つからない場合</p>

@@ -313,10 +313,12 @@ describe('Quote acceptance database and UI boundaries', () => {
     expect(workspace).toContain("const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';");
     expect(workspace).toContain("const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';");
     expect(workspace).toContain("? '確定見積の承諾履歴'");
-    expect(workspace).toContain("? '概算承諾履歴'");
+    expect(workspace).toContain("isPreliminaryAccepted ? '承諾履歴あり' : '発行済み'");
     expect(workspace).toContain('確定見積の承諾履歴（最新状態要確認）');
     expect(workspace).toContain('次にやること：最新の見積状態を確認');
     expect(workspace).toContain('概算見積の承諾履歴');
+    expect(workspace).toContain('次にやること：担当代理店を決める');
+    expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
     expect(workspace).not.toContain('<QuoteStatusForm');
   });
 });

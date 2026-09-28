@@ -136,6 +136,11 @@ describe('見積テンプレート管理UI', () => {
     expect(simulatorPreview).toContain('allowStandardEstimateCategoryPick');
     expect(simulatorPreview).toContain('画面内試算');
     expect(simulatorPreview).toContain('プランボード確認');
+    expect(simulatorPreview).toContain("useState<'estimate' | 'plan'>('estimate')");
+    expect(simulatorPreview).toContain('role="tablist"');
+    expect(simulatorPreview).toContain('aria-label="標準見積の確認内容"');
+    expect(simulatorPreview).toContain("contentTab === 'estimate'");
+    expect(simulatorPreview).toContain("contentTab === 'plan'");
     expect(simulatorPreview).toContain('試算をリセット');
     expect(simulatorPreview).toContain('explainBlocked');
     expect(simulatorPreview).toContain('toggleOption');

@@ -303,6 +303,7 @@ export const dealerRevisionSchema = z.object({
 export const manualQuoteSchema = z.object({
   customer_name: trimmed(60).min(1, 'お客様名を入力してください'),
   customer_company: optional(100),
+  site_address: optional(200),
   base_model_id: z.uuid(),
   spec_code: trimmed(40).regex(/^[a-z0-9-]*$/),
   finish_level: z.enum(['shell', 'equipment', 'full']),

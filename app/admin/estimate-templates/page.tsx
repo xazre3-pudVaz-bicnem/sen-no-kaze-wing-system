@@ -267,8 +267,13 @@ export default async function EstimateTemplatesPage({
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
             複製
           </button>
-          <button type="button" className="btn-secondary btn-sm" disabled title="標準指定の正式接続後に利用できます">
-            標準に設定
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            disabled
+            title="正式見積書の標準指定接続後に利用できます"
+          >
+            この見積書を標準に設定
           </button>
         </div>
       }

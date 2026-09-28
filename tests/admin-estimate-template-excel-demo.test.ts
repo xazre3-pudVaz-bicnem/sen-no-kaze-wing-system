@@ -82,7 +82,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft接続後に利用できます');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
-    expect(demo).toContain("{dirty ? '編集中' : '下書き'}");
+    expect(demo).toContain("{dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}");
     expect(demo).not.toContain('編集内容を一時保持');
     expect(demo).not.toContain('一時保持時点に戻す');
     expect(demo).not.toContain('一時保持済み');

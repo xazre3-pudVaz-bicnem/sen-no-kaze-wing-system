@@ -15,9 +15,8 @@ export interface ManualQuoteModel {
 }
 
 /**
- * スタッフ（本部・総代理店・代理店）が管理画面から直接見積を作る。
- * モデルと仕様を選ぶと標準構成で第1版が発行され、そのままエクセル表で編集できる。
- * 代理店が作った見積は自動的に自分が担当になる。
+ * スタッフ（本部・総代理店・代理店）がWeb外の案件を登録する。
+ * この画面ではRevisionを発行せず、案件 + 空Draftだけを作ってExcel型編集へ進む。
  */
 export function ManualQuoteForm({ models }: { models: ManualQuoteModel[] }) {
   const [state, action, pending] = useActionState(createManualQuoteAction, initial);
@@ -82,10 +81,10 @@ export function ManualQuoteForm({ models }: { models: ManualQuoteModel[] }) {
         <Textarea id="mq-memo" name="memo" rows={3} />
       </Field>
       <p className="text-xs text-muted">
-        作成すると、選んだ仕様の標準構成で第1版（概算見積）が発行されます。
-        現地確認後は「見積内容を更新」から施工金額や商品変更を反映し、必要に応じて改訂見積を発行してください。
+        登録時点では見積Revisionを発行しません。空のDraftを作成し、次のExcel型編集画面で明細・金額を入力します。
+        「正式保存」を行った時点で、初めて正式なRevision 1が作成されます。
       </p>
-      <SubmitButton pending={pending} label="案件を登録して概算見積を作成" />
+      <SubmitButton pending={pending} label="案件を登録して見積Draftを開く" />
     </form>
   );
 }

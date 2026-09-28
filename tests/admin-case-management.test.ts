@@ -150,7 +150,8 @@ describe('Admin case management UI', () => {
     expect(list).toContain('担当：すべて');
     expect(list).toContain('data-testid="case-list-scroll"');
     expect(list).toContain('見積番号');
-    expect(list).toContain('工程・状態');
+    expect(list).toContain('現在フェーズ');
+    expect(list).not.toContain('工程・状態');
     expect(list).not.toContain('caseQuoteStatusLabel');
     expect(list).not.toContain('quoteStatusTone');
     expect(list).toContain('casePhaseLabel');
@@ -175,6 +176,9 @@ describe('Admin case management UI', () => {
     }
     expect(list).toContain('未登録');
     expect(list).toContain('更新 {formatDate(updatedAt, true)}');
+    expect(list).toContain('更新 {formatDate(q.updated_at, true)}');
+    expect(list).not.toContain('依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]} ／ 更新');
+    expect(list).not.toContain('q.request_status ? `依頼：${QUOTE_REQUEST_STATUS_LABELS[q.request_status]} ／ `');
     expect(list).toContain("import { MapPin } from 'lucide-react'");
     expect(list).toContain('googleMapsHref');
     expect(list).toContain('https://www.google.com/maps/search/?api=1&query=');

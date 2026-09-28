@@ -65,5 +65,7 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(demo).toContain('DBには保存されません');
     expect(demo).toContain('Excel原本 税込合計');
     expect(demo).toContain("sample ? 0 : 15");
+    expect(demo).toContain('if (sample && !dirty)');
+    expect(demo).toContain('saleGrand = sample.sourceTotal');
   });
 });

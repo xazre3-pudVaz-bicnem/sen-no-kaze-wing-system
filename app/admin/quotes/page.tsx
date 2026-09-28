@@ -226,7 +226,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
                   <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
-                  <th className="w-[16%] px-2 py-1 text-left font-semibold">工程・状態</th>
+                  <th className="w-[16%] px-2 py-1 text-left font-semibold">現在フェーズ</th>
                   <th className="w-[20%] px-2 py-1 text-left font-semibold">設置予定地</th>
                   <th className="w-[12%] px-2 py-1 text-left font-semibold">商品モデル</th>
                   <th className="w-[14%] px-2 py-1 text-right font-semibold">見積額</th>
@@ -262,7 +262,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                           <span className="text-[0.64rem] font-semibold text-[#315745]">{casePhaseLabel(q)}</span>
                         </div>
                         <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">
-                          {q.request_status ? `依頼：${QUOTE_REQUEST_STATUS_LABELS[q.request_status]} ／ ` : ''}更新 {formatDate(q.updated_at, true)}
+                          更新 {formatDate(q.updated_at, true)}
                         </span>
                       </td>
                       <td className="px-2 py-1 align-middle text-[0.64rem]">
@@ -496,7 +496,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
                 <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
-                <th className="w-[16%] px-2 py-1 text-left font-semibold">工程・状態</th>
+                <th className="w-[16%] px-2 py-1 text-left font-semibold">現在フェーズ</th>
                 <th className="w-[20%] px-2 py-1 text-left font-semibold">設置予定地</th>
                 <th className="w-[12%] px-2 py-1 text-left font-semibold">商品モデル</th>
                 <th className="w-[14%] px-2 py-1 text-right font-semibold">見積額</th>
@@ -559,7 +559,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                             <span className="text-[0.64rem] font-semibold text-[#315745]">{casePhaseLabel(quote)}</span>
                           </div>
                           <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">
-                            依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]} ／ 更新 {formatDate(updatedAt, true)}
+                            更新 {formatDate(updatedAt, true)}
                           </span>
                         </>
                       ) : (

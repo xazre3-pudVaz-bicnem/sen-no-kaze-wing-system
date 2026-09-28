@@ -3,11 +3,10 @@ import type { ProductOption } from './types';
 export type LedgerQuickFilter = 'all' | 'draft' | 'needs-attention';
 
 export function productAttentionReasons(option: ProductOption): string[] {
-  const reasons: string[] = [];
-  if (option.status === 'draft') reasons.push('下書き');
-  if (!option.model_no?.trim()) reasons.push('型番未設定');
-  if (!option.image_url) reasons.push('画像未登録');
-  return reasons;
+  // 商品台帳の「要確認」は、公開中なのにお客様表示の基本素材が欠けている商品だけを対象にする。
+  // 下書きは通常の作業状態で、型番は工事・造作等では存在しない場合があるため警告理由にしない。
+  if (option.status !== 'published') return [];
+  return option.image_url ? [] : ['画像未登録'];
 }
 
 export function needsProductAttention(option: ProductOption): boolean {

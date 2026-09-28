@@ -74,14 +74,17 @@ describe('見積書作成・管理UI', () => {
 
   it('見積書が未登録でも空画面ではなく作成画面を直接表示する', () => {
     expect(listPage).toContain('if (!selectedTemplate)');
-    expect(listPage).toContain('<EstimateTemplateExcelDemo />');
+    expect(listPage).toContain('<EstimateTemplateExcelDemo key={selectedSample?.id ?? \'new-estimate-demo\'} sampleId={selectedSample?.id} />');
     expect(listPage).toContain('正式な見積書データが未登録のため、作成画面を直接表示しています。');
     expect(listPage).not.toContain('見積書がまだありません');
   });
 
   it('作成済み見積書・新規作成・標準指定の入口を編集画面上部に置く', () => {
     expect(listPage).toContain('作成済み見積書');
-    expect(listPage).toContain('作成済み見積書（0件）');
+    expect(listPage).toContain('作成済み見積書（{totalCount}件）');
+    expect(listPage).toContain('EXCELサンプル');
+    expect(listPage).toContain('sampleEstimateHref');
+    expect(listPage).toContain('selectedSampleId={selectedSample?.id}');
     expect(listPage).toContain('<SavedEstimateMenu');
     expect(listPage).toContain('aria-current={active ? \'page\' : undefined}');
     expect(listPage).toContain('複製');

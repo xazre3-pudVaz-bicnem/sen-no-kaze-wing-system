@@ -38,6 +38,14 @@ describe('Quote Revision staff access corrective', () => {
     );
   });
 
+  it('does not reuse catalog-edit or organization-hierarchy permission as Quote revision access', () => {
+    const body = functionBody(migration, 'create_quote_revision');
+
+    expect(body).not.toContain('public.can_edit_catalog()');
+    expect(body).not.toContain('organization_memberships');
+    expect(body).not.toContain('parent_organization_id');
+  });
+
   it('keeps the revision lifecycle lock and issued-only guard intact', () => {
     const body = functionBody(migration, 'create_quote_revision');
     const lock = body.indexOf('for update;');

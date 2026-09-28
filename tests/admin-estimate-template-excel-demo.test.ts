@@ -54,7 +54,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('商品を追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("isCollapsed ? '+' : '−'");
-    expect(demo).toContain('編集内容を一時保持');
+    expect(demo).toContain('下書き保存');
   });
 
   it('見積条件と価格設定を分け、技術の杜のExcelと同じ用語で表示する', () => {
@@ -74,11 +74,17 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('売価諸費用');
   });
 
-  it('本番接続前の一時保持と正式保存を誤認しない表記にする', () => {
-    expect(demo).toContain('編集内容を一時保持');
-    expect(demo).toContain('一時保持時点に戻す');
-    expect(demo).toContain('正式保存（接続後）');
-    expect(demo).toContain('下書きを破棄（接続後）');
+  it('保存操作は本番の最終形だけを表示し、接続前は実行できない', () => {
+    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('正式保存');
+    expect(demo).toContain('Draft接続後に利用できます');
+    expect(demo).toContain('Draft→正式Revision接続後に利用できます');
+    expect(demo).toContain("{dirty ? '編集中' : '下書き'}");
+    expect(demo).not.toContain('編集内容を一時保持');
+    expect(demo).not.toContain('一時保持時点に戻す');
+    expect(demo).not.toContain('一時保持済み');
+    expect(demo).not.toContain('正式保存（接続後）');
+    expect(demo).not.toContain('下書きを破棄（接続後）');
     expect(demo).not.toContain('画面内でDraft保存');
     expect(demo).not.toContain('Draftの操作');
   });

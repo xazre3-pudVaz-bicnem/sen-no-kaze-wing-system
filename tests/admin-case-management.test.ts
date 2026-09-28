@@ -30,6 +30,12 @@ const dealerRequestMetaMigration = fs.readFileSync(
 );
 
 describe('Admin case management UI', () => {
+  it('routes only admin to the global case list; master dealer and dealer use assigned cases', () => {
+    expect(list).toContain("if (actor.role !== 'admin') {");
+    expect(list).toContain('store.listDealerQuotes(actor.id)');
+    expect(list).not.toContain('if (!canEditCatalog(actor.role))');
+  });
+
   it('keeps the case list payload small and defers case workspace loading until selection', () => {
     expect(list).toContain('store.listQuoteRequests()');
     expect(list).toContain('store.listAllQuotes()');

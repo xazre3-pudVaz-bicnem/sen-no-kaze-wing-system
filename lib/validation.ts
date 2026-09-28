@@ -330,7 +330,7 @@ export const quoteDraftSaveItemSchema = z.object({
   remark: optional(200).nullable(),
   unit_price: z.coerce.number().int().min(-100_000_000).max(100_000_000),
   quantity: z.coerce.number().min(0.01).max(99_999).refine(
-    (value) => Number.isInteger(value * 10_000),
+    (value) => Math.abs(value * 10_000 - Math.round(value * 10_000)) < 1e-7,
     '数量は小数4桁以内で入力してください'
   ),
   image_url: optional(500).nullable(),

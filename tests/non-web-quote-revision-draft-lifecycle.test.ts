@@ -1,0 +1,119 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+const migration = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260928210000_non_web_quote_revision_draft_lifecycle.sql'),
+  'utf8'
+);
+const actions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
+const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
+const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
+const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
+const editor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
+
+describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
+  it('scopes revision-number uniqueness to non-Web series', () => {
+    expect(migration).toContain('create unique index if not exists quotes_non_web_request_revision_uidx');
+    expect(migration).toContain('on public.quotes(quote_request_id, revision)');
+    expect(migration).toContain('where configuration_id is null');
+  });
+
+  it('creates a Draft only from the current issued formal non-Web Revision under row locks', () => {
+    const body = migration.slice(
+      migration.indexOf('create or replace function public.create_quote_revision_draft'),
+      migration.indexOf('create or replace function public.save_quote_draft')
+    );
+    expect(body).toContain('from public.quotes');
+    expect(body).toContain('for update;');
+    expect(body).toContain("parent.quote_kind is distinct from 'formal'");
+    expect(body).toContain("parent.status <> 'issued'");
+    expect(body).toContain('r.quote_id is distinct from parent.id');
+    expect(body).toContain('v_rank < 3 and parent.dealer_id is distinct from v_uid');
+    expect(body).toContain('parent.configuration_id is not null');
+  });
+
+  it('copies line identity and exact stored amount without recalculating the parent snapshot', () => {
+    const body = migration.slice(
+      migration.indexOf('create or replace function public.create_quote_revision_draft'),
+      migration.indexOf('create or replace function public.save_quote_draft')
+    );
+    expect(body).toContain('item.line_key');
+    expect(body).toContain('item.amount');
+    expect(body).toContain('parent.subtotal - parent.adjustment');
+    expect(body).not.toContain('round(item.unit_price');
+  });
+
+  it('keeps stable Draft identity and preserves parent amount for unchanged quantity and price', () => {
+    const body = migration.slice(
+      migration.indexOf('create or replace function public.save_quote_draft'),
+      migration.indexOf('create or replace function public.guard_non_web_revision_path')
+    );
+    expect(body).toContain('on conflict (draft_id, line_key) do update');
+    expect(body).toContain('v_parent_item.unit_price = v_unit_price');
+    expect(body).toContain('v_parent_item.quantity = v_qty');
+    expect(body).toContain('v_amount := v_parent_item.amount');
+    expect(body).toContain('v_amount_numeric := round(v_unit_price_raw * v_qty)');
+    expect(body).toContain('他の見積系列のline_keyは使用できません');
+  });
+
+  it('keeps parent-pinned history usable while validating changed references', () => {
+    expect(migration).toContain('v_parent_item.option_id is not distinct from v_option_id');
+    expect(migration).toContain("rev.status in ('published', 'superseded')");
+    expect(migration).toContain('p_base_master_revision_id is not distinct from parent.base_master_revision_id');
+    expect(migration).toContain('public.can_use_base_master(v_base_master_id)');
+  });
+
+  it('finalizes N+1 atomically against the current parent and moves the current pointer', () => {
+    const body = migration.slice(
+      migration.indexOf('create or replace function public.finalize_quote_revision_draft')
+    );
+    expect(body).toContain('from public.quote_drafts');
+    expect(body).toContain('from public.quotes');
+    expect(body).toContain('from public.quote_requests');
+    expect(body).toContain('for update;');
+    expect(body).toContain('r.quote_id is distinct from parent.id');
+    expect(body).toContain('v_next_revision := parent.revision + 1');
+    expect(body).toContain('d.adjustment_reason');
+    expect(body).toContain('item.amount');
+    expect(body).toContain("set status = 'superseded'");
+    expect(body).toContain('set quote_id = v_quote_id');
+    expect(body).toContain("status = 'reviewing'");
+    expect(body).toContain('delete from public.quote_drafts');
+  });
+
+  it('keeps legacy direct non-Web child creation blocked by the snapshot contract', () => {
+    expect(migration).toContain('create or replace function public.guard_non_web_revision_path()');
+    expect(migration).toContain("new.quote_kind is distinct from 'formal'");
+    expect(migration).toContain('new.base_master_revision_id is null');
+    expect(migration).toContain('非Web案件の改訂はRevision Draft lifecycleから行ってください');
+    expect(migration).not.toContain('create or replace function public.create_quote_revision(');
+  });
+
+  it('hardens SECURITY DEFINER ownership and EXECUTE ACL', () => {
+    for (const signature of [
+      'public.create_quote_revision_draft(uuid)',
+      'public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text)',
+      'public.finalize_quote_revision_draft(uuid, integer)',
+    ]) {
+      expect(migration).toContain('alter function ' + signature + ' owner to postgres;');
+      expect(migration).toContain('revoke execute on function ' + signature);
+      expect(migration).toContain('grant execute on function ' + signature + ' to authenticated;');
+    }
+    expect(migration).toContain("set search_path = ''");
+    expect(migration).toContain('QUOTE_REVISION_DRAFT_OWNER_INVALID');
+  });
+
+  it('wires only non-Web revisions to the new Draft flow while retaining Web legacy revision wiring', () => {
+    expect(store).toContain('createQuoteRevisionDraft');
+    expect(supabaseStore).toContain("db.rpc('create_quote_revision_draft'");
+    expect(actions).toContain('export async function createQuoteRevisionDraftAction');
+    expect(workspace).toContain('const canCreateRevisionDraft =');
+    expect(workspace).toContain('quote.configuration_id === null');
+    expect(workspace).toContain('const canUseLegacyRevision =');
+    expect(workspace).toContain('quote.configuration_id !== null');
+    expect(editor).toContain('const isRevisionDraft = detail.draft.parent_quote_id !== null;');
+    expect(editor).toContain("isRevisionDraft ? '次のRevision' : 'Revision 1'");
+  });
+});

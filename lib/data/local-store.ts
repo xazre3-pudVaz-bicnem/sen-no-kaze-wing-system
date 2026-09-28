@@ -659,11 +659,12 @@ export class LocalStore implements DataStore {
         const found = db.configurations.find((c) => c.id === input.id);
         if (!found) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
         if (!this.canAccess(actor, found.user_id)) throw new StoreError('FORBIDDEN', '権限がありません');
-        if (found.status !== 'draft' && actor.role !== 'admin') {
+        if (found.status !== 'draft') {
           throw new StoreError('LOCKED', '見積依頼済みの仕様は編集できません。複製して編集してください。');
         }
         cfg = found;
         cfg.name = input.name || cfg.name;
+        cfg.base_model_id = model.id;
         cfg.finish_level = level;
         cfg.spec_code = input.spec_code ?? cfg.spec_code ?? null;
         cfg.site_prefecture = sitePrefecture;
@@ -671,6 +672,7 @@ export class LocalStore implements DataStore {
         cfg.site_location_undecided = undecided;
         cfg.preview_image_url = input.preview_image_url;
         cfg.notes = input.notes;
+        (cfg as Configuration & { exterior_faces?: unknown }).exterior_faces = input.exterior_faces ?? [];
         db.configurationItems = db.configurationItems.filter((i) => i.configuration_id !== cfg.id);
       } else {
         cfg = {
@@ -699,6 +701,7 @@ export class LocalStore implements DataStore {
           created_at: nowIso(),
           updated_at: nowIso(),
         };
+        (cfg as Configuration & { exterior_faces?: unknown }).exterior_faces = input.exterior_faces ?? [];
         db.configurations.push(cfg);
       }
       // その商品の選択項目に属する選択肢だけを紐づける

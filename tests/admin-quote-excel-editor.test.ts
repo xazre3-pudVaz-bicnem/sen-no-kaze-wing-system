@@ -86,7 +86,11 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('isCollapsed && editableRows.map');
     expect(form).toContain('name={`items.${i}.unit_price`} value={r.unit_price}');
     expect(form).toContain('!element.readOnly');
-    expect(form).toContain("isCollapsed ? '+' : '−'");
+    expect(form).toContain("data-testid={`revision-section-subtotal-${section.key}`}");
+    expect(form).toContain("onClick={isCollapsed ? () => toggleSection(section.key) : undefined}");
+    expect(form).toContain("aria-label={section.label + 'を開く'}");
+    expect(form).toContain("{!isCollapsed && (");
+    expect(form).toContain('別途見積');
     expect(form).toContain('data-revision-col="quantity"');
     expect(form).toContain('handleSheetKeyDown');
     expect(form).toContain('明細を編集前に戻す');

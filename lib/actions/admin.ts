@@ -27,8 +27,6 @@ import {
   optionPricesSchema,
   userRoleSchema,
 } from '@/lib/validation';
-import { pruneToScope } from '@/lib/domain/rules';
-import { buildPresetSelection, defaultVariantIdsFor } from '@/lib/domain/preset';
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 import { withPlanDisplaySize } from '@/lib/domain/plan-display';
@@ -1123,9 +1121,9 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
 /* ---------------- スタッフの新規見積作成 ---------------- */
 
 /**
- * スタッフ（代理店以上）が管理画面から直接見積を作る。
- * 選んだ仕様の標準構成で保存 → 第1版（概算見積）を発行し、編集画面へ移動する。
- * 代理店・総代理店が作った見積は自動的に自分が担当になる（DB 側でも同じ判定）。
+ * スタッフ（代理店以上）がWeb外の案件を登録する。
+ * Configurationや概算Quoteは作らず、quote_request + 空Draftだけを作成する。
+ * Revision 1はExcel型Draftを編集し「正式保存」した時点で初めて作成する。
  */
 export async function createManualQuoteAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const actor = await requireStaff();
@@ -1139,52 +1137,104 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
     memo: formData.get('memo'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
-  let quoteId: string | null = null;
+
+  let draftId: string | null = null;
   try {
     const store = await getStore();
-    const bundle = await store.getCatalogBundle(parsed.data.base_model_id);
-    if (!bundle) return { ok: false, error: 'モデルが見つかりません。' };
-    const preset = bundle.model.presets?.find((x) => x.code === parsed.data.spec_code) ?? bundle.model.presets?.[0];
-    if (!preset) return { ok: false, error: 'このモデルには仕様（プラン）が登録されていません。' };
-    const ctx = {
-      options: bundle.options,
-      categories: bundle.categories,
-      dependencies: bundle.dependencies,
-      conflicts: bundle.conflicts,
-    };
-    const optionIds = pruneToScope(ctx, buildPresetSelection(ctx, preset), parsed.data.finish_level);
-    const cfg = await store.saveConfiguration(actor, {
-      id: null,
-      base_model_id: bundle.model.id,
-      name: `${parsed.data.customer_name} 様向け（${preset.name}）`,
-      option_ids: optionIds,
-      preview_image_url: null,
-      notes: parsed.data.memo,
+    const draft = await store.createManualQuoteDraft(actor, {
+      customer_name: parsed.data.customer_name,
+      customer_company: parsed.data.customer_company || null,
+      site_address: parsed.data.site_address || null,
+      base_model_id: parsed.data.base_model_id,
+      spec_code: parsed.data.spec_code,
       finish_level: parsed.data.finish_level,
-      spec_code: preset.code,
-      variant_choice_ids: defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds),
+      memo: parsed.data.memo || null,
     });
-    const quote = await store.createQuoteFromConfiguration(
-      actor,
-      cfg.id,
-      {
-        full_name: parsed.data.customer_name,
-        company_name: parsed.data.customer_company,
-        email: actor.email,
-        phone: '',
-        address: '',
-        site_address: parsed.data.site_address || null,
-      },
-      parsed.data.memo
-    );
-    quoteId = quote.id;
-    await flushNotificationsSafely();
+    draftId = draft.id;
     revalidatePath('/admin/quotes');
-    revalidatePath('/mypage');
   } catch (e) {
     return errState(e);
   }
-  redirect(`/admin/quotes/${quoteId}?created=1`);
+
+  redirect(`/admin/quotes/drafts/${draftId}?created=1`);
+}
+
+export interface QuoteDraftFormState extends AdminFormState {
+  savedVersion?: number;
+}
+
+export async function saveQuoteDraftAction(
+  _prev: QuoteDraftFormState,
+  formData: FormData
+): Promise<QuoteDraftFormState> {
+  const actor = await requireStaff();
+  const draftId = String(formData.get('draft_id') ?? '').trim();
+  const expectedLockVersion = Number(formData.get('expected_lock_version'));
+  const adjustment = Number(formData.get('adjustment') ?? 0);
+
+  if (!draftId) return { ok: false, error: 'Draftが指定されていません。' };
+  if (!Number.isInteger(expectedLockVersion) || expectedLockVersion < 0) {
+    return { ok: false, error: 'Draftの版情報が不正です。再読み込みしてください。' };
+  }
+  if (!Number.isInteger(adjustment)) {
+    return { ok: false, fieldErrors: { adjustment: ['調整額は1円単位の整数で入力してください。'] } };
+  }
+
+  let items: unknown;
+  try {
+    items = JSON.parse(String(formData.get('items_json') ?? '[]'));
+  } catch {
+    return { ok: false, error: '明細データを読み取れませんでした。' };
+  }
+  if (!Array.isArray(items)) return { ok: false, error: '明細データが不正です。' };
+
+  try {
+    const store = await getStore();
+    const savedVersion = await store.saveQuoteDraft(
+      draftId,
+      {
+        expected_lock_version: expectedLockVersion,
+        base_master_revision_id: nullableId(formData.get('base_master_revision_id')),
+        items: items as Parameters<typeof store.saveQuoteDraft>[1]['items'],
+        adjustment,
+        adjustment_reason: nullableId(formData.get('adjustment_reason')),
+        dealer_note: nullableId(formData.get('dealer_note')),
+        notes: nullableId(formData.get('notes')),
+      },
+      actor
+    );
+    revalidatePath(`/admin/quotes/drafts/${draftId}`);
+    return { ok: true, message: 'Draftを保存しました。', savedVersion };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+export async function finalizeQuoteDraftAction(
+  _prev: QuoteDraftFormState,
+  formData: FormData
+): Promise<QuoteDraftFormState> {
+  const actor = await requireStaff();
+  const draftId = String(formData.get('draft_id') ?? '').trim();
+  const expectedLockVersion = Number(formData.get('expected_lock_version'));
+
+  if (!draftId) return { ok: false, error: 'Draftが指定されていません。' };
+  if (!Number.isInteger(expectedLockVersion) || expectedLockVersion < 0) {
+    return { ok: false, error: 'Draftの版情報が不正です。再読み込みしてください。' };
+  }
+
+  let quoteId: string;
+  try {
+    const store = await getStore();
+    const quote = await store.finalizeQuoteDraft(draftId, expectedLockVersion, actor);
+    quoteId = quote.id;
+    revalidatePath('/admin/quotes');
+    revalidatePath(`/admin/quotes/${quoteId}`);
+  } catch (e) {
+    return errState(e);
+  }
+
+  redirect(`/admin/quotes/${quoteId}?created=1&revision=1`);
 }
 
 /* ---------------- 標準見積テンプレート ---------------- */

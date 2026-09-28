@@ -50,7 +50,12 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('画像表示');
     expect(client).toContain("useState<'list' | 'grid'>('list')");
     expect(client).toContain('data-testid="ledger-table-view"');
-    expect(client).toContain('<table className="w-full min-w-[680px] table-fixed text-left text-sm">');
+    expect(client).toContain('<table className="w-full table-fixed text-left text-sm">');
+    expect(client).toContain('<div className="hidden md:block">');
+    expect(client).not.toContain('hidden overflow-x-auto md:block');
+    expect(client).not.toContain('min-w-[680px]');
+    expect(client).not.toContain('商品番号未採番');
+    expect(client).not.toContain('型番未設定');
     expect(client).toContain('メーカー・型番');
     expect(client).not.toContain('<th className="w-[12%] px-3 py-2.5">対象モデル</th>');
     expect(client).toContain('data-testid="ledger-grid-view"');

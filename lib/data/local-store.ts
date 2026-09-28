@@ -1303,8 +1303,9 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      // 代理店は担当案件のオプション・別途等を編集可能。本体は総代理店・本部だけ。
-      const canEditAnyQuote = hasRoleAtLeast(actor.role, 'master_dealer');
+      // 全案件を改訂できるのは本部だけ。総代理店・代理店は自分の担当案件に限る。
+      // 本体明細を編集できるかは別判定とし、総代理店は担当案件内でのみ許可する。
+      const canEditAnyQuote = actor.role === 'admin';
       const canEditBase = hasRoleAtLeast(actor.role, 'master_dealer');
       if (!(canEditAnyQuote || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
         throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');

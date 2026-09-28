@@ -153,6 +153,10 @@ describe('non-Web manual case application wiring', () => {
     expect(supabaseStore).toContain("db.rpc('finalize_quote_draft'");
   });
 
+  it('keeps the case workspace usable when a non-Web Quote has no Configuration', () => {
+    expect(supabaseStore).toContain("error.code === 'PGRST202' || error.code === '42883' || error.code === 'P0002'");
+  });
+
   it('states clearly that case registration does not issue a quote', () => {
     expect(manualForm).toContain('登録時点では見積Revisionを発行しません。');
     expect(manualForm).toContain('正式保存');

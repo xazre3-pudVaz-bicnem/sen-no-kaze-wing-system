@@ -329,17 +329,12 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if d.parent_quote_id is null
-     and v_rank < 3
-     and d.created_by is distinct from v_uid then
-    raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
-  end if;
-  if d.lock_version is distinct from p_expected_lock_version then
-    raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください'
-      using errcode = 'P0001';
-  end if;
 
-  if d.parent_quote_id is not null then
+  if d.parent_quote_id is null then
+    if v_rank < 3 and d.created_by is distinct from v_uid then
+      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    end if;
+  else
     select * into parent
       from public.quotes
      where id = d.parent_quote_id
@@ -352,6 +347,14 @@ begin
     if v_rank < 3 and parent.dealer_id is distinct from v_uid then
       raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
     end if;
+  end if;
+
+  if d.lock_version is distinct from p_expected_lock_version then
+    raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください'
+      using errcode = 'P0001';
+  end if;
+
+  if d.parent_quote_id is not null then
     if parent.configuration_id is not null
        or parent.user_id is not null
        or parent.quote_kind is distinct from 'formal' then
@@ -761,18 +764,6 @@ begin
     raise exception 'VALIDATION: このRPCはRevision 2以降のDraft専用です'
       using errcode = 'P0001';
   end if;
-  if d.lock_version is distinct from p_expected_lock_version then
-    raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください'
-      using errcode = 'P0001';
-  end if;
-  if d.quote_kind <> 'formal' then
-    raise exception 'VALIDATION: 改訂見積はformalとして保存してください'
-      using errcode = 'P0001';
-  end if;
-  if d.base_master_revision_id is null then
-    raise exception 'VALIDATION: 正式保存前に基準本体Revisionを選択してください'
-      using errcode = 'P0001';
-  end if;
 
   select * into parent
     from public.quotes
@@ -786,6 +777,20 @@ begin
   if v_rank < 3 and parent.dealer_id is distinct from v_uid then
     raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
   end if;
+
+  if d.lock_version is distinct from p_expected_lock_version then
+    raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください'
+      using errcode = 'P0001';
+  end if;
+  if d.quote_kind <> 'formal' then
+    raise exception 'VALIDATION: 改訂見積はformalとして保存してください'
+      using errcode = 'P0001';
+  end if;
+  if d.base_master_revision_id is null then
+    raise exception 'VALIDATION: 正式保存前に基準本体Revisionを選択してください'
+      using errcode = 'P0001';
+  end if;
+
   if parent.configuration_id is not null
      or parent.user_id is not null
      or parent.quote_kind is distinct from 'formal' then

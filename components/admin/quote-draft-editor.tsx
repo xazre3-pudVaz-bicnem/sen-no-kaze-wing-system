@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useMemo, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   finalizeQuoteDraftAction,
@@ -76,13 +76,10 @@ export function QuoteDraftEditor({
   const [adjustmentReason, setAdjustmentReason] = useState(detail.draft.adjustment_reason ?? '');
   const [dealerNote, setDealerNote] = useState(detail.draft.dealer_note ?? '');
   const [notes, setNotes] = useState(detail.draft.notes ?? '');
-  const [dirty, setDirty] = useState(false);
 
   const lockVersion = saveState.savedVersion ?? detail.draft.lock_version;
-
-  useEffect(() => {
-    if (saveState.ok && saveState.savedVersion !== undefined) setDirty(false);
-  }, [saveState.ok, saveState.savedVersion]);
+  const [dirtyAtVersion, setDirtyAtVersion] = useState<number | null>(null);
+  const dirty = dirtyAtVersion === lockVersion;
 
   const totals = useMemo(() => {
     const subtotalRaw = rows.reduce(
@@ -94,19 +91,21 @@ export function QuoteDraftEditor({
     return { subtotalRaw, subtotal, tax, total: subtotal + tax };
   }, [rows, adjustment, detail.draft.tax_rate]);
 
+  const markDirty = () => setDirtyAtVersion(lockVersion);
+
   const updateRow = (key: string, patch: Partial<EditorRow>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
-    setDirty(true);
+    markDirty();
   };
 
   const addRow = () => {
     setRows((current) => [...current, newRow()]);
-    setDirty(true);
+    markDirty();
   };
 
   const removeRow = (key: string) => {
     setRows((current) => current.filter((row) => row.key !== key));
-    setDirty(true);
+    markDirty();
   };
 
   const itemsJson = JSON.stringify(
@@ -182,7 +181,7 @@ export function QuoteDraftEditor({
                 value={baseRevisionId}
                 onChange={(event) => {
                   setBaseRevisionId(event.target.value);
-                  setDirty(true);
+                  markDirty();
                 }}
               >
                 <option value="">選択してください</option>
@@ -319,7 +318,7 @@ export function QuoteDraftEditor({
                 value={notes}
                 onChange={(event) => {
                   setNotes(event.target.value);
-                  setDirty(true);
+                  markDirty();
                 }}
                 rows={3}
                 className="mt-1"
@@ -332,7 +331,7 @@ export function QuoteDraftEditor({
                 value={dealerNote}
                 onChange={(event) => {
                   setDealerNote(event.target.value);
-                  setDirty(true);
+                  markDirty();
                 }}
                 rows={2}
                 className="mt-1"
@@ -351,7 +350,7 @@ export function QuoteDraftEditor({
                 value={adjustment}
                 onChange={(event) => {
                   setAdjustment(Number(event.target.value) || 0);
-                  setDirty(true);
+                  markDirty();
                 }}
                 className="h-8 w-32 text-right"
               />
@@ -363,7 +362,7 @@ export function QuoteDraftEditor({
                 value={adjustmentReason}
                 onChange={(event) => {
                   setAdjustmentReason(event.target.value);
-                  setDirty(true);
+                  markDirty();
                 }}
                 placeholder={adjustment === 0 ? '調整なし' : '必須'}
                 className="mt-1 h-8"

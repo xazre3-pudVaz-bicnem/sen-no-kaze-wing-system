@@ -57,6 +57,8 @@ create index if not exists quotes_base_master_revision_idx
 -- need a data rewrite. A later lifecycle migration will backfill and enforce
 -- Revision-level identity before relying on it.
 alter table public.quote_items
+  alter column quantity type numeric(14, 4)
+    using quantity::numeric(14, 4),
   add column if not exists line_key uuid,
   add column if not exists option_id uuid references public.options(id) on delete restrict;
 
@@ -85,7 +87,7 @@ create table if not exists public.quote_drafts (
   spec_code text not null,
   quote_kind text not null default 'formal'
     check (quote_kind in ('preliminary', 'formal')),
-  tax_rate numeric(8, 6) not null default 0.10
+  tax_rate numeric(5, 4) not null default 0.10
     check (tax_rate >= 0 and tax_rate <= 1),
   adjustment integer not null default 0,
   adjustment_reason text,

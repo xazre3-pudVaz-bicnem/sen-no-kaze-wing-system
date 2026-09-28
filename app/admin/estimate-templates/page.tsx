@@ -202,7 +202,7 @@ export default async function EstimateTemplatesPage({
 
         <div className="overflow-x-auto">
           <div className="min-w-[40rem]">
-            <div className={`${LIST_GRID} border-b border-line bg-sand/35 px-3 py-2 text-xs font-semibold text-ink-soft`}>
+            <div className={`${LIST_GRID} border-b border-line bg-sand/35 px-3 py-1.5 text-xs font-semibold text-ink-soft`}>
               <div>見積名</div>
               <div className="text-right">原価税込</div>
               <div className="text-right">売価税込</div>
@@ -214,9 +214,9 @@ export default async function EstimateTemplatesPage({
             <Link
               href={sampleHref(modelId, qRaw)}
               aria-current={sampleSelected ? 'true' : undefined}
-              className={`${LIST_GRID} min-h-12 border-b border-line px-3 py-2 text-sm transition ${
+              className={`${LIST_GRID} min-h-11 border-b border-line px-3 py-1.5 text-sm transition ${
                 sampleSelected
-                  ? 'border-l-4 border-l-amber-500 bg-amber-50/70 pl-2'
+                  ? 'border-l-4 border-l-amber-500 bg-amber-50/80 shadow-[inset_0_0_0_1px_rgba(180,120,40,0.16)] pl-2'
                   : 'bg-sand/15 hover:bg-amber-50/50'
               }`}
             >
@@ -224,6 +224,11 @@ export default async function EstimateTemplatesPage({
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
                   <Badge tone="warn" className="shrink-0">動作確認用</Badge>
+                  {sampleSelected && (
+                    <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      選択中
+                    </span>
+                  )}
                 </div>
                 <p className="mt-0.5 text-[10px] text-muted">保存されない画面確認用データ</p>
               </div>
@@ -243,7 +248,7 @@ export default async function EstimateTemplatesPage({
                     open={Boolean(modelId) || groupIndex === 0 || selectedGroup}
                     className="group border-b border-line"
                   >
-                    <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-2 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
+                    <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-1.5 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
                       <div className="flex items-center gap-2 text-sm font-semibold text-forest">
                         <span className="text-xs transition-transform group-open:rotate-90">▶</span>
                         <span>{displayModelName}</span>
@@ -264,14 +269,19 @@ export default async function EstimateTemplatesPage({
                             key={choice.code}
                             href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
                             aria-current={active ? 'true' : undefined}
-                            className={`${LIST_GRID} min-h-12 px-3 py-2 text-sm transition ${
+                            className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
                               active
-                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-2'
+                                ? 'border-l-4 border-l-forest bg-[#e4f1e8] shadow-[inset_0_0_0_1px_rgba(35,93,68,0.18)] pl-2'
                                 : 'bg-white hover:bg-sand/30'
                             }`}
                           >
-                            <div className="min-w-0 pl-4">
-                              <span className="font-semibold text-ink">{choice.name}</span>
+                            <div className="flex min-w-0 items-center gap-2 pl-4">
+                              <span className="truncate font-semibold text-ink">{choice.name}</span>
+                              {active && (
+                                <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                  選択中
+                                </span>
+                              )}
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div className="text-right font-semibold">

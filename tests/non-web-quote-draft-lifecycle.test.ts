@@ -72,6 +72,11 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(saveBody).toContain('delete from public.quote_draft_items');
   });
 
+  it('rejects NULL expected_lock_version in both save and finalize RPCs', () => {
+    expect(migration.match(/d\.lock_version is distinct from p_expected_lock_version/g)?.length).toBe(2);
+    expect(migration).not.toContain('d.lock_version <> p_expected_lock_version');
+  });
+
   it('validates quantity precision and recalculates Draft money in PostgreSQL', () => {
     expect(migration).toContain('v_qty <> round(v_qty, 4)');
     expect(migration).toContain("v_qty::text in ('NaN', 'Infinity', '-Infinity')");
@@ -134,7 +139,7 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).not.toContain('create or replace function public.create_quote_from_configuration');
     expect(migration).not.toContain('create or replace function public.create_quote_revision');
     expect(migration).toContain('create or replace function public.respond_to_quote');
-    expect(migration).toContain('if q.user_id is null or q.user_id <> auth.uid() then');
+    expect(migration).toContain('if q.user_id is null or q.user_id is distinct from auth.uid() then');
     expect(migration).toContain('alter function public.respond_to_quote(uuid, text) owner to postgres;');
     expect(migration).toContain('grant execute on function public.respond_to_quote(uuid, text) to authenticated;');
   });

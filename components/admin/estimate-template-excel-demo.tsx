@@ -485,10 +485,10 @@ export function EstimateTemplateExcelDemo() {
                           {section}
                           {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスターから読込・この見積内で編集可）</span>}
                         </td>
-                        <td colSpan={4} className="px-3 text-right text-xs">
+                        <td colSpan={4} className="whitespace-nowrap px-1 text-right text-[10px]">
                           {section === '別途' && sectionSummary.onRequest > 0
                             ? `別途見積 ${sectionSummary.onRequest}件`
-                            : `原価 ${formatYen(sectionSummary.cost)} ／ 売価 ${formatYen(sectionSummary.sale)} ／ 粗利 ${formatYen(sectionSummary.profit)}`}
+                            : `売価 ${formatYen(sectionSummary.sale)}`}
                         </td>
                         <td className="px-2 text-center">
                           {section !== '本体' && (

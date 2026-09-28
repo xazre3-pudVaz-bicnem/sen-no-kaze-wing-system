@@ -27,6 +27,7 @@ import type {
   QuoteDraftItem,
   QuoteRequest,
   QuoteRequestStatus,
+  QuoteStatus,
   RoleCode,
   ContactMessage,
   ContactStatus,
@@ -66,6 +67,96 @@ export type DealerQuoteListItem = Quote & {
   request_status: QuoteRequestStatus | null;
   site_address: string | null;
 };
+
+export type AccessibleCustomerIdentityIssue =
+  | 'inconsistent_user_id'
+  | 'non_customer_profile'
+  | 'missing_profile';
+
+export interface AccessibleCustomerCaseSummary {
+  id: string;
+  open_quote_id: string | null;
+  quote_no: string | null;
+  model_name: string | null;
+  site_address: string | null;
+  activity_at: string;
+  dealer_name: string | null;
+}
+
+export interface AccessibleCustomerListItem {
+  id: string;
+  customer_no: string | null;
+  full_name: string;
+  company_name: string | null;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  ongoing_case_count: number;
+  recent_case: AccessibleCustomerCaseSummary | null;
+}
+
+export interface AccessibleUnlinkedCustomerCase {
+  id: string;
+  full_name: string;
+  company_name: string | null;
+  identity_issue: AccessibleCustomerIdentityIssue;
+  open_quote_id: string | null;
+  quote_no: string | null;
+  model_name: string | null;
+  site_address: string | null;
+  activity_at: string;
+  dealer_name: string | null;
+}
+
+export interface AccessibleCustomerListResult {
+  customers: AccessibleCustomerListItem[];
+  unlinked_cases: AccessibleUnlinkedCustomerCase[];
+}
+
+export interface AccessibleCustomerQuote {
+  id: string;
+  case_id: string;
+  quote_no: string;
+  revision: number;
+  status: QuoteStatus;
+  base_model_name: string;
+  issued_at: string;
+  total: number;
+  can_open_quote: boolean;
+}
+
+export interface AccessibleCustomerCase {
+  id: string;
+  request_status: QuoteRequestStatus | null;
+  message: string | null;
+  contact: QuoteContact | null;
+  site_address: string | null;
+  site_source: 'quote_contact' | 'configuration' | null;
+  ongoing: boolean;
+  activity_at: string;
+  model_name: string | null;
+  dealer_name: string | null;
+  dealer_company: string | null;
+  open_quote_id: string | null;
+  latest_quote: AccessibleCustomerQuote | null;
+}
+
+export interface AccessibleCustomerDetail {
+  customer: {
+    id: string;
+    customer_no: string | null;
+    full_name: string;
+    company_name: string | null;
+    email: string;
+    phone: string | null;
+    postal_code: string | null;
+    address: string | null;
+    created_at: string;
+  };
+  latest_contact: QuoteContact | null;
+  cases: AccessibleCustomerCase[];
+  quote_history: AccessibleCustomerQuote[];
+}
 
 export interface SaveConfigurationInput {
   id: string | null;
@@ -276,6 +367,10 @@ export interface DataStore {
   listProfiles(): Promise<Profile[]>;
   /** 管理者がユーザーの権限を変更する。自分自身の権限は変更できない */
   updateUserRole(userId: string, role: RoleCode, actor: SessionUser): Promise<Profile>;
+  /** 顧客管理。adminは全顧客、総代理店・代理店は担当案件由来の顧客だけを返す。 */
+  listAccessibleCustomers(actor: SessionUser): Promise<AccessibleCustomerListResult>;
+  /** 顧客詳細。アクセスできない顧客は null を返し、存在有無を区別しない。 */
+  getAccessibleCustomerDetail(customerId: string, actor: SessionUser): Promise<AccessibleCustomerDetail | null>;
 
   // ---- 保存した仕様 ----
   listConfigurations(userId: string): Promise<Configuration[]>;

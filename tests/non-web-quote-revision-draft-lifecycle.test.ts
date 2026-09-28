@@ -12,6 +12,7 @@ const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
 const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const editor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
+const draftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
 
 describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
   it('scopes revision-number uniqueness to non-Web series', () => {
@@ -65,6 +66,73 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
     expect(migration).toContain('public.can_use_base_master(v_base_master_id)');
   });
 
+  it('uses current Quote assignment as the Revision Draft authorization source', () => {
+    const readBody = migration.slice(
+      migration.indexOf('create or replace function public.get_quote_draft'),
+      migration.indexOf('create or replace function public.create_quote_revision_draft')
+    );
+    const createBody = migration.slice(
+      migration.indexOf('create or replace function public.create_quote_revision_draft'),
+      migration.indexOf('create or replace function public.save_quote_draft')
+    );
+    const saveBody = migration.slice(
+      migration.indexOf('create or replace function public.save_quote_draft'),
+      migration.indexOf('create or replace function public.guard_non_web_revision_path')
+    );
+    const finalizeBody = migration.slice(
+      migration.indexOf('create or replace function public.finalize_quote_revision_draft')
+    );
+
+    expect(readBody).toContain('if d.parent_quote_id is null then');
+    expect(readBody).toContain('d.created_by is distinct from v_uid');
+    expect(readBody).toContain('parent.dealer_id is distinct from v_uid');
+    expect(createBody).not.toContain('v_existing.created_by is distinct from v_uid');
+    expect(createBody.indexOf('parent.dealer_id is distinct from v_uid')).toBeLessThan(
+      createBody.indexOf('parent.configuration_id is not null')
+    );
+    expect(saveBody).toContain('if d.parent_quote_id is null');
+    expect(saveBody).toContain('parent.dealer_id is distinct from v_uid');
+    expect(finalizeBody).toContain('parent.dealer_id is distinct from v_uid');
+    expect(finalizeBody).not.toContain('d.created_by is distinct from v_uid');
+  });
+
+  it('prevents dealer from changing Base Revision or base/base_expense snapshot in Revision Drafts', () => {
+    const saveBody = migration.slice(
+      migration.indexOf('create or replace function public.save_quote_draft'),
+      migration.indexOf('create or replace function public.guard_non_web_revision_path')
+    );
+    const finalizeBody = migration.slice(
+      migration.indexOf('create or replace function public.finalize_quote_revision_draft')
+    );
+
+    for (const body of [saveBody, finalizeBody]) {
+      expect(body).toContain('v_can_edit_base := v_rank >= 2');
+      expect(body).toContain('本体Revisionを変更できるのは総代理店・本部だけです');
+      expect(body).toContain('本体明細を変更できるのは総代理店・本部だけです');
+      expect(body).toContain('本体明細を追加できるのは総代理店・本部だけです');
+      expect(body).toContain('本体明細を削除できるのは総代理店・本部だけです');
+      expect(body).toContain("item.kind in ('base', 'base_expense')");
+    }
+
+    expect(draftPage).toContain('canEditBase={canEditCatalog(actor.role)}');
+    expect(editor).toContain('const baseLocked = isRevisionDraft && !canEditBase;');
+    expect(editor).toContain('disabled={baseLocked}');
+    expect(editor).toContain('const rowBaseLocked = baseLocked');
+    expect(editor).toContain("kind !== 'base' && kind !== 'base_expense'");
+    expect(editor).toContain('disabled={rowBaseLocked}');
+  });
+
+  it('revalidates new or changed options again at formalization time', () => {
+    const finalizeBody = migration.slice(
+      migration.indexOf('create or replace function public.finalize_quote_revision_draft')
+    );
+    expect(finalizeBody).toContain('v_parent_item.option_id is not distinct from i.option_id');
+    expect(finalizeBody).toContain('from public.options o');
+    expect(finalizeBody).toContain("o.status = 'published'");
+    expect(finalizeBody).toContain('o.base_model_id is null or o.base_model_id = d.base_model_id');
+    expect(finalizeBody).toContain('正式保存時点で利用できる公開商品を指定してください');
+  });
+
   it('finalizes N+1 atomically against the current parent and moves the current pointer', () => {
     const body = migration.slice(
       migration.indexOf('create or replace function public.finalize_quote_revision_draft')
@@ -93,6 +161,7 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
 
   it('hardens SECURITY DEFINER ownership and EXECUTE ACL', () => {
     for (const signature of [
+      'public.get_quote_draft(uuid)',
       'public.create_quote_revision_draft(uuid)',
       'public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text)',
       'public.finalize_quote_revision_draft(uuid, integer)',

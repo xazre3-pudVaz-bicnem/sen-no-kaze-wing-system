@@ -13,7 +13,7 @@ describe('顧客管理UI', () => {
   it('keeps user and permission management separate from customer management', () => {
     expect(existingUsers).toContain('title="ユーザー・担当者"');
     expect(existingUsers).toContain('UserRoleForm');
-    expect(existingUsers).not.toContain("from '@/lib/data/store'");
+    expect(existingUsers).not.toContain("from '@/lib/domain/customer-management'");
     expect(list).toContain('title="顧客管理"');
     expect(list).toContain("await requireStaff('/admin/customer-management')");
     expect(detail).toContain("await requireStaff('/admin/customer-management')");

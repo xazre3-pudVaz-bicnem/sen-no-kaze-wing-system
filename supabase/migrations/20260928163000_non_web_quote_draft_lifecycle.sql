@@ -8,6 +8,8 @@
 --
 -- Existing Web Configuration -> preliminary Quote flow is intentionally
 -- unchanged in this migration.
+-- Draft access follows the current staff boundary:
+--   admin: all Drafts / master_dealer+dealer: only Drafts they created.
 -- =============================================================
 
 begin;
@@ -221,7 +223,7 @@ begin
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
 
-  if not (v_rank >= 2 or d.created_by = v_uid) then
+  if not (v_rank >= 3 or d.created_by = v_uid) then
     raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
   end if;
 
@@ -338,7 +340,7 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if not (v_rank >= 2 or d.created_by = v_uid) then
+  if not (v_rank >= 3 or d.created_by = v_uid) then
     raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
   end if;
   if d.lock_version <> p_expected_lock_version then
@@ -577,7 +579,7 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if not (v_rank >= 2 or d.created_by = v_uid) then
+  if not (v_rank >= 3 or d.created_by = v_uid) then
     raise exception 'FORBIDDEN: このDraftを正式保存できません' using errcode = '42501';
   end if;
   if d.lock_version <> p_expected_lock_version then

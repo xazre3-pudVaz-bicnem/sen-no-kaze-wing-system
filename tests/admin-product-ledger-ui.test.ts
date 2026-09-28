@@ -9,7 +9,7 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('ProductLedgerClient');
     expect(ledger).not.toContain('/admin/base-breakdown');
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('商品名・メーカー・型番・商品番号');
+    expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号');
     expect(client).toContain('商品価格（税別）');
   });
 
@@ -19,27 +19,31 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('catalogCategories');
   });
 
-  it('一覧を主役にし、未選択時は余分な詳細カードを出さない', () => {
+  it('一覧を主役にし、台帳向けの検索・絞り込み・表示切替を備える', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品一覧');
-    expect(client).toContain('商品名・メーカー・型番・商品番号を検索');
+    expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号で検索');
     expect(client).toContain('カテゴリー：すべて');
-    expect(client).toContain('状態：すべて');
+    expect(client).toContain('メーカー：すべて');
+    expect(client).toContain('対象モデル：すべて');
+    expect(client).toContain('全モデル共通');
     expect(client).toContain('並び替え：更新が新しい順');
-    expect(client).toContain('SmartImage');
-    expect(client).toContain('Ellipsis');
-    expect(client).toContain('商品を種類から絞り込み');
-    expect(client).toContain('md:grid-cols-[11rem_minmax(0,1fr)]');
+    expect(client).toContain('すべて <span');
+    expect(client).toContain('公開中 <span');
+    expect(client).toContain('下書き <span');
+    expect(client).toContain('要確認のみ');
+    expect(client).toContain('一覧表示');
+    expect(client).toContain('画像表示');
+    expect(client).toContain("useState<'list' | 'grid'>('list')");
+    expect(client).toContain('data-testid="ledger-table-view"');
+    expect(client).toContain('<table className="w-full min-w-[760px] table-fixed text-left text-sm">');
+    expect(client).toContain('メーカー・型番');
+    expect(client).toContain('対象モデル');
+    expect(client).toContain('data-testid="ledger-grid-view"');
+    expect(client).toContain('hidden overflow-x-auto md:block');
+    expect(client).toContain('space-y-2 p-3 md:hidden');
     expect(client).toContain('hidden md:sticky md:top-4 md:block');
-    expect(client).toContain('min-w-0 md:hidden');
     expect(client).toContain('sticky top-0');
-    expect(client).toContain('data-testid="ledger-card-grid"');
-    expect(client).toContain('grid grid-cols-1 gap-2.5 min-[1120px]:grid-cols-2');
-    expect(client).toContain('カテゴリー未設定');
-    expect(client).toContain('productAttentionReasons');
-    expect(client).toContain("要確認：{attentionReasons.join('・')}");
-    expect(client).toContain('件中');
-    expect(client).not.toContain('<table className="w-full table-fixed text-left text-sm">');
     expect(client).toContain("useState(50)");
     expect(client).toContain('表示件数');
     expect(client).toContain('25件');
@@ -48,6 +52,9 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('前へ');
     expect(client).toContain('次へ');
     expect(client).not.toContain('ledger-empty-detail');
+
+    expect(ledger).toContain("store.listModels({ includeDraft: true })");
+    expect(ledger).toContain('models={models}');
   });
 
   it('商品詳細を2タブのレスポンシブモーダルで表示する', () => {

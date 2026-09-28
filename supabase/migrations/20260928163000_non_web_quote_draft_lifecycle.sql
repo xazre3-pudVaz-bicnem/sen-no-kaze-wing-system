@@ -382,7 +382,7 @@ begin
       'base', 'base_expense',
       'interior_exterior', 'interior_exterior_expense',
       'option', 'option_expense',
-      'installation', 'free', 'discount'
+      'installation', 'free'
     ) then
       raise exception 'VALIDATION: 明細区分が不正です（%）', v_kind using errcode = 'P0001';
     end if;
@@ -422,11 +422,9 @@ begin
     end if;
 
     v_unit_price := v_unit_price_raw::integer;
-    if v_unit_price < 0 and v_kind <> 'discount' then
-      raise exception 'VALIDATION: マイナス単価は値引き行だけに使用できます' using errcode = 'P0001';
-    end if;
-    if v_kind = 'discount' and v_unit_price > 0 then
-      raise exception 'VALIDATION: 値引き行の単価は0円以下で入力してください' using errcode = 'P0001';
+    if v_unit_price < 0 then
+      raise exception 'VALIDATION: 明細単価は0円以上で入力し、値引きは調整額を使用してください'
+        using errcode = 'P0001';
     end if;
 
     if v_option_id is not null

@@ -58,6 +58,8 @@ import {
   type DealerRevisionInput,
   type CatalogImportBatch,
   type EstimateTemplateImportInput,
+  type AccessibleCustomerListResult,
+  type AccessibleCustomerDetail,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
@@ -389,6 +391,35 @@ export class SupabaseStore implements DataStore {
     const { data, error } = await db.from('profiles').select('*').order('created_at', { ascending: false });
     if (error) mapPgError(error);
     return (data ?? []) as Profile[];
+  }
+
+  async listAccessibleCustomers(actor: SessionUser): Promise<AccessibleCustomerListResult> {
+    if (actor.role === 'customer') {
+      throw new StoreError('FORBIDDEN', '顧客管理を閲覧できるのは代理店以上です');
+    }
+    const db = await this.db();
+    const { data, error } = await db.rpc('list_accessible_customers');
+    if (error) mapPgError(error);
+    const payload = (data ?? {}) as Partial<AccessibleCustomerListResult>;
+    return {
+      customers: Array.isArray(payload.customers) ? payload.customers : [],
+      unlinked_cases: Array.isArray(payload.unlinked_cases) ? payload.unlinked_cases : [],
+    };
+  }
+
+  async getAccessibleCustomerDetail(
+    customerId: string,
+    actor: SessionUser
+  ): Promise<AccessibleCustomerDetail | null> {
+    if (actor.role === 'customer') {
+      throw new StoreError('FORBIDDEN', '顧客管理を閲覧できるのは代理店以上です');
+    }
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_accessible_customer_detail', {
+      p_customer_id: customerId,
+    });
+    if (error) mapPgError(error);
+    return (data as AccessibleCustomerDetail | null) ?? null;
   }
 
   // ---------- 仕様 ----------

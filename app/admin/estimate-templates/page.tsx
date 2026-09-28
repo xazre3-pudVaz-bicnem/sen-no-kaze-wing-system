@@ -1,462 +1,303 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { simulatorEstimateChoices } from '@/lib/domain/estimate-template';
 import { formatYen } from '@/lib/domain/pricing';
-import type { EstimateTemplateBundle } from '@/lib/domain/types';
-import { Badge } from '@/components/ui';
+import { Alert, Badge } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
+import {
+  EstimateTemplateWorkbench,
+  type EstimateTemplateWorkbenchLine,
+  type EstimateTemplateWorkbenchSection,
+} from '@/components/admin/estimate-template-workbench';
+import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
 
-type FireSpec = 'non_fire' | 'fire';
-type FireFilter = '' | FireSpec;
-type SimulatorChoice = ReturnType<typeof simulatorEstimateChoices>[number];
-type EstimateListChoice = SimulatorChoice & {
-  fireSpec: FireSpec;
-  registrationKey: string;
+const SPEC_LABELS: Record<string, string> = {
+  base: '本体のみ',
+  hotel: 'ホテル',
+  'hotel-single': 'ホテル・単身者',
+  residence: '住宅・単身者',
+  'water-kit': '水回りキット',
+  office: '事務所・店舗',
 };
 
-const CURRENT_FIRE_VARIANTS: Record<string, readonly string[]> = {
-  'wing-01': ['hotel', 'residence', 'office'],
-  box: ['water-kit'],
-  flat: ['base'],
-};
-
-function expandCurrentEstimateChoices(
-  modelSlug: string,
-  choices: SimulatorChoice[]
-): EstimateListChoice[] {
-  const fireSpecs = new Set(CURRENT_FIRE_VARIANTS[modelSlug] ?? []);
-  return choices.flatMap((choice) => {
-    const rows: EstimateListChoice[] = [
-      {
-        ...choice,
-        fireSpec: 'non_fire',
-        registrationKey: `${choice.code}:non_fire`,
-      },
-    ];
-    if (fireSpecs.has(choice.code)) {
-      rows.push({
-        ...choice,
-        template: null,
-        fireSpec: 'fire',
-        registrationKey: `${choice.code}:fire`,
-      });
-    }
-    return rows;
-  });
-}
-
-function filterHref(model: string, fire: FireFilter) {
-  const params = new URLSearchParams();
-  if (model) params.set('model', model);
-  if (fire) params.set('fire', fire);
-  const query = params.toString();
-  return query ? `/admin/estimate-templates?${query}` : '/admin/estimate-templates';
-}
-
-function selectionHref(
-  model: string,
-  fire: FireFilter,
-  selectedModel: string,
-  selectedSpec: string,
-  selectedFire: FireSpec
-) {
-  const params = new URLSearchParams();
-  if (model) params.set('model', model);
-  if (fire) params.set('fire', fire);
-  params.set('selected_model', selectedModel);
-  params.set('selected_spec', selectedSpec);
-  params.set('selected_fire', selectedFire);
-  return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
-}
-
-function sampleHref(model: string, fire: FireFilter) {
-  const params = new URLSearchParams();
-  if (model) params.set('model', model);
-  if (fire) params.set('fire', fire);
-  params.set('sample', '1');
-  return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
-}
-
-function createTargetHref(modelId: string, specCode: string, fireSpec: FireSpec) {
-  const params = new URLSearchParams({
-    model: modelId,
-    spec: specCode,
-    fire: fireSpec,
-  });
-  return `/admin/estimate-templates/new?${params.toString()}`;
-}
-
-const LIST_GRID =
-  'grid grid-cols-[minmax(14rem,2fr)_6.75rem_7rem_5.5rem_5.5rem_1.5rem] items-center gap-x-2';
-
-const SAMPLE_PRICING = {
-  costTaxIncluded: 2_100_000,
-  saleTaxIncluded: 2_822_600,
-  marginRate: '25.6%',
+const SECTION_LABELS = {
+  interior_exterior: '内外装工事',
+  option: 'オプション',
+  sitework: '別途',
 } as const;
+
+type SectionCode = keyof typeof SECTION_LABELS;
+
+function estimateHref(id: string) {
+  const params = new URLSearchParams({ estimate: id });
+  return `/admin/estimate-templates?${params.toString()}`;
+}
 
 export default async function EstimateTemplatesPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireCatalogEditor('/admin/estimate-templates');
+  const actor = await requireCatalogEditor('/admin/estimate-templates');
   const sp = await searchParams;
   const store = await getStore();
-  const [models, templateHeaders] = await Promise.all([
+
+  const [models, templates, options, categories] = await Promise.all([
     store.listModels({ includeDraft: true }),
     store.listEstimateTemplates(),
+    store.listOptions(),
+    store.listCategories(),
   ]);
 
-  const templateBundles = (
-    await Promise.all(
-      templateHeaders.map((template) =>
-        store.getEstimateTemplateBundle(template.base_model_id, template.spec_code)
-      )
-    )
-  ).filter((row): row is EstimateTemplateBundle => Boolean(row));
+  const selectedTemplate =
+    templates.find((template) => template.id === sp.estimate) ??
+    templates[0] ??
+    null;
 
-  const bundlesByModel = new Map<string, EstimateTemplateBundle[]>();
-  for (const bundle of templateBundles) {
-    const rows = bundlesByModel.get(bundle.template.base_model_id) ?? [];
-    rows.push(bundle);
-    bundlesByModel.set(bundle.template.base_model_id, rows);
+  if (!selectedTemplate) {
+    return (
+      <AdminPage
+        title="見積書作成・管理"
+        lead="見積書をExcelに近い操作感で作成・編集し、見積書とプランボードを同じ内容から確認します。"
+        actions={
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            ＋ 新しい見積書を作成
+          </Link>
+        }
+      >
+        <section className="card px-6 py-12 text-center">
+          <h2 className="font-semibold">見積書がまだありません</h2>
+          <p className="mt-2 text-sm text-muted">新しい見積書を作成すると、この画面で直接明細を編集できます。</p>
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm mt-5">
+            ＋ 新しい見積書を作成
+          </Link>
+        </section>
+      </AdminPage>
+    );
   }
 
-  const simulatorModels = models.filter((model) => model.status === 'published');
-  const modelId = sp.model ?? '';
-  const fireFilter: FireFilter =
-    sp.fire === 'fire' || sp.fire === 'non_fire' ? sp.fire : '';
-
-  const allGroups = simulatorModels.map((model) => ({
-    model,
-    choices: expandCurrentEstimateChoices(
-      model.slug,
-      simulatorEstimateChoices(model, bundlesByModel.get(model.id) ?? [])
-    ),
-  }));
-  const modelScopeGroups = allGroups.filter((group) => !modelId || group.model.id === modelId);
-  const groups = modelScopeGroups
-    .map((group) => ({
-      ...group,
-      choices: group.choices.filter(
-        (choice) => !fireFilter || choice.fireSpec === fireFilter
-      ),
-    }))
-    .filter((group) => group.choices.length > 0);
-
-  const modelCounts = new Map(
-    allGroups.map((group) => [
-      group.model.id,
-      group.choices.filter((choice) => !fireFilter || choice.fireSpec === fireFilter).length,
-    ])
-  );
-  const allModelCount = [...modelCounts.values()].reduce((sum, count) => sum + count, 0);
-  const fireCounts = {
-    all: modelScopeGroups.reduce((sum, group) => sum + group.choices.length, 0),
-    non_fire: modelScopeGroups.reduce(
-      (sum, group) => sum + group.choices.filter((choice) => choice.fireSpec === 'non_fire').length,
-      0
-    ),
-    fire: modelScopeGroups.reduce(
-      (sum, group) => sum + group.choices.filter((choice) => choice.fireSpec === 'fire').length,
-      0
-    ),
-  };
-
-  const sampleSelected = sp.sample === '1' && fireFilter !== 'fire';
-  const sampleModel = simulatorModels.find((model) => model.slug === 'wing-01') ?? null;
-  const sampleVisible = Boolean(
-    sampleModel &&
-      fireFilter !== 'fire' &&
-      groups.some((group) => group.model.id === sampleModel.id)
-  );
-  const sampleSpecCode = sampleModel?.presets.some((preset) => preset.code === 'hotel') ? 'hotel' : null;
-
-  const requestedModelId = sp.selected_model ?? '';
-  const requestedSpecCode = sp.selected_spec ?? '';
-  const requestedFireSpec: FireSpec =
-    sp.selected_fire === 'fire' ? 'fire' : 'non_fire';
-  const requestedSelection = groups
-    .flatMap((group) =>
-      group.choices.map((choice) => ({ model: group.model, choice }))
-    )
-    .find(
-      ({ model, choice }) =>
-        model.id === requestedModelId &&
-        choice.code === requestedSpecCode &&
-        choice.fireSpec === requestedFireSpec
-    );
-  const firstSelection =
-    groups[0]?.choices[0] ? { model: groups[0].model, choice: groups[0].choices[0] } : null;
-  const selected = sampleSelected ? null : requestedSelection ?? firstSelection;
-  const [selectedCatalog, sampleCatalog] = await Promise.all([
-    selected?.choice.fireSpec === 'non_fire'
-      ? store.getCatalogBundle(selected.model.id)
-      : Promise.resolve(null),
-    sampleSelected && sampleModel && sampleSpecCode
-      ? store.getCatalogBundle(sampleModel.id)
-      : Promise.resolve(null),
+  const [bundle, catalogBundle] = await Promise.all([
+    store.getEstimateTemplateBundle(selectedTemplate.base_model_id, selectedTemplate.spec_code),
+    store.getCatalogBundle(selectedTemplate.base_model_id),
   ]);
 
-  const totalChoices = groups.reduce((sum, group) => sum + group.choices.length, 0);
+  const model = models.find((row) => row.id === selectedTemplate.base_model_id) ?? null;
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+
+  if (!bundle) {
+    return (
+      <AdminPage
+        title="見積書作成・管理"
+        lead="見積書をExcelに近い操作感で作成・編集します。"
+        actions={
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            ＋ 新しい見積書を作成
+          </Link>
+        }
+      >
+        <Alert tone="warning">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
+        <section className="card p-4">
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold">見積書を選ぶ</summary>
+            <div className="mt-3 divide-y divide-line">
+              {templates.map((template) => (
+                <Link key={template.id} href={estimateHref(template.id)} className="block px-3 py-2 text-sm hover:bg-sand/40">
+                  {template.name}
+                </Link>
+              ))}
+            </div>
+          </details>
+        </section>
+      </AdminPage>
+    );
+  }
+
+  const baseSection = bundle.sections.find((section) => section.code === 'base');
+  const baseTotal =
+    baseSection?.total ??
+    bundle.base_breakdown_items.reduce((sum, row) => sum + row.amount, 0);
+
+  const sections: EstimateTemplateWorkbenchSection[] = (Object.keys(SECTION_LABELS) as SectionCode[]).map((code) => {
+    const section = bundle.sections.find((row) => row.code === code);
+    return {
+      code,
+      label: SECTION_LABELS[code],
+      expenseLabel: section?.expense_label ?? null,
+      expenseAmount: section?.expense_amount ?? 0,
+    };
+  });
+
+  const initialLines: EstimateTemplateWorkbenchLine[] = bundle.lines.map((line) => ({
+    id: line.id,
+    section: line.section_code,
+    groupLabel: line.group_label ?? '',
+    name: line.name,
+    quantity: line.quantity ?? 1,
+    unit: line.unit ?? '',
+    saleUnitPrice: line.unit_price ?? 0,
+    remark: line.remark ?? '',
+    source: 'legacy',
+    customerSelection: '—',
+  }));
+
+  const products = options
+    .filter((option) => option.status === 'published')
+    .map((option) => ({
+      id: option.id,
+      categoryId: option.category_id,
+      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+      categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
+      name: option.name,
+      manufacturer: option.manufacturer ?? '',
+      modelNo: option.model_no ?? '',
+      sizeNote: option.size_note ?? '',
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+      imageUrl: option.image_url,
+    }));
+
+  const returnSection =
+    sp.return_section === 'interior_exterior' ||
+    sp.return_section === 'option' ||
+    sp.return_section === 'sitework'
+      ? sp.return_section
+      : undefined;
+
+  const workspaceReturnPath = `/admin/estimate-templates?estimate=${selectedTemplate.id}`;
+
+  const unavailablePreview = (
+    <section className="card px-5 py-8 text-center">
+      <p className="font-semibold">この見積書の表示データを準備中です</p>
+      <p className="mt-1 text-sm text-muted">編集画面は利用できます。見積書・プランボード表示は正式接続後に確認できます。</p>
+    </section>
+  );
 
   return (
     <AdminPage
-      title="標準見積"
-      lead="標準見積を一覧で確認・管理します。"
+      title="見積書作成・管理"
+      lead="開いたらすぐ明細を編集できる、Excelに近い見積書作成画面です。"
       actions={
-        <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-          ＋ 新規標準見積を作成
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            ＋ 新しい見積書を作成
+          </Link>
+          <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
+            複製
+          </button>
+          <button type="button" className="btn-secondary btn-sm" disabled title="標準指定の正式接続後に利用できます">
+            標準に設定
+          </button>
+        </div>
       }
     >
       <section className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          <h2 className="text-base font-semibold">標準見積一覧</h2>
-          <div className="flex items-center gap-2 text-xs text-muted">
-            <span>{totalChoices}件</span>
-            {sampleVisible && (
-              <>
-                <span aria-hidden="true">・</span>
-                <span>動作確認用 1件</span>
-              </>
-            )}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted">編集中の見積書</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-semibold">{selectedTemplate.name}</h2>
+              <Badge tone="neutral">編集画面</Badge>
+            </div>
           </div>
-        </div>
 
-        <div className="border-b border-line bg-sand/15 px-4 py-2.5 sm:px-5">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-16 shrink-0 text-xs font-semibold text-ink-soft">モデル</span>
-              <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
-                <Link
-                  href={filterHref('', fireFilter)}
-                  aria-current={!modelId ? 'page' : undefined}
-                  className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium transition ${
-                    !modelId
-                      ? 'border-ink bg-ink text-white'
-                      : 'border-line bg-white text-ink hover:bg-sand'
-                  }`}
-                >
-                  <span>すべて</span>
-                  <span className="text-[10px] opacity-70">{allModelCount}</span>
-                </Link>
-                {simulatorModels.map((model) => {
-                  const active = model.id === modelId;
+          <details className="relative">
+            <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+              見積書を選ぶ
+            </summary>
+            <div className="absolute right-0 z-40 mt-2 max-h-[24rem] w-[22rem] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
+              <p className="px-2 pb-2 pt-1 text-[11px] font-semibold text-muted">作成済み見積書</p>
+              <div className="divide-y divide-line">
+                {templates.map((template) => {
+                  const active = template.id === selectedTemplate.id;
+                  const templateModel = models.find((item) => item.id === template.base_model_id);
                   return (
                     <Link
-                      key={model.id}
-                      href={filterHref(model.id, fireFilter)}
+                      key={template.id}
+                      href={estimateHref(template.id)}
                       aria-current={active ? 'page' : undefined}
-                      className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium transition ${
+                      className={
                         active
-                          ? 'border-forest bg-forest text-white'
-                          : 'border-line bg-white text-ink hover:bg-sand'
-                      }`}
+                          ? 'block rounded-lg bg-forest/5 px-3 py-2 text-sm'
+                          : 'block rounded-lg px-3 py-2 text-sm hover:bg-sand/40'
+                      }
                     >
-                      <span>{model.name === 'フラット' ? 'Flat' : model.name}</span>
-                      <span className="text-[10px] opacity-70">{modelCounts.get(model.id) ?? 0}</span>
+                      <span className="block font-semibold">{template.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-muted">
+                        {templateModel?.name ?? '—'} ／ {SPEC_LABELS[template.spec_code] ?? template.spec_code} ／ {formatYen(template.total)}
+                      </span>
                     </Link>
                   );
                 })}
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-16 shrink-0 text-xs font-semibold text-ink-soft">防火仕様</span>
-              <div className="flex flex-wrap items-center gap-1.5" aria-label="防火仕様">
-                {[
-                  { value: '' as const, label: 'すべて', count: fireCounts.all },
-                  { value: 'non_fire' as const, label: '非防火', count: fireCounts.non_fire },
-                  { value: 'fire' as const, label: '防火', count: fireCounts.fire },
-                ].map((item) => {
-                  const active = fireFilter === item.value;
-                  return (
-                    <Link
-                      key={item.value || 'all'}
-                      href={filterHref(modelId, item.value)}
-                      aria-current={active ? 'page' : undefined}
-                      className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium transition ${
-                        active
-                          ? 'border-forest bg-forest text-white'
-                          : 'border-line bg-white text-ink hover:bg-sand'
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                      <span className="text-[10px] opacity-70">{item.count}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          </details>
         </div>
 
-        <div className="overflow-x-auto">
-          <div className="min-w-[40rem]">
-            <div className={`${LIST_GRID} border-b border-line bg-sand/35 px-3 py-1.5 text-xs font-semibold text-ink-soft`}>
-              <div>見積名</div>
-              <div className="text-right">原価税込</div>
-              <div className="text-right">売価税込</div>
-              <div className="text-right">粗利率</div>
-              <div className="text-center">状態</div>
-              <div aria-hidden="true" />
-            </div>
-
-            {groups.length > 0 ? groups.map((group, groupIndex) => {
-                const displayModelName = group.model.name === 'フラット' ? 'Flat' : group.model.name;
-                const selectedGroup = selected?.model.id === group.model.id;
-                const sampleGroup = sampleModel?.id === group.model.id;
-                return (
-                  <details
-                    key={group.model.id}
-                    open={Boolean(modelId) || groupIndex === 0 || selectedGroup || (sampleSelected && sampleGroup)}
-                    className="group border-b border-line"
-                  >
-                    <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-1.5 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-forest">
-                        <span className="text-xs transition-transform group-open:rotate-90">▶</span>
-                        <span>{displayModelName}</span>
-                        <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">
-                          {group.choices.length}件
-                        </span>
-                        {sampleGroup && (
-                          <span className="text-[10px] font-medium text-muted">＋確認用1件</span>
-                        )}
-                      </div>
-                    </summary>
-
-                    <div className="divide-y divide-line">
-                      {sampleGroup && (
-                        <Link
-                          href={sampleHref(modelId, fireFilter)}
-                          aria-current={sampleSelected ? 'true' : undefined}
-                          className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
-                            sampleSelected
-                              ? 'border-l-4 border-l-amber-500 bg-amber-50/90 shadow-[inset_0_0_0_1px_rgba(180,120,40,0.18)] pl-2'
-                              : 'bg-amber-50/35 hover:bg-amber-50/70'
-                          }`}
-                        >
-                          <div className="flex min-w-0 items-center gap-2 pl-4">
-                            <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
-                            <Badge tone="warn" className="shrink-0">動作確認用</Badge>
-                            {sampleSelected && (
-                              <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                選択中
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
-                          <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
-                          <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
-                          <div className="text-center"><Badge tone="neutral">サンプル</Badge></div>
-                          <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
-                        </Link>
-                      )}
-                      {group.choices.map((choice) => {
-                        const template = choice.template?.template ?? null;
-                        const active =
-                          selected?.model.id === group.model.id &&
-                          selected?.choice.code === choice.code &&
-                          selected?.choice.fireSpec === choice.fireSpec;
-                        return (
-                          <Link
-                            key={choice.registrationKey}
-                            href={selectionHref(modelId, fireFilter, group.model.id, choice.code, choice.fireSpec)}
-                            aria-current={active ? 'true' : undefined}
-                            className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
-                              active
-                                ? 'border-l-4 border-l-forest bg-[#e4f1e8] shadow-[inset_0_0_0_1px_rgba(35,93,68,0.18)] pl-2'
-                                : 'bg-white hover:bg-sand/30'
-                            }`}
-                          >
-                            <div className="flex min-w-0 items-center gap-2 pl-4">
-                              <span className="truncate font-semibold text-ink">{choice.name}</span>
-                              <Badge tone={choice.fireSpec === 'fire' ? 'warn' : 'neutral'} className="shrink-0">
-                                {choice.fireSpec === 'fire' ? '防火' : '非防火'}
-                              </Badge>
-                              {active && (
-                                <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                  選択中
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-right text-muted">—</div>
-                            <div className="text-right font-semibold">
-                              {template ? (
-                                <span className="tabular-nums">{formatYen(template.total)}</span>
-                              ) : (
-                                <span className="font-normal text-muted">—</span>
-                              )}
-                            </div>
-                            <div className="text-right text-muted">—</div>
-                            <div className="text-center">
-                              {template ? (
-                                <Badge tone="success">登録済み</Badge>
-                              ) : (
-                                <Badge tone="neutral">未登録</Badge>
-                              )}
-                            </div>
-                            <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </details>
-                );
-              }) : (
-                <div className="col-span-6 px-6 py-8 text-center">
-                  <p className="text-sm font-semibold">条件に一致する正式な標準見積がありません</p>
-                  <p className="mt-1 text-xs text-muted">商品モデルや防火仕様を変更して確認してください。</p>
-                </div>
-              )}
-          </div>
+        <div className="flex flex-wrap divide-x divide-line text-xs">
+          <span className="px-4 py-2">商品 <strong className="ml-1">{model?.name ?? '—'}</strong></span>
+          <span className="px-4 py-2">仕様 <strong className="ml-1">{SPEC_LABELS[selectedTemplate.spec_code] ?? selectedTemplate.spec_code}</strong></span>
+          <span className="px-4 py-2">現在額 <strong className="ml-1">{formatYen(selectedTemplate.total)}</strong></span>
         </div>
-
       </section>
 
-      {sampleSelected && sampleCatalog && sampleSpecCode ? (
-        <StandardEstimateSimulatorPreview
-          bundle={sampleCatalog}
-          specCode={sampleSpecCode}
-          template={null}
-          sampleMode
-        />
-      ) : selected && selectedCatalog && selected.choice.fireSpec === 'non_fire' ? (
-        <StandardEstimateSimulatorPreview
-          bundle={selectedCatalog}
-          specCode={selected.choice.code}
-          template={selected.choice.template}
-          createHref={
-            selected.choice.template
-              ? undefined
-              : createTargetHref(selected.model.id, selected.choice.code, selected.choice.fireSpec)
-          }
-        />
-      ) : selected && selected.choice.fireSpec === 'fire' ? (
-        <section className="card overflow-hidden" id="estimate-preview">
-          <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4 sm:px-5">
-            <div>
-              <p className="text-xs font-semibold text-forest">選択中の標準見積</p>
-              <h2 className="mt-1 text-lg font-semibold">
-                {selected.model.name === 'フラット' ? 'Flat' : selected.model.name} / {selected.choice.name}
-              </h2>
-              <p className="mt-1 text-xs text-muted">
-                防火仕様の標準見積は未登録です。基準本体を選んで新規作成へ進めます。
-              </p>
-            </div>
-            <Link
-              href={createTargetHref(selected.model.id, selected.choice.code, selected.choice.fireSpec)}
-              className="btn-primary btn-sm"
-            >
-              この標準見積を作成
-            </Link>
-          </div>
-        </section>
-      ) : null}
+      <Alert tone="info">
+        現在はExcel型編集画面をメイン画面として確認する段階です。画面内の明細変更はまだDBへ保存されません。
+      </Alert>
+
+      <EstimateTemplateDetailTabs
+        editContent={
+          <EstimateTemplateWorkbench
+            templateId={selectedTemplate.id}
+            role={actor.role}
+            baseLines={bundle.base_breakdown_items.map((line) => ({
+              id: line.id,
+              section: line.section,
+              name: line.name,
+              quantity: line.quantity,
+              unit: line.unit ?? '',
+              unitPrice: line.unit_price,
+              amount: line.amount,
+              remark: line.remark ?? '',
+            }))}
+            baseTotal={baseTotal}
+            initialLines={initialLines}
+            sections={sections}
+            products={products}
+            createdOptionId={sp.created_option}
+            returnSection={returnSection}
+            returnPath={workspaceReturnPath}
+            taxRate={selectedTemplate.tax_rate}
+            adjustment={selectedTemplate.adjustment}
+          />
+        }
+        estimateContent={
+          catalogBundle ? (
+            <StandardEstimateSimulatorPreview
+              bundle={catalogBundle}
+              specCode={selectedTemplate.spec_code}
+              template={bundle}
+              initialContentTab="estimate"
+              showContentTabs={false}
+              showEditLink={false}
+              previewOnly
+            />
+          ) : unavailablePreview
+        }
+        planContent={
+          catalogBundle ? (
+            <StandardEstimateSimulatorPreview
+              bundle={catalogBundle}
+              specCode={selectedTemplate.spec_code}
+              template={bundle}
+              initialContentTab="plan"
+              showContentTabs={false}
+              showEditLink={false}
+              previewOnly
+            />
+          ) : unavailablePreview
+        }
+      />
     </AdminPage>
   );
 }

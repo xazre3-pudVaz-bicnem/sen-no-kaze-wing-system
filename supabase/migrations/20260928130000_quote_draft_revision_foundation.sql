@@ -56,6 +56,39 @@ create index if not exists quotes_base_master_revision_idx
   on public.quotes(base_master_revision_id)
   where base_master_revision_id is not null;
 
+-- Extend the existing Quote lineage guard to the snapshot metadata introduced
+-- above.  The trusted postgres-owned lifecycle boundary remains the only path
+-- that can write these fields; ordinary/admin table UPDATE cannot rewrite an
+-- issued Revision's meaning after INSERT.  Legacy rows may remain NULL until a
+-- separately reviewed backfill migration is introduced.
+create or replace function public.guard_quote_lineage_transition()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+begin
+  if current_user <> 'postgres' then
+    if tg_op = 'INSERT'
+       or old.parent_quote_id is distinct from new.parent_quote_id
+       or old.revision is distinct from new.revision
+       or old.quote_request_id is distinct from new.quote_request_id
+       or old.configuration_id is distinct from new.configuration_id
+       or old.user_id is distinct from new.user_id
+       or old.quote_kind is distinct from new.quote_kind
+       or old.base_model_id is distinct from new.base_model_id
+       or old.base_master_revision_id is distinct from new.base_master_revision_id
+       or old.spec_code is distinct from new.spec_code
+       or old.adjustment_reason is distinct from new.adjustment_reason
+       or old.created_by is distinct from new.created_by
+    then
+      raise exception 'QUOTE_LINEAGE_IMMUTABLE: 見積の系譜・snapshot情報はライフサイクル処理でのみ変更できます'
+        using errcode = 'P0001';
+    end if;
+  end if;
+  return new;
+end;
+$;
+
 -- quote_items remains the immutable issued-Revision snapshot.
 -- line_key is nullable in this foundation migration so existing rows do not
 -- need a data rewrite. A later lifecycle migration will backfill and enforce
@@ -89,7 +122,7 @@ create table if not exists public.quote_drafts (
   base_master_revision_id uuid
     references public.base_master_revisions(id) on delete restrict,
   spec_code text not null,
-  quote_kind text not null default 'formal'
+  quote_kind text not null
     check (quote_kind in ('preliminary', 'formal')),
   tax_rate numeric(5, 4) not null default 0.10
     check (tax_rate >= 0 and tax_rate <= 1),
@@ -126,6 +159,82 @@ create table if not exists public.quote_drafts (
     or nullif(btrim(coalesce(adjustment_reason, '')), '') is not null
   )
 );
+
+-- ---------- Cross-table Draft / Revision invariants ----------
+-- A pinned Base Master Revision must belong to the same product model and
+-- must already be an immutable published/superseded Revision.  NULL remains
+-- valid for legacy Quotes and for Drafts before a Base Revision is selected.
+create or replace function public.validate_quote_base_revision_ref()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  if new.base_master_revision_id is not null
+     and not exists (
+       select 1
+         from public.base_master_revisions r
+         join public.base_masters m on m.id = r.base_master_id
+        where r.id = new.base_master_revision_id
+          and r.status in ('published', 'superseded')
+          and m.base_model_id = new.base_model_id
+     ) then
+    raise exception 'VALIDATION: 本体Revisionは同じ商品モデルのpublished/superseded版を指定してください'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists quotes_base_revision_ref on public.quotes;
+create trigger quotes_base_revision_ref
+before insert or update of base_model_id, base_master_revision_id
+on public.quotes
+for each row execute function public.validate_quote_base_revision_ref();
+
+drop trigger if exists quote_drafts_base_revision_ref on public.quote_drafts;
+create trigger quote_drafts_base_revision_ref
+before insert or update of base_model_id, base_master_revision_id
+on public.quote_drafts
+for each row execute function public.validate_quote_base_revision_ref();
+
+-- A Revision Draft may only point at a parent Quote from the same case /
+-- QuoteRequest.  Whether that parent is the current latest Revision is
+-- intentionally left to the FOR UPDATE lifecycle transaction in the next PR.
+create or replace function public.validate_quote_draft_parent_ref()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  if new.parent_quote_id is not null
+     and not exists (
+       select 1
+         from public.quotes q
+        where q.id = new.parent_quote_id
+          and q.quote_request_id = new.quote_request_id
+     ) then
+    raise exception 'VALIDATION: Draftの親見積は同じ案件系列のQuoteを指定してください'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$;
+
+drop trigger if exists quote_drafts_parent_ref on public.quote_drafts;
+create trigger quote_drafts_parent_ref
+before insert or update of quote_request_id, parent_quote_id
+on public.quote_drafts
+for each row execute function public.validate_quote_draft_parent_ref();
+
+revoke all on function public.validate_quote_base_revision_ref()
+  from public, anon, authenticated;
+revoke all on function public.validate_quote_draft_parent_ref()
+  from public, anon, authenticated;
 
 create index if not exists quote_drafts_parent_idx
   on public.quote_drafts(parent_quote_id)

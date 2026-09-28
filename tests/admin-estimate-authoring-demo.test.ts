@@ -8,14 +8,15 @@ const demo = fs.readFileSync(
 );
 
 describe('技術の杜確認用 見積書作成デモ', () => {
-  it('普通の見積書作成として4つの表示を同じワークスペースで切り替える', () => {
-    expect(demo).toContain("type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing'");
+  it('見積書・プランボード・図面の3タブで見積作成を進める', () => {
+    expect(demo).toContain("type DemoTab = 'estimate' | 'plan' | 'drawing'");
     expect(demo).toContain('aria-label="見積書作成の表示切替"');
-    expect(demo).toContain("['edit', '編集']");
+    expect(demo).not.toContain("['edit', '編集']");
     expect(demo).toContain("['estimate', '見積書']");
     expect(demo).toContain("['plan', 'プランボード']");
     expect(demo).toContain("['drawing', '図面']");
     expect(demo).toContain('見積書作成');
+    expect(demo).toContain('見積書プレビュー');
   });
 
   it('本体マスターを壊さず見積書内の本体明細を編集できる', () => {

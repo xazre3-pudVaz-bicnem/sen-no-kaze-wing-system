@@ -270,7 +270,7 @@ export default async function EstimateTemplatesPage({
                                 : 'bg-white hover:bg-sand/30'
                             }`}
                           >
-                            <div className="min-w-0">
+                            <div className="min-w-0 pl-4">
                               <span className="font-semibold text-ink">{choice.name}</span>
                             </div>
                             <div className="text-right text-muted">—</div>

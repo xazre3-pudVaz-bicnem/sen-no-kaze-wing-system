@@ -26,9 +26,9 @@ export async function getExteriorFaces(configurationId: string): Promise<Exterio
 }
 
 /**
- * 外壁4面の割当を保存する。
- * 商品・色の妥当性は呼び出し側で CatalogBundle に対して検証済みであること。
- * 保存直後に再計算し、画面・保存仕様・正式見積の金額が一致するようにする。
+ * Local mode tests may update the in-memory fixture directly.  Production
+ * saves must go through save_configuration_atomic, which writes faces together
+ * with the parent, items, derived price, and snapshot.
  */
 export async function saveExteriorFaces(configurationId: string, faces: ExteriorFaceSelection[]): Promise<void> {
   if (isLocalMode()) {
@@ -45,12 +45,5 @@ export async function saveExteriorFaces(configurationId: string, faces: Exterior
     return;
   }
 
-  const { createClient } = await import('@/lib/supabase/server');
-  const db = await createClient();
-  const { error } = await db.from('configurations').update({ exterior_faces: faces }).eq('id', configurationId);
-  if (error) throw error;
-
-  // save_configuration は外壁4面保存より先に再計算されるため、4面保存後にもう一度再計算する。
-  const { error: recalcError } = await db.rpc('recalculate_configuration', { p_configuration_id: configurationId });
-  if (recalcError) throw recalcError;
+  throw new Error('外壁だけの保存は廃止されました。Configuration全体を保存してください。');
 }

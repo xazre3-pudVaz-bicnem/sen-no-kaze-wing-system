@@ -82,6 +82,8 @@ export interface SaveConfigurationInput {
   site_location_undecided?: boolean;
   /** 選ばれたバリエーション（選択肢 ID） */
   variant_choice_ids?: string[];
+  /** 外壁4面の割当。未指定は既存互換用に空配列として保存する */
+  exterior_faces?: ExteriorFaceSelection[];
 }
 
 /** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */

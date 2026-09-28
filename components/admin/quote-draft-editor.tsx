@@ -28,6 +28,7 @@ const KIND_LABELS: Record<QuoteItemKind, string> = {
 };
 
 const KINDS = Object.keys(KIND_LABELS) as QuoteItemKind[];
+const roundLikePostgres = (value: number) => value < 0 ? -Math.round(-value) : Math.round(value);
 
 type EditorRow = QuoteDraftSaveItem & { key: string };
 
@@ -83,7 +84,7 @@ export function QuoteDraftEditor({
 
   const totals = useMemo(() => {
     const subtotalRaw = rows.reduce(
-      (sum, row) => sum + Math.round(row.unit_price * row.quantity),
+      (sum, row) => sum + roundLikePostgres(row.unit_price * row.quantity),
       0
     );
     const subtotal = Math.max(0, subtotalRaw + adjustment);
@@ -211,7 +212,7 @@ export function QuoteDraftEditor({
               </thead>
               <tbody>
                 {rows.map((row, index) => {
-                  const amount = Math.round(row.unit_price * row.quantity);
+                  const amount = roundLikePostgres(row.unit_price * row.quantity);
                   return (
                     <tr key={row.key} className="border-b border-slate-200">
                       <td className="border-r border-slate-200 px-2 py-1 text-center text-muted">{index + 1}</td>

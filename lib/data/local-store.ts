@@ -40,6 +40,7 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
+import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
   isQuoteAcceptanceEligible,
@@ -75,6 +76,9 @@ import {
   type DealerRevisionInput,
   type DealerRevisionItem,
   type EstimateTemplateImportInput,
+  type AccessibleCustomerListResult,
+  type AccessibleCustomerDetail,
+  type AccessibleCustomerQuote,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
@@ -456,6 +460,169 @@ export class LocalStore implements DataStore {
   }
   async listProfiles() {
     return this.read((db) => [...db.profiles].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+  }
+
+  private buildAccessibleCustomerView(db: LocalDb, actor: SessionUser) {
+    if (!hasRoleAtLeast(actor.role, 'dealer')) {
+      throw new StoreError('FORBIDDEN', '顧客管理を閲覧できるのは代理店以上です');
+    }
+
+    const accessibleRequestIds = new Set(
+      actor.role === 'admin'
+        ? db.quoteRequests.map((request) => request.id)
+        : db.quotes.filter((quote) => quote.dealer_id === actor.id).map((quote) => quote.quote_request_id)
+    );
+    const requests = db.quoteRequests.filter((request) => accessibleRequestIds.has(request.id));
+    const quotes = db.quotes.filter((quote) => accessibleRequestIds.has(quote.quote_request_id));
+    const configurationIds = new Set([
+      ...requests.map((request) => request.configuration_id),
+      ...quotes.map((quote) => quote.configuration_id),
+    ]);
+    const configurations = db.configurations.filter((configuration) => configurationIds.has(configuration.id));
+    const view = buildCustomerManagementView({
+      profiles: db.profiles,
+      quotes,
+      requests,
+      configurations,
+    });
+
+    if (actor.role === 'admin') return view;
+    return {
+      customers: view.customers.filter((customer) => customer.cases.length > 0),
+      unlinkedCases: view.unlinkedCases,
+    };
+  }
+
+  private accessibleCaseOpenQuoteId(
+    quotes: Quote[],
+    latestQuote: Quote | null,
+    actor: SessionUser
+  ): string | null {
+    if (actor.role === 'admin') return latestQuote?.id ?? null;
+    return quotes.find((quote) => quote.dealer_id === actor.id)?.id ?? null;
+  }
+
+  async listAccessibleCustomers(actor: SessionUser): Promise<AccessibleCustomerListResult> {
+    return this.read((db) => {
+      const view = this.buildAccessibleCustomerView(db, actor);
+      return {
+        customers: view.customers.map((customer) => ({
+          id: customer.profile.id,
+          customer_no: customer.profile.customer_no,
+          full_name: customer.profile.full_name,
+          company_name: customer.profile.company_name,
+          email: customer.profile.email,
+          phone: customer.profile.phone,
+          address: customer.profile.address,
+          ongoing_case_count: customer.ongoingCases.length,
+          recent_case: customer.recentCase
+            ? {
+                id: customer.recentCase.id,
+                open_quote_id: this.accessibleCaseOpenQuoteId(
+                  customer.recentCase.quotes,
+                  customer.recentCase.latestQuote,
+                  actor
+                ),
+                quote_no: customer.recentCase.latestQuote?.quote_no ?? null,
+                model_name: customer.recentCase.latestQuote?.base_model_name ?? null,
+                site_address: customer.recentCase.siteAddress,
+                activity_at: customer.recentCase.activityAt,
+                dealer_name: customer.recentCase.dealer?.full_name ?? null,
+              }
+            : null,
+        })),
+        unlinked_cases: view.unlinkedCases.map((customerCase) => ({
+          id: customerCase.id,
+          full_name:
+            customerCase.contact?.full_name ||
+            customerCase.latestQuote?.customer_name ||
+            '顧客名未登録',
+          company_name:
+            customerCase.contact?.company_name ||
+            customerCase.latestQuote?.customer_company ||
+            null,
+          identity_issue:
+            customerCase.identityIssue === 'none' ? 'missing_profile' : customerCase.identityIssue,
+          open_quote_id: this.accessibleCaseOpenQuoteId(
+            customerCase.quotes,
+            customerCase.latestQuote,
+            actor
+          ),
+          quote_no: customerCase.latestQuote?.quote_no ?? null,
+          model_name: customerCase.latestQuote?.base_model_name ?? null,
+          site_address: customerCase.siteAddress,
+          activity_at: customerCase.activityAt,
+          dealer_name: customerCase.dealer?.full_name ?? null,
+        })),
+      };
+    });
+  }
+
+  async getAccessibleCustomerDetail(
+    customerId: string,
+    actor: SessionUser
+  ): Promise<AccessibleCustomerDetail | null> {
+    return this.read((db) => {
+      const view = this.buildAccessibleCustomerView(db, actor);
+      const customer = view.customers.find((entry) => entry.profile.id === customerId);
+      if (!customer) return null;
+
+      const quoteCaseById = new Map<string, string>();
+      for (const customerCase of customer.cases) {
+        for (const quote of customerCase.quotes) quoteCaseById.set(quote.id, customerCase.id);
+      }
+
+      const toQuote = (quote: Quote, caseId: string): AccessibleCustomerQuote => ({
+        id: quote.id,
+        case_id: caseId,
+        quote_no: quote.quote_no,
+        revision: quote.revision,
+        status: quote.status,
+        base_model_name: quote.base_model_name,
+        issued_at: quote.issued_at,
+        total: quote.total,
+        can_open_quote: actor.role === 'admin' || quote.dealer_id === actor.id,
+      });
+
+      return {
+        customer: {
+          id: customer.profile.id,
+          customer_no: customer.profile.customer_no,
+          full_name: customer.profile.full_name,
+          company_name: customer.profile.company_name,
+          email: customer.profile.email,
+          phone: customer.profile.phone,
+          postal_code: customer.profile.postal_code,
+          address: customer.profile.address,
+          created_at: customer.profile.created_at,
+        },
+        latest_contact: customer.latestContact,
+        cases: customer.cases.map((customerCase) => ({
+          id: customerCase.id,
+          request_status: customerCase.request?.status ?? null,
+          message: customerCase.request?.message ?? null,
+          contact: customerCase.contact,
+          site_address: customerCase.siteAddress,
+          site_source: customerCase.siteSource,
+          ongoing: customerCase.ongoing,
+          activity_at: customerCase.activityAt,
+          model_name: customerCase.latestQuote?.base_model_name ?? null,
+          dealer_name: customerCase.dealer?.full_name ?? null,
+          dealer_company: customerCase.dealer?.company_name ?? null,
+          open_quote_id: this.accessibleCaseOpenQuoteId(
+            customerCase.quotes,
+            customerCase.latestQuote,
+            actor
+          ),
+          latest_quote: customerCase.latestQuote
+            ? toQuote(customerCase.latestQuote, customerCase.id)
+            : null,
+        })),
+        quote_history: customer.quoteHistory.map((quote) =>
+          toQuote(quote, quoteCaseById.get(quote.id) ?? quote.quote_request_id)
+        ),
+      };
+    });
   }
 
   // ---------- 仕様 ----------

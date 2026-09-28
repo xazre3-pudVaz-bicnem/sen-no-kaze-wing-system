@@ -74,17 +74,31 @@ function SavedEstimateMenu({
   return (
     <details className="relative">
       <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        作成済み見積書（{totalCount}件）
+        見積書一覧（{totalCount}件）
       </summary>
       <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(92vw,42rem)] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
         <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
           <div>
-            <p className="text-sm font-semibold">作成済み見積書</p>
-            <p className="mt-0.5 text-[11px] text-muted">開く見積書を選択します。</p>
+            <p className="text-sm font-semibold">見積書一覧</p>
+            <p className="mt-0.5 text-[11px] text-muted">シミュレーター標準と作成済み見積書をここで確認します。</p>
           </div>
           <span className="text-[11px] text-muted">{totalCount}件</span>
         </div>
-        {templates.length > 0 && (
+
+        <div className="mb-2 rounded-lg border border-line bg-sand/25 px-3 py-2">
+          <p className="text-[10px] font-semibold tracking-wide text-muted">シミュレーター標準</p>
+          <p className="mt-1 text-xs font-semibold">正式見積書から指定</p>
+          <p className="mt-0.5 text-[11px] text-muted">
+            正式保存した見積書を開き、「シミュレーターの標準に設定」から指定します。現在は指定機能の接続準備中です。
+          </p>
+        </div>
+
+        <div className="border-t border-line pt-2">
+          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">作成済み見積書</p>
+          {templates.length === 0 && (
+            <p className="px-3 py-2 text-[11px] text-muted">正式保存済みの見積書はまだありません。</p>
+          )}
+          {templates.length > 0 && (
           <div className="divide-y divide-line">
           {templates.map((template) => {
             const active = template.id === selectedId;
@@ -118,9 +132,10 @@ function SavedEstimateMenu({
             );
           })}
           </div>
-        )}
-        <div className={templates.length > 0 ? 'mt-2 border-t border-line pt-2' : ''}>
-          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">EXCELサンプル</p>
+          )}
+        </div>
+        <div className="mt-2 border-t border-line pt-2">
+          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">画面確認用サンプル</p>
           <div className="divide-y divide-line">
             {ESTIMATE_DEMO_SAMPLES.map((sample) => {
               const active = sample.id === selectedSampleId;
@@ -231,7 +246,7 @@ export default async function EstimateTemplatesPage({
       >
         <Alert tone="warn">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
         <section className="card p-4 text-sm text-muted">
-          右上の「作成済み見積書」から別の見積書を開けます。
+          右上の「見積書一覧」から別の見積書を開けます。
         </section>
       </AdminPage>
     );
@@ -314,9 +329,9 @@ export default async function EstimateTemplatesPage({
             type="button"
             className="btn-secondary btn-sm"
             disabled
-            title="正式見積書の標準指定接続後に利用できます"
+            title="シミュレーター標準の指定接続後に利用できます"
           >
-            この見積書を標準に設定
+            シミュレーターの標準に設定
           </button>
         </div>
       }
@@ -331,7 +346,7 @@ export default async function EstimateTemplatesPage({
             </div>
           </div>
 
-          <span className="text-xs text-muted">別の見積書は右上の「作成済み見積書」から開けます。</span>
+          <span className="text-xs text-muted">別の見積書は右上の「見積書一覧」から開けます。</span>
         </div>
 
         <div className="flex flex-wrap divide-x divide-line text-xs">

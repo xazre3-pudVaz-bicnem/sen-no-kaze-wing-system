@@ -178,11 +178,11 @@ export async function CaseWorkspace({
   const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';
   const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';
   const isAdmin = actor.role === 'admin';
-  const canManageAllQuotes = canEditCatalog(actor.role);
+  const canViewAllQuotes = isAdmin;
   const canEditBase = canEditCatalog(actor.role);
-  if (!canManageAllQuotes && quote.dealer_id !== actor.id) notFound();
+  if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();
 
-  const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);
+  const canRevise = quote.status === 'issued' && (canViewAllQuotes || quote.dealer_id === actor.id);
   const activeTab: TabKey = isTabKey(tab) ? tab : 'estimate';
 
   const [profiles, categories, options, casePlanConfiguration, caseDocuments] = await Promise.all([

@@ -7,6 +7,10 @@ const migration = fs.readFileSync(
   path.join(root, 'supabase/migrations/20260922050000_case_plan_configuration_read.sql'),
   'utf8'
 );
+const accessCorrective = fs.readFileSync(
+  path.join(root, 'supabase/migrations/20260928173000_master_dealer_case_access_corrective.sql'),
+  'utf8'
+);
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const casePlan = fs.readFileSync(path.join(root, 'components/admin/case-plan-board.tsx'), 'utf8');
 const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
@@ -56,19 +60,20 @@ describe('案件プランボード', () => {
     expect(store).toContain('getCasePlanConfiguration(quoteId: string, actor: SessionUser)');
     expect(supabaseStore).toContain("db.rpc('get_case_plan_configuration'");
     expect(localStore).toContain('async getCasePlanConfiguration(quoteId: string, actor: SessionUser)');
-    expect(localStore).toContain("const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');");
-    expect(localStore).toContain('quote.dealer_id !== actor.id');
+    expect(localStore).toContain("if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;");
+    expect(localStore).not.toContain("const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');");
     expect(localStore).toContain('option_id: item.option_id');
     expect(localStore).toContain('variant_choice_ids: item.variant_choice_ids ?? []');
   });
 
-  it('専用RPCはSECURITY DEFINERをhardeningし、顧客と無関係な代理店を拒否する', () => {
-    const body = functionBody(migration, 'get_case_plan_configuration');
+  it('専用RPCの最終定義はSECURITY DEFINERをhardeningし、未担当の総代理店・代理店を拒否する', () => {
+    const body = functionBody(accessCorrective, 'get_case_plan_configuration');
     expect(body).toContain('security definer');
     expect(body).toContain("set search_path = ''");
     expect(body).toContain('v_rank integer := public.current_role_rank();');
     expect(body).toContain('if v_rank < 1 then');
-    expect(body).toContain('v_rank >= 2 or (v_rank >= 1 and v_quote.dealer_id = v_uid)');
+    expect(body).toContain('v_rank >= 3 or (v_rank >= 1 and v_quote.dealer_id = v_uid)');
+    expect(body).not.toContain('v_rank >= 2 or');
     expect(body).toContain('from public.quotes');
     expect(body).toContain('from public.configurations');
     expect(body).toContain('from public.configuration_items');
@@ -85,24 +90,28 @@ describe('案件プランボード', () => {
     expect(body).not.toMatch(/\bdelete\s+from\b/i);
   });
 
-  it('専用RPCはAPI全roleから一度剥がしauthenticatedだけへ公開する', () => {
-    expect(migration).toContain(
+  it('専用RPCの最終定義はAPI全roleから一度剥がしauthenticatedだけへ公開する', () => {
+    expect(accessCorrective).toContain(
       "revoke execute on function public.get_case_plan_configuration(uuid)\n  from public, anon, authenticated, service_role;"
     );
-    expect(migration).toContain(
+    expect(accessCorrective).toContain(
       'grant execute on function public.get_case_plan_configuration(uuid) to authenticated;'
     );
-    expect(migration).not.toContain(
+    expect(accessCorrective).not.toContain(
       'grant execute on function public.get_case_plan_configuration(uuid) to service_role;'
     );
-    expect(migration).not.toContain('create policy');
-    expect(migration).not.toContain('alter policy');
+    expect(accessCorrective).toContain(
+      'alter function public.get_case_plan_configuration(uuid) owner to postgres;'
+    );
   });
 
-  it('既存migrationより後ろのadditive migrationで、データ更新を行わない', () => {
+  it('元の読み取りmigrationと後続correctiveはいずれもデータ更新を行わない', () => {
     expect(Number('20260922050000')).toBeGreaterThan(Number('20260916084500'));
-    expect(migration).not.toMatch(/\bupdate\s+public\./i);
-    expect(migration).not.toMatch(/\binsert\s+into\b/i);
-    expect(migration).not.toMatch(/\bdelete\s+from\b/i);
+    expect(Number('20260928173000')).toBeGreaterThan(Number('20260922050000'));
+    for (const source of [migration, accessCorrective]) {
+      expect(source).not.toMatch(/\bupdate\s+public\./i);
+      expect(source).not.toMatch(/\binsert\s+into\b/i);
+      expect(source).not.toMatch(/\bdelete\s+from\b/i);
+    }
   });
 });

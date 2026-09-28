@@ -4,7 +4,6 @@ import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import {
-  canEditCatalog,
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
 } from '@/lib/domain/types';
@@ -170,8 +169,9 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
 
-  // 代理店は自分に割り当てられた案件だけ。既存の権限・Quote lifecycleは変更しない。
-  if (!canEditCatalog(actor.role)) {
+  // 総代理店・代理店は自分に割り当てられた案件だけ。本部だけが全体一覧を扱う。
+  // Quote lifecycle自体は変更しない。
+  if (actor.role !== 'admin') {
     const mine = await store.listDealerQuotes(actor.id);
     const latest = mine.filter((q) => q.status !== 'superseded');
     const quoteTotal = latest.reduce((sum, quote) => sum + quote.total, 0);

@@ -1,13 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { requireAdmin } from '@/lib/auth/session';
-import { getStore } from '@/lib/data/store';
-import {
-  buildCustomerManagementView,
-  customerCaseHref,
-  customerCaseLabel,
-  type CustomerCaseView,
-} from '@/lib/domain/customer-management';
+import { requireStaff } from '@/lib/auth/session';
+import { getStore, type AccessibleCustomerCase } from '@/lib/data/store';
 import {
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
@@ -17,30 +11,37 @@ import { formatDate } from '@/lib/utils';
 import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 import { Badge } from '@/components/ui';
 
-function caseStatus(customerCase: CustomerCaseView): string {
-  if (customerCase.latestQuote) return QUOTE_STATUS_LABELS[customerCase.latestQuote.status];
-  if (customerCase.request) return QUOTE_REQUEST_STATUS_LABELS[customerCase.request.status];
+function caseStatus(customerCase: AccessibleCustomerCase): string {
+  if (customerCase.latest_quote) return QUOTE_STATUS_LABELS[customerCase.latest_quote.status];
+  if (customerCase.request_status) return QUOTE_REQUEST_STATUS_LABELS[customerCase.request_status];
   return '状態未登録';
 }
 
-function caseStatusTone(customerCase: CustomerCaseView): 'neutral' | 'success' | 'warn' | 'navy' {
-  if (customerCase.latestQuote?.status === 'accepted') return 'success';
-  if (customerCase.request?.status === 'new') return 'warn';
+function caseStatusTone(customerCase: AccessibleCustomerCase): 'neutral' | 'success' | 'warn' | 'navy' {
+  if (customerCase.latest_quote?.status === 'accepted') return 'success';
+  if (customerCase.request_status === 'new') return 'warn';
   if (customerCase.ongoing) return 'navy';
   return 'neutral';
 }
 
-function siteSourceLabel(customerCase: CustomerCaseView): string {
-  if (customerCase.siteSource === 'quote_contact') return '案件受付情報';
-  if (customerCase.siteSource === 'configuration') return '保存済み仕様';
+function siteSourceLabel(customerCase: AccessibleCustomerCase): string {
+  if (customerCase.site_source === 'quote_contact') return '案件受付情報';
+  if (customerCase.site_source === 'configuration') return '保存済み仕様';
   return '未登録';
+}
+
+function caseHref(customerCase: AccessibleCustomerCase): string {
+  if (customerCase.open_quote_id) {
+    return `/admin/quotes?case=${encodeURIComponent(customerCase.open_quote_id)}#case-workspace`;
+  }
+  return `/admin/quotes?request=${encodeURIComponent(customerCase.id)}#pending-quote-request`;
 }
 
 function CaseTable({
   cases,
   emptyLabel,
 }: {
-  cases: CustomerCaseView[];
+  cases: AccessibleCustomerCase[];
   emptyLabel: string;
 }) {
   return (
@@ -65,34 +66,32 @@ function CaseTable({
           cases.map((customerCase) => (
             <tr key={customerCase.id} data-testid="customer-case-row">
               <Td>
-                <p className="font-semibold">{customerCaseLabel(customerCase)}</p>
-                {customerCase.request?.message && (
-                  <p className="mt-1 max-w-64 truncate text-xs text-muted">{customerCase.request.message}</p>
+                <p className="font-semibold">{customerCase.latest_quote?.quote_no ?? '見積未発行'}</p>
+                {customerCase.message && (
+                  <p className="mt-1 max-w-64 truncate text-xs text-muted">{customerCase.message}</p>
                 )}
               </Td>
               <Td>
                 <Badge tone={caseStatusTone(customerCase)}>{caseStatus(customerCase)}</Badge>
               </Td>
-              <Td className="text-xs">{customerCase.latestQuote?.base_model_name ?? '見積未発行'}</Td>
+              <Td className="text-xs">{customerCase.model_name ?? '見積未発行'}</Td>
               <Td className="text-xs">
-                <span className="block">{customerCase.siteAddress ?? '未登録'}</span>
+                <span className="block">{customerCase.site_address ?? '未登録'}</span>
                 <span className="mt-1 block text-muted">{siteSourceLabel(customerCase)}</span>
               </Td>
               <Td className="text-xs">
-                {customerCase.dealer ? (
+                {customerCase.dealer_name ? (
                   <>
-                    <span className="block font-semibold">{customerCase.dealer.full_name}</span>
-                    <span className="mt-1 block text-muted">
-                      {customerCase.dealer.company_name ?? customerCase.dealer.email}
-                    </span>
+                    <span className="block font-semibold">{customerCase.dealer_name}</span>
+                    <span className="mt-1 block text-muted">{customerCase.dealer_company ?? '会社名未登録'}</span>
                   </>
                 ) : (
                   <span className="text-muted">未割り当て</span>
                 )}
               </Td>
-              <Td className="whitespace-nowrap text-xs">{formatDate(customerCase.activityAt, true)}</Td>
+              <Td className="whitespace-nowrap text-xs">{formatDate(customerCase.activity_at, true)}</Td>
               <Td>
-                <Link href={customerCaseHref(customerCase)} className="btn-secondary btn-sm">案件を見る</Link>
+                <Link href={caseHref(customerCase)} className="btn-secondary btn-sm">案件を見る</Link>
               </Td>
             </tr>
           ))
@@ -107,27 +106,22 @@ export default async function AdminCustomerDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin('/admin/customer-management');
+  const actor = await requireStaff('/admin/customer-management');
   const { id } = await params;
   const store = await getStore();
-  const [profiles, quotes, requests, configurations] = await Promise.all([
-    store.listProfiles(),
-    store.listAllQuotes(),
-    store.listQuoteRequests(),
-    store.listAllConfigurations(),
-  ]);
-  const view = buildCustomerManagementView({ profiles, quotes, requests, configurations });
-  const customer = view.customers.find((entry) => entry.profile.id === id);
-  if (!customer) notFound();
+  const detail = await store.getAccessibleCustomerDetail(id, actor);
+  if (!detail) notFound();
 
-  const profile = customer.profile;
-  const contact = customer.latestContact;
-  const siteCases = customer.cases.filter((customerCase) => customerCase.siteAddress);
+  const profile = detail.customer;
+  const contact = detail.latest_contact;
+  const ongoingCases = detail.cases.filter((customerCase) => customerCase.ongoing);
+  const pastCases = detail.cases.filter((customerCase) => !customerCase.ongoing);
+  const siteCases = detail.cases.filter((customerCase) => customerCase.site_address);
 
   return (
     <AdminPage
       title={profile.full_name || '顧客詳細'}
-      lead="既存データを user_id で紐づけた顧客・案件の参照画面です。編集や顧客統合は行いません。"
+      lead="参照権限のある案件だけを、顧客単位で確認する画面です。編集や顧客統合は行いません。"
       actions={
         <Link href="/admin/quotes" className="btn-secondary btn-sm">
           案件管理を開く
@@ -137,8 +131,8 @@ export default async function AdminCustomerDetailPage({
         <div className="space-y-1">
           <p className="font-semibold text-ink">顧客情報の正本は未確定です。</p>
           <p>
-            下の Profile と QuoteContact は別々の既存情報として表示しています。
-            値が異なっていても、この画面では上書き・自動統合しません。
+            Profile と案件受付時の情報は別々の既存情報として表示しています。
+            総代理店・代理店には、自分が担当する案件系列に由来する情報だけを表示します。
           </p>
         </div>
       }
@@ -149,7 +143,7 @@ export default async function AdminCustomerDetailPage({
         <div>
           <h2 id="customer-basic-heading" className="text-lg font-semibold">基本情報</h2>
           <p className="mt-1 text-xs text-muted">
-            アカウント情報と最新案件の受付情報を、出典を分けて確認します。
+            アカウント情報と参照可能な最新案件の受付情報を、出典を分けて確認します。
           </p>
         </div>
 
@@ -226,7 +220,7 @@ export default async function AdminCustomerDetailPage({
                 </div>
               </dl>
             ) : (
-              <p className="mt-4 text-sm text-muted">user_id で紐づく案件受付情報はまだありません。</p>
+              <p className="mt-4 text-sm text-muted">参照可能な案件受付情報はまだありません。</p>
             )}
           </div>
         </div>
@@ -236,31 +230,29 @@ export default async function AdminCustomerDetailPage({
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="ongoing-cases-heading" className="text-lg font-semibold">進行中案件</h2>
-            <p className="mt-1 text-xs text-muted">新規・確認中・回答済み等、現在の案件フロー上で継続中の案件です。</p>
+            <p className="mt-1 text-xs text-muted">参照可能な案件のうち、現在の案件フロー上で継続中のものです。</p>
           </div>
-          <Badge tone={customer.ongoingCases.length > 0 ? 'navy' : 'neutral'}>
-            {customer.ongoingCases.length} 件
-          </Badge>
+          <Badge tone={ongoingCases.length > 0 ? 'navy' : 'neutral'}>{ongoingCases.length} 件</Badge>
         </div>
-        <CaseTable cases={customer.ongoingCases} emptyLabel="進行中案件はありません。" />
+        <CaseTable cases={ongoingCases} emptyLabel="進行中案件はありません。" />
       </section>
 
       <section className="space-y-3" aria-labelledby="past-cases-heading">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 id="past-cases-heading" className="text-lg font-semibold">過去案件</h2>
-            <p className="mt-1 text-xs text-muted">完了・キャンセル等、既存の案件状態から継続中ではないと判断できる案件です。</p>
+            <p className="mt-1 text-xs text-muted">参照可能な案件のうち、既存状態から継続中ではないと判断できるものです。</p>
           </div>
-          <Badge tone="neutral">{customer.pastCases.length} 件</Badge>
+          <Badge tone="neutral">{pastCases.length} 件</Badge>
         </div>
-        <CaseTable cases={customer.pastCases} emptyLabel="過去案件はありません。" />
+        <CaseTable cases={pastCases} emptyLabel="過去案件はありません。" />
       </section>
 
       <section className="space-y-3" aria-labelledby="quote-history-heading">
         <div>
           <h2 id="quote-history-heading" className="text-lg font-semibold">見積履歴</h2>
           <p className="mt-1 text-xs text-muted">
-            同じ案件の改訂版も別の見積履歴として表示します。発行済みの内容はここでは変更しません。
+            担当する案件系列のRevision履歴だけを表示します。発行済みの内容はここでは変更しません。
           </p>
         </div>
         <Table minWidth="58rem">
@@ -276,12 +268,12 @@ export default async function AdminCustomerDetailPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {customer.quoteHistory.length === 0 ? (
+            {detail.quote_history.length === 0 ? (
               <tr>
                 <Td colSpan={7} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
               </tr>
             ) : (
-              customer.quoteHistory.map((quote) => (
+              detail.quote_history.map((quote) => (
                 <tr key={quote.id} data-testid="customer-quote-history-row">
                   <Td className="font-semibold">{quote.quote_no}</Td>
                   <Td className="whitespace-nowrap">第{quote.revision}版</Td>
@@ -290,12 +282,16 @@ export default async function AdminCustomerDetailPage({
                   <Td className="whitespace-nowrap text-xs">{formatDate(quote.issued_at)}</Td>
                   <Td right className="whitespace-nowrap">{formatYen(quote.total)}</Td>
                   <Td>
-                    <Link
-                      href={`/admin/quotes/${encodeURIComponent(quote.id)}`}
-                      className="text-xs font-semibold underline-offset-4 hover:underline"
-                    >
-                      案件を見る
-                    </Link>
+                    {quote.can_open_quote ? (
+                      <Link
+                        href={`/admin/quotes/${encodeURIComponent(quote.id)}`}
+                        className="text-xs font-semibold underline-offset-4 hover:underline"
+                      >
+                        案件を見る
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-muted">履歴のみ</span>
+                    )}
                   </Td>
                 </tr>
               ))
@@ -308,7 +304,7 @@ export default async function AdminCustomerDetailPage({
         <div>
           <h2 id="customer-sites-heading" className="text-lg font-semibold">設置予定地</h2>
           <p className="mt-1 text-xs text-muted">
-            案件受付時の設置予定地を優先し、未登録の場合だけ同じ user_id の保存済み仕様から参照します。
+            参照可能な案件について、案件受付時の設置予定地を優先し、未登録時だけ保存済み仕様から参照します。
           </p>
         </div>
         {siteCases.length > 0 ? (
@@ -317,13 +313,13 @@ export default async function AdminCustomerDetailPage({
               <div key={customerCase.id} className="card p-4" data-testid="customer-site-card">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-xs text-muted">{customerCaseLabel(customerCase)}</p>
-                    <p className="mt-1 font-semibold">{customerCase.siteAddress}</p>
+                    <p className="text-xs text-muted">{customerCase.latest_quote?.quote_no ?? '見積未発行'}</p>
+                    <p className="mt-1 font-semibold">{customerCase.site_address}</p>
                   </div>
                   <Badge tone="neutral">{siteSourceLabel(customerCase)}</Badge>
                 </div>
                 <Link
-                  href={customerCaseHref(customerCase)}
+                  href={caseHref(customerCase)}
                   className="mt-3 inline-block text-xs font-semibold underline-offset-4 hover:underline"
                 >
                   この案件を見る
@@ -332,7 +328,7 @@ export default async function AdminCustomerDetailPage({
             ))}
           </div>
         ) : (
-          <div className="card p-4 text-sm text-muted">既存データに設置予定地はありません。</div>
+          <div className="card p-4 text-sm text-muted">参照可能な案件に設置予定地はありません。</div>
         )}
       </section>
 

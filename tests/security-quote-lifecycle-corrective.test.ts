@@ -208,7 +208,7 @@ describe('Security / Quote lifecycle corrective', () => {
 
   it('Quote改訂UIはissuedだけ表示可能にする', () => {
     expect(adminQuoteWorkspace).toContain(
-      "const canRevise = quote.status === 'issued' && (canManageAllQuotes || quote.dealer_id === actor.id);"
+      "const canRevise = quote.status === 'issued' && (canViewAllQuotes || quote.dealer_id === actor.id);"
     );
   });
 

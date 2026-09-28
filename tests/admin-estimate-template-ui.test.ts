@@ -57,7 +57,7 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('store.getEstimateTemplateBundle');
     expect(listPage).toContain('未登録');
     expect(listPage).toContain('登録済み');
-    expect(listPage).toContain('シミュレーターで算出');
+    expect(listPage).not.toContain('シミュレーターで算出');
     expect(listPage).not.toContain('SAMPLE_WING_ROWS');
     expect(listPage).not.toContain('添付HTMLに合わせた画面見本');
     expect(listPage).not.toContain('/admin/estimate-templates/demo');

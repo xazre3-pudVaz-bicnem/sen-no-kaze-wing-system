@@ -565,10 +565,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       ) : (
                         <>
                           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                            <span className="text-[0.6rem] font-semibold text-[#315745]">F5/15 見積依頼</span>
-                            <Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>
-                              {QUOTE_REQUEST_STATUS_LABELS[request.status]}
-                            </Badge>
+                            <span className="text-[0.64rem] font-semibold text-[#315745]">F5/15 見積依頼</span>
                           </div>
                           <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">更新 {formatDate(updatedAt, true)}</span>
                         </>

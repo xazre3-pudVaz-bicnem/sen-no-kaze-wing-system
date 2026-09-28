@@ -230,6 +230,7 @@ describe('見積テンプレート管理UI', () => {
     expect(detailPage).toContain('initialContentTab="plan"');
     expect(detailPage).toContain('showContentTabs={false}');
     expect(detailPage).toContain('showEditLink={false}');
+    expect(detailPage).toContain('previewOnly');
     expect(detailTabs).toContain("type DetailTab = 'edit' | 'estimate' | 'plan'");
     expect(detailTabs).toContain('標準見積の表示切替');
     expect(detailTabs).toContain('編集');
@@ -240,6 +241,10 @@ describe('見積テンプレート管理UI', () => {
     expect(simulatorPreview).toContain('initialContentTab?: ContentTab');
     expect(simulatorPreview).toContain('showContentTabs?: boolean');
     expect(simulatorPreview).toContain('showEditLink?: boolean');
+    expect(simulatorPreview).toContain('previewOnly?: boolean');
+    expect(simulatorPreview).toContain('readOnly={previewOnly}');
+    expect(simulatorPreview).toContain('allowStandardEstimateCategoryPick={!previewOnly}');
+    expect(simulatorPreview).toContain('変更は「編集」タブで行います');
   });
 
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {

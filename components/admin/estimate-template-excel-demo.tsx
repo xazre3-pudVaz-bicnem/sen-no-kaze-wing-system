@@ -641,7 +641,7 @@ export function EstimateTemplateExcelDemo() {
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>売価諸費用 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
+        <div className="flex justify-between gap-4 py-1"><span>経費 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
           <input

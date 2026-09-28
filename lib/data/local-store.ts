@@ -74,6 +74,9 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type DealerRevisionItem,
+  type ManualQuoteDraftInput,
+  type QuoteDraftDetail,
+  type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
 } from './store';
 
@@ -775,6 +778,22 @@ export class LocalStore implements DataStore {
     db.quoteSequences[ym] = n;
     return `Q${ym}-${String(n).padStart(4, '0')}`;
   }
+  async createManualQuoteDraft(_actor: SessionUser, _input: ManualQuoteDraftInput) {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async getQuoteDraft(_id: string, _actor: SessionUser): Promise<QuoteDraftDetail | null> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async saveQuoteDraft(_id: string, _input: QuoteDraftSaveInput, _actor: SessionUser): Promise<number> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async finalizeQuoteDraft(_id: string, _expectedLockVersion: number, _actor: SessionUser): Promise<Quote> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
   async createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null) {
     return this.mutate((db) => {
       const cfg = db.configurations.find((c) => c.id === configurationId);

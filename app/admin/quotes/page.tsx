@@ -25,23 +25,6 @@ const SPEC_LABELS: Record<string, string> = {
   office: '事務所・店舗',
 };
 
-function quoteStatusTone(status: keyof typeof QUOTE_STATUS_LABELS) {
-  if (status === 'accepted') return 'success' as const;
-  if (status === 'issued') return 'navy' as const;
-  return 'neutral' as const;
-}
-
-function caseQuoteStatusLabel(quote: {
-  status: keyof typeof QUOTE_STATUS_LABELS;
-  parent_quote_id: string | null;
-}) {
-  const kind = isFormalQuote(quote) ? '確定見積' : '概算見積';
-  if (quote.status === 'accepted') {
-    return isFormalQuote(quote) ? '確定見積 承諾済み' : '概算見積 承諾履歴';
-  }
-  return `${kind} ${QUOTE_STATUS_LABELS[quote.status]}`;
-}
-
 function casePhaseLabel(quote: {
   status: keyof typeof QUOTE_STATUS_LABELS;
   parent_quote_id: string | null;
@@ -276,8 +259,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       </td>
                       <td className="px-2 py-1 align-middle">
                         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                          <span className="text-[0.6rem] font-semibold text-[#315745]">{casePhaseLabel(q)}</span>
-                          <Badge tone={quoteStatusTone(q.status)}>{caseQuoteStatusLabel(q)}</Badge>
+                          <span className="text-[0.64rem] font-semibold text-[#315745]">{casePhaseLabel(q)}</span>
                         </div>
                         <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">
                           {q.request_status ? `依頼：${QUOTE_REQUEST_STATUS_LABELS[q.request_status]} ／ ` : ''}更新 {formatDate(q.updated_at, true)}
@@ -574,8 +556,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       {quote ? (
                         <>
                           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                            <span className="text-[0.6rem] font-semibold text-[#315745]">{casePhaseLabel(quote)}</span>
-                            <Badge tone={quoteStatusTone(quote.status)}>{caseQuoteStatusLabel(quote)}</Badge>
+                            <span className="text-[0.64rem] font-semibold text-[#315745]">{casePhaseLabel(quote)}</span>
                           </div>
                           <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">
                             依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]} ／ 更新 {formatDate(updatedAt, true)}

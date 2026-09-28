@@ -19,6 +19,8 @@ describe('quote draft / revision foundation migration', () => {
     expect(migration).toContain('add column if not exists spec_code text');
     expect(migration).toContain('add column if not exists adjustment_reason text');
     expect(migration).toContain('add column if not exists created_by uuid');
+    expect(migration).toContain('alter column quantity type numeric(14, 4)');
+    expect(migration).toContain('using quantity::numeric(14, 4)');
     expect(migration).toContain('add column if not exists line_key uuid');
     expect(migration).toContain('add column if not exists option_id uuid');
     expect(migration).not.toMatch(/add column if not exists line_key uuid\s+not null/i);
@@ -45,6 +47,8 @@ describe('quote draft / revision foundation migration', () => {
   });
 
   it('stores Draft money and optimistic lock metadata without making UI totals authoritative', () => {
+    expect(migration).toContain('tax_rate numeric(5, 4) not null default 0.10');
+    expect(migration).not.toContain('tax_rate numeric(8, 6)');
     expect(migration).toContain('lock_version integer not null default 0');
     expect(migration).toContain('subtotal = subtotal_raw + adjustment');
     expect(migration).toContain('tax = floor(subtotal::numeric * tax_rate)::integer');

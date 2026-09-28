@@ -99,6 +99,7 @@ export default async function EstimateTemplatesPage({
 
   const sampleSelected = sp.sample === '1';
   const sampleModel = simulatorModels.find((model) => model.slug === 'wing-01') ?? null;
+  const sampleVisible = Boolean(sampleModel && groups.some((group) => group.model.id === sampleModel.id));
   const sampleSpecCode = sampleModel?.presets.some((preset) => preset.code === 'hotel') ? 'hotel' : null;
 
   const requestedModelId = sp.selected_model ?? '';
@@ -138,8 +139,12 @@ export default async function EstimateTemplatesPage({
           <h2 className="text-base font-semibold">標準見積一覧</h2>
           <div className="flex items-center gap-2 text-xs text-muted">
             <span>{totalChoices}件</span>
-            <span aria-hidden="true">・</span>
-            <span>動作確認用 1件</span>
+            {sampleVisible && (
+              <>
+                <span aria-hidden="true">・</span>
+                <span>動作確認用 1件</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -202,7 +207,7 @@ export default async function EstimateTemplatesPage({
 
         <div className="overflow-x-auto">
           <div className="min-w-[40rem]">
-            <div className={`${LIST_GRID} border-b border-line bg-sand/35 px-3 py-2 text-xs font-semibold text-ink-soft`}>
+            <div className={`${LIST_GRID} border-b border-line bg-sand/35 px-3 py-1.5 text-xs font-semibold text-ink-soft`}>
               <div>見積名</div>
               <div className="text-right">原価税込</div>
               <div className="text-right">売価税込</div>
@@ -211,49 +216,56 @@ export default async function EstimateTemplatesPage({
               <div aria-hidden="true" />
             </div>
 
-            <Link
-              href={sampleHref(modelId, qRaw)}
-              aria-current={sampleSelected ? 'true' : undefined}
-              className={`${LIST_GRID} min-h-12 border-b border-line px-3 py-2 text-sm transition ${
-                sampleSelected
-                  ? 'border-l-4 border-l-amber-500 bg-amber-50/70 pl-2'
-                  : 'bg-sand/15 hover:bg-amber-50/50'
-              }`}
-            >
-              <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
-                  <Badge tone="warn" className="shrink-0">動作確認用</Badge>
-                </div>
-                <p className="mt-0.5 text-[10px] text-muted">保存されない画面確認用データ</p>
-              </div>
-              <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
-              <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
-              <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
-              <div className="text-center"><Badge tone="neutral">サンプル</Badge></div>
-              <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
-            </Link>
-
             {groups.length > 0 ? groups.map((group, groupIndex) => {
                 const displayModelName = group.model.name === 'フラット' ? 'Flat' : group.model.name;
                 const selectedGroup = selected?.model.id === group.model.id;
+                const sampleGroup = sampleModel?.id === group.model.id;
                 return (
                   <details
                     key={group.model.id}
-                    open={Boolean(modelId) || groupIndex === 0 || selectedGroup}
+                    open={Boolean(modelId) || groupIndex === 0 || selectedGroup || (sampleSelected && sampleGroup)}
                     className="group border-b border-line"
                   >
-                    <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-2 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
+                    <summary className="list-none cursor-pointer border-l-4 border-l-forest bg-sand/15 px-3 py-1.5 [&::-webkit-details-marker]:hidden hover:bg-sand/30">
                       <div className="flex items-center gap-2 text-sm font-semibold text-forest">
                         <span className="text-xs transition-transform group-open:rotate-90">▶</span>
                         <span>{displayModelName}</span>
                         <span className="rounded-full border border-line bg-white px-2 py-0.5 text-xs text-ink-soft">
                           {group.choices.length}件
                         </span>
+                        {sampleGroup && (
+                          <span className="text-[10px] font-medium text-muted">＋確認用1件</span>
+                        )}
                       </div>
                     </summary>
 
                     <div className="divide-y divide-line">
+                      {sampleGroup && (
+                        <Link
+                          href={sampleHref(modelId, qRaw)}
+                          aria-current={sampleSelected ? 'true' : undefined}
+                          className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
+                            sampleSelected
+                              ? 'border-l-4 border-l-amber-500 bg-amber-50/90 shadow-[inset_0_0_0_1px_rgba(180,120,40,0.18)] pl-2'
+                              : 'bg-amber-50/35 hover:bg-amber-50/70'
+                          }`}
+                        >
+                          <div className="flex min-w-0 items-center gap-2 pl-4">
+                            <span className="truncate font-semibold text-ink">Wing ホテル仕様</span>
+                            <Badge tone="warn" className="shrink-0">動作確認用</Badge>
+                            {sampleSelected && (
+                              <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                選択中
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.costTaxIncluded)}</div>
+                          <div className="text-right font-semibold tabular-nums">{formatYen(SAMPLE_PRICING.saleTaxIncluded)}</div>
+                          <div className="text-right font-semibold tabular-nums">{SAMPLE_PRICING.marginRate}</div>
+                          <div className="text-center"><Badge tone="neutral">サンプル</Badge></div>
+                          <div className="text-right text-lg leading-none text-muted" aria-hidden="true">›</div>
+                        </Link>
+                      )}
                       {group.choices.map((choice) => {
                         const template = choice.template?.template ?? null;
                         const active =
@@ -264,21 +276,26 @@ export default async function EstimateTemplatesPage({
                             key={choice.code}
                             href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
                             aria-current={active ? 'true' : undefined}
-                            className={`${LIST_GRID} min-h-12 px-3 py-2 text-sm transition ${
+                            className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
                               active
-                                ? 'border-l-4 border-l-forest bg-[#f0f7f3] pl-2'
+                                ? 'border-l-4 border-l-forest bg-[#e4f1e8] shadow-[inset_0_0_0_1px_rgba(35,93,68,0.18)] pl-2'
                                 : 'bg-white hover:bg-sand/30'
                             }`}
                           >
-                            <div className="min-w-0 pl-4">
-                              <span className="font-semibold text-ink">{choice.name}</span>
+                            <div className="flex min-w-0 items-center gap-2 pl-4">
+                              <span className="truncate font-semibold text-ink">{choice.name}</span>
+                              {active && (
+                                <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                  選択中
+                                </span>
+                              )}
                             </div>
                             <div className="text-right text-muted">—</div>
                             <div className="text-right font-semibold">
                               {template ? (
                                 <span className="tabular-nums">{formatYen(template.total)}</span>
                               ) : (
-                                <span className="text-xs font-normal leading-tight text-muted">シミュレーターで算出</span>
+                                <span className="font-normal text-muted">—</span>
                               )}
                             </div>
                             <div className="text-right text-muted">—</div>
@@ -299,7 +316,7 @@ export default async function EstimateTemplatesPage({
               }) : (
                 <div className="col-span-6 px-6 py-8 text-center">
                   <p className="text-sm font-semibold">条件に一致する正式な標準見積がありません</p>
-                  <p className="mt-1 text-xs text-muted">上の動作確認サンプルは引き続き確認できます。</p>
+                  <p className="mt-1 text-xs text-muted">商品モデルや検索条件を変更して確認してください。</p>
                 </div>
               )}
           </div>

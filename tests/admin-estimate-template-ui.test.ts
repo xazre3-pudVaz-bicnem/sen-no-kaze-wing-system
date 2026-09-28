@@ -85,9 +85,9 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('<SavedEstimateMenu');
     expect(listPage).toContain('aria-current={active ? \'page\' : undefined}');
     expect(listPage).toContain('複製');
-    expect(listPage).toContain('標準に設定');
+    expect(listPage).toContain('この見積書を標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');
-    expect(listPage).toContain('標準指定の正式接続後に利用できます');
+    expect(listPage).toContain('正式見積書の標準指定接続後に利用できます');
   });
 
   it('編集・見積書・プランボードを同じ見積書ワークスペースで切り替える', () => {

@@ -65,7 +65,7 @@ create or replace function public.guard_quote_lineage_transition()
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $quote_guard$
 begin
   if current_user <> 'postgres' then
     if tg_op = 'INSERT'
@@ -87,7 +87,7 @@ begin
   end if;
   return new;
 end;
-$;
+$quote_guard$;
 
 -- quote_items remains the immutable issued-Revision snapshot.
 -- line_key is nullable in this foundation migration so existing rows do not
@@ -169,7 +169,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $base_ref_guard$
 begin
   if new.base_master_revision_id is not null
      and not exists (
@@ -186,7 +186,7 @@ begin
 
   return new;
 end;
-$;
+$base_ref_guard$;
 
 drop trigger if exists quotes_base_revision_ref on public.quotes;
 create trigger quotes_base_revision_ref
@@ -208,7 +208,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $parent_ref_guard$
 begin
   if new.parent_quote_id is not null
      and not exists (
@@ -223,7 +223,7 @@ begin
 
   return new;
 end;
-$;
+$parent_ref_guard$;
 
 drop trigger if exists quote_drafts_parent_ref on public.quote_drafts;
 create trigger quote_drafts_parent_ref

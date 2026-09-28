@@ -509,6 +509,7 @@ export interface QuoteRequest {
 }
 
 export type QuoteStatus = 'issued' | 'expired' | 'accepted' | 'declined' | 'cancelled' | 'superseded';
+export type QuoteKind = 'preliminary' | 'formal';
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   issued: '発行済み',
   expired: '期限切れ',
@@ -525,6 +526,14 @@ export interface Quote {
   configuration_id: string;
   user_id: string;
   status: QuoteStatus;
+  /** 新Revision基盤への移行中は旧見積でnull/未取得を許容する */
+  quote_kind?: QuoteKind | null;
+  /** 発行時点の商品モデル参照。旧見積はnull/未取得を許容する */
+  base_model_id?: string | null;
+  /** 発行時点でpinした本体Master Revision。旧Web見積はnull/未取得を許容する */
+  base_master_revision_id?: string | null;
+  /** 発行時点の用途仕様。旧見積はnull/未取得を許容する */
+  spec_code?: string | null;
   issued_at: string;
   valid_until: string;
   customer_no: string | null;
@@ -539,6 +548,8 @@ export interface Quote {
   option_expense: number;
   installation_subtotal: number;
   adjustment: number;
+  /** 調整額の理由。旧見積では未保存の場合がある */
+  adjustment_reason?: string | null;
   subtotal: number;
   tax_rate: number;
   tax: number;
@@ -553,6 +564,8 @@ export interface Quote {
   parent_quote_id: string | null;
   preview_image_url: string | null;
   notes: string | null;
+  /** 見積Revisionを作成したスタッフ。既存見積はnull/未取得を許容する */
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -572,7 +585,11 @@ export type QuoteItemKind =
 export interface QuoteItem {
   id: string;
   quote_id: string;
+  /** Revision間で同一明細を追跡するidentity。既存行は移行までnull */
+  line_key?: string | null;
   kind: QuoteItemKind;
+  /** 元の商品マスター。自由明細・既存Snapshotはnull */
+  option_id?: string | null;
   name: string;
   description: string | null;
   /** 単位（式・台・㎡ など） */
@@ -585,6 +602,49 @@ export interface QuoteItem {
   /** 選択した商品の画像（見積書に表示） */
   image_url: string | null;
   sort_order: number;
+}
+
+export interface QuoteDraft {
+  id: string;
+  quote_request_id: string;
+  parent_quote_id: string | null;
+  base_model_id: string;
+  base_master_revision_id: string | null;
+  spec_code: string;
+  quote_kind: QuoteKind;
+  tax_rate: number;
+  adjustment: number;
+  adjustment_reason: string | null;
+  subtotal_raw: number;
+  subtotal: number;
+  tax: number;
+  total: number;
+  lock_version: number;
+  dealer_note: string | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteDraftItem {
+  id: string;
+  draft_id: string;
+  line_key: string;
+  kind: QuoteItemKind;
+  option_id: string | null;
+  name: string;
+  description: string | null;
+  unit: string | null;
+  remark: string | null;
+  unit_price: number;
+  quantity: number;
+  amount: number;
+  image_url: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ContactStatus = 'new' | 'handled';

@@ -11,6 +11,12 @@ const optional = (max: number) =>
     .max(max)
     .transform((v) => (v === '' ? null : v));
 
+const exteriorFaceSchema = z.object({
+  face_code: z.enum(['front', 'right', 'back', 'left']),
+  option_id: z.uuid(),
+  variant_choice_ids: z.array(z.uuid()).max(30).default([]),
+});
+
 export const passwordSchema = z
   .string()
   .min(8, 'パスワードは8文字以上で入力してください')
@@ -75,6 +81,7 @@ export const saveConfigurationSchema = z.object({
     .preprocess((v) => (v === '' || v == null ? null : v), z.string().trim().max(80).nullable())
     .default(null),
   site_location_undecided: z.boolean().default(false),
+  exterior_faces: z.array(exteriorFaceSchema).max(4).default([]),
 });
 
 export const quoteRequestSchema = z.object({

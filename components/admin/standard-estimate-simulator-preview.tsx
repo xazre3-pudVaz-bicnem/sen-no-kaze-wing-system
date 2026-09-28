@@ -29,21 +29,34 @@ import { PreviewStage } from '@/components/simulator/preview-stage';
 import { QuoteSheet } from '@/components/simulator/quote-sheet';
 import { OptionPickerDialog } from '@/components/simulator/option-picker-dialog';
 
+type ContentTab = 'estimate' | 'plan';
+
 interface Props {
   bundle: CatalogBundle;
   specCode: string;
   template: EstimateTemplateBundle | null;
   sampleMode?: boolean;
+  initialContentTab?: ContentTab;
+  showContentTabs?: boolean;
+  showEditLink?: boolean;
 }
 
 export function StandardEstimateSimulatorPreview(props: Props) {
-  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}:${props.sampleMode ? 'sample' : 'normal'}`;
+  const previewKey = `${props.bundle.model.id}:${props.specCode}:${props.template?.template.id ?? 'unregistered'}:${props.sampleMode ? 'sample' : 'normal'}:${props.initialContentTab ?? 'estimate'}`;
   return <StandardEstimateSimulatorPreviewBody key={previewKey} {...props} />;
 }
 
-function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, sampleMode = false }: Props) {
+function StandardEstimateSimulatorPreviewBody({
+  bundle,
+  specCode,
+  template,
+  sampleMode = false,
+  initialContentTab = 'estimate',
+  showContentTabs = true,
+  showEditLink = true,
+}: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
-  const [contentTab, setContentTab] = useState<'estimate' | 'plan'>('estimate');
+  const [contentTab, setContentTab] = useState<ContentTab>(initialContentTab);
   const [picker, setPicker] = useState<string | null>(null);
   const { model } = bundle;
   const ctx = useMemo<RuleContext>(
@@ -289,7 +302,7 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
                   試算をリセット
                 </button>
               )}
-              {template && (
+              {template && showEditLink && (
                 <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
                   標準見積を編集
                 </Link>
@@ -297,34 +310,37 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
             </div>
           </div>
 
-          <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="標準見積の確認内容">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contentTab === 'estimate'}
-              onClick={() => setContentTab('estimate')}
-              className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
-                contentTab === 'estimate'
-                  ? 'border-line border-b-white bg-white text-forest'
-                  : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
-              }`}
-            >
-              見積書
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contentTab === 'plan'}
-              onClick={() => setContentTab('plan')}
-              className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
-                contentTab === 'plan'
-                  ? 'border-line border-b-white bg-white text-forest'
-                  : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
-              }`}
-            >
-              プランボード
-            </button>
-          </div>
+          {showContentTabs && (
+            <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="標準見積の確認内容">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={contentTab === 'estimate'}
+                onClick={() => setContentTab('estimate')}
+                className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
+                  contentTab === 'estimate'
+                    ? 'border-line border-b-white bg-white text-forest'
+                    : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
+                }`}
+              >
+                見積書
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={contentTab === 'plan'}
+                onClick={() => setContentTab('plan')}
+                className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
+                  contentTab === 'plan'
+                    ? 'border-line border-b-white bg-white text-forest'
+                    : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
+                }`}
+              >
+                プランボード
+              </button>
+            </div>
+  
+          )}
 
           {contentTab === 'estimate' && (
           <div className="px-4 py-4 sm:px-5">

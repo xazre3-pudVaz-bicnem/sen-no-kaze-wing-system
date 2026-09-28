@@ -1313,7 +1313,7 @@ export class LocalStore implements DataStore {
           const request = db.quoteRequests.find((r) => r.id === q.quote_request_id);
           return {
             ...q,
-            user_email: email.get(q.user_id) ?? '',
+            user_email: q.user_id ? email.get(q.user_id) ?? '' : '',
             request_status: request?.status ?? null,
             site_address: request?.contact.site_address ?? null,
           };

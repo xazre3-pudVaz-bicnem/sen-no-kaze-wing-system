@@ -410,11 +410,12 @@ export function QuoteDraftEditor({
               Revision 1をformalとして作成します。parent_quote_idはNULLで、発行後のsnapshot属性・金額はDB側で保護されます。
             </p>
           </div>
-          <SubmitButton
-            pending={finalizePending}
-            label="正式保存（Revision 1）"
-            disabled={dirty || rows.length === 0 || !baseRevisionId}
-          />
+          <Button
+            type="submit"
+            disabled={finalizePending || dirty || rows.length === 0 || !baseRevisionId}
+          >
+            {finalizePending ? '正式保存中…' : '正式保存（Revision 1）'}
+          </Button>
         </div>
       </form>
     </div>

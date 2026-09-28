@@ -6,6 +6,7 @@ import {
   NewEstimateTemplateForm,
   type EstimateBaseMasterChoice,
 } from '@/components/admin/new-estimate-template-form';
+import { estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { BASE_BREAKDOWN_ITEMS, BASE_BREAKDOWN_TOTALS } from '@/lib/seed/base-breakdown';
 
 async function loadPublishedBaseMasters(): Promise<{
@@ -97,8 +98,13 @@ async function loadPublishedBaseMasters(): Promise<{
   };
 }
 
-export default async function NewEstimateTemplatePage() {
+export default async function NewEstimateTemplatePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const actor = await requireCatalogEditor('/admin/estimate-templates/new');
+  const sp = await searchParams;
   const store = await getStore();
   const [models, options, categories, baseMasterResult] = await Promise.all([
     store.listModels({ includeDraft: true }),
@@ -107,6 +113,22 @@ export default async function NewEstimateTemplatePage() {
     loadPublishedBaseMasters(),
   ]);
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+
+  const requestedModel = models.find((model) => model.id === sp.model) ?? null;
+  const requestedSpec =
+    requestedModel
+      ? estimateTemplatesFor(requestedModel).find((item) => item.code === sp.spec) ?? null
+      : null;
+  const requestedFire =
+    sp.fire === 'fire' || sp.fire === 'non_fire' ? sp.fire : null;
+  const initialTarget =
+    requestedModel && requestedSpec && requestedFire
+      ? {
+          modelId: requestedModel.id,
+          specCode: requestedSpec.code,
+          fireSpec: requestedFire,
+        }
+      : null;
 
   const sampleWing = models.find((model) => model.slug === 'wing-01') ?? null;
   const sampleTotals = BASE_BREAKDOWN_TOTALS['wing-01:hotel'] ?? null;
@@ -151,11 +173,12 @@ export default async function NewEstimateTemplatePage() {
         models={models.map((model) => ({
           id: model.id,
           name: model.name,
-          specs: model.presets.map((preset) => ({ code: preset.code, name: preset.name })),
+          specs: estimateTemplatesFor(model).map((item) => ({ code: item.code, name: item.name })),
         }))}
         baseMasters={baseMasterResult.items}
         baseMasterSourceReady={baseMasterResult.sourceReady}
         sampleBaseMaster={sampleBaseMaster}
+        initialTarget={initialTarget}
         products={options
           .filter((option) => option.status === 'published')
           .map((option) => ({

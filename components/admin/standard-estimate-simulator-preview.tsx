@@ -43,6 +43,7 @@ export function StandardEstimateSimulatorPreview(props: Props) {
 
 function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, sampleMode = false }: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
+  const [contentTab, setContentTab] = useState<'estimate' | 'plan'>('estimate');
   const [picker, setPicker] = useState<string | null>(null);
   const { model } = bundle;
   const ctx = useMemo<RuleContext>(
@@ -296,6 +297,36 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
             </div>
           </div>
 
+          <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="標準見積の確認内容">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={contentTab === 'estimate'}
+              onClick={() => setContentTab('estimate')}
+              className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
+                contentTab === 'estimate'
+                  ? 'border-line border-b-white bg-white text-forest'
+                  : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
+              }`}
+            >
+              見積書
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={contentTab === 'plan'}
+              onClick={() => setContentTab('plan')}
+              className={`rounded-t-md border px-4 py-2 text-sm font-semibold transition ${
+                contentTab === 'plan'
+                  ? 'border-line border-b-white bg-white text-forest'
+                  : 'border-transparent bg-sand/30 text-muted hover:bg-sand/50 hover:text-ink'
+              }`}
+            >
+              プランボード
+            </button>
+          </div>
+
+          {contentTab === 'estimate' && (
           <div className="px-4 py-4 sm:px-5">
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
               <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
@@ -316,8 +347,10 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
               onPickCategory={openPicker}
             />
           </div>
+          )}
         </section>
 
+        {contentTab === 'plan' && (
         <section className="card mx-auto w-full max-w-5xl overflow-hidden">
           <div className="border-b border-line bg-sand/20 px-4 py-3 sm:px-5">
             <h2 className="text-base font-semibold">プランボード確認</h2>
@@ -376,6 +409,7 @@ function StandardEstimateSimulatorPreviewBody({ bundle, specCode, template, samp
             </div>
           </div>
         </section>
+        )}
       </div>
 
       {picker && (() => {

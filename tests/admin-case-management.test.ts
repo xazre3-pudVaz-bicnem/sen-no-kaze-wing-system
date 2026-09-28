@@ -47,7 +47,7 @@ describe('Admin case management UI', () => {
 
   it('restores dealer request metadata through the list query without per-quote detail loading', () => {
     expect(list).toContain("quote.request_status === 'new'");
-    expect(list).toContain('QUOTE_REQUEST_STATUS_LABELS[q.request_status]');
+    expect(list).not.toContain('QUOTE_REQUEST_STATUS_LABELS[q.request_status]');
     expect(list).toContain("q.site_address || '未登録'");
     expect(list).not.toContain('q.address');
     expect(list).not.toContain('latest.map((q) => store.getQuote(q.id, actor))');

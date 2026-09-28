@@ -81,6 +81,25 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
+    const onRequest = rows.filter((row) => row.priceOnRequest).length;
+
+    if (sample && !dirty) {
+      const subtotal = sample.sourceSubtotal + sample.adjustment;
+      const saleGrand = sample.sourceTotal;
+      const profit = saleGrand - cost;
+      return {
+        cost,
+        saleLines: sample.sourceSubtotal,
+        saleExpense: 0,
+        subtotal,
+        tax: sample.tax,
+        saleGrand,
+        profit,
+        margin: saleGrand > 0 ? profit / saleGrand * 100 : 0,
+        onRequest,
+      };
+    }
+
     const saleLines = rows.reduce((sum, row) => sum + rowSale(row), 0);
     const expenseBase = rows
       .filter((row) => row.section !== '別途')
@@ -99,9 +118,9 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
       saleGrand,
       profit,
       margin: saleGrand > 0 ? profit / saleGrand * 100 : 0,
-      onRequest: rows.filter((row) => row.priceOnRequest).length,
+      onRequest,
     };
-  }, [rows, expenseRate, adjustment]);
+  }, [rows, expenseRate, adjustment, sample, dirty]);
 
   const sectionTotals = useMemo(() => {
     const map = new Map<Section, { cost: number; sale: number; profit: number; onRequest: number }>();

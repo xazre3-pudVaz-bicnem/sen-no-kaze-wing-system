@@ -191,6 +191,7 @@ export default async function EstimateTemplateDetailPage({
             initialContentTab="estimate"
             showContentTabs={false}
             showEditLink={false}
+            previewOnly
           />
         }
         planContent={
@@ -201,6 +202,7 @@ export default async function EstimateTemplateDetailPage({
             initialContentTab="plan"
             showContentTabs={false}
             showEditLink={false}
+            previewOnly
           />
         }
       />

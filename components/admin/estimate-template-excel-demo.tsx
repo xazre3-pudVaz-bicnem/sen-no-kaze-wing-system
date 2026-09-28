@@ -326,7 +326,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             </div>
             <p className="mt-1 text-xs text-slate-500">
               {sample
-                ? `Excel「${sample.sourceSheet}」を画面確認用に反映しています。主要明細を残し、残りは「その他明細（Excel原本…行を集約）」としてまとめています。DBには保存されません。`
+                ? `Excel「${sample.sourceSheet}」の金額が入っている明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外しています。DBには保存されません。`
                 : '本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。'}
             </p>
           </div>

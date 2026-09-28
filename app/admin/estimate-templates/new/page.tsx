@@ -5,6 +5,7 @@ import { AdminPage, BackLink } from '@/components/admin/ui';
 import {
   NewEstimateTemplateForm,
   type EstimateBaseMasterChoice,
+  type InitialEstimateTarget,
 } from '@/components/admin/new-estimate-template-form';
 import { estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { BASE_BREAKDOWN_ITEMS, BASE_BREAKDOWN_TOTALS } from '@/lib/seed/base-breakdown';
@@ -121,7 +122,7 @@ export default async function NewEstimateTemplatePage({
       : null;
   const requestedFire =
     sp.fire === 'fire' || sp.fire === 'non_fire' ? sp.fire : null;
-  const initialTarget =
+  const initialTarget: InitialEstimateTarget | null =
     requestedModel && requestedSpec && requestedFire
       ? {
           modelId: requestedModel.id,

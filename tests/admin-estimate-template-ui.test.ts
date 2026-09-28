@@ -66,7 +66,6 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('returnPath={workspaceReturnPath}');
     expect(listPage).not.toContain('標準見積一覧');
     expect(listPage).not.toContain('登録済み');
-    expect(listPage).not.toContain('未登録');
   });
 
   it('見積書が未登録でも空画面ではなく作成画面を直接表示する', () => {

@@ -11,7 +11,7 @@ const migration = fs.readFileSync(
 );
 
 describe('quote draft / revision foundation migration', () => {
-  it('adds only nullable forward-compatible metadata to issued quotes/items', () => {
+  it('adds forward-compatible metadata and safely widens issued item quantity precision', () => {
     expect(migration).toContain('alter table public.quotes');
     expect(migration).toContain('add column if not exists quote_kind text');
     expect(migration).toContain('add column if not exists base_model_id uuid');

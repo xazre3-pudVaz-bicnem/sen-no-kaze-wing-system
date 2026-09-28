@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   finalizeQuoteDraftAction,
@@ -78,6 +78,8 @@ export function QuoteDraftEditor({
   const [dealerNote, setDealerNote] = useState(detail.draft.dealer_note ?? '');
   const [notes, setNotes] = useState(detail.draft.notes ?? '');
 
+  const isRevisionDraft = detail.draft.parent_quote_id !== null;
+  const formalRevisionLabel = isRevisionDraft ? '次のRevision' : 'Revision 1';
   const lockVersion = saveState.savedVersion ?? detail.draft.lock_version;
   const [editGeneration, setEditGeneration] = useState(0);
   const [savedGeneration, setSavedGeneration] = useState(0);
@@ -91,15 +93,17 @@ export function QuoteDraftEditor({
     }
   }, [saveState.savedVersion, editGeneration]);
 
-  const totals = useMemo(() => {
-    const subtotalRaw = rows.reduce(
-      (sum, row) => sum + roundLikePostgres(row.unit_price * row.quantity),
-      0
-    );
-    const subtotal = Math.max(0, subtotalRaw + adjustment);
-    const tax = Math.floor(subtotal * detail.draft.tax_rate);
-    return { subtotalRaw, subtotal, tax, total: subtotal + tax };
-  }, [rows, adjustment, detail.draft.tax_rate]);
+  const amountForRow = (row: EditorRow) => {
+    const source = detail.items.find((item) => item.line_key === row.line_key);
+    if (source && source.unit_price === row.unit_price && source.quantity === row.quantity) {
+      return source.amount;
+    }
+    return roundLikePostgres(row.unit_price * row.quantity);
+  };
+  const subtotalRaw = rows.reduce((sum, row) => sum + amountForRow(row), 0);
+  const subtotal = Math.max(0, subtotalRaw + adjustment);
+  const tax = Math.floor(subtotal * detail.draft.tax_rate);
+  const totals = { subtotalRaw, subtotal, tax, total: subtotal + tax };
 
   const markDirty = () => setEditGeneration((current) => current + 1);
 
@@ -139,7 +143,7 @@ export function QuoteDraftEditor({
             <p className="text-xs font-semibold text-muted">非Web案件・編集中Draft</p>
             <h1 className="mt-1 text-xl font-semibold">{customer.full_name} 様</h1>
             <p className="mt-1 text-sm text-muted">
-              {modelName} ／ {detail.draft.spec_code} ／ Revision未発行
+              {modelName} ／ {detail.draft.spec_code} ／ {isRevisionDraft ? '既存Revisionから編集中' : 'Revision未発行'}
             </p>
           </div>
           <div className="rounded-lg bg-[#eef4f1] px-3 py-2 text-xs font-semibold text-[#315745]">
@@ -185,7 +189,7 @@ export function QuoteDraftEditor({
             <div>
               <h2 className="font-semibold">見積Draft</h2>
               <p className="mt-1 text-xs text-muted">
-                保存してもRevision番号は増えません。正式保存した時だけRevision 1を作成します。
+                保存してもRevision番号は増えません。正式保存した時だけ{formalRevisionLabel}を作成します。
               </p>
             </div>
             <div className="min-w-[18rem]">
@@ -228,7 +232,7 @@ export function QuoteDraftEditor({
               </thead>
               <tbody>
                 {rows.map((row, index) => {
-                  const amount = roundLikePostgres(row.unit_price * row.quantity);
+                  const amount = amountForRow(row);
                   return (
                     <tr key={row.key} className="border-b border-slate-200">
                       <td className="border-r border-slate-200 px-2 py-1 text-center text-muted">{index + 1}</td>
@@ -410,7 +414,7 @@ export function QuoteDraftEditor({
             window.alert('未保存の変更があります。先にDraftを保存してください。');
             return;
           }
-          if (!window.confirm('この内容を正式なRevision 1として保存しますか？保存後、このDraftは編集できません。')) {
+          if (!window.confirm(`この内容を正式な${formalRevisionLabel}として保存しますか？保存後、このDraftは編集できません。`)) {
             event.preventDefault();
           }
         }}
@@ -423,14 +427,16 @@ export function QuoteDraftEditor({
           <div>
             <h2 className="font-semibold">正式保存</h2>
             <p className="mt-1 text-xs text-muted">
-              Revision 1をformalとして作成します。parent_quote_idはNULLで、発行後のsnapshot属性・金額はDB側で保護されます。
+              {isRevisionDraft
+                ? '親Revisionをsupersededにし、次のformal Revisionへcurrent pointerを原子的に切り替えます。'
+                : 'Revision 1をformalとして作成します。parent_quote_idはNULLで、発行後のsnapshot属性・金額はDB側で保護されます。'}
             </p>
           </div>
           <Button
             type="submit"
             disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
           >
-            {finalizePending ? '正式保存中…' : '正式保存（Revision 1）'}
+            {finalizePending ? '正式保存中…' : `正式保存（${formalRevisionLabel}）`}
           </Button>
         </div>
       </form>

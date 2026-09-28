@@ -223,7 +223,7 @@ begin
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
 
-  if not (v_rank >= 3 or d.created_by = v_uid) then
+  if v_rank < 3 and d.created_by is distinct from v_uid then
     raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
   end if;
 
@@ -340,10 +340,10 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if not (v_rank >= 3 or d.created_by = v_uid) then
+  if v_rank < 3 and d.created_by is distinct from v_uid then
     raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
   end if;
-  if d.lock_version <> p_expected_lock_version then
+  if d.lock_version is distinct from p_expected_lock_version then
     raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください' using errcode = 'P0001';
   end if;
   if d.parent_quote_id is not null then
@@ -526,6 +526,39 @@ end;
 $save_draft$;
 
 -- -------------------------------------------------------------
+-- Temporary lifecycle guard until PR #3 owns Revision 2+.
+-- The legacy create_quote_revision() path does not carry the new non-Web
+-- snapshot metadata / line identity, so Configuration-less series cannot
+-- create a child Quote through that legacy path.
+-- -------------------------------------------------------------
+create or replace function public.guard_non_web_revision_path()
+returns trigger
+language plpgsql
+set search_path = ''
+as $non_web_revision_guard$
+begin
+  if new.parent_quote_id is not null
+     and exists (
+       select 1
+         from public.quotes parent
+        where parent.id = new.parent_quote_id
+          and parent.configuration_id is null
+     )
+  then
+    raise exception 'LOCKED: 非Web案件の改訂は次工程のRevision lifecycleから行ってください'
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$non_web_revision_guard$;
+
+drop trigger if exists trg_quotes_non_web_revision_path on public.quotes;
+create trigger trg_quotes_non_web_revision_path
+before insert on public.quotes
+for each row execute function public.guard_non_web_revision_path();
+
+-- -------------------------------------------------------------
 -- Finalize an initial Non-Web Draft as immutable formal Revision 1.
 -- No email/PDF delivery happens here.
 -- -------------------------------------------------------------
@@ -579,10 +612,10 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if not (v_rank >= 3 or d.created_by = v_uid) then
+  if v_rank < 3 and d.created_by is distinct from v_uid then
     raise exception 'FORBIDDEN: このDraftを正式保存できません' using errcode = '42501';
   end if;
-  if d.lock_version <> p_expected_lock_version then
+  if d.lock_version is distinct from p_expected_lock_version then
     raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください' using errcode = 'P0001';
   end if;
   if d.parent_quote_id is not null then
@@ -813,6 +846,80 @@ begin
   return v_quote_id;
 end;
 $finalize_draft$;
+
+-- -------------------------------------------------------------
+-- Nullable customer identity compatibility.
+-- Non-Web Quotes intentionally have user_id = NULL.  Customer response must
+-- therefore fail closed before any current-pointer lookup.
+-- -------------------------------------------------------------
+create or replace function public.respond_to_quote(p_quote_id uuid, p_status text)
+returns public.quotes
+language plpgsql
+security definer
+set search_path = ''
+as $respond_to_quote$
+declare
+  q public.quotes;
+  v_current_quote_id uuid;
+begin
+  if p_status not in ('accepted', 'declined') then
+    raise exception 'VALIDATION: 回答が不正です' using errcode = 'P0001';
+  end if;
+
+  select * into q
+    from public.quotes
+   where id = p_quote_id
+   for update;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+  if q.user_id is null or q.user_id <> auth.uid() then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+  if q.status <> 'issued' then
+    raise exception 'LOCKED: この見積にはすでに回答済みです（または改訂されています）' using errcode = 'P0001';
+  end if;
+
+  select quote_id into v_current_quote_id
+    from public.quote_requests
+   where id = q.quote_request_id
+     and user_id = q.user_id
+   for update;
+
+  if not found or v_current_quote_id is distinct from q.id then
+    raise exception 'LOCKED: この見積は最新の版ではありません' using errcode = 'P0001';
+  end if;
+
+  if p_status = 'accepted' and (
+    q.parent_quote_id is null or not exists (
+      select 1
+        from public.quotes parent
+       where parent.id = q.parent_quote_id
+         and parent.quote_request_id = q.quote_request_id
+         and parent.user_id = q.user_id
+    )
+  ) then
+    raise exception 'LOCKED: 現地条件と施工金額を反映した確定見積の発行後に承諾できます' using errcode = 'P0001';
+  end if;
+
+  update public.quotes
+     set status = p_status
+   where id = p_quote_id
+  returning * into q;
+
+  update public.configurations
+     set status = 'closed'
+   where id = q.configuration_id;
+
+  return q;
+end;
+$respond_to_quote$;
+
+alter function public.respond_to_quote(uuid, text) owner to postgres;
+revoke execute on function public.respond_to_quote(uuid, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.respond_to_quote(uuid, text) to authenticated;
 
 -- Explicit ownership / EXECUTE boundary.
 alter function public.create_manual_quote_case(jsonb, text, uuid, text, text) owner to postgres;

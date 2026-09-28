@@ -141,7 +141,7 @@ export function EstimateTemplateExcelDemo() {
   };
 
   const resetToSaved = () => {
-    if (dirty && !window.confirm('未保存の変更を破棄して、画面内の保存時点へ戻しますか？')) return;
+    if (dirty && !window.confirm('一時保持していない変更を破棄して、直前の一時保持時点へ戻しますか？')) return;
     setRows(cloneRows(savedRows));
     setMarkupRate(savedMarkupRate);
     setExpenseRate(savedExpenseRate);
@@ -298,7 +298,7 @@ export function EstimateTemplateExcelDemo() {
           ))}
         </div>
         <div className="bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          同じ見積書の内容を、編集・見積書・プランボード・図面で確認します。現在はDB非連動の操作確認版です。
+          編集した内容は、見積書・プランボード・図面の確認にも同じ内容で反映されます。
         </div>
       </section>
 
@@ -308,21 +308,21 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">見積書作成 ― Excel操作確認版</h2>
+              <h2 className="font-semibold">見積書作成</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
                 : 'rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800'}
               >
-                {dirty ? '未保存の変更あり' : '保存時点と同じ'}
+                {dirty ? '変更あり' : '一時保持済み'}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              本体明細も含めて、この見積書の内容をExcelのように変更できます。変更は画面内だけで、DBには保存しません。
+              本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetToSaved}>保存時点に戻す</Button>
-            <Button type="button" size="sm" onClick={saveLocal}>画面内でDraft保存</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={resetToSaved}>一時保持時点に戻す</Button>
+            <Button type="button" size="sm" onClick={saveLocal}>編集内容を一時保持</Button>
           </div>
         </div>
 
@@ -384,21 +384,21 @@ export function EstimateTemplateExcelDemo() {
         </div>
 
         <div className="max-h-[68vh] overflow-auto">
-          <table className="min-w-[88rem] border-collapse text-sm">
+          <table className="min-w-[76rem] border-collapse text-sm">
             <thead>
               <tr>
                 <th className="sticky top-0 z-10 w-12 border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">#</th>
                 <th className="sticky top-0 z-10 w-10 border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
-                <th className="sticky top-0 z-10 min-w-[20rem] border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">品名</th>
-                <th className="sticky top-0 z-10 w-20 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">数量</th>
+                <th className="sticky top-0 z-10 min-w-[16rem] border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">品名</th>
+                <th className="sticky top-0 z-10 w-16 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">数量</th>
                 <th className="sticky top-0 z-10 w-20 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">単位</th>
-                <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価</th>
+                <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価金額</th>
-                <th className="sticky top-0 z-10 w-32 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価</th>
+                <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価金額</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">粗利</th>
-                <th className="sticky top-0 z-10 min-w-48 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
-                <th className="sticky top-0 z-10 w-24 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
+                <th className="sticky top-0 z-10 min-w-40 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
+                <th className="sticky top-0 z-10 w-20 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -626,12 +626,12 @@ export function EstimateTemplateExcelDemo() {
       <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold">Draftの操作</h2>
-            <p className="mt-1 text-xs text-slate-500">UI確認版のため、正式保存・Revision発行・破棄は実行しません。</p>
+            <h2 className="font-semibold">正式保存</h2>
+            <p className="mt-1 text-xs text-slate-500">正式保存・Revision発行・下書きの破棄は、DB接続後に利用できます。</p>
           </div>
           <div className="flex gap-2">
             <Button type="button" disabled>正式保存（接続後）</Button>
-            <Button type="button" variant="ghost" disabled>Draftを破棄</Button>
+            <Button type="button" variant="ghost" disabled>下書きを破棄（接続後）</Button>
           </div>
         </div>
       </section>

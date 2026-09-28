@@ -18,11 +18,42 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) { retu
 function date(value: string) { const d = new Date(value); return Number.isNaN(d.valueOf()) ? dash : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`; }
 
 export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, initiallySelectedId }: Props) {
-  const [query, setQuery] = useState(''); const [searchOpen, setSearchOpen] = useState(false); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(50); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer'); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
+  const [query, setQuery] = useState(''); const [searchOpen, setSearchOpen] = useState(false); const [groupCode, setGroupCode] = useState(''); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(50); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer'); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
   const dialogRef = useRef<HTMLElement | null>(null); const openerRef = useRef<HTMLElement | null>(null);
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
-  const filtered = useMemo(() => options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId, status, quick })).sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [categoryId, options, query, quick, status]);
+  const categoryGroups = useMemo(() => {
+    const groups = new Map<string, { code: string; name: string; sort: number; categories: OptionCategory[] }>();
+    for (const category of categories) {
+      const existing = groups.get(category.group_code);
+      if (existing) {
+        existing.categories.push(category);
+        existing.sort = Math.min(existing.sort, category.group_sort);
+      } else {
+        groups.set(category.group_code, {
+          code: category.group_code,
+          name: category.group_name,
+          sort: category.group_sort,
+          categories: [category],
+        });
+      }
+    }
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        categories: [...group.categories].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ja-JP')),
+      }))
+      .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'ja-JP'));
+  }, [categories]);
+  const selectedGroup = useMemo(() => categoryGroups.find((group) => group.code === groupCode) ?? null, [categoryGroups, groupCode]);
+  const selectedGroupCategoryIds = useMemo(() => new Set(selectedGroup?.categories.map((category) => category.id) ?? []), [selectedGroup]);
+  const filtered = useMemo(
+    () =>
+      options
+        .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick }))
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    [categoryId, groupCode, options, query, quick, selectedGroupCategoryIds, status]
+  );
   /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
   useEffect(() => setSelectedId((id) => selectedOptionAfterFilter(id, filtered.map((o) => o.id))), [filtered]);
   const selected = filtered.find((o) => o.id === selectedId); const category = selected && categoryMap.get(selected.category_id); const variants = selected ? variantsByOptionId[selected.id] ?? EMPTY_VARIANTS : EMPTY_VARIANTS;
@@ -83,6 +114,13 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     return counts;
   }, [options, query, quick, status]);
   const categoryTotal = Array.from(categoryCounts.values()).reduce((sum, count) => sum + count, 0);
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const group of categoryGroups) {
+      counts.set(group.code, group.categories.reduce((sum, category) => sum + (categoryCounts.get(category.id) ?? 0), 0));
+    }
+    return counts;
+  }, [categoryCounts, categoryGroups]);
   const publishedCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
   const draftCount = options.length - publishedCount;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -143,16 +181,32 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
             </div>
           </div>
 
-          <nav className="px-3 py-2 sm:px-4" aria-label="商品カテゴリー">
-            <div className="flex flex-wrap items-center gap-1">
-              <button type="button" onClick={() => { setCategoryId(''); setPage(1); }} className={'rounded-full px-2.5 py-1.5 text-xs whitespace-nowrap sm:text-sm ' + (categoryId === '' ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
-                すべて <span className="ml-1 text-[0.68rem] opacity-75">{categoryTotal}</span>
-              </button>
-              {categories.map((item) => <button key={item.id} type="button" onClick={() => { setCategoryId(item.id); setPage(1); }} className={'rounded-full px-2.5 py-1.5 text-xs whitespace-nowrap sm:text-sm ' + (categoryId === item.id ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
-                {item.name} <span className="ml-1 text-[0.68rem] opacity-75">{categoryCounts.get(item.id) ?? 0}</span>
-              </button>)}
-            </div>
-          </nav>
+          <div data-testid="ledger-category-groups">
+            <nav className="px-3 py-2 sm:px-4" aria-label="商品分類">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={() => { setGroupCode(''); setCategoryId(''); setPage(1); }} className={'rounded-full px-3 py-1.5 text-xs whitespace-nowrap sm:text-sm ' + (groupCode === '' ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
+                  すべて <span className="ml-1 text-[0.68rem] opacity-75">{categoryTotal}</span>
+                </button>
+                {categoryGroups.map((group) => <button key={group.code} type="button" onClick={() => { setGroupCode(group.code); setCategoryId(''); setPage(1); }} className={'rounded-full px-3 py-1.5 text-xs whitespace-nowrap sm:text-sm ' + (groupCode === group.code ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
+                  {group.name} <span className="ml-1 text-[0.68rem] opacity-75">{groupCounts.get(group.code) ?? 0}</span>
+                </button>)}
+              </div>
+            </nav>
+
+            {selectedGroup && (
+              <nav className="border-t border-line bg-sand/25 px-3 py-2 sm:px-4" aria-label={selectedGroup.name + 'のカテゴリー'} data-testid="ledger-category-children">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[0.68rem] font-semibold text-muted">{selectedGroup.name}</span>
+                  <button type="button" onClick={() => { setCategoryId(''); setPage(1); }} className={'rounded-lg px-2.5 py-1 text-xs whitespace-nowrap ' + (categoryId === '' ? 'bg-white font-semibold text-ink shadow-sm ring-1 ring-line' : 'text-ink-soft hover:bg-white')}>
+                    すべて <span className="ml-1 text-[0.65rem] text-muted">{groupCounts.get(selectedGroup.code) ?? 0}</span>
+                  </button>
+                  {selectedGroup.categories.map((item) => <button key={item.id} type="button" onClick={() => { setCategoryId(item.id); setPage(1); }} className={'rounded-lg px-2.5 py-1 text-xs whitespace-nowrap ' + (categoryId === item.id ? 'bg-white font-semibold text-ink shadow-sm ring-1 ring-line' : 'text-ink-soft hover:bg-white')}>
+                    {item.name} <span className="ml-1 text-[0.65rem] text-muted">{categoryCounts.get(item.id) ?? 0}</span>
+                  </button>)}
+                </div>
+              </nav>
+            )}
+          </div>
 
           {searchOpen && <div className="border-t border-line px-3 py-2 sm:px-4" data-testid="ledger-collapsible-search">
             <div className="flex items-center gap-2">

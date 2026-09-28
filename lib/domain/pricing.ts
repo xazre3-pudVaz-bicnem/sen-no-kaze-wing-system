@@ -197,7 +197,8 @@ export function computePricing(
 
 /** 数量の表示（小数第1位まで。整数はそのまま）。先方指定「数量は小数点1」 */
 export function formatQty(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(4).replace(/\.?0+$/, '');
 }
 
 export function formatYen(value: number): string {

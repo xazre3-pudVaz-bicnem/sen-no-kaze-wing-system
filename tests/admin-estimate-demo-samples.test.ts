@@ -30,7 +30,7 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(index).toContain('WingOfficeSample');
     expect(index).toContain('BoxHotelSingleSample');
     expect(index).toContain('FlatOfficeSample');
-    expect(page).toContain('EXCELサンプル');
+    expect(page).toContain('画面確認用サンプル');
     expect(page).toContain('sampleEstimateHref(sample.id)');
     expect(page).toContain('Badge tone="neutral">サンプル');
   });

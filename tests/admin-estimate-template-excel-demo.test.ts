@@ -53,7 +53,9 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('別途見積');
     expect(demo).toContain('商品を追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
-    expect(demo).toContain("isCollapsed ? '+' : '−'");
+    expect(demo).toContain("aria-label={section + 'を展開'}");
+    expect(demo).toContain("data-testid={`estimate-demo-section-total-${section}`}");
+    expect(demo).toContain('商品から選ぶ');
     expect(demo).toContain('下書き保存');
   });
 

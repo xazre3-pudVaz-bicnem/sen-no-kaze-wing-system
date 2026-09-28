@@ -44,6 +44,34 @@ describe('quote draft / revision foundation migration', () => {
     expect(migration).toContain('references public.base_master_revisions(id) on delete restrict');
     expect(migration).toContain('spec_code text not null');
     expect(migration).toContain("spec_code !~ '[[:space:]]'");
+    expect(migration).toContain('quote_kind text not null\n    check');
+    expect(migration).not.toContain("quote_kind text not null default 'formal'");
+  });
+
+  it('protects new Quote snapshot metadata through the existing lifecycle guard', () => {
+    expect(migration).toContain('create or replace function public.guard_quote_lineage_transition()');
+    expect(migration).toContain('old.quote_kind is distinct from new.quote_kind');
+    expect(migration).toContain('old.base_model_id is distinct from new.base_model_id');
+    expect(migration).toContain('old.base_master_revision_id is distinct from new.base_master_revision_id');
+    expect(migration).toContain('old.spec_code is distinct from new.spec_code');
+    expect(migration).toContain('old.adjustment_reason is distinct from new.adjustment_reason');
+    expect(migration).toContain('old.created_by is distinct from new.created_by');
+    expect(migration).toContain("current_user <> 'postgres'");
+  });
+
+  it('requires pinned Base Revisions to match the product model and be immutable history', () => {
+    expect(migration).toContain('create or replace function public.validate_quote_base_revision_ref()');
+    expect(migration).toContain("r.status in ('published', 'superseded')");
+    expect(migration).toContain('m.base_model_id = new.base_model_id');
+    expect(migration).toContain('create trigger quotes_base_revision_ref');
+    expect(migration).toContain('create trigger quote_drafts_base_revision_ref');
+  });
+
+  it('requires a Draft parent Quote to belong to the same QuoteRequest', () => {
+    expect(migration).toContain('create or replace function public.validate_quote_draft_parent_ref()');
+    expect(migration).toContain('q.id = new.parent_quote_id');
+    expect(migration).toContain('q.quote_request_id = new.quote_request_id');
+    expect(migration).toContain('create trigger quote_drafts_parent_ref');
   });
 
   it('stores Draft money and optimistic lock metadata without making UI totals authoritative', () => {

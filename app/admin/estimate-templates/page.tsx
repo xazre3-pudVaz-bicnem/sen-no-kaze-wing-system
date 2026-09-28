@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
-import { getStore } from '@/lib/data/store';
+import { getStore, isLocalMode } from '@/lib/data/store';
+import { createClient } from '@/lib/supabase/server';
 import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
@@ -11,6 +12,7 @@ import {
 } from '@/components/admin/estimate-template-workbench';
 import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
+import { LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -34,6 +36,57 @@ function estimateHref(id: string) {
   return `/admin/estimate-templates?${params.toString()}`;
 }
 
+function draftHref(revisionId: string) {
+  return '/admin/estimate-templates/new?draft=' + encodeURIComponent(revisionId);
+}
+
+interface StandardEstimateDraftHeader {
+  revisionId: string;
+  masterId: string;
+  modelId: string;
+  specCode: string;
+  name: string;
+  total: number;
+  updatedAt: string;
+}
+
+async function loadStandardEstimateDraftHeaders(): Promise<StandardEstimateDraftHeader[]> {
+  if (isLocalMode()) return [];
+
+  const supabase = await createClient();
+  const { data: revisions, error: revisionError } = await supabase
+    .from('standard_estimate_revisions')
+    .select('id, standard_estimate_master_id, total, updated_at')
+    .eq('status', 'draft')
+    .order('updated_at', { ascending: false });
+
+  if (revisionError || !revisions?.length) return [];
+
+  const masterIds = [...new Set(revisions.map((revision) => revision.standard_estimate_master_id))];
+  const { data: masters, error: masterError } = await supabase
+    .from('standard_estimate_masters')
+    .select('id, base_model_id, spec_code, name, status')
+    .in('id', masterIds)
+    .eq('status', 'active');
+
+  if (masterError) return [];
+
+  const masterMap = new Map((masters ?? []).map((master) => [master.id, master] as const));
+  return revisions.flatMap((revision) => {
+    const master = masterMap.get(revision.standard_estimate_master_id);
+    if (!master) return [];
+    return [{
+      revisionId: revision.id,
+      masterId: master.id,
+      modelId: master.base_model_id,
+      specCode: master.spec_code,
+      name: master.name,
+      total: Number(revision.total),
+      updatedAt: revision.updated_at,
+    }];
+  });
+}
+
 export default async function EstimateTemplatesPage({
   searchParams,
 }: {
@@ -43,11 +96,12 @@ export default async function EstimateTemplatesPage({
   const sp = await searchParams;
   const store = await getStore();
 
-  const [models, templates, options, categories] = await Promise.all([
+  const [models, templates, options, categories, standardDrafts] = await Promise.all([
     store.listModels({ includeDraft: true }),
     store.listEstimateTemplates(),
     store.listOptions(),
     store.listCategories(),
+    loadStandardEstimateDraftHeaders(),
   ]);
 
   const selectedTemplate =
@@ -66,13 +120,45 @@ export default async function EstimateTemplatesPage({
           </Link>
         }
       >
-        <section className="card px-6 py-12 text-center">
-          <h2 className="font-semibold">見積書がまだありません</h2>
-          <p className="mt-2 text-sm text-muted">新しい見積書を作成すると、この画面で直接明細を編集できます。</p>
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm mt-5">
-            ＋ 新しい見積書を作成
-          </Link>
-        </section>
+        {standardDrafts.length > 0 ? (
+          <section className="card overflow-hidden">
+            <div className="border-b border-line px-4 py-3">
+              <h2 className="font-semibold">保存済み下書き</h2>
+              <p className="mt-1 text-xs text-muted">下書きを選ぶと、保存した明細から編集を再開できます。</p>
+            </div>
+            <div className="divide-y divide-line">
+              {standardDrafts.map((draft) => {
+                const draftModel = models.find((model) => model.id === draft.modelId);
+                return (
+                  <Link
+                    key={draft.revisionId}
+                    href={draftHref(draft.revisionId)}
+                    className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-sand/40"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{draft.name}</span>
+                      <span className="mt-0.5 block text-[11px] text-muted">
+                        {draftModel?.name ?? '—'} ／ {SPEC_LABELS[draft.specCode] ?? draft.specCode}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge tone="warn">下書き</Badge>
+                      <strong className="tabular-nums">{formatYen(draft.total)}</strong>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <section className="card px-6 py-12 text-center">
+            <h2 className="font-semibold">見積書がまだありません</h2>
+            <p className="mt-2 text-sm text-muted">新しい見積書を作成すると、この画面で直接明細を編集できます。</p>
+            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm mt-5">
+              ＋ 新しい見積書を作成
+            </Link>
+          </section>
+        )}
       </AdminPage>
     );
   }
@@ -142,7 +228,11 @@ export default async function EstimateTemplatesPage({
   }));
 
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter(
+      (option) =>
+        option.status === 'published' &&
+        categoryMap.get(option.category_id)?.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE
+    )
     .map((option) => ({
       id: option.id,
       categoryId: option.category_id,
@@ -230,6 +320,31 @@ export default async function EstimateTemplatesPage({
                   );
                 })}
               </div>
+              {standardDrafts.length > 0 && (
+                <>
+                  <p className="mt-2 border-t border-line px-2 pb-2 pt-3 text-[11px] font-semibold text-muted">保存済み下書き</p>
+                  <div className="divide-y divide-line">
+                    {standardDrafts.map((draft) => {
+                      const draftModel = models.find((item) => item.id === draft.modelId);
+                      return (
+                        <Link
+                          key={draft.revisionId}
+                          href={draftHref(draft.revisionId)}
+                          className="block rounded-lg px-3 py-2 text-sm hover:bg-sand/40"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="min-w-0 flex-1 truncate font-semibold">{draft.name}</span>
+                            <Badge tone="warn">下書き</Badge>
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-muted">
+                            {draftModel?.name ?? '—'} ／ {SPEC_LABELS[draft.specCode] ?? draft.specCode} ／ {formatYen(draft.total)}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </details>
         </div>

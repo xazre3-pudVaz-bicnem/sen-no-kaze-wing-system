@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, LayoutGrid, List, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, LayoutGrid, List, Search, X } from 'lucide-react';
 import { ProductDetail } from '@/components/simulator/product-detail';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Badge, Input, Select } from '@/components/ui';
@@ -18,12 +18,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) { retu
 function date(value: string) { const d = new Date(value); return Number.isNaN(d.valueOf()) ? dash : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`; }
 
 export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, initiallySelectedId }: Props) {
-  const [query, setQuery] = useState(''); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [manufacturer, setManufacturer] = useState(''); const [baseModelId, setBaseModelId] = useState(''); const [sort, setSort] = useState('updated'); const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(50); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer'); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
+  const [query, setQuery] = useState(''); const [searchOpen, setSearchOpen] = useState(false); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(50); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer'); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
   const dialogRef = useRef<HTMLElement | null>(null); const openerRef = useRef<HTMLElement | null>(null);
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
-  const manufacturers = useMemo(() => Array.from(new Set(options.map((option) => option.manufacturer?.trim()).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, 'ja-JP')), [options]);
-  const filtered = useMemo(() => options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId, status, quick, manufacturer, baseModelId })).sort((a, b) => sort === 'updated' ? b.updated_at.localeCompare(a.updated_at) : a.name.localeCompare(b.name, 'ja-JP')), [baseModelId, categoryId, manufacturer, options, query, quick, sort, status]);
+  const filtered = useMemo(() => options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId, status, quick })).sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [categoryId, options, query, quick, status]);
   /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
   useEffect(() => setSelectedId((id) => selectedOptionAfterFilter(id, filtered.map((o) => o.id))), [filtered]);
   const selected = filtered.find((o) => o.id === selectedId); const category = selected && categoryMap.get(selected.category_id); const variants = selected ? variantsByOptionId[selected.id] ?? EMPTY_VARIANTS : EMPTY_VARIANTS;
@@ -78,11 +77,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   };
   const visiblePreviewGroups = visibleVariantGroups(preview.groups, preview.choices, previewVariantIds);
   const categoryCounts = useMemo(() => {
-    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick, manufacturer, baseModelId }));
+    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick }));
     const counts = new Map<string, number>();
     for (const option of base) counts.set(option.category_id, (counts.get(option.category_id) ?? 0) + 1);
     return counts;
-  }, [baseModelId, manufacturer, options, query, quick, status]);
+  }, [options, query, quick, status]);
   const categoryTotal = Array.from(categoryCounts.values()).reduce((sum, count) => sum + count, 0);
   const publishedCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
   const draftCount = options.length - publishedCount;
@@ -99,26 +98,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     setPage(Math.floor(index / pageSize) + 1);
     setSelectedId(option.id);
   };
-  const resetFilters = () => { setQuery(''); setCategoryId(''); setStatus(''); setQuick('all'); setManufacturer(''); setBaseModelId(''); setSort('updated'); setPage(1); };
   return <div className="space-y-5">
-    <div className="grid items-start gap-4 md:grid-cols-[11rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)]">
-      <aside className="hidden md:sticky md:top-4 md:block">
-        <div className="card overflow-hidden">
-          <div className="border-b border-line px-4 py-3">
-            <p className="text-sm font-semibold">カテゴリー</p>
-            <p className="mt-0.5 text-xs text-muted">商品を種類から絞り込み</p>
-          </div>
-          <nav className="max-h-[70vh] overflow-y-auto p-2" aria-label="商品カテゴリー">
-            <button type="button" onClick={() => { setCategoryId(''); setPage(1); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${categoryId === '' ? 'bg-forest/10 font-semibold text-ink' : 'text-ink-soft hover:bg-sand'}`}>
-              <span>すべて</span><span className="text-xs text-muted">{categoryTotal}</span>
-            </button>
-            {categories.map((item) => <button key={item.id} type="button" onClick={() => { setCategoryId(item.id); setPage(1); }} className={`mt-0.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm ${categoryId === item.id ? 'bg-forest/10 font-semibold text-ink' : 'text-ink-soft hover:bg-sand'}`}>
-              <span className="min-w-0 truncate">{item.name}</span><span className="ml-2 shrink-0 text-xs text-muted">{categoryCounts.get(item.id) ?? 0}</span>
-            </button>)}
-          </nav>
-        </div>
-      </aside>
-      <section className="card min-w-0 overflow-hidden">
+      <section className="card min-w-0 overflow-visible">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div>
             <h2 className="text-lg font-semibold">商品一覧</h2>
@@ -129,72 +110,59 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-1.5 border-b border-line bg-white px-3 py-2.5 sm:px-4" role="tablist" aria-label="公開状態">
-          <button type="button" role="tab" aria-selected={status === ''} onClick={() => { setStatus(''); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
-            すべて <span className="ml-1 text-xs">{options.length}</span>
-          </button>
-          <button type="button" role="tab" aria-selected={status === 'published'} onClick={() => { setStatus('published'); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
-            公開中 <span className="ml-1 text-xs">{publishedCount}</span>
-          </button>
-          <button type="button" role="tab" aria-selected={status === 'draft'} onClick={() => { setStatus('draft'); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
-            下書き <span className="ml-1 text-xs">{draftCount}</span>
-          </button>
-        </div>
-
-        <div className="sticky top-0 z-20 border-b border-line bg-white/95 p-3 shadow-sm backdrop-blur sm:p-4">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_minmax(9rem,.38fr)_minmax(10rem,.4fr)_minmax(11rem,.46fr)]">
-            <label className="min-w-0 sm:col-span-2 xl:col-span-1">
-              <span className="sr-only">商品を検索</span>
-              <Input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・シリーズ・型番・商品番号で検索" className="w-full" />
-            </label>
-            <label className="min-w-0 md:hidden">
-              <span className="sr-only">カテゴリー</span>
-              <Select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1); }} className="w-full">
-                <option value="">カテゴリー：すべて</option>
-                {categories.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-              </Select>
-            </label>
-            <label className="min-w-0">
-              <span className="sr-only">メーカー</span>
-              <Select value={manufacturer} onChange={(e) => { setManufacturer(e.target.value); setPage(1); }} className="w-full">
-                <option value="">メーカー：すべて</option>
-                {manufacturers.map((name) => <option key={name} value={name}>{name}</option>)}
-              </Select>
-            </label>
-            <label className="min-w-0">
-              <span className="sr-only">対象モデル</span>
-              <Select value={baseModelId} onChange={(e) => { setBaseModelId(e.target.value); setPage(1); }} className="w-full">
-                <option value="">対象モデル：すべて</option>
-                <option value="__shared__">全モデル共通</option>
-                {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </Select>
-            </label>
-            <label className="min-w-0">
-              <span className="sr-only">並び替え</span>
-              <Select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }} className="w-full">
-                <option value="updated">並び替え：更新が新しい順</option>
-                <option value="name">並び替え：商品名順</option>
-              </Select>
-            </label>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="sticky top-0 z-30 border-b border-line bg-white/95 shadow-sm backdrop-blur" data-testid="ledger-sticky-category-bar">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 sm:px-4">
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="公開状態">
+              <button type="button" role="tab" aria-selected={status === ''} onClick={() => { setStatus(''); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+                すべて <span className="ml-1 text-xs">{options.length}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={status === 'published'} onClick={() => { setStatus('published'); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+                公開中 <span className="ml-1 text-xs">{publishedCount}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={status === 'draft'} onClick={() => { setStatus('draft'); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+                下書き <span className="ml-1 text-xs">{draftCount}</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" aria-expanded={searchOpen} className={query ? 'btn-secondary btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSearchOpen((open) => !open)}>
+                <Search className="size-4" aria-hidden="true" /> 検索
+              </button>
               <button type="button" className={quick === 'needs-attention' ? 'btn-secondary btn-sm bg-ivory' : 'btn-ghost btn-sm'} onClick={() => { setQuick(quick === 'needs-attention' ? 'all' : 'needs-attention'); setPage(1); }}>
                 要確認のみ
               </button>
-              <button type="button" className="btn-ghost btn-sm" onClick={resetFilters} disabled={!query && !categoryId && !status && quick === 'all' && !manufacturer && !baseModelId && sort === 'updated'}>条件をクリア</button>
-            </div>
-            <div className="flex rounded-lg border border-line bg-white p-0.5" aria-label="表示形式">
-              <button type="button" aria-pressed={viewMode === 'list'} title="一覧表示" onClick={() => setViewMode('list')} className={'inline-flex size-8 items-center justify-center rounded-md ' + (viewMode === 'list' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand')}>
-                <List className="size-4" aria-hidden="true" />
-                <span className="sr-only">一覧表示</span>
-              </button>
-              <button type="button" aria-pressed={viewMode === 'grid'} title="画像表示" onClick={() => setViewMode('grid')} className={'inline-flex size-8 items-center justify-center rounded-md ' + (viewMode === 'grid' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand')}>
-                <LayoutGrid className="size-4" aria-hidden="true" />
-                <span className="sr-only">画像表示</span>
-              </button>
+              <div className="flex rounded-lg border border-line bg-white p-0.5" aria-label="表示形式">
+                <button type="button" aria-pressed={viewMode === 'list'} title="一覧表示" onClick={() => setViewMode('list')} className={'inline-flex size-8 items-center justify-center rounded-md ' + (viewMode === 'list' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand')}>
+                  <List className="size-4" aria-hidden="true" />
+                  <span className="sr-only">一覧表示</span>
+                </button>
+                <button type="button" aria-pressed={viewMode === 'grid'} title="画像表示" onClick={() => setViewMode('grid')} className={'inline-flex size-8 items-center justify-center rounded-md ' + (viewMode === 'grid' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand')}>
+                  <LayoutGrid className="size-4" aria-hidden="true" />
+                  <span className="sr-only">画像表示</span>
+                </button>
+              </div>
             </div>
           </div>
+
+          <nav className="overflow-x-auto px-3 py-2 sm:px-4" aria-label="商品カテゴリー">
+            <div className="flex min-w-max items-center gap-1.5">
+              <button type="button" onClick={() => { setCategoryId(''); setPage(1); }} className={'rounded-full px-3 py-1.5 text-sm whitespace-nowrap ' + (categoryId === '' ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
+                すべて <span className="ml-1 text-xs opacity-75">{categoryTotal}</span>
+              </button>
+              {categories.map((item) => <button key={item.id} type="button" onClick={() => { setCategoryId(item.id); setPage(1); }} className={'rounded-full px-3 py-1.5 text-sm whitespace-nowrap ' + (categoryId === item.id ? 'bg-forest text-white' : 'bg-sand text-ink-soft hover:bg-forest/10')}>
+                {item.name} <span className="ml-1 text-xs opacity-75">{categoryCounts.get(item.id) ?? 0}</span>
+              </button>)}
+            </div>
+          </nav>
+
+          {searchOpen && <div className="border-t border-line px-3 py-2 sm:px-4" data-testid="ledger-collapsible-search">
+            <div className="flex items-center gap-2">
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">商品を検索</span>
+                <Input autoFocus type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・シリーズ・型番・商品番号で検索" className="w-full" />
+              </label>
+              {query && <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => { setQuery(''); setPage(1); }}>クリア</button>}
+            </div>
+          </div>}
         </div>
 
         {viewMode === 'list' ? (
@@ -333,7 +301,6 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
           </div>
         </div>}
       </section>
-    </div>
     {selected && category && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/55 p-0 sm:p-4" data-testid="ledger-product-detail-modal" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="ledger-product-detail-title" className="relative flex h-full w-full flex-col overflow-hidden bg-sand/40 shadow-2xl sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-line">
         <header className="border-b border-line bg-white/95 px-4 py-3 backdrop-blur sm:px-5">

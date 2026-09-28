@@ -19,14 +19,21 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('catalogCategories');
   });
 
-  it('カテゴリーを上部固定し、低頻度フィルターを常設しない', () => {
+  it('分類フォルダとカテゴリーを2階層で上部固定する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品一覧');
     expect(client).toContain('data-testid="ledger-sticky-category-bar"');
     expect(client).toContain('sticky top-0 z-30');
-    expect(client).toContain('aria-label="商品カテゴリー"');
-    expect(client).toContain('flex flex-wrap items-center gap-1');
-    expect(client).not.toContain('<nav className="overflow-x-auto px-3 py-2 sm:px-4" aria-label="商品カテゴリー">');
+    expect(client).toContain('data-testid="ledger-category-groups"');
+    expect(client).toContain('aria-label="商品分類"');
+    expect(client).toContain('category.group_code');
+    expect(client).toContain('category.group_name');
+    expect(client).toContain('category.group_sort');
+    expect(client).toContain('group.categories.reduce');
+    expect(client).toContain('setGroupCode(group.code)');
+    expect(client).toContain('data-testid="ledger-category-children"');
+    expect(client).toContain("selectedGroup.name + 'のカテゴリー'");
+    expect(client).toContain('selectedGroup.categories.map');
     expect(client).toContain('categoryCounts.get(item.id)');
     expect(client).toContain('すべて <span');
     expect(client).toContain('公開中 <span');

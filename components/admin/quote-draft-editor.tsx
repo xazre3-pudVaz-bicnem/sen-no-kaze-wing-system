@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   finalizeQuoteDraftAction,
@@ -79,8 +79,17 @@ export function QuoteDraftEditor({
   const [notes, setNotes] = useState(detail.draft.notes ?? '');
 
   const lockVersion = saveState.savedVersion ?? detail.draft.lock_version;
-  const [dirtyAtVersion, setDirtyAtVersion] = useState<number | null>(null);
-  const dirty = dirtyAtVersion === lockVersion;
+  const [editGeneration, setEditGeneration] = useState(0);
+  const [savedGeneration, setSavedGeneration] = useState(0);
+  const submittedGeneration = useRef<number | null>(null);
+  const dirty = editGeneration !== savedGeneration;
+
+  useEffect(() => {
+    if (saveState.savedVersion == null || submittedGeneration.current == null) return;
+    if (editGeneration === submittedGeneration.current) {
+      setSavedGeneration(editGeneration);
+    }
+  }, [saveState.savedVersion, editGeneration]);
 
   const totals = useMemo(() => {
     const subtotalRaw = rows.reduce(
@@ -92,7 +101,7 @@ export function QuoteDraftEditor({
     return { subtotalRaw, subtotal, tax, total: subtotal + tax };
   }, [rows, adjustment, detail.draft.tax_rate]);
 
-  const markDirty = () => setDirtyAtVersion(lockVersion);
+  const markDirty = () => setEditGeneration((current) => current + 1);
 
   const updateRow = (key: string, patch: Partial<EditorRow>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -157,7 +166,14 @@ export function QuoteDraftEditor({
         </dl>
       </section>
 
-      <form action={saveAction} className="space-y-4" noValidate>
+      <form
+        action={saveAction}
+        onSubmit={() => {
+          submittedGeneration.current = editGeneration;
+        }}
+        className="space-y-4"
+        noValidate
+      >
         <input type="hidden" name="draft_id" value={detail.draft.id} />
         <input type="hidden" name="expected_lock_version" value={lockVersion} />
         <input type="hidden" name="items_json" value={itemsJson} />
@@ -412,7 +428,7 @@ export function QuoteDraftEditor({
           </div>
           <Button
             type="submit"
-            disabled={finalizePending || dirty || rows.length === 0 || !baseRevisionId}
+            disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
           >
             {finalizePending ? '正式保存中…' : '正式保存（Revision 1）'}
           </Button>

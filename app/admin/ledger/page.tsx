@@ -3,14 +3,14 @@ import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
 export default async function AdminLedgerPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories, models] = await Promise.all([store.listOptions(), store.listCategories(), store.listModels({ includeDraft: true })]);
-  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE);
+  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
   const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
   const rows = await Promise.all(catalogOptions.map(async (option) => [option.id, await store.getOptionVariants(option.id)] as const));

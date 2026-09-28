@@ -36,7 +36,7 @@ const sections: NavSection[] = [
   },
   {
     href: '/admin/estimate-templates',
-    label: '標準見積',
+    label: '見積書作成・管理',
     match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'],
     need: 'admin',
   },

@@ -25,7 +25,7 @@ export function EstimateTemplateDetailTabs({
   return (
     <section className="space-y-4">
       <div className="card overflow-hidden">
-        <div className="flex items-center gap-1 border-b border-line px-3" role="tablist" aria-label="標準見積の表示切替">
+        <div className="flex items-center gap-1 border-b border-line px-3" role="tablist" aria-label="見積書の表示切替">
           <button type="button" role="tab" aria-selected={tab === 'edit'} onClick={() => setTab('edit')} className={tabClass('edit')}>
             編集
           </button>

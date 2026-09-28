@@ -44,6 +44,11 @@ export default async function AdminQuoteDraftPage({
           案件を登録しました。まだ見積Revisionは発行していません。Draftを編集・保存してください。
         </Alert>
       )}
+      {sp.revisionDraft && (
+        <Alert tone="success">
+          現在の正式Revisionをコピーして改訂Draftを作成しました。Draft保存だけでは正式Revisionは増えません。
+        </Alert>
+      )}
 
       <QuoteDraftEditor
         detail={detail}

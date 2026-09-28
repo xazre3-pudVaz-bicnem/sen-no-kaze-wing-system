@@ -96,7 +96,7 @@ export default async function EstimateTemplatesPage({
           </Link>
         }
       >
-        <Alert tone="warning">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
+        <Alert tone="warn">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
         <section className="card p-4">
           <details>
             <summary className="cursor-pointer text-sm font-semibold">見積書を選ぶ</summary>

@@ -69,6 +69,13 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).not.toContain('未登録');
   });
 
+  it('見積書が未登録でも空画面ではなくExcel操作画面を直接表示する', () => {
+    expect(listPage).toContain('if (!selectedTemplate)');
+    expect(listPage).toContain('<EstimateTemplateExcelDemo />');
+    expect(listPage).toContain('正式な見積書データが未登録のため、Excel型の操作確認画面を直接表示しています。');
+    expect(listPage).not.toContain('見積書がまだありません');
+  });
+
   it('見積書切替・新規作成・標準指定の入口を編集画面上部に置く', () => {
     expect(listPage).toContain('見積書を選ぶ');
     expect(listPage).toContain('作成済み見積書');

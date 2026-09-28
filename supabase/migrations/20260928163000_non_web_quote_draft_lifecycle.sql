@@ -87,8 +87,8 @@ begin
 
   if not exists (
     select 1
-      from jsonb_array_elements(coalesce(v_model.presets, '[]'::jsonb)) preset
-     where preset ->> 'code' = p_spec_code
+      from jsonb_array_elements(coalesce(v_model.presets, '[]'::jsonb)) as preset(value)
+     where preset.value ->> 'code' = p_spec_code
   ) then
     raise exception 'VALIDATION: 選択した商品モデルに存在しない仕様です' using errcode = 'P0001';
   end if;
@@ -342,7 +342,9 @@ begin
   delete from public.quote_draft_items
    where draft_id = d.id;
 
-  for row_json in select value from jsonb_array_elements(p_items)
+  for row_json in
+    select item.value
+      from jsonb_array_elements(p_items) as item(value)
   loop
     v_sort := v_sort + 1;
     v_kind := row_json ->> 'kind';

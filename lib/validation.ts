@@ -305,9 +305,74 @@ export const manualQuoteSchema = z.object({
   customer_company: optional(100),
   site_address: optional(200),
   base_model_id: z.uuid(),
-  spec_code: trimmed(40).regex(/^[a-z0-9-]*$/),
+  spec_code: trimmed(40).min(1, '仕様を選んでください').regex(/^[a-z0-9-]+$/),
   finish_level: z.enum(['shell', 'equipment', 'full']),
   memo: optional(1000),
+});
+
+export const quoteDraftSaveItemSchema = z.object({
+  line_key: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  kind: z.enum([
+    'base',
+    'base_expense',
+    'interior_exterior',
+    'interior_exterior_expense',
+    'option',
+    'option_expense',
+    'installation',
+    'free',
+    'discount',
+  ]),
+  option_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  name: trimmed(120).min(1, '品名を入力してください'),
+  description: optional(200).nullable(),
+  unit: optional(12).nullable(),
+  remark: optional(200).nullable(),
+  unit_price: z.coerce.number().int().min(-100_000_000).max(100_000_000),
+  quantity: z.coerce.number().min(0.01).max(99_999).refine(
+    (value) => Number.isInteger(value * 10_000),
+    '数量は小数4桁以内で入力してください'
+  ),
+  image_url: optional(500).nullable(),
+}).superRefine((row, ctx) => {
+  if (row.unit_price < 0 && row.kind !== 'discount') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['unit_price'],
+      message: 'マイナス単価は値引き行だけに使用できます',
+    });
+  }
+  if (row.kind === 'discount' && row.unit_price > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['unit_price'],
+      message: '値引き行の単価は0円以下で入力してください',
+    });
+  }
+});
+
+export const quoteDraftSaveSchema = z.object({
+  draft_id: z.uuid(),
+  expected_lock_version: z.coerce.number().int().min(0),
+  base_master_revision_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  items: z.array(quoteDraftSaveItemSchema).max(300),
+  adjustment: z.coerce.number().int().min(-2_000_000_000).max(2_000_000_000),
+  adjustment_reason: optional(500).nullable(),
+  dealer_note: optional(1000).nullable(),
+  notes: optional(1000).nullable(),
+}).superRefine((data, ctx) => {
+  if (data.adjustment !== 0 && !data.adjustment_reason?.trim()) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['adjustment_reason'],
+      message: '調整額を設定する場合は理由を入力してください',
+    });
+  }
+});
+
+export const quoteDraftFinalizeSchema = z.object({
+  draft_id: z.uuid(),
+  expected_lock_version: z.coerce.number().int().min(0),
 });
 
 /** 本体内訳マスター（分類表見積書）の 1 行 */

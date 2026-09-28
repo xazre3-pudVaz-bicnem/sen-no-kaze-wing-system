@@ -22,6 +22,9 @@ import type {
   QuoteDocument,
   CaseDocument,
   QuoteItem,
+  QuoteItemKind,
+  QuoteDraft,
+  QuoteDraftItem,
   QuoteRequest,
   QuoteRequestStatus,
   QuoteStatus,
@@ -205,6 +208,55 @@ export interface DealerRevisionInput {
   dealer_note: string | null;
 }
 
+export interface ManualQuoteDraftInput {
+  customer_name: string;
+  customer_company: string | null;
+  site_address: string | null;
+  base_model_id: string;
+  spec_code: string;
+  finish_level: FinishLevel;
+  memo: string | null;
+}
+
+export interface QuoteDraftSaveItem {
+  line_key?: string | null;
+  kind: QuoteItemKind;
+  option_id?: string | null;
+  name: string;
+  description?: string | null;
+  unit?: string | null;
+  remark?: string | null;
+  unit_price: number;
+  quantity: number;
+  image_url?: string | null;
+}
+
+export interface QuoteDraftSaveInput {
+  expected_lock_version: number;
+  base_master_revision_id: string | null;
+  items: QuoteDraftSaveItem[];
+  adjustment: number;
+  adjustment_reason: string | null;
+  dealer_note: string | null;
+  notes: string | null;
+}
+
+export interface QuoteDraftBaseRevisionChoice {
+  id: string;
+  base_master_id: string;
+  master_name: string;
+  fire_spec_code: 'non_fire' | 'fire';
+  version: number;
+  total: number;
+}
+
+export interface QuoteDraftDetail {
+  draft: QuoteDraft;
+  items: QuoteDraftItem[];
+  request: Pick<QuoteRequest, 'id' | 'status' | 'message' | 'contact' | 'created_by' | 'created_at' | 'updated_at'>;
+  baseRevisions: QuoteDraftBaseRevisionChoice[];
+}
+
 export interface QuoteDetail {
   quote: Quote;
   items: QuoteItem[];
@@ -331,6 +383,14 @@ export interface DataStore {
   listAllConfigurations(): Promise<(Configuration & { user_email: string; user_name: string; user_address: string | null })[]>;
 
   // ---- 見積 ----
+  /** 非Web案件を登録し、Quoteを発行せず空Draftを作る */
+  createManualQuoteDraft(actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft>;
+  /** RLSを迂回せずSECURITY DEFINER RPCの権限境界でDraftを読む */
+  getQuoteDraft(id: string, actor: SessionUser): Promise<QuoteDraftDetail | null>;
+  /** expected lock_versionで競合検知し、DB再計算でDraftを保存する */
+  saveQuoteDraft(id: string, input: QuoteDraftSaveInput, actor: SessionUser): Promise<number>;
+  /** 非Web初回Draftをformal Revision 1として確定する */
+  finalizeQuoteDraft(id: string, expectedLockVersion: number, actor: SessionUser): Promise<Quote>;
   createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null): Promise<Quote>;
   listQuotes(userId: string): Promise<Quote[]>;
   listQuotesByConfiguration(userId: string): Promise<Map<string, Quote>>;

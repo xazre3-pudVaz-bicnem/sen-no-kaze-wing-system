@@ -498,12 +498,16 @@ export interface QuoteContact {
 
 export interface QuoteRequest {
   id: string;
-  configuration_id: string;
-  user_id: string;
+  /** 非Web案件はConfigurationを持たない */
+  configuration_id: string | null;
+  /** 非Web案件はcustomer accountを持たない */
+  user_id: string | null;
   quote_id: string | null;
   status: QuoteRequestStatus;
   message: string | null;
   contact: QuoteContact;
+  /** 非Web案件を登録したスタッフ。Web案件では未設定の場合がある */
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -523,8 +527,10 @@ export interface Quote {
   id: string;
   quote_no: string;
   quote_request_id: string;
-  configuration_id: string;
-  user_id: string;
+  /** 非Web案件の正式RevisionはConfigurationを持たない */
+  configuration_id: string | null;
+  /** 非Web案件の正式Revisionはcustomer accountを持たない */
+  user_id: string | null;
   status: QuoteStatus;
   /** 新Revision基盤への移行中は旧見積でnull/未取得を許容する */
   quote_kind?: QuoteKind | null;
@@ -558,7 +564,7 @@ export interface Quote {
   dealer_id: string | null;
   /** 代理店からの申し送り（現地条件・工期など） */
   dealer_note: string | null;
-  /** 版数。1 = 技術の杜の概算見積、2 以降 = 代理店が別途工事を入れた確定見積 */
+  /** 案件内の版数。WebはRev1がpreliminaryの場合があり、非WebはRev1からformalになり得る */
   revision: number;
   /** 直前の版 */
   parent_quote_id: string | null;
@@ -612,6 +618,7 @@ export interface QuoteDraft {
   base_master_revision_id: string | null;
   spec_code: string;
   quote_kind: QuoteKind;
+  finish_level: FinishLevel;
   tax_rate: number;
   adjustment: number;
   adjustment_reason: string | null;

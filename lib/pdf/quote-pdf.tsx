@@ -3,6 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer';
 import { type Quote, type QuoteItem } from '@/lib/domain/types';
+import { formatQty } from '@/lib/domain/pricing';
+import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
 import { COMPANY, PROJECT_NAME } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
 
@@ -23,8 +25,11 @@ function registerFonts() {
 }
 
 const yen = (v: number) => `${v < 0 ? '-' : ''}¥${Math.abs(v).toLocaleString('ja-JP')}`;
-/** 数量は小数第1位まで（8.5・17.6。整数はそのまま） */
-const fmtQty = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(1));
+export function quotePdfRevisionLabel(
+  quote: Pick<Quote, 'quote_kind' | 'parent_quote_id' | 'revision'>
+) {
+  return isFormalQuote(quote) ? `（第${quote.revision}版・確定見積）` : '（概算）';
+}
 
 const s = StyleSheet.create({
   page: { fontFamily: 'NotoSansJP', fontSize: 9, paddingTop: 34, paddingBottom: 46, paddingHorizontal: 38, color: '#1d1a16', lineHeight: 1.45 },
@@ -94,7 +99,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
   const optionExpense = items.find((i) => i.kind === 'option_expense') ?? null;
   const sitework = items.filter((i) => i.kind === 'installation');
   const freeItems = items.filter((i) => i.kind === 'free');
-  const revisionLabel = quote.revision > 1 ? `（第${quote.revision}版・確定見積）` : '（概算）';
+  const revisionLabel = quotePdfRevisionLabel(quote);
   const freeAmount = freeItems.reduce((sum, i) => sum + i.amount, 0);
   const siteworkAmount = sitework.reduce((sum, i) => sum + i.amount, 0);
   const baseTotal = quote.base_price + quote.base_expense;
@@ -115,7 +120,7 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
       <Text style={s.cName}>{it.name}</Text>
       <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
       <Text style={s.cPrice}>{it.unit_price !== 0 ? yen(it.unit_price) : ''}</Text>
-      <Text style={s.cQty}>{it.unit ? `${fmtQty(it.quantity)} ${it.unit}` : fmtQty(it.quantity)}</Text>
+      <Text style={s.cQty}>{it.unit ? `${formatQty(it.quantity)} ${it.unit}` : formatQty(it.quantity)}</Text>
       <Text style={s.cAmount}>{opts.dash && it.amount === 0 ? '−' : yen(it.amount)}</Text>
     </View>
   );

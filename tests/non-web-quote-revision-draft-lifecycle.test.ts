@@ -92,7 +92,13 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
     );
     expect(saveBody).toContain('if d.parent_quote_id is null');
     expect(saveBody).toContain('parent.dealer_id is distinct from v_uid');
+    expect(saveBody.indexOf('parent.dealer_id is distinct from v_uid')).toBeLessThan(
+      saveBody.indexOf('d.lock_version is distinct from p_expected_lock_version')
+    );
     expect(finalizeBody).toContain('parent.dealer_id is distinct from v_uid');
+    expect(finalizeBody.indexOf('parent.dealer_id is distinct from v_uid')).toBeLessThan(
+      finalizeBody.indexOf('d.lock_version is distinct from p_expected_lock_version')
+    );
     expect(finalizeBody).not.toContain('d.created_by is distinct from v_uid');
   });
 

@@ -54,7 +54,23 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('商品を追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("isCollapsed ? '+' : '−'");
-    expect(demo).toContain('画面内でDraft保存');
+    expect(demo).toContain('編集内容を一時保持');
+  });
+
+  it('本番接続前の一時保持と正式保存を誤認しない表記にする', () => {
+    expect(demo).toContain('編集内容を一時保持');
+    expect(demo).toContain('一時保持時点に戻す');
+    expect(demo).toContain('正式保存（接続後）');
+    expect(demo).toContain('下書きを破棄（接続後）');
+    expect(demo).not.toContain('画面内でDraft保存');
+    expect(demo).not.toContain('Draftの操作');
+  });
+
+  it('表を従来よりコンパクトな横幅で表示する', () => {
+    expect(demo).toContain('min-w-[76rem] border-collapse text-sm');
+    expect(demo).toContain('min-w-[16rem]');
+    expect(demo).not.toContain('min-w-[88rem] border-collapse text-sm');
+    expect(demo).not.toContain('min-w-[20rem]');
   });
 
   it('編集・見積書・プランボード・図面を同じ操作確認画面で切り替える', () => {

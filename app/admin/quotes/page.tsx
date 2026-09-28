@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { MapPin } from 'lucide-react';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
@@ -57,6 +58,10 @@ function casePhaseLabel(quote: {
   return 'F5/15 見積依頼';
 }
 
+function googleMapsHref(address: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
 function CaseSummary({
   caseCount,
   newCount,
@@ -78,9 +83,9 @@ function CaseSummary({
       className="rounded-lg border border-[#dbe4df] bg-white px-3 py-2 shadow-sm"
       data-testid="case-summary-strip"
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.7rem]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.7rem]" data-testid="case-summary-current">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-status">
-          <span className="font-semibold text-[#315745]">案件状況</span>
+          <span className="font-semibold text-[#315745]">現在案件</span>
           <span className="text-muted">案件</span>
           <strong className="text-xs text-ink">{caseCount}</strong>
           <span className="text-muted">新規依頼</span>
@@ -89,13 +94,15 @@ function CaseSummary({
           <strong className="text-ink">{quotedCount}</strong>
           <span className="text-muted">見積承諾</span>
           <strong className="text-ink">{acceptedCount}</strong>
+          <span className="text-muted">棟数</span>
+          <strong className="text-muted">—</strong>
         </div>
 
         <span className="hidden h-4 w-px bg-line md:block" aria-hidden="true" />
 
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-finance">
           <span className="font-semibold text-[#315745]">収支</span>
-          <span className="text-muted">{filtered ? '表示中の見積金額合計' : '各案件の現在金額合計'}</span>
+          <span className="text-muted">{filtered ? '表示中の見積額' : '見積額'}</span>
           <strong className="text-xs tabular-nums text-ink">{formatYen(quoteTotal)}</strong>
           <span className="text-muted">原価</span>
           <strong className="text-muted">—</strong>
@@ -111,6 +118,26 @@ function CaseSummary({
           <span className="font-semibold text-[#315745]">災害時供給</span>
           <span className="text-muted">完成個体登録後に供給可否を管理</span>
         </div>
+      </div>
+
+      <div
+        className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-line pt-1.5 text-[0.68rem]"
+        data-testid="case-summary-cumulative"
+      >
+        <span className="font-semibold text-[#315745]">累計実績</span>
+        <span className="rounded-full bg-[#edf3f6] px-1.5 py-0.5 text-[0.58rem] font-semibold text-[#536771]">未集計</span>
+        <span className="text-muted">成約件数</span>
+        <strong className="text-muted">—</strong>
+        <span className="text-muted">引渡し棟数</span>
+        <strong className="text-muted">—</strong>
+        <span className="text-muted">売上</span>
+        <strong className="text-muted">—</strong>
+        <span className="text-muted">原価</span>
+        <strong className="text-muted">—</strong>
+        <span className="text-muted">利益</span>
+        <strong className="text-muted">—</strong>
+        <span className="text-muted">利益率</span>
+        <strong className="text-muted">—</strong>
       </div>
     </section>
   );
@@ -256,7 +283,24 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                           {q.request_status ? `依頼：${QUOTE_REQUEST_STATUS_LABELS[q.request_status]} ／ ` : ''}更新 {formatDate(q.updated_at, true)}
                         </span>
                       </td>
-                      <td className="px-2 py-1 align-middle text-[0.64rem]">{q.site_address || '未登録'}</td>
+                      <td className="px-2 py-1 align-middle text-[0.64rem]">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <span className="min-w-0 truncate">{q.site_address || '未登録'}</span>
+                          {q.site_address && (
+                            <a
+                              href={googleMapsHref(q.site_address)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="shrink-0 rounded p-0.5 text-[#315745] hover:bg-[#edf3ef] hover:text-[#234a39]"
+                              aria-label={`${q.site_address}をGoogleマップで開く`}
+                              title="Googleマップで開く"
+                              data-testid="case-map-link"
+                            >
+                              <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-2 py-1 align-middle">
                         <strong>{q.base_model_name}</strong>
                       </td>
@@ -549,7 +593,24 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         </>
                       )}
                     </td>
-                    <td className="px-2 py-1 align-middle text-[0.64rem]">{request.contact.site_address || '—'}</td>
+                    <td className="px-2 py-1 align-middle text-[0.64rem]">
+                      <div className="flex min-w-0 items-center gap-1">
+                        <span className="min-w-0 truncate">{request.contact.site_address || '—'}</span>
+                        {request.contact.site_address && (
+                          <a
+                            href={googleMapsHref(request.contact.site_address)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0 rounded p-0.5 text-[#315745] hover:bg-[#edf3ef] hover:text-[#234a39]"
+                            aria-label={`${request.contact.site_address}をGoogleマップで開く`}
+                            title="Googleマップで開く"
+                            data-testid="case-map-link"
+                          >
+                            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-2 py-1 align-middle">
                       <strong>{modelName ?? '—'}</strong>
                       {specName ? <span className="ml-1 text-[0.6rem] text-muted">{specName}</span> : null}

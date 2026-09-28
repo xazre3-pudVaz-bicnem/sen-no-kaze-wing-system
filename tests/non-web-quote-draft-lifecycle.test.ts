@@ -10,6 +10,7 @@ const migration = fs.readFileSync(
 const actions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
 const manualForm = fs.readFileSync(path.join(root, 'components/admin/manual-quote-form.tsx'), 'utf8');
 const draftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
+const caseWorkspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
 
 describe('non-Web Quote Draft lifecycle migration', () => {
@@ -50,8 +51,9 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).toContain("pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'");
   });
 
-  it('matches the latest staff access boundary for non-Web Drafts', () => {
-    expect(migration.match(/v_rank >= 3 or d\.created_by = v_uid/g)?.length).toBe(3);
+  it('matches the latest staff access boundary for non-Web Drafts and fails closed on NULL created_by', () => {
+    expect(migration.match(/v_rank < 3 and d\.created_by is distinct from v_uid/g)?.length).toBe(3);
+    expect(migration).not.toContain('if not (v_rank >= 3 or d.created_by = v_uid) then');
     expect(migration).not.toContain('v_rank >= 2 or d.created_by = v_uid');
     expect(migration).toContain('admin: all Drafts / master_dealer+dealer: only Drafts they created.');
   });
@@ -63,7 +65,9 @@ describe('non-Web Quote Draft lifecycle migration', () => {
 
     expect(saveBody).toContain('from public.quote_drafts');
     expect(saveBody).toContain('for update;');
-    expect(saveBody).toContain('d.lock_version <> p_expected_lock_version');
+    expect(saveBody).toContain('d.lock_version is distinct from p_expected_lock_version');
+    expect(saveBody).not.toContain('d.lock_version <> p_expected_lock_version');
+    expect(migration.match(/d\.lock_version is distinct from p_expected_lock_version/g)?.length).toBe(2);
     expect(saveBody).toContain('lock_version = lock_version + 1');
     expect(saveBody).toContain('delete from public.quote_draft_items');
   });
@@ -126,11 +130,21 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).toContain('round(item.unit_price::numeric * item.quantity)::integer');
   });
 
-  it('does not replace existing Web quote creation/revision RPCs', () => {
+  it('keeps existing Web creation/revision RPCs while hardening nullable customer acceptance', () => {
     expect(migration).not.toContain('create or replace function public.create_quote_from_configuration');
     expect(migration).not.toContain('create or replace function public.create_quote_revision');
-    expect(migration).not.toContain('create or replace function public.respond_to_quote');
-    expect(migration).not.toContain('update public.configurations');
+    expect(migration).toContain('create or replace function public.respond_to_quote');
+    expect(migration).toContain('if q.user_id is null or q.user_id <> auth.uid() then');
+    expect(migration).toContain('alter function public.respond_to_quote(uuid, text) owner to postgres;');
+    expect(migration).toContain('grant execute on function public.respond_to_quote(uuid, text) to authenticated;');
+  });
+
+  it('blocks legacy Revision 2+ creation for Configuration-less non-Web series until PR #3', () => {
+    expect(migration).toContain('create or replace function public.guard_non_web_revision_path()');
+    expect(migration).toContain('parent.configuration_id is null');
+    expect(migration).toContain('create trigger trg_quotes_non_web_revision_path');
+    expect(migration).toContain('LOCKED: 非Web案件の改訂は次工程のRevision lifecycleから行ってください');
+    expect(caseWorkspace).toContain('quote.configuration_id !== null');
   });
 });
 
@@ -180,5 +194,14 @@ describe('non-Web manual case application wiring', () => {
     expect(draftEditor).toContain('未保存の変更があります。先にDraftを保存してください。');
     expect(draftEditor).toContain('DBが数量×単価・税額・合計を再計算します');
     expect(draftEditor).toContain('base_master_revision_id');
+  });
+
+  it('keeps edits made during a save marked dirty and blocks finalization while save is pending', () => {
+    expect(draftEditor).toContain('const [editGeneration, setEditGeneration] = useState(0);');
+    expect(draftEditor).toContain('const submittedGeneration = useRef<number | null>(null);');
+    expect(draftEditor).toContain('submittedGeneration.current = editGeneration;');
+    expect(draftEditor).toContain('if (editGeneration === submittedGeneration.current)');
+    expect(draftEditor).toContain('setSavedGeneration(editGeneration);');
+    expect(draftEditor).toContain('disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}');
   });
 });

@@ -122,6 +122,8 @@ describe('見積Snapshotの数量・種別表示', () => {
     expect(formatQty(14.76)).toBe('14.76');
     expect(formatQty(12.18)).toBe('12.18');
     expect(formatQty(1.2345)).toBe('1.2345');
+    // 既存QuoteItemはunconstrained numericのため、過去snapshotの5桁以上も表示時に丸めない。
+    expect(formatQty(1.23456)).toBe('1.23456');
   });
 
   it('非Web formal Revision 1を概算ではなく確定見積として扱う', () => {

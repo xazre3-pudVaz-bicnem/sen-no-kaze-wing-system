@@ -566,8 +566,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
                     data-testid="case-row-meta"
                   >
-                    <td colSpan={6} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.64rem] text-muted">
+                    <td colSpan={6} className={`border-l-4 px-2 pb-0.5 pt-0 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.59rem] leading-4 text-muted">
                         <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
                         <span>原価 <strong className="font-semibold text-muted">—</strong></span>
                         <span>利益 <strong className="font-semibold text-muted">—</strong></span>

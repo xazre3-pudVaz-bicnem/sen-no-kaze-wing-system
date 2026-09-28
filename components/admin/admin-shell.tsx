@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { Bell } from 'lucide-react';
 import { signOutAction } from '@/lib/actions/auth';
 import { ROLE_LABELS, type RoleCode } from '@/lib/domain/types';
 import { AdminNav } from '@/components/admin/admin-nav';
@@ -28,6 +29,16 @@ export function AdminShell({ children, email, role, migrationOnly = false }: Adm
           <div className="flex min-w-0 items-center gap-3 text-xs text-muted">
             <p className="hidden truncate sm:block">{email}</p>
             <span className="shrink-0 rounded bg-sand px-1.5 py-0.5 text-[0.65rem] text-ink-soft">{ROLE_LABELS[role]}</span>
+            {!migrationOnly && (
+              <Link
+                href="/admin/notifications"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-line text-ink-soft hover:bg-sand hover:text-ink"
+                aria-label="お知らせ"
+                title="お知らせ"
+              >
+                <Bell className="size-4" aria-hidden="true" />
+              </Link>
+            )}
             <Link href="/" className="hidden shrink-0 hover:text-ink lg:block">公開サイト</Link>
             <form action={signOutAction} className="shrink-0">
               <button type="submit" className="hover:text-ink">ログアウト</button>

@@ -58,10 +58,10 @@ describe('顧客管理UI', () => {
     expect(requestCheck).toBeGreaterThan(quoteCheck);
   });
 
-  it('keeps customer management as a case-management utility instead of a second-level menu', () => {
-    expect(nav).toContain('/admin/customer-management');
-    expect(quotes).toContain('href="/admin/customer-management"');
-    expect(quotes).toContain('顧客管理');
-    expect(nav).not.toContain("label: '顧客管理'");
+  it('keeps customer management as a case-management utility without crowding the case heading', () => {
+    expect(nav).toContain("href: '/admin/customer-management'");
+    expect(nav).toContain("label: '顧客管理'");
+    expect(quotes).not.toContain('href="/admin/customer-management"');
+    expect(quotes).not.toContain('>顧客管理<');
   });
 });

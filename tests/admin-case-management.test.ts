@@ -77,22 +77,24 @@ describe('Admin case management UI', () => {
     expect(dealerRequestMetaMigration).toContain('grant execute on function public.list_dealer_quote_request_meta() to authenticated;');
   });
 
-  it('keeps case utilities contextual instead of rendering a fixed second-level menu', () => {
+  it('keeps the case heading focused and moves supporting routes to shared navigation', () => {
     for (const route of ['/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
       expect(nav).toContain(route);
     }
-    for (const label of ['案件一覧', '保存済み仕様', '問い合わせ受付']) {
-      expect(nav).not.toContain(`label: '${label}'`);
-    }
-    expect(list).toContain('href="/admin/customer-management"');
-    expect(list).toContain('href="/admin/contacts"');
-    expect(list).toContain('href="/admin/notifications"');
-    expect(list).toContain('＋対面・電話・紹介の案件受付');
+    expect(list).not.toContain('href="/admin/customer-management"');
+    expect(list).not.toContain('href="/admin/contacts"');
+    expect(list).not.toContain('href="/admin/notifications"');
+    expect(list).not.toContain('＋対面・電話・紹介の案件受付');
+    expect(list).toContain('＋案件を登録');
     expect(list).toContain('href="/admin/quotes/new"');
+    expect(shell).toContain('href="/admin/notifications"');
+    expect(shell).toContain('aria-label="お知らせ"');
+    expect(nav).toContain("href: '/admin/customer-management'");
+    expect(nav).toContain("href: '/admin/contacts'");
   });
 
   it('uses one case flow for Web and staff-received orders without calling revisions new quotes', () => {
-    expect(list).toContain('Web見積依頼と、対面・電話・紹介で受け付けた案件 {caseCount} 件をまとめて管理します。');
+    expect(list).toContain('Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。');
     expect(newQuote).toContain('Web以外で受けた案件を登録し、概算見積を作成します。作成後はWeb経由の案件と同じ案件管理で進めます。');
     expect(manualQuoteForm).toContain('案件を登録して概算見積を作成');
     expect(manualQuoteForm).toContain('現地確認後は「見積内容を更新」から施工金額や商品変更を反映');

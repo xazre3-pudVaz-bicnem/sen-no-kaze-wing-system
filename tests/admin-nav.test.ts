@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getAdminNavSections } from '@/components/admin/admin-nav';
+import { getAdminNavSections, getAdminUtilityLinks } from '@/components/admin/admin-nav';
 
 const labelsFor = (role: 'admin' | 'master_dealer' | 'dealer') => getAdminNavSections(role).map((section) => section.label);
 const settingsPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/settings/page.tsx'), 'utf8');
@@ -14,6 +14,12 @@ describe('管理画面の業務領域ナビゲーション', () => {
 
   it.each(['master_dealer', 'dealer'] as const)('%sには見積書作成・管理を表示しない', (role) => {
     expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
+  });
+
+  it('案件管理の補助導線は本部向けだけを大分類の右側に置く', () => {
+    expect(getAdminUtilityLinks('admin').map((item) => item.label)).toEqual(['顧客管理', '問い合わせ']);
+    expect(getAdminUtilityLinks('master_dealer')).toEqual([]);
+    expect(getAdminUtilityLinks('dealer')).toEqual([]);
   });
 
   it('補助画面は大分類のactive判定にだけ含め、二段目メニューを描画しない', () => {

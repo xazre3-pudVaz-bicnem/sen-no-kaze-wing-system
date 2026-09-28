@@ -43,7 +43,8 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('立面図');
     expect(demo).toContain('配置図');
     expect(demo).toContain('図面ファイル保存・作図機能・Revisionとの正式な紐付けは後続工程で接続します。');
-    expect(demo).toContain('正式保存（接続後）');
-    expect(demo).toContain('下書きを破棄（接続後）');
+    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('正式保存');
+    expect(demo).toContain('Draft→正式Revision接続後に利用できます');
   });
 });

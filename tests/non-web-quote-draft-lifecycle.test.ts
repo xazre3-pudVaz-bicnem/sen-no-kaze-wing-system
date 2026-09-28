@@ -154,9 +154,9 @@ describe('non-Web manual case application wiring', () => {
   });
 
   it('states clearly that case registration does not issue a quote', () => {
-    expect(manualForm).toContain('Configurationや見積Revisionを作りません');
+    expect(manualForm).toContain('登録時点では見積Revisionを発行しません。');
     expect(manualForm).toContain('正式保存');
-    expect(manualForm).toContain('案件を登録してDraftを開く');
+    expect(manualForm).toContain('案件を登録して見積Draftを開く');
   });
 
   it('keeps Draft save and immutable Revision 1 finalization as separate UI actions', () => {

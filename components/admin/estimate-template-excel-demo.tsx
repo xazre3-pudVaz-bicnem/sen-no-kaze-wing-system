@@ -395,7 +395,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
               <label className="flex items-center gap-2">
                 <div>
                   <p className="text-xs font-semibold text-slate-700">経費</p>
-                  <p className="text-[10px] text-slate-500">区分に加算</p>
+                  <p className="text-[10px] text-slate-500">{sample ? 'Excel明細に反映済み' : '区分に加算'}</p>
                 </div>
                 <input
                   type="number"
@@ -725,7 +725,10 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>経費 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
+        <div className="flex justify-between gap-4 py-1">
+          <span>{sample ? '追加経費（Excel明細に反映済み）' : `経費 ${expenseRate.toFixed(1)}%`}</span>
+          <strong>{sample ? '—' : formatYen(totals.saleExpense)}</strong>
+        </div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
           <input

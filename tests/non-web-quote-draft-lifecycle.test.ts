@@ -74,6 +74,11 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).toContain('v_total := v_subtotal + v_tax');
   });
 
+  it('uses adjustment for discounts instead of creating PDF-hidden negative detail rows', () => {
+    expect(migration).toContain('値引きは調整額を使用してください');
+    expect(draftEditor).toContain("filter((kind) => kind !== 'discount')");
+  });
+
   it('preserves PR #275 Base Revision invariants and use permission', () => {
     expect(migration).toContain("rev.status in ('published', 'superseded')");
     expect(migration).toContain('master.base_model_id = d.base_model_id');

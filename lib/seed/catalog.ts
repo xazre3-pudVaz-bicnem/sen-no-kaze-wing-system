@@ -6,9 +6,13 @@
  * 構成は先方指定の商品台帳に準拠する。
  *   本体（Wing / BOX / フラット）
  *    └ 仕様（ホテル仕様 / 住宅仕様 / 事務所・店舗用）… base_models.presets
- *       └ 分類（内外装仕上げ / サッシ / 内部建具 / 設備機器 / 照明器具 / 家具 / その他 / 防火仕様 / 別途工事）… option_categories.group_*
+ *       └ 分類（内外装仕上げ / サッシ / 内部建具 / 設備機器 / 照明器具 / 家具 / その他 / 別途工事）… option_categories.group_*
  *          └ カテゴリー（浴室・トイレ・床材 …）… option_categories
  *             └ 商品（オプション）… options（spec_codes で仕様を絞り込み）
+ *
+ * 防火 / 非防火は見積・本体仕様の条件軸として扱う。
+ * 旧 simulator / 保存済み Configuration 互換のため fireproof カテゴリーと2オプションは当面残すが、
+ * 商品台帳・商品登録の通常カテゴリーとしては扱わない。
  *
  * 価格は「20260822見積書テンプレート.xlsx」のお客様価格（原価×1.5）から転記。
  * 本体・オプションの諸費用 15% は計算時に自動加算するため、ここには含めない。
@@ -346,7 +350,7 @@ const cat = (
   ...opts,
 });
 
-// 並び順は先方の本体分類表（防火・非防火 → 屋根・外壁 → 内装 → 玄関ドア → サッシ → 設備 → …）に合わせる
+// 商品台帳の分類順。fireproof は旧 simulator / Configuration 互換専用で、通常の商品台帳には表示しない
 const G = {
   fireproof: ['fireproof', '防火仕様', 1] as [string, string, number],
   finish: ['finish', '内外装仕上げ', 2] as [string, string, number],
@@ -395,7 +399,7 @@ export const seedCategories: OptionCategory[] = [
   cat(C.officeSupplies, 'office-supplies', '事務所用品', G.other, 4, { finish_level: 'equipment', selection_mode: 'multi' }),
   cat(C.fireproof, 'fireproof', '防火仕様', G.fireproof, 1, { finish_level: 'shell', is_required: true, description: '建築する場所によって異なります。詳しくは近くの代理店にご相談ください' }),
   cat(C.insulation, 'insulation', '断熱仕様', G.finish, 4, { finish_level: 'shell', selection_mode: 'multi', description: '本体の断熱性能。あとから変更できないため本体注文時に選びます' }),
-  // 防火仕様カテゴリーは注文範囲の選択に隣接して表示する（並び順は G.fireproof=1）
+  // fireproof カテゴリーは旧 simulator / Configuration 互換のため残す。通常の商品台帳・商品登録には表示しない
   cat(C.freeProduct, 'free-product', 'フリー商品', G.free, 1, {
     finish_level: 'equipment',
     selection_mode: 'multi',
@@ -605,7 +609,7 @@ export const seedOptions: ProductOption[] = [
   opt({ id: O.interiorStdFlat, base_model_id: MODEL_FLAT_ID, category_id: C.wallCeiling, code: 'interior-standard-flat', name: '内装工事一式（標準）', description: '床フローリング 16.24㎡、壁クロス 30.8㎡、天井クロス・ラワンべニア 16.24㎡。', price: 461163, selection_type: 'radio', is_default: true, sort_order: 10 }),
   opt({ id: O.insulationUpgradeWing, base_model_id: MODEL_WING01_ID, category_id: C.insulation, code: 'insulation-upgrade-wing', name: '高断熱仕様（スタイロフォーム 90mm）', description: '床・壁・天井の断熱材をグラスウールからスタイロフォーム 90mm に変更。', price: 235278, selection_type: 'checkbox', sort_order: 5 }),
 
-  // ---- 防火仕様（先方指定：④その他） ----
+  // ---- 防火仕様（旧互換専用。正式には標準見積・本体仕様の条件軸として扱う） ----
   opt({ id: O.fireStandard, category_id: C.fireproof, code: 'fire-standard', name: '非防火仕様（基本仕様）', description: '防火指定のない地域向けの標準仕様です。', price: 0, selection_type: 'radio', is_default: true, sort_order: 1 }),
   opt({ id: O.fireProof, category_id: C.fireproof, code: 'fire-proof', name: '防火仕様（防火構造）', description: '防火地域・準防火地域向けの防火構造。建築する場所によって異なるため、近くの代理店にご相談ください。', price: 0, price_on_request: true, selection_type: 'radio', sort_order: 2 }),
 

@@ -68,16 +68,12 @@ const makeId = () => `estimate-demo-${Date.now()}-${++seq}`;
 
 export function EstimateTemplateExcelDemo() {
   const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
-  const [savedRows, setSavedRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
-  const [selectedCell, setSelectedCell] = useState('選択したセルの内容を表示');
+  const [selectedCell, setSelectedCell] = useState('セルを選択すると内容を表示します');
   const [markupRate, setMarkupRate] = useState(160);
-  const [savedMarkupRate, setSavedMarkupRate] = useState(160);
   const [expenseRate, setExpenseRate] = useState(15);
-  const [savedExpenseRate, setSavedExpenseRate] = useState(15);
   const [adjustment, setAdjustment] = useState(-2500);
-  const [savedAdjustment, setSavedAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('edit');
@@ -131,24 +127,6 @@ export function EstimateTemplateExcelDemo() {
   }, [query]);
 
   const markDirty = () => setDirty(true);
-
-  const saveLocal = () => {
-    setSavedRows(cloneRows(rows));
-    setSavedMarkupRate(markupRate);
-    setSavedExpenseRate(expenseRate);
-    setSavedAdjustment(adjustment);
-    setDirty(false);
-  };
-
-  const resetToSaved = () => {
-    if (dirty && !window.confirm('未保存の変更を破棄して、画面内の保存時点へ戻しますか？')) return;
-    setRows(cloneRows(savedRows));
-    setMarkupRate(savedMarkupRate);
-    setExpenseRate(savedExpenseRate);
-    setAdjustment(savedAdjustment);
-    setCollapsed(new Set());
-    setDirty(false);
-  };
 
   const updateRow = (id: string, patch: Partial<DemoRow>) => {
     setRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
@@ -298,7 +276,7 @@ export function EstimateTemplateExcelDemo() {
           ))}
         </div>
         <div className="bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          同じ見積書の内容を、編集・見積書・プランボード・図面で確認します。現在はDB非連動の操作確認版です。
+          編集した内容は、見積書・プランボード・図面の確認にも同じ内容で反映されます。
         </div>
       </section>
 
@@ -308,67 +286,114 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">見積書作成 ― Excel操作確認版</h2>
+              <h2 className="font-semibold">見積書作成</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
-                : 'rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800'}
+                : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
               >
-                {dirty ? '未保存の変更あり' : '保存時点と同じ'}
+                {dirty ? '編集中' : '下書き'}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              本体明細も含めて、この見積書の内容をExcelのように変更できます。変更は画面内だけで、DBには保存しません。
+              本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetToSaved}>保存時点に戻す</Button>
-            <Button type="button" size="sm" onClick={saveLocal}>画面内でDraft保存</Button>
+            <Button type="button" variant="secondary" size="sm" disabled title="Draft接続後に利用できます">
+              下書き保存
+            </Button>
+            <Button type="button" size="sm" disabled title="Draft→正式Revision接続後に利用できます">
+              正式保存
+            </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap divide-x divide-slate-200 border-b border-slate-200 text-sm">
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>Wing</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>ホテルUB</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>非防火</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>標準地域</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>Wing ホテル仕様 v4</strong></div>
-          <label className="flex items-center gap-2 px-4 py-2">
-            <span className="text-xs text-slate-500">売価倍率</span>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={markupRate}
-              onChange={(event) => {
-                setMarkupRate(Math.max(0, Number(event.target.value) || 0));
-                markDirty();
-              }}
-              className="h-8 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
-            />
-            <span>%</span>
-            <button type="button" className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold" onClick={applyMarkup}>
-              掛率から売価を再計算
-            </button>
-          </label>
-          <label className="flex items-center gap-2 px-4 py-2">
-            <span className="text-xs text-slate-500">売価諸費用</span>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={expenseRate}
-              onChange={(event) => {
-                setExpenseRate(Math.max(0, Number(event.target.value) || 0));
-                markDirty();
-              }}
-              className="h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
-            />
-            <span>%</span>
-          </label>
+        <div className="border-b border-slate-200 text-sm">
+          <div className="flex flex-wrap items-stretch border-b border-slate-200">
+            <div className="flex w-20 shrink-0 items-center bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+              見積条件
+            </div>
+            <div className="flex flex-wrap divide-x divide-slate-200">
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>Wing</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>ホテルUB</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>非防火</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>標準地域</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>Wing ホテル仕様 v4</strong></div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-stretch bg-slate-50/50">
+            <div className="flex w-20 shrink-0 items-center bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+              価格設定
+            </div>
+            <div className="flex flex-1 flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2">
+              <div className="flex items-center gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">販売費</p>
+                  <p className="text-[10px] text-slate-500">原価側</p>
+                </div>
+                <div
+                  className="flex h-8 min-w-20 items-center justify-end rounded border border-slate-300 bg-slate-100 px-2 text-sm font-semibold text-slate-600"
+                  title="原価側の正式計算を接続後に変更できるようにします"
+                >
+                  100 <span className="ml-1 font-normal">%</span>
+                </div>
+                <span className="text-[10px] text-slate-400">接続後</span>
+              </div>
+
+              <label className="flex items-center gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">経費</p>
+                  <p className="text-[10px] text-slate-500">区分に加算</p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={expenseRate}
+                  onChange={(event) => {
+                    setExpenseRate(Math.max(0, Number(event.target.value) || 0));
+                    markDirty();
+                  }}
+                  className="h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  aria-label="経費率"
+                />
+                <span>%</span>
+              </label>
+
+              <label className="flex items-center gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">掛率</p>
+                  <p className="text-[10px] text-slate-500">原価→売価</p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={markupRate}
+                  onChange={(event) => {
+                    setMarkupRate(Math.max(0, Number(event.target.value) || 0));
+                    markDirty();
+                  }}
+                  className="h-8 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  aria-label="掛率"
+                />
+                <span>%</span>
+              </label>
+
+              <button
+                type="button"
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm"
+                onClick={applyMarkup}
+              >
+                売価を再計算
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="flex border-b border-slate-200 text-xs">
-          <div className="w-16 border-r border-slate-200 bg-slate-100 px-2 py-1.5 font-semibold text-slate-500">内容</div>
+          <div className="w-20 border-r border-slate-200 bg-slate-100 px-3 py-1.5 font-semibold text-slate-500">選択中</div>
           <div className="min-h-7 flex-1 px-3 py-1.5">{selectedCell}</div>
         </div>
       </section>
@@ -384,21 +409,21 @@ export function EstimateTemplateExcelDemo() {
         </div>
 
         <div className="max-h-[68vh] overflow-auto">
-          <table className="min-w-[88rem] border-collapse text-sm">
+          <table className="min-w-[76rem] border-collapse text-sm">
             <thead>
               <tr>
                 <th className="sticky top-0 z-10 w-12 border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">#</th>
                 <th className="sticky top-0 z-10 w-10 border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
-                <th className="sticky top-0 z-10 min-w-[20rem] border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">品名</th>
-                <th className="sticky top-0 z-10 w-20 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">数量</th>
+                <th className="sticky top-0 z-10 min-w-[16rem] border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">品名</th>
+                <th className="sticky top-0 z-10 w-16 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">数量</th>
                 <th className="sticky top-0 z-10 w-20 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">単位</th>
-                <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価</th>
+                <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価金額</th>
-                <th className="sticky top-0 z-10 w-32 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価</th>
+                <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価金額</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">粗利</th>
-                <th className="sticky top-0 z-10 min-w-48 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
-                <th className="sticky top-0 z-10 w-24 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
+                <th className="sticky top-0 z-10 min-w-40 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
+                <th className="sticky top-0 z-10 w-20 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -598,7 +623,7 @@ export function EstimateTemplateExcelDemo() {
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>売価諸費用 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
+        <div className="flex justify-between gap-4 py-1"><span>経費 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
           <input
@@ -623,18 +648,6 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex justify-between gap-4 py-1 text-xs text-slate-500"><span>別途見積</span><strong>{totals.onRequest}件</strong></div>
       </section>
 
-      <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="font-semibold">Draftの操作</h2>
-            <p className="mt-1 text-xs text-slate-500">UI確認版のため、正式保存・Revision発行・破棄は実行しません。</p>
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" disabled>正式保存（接続後）</Button>
-            <Button type="button" variant="ghost" disabled>Draftを破棄</Button>
-          </div>
-        </div>
-      </section>
         </>
       )}
 

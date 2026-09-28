@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 type Access = 'admin';
 type NavSection = { href: string; label: string; match: string[]; need?: Access };
+type NavUtilityLink = { href: string; label: string; need?: Access };
 
 const sections: NavSection[] = [
   {
@@ -47,8 +48,13 @@ const sections: NavSection[] = [
   },
 ];
 
-function isAllowed(section: NavSection, role: RoleCode) {
-  return section.need === 'admin' ? role === 'admin' : true;
+const utilityLinks: NavUtilityLink[] = [
+  { href: '/admin/customer-management', label: '顧客管理' },
+  { href: '/admin/contacts', label: '問い合わせ', need: 'admin' },
+];
+
+function isAllowed(item: { need?: Access }, role: RoleCode) {
+  return item.need === 'admin' ? role === 'admin' : true;
 }
 
 function sectionIsActive(section: NavSection, pathname: string) {
@@ -60,9 +66,15 @@ export function getAdminNavSections(role: RoleCode) {
   return sections.filter((section) => isAllowed(section, role));
 }
 
+/** 大分類を増やさず、案件管理の補助画面だけを右側に置く。 */
+export function getAdminUtilityLinks(role: RoleCode) {
+  return utilityLinks.filter((item) => isAllowed(item, role));
+}
+
 export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migrationOnly?: boolean }) {
   const pathname = usePathname();
   const visible = migrationOnly ? [] : getAdminNavSections(role);
+  const utilities = migrationOnly ? [] : getAdminUtilityLinks(role);
 
   return (
     <nav aria-label="管理メニュー" className="border-t border-line">
@@ -92,6 +104,26 @@ export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migr
             </Link>
           );
         })}
+        {utilities.length > 0 && (
+          <div className="ml-auto flex shrink-0 items-center gap-1 border-l border-line pl-2" aria-label="案件管理の補助メニュー">
+            {utilities.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium',
+                    active ? 'bg-sand text-ink' : 'text-muted hover:bg-sand hover:text-ink'
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </nav>
   );

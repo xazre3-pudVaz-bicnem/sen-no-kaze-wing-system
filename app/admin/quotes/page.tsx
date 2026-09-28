@@ -4,10 +4,8 @@ import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import {
-  canEditCatalog,
   QUOTE_REQUEST_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
-  ROLE_LABELS,
 } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
@@ -126,40 +124,22 @@ function CaseSummary({
   );
 }
 
-function CasePageHeading({ role, caseCount }: { role: keyof typeof ROLE_LABELS; caseCount: number }) {
-  const isAdmin = role === 'admin';
-
+function CasePageHeading({ caseCount }: { caseCount: number }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-2">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">案件管理</h1>
         <p className="mt-0.5 text-xs text-ink-soft">
-          Web見積依頼と、対面・電話・紹介で受け付けた案件 {caseCount} 件をまとめて管理します。案件を選択すると下に作業領域を表示します。
+          Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。
         </p>
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {isAdmin && (
-          <Link href="/admin/customer-management" className="btn-ghost btn-sm">
-            顧客管理
-          </Link>
-        )}
-        {isAdmin && (
-          <Link href="/admin/contacts" className="btn-ghost btn-sm">
-            問い合わせ
-          </Link>
-        )}
-        <Link href="/admin/notifications" className="btn-ghost btn-sm">
-          お知らせ
-        </Link>
-        <Link
-          href="/admin/quotes/new"
-          className="inline-flex items-center rounded-lg bg-[#2f6b4f] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#285d45]"
-          data-testid="new-quote-link"
-        >
-          ＋対面・電話・紹介の案件受付
-        </Link>
-        <span className="rounded-lg bg-[#edf3f6] px-3 py-2 text-[0.68rem] font-semibold text-[#365467]">{ROLE_LABELS[role]}</span>
-      </div>
+      <Link
+        href="/admin/quotes/new"
+        className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+        data-testid="new-quote-link"
+      >
+        ＋案件を登録
+      </Link>
     </div>
   );
 }
@@ -189,8 +169,9 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
 
-  // 代理店は自分に割り当てられた案件だけ。既存の権限・Quote lifecycleは変更しない。
-  if (!canEditCatalog(actor.role)) {
+  // 総代理店・代理店は自分に割り当てられた案件だけ。本部だけが全体一覧を扱う。
+  // Quote lifecycle自体は変更しない。
+  if (actor.role !== 'admin') {
     const mine = await store.listDealerQuotes(actor.id);
     const latest = mine.filter((q) => q.status !== 'superseded');
     const quoteTotal = latest.reduce((sum, quote) => sum + quote.total, 0);
@@ -201,7 +182,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-        <CasePageHeading role={actor.role} caseCount={latest.length} />
+        <CasePageHeading caseCount={latest.length} />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}
@@ -411,7 +392,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-      <CasePageHeading role={actor.role} caseCount={requests.length} />
+      <CasePageHeading caseCount={requests.length} />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}
@@ -701,7 +682,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </div>
             <p className="mt-1 text-xs leading-5 text-ink-soft">
               この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
-              右上の「対面・電話・紹介の案件受付」は別の案件を新規作成するため、このWeb受付の引継ぎには使用しません。
+              右上の「＋案件を登録」は別の案件を新規作成するため、このWeb受付の引継ぎには使用しません。
             </p>
           </section>
         </section>

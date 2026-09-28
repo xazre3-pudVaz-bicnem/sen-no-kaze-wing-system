@@ -81,6 +81,7 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('<Badge tone="neutral">未登録</Badge>');
     expect(listPage).toContain('aria-hidden="true">›</div>');
     expect(listPage).toContain('border-l-4 border-l-forest bg-sand/15');
+    expect(listPage).toContain('className="min-w-0 pl-4"');
     expect(listPage).toContain('costTaxIncluded: 2_100_000');
     expect(listPage).toContain('saleTaxIncluded: 2_822_600');
     expect(listPage).toContain("marginRate: '25.6%'");

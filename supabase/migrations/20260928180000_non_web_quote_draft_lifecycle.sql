@@ -936,7 +936,8 @@ begin
        'public.create_manual_quote_case(jsonb, text, uuid, text, text)'::regprocedure,
        'public.get_quote_draft(uuid)'::regprocedure,
        'public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text)'::regprocedure,
-       'public.finalize_quote_draft(uuid, integer)'::regprocedure
+       'public.finalize_quote_draft(uuid, integer)'::regprocedure,
+       'public.respond_to_quote(uuid, text)'::regprocedure
      )
        and pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'
   ) then

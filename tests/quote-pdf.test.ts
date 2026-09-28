@@ -1,6 +1,7 @@
 import zlib from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { renderQuotePdf } from '@/lib/pdf/quote-pdf';
+import { quotePdfRevisionLabel, renderQuotePdf } from '@/lib/pdf/quote-pdf';
+import { formatQty } from '@/lib/domain/pricing';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
 
 const NOW = '2026-08-23T00:00:00.000Z';
@@ -113,6 +114,34 @@ function textBaselines(content: string): { size: number; y: number }[] {
   }
   return rows;
 }
+
+describe('見積Snapshotの数量・種別表示', () => {
+  it('小数数量を4桁以内で丸めず表示する', () => {
+    expect(formatQty(21.12)).toBe('21.12');
+    expect(formatQty(61.6)).toBe('61.6');
+    expect(formatQty(14.76)).toBe('14.76');
+    expect(formatQty(12.18)).toBe('12.18');
+    expect(formatQty(1.2345)).toBe('1.2345');
+  });
+
+  it('非Web formal Revision 1を概算ではなく確定見積として扱う', () => {
+    expect(
+      quotePdfRevisionLabel({
+        quote_kind: 'formal',
+        parent_quote_id: null,
+        revision: 1,
+      })
+    ).toBe('（第1版・確定見積）');
+
+    expect(
+      quotePdfRevisionLabel({
+        quote_kind: 'preliminary',
+        parent_quote_id: null,
+        revision: 1,
+      })
+    ).toBe('（概算）');
+  });
+});
 
 describe('見積書 PDF のレイアウト', () => {
   it(

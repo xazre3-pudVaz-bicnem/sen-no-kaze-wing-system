@@ -8,6 +8,7 @@ import { Button } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
 type Section = '本体' | '内外装工事' | 'オプション' | '別途';
+type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing';
 
 type DemoRow = {
   id: string;
@@ -79,6 +80,7 @@ export function EstimateTemplateExcelDemo() {
   const [savedAdjustment, setSavedAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<DemoTab>('edit');
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
@@ -176,7 +178,7 @@ export function EstimateTemplateExcelDemo() {
     markDirty();
   };
 
-  const addFreeRow = (section: Exclude<Section, '本体'>) => {
+  const addFreeRow = (section: Section) => {
     setRows((current) => [
       ...current,
       {
@@ -190,7 +192,7 @@ export function EstimateTemplateExcelDemo() {
         manualSale: false,
         priceOnRequest: section === '別途',
         remark: '',
-        source: 'free',
+        source: section === '本体' ? 'base' : 'free',
       },
     ]);
     markDirty();
@@ -271,11 +273,42 @@ export function EstimateTemplateExcelDemo() {
 
   return (
     <div className="space-y-4">
+      <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+        <div className="flex items-center gap-1 border-b border-slate-200 px-3" role="tablist" aria-label="見積書作成の表示切替">
+          {([
+            ['edit', '編集'],
+            ['estimate', '見積書'],
+            ['plan', 'プランボード'],
+            ['drawing', '図面'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`min-h-10 border-b-2 px-4 py-2 text-sm font-semibold transition ${
+                tab === key
+                  ? 'border-emerald-800 text-emerald-900'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="bg-slate-50 px-4 py-2 text-xs text-slate-600">
+          同じ見積書の内容を、編集・見積書・プランボード・図面で確認します。現在はDB非連動の操作確認版です。
+        </div>
+      </section>
+
+      {tab === 'edit' && (
+        <>
       <section className="sticky top-0 z-30 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">見積テンプレート ― Excel操作確認版</h2>
+              <h2 className="font-semibold">見積書作成 ― Excel操作確認版</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
                 : 'rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800'}
@@ -284,7 +317,7 @@ export function EstimateTemplateExcelDemo() {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              本体マスターと同じ列・行高・操作感で確認します。変更は画面内だけで、DBには保存しません。
+              本体明細も含めて、この見積書の内容をExcelのように変更できます。変更は画面内だけで、DBには保存しません。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -343,9 +376,9 @@ export function EstimateTemplateExcelDemo() {
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
           <p>
-            <strong className="text-emerald-900">本体マスターから参照中：</strong>
+            <strong className="text-emerald-900">本体マスターから読み込み済み：</strong>
             Wing ホテル仕様 v4
-            <span className="ml-2 text-slate-500">本体明細は見積テンプレート側では直接変更しません。</span>
+            <span className="ml-2 text-slate-500">本体マスター自体は変更せず、この見積書内の明細を編集します。</span>
           </p>
           <Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">本体マスターの操作確認画面を開く</Link>
         </div>
@@ -389,7 +422,7 @@ export function EstimateTemplateExcelDemo() {
                       </td>
                       <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">
                         {section}
-                        {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスター参照・読取専用）</span>}
+                        {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスターから読込・この見積内で編集可）</span>}
                       </td>
                       <td colSpan={4} className="px-3 text-right text-xs">
                         {section === '別途' && sectionSummary.onRequest > 0
@@ -415,26 +448,6 @@ export function EstimateTemplateExcelDemo() {
                       const costAmount = rowCost(row);
                       const saleAmount = rowSale(row);
                       const profit = row.priceOnRequest ? null : saleAmount - costAmount;
-                      const readOnly = section === '本体';
-
-                      if (readOnly) {
-                        return (
-                          <tr key={row.id} className="border-b border-slate-200 bg-slate-100 text-slate-600">
-                            <th className="bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">{rowIndex}</th>
-                            <td className="border-r border-slate-200"></td>
-                            <td className="border-r border-slate-200 px-2">{row.name}</td>
-                            <td className="border-r border-slate-200 px-2 text-right">{row.quantity}</td>
-                            <td className="border-r border-slate-200 px-2">{row.unit}</td>
-                            <td className="border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(row.cost)}</td>
-                            <td className="border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(costAmount)}</td>
-                            <td className="border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(row.sale)}</td>
-                            <td className="border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(saleAmount)}</td>
-                            <td className="border-r border-slate-200 px-3 text-right tabular-nums">{formatYen(profit ?? 0)}</td>
-                            <td className="border-r border-slate-200 px-2">{row.remark}</td>
-                            <td className="px-2 text-center text-xs">参照のみ</td>
-                          </tr>
-                        );
-                      }
 
                       return (
                         <tr key={row.id} className="border-b border-slate-200 bg-white">
@@ -522,22 +535,26 @@ export function EstimateTemplateExcelDemo() {
                             />
                           </td>
                           <td className="whitespace-nowrap px-1 text-center">
-                            <button
-                              type="button"
-                              title="商品マスターから選択"
-                              className="rounded px-1 text-xs font-semibold text-emerald-800"
-                              onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
-                            >
-                              …
-                            </button>
-                            <button
-                              type="button"
-                              title={row.priceOnRequest ? '金額入力へ戻す' : 'この行を別途見積にする'}
-                              className="rounded px-1 text-[10px] text-slate-500 underline"
-                              onClick={() => toggleSeparate(row)}
-                            >
-                              {row.priceOnRequest ? '金額' : '別途'}
-                            </button>
+                            {section !== '本体' && (
+                              <button
+                                type="button"
+                                title="商品マスターから選択"
+                                className="rounded px-1 text-xs font-semibold text-emerald-800"
+                                onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
+                              >
+                                …
+                              </button>
+                            )}
+                            {section !== '本体' && (
+                              <button
+                                type="button"
+                                title={row.priceOnRequest ? '金額入力へ戻す' : 'この行を別途見積にする'}
+                                className="rounded px-1 text-[10px] text-slate-500 underline"
+                                onClick={() => toggleSeparate(row)}
+                              >
+                                {row.priceOnRequest ? '金額' : '別途'}
+                              </button>
+                            )}
                             <button type="button" aria-label="行を削除" title="明細を削除" className="rounded p-1 text-slate-500 hover:text-red-700" onClick={() => removeRow(row.id)}>
                               <Trash2 className="size-4" />
                             </button>
@@ -558,11 +575,9 @@ export function EstimateTemplateExcelDemo() {
                       <td className="px-3 text-right tabular-nums">{section === '別途' && sectionSummary.onRequest ? '—' : formatYen(sectionSummary.profit)}</td>
                       <td></td>
                       <td className="px-2 text-right">
-                        {section !== '本体' && (
-                          <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section as Exclude<Section, '本体'>)}>
-                            ＋自由明細
-                          </button>
-                        )}
+                        <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section)}>
+                          ＋明細
+                        </button>
                       </td>
                     </tr>
                   </Fragment>
@@ -612,14 +627,137 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="font-semibold">Draftの操作</h2>
-            <p className="mt-1 text-xs text-slate-500">UI確認版のため、公開・破棄は実行しません。</p>
+            <p className="mt-1 text-xs text-slate-500">UI確認版のため、正式保存・Revision発行・破棄は実行しません。</p>
           </div>
           <div className="flex gap-2">
-            <Button type="button" disabled>公開内容を確認</Button>
+            <Button type="button" disabled>正式保存（接続後）</Button>
             <Button type="button" variant="ghost" disabled>Draftを破棄</Button>
           </div>
         </div>
       </section>
+        </>
+      )}
+
+      {tab === 'estimate' && (
+        <section data-testid="estimate-live-preview" className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-6 py-5">
+            <p className="text-xs text-slate-500">見積書プレビュー・画面内編集と連動</p>
+            <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">御見積書</h2>
+                <p className="mt-1 text-sm text-slate-600">Wing ホテルUB／非防火</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-500">見積金額（税込）</p>
+                <p className="text-2xl font-bold">{formatYen(totals.saleGrand)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-x-auto p-5">
+            <table className="min-w-[48rem] w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-y border-slate-300 bg-slate-50 text-xs text-slate-600">
+                  <th className="px-3 py-2 text-left">品名</th>
+                  <th className="px-3 py-2 text-right">数量</th>
+                  <th className="px-3 py-2 text-left">単位</th>
+                  <th className="px-3 py-2 text-right">単価</th>
+                  <th className="px-3 py-2 text-right">金額</th>
+                  <th className="px-3 py-2 text-left">備考</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SECTIONS.map((section) => (
+                  <Fragment key={section}>
+                    <tr className="border-b border-slate-300 bg-emerald-50">
+                      <td colSpan={6} className="px-3 py-1.5 font-semibold text-emerald-950">{section}</td>
+                    </tr>
+                    {rows.filter((row) => row.section === section).map((row) => (
+                      <tr key={row.id} className="border-b border-slate-200">
+                        <td className="px-3 py-2">{row.name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
+                        <td className="px-3 py-2">{row.unit}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.priceOnRequest ? '別途見積' : formatYen(row.sale)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.priceOnRequest ? '—' : formatYen(rowSale(row))}</td>
+                        <td className="px-3 py-2 text-slate-600">{row.remark}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="ml-auto max-w-md space-y-1 border-t border-slate-200 px-6 py-5 text-sm">
+            <div className="flex justify-between gap-4"><span>明細・諸費用・調整後</span><strong>{formatYen(totals.subtotal)}</strong></div>
+            <div className="flex justify-between gap-4"><span>消費税</span><strong>{formatYen(totals.tax)}</strong></div>
+            <div className="flex justify-between gap-4 border-t border-slate-400 pt-2 text-lg"><span>税込合計</span><strong>{formatYen(totals.saleGrand)}</strong></div>
+          </div>
+        </section>
+      )}
+
+      {tab === 'plan' && (
+        <section data-testid="plan-live-preview" className="rounded-xl border border-slate-300 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+              <p className="text-xs text-slate-500">プランボード・画面内編集と連動</p>
+              <h2 className="mt-1 text-xl font-semibold">Wing ホテルUB プラン</h2>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500">現在の見積金額</p>
+              <p className="text-xl font-bold">{formatYen(totals.saleGrand)}</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {SECTIONS.map((section) => (
+              <article key={section} className="rounded-xl border border-slate-200 p-4">
+                <h3 className="font-semibold">{section}</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  {rows.filter((row) => row.section === section).map((row) => (
+                    <div key={row.id} className="flex items-start justify-between gap-4 border-b border-slate-100 pb-2 last:border-0">
+                      <div>
+                        <p className="font-medium">{row.name}</p>
+                        <p className="text-xs text-slate-500">{row.quantity}{row.unit}{row.remark ? ' ／ ' + row.remark : ''}</p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold">{row.priceOnRequest ? '別途見積' : formatYen(rowSale(row))}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {tab === 'drawing' && (
+        <section data-testid="drawing-workspace-preview" className="rounded-xl border border-slate-300 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+              <p className="text-xs text-slate-500">図面も同じ見積書作成ワークスペースで管理</p>
+              <h2 className="mt-1 text-xl font-semibold">図面</h2>
+              <p className="mt-2 text-sm text-slate-600">見積書・プランボードと同じ案件内容を参照し、図面を作成・確認する位置づけです。</p>
+            </div>
+            <Button type="button" disabled>図面を追加（接続後）</Button>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {[
+              ['平面図', '1階・2階の間取り、寸法、設備位置'],
+              ['立面図', '外観・開口・屋根形状'],
+              ['配置図', '設置位置、敷地・道路との関係'],
+            ].map(([title, body]) => (
+              <article key={title} className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                <div className="flex aspect-[4/3] items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-400">
+                  {title}プレビュー
+                </div>
+                <h3 className="mt-3 font-semibold">{title}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{body}</p>
+                <button type="button" disabled className="mt-3 text-xs font-semibold text-slate-400">作成・差し替え（接続後）</button>
+              </article>
+            ))}
+          </div>
+          <p className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+            現在は配置確認だけです。図面ファイル保存・作図機能・Revisionとの正式な紐付けは後続工程で接続します。
+          </p>
+        </section>
+      )}
 
       {pickerSection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を追加">

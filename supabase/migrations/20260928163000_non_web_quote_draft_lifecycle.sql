@@ -366,11 +366,13 @@ begin
         raise exception 'VALIDATION: 明細ID・商品ID・数量・単価の形式が不正です' using errcode = 'P0001';
     end;
 
-    if v_qty < 0.01 or v_qty > 99999 or v_qty <> round(v_qty, 4) then
+    if v_qty::text in ('NaN', 'Infinity', '-Infinity')
+       or v_qty < 0.01 or v_qty > 99999 or v_qty <> round(v_qty, 4) then
       raise exception 'VALIDATION: 数量は0.01以上99999以下・小数4桁以内で入力してください' using errcode = 'P0001';
     end if;
 
-    if v_unit_price_raw <> trunc(v_unit_price_raw)
+    if v_unit_price_raw::text in ('NaN', 'Infinity', '-Infinity')
+       or v_unit_price_raw <> trunc(v_unit_price_raw)
        or v_unit_price_raw < -100000000
        or v_unit_price_raw > 100000000 then
       raise exception 'VALIDATION: 単価は整数かつ-100000000以上100000000以下で入力してください' using errcode = 'P0001';
@@ -389,8 +391,11 @@ begin
          select 1
            from public.options o
           where o.id = v_option_id
+            and o.status = 'published'
+            and (o.base_model_id is null or o.base_model_id = d.base_model_id)
        ) then
-      raise exception 'VALIDATION: 商品マスターが見つかりません' using errcode = 'P0001';
+      raise exception 'VALIDATION: この商品モデルで利用できる公開商品を指定してください'
+        using errcode = 'P0001';
     end if;
 
     v_amount_numeric := round(v_unit_price_raw * v_qty);
@@ -613,6 +618,16 @@ begin
       v_inst := v_inst + i.amount;
     end if;
   end loop;
+
+  if greatest(
+       abs(v_base), abs(v_base_exp),
+       abs(v_int), abs(v_int_exp),
+       abs(v_opt), abs(v_opt_exp),
+       abs(v_inst)
+     ) > 2147483647 then
+    raise exception 'VALIDATION: 区分別金額が保存可能範囲を超えています'
+      using errcode = 'P0001';
+  end if;
 
   v_subtotal_raw := v_base + v_base_exp + v_int + v_int_exp + v_opt + v_opt_exp + v_inst;
   if v_subtotal_raw <> d.subtotal_raw then

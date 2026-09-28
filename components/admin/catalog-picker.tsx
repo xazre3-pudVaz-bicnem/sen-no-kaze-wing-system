@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ImageOff, Plus, Search, X } from 'lucide-react';
+import { Check, ImageOff, Plus, Search, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Button } from '@/components/ui';
@@ -18,10 +18,9 @@ export interface CatalogPickerItem {
 }
 
 /**
- * 見積書の行を商品台帳から追加するポップアップ。
- * 先方要望「見積書の項目をクリックしたら商品台帳を呼び出して、その中から選べるように」。
- * 区分（本体・オプション・別途工事・フリー商品）を選んでから商品をクリックすると行が増える。
- * 続けて何個でも追加できる。自由入力の行は従来どおり「行を追加」から。
+ * 見積書の行へ商品台帳から商品を選ぶポップアップ。
+ * 追加モードでは商品をクリックすると新しい行を追加し、置換モードでは現在の行へ商品情報を反映する。
+ * 自由入力は従来どおり残し、必要なときだけ商品台帳を呼び出せる。
  */
 export function CatalogPickerDialog<K extends string>({
   catalog,
@@ -29,13 +28,15 @@ export function CatalogPickerDialog<K extends string>({
   kindLabels,
   onPick,
   onClose,
+  mode = 'add',
 }: {
   catalog: CatalogPickerItem[];
-  /** 追加できる区分（代理店は別途工事・フリー商品だけ） */
+  /** 追加・置換できる区分。置換時は現在行の区分だけを渡す */
   kinds: K[];
   kindLabels: Record<string, string>;
   onPick: (item: CatalogPickerItem, kind: K) => void;
   onClose: () => void;
+  mode?: 'add' | 'replace';
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [q, setQ] = useState('');
@@ -75,8 +76,14 @@ export function CatalogPickerDialog<K extends string>({
       <div className="border-b border-line px-5 py-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id="catalog-picker-title" className="text-lg">商品台帳から行を追加</h2>
-            <p className="text-xs text-muted">商品をクリックすると見積書に行が追加されます（続けて追加できます）</p>
+            <h2 id="catalog-picker-title" className="text-lg">
+              {mode === 'replace' ? '既存商品から選択' : '商品台帳から行を追加'}
+            </h2>
+            <p className="text-xs text-muted">
+              {mode === 'replace'
+                ? '商品をクリックすると、選択中の見積行へ商品情報を反映します。'
+                : '商品をクリックすると見積書に行が追加されます（続けて追加できます）'}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-1 hover:bg-sand" aria-label="閉じる">
             <X className="size-5" aria-hidden="true" />
@@ -94,21 +101,23 @@ export function CatalogPickerDialog<K extends string>({
               data-testid="catalog-picker-search"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            追加する区分
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value as K)}
-              className="rounded-lg border border-line px-2 py-1.5 text-sm text-ink"
-              data-testid="catalog-picker-kind"
-            >
-              {kinds.map((k) => (
-                <option key={k} value={k}>
-                  {kindLabels[k] ?? k}
-                </option>
-              ))}
-            </select>
-          </label>
+          {mode === 'add' && (
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              追加する区分
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as K)}
+                className="rounded-lg border border-line px-2 py-1.5 text-sm text-ink"
+                data-testid="catalog-picker-kind"
+              >
+                {kinds.map((k) => (
+                  <option key={k} value={k}>
+                    {kindLabels[k] ?? k}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       </div>
 
@@ -123,6 +132,10 @@ export function CatalogPickerDialog<K extends string>({
                     type="button"
                     onClick={() => {
                       onPick(c, kind);
+                      if (mode === 'replace') {
+                        onClose();
+                        return;
+                      }
                       setAdded((n) => n + 1);
                     }}
                     className="flex w-full items-center gap-3 py-2 text-left hover:bg-ivory"
@@ -142,7 +155,11 @@ export function CatalogPickerDialog<K extends string>({
                     <span className="shrink-0 text-sm tabular-nums text-ink-soft">
                       {c.price_on_request ? '別途見積' : formatYen(c.price)}
                     </span>
-                    <Plus className="size-4 shrink-0 text-brown" aria-hidden="true" />
+                    {mode === 'replace' ? (
+                      <Check className="size-4 shrink-0 text-[#315745]" aria-hidden="true" />
+                    ) : (
+                      <Plus className="size-4 shrink-0 text-brown" aria-hidden="true" />
+                    )}
                   </button>
                 </li>
               ))}
@@ -154,7 +171,11 @@ export function CatalogPickerDialog<K extends string>({
 
       <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
         <p className="text-xs text-muted" data-testid="catalog-picker-added">
-          {added > 0 ? `${added} 行を追加しました` : ''}
+          {mode === 'replace'
+            ? '選択した商品を現在の行に反映します。'
+            : added > 0
+              ? `${added} 行を追加しました`
+              : ''}
         </p>
         <Button type="button" variant="secondary" size="sm" onClick={onClose}>
           閉じる

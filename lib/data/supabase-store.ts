@@ -664,13 +664,15 @@ export class SupabaseStore implements DataStore {
     if (!detail) throw new StoreError('NOT_FOUND', 'Draftが見つかりません');
 
     const db = await this.db();
-    const rpcName = detail.draft.parent_quote_id
-      ? 'finalize_quote_revision_draft'
-      : 'finalize_quote_draft';
-    const { data, error } = await db.rpc(rpcName, {
-      p_draft_id: id,
-      p_expected_lock_version: expectedLockVersion,
-    });
+    const { data, error } = detail.draft.parent_quote_id
+      ? await db.rpc('finalize_quote_revision_draft', {
+          p_draft_id: id,
+          p_expected_lock_version: expectedLockVersion,
+        })
+      : await db.rpc('finalize_quote_draft', {
+          p_draft_id: id,
+          p_expected_lock_version: expectedLockVersion,
+        });
     if (error) mapPgError(error);
     const { data: quote, error: quoteError } = await db.from('quotes').select('*').eq('id', data as string).single();
     if (quoteError) mapPgError(quoteError);

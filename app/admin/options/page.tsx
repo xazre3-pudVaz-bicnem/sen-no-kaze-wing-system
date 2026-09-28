@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 import { Badge, Input, Select } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
@@ -17,9 +17,9 @@ export default async function AdminOptionsPage({
   const sp = await searchParams;
   const store = await getStore();
   const [options, categories] = await Promise.all([store.listOptions(), store.listCategories()]);
-  const freeCategoryId = categories.find((category) => category.code === FREE_PRODUCT_CATEGORY_CODE)?.id;
-  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE);
-  const catalogOptions = freeCategoryId ? options.filter((option) => option.category_id !== freeCategoryId) : options;
+  const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
+  const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
+  const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
   const categoryMap = new Map(categories.map((category) => [category.id, category]));
 
   const q = (sp.q ?? '').trim().toLowerCase();

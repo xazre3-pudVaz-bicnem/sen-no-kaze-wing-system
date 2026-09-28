@@ -53,7 +53,10 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('別途見積');
     expect(demo).toContain('商品を追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
-    expect(demo).toContain("isCollapsed ? '+' : '−'");
+    expect(demo).toContain("aria-label={section + 'を展開'}");
+    expect(demo).toContain("data-testid={`estimate-demo-section-total-${section}`}");
+    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain('⋯');
     expect(demo).toContain('下書き保存');
   });
 
@@ -79,7 +82,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft接続後に利用できます');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
-    expect(demo).toContain("{dirty ? '編集中' : '下書き'}");
+    expect(demo).toContain("{dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}");
     expect(demo).not.toContain('編集内容を一時保持');
     expect(demo).not.toContain('一時保持時点に戻す');
     expect(demo).not.toContain('一時保持済み');
@@ -97,11 +100,26 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain("import Link from 'next/link'");
   });
 
-  it('表を従来よりコンパクトな横幅で表示する', () => {
-    expect(demo).toContain('min-w-[76rem] border-collapse text-sm');
-    expect(demo).toContain('min-w-[16rem]');
-    expect(demo).not.toContain('min-w-[88rem] border-collapse text-sm');
-    expect(demo).not.toContain('min-w-[20rem]');
+  it('PC表示では横スクロールに頼らず、金額列と操作列をコンパクトに収める', () => {
+    expect(demo).toContain('data-testid="estimate-demo-fit-table"');
+    expect(demo).toContain('w-full table-fixed border-collapse text-[11px]');
+    expect(demo).toContain('<col className="w-[19%]" />');
+    expect(demo).toContain('<col className="w-[11%]" />');
+    expect(demo).toContain('<col className="w-[5%]" />');
+    expect(demo).toContain('whitespace-nowrap border-r border-slate-200 bg-slate-50');
+    expect(demo).not.toContain('max-h-[68vh] overflow-auto');
+    expect(demo).not.toContain('min-w-[76rem] border-collapse text-sm');
+    expect(demo).not.toContain('w-36 min-w-36');
+  });
+
+  it('行操作は三点メニューへまとめ、商品選択・別途見積・削除を開ける', () => {
+    expect(demo).toContain('data-testid={`estimate-demo-row-menu-${row.id}`}');
+    expect(demo).toContain('aria-label={row.name + \'の操作\'}');
+    expect(demo).toContain('⋯');
+    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain("row.priceOnRequest ? '金額入力に戻す' : '別途見積にする'");
+    expect(demo).toContain('行を削除');
+    expect(demo).not.toContain('title="既存の商品から選択"');
   });
 
   it('見積書に編集とプレビューをまとめ、プランボード・図面と3タブにする', () => {

@@ -28,6 +28,27 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).not.toContain('本体明細は見積テンプレート側では直接変更しません。');
   });
 
+  it('折り畳み時は区分見出しを消し、計の1行だけから再展開できる', () => {
+    expect(demo).toContain("data-testid={\`estimate-demo-section-total-\${section}\`}");
+    expect(demo).toContain("onClick={isCollapsed ? () => toggleSection(section) : undefined}");
+    expect(demo).toContain("{!isCollapsed && (");
+    expect(demo).toContain("aria-label={section + 'を展開'}");
+    expect(demo).toContain("{section} 計");
+    expect(demo).toContain("!isCollapsed && (");
+  });
+
+  it('自由入力を残したまま、明細行から既存商品を選んで置換できる', () => {
+    expect(demo).toContain('const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);');
+    expect(demo).toContain('openProductPicker(section as Exclude<Section, \'本体\'>, row.id)');
+    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain('⋯');
+    expect(demo).toContain("pickerTargetRowId ? '既存の商品から選択' : '商品を追加'");
+    expect(demo).toContain("row.id === pickerTargetRowId");
+    expect(demo).toContain("source: 'product'");
+    expect(demo).toContain("pickerTargetRowId ? 'この商品を選ぶ' : '追加'");
+    expect(demo).toContain("name: '新しい自由項目'");
+  });
+
   it('編集した同じrowsと合計を見積書・プランボードへ反映する', () => {
     expect(demo).toContain('data-testid="estimate-live-preview"');
     expect(demo).toContain('data-testid="plan-live-preview"');

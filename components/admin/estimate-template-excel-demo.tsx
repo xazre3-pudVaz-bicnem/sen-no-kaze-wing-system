@@ -2,9 +2,9 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
+import { estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 
 type Section = '本体' | '内外装工事' | 'オプション' | '別途';
 type DemoTab = 'estimate' | 'plan' | 'drawing';
@@ -65,20 +65,41 @@ const rowSale = (row: DemoRow) => row.priceOnRequest ? 0 : Math.round(row.quanti
 let seq = 0;
 const makeId = () => `estimate-demo-${Date.now()}-${++seq}`;
 
-export function EstimateTemplateExcelDemo() {
-  const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
+export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | null }) {
+  const sample = estimateDemoSampleById(sampleId);
+  const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(sample?.rows ?? INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
   const [markupRate, setMarkupRate] = useState(160);
-  const [expenseRate, setExpenseRate] = useState(15);
-  const [adjustment, setAdjustment] = useState(-2500);
+  const [expenseRate, setExpenseRate] = useState(sample ? 0 : 15);
+  const [adjustment, setAdjustment] = useState(sample?.adjustment ?? -2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
+  const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
+    const onRequest = rows.filter((row) => row.priceOnRequest).length;
+
+    if (sample && !dirty) {
+      const subtotal = sample.sourceSubtotal + sample.adjustment;
+      const saleGrand = sample.sourceTotal;
+      const profit = saleGrand - cost;
+      return {
+        cost,
+        saleLines: sample.sourceSubtotal,
+        saleExpense: 0,
+        subtotal,
+        tax: sample.tax,
+        saleGrand,
+        profit,
+        margin: saleGrand > 0 ? profit / saleGrand * 100 : 0,
+        onRequest,
+      };
+    }
+
     const saleLines = rows.reduce((sum, row) => sum + rowSale(row), 0);
     const expenseBase = rows
       .filter((row) => row.section !== '別途')
@@ -97,9 +118,9 @@ export function EstimateTemplateExcelDemo() {
       saleGrand,
       profit,
       margin: saleGrand > 0 ? profit / saleGrand * 100 : 0,
-      onRequest: rows.filter((row) => row.priceOnRequest).length,
+      onRequest,
     };
-  }, [rows, expenseRate, adjustment]);
+  }, [rows, expenseRate, adjustment, sample, dirty]);
 
   const sectionTotals = useMemo(() => {
     const map = new Map<Section, { cost: number; sale: number; profit: number; onRequest: number }>();
@@ -180,26 +201,54 @@ export function EstimateTemplateExcelDemo() {
     markDirty();
   };
 
+  const openProductPicker = (section: Exclude<Section, '本体'>, targetRowId: string | null = null) => {
+    setPickerSection(section);
+    setPickerTargetRowId(targetRowId);
+    setQuery('');
+  };
+
+  const closeProductPicker = () => {
+    setPickerSection(null);
+    setPickerTargetRowId(null);
+    setQuery('');
+  };
+
   const addProduct = (product: DemoProduct) => {
     if (!pickerSection) return;
-    setRows((current) => [
-      ...current,
-      {
-        id: makeId(),
-        section: pickerSection,
-        name: product.name,
-        quantity: 1,
-        unit: product.priceOnRequest ? '式' : '台',
-        cost: 0,
-        sale: product.price,
-        manualSale: true,
-        priceOnRequest: product.priceOnRequest,
-        remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
-        source: 'product',
-      },
-    ]);
-    setPickerSection(null);
-    setQuery('');
+    if (pickerTargetRowId) {
+      setRows((current) => current.map((row) =>
+        row.id === pickerTargetRowId
+          ? {
+              ...row,
+              name: product.name,
+              unit: product.priceOnRequest ? '式' : '台',
+              sale: product.price,
+              manualSale: true,
+              priceOnRequest: product.priceOnRequest,
+              remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
+              source: 'product',
+            }
+          : row
+      ));
+    } else {
+      setRows((current) => [
+        ...current,
+        {
+          id: makeId(),
+          section: pickerSection,
+          name: product.name,
+          quantity: 1,
+          unit: product.priceOnRequest ? '式' : '台',
+          cost: 0,
+          sale: product.price,
+          manualSale: true,
+          priceOnRequest: product.priceOnRequest,
+          remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
+          source: 'product',
+        },
+      ]);
+    }
+    closeProductPicker();
     markDirty();
   };
 
@@ -244,7 +293,7 @@ export function EstimateTemplateExcelDemo() {
   });
 
   const inputClass =
-    'h-7 w-full border-0 bg-transparent px-1.5 text-[13px] leading-none outline-none focus:ring-2 focus:ring-emerald-700/30';
+    'h-6 w-full min-w-0 border-0 bg-transparent px-1 text-[11px] leading-none outline-none focus:ring-2 focus:ring-emerald-700/30';
 
   let rowCounter = 0;
 
@@ -284,16 +333,20 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">見積書作成</h2>
+              <h2 className="font-semibold">{sample?.name ?? '見積書作成'}</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
-                : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
+                : sample
+                  ? 'rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800'
+                  : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
               >
-                {dirty ? '編集中' : '下書き'}
+                {dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。
+              {sample
+                ? `Excel「${sample.sourceSheet}」の金額が入っている明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外しています。DBには保存されません。`
+                : '本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -305,10 +358,21 @@ export function EstimateTemplateExcelDemo() {
             >
               {showEstimatePreview ? 'プレビューを閉じる' : '見積書プレビュー'}
             </Button>
-            <Button type="button" variant="secondary" size="sm" disabled title="Draft接続後に利用できます">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled
+              title={sample ? 'サンプルはDBへ保存されません' : 'Draft接続後に利用できます'}
+            >
               下書き保存
             </Button>
-            <Button type="button" size="sm" disabled title="Draft→正式Revision接続後に利用できます">
+            <Button
+              type="button"
+              size="sm"
+              disabled
+              title={sample ? 'サンプルは正式見積として保存されません' : 'Draft→正式Revision接続後に利用できます'}
+            >
               正式保存
             </Button>
           </div>
@@ -320,11 +384,11 @@ export function EstimateTemplateExcelDemo() {
               見積条件
             </div>
             <div className="flex flex-wrap divide-x divide-slate-200">
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>Wing</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>ホテルUB</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>非防火</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>標準地域</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>Wing ホテル仕様 v4</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>{sample?.model ?? 'Wing'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>{sample?.spec ?? 'ホテルUB'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>{sample?.fireSpec ?? '非防火'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>{sample?.region ?? '標準地域'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>{sample?.baseMaster ?? 'Wing ホテル仕様 v4'}</strong></div>
             </div>
           </div>
 
@@ -350,18 +414,22 @@ export function EstimateTemplateExcelDemo() {
               <label className="flex items-center gap-2">
                 <div>
                   <p className="text-xs font-semibold text-slate-700">経費</p>
-                  <p className="text-[10px] text-slate-500">区分に加算</p>
+                  <p className="text-[10px] text-slate-500">{sample ? 'Excel明細に反映済み' : '区分に加算'}</p>
                 </div>
                 <input
                   type="number"
                   min={0}
                   step={0.1}
                   value={expenseRate}
+                  disabled={Boolean(sample)}
+                  title={sample ? 'Excel原本の経費行を明細として反映済みです' : undefined}
                   onChange={(event) => {
                     setExpenseRate(Math.max(0, Number(event.target.value) || 0));
                     markDirty();
                   }}
-                  className="h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  className={sample
+                    ? 'h-8 w-20 rounded border border-slate-300 bg-slate-100 px-2 text-right text-sm text-slate-500'
+                    : 'h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm'}
                   aria-label="経費率"
                 />
                 <span>%</span>
@@ -389,7 +457,9 @@ export function EstimateTemplateExcelDemo() {
 
               <button
                 type="button"
-                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm"
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                disabled={Boolean(sample)}
+                title={sample ? 'Excelサンプルでは原本の売価をそのまま表示します' : undefined}
                 onClick={applyMarkup}
               >
                 売価を再計算
@@ -400,23 +470,37 @@ export function EstimateTemplateExcelDemo() {
 
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-        <div className="max-h-[68vh] overflow-auto">
-          <table className="min-w-[76rem] border-collapse text-sm">
+      <section className="overflow-visible rounded-xl border border-slate-300 bg-white shadow-sm">
+        <div className="w-full">
+          <table className="w-full table-fixed border-collapse text-[11px]" data-testid="estimate-demo-fit-table">
+            <colgroup>
+              <col className="w-[3%]" />
+              <col className="w-[3%]" />
+              <col className="w-[19%]" />
+              <col className="w-[5%]" />
+              <col className="w-[5%]" />
+              <col className="w-[9%]" />
+              <col className="w-[11%]" />
+              <col className="w-[9%]" />
+              <col className="w-[11%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+              <col className="w-[5%]" />
+            </colgroup>
             <thead>
               <tr>
-                <th className="sticky top-0 z-10 w-12 border-r border-slate-300 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">#</th>
-                <th className="sticky top-0 z-10 w-10 border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
-                <th className="sticky top-0 z-10 min-w-[16rem] border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">品名</th>
-                <th className="sticky top-0 z-10 w-16 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">数量</th>
-                <th className="sticky top-0 z-10 w-20 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">単位</th>
-                <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価</th>
-                <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">原価金額</th>
-                <th className="sticky top-0 z-10 w-24 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価</th>
-                <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価金額</th>
-                <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">粗利</th>
-                <th className="sticky top-0 z-10 min-w-40 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
-                <th className="sticky top-0 z-10 w-20 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-center text-[10px] font-semibold text-slate-600">#</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-0.5 py-1"></th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1.5 py-1 text-left text-[10px] font-semibold text-slate-600">品名</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">数量</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[10px] font-semibold text-slate-600">単位</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">原価</th>
+                <th className="sticky top-0 z-10 whitespace-nowrap border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">原価金額</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">売価</th>
+                <th className="sticky top-0 z-10 whitespace-nowrap border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">売価金額</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">粗利</th>
+                <th className="sticky top-0 z-10 border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[10px] font-semibold text-slate-600">備考</th>
+                <th className="sticky top-0 z-10 bg-slate-100 px-0.5 py-1 text-center text-[10px] font-semibold text-slate-600">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -426,39 +510,41 @@ export function EstimateTemplateExcelDemo() {
                 const sectionSummary = sectionTotals.get(section)!;
                 return (
                   <Fragment key={section}>
-                    <tr className="border-b border-slate-300 bg-emerald-900 text-white">
-                      <th className="bg-slate-100"></th>
-                      <td className="px-1 text-center">
-                        <button
-                          type="button"
-                          className="size-6 rounded border border-white/60 bg-white text-slate-800"
-                          aria-label={isCollapsed ? section + 'を展開' : section + 'を折り畳む'}
-                          onClick={() => toggleSection(section)}
-                        >
-                          {isCollapsed ? '+' : '−'}
-                        </button>
-                      </td>
-                      <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">
-                        {section}
-                        {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスターから読込・この見積内で編集可）</span>}
-                      </td>
-                      <td colSpan={4} className="px-3 text-right text-xs">
-                        {section === '別途' && sectionSummary.onRequest > 0
-                          ? `別途見積 ${sectionSummary.onRequest}件`
-                          : `原価 ${formatYen(sectionSummary.cost)} ／ 売価 ${formatYen(sectionSummary.sale)} ／ 粗利 ${formatYen(sectionSummary.profit)}`}
-                      </td>
-                      <td className="px-2 text-center">
-                        {section !== '本体' && (
+                    {!isCollapsed && (
+                      <tr className="border-b border-slate-300 bg-emerald-900 text-white">
+                        <th className="bg-slate-100"></th>
+                        <td className="px-1 text-center">
                           <button
                             type="button"
-                            className="text-[11px] underline"
-                            onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
+                            className="size-6 rounded border border-white/60 bg-white text-slate-800"
+                            aria-label={section + 'を折り畳む'}
+                            onClick={() => toggleSection(section)}
                           >
-                            商品追加
+                            −
                           </button>
-                        )}
-                      </td>
-                    </tr>
+                        </td>
+                        <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">
+                          {section}
+                          {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスターから読込・この見積内で編集可）</span>}
+                        </td>
+                        <td colSpan={4} className="whitespace-nowrap px-1 text-right text-[10px]">
+                          {section === '別途' && sectionSummary.onRequest > 0
+                            ? `別途見積 ${sectionSummary.onRequest}件`
+                            : `売価 ${formatYen(sectionSummary.sale)}`}
+                        </td>
+                        <td className="px-2 text-center">
+                          {section !== '本体' && (
+                            <button
+                              type="button"
+                              className="text-[11px] underline"
+                              onClick={() => openProductPicker(section as Exclude<Section, '本体'>)}
+                            >
+                              商品追加
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )}
 
                     {!isCollapsed && sectionRows.map((row) => {
                       rowCounter += 1;
@@ -469,7 +555,7 @@ export function EstimateTemplateExcelDemo() {
 
                       return (
                         <tr key={row.id} className="border-b border-slate-200 bg-white">
-                          <th className="bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">{rowIndex}</th>
+                          <th className="bg-slate-100 px-0.5 text-center text-[10px] font-normal text-slate-500">{rowIndex}</th>
                           <td className="border-r border-slate-200"></td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             <input
@@ -487,7 +573,7 @@ export function EstimateTemplateExcelDemo() {
                               step={0.01}
                               value={row.quantity}
                               onChange={(event) => updateRow(row.id, { quantity: Math.max(0, Number(event.target.value) || 0) })}
-                              className={inputClass + ' text-right'}
+                              className={inputClass + ' appearance-none text-right tabular-nums'}
                             />
                           </td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
@@ -506,18 +592,17 @@ export function EstimateTemplateExcelDemo() {
                               step={1}
                               value={row.cost}
                               onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })}
-                              className={inputClass + ' text-right'}
+                              className={inputClass + ' appearance-none text-right tabular-nums'}
                             />
                           </td>
-                          <td className="border-r border-slate-200 bg-slate-50 px-3 text-right tabular-nums">{formatYen(costAmount)}</td>
+                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{formatYen(costAmount)}</td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             {row.priceOnRequest ? (
-                              <div className="flex h-7 items-center justify-end gap-1 px-1">
-                                <span className="rounded border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">別途見積</span>
-                                <button type="button" className="text-[10px] text-emerald-800 underline" onClick={() => toggleSeparate(row)}>金額入力</button>
+                              <div className="flex h-6 items-center justify-end px-0.5">
+                                <span className="whitespace-nowrap rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[9px] font-semibold text-amber-900">別途見積</span>
                               </div>
                             ) : (
-                              <div className="flex h-7 items-center gap-1">
+                              <div className="flex h-6 min-w-0 items-center gap-0.5">
                                 <input
                                   {...cellProps('sale', rowIndex)}
                                   type="number"
@@ -525,71 +610,120 @@ export function EstimateTemplateExcelDemo() {
                                   step={1}
                                   value={row.sale}
                                   onChange={(event) => updateRow(row.id, { sale: Math.max(0, Number(event.target.value) || 0), manualSale: true })}
-                                  className={inputClass + ' min-w-0 flex-1 text-right'}
+                                  className={inputClass + ' min-w-0 flex-1 appearance-none px-0.5 text-right text-[10px] tabular-nums'}
                                 />
                                 <span className={row.manualSale
-                                  ? 'rounded border border-orange-300 bg-orange-50 px-1 text-[10px] font-semibold text-orange-800'
-                                  : 'rounded border border-emerald-300 bg-emerald-50 px-1 text-[10px] font-semibold text-emerald-800'}
+                                  ? 'shrink-0 rounded border border-orange-300 bg-orange-50 px-0.5 text-[8px] font-semibold text-orange-800'
+                                  : 'shrink-0 rounded border border-emerald-300 bg-emerald-50 px-0.5 text-[8px] font-semibold text-emerald-800'}
                                 >
                                   {row.manualSale ? '手動' : '自動'}
                                 </span>
                               </div>
                             )}
                           </td>
-                          <td className="border-r border-slate-200 bg-slate-50 px-3 text-right tabular-nums">{row.priceOnRequest ? '—' : formatYen(saleAmount)}</td>
-                          <td className="border-r border-slate-200 bg-slate-50 px-3 text-right tabular-nums">{profit == null ? '—' : formatYen(profit)}</td>
+                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{row.priceOnRequest ? '—' : formatYen(saleAmount)}</td>
+                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{profit == null ? '—' : formatYen(profit)}</td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             <input
                               {...cellProps('remark', rowIndex)}
                               value={row.remark}
                               onChange={(event) => updateRow(row.id, { remark: event.target.value })}
                               className={inputClass}
+                              title={row.remark || undefined}
                             />
                           </td>
-                          <td className="whitespace-nowrap px-1 text-center">
-                            {section !== '本体' && (
-                              <button
-                                type="button"
-                                title="商品マスターから選択"
-                                className="rounded px-1 text-xs font-semibold text-emerald-800"
-                                onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
+                          <td className="relative px-0.5 text-center">
+                            <details className="group relative inline-block" data-testid={`estimate-demo-row-menu-${row.id}`}>
+                              <summary
+                                className="flex size-6 cursor-pointer list-none items-center justify-center rounded text-sm font-bold text-slate-600 hover:bg-slate-100 [&::-webkit-details-marker]:hidden"
+                                aria-label={row.name + 'の操作'}
+                                title="行の操作"
                               >
-                                …
-                              </button>
-                            )}
-                            {section !== '本体' && (
-                              <button
-                                type="button"
-                                title={row.priceOnRequest ? '金額入力へ戻す' : 'この行を別途見積にする'}
-                                className="rounded px-1 text-[10px] text-slate-500 underline"
-                                onClick={() => toggleSeparate(row)}
-                              >
-                                {row.priceOnRequest ? '金額' : '別途'}
-                              </button>
-                            )}
-                            <button type="button" aria-label="行を削除" title="明細を削除" className="rounded p-1 text-slate-500 hover:text-red-700" onClick={() => removeRow(row.id)}>
-                              <Trash2 className="size-4" />
-                            </button>
+                                ⋯
+                              </summary>
+                              <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
+                                {section !== '本体' && (
+                                  <button
+                                    type="button"
+                                    className="block w-full px-3 py-2 text-left hover:bg-slate-50"
+                                    onClick={(event) => {
+                                      event.currentTarget.closest('details')?.removeAttribute('open');
+                                      openProductPicker(section as Exclude<Section, '本体'>, row.id);
+                                    }}
+                                  >
+                                    既存の商品から選択
+                                  </button>
+                                )}
+                                {section !== '本体' && (
+                                  <button
+                                    type="button"
+                                    className="block w-full px-3 py-2 text-left hover:bg-slate-50"
+                                    onClick={(event) => {
+                                      event.currentTarget.closest('details')?.removeAttribute('open');
+                                      toggleSeparate(row);
+                                    }}
+                                  >
+                                    {row.priceOnRequest ? '金額入力に戻す' : '別途見積にする'}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="block w-full px-3 py-2 text-left text-red-700 hover:bg-red-50"
+                                  onClick={(event) => {
+                                    event.currentTarget.closest('details')?.removeAttribute('open');
+                                    removeRow(row.id);
+                                  }}
+                                >
+                                  行を削除
+                                </button>
+                              </div>
+                            </details>
                           </td>
                         </tr>
                       );
                     })}
 
-                    <tr className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold">
+                    <tr
+                      className={`border-y-2 border-emerald-800 bg-emerald-50 font-semibold ${isCollapsed ? 'cursor-pointer hover:bg-emerald-100/70' : ''}`}
+                      data-testid={`estimate-demo-section-total-${section}`}
+                      onClick={isCollapsed ? () => toggleSection(section) : undefined}
+                    >
                       <th className="bg-slate-100"></th>
-                      <td></td>
+                      <td className="px-1 text-center">
+                        {isCollapsed && (
+                          <button
+                            type="button"
+                            className="size-6 rounded border border-emerald-300 bg-white text-slate-800"
+                            aria-label={section + 'を展開'}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleSection(section);
+                            }}
+                          >
+                            +
+                          </button>
+                        )}
+                      </td>
                       <td className="px-3 py-1">{section} 計</td>
                       <td></td><td></td>
-                      <td className="px-3 text-right tabular-nums">{formatYen(sectionSummary.cost)}</td>
+                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{formatYen(sectionSummary.cost)}</td>
                       <td></td>
-                      <td className="px-3 text-right tabular-nums">{section === '別途' && sectionSummary.onRequest ? '別途見積' : formatYen(sectionSummary.sale)}</td>
+                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{section === '別途' && sectionSummary.onRequest ? '別途見積' : formatYen(sectionSummary.sale)}</td>
                       <td></td>
-                      <td className="px-3 text-right tabular-nums">{section === '別途' && sectionSummary.onRequest ? '—' : formatYen(sectionSummary.profit)}</td>
+                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{section === '別途' && sectionSummary.onRequest ? '—' : formatYen(sectionSummary.profit)}</td>
                       <td></td>
-                      <td className="px-2 text-right">
-                        <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section)}>
-                          ＋明細
-                        </button>
+                      <td className="px-0.5 text-center">
+                        {!isCollapsed && (
+                          <button
+                            type="button"
+                            className="rounded px-1 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-100"
+                            title="自由明細を追加"
+                            aria-label={section + 'に自由明細を追加'}
+                            onClick={() => addFreeRow(section)}
+                          >
+                            ＋
+                          </button>
+                        )}
                       </td>
                     </tr>
                   </Fragment>
@@ -610,7 +744,10 @@ export function EstimateTemplateExcelDemo() {
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>経費 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
+        <div className="flex justify-between gap-4 py-1">
+          <span>{sample ? '追加経費（Excel明細に反映済み）' : `経費 ${expenseRate.toFixed(1)}%`}</span>
+          <strong>{sample ? '—' : formatYen(totals.saleExpense)}</strong>
+        </div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
           <input
@@ -628,6 +765,11 @@ export function EstimateTemplateExcelDemo() {
         <div className="mt-2 flex justify-between gap-4 border-t-2 border-slate-700 pt-3 text-lg">
           <span>見積金額</span><strong>{formatYen(totals.saleGrand)}</strong>
         </div>
+        {sample && (
+          <div className="flex justify-between gap-4 py-1 text-xs text-slate-500">
+            <span>Excel原本 税込合計</span><strong>{formatYen(sample.sourceTotal)}</strong>
+          </div>
+        )}
         <div className="mt-2 flex justify-between gap-4 rounded bg-emerald-50 px-3 py-2">
           <span>粗利</span><strong>{formatYen(totals.profit)}</strong>
         </div>
@@ -645,7 +787,7 @@ export function EstimateTemplateExcelDemo() {
             <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">御見積書</h2>
-                <p className="mt-1 text-sm text-slate-600">Wing ホテルUB／非防火</p>
+                <p className="mt-1 text-sm text-slate-600">{sample ? `${sample.model} ${sample.spec}／${sample.fireSpec}` : 'Wing ホテルUB／非防火'}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500">見積金額（税込）</p>
@@ -699,7 +841,7 @@ export function EstimateTemplateExcelDemo() {
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
               <p className="text-xs text-slate-500">プランボード・画面内編集と連動</p>
-              <h2 className="mt-1 text-xl font-semibold">Wing ホテルUB プラン</h2>
+              <h2 className="mt-1 text-xl font-semibold">{sample ? `${sample.model} ${sample.spec} プラン` : 'Wing ホテルUB プラン'}</h2>
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-500">現在の見積金額</p>
@@ -760,14 +902,18 @@ export function EstimateTemplateExcelDemo() {
       )}
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を追加">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="既存の商品から選択">
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">商品を追加</h2>
-                <p className="mt-1 text-xs text-slate-500">追加先：{pickerSection} ／ この一覧もDB非連動の確認用サンプルです。</p>
+                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '既存の商品から選択' : '商品を追加'}</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {pickerTargetRowId
+                    ? `選択した商品を現在の明細行へ反映します。区分：${pickerSection}`
+                    : `追加先：${pickerSection} ／ この一覧もDB非連動の確認用サンプルです。`}
+                </p>
               </div>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setPickerSection(null)}>閉じる</button>
+              <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
             <div className="space-y-4 p-5">
@@ -787,7 +933,9 @@ export function EstimateTemplateExcelDemo() {
                     <p className="mt-1 text-xs text-slate-500">{product.modelNo || '型番なし'}</p>
                     <p className="mt-3 text-sm font-semibold">{product.priceOnRequest ? '別途見積' : '追加金額 ' + formatYen(product.price)}</p>
                     <div className="mt-4 flex justify-end">
-                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>追加</button>
+                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>
+                        {pickerTargetRowId ? 'この商品を選ぶ' : '追加'}
+                      </button>
                     </div>
                   </article>
                 ))}

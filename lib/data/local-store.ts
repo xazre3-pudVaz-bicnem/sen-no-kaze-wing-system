@@ -25,6 +25,7 @@ import type {
   RoleCode,
   Quote,
   QuoteItem,
+  QuoteDraft,
   QuoteContact,
   QuoteDocument,
   CaseDocument,
@@ -778,7 +779,7 @@ export class LocalStore implements DataStore {
     db.quoteSequences[ym] = n;
     return `Q${ym}-${String(n).padStart(4, '0')}`;
   }
-  async createManualQuoteDraft(_actor: SessionUser, _input: ManualQuoteDraftInput) {
+  async createManualQuoteDraft(_actor: SessionUser, _input: ManualQuoteDraftInput): Promise<QuoteDraft> {
     throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
   }
 

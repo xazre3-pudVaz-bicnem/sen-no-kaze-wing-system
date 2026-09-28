@@ -77,10 +77,12 @@ begin
     raise exception 'LOCKED: 最新Revisionから改訂してください' using errcode = 'P0001';
   end if;
 
+  -- The QuoteRequest lock above serializes Draft creation. Do not lock an
+  -- existing Draft here: save/finalize lock Draft -> parent Quote -> Request,
+  -- so taking parent/request -> Draft would introduce a lock-order inversion.
   select * into v_existing
     from public.quote_drafts
-   where quote_request_id = r.id
-   for update;
+   where quote_request_id = r.id;
 
   if found then
     if v_existing.parent_quote_id is distinct from parent.id then
@@ -203,6 +205,7 @@ declare
   v_total numeric;
   v_adjustment integer := coalesce(p_adjustment, 0);
   v_reason text := nullif(btrim(coalesce(p_adjustment_reason, '')), '');
+  v_new_lock_version integer;
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -494,9 +497,9 @@ begin
          lock_version = lock_version + 1,
          updated_by = v_uid
    where id = d.id
-  returning lock_version into p_expected_lock_version;
+  returning lock_version into v_new_lock_version;
 
-  return p_expected_lock_version;
+  return v_new_lock_version;
 end;
 $save_draft$;
 
@@ -623,6 +626,11 @@ begin
   end if;
   if parent.status <> 'issued' then
     raise exception 'LOCKED: 親Revisionはすでに発行中ではありません'
+      using errcode = 'P0001';
+  end if;
+  if d.base_model_id is distinct from parent.base_model_id
+     or d.spec_code is distinct from parent.spec_code then
+    raise exception 'VALIDATION: Draftと親Revisionのモデル・仕様が一致しません'
       using errcode = 'P0001';
   end if;
   if v_rank < 3 and parent.dealer_id is distinct from v_uid then

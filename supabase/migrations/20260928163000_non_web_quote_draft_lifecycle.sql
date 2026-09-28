@@ -54,6 +54,10 @@ declare
   v_model public.base_models;
   v_request_id uuid;
   v_draft_id uuid;
+  v_full_name text;
+  v_company_name text;
+  v_site_address text;
+  v_message text;
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -62,9 +66,28 @@ begin
     raise exception 'FORBIDDEN: 案件を登録できるのは代理店以上です' using errcode = '42501';
   end if;
 
-  if nullif(btrim(coalesce(p_contact ->> 'full_name', '')), '') is null then
-    raise exception 'VALIDATION: お客様名を入力してください' using errcode = 'P0001';
+  if p_contact is null or jsonb_typeof(p_contact) <> 'object' then
+    raise exception 'VALIDATION: お客様情報が不正です' using errcode = 'P0001';
   end if;
+
+  v_full_name := nullif(btrim(coalesce(p_contact ->> 'full_name', '')), '');
+  v_company_name := nullif(btrim(coalesce(p_contact ->> 'company_name', '')), '');
+  v_site_address := nullif(btrim(coalesce(p_contact ->> 'site_address', '')), '');
+  v_message := nullif(btrim(coalesce(p_message, '')), '');
+
+  if v_full_name is null or length(v_full_name) > 60 then
+    raise exception 'VALIDATION: お客様名は1〜60文字で入力してください' using errcode = 'P0001';
+  end if;
+  if v_company_name is not null and length(v_company_name) > 100 then
+    raise exception 'VALIDATION: 会社名は100文字以内で入力してください' using errcode = 'P0001';
+  end if;
+  if v_site_address is not null and length(v_site_address) > 200 then
+    raise exception 'VALIDATION: 設置予定地は200文字以内で入力してください' using errcode = 'P0001';
+  end if;
+  if v_message is not null and length(v_message) > 1000 then
+    raise exception 'VALIDATION: メモは1000文字以内で入力してください' using errcode = 'P0001';
+  end if;
+
   if p_finish_level not in ('shell', 'equipment', 'full') then
     raise exception 'VALIDATION: 注文範囲が不正です' using errcode = 'P0001';
   end if;
@@ -107,8 +130,15 @@ begin
     null,
     null,
     'reviewing',
-    nullif(btrim(coalesce(p_message, '')), ''),
-    coalesce(p_contact, '{}'::jsonb),
+    v_message,
+    jsonb_build_object(
+      'full_name', v_full_name,
+      'company_name', v_company_name,
+      'email', '',
+      'phone', '',
+      'address', '',
+      'site_address', v_site_address
+    ),
     v_uid
   )
   returning id into v_request_id;
@@ -149,7 +179,7 @@ begin
     0,
     0,
     null,
-    nullif(btrim(coalesce(p_message, '')), ''),
+    v_message,
     v_uid,
     v_uid
   )
@@ -361,6 +391,13 @@ begin
     if v_name is null or length(v_name) > 120 then
       raise exception 'VALIDATION: 品名は1〜120文字で入力してください' using errcode = 'P0001';
     end if;
+    if length(coalesce(row_json ->> 'description', '')) > 200
+       or length(coalesce(row_json ->> 'remark', '')) > 200
+       or length(coalesce(row_json ->> 'unit', '')) > 12
+       or length(coalesce(row_json ->> 'image_url', '')) > 500 then
+      raise exception 'VALIDATION: 明細の説明・単位・備考・画像URLが長すぎます'
+        using errcode = 'P0001';
+    end if;
 
     begin
       v_line_key := coalesce(nullif(row_json ->> 'line_key', '')::uuid, gen_random_uuid());
@@ -445,6 +482,13 @@ begin
 
   if v_adjustment <> 0 and v_reason is null then
     raise exception 'VALIDATION: 調整額を設定する場合は理由を入力してください' using errcode = 'P0001';
+  end if;
+  if v_reason is not null and length(v_reason) > 500 then
+    raise exception 'VALIDATION: 調整理由は500文字以内で入力してください' using errcode = 'P0001';
+  end if;
+  if length(coalesce(p_dealer_note, '')) > 1000
+     or length(coalesce(p_notes, '')) > 1000 then
+    raise exception 'VALIDATION: メモは1000文字以内で入力してください' using errcode = 'P0001';
   end if;
 
   v_subtotal := v_subtotal_raw + v_adjustment;

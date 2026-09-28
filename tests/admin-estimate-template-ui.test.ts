@@ -56,7 +56,11 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('title="見積書作成・管理"');
     expect(listPage).toContain('開いたらすぐ明細を編集できる');
     expect(listPage).toContain('＋ 新しい見積書を作成');
-    expect(listPage).toContain('見積書を選ぶ');
+    expect(listPage).toContain('作成済み見積書（{templates.length}件）');
+    expect(listPage).toContain('開く見積書を選択します。');
+    expect(listPage).toContain("active ? '表示中' : '開く'");
+    expect(listPage).toContain('更新 {formatUpdatedAt(template.updated_at)}');
+    expect(listPage).not.toContain('見積書を選ぶ');
     expect(listPage).toContain('編集中の見積書');
     expect(listPage).toContain('<EstimateTemplateWorkbench');
     expect(listPage).toContain('<EstimateTemplateDetailTabs');
@@ -75,9 +79,11 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).not.toContain('見積書がまだありません');
   });
 
-  it('見積書切替・新規作成・標準指定の入口を編集画面上部に置く', () => {
-    expect(listPage).toContain('見積書を選ぶ');
+  it('作成済み見積書・新規作成・標準指定の入口を編集画面上部に置く', () => {
     expect(listPage).toContain('作成済み見積書');
+    expect(listPage).toContain('作成済み見積書（0件）');
+    expect(listPage).toContain('<SavedEstimateMenu');
+    expect(listPage).toContain('aria-current={active ? \'page\' : undefined}');
     expect(listPage).toContain('複製');
     expect(listPage).toContain('標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');

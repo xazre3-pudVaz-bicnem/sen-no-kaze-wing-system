@@ -35,6 +35,91 @@ function estimateHref(id: string) {
   return `/admin/estimate-templates?${params.toString()}`;
 }
 
+function formatUpdatedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function SavedEstimateMenu({
+  templates,
+  models,
+  selectedId,
+}: {
+  templates: {
+    id: string;
+    name: string;
+    base_model_id: string;
+    spec_code: string;
+    total: number;
+    updated_at: string;
+  }[];
+  models: { id: string; name: string }[];
+  selectedId?: string | null;
+}) {
+  if (templates.length === 0) {
+    return (
+      <button type="button" className="btn-secondary btn-sm" disabled>
+        作成済み見積書（0件）
+      </button>
+    );
+  }
+
+  return (
+    <details className="relative">
+      <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        作成済み見積書（{templates.length}件）
+      </summary>
+      <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(92vw,42rem)] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
+        <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
+          <div>
+            <p className="text-sm font-semibold">作成済み見積書</p>
+            <p className="mt-0.5 text-[11px] text-muted">開く見積書を選択します。</p>
+          </div>
+          <span className="text-[11px] text-muted">{templates.length}件</span>
+        </div>
+        <div className="divide-y divide-line">
+          {templates.map((template) => {
+            const active = template.id === selectedId;
+            const templateModel = models.find((item) => item.id === template.base_model_id);
+            return (
+              <Link
+                key={template.id}
+                href={estimateHref(template.id)}
+                aria-current={active ? 'page' : undefined}
+                className={
+                  active
+                    ? 'grid gap-1 rounded-lg bg-forest/5 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
+                    : 'grid gap-1 rounded-lg px-3 py-2.5 text-sm hover:bg-sand/40 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
+                }
+              >
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-semibold">{template.name}</span>
+                    {active && <Badge tone="neutral">表示中</Badge>}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-muted">
+                    {templateModel?.name ?? '—'} ／ {SPEC_LABELS[template.spec_code] ?? template.spec_code}
+                    <span className="ml-2">更新 {formatUpdatedAt(template.updated_at)}</span>
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3 sm:justify-end">
+                  <strong className="tabular-nums">{formatYen(template.total)}</strong>
+                  <span className="text-xs font-semibold text-forest">{active ? '表示中' : '開く'}</span>
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export default async function EstimateTemplatesPage({
   searchParams,
 }: {
@@ -62,9 +147,12 @@ export default async function EstimateTemplatesPage({
         title="見積書作成・管理"
         lead="見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。"
         actions={
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい見積書を作成
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <SavedEstimateMenu templates={templates} models={models} />
+            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+              ＋ 新しい見積書を作成
+            </Link>
+          </div>
         }
       >
         <Alert tone="info">
@@ -90,23 +178,17 @@ export default async function EstimateTemplatesPage({
         title="見積書作成・管理"
         lead="見積書をExcelに近い操作感で作成・編集します。"
         actions={
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい見積書を作成
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <SavedEstimateMenu templates={templates} models={models} selectedId={selectedTemplate.id} />
+            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+              ＋ 新しい見積書を作成
+            </Link>
+          </div>
         }
       >
         <Alert tone="warn">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
-        <section className="card p-4">
-          <details>
-            <summary className="cursor-pointer text-sm font-semibold">見積書を選ぶ</summary>
-            <div className="mt-3 divide-y divide-line">
-              {templates.map((template) => (
-                <Link key={template.id} href={estimateHref(template.id)} className="block px-3 py-2 text-sm hover:bg-sand/40">
-                  {template.name}
-                </Link>
-              ))}
-            </div>
-          </details>
+        <section className="card p-4 text-sm text-muted">
+          右上の「作成済み見積書」から別の見積書を開けます。
         </section>
       </AdminPage>
     );
@@ -178,6 +260,7 @@ export default async function EstimateTemplatesPage({
       lead="開いたらすぐ明細を編集できる、Excelに近い見積書作成画面です。"
       actions={
         <div className="flex flex-wrap gap-2">
+          <SavedEstimateMenu templates={templates} models={models} selectedId={selectedTemplate.id} />
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
             ＋ 新しい見積書を作成
           </Link>
@@ -200,37 +283,7 @@ export default async function EstimateTemplatesPage({
             </div>
           </div>
 
-          <details className="relative">
-            <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-              見積書を選ぶ
-            </summary>
-            <div className="absolute right-0 z-40 mt-2 max-h-[24rem] w-[22rem] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
-              <p className="px-2 pb-2 pt-1 text-[11px] font-semibold text-muted">作成済み見積書</p>
-              <div className="divide-y divide-line">
-                {templates.map((template) => {
-                  const active = template.id === selectedTemplate.id;
-                  const templateModel = models.find((item) => item.id === template.base_model_id);
-                  return (
-                    <Link
-                      key={template.id}
-                      href={estimateHref(template.id)}
-                      aria-current={active ? 'page' : undefined}
-                      className={
-                        active
-                          ? 'block rounded-lg bg-forest/5 px-3 py-2 text-sm'
-                          : 'block rounded-lg px-3 py-2 text-sm hover:bg-sand/40'
-                      }
-                    >
-                      <span className="block font-semibold">{template.name}</span>
-                      <span className="mt-0.5 block text-[11px] text-muted">
-                        {templateModel?.name ?? '—'} ／ {SPEC_LABELS[template.spec_code] ?? template.spec_code} ／ {formatYen(template.total)}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          </details>
+          <span className="text-xs text-muted">別の見積書は右上の「作成済み見積書」から開けます。</span>
         </div>
 
         <div className="flex flex-wrap divide-x divide-line text-xs">

@@ -83,6 +83,12 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).toContain('(o.base_model_id is null or o.base_model_id = d.base_model_id)');
   });
 
+  it('keeps a Draft-pinned superseded Base Revision selectable after a newer publish', () => {
+    expect(migration).toContain("rev.status in ('published', 'superseded')");
+    expect(migration).toContain('rev.id = master.current_published_revision_id');
+    expect(migration).toContain('or rev.id = d.base_master_revision_id');
+  });
+
   it('finalizes only an initial formal Draft as immutable Revision 1 in one transaction', () => {
     const finalizeStart = migration.indexOf('create or replace function public.finalize_quote_draft(');
     const finalizeBody = migration.slice(finalizeStart);

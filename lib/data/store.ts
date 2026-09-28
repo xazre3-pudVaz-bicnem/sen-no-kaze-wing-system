@@ -124,9 +124,9 @@ export interface AccessibleCustomerQuote {
 
 export interface AccessibleCustomerCase {
   id: string;
-  request_status: QuoteRequestStatus;
+  request_status: QuoteRequestStatus | null;
   message: string | null;
-  contact: QuoteContact;
+  contact: QuoteContact | null;
   site_address: string | null;
   site_source: 'quote_contact' | 'configuration' | null;
   ongoing: boolean;

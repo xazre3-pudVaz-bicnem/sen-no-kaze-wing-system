@@ -1,13 +1,17 @@
 -- =============================================================
 -- Generic Quote Draft / Revision foundation
 --
--- This migration is additive only. It prepares the existing
--- quote_requests -> quotes -> quote_items lifecycle for a shared Draft /
--- Revision flow used by both Web and non-Web cases.
+-- This migration is forward-compatible foundation work. Most changes are
+-- additive, but quote_items.quantity is widened from integer to
+-- numeric(14,4), which may rewrite/lock quote_items during migration
+-- execution. It prepares the existing quote_requests -> quotes ->
+-- quote_items lifecycle for a shared Draft / Revision flow used by both
+-- Web and non-Web cases.
 --
 -- IMPORTANT:
 -- - No RPC is added or replaced here.
--- - Existing quote rows/items are not backfilled or rewritten here.
+-- - Existing quote rows/items are not backfilled or semantically rewritten;
+--   the quantity type widening preserves existing integer values exactly.
 -- - Existing Quote lifecycle behavior is unchanged in this migration.
 -- - Draft tables are intentionally closed to ordinary roles until the
 --   follow-up Draft RPC / RLS policies are introduced.

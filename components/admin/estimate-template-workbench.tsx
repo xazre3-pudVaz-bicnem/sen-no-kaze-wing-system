@@ -83,6 +83,7 @@ export function EstimateTemplateWorkbench({
   products,
   createdOptionId,
   returnSection,
+  returnPath,
   taxRate,
   adjustment,
   demoMode = false,
@@ -105,6 +106,7 @@ export function EstimateTemplateWorkbench({
   products: EstimateTemplateWorkbenchProduct[];
   createdOptionId?: string;
   returnSection?: SectionCode;
+  returnPath?: string;
   taxRate: number;
   adjustment: number;
   demoMode?: boolean;
@@ -1040,10 +1042,18 @@ export function EstimateTemplateWorkbench({
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
                   <div>
                     <p className="font-semibold">商品が見つからない場合</p>
-                    <p className="mt-1 text-xs text-muted">商品登録後、この標準見積へ戻れます。</p>
+                    <p className="mt-1 text-xs text-muted">商品登録後、この見積書へ戻れます。</p>
                   </div>
                   <Link
-                    href={'/admin/options/new?return_to=' + encodeURIComponent('/admin/estimate-templates/' + templateId + '?return_section=' + pickerSection)}
+                    href={
+                      '/admin/options/new?return_to=' +
+                      encodeURIComponent(
+                        (returnPath ?? '/admin/estimate-templates/' + templateId) +
+                          ((returnPath ?? '/admin/estimate-templates/' + templateId).includes('?') ? '&' : '?') +
+                          'return_section=' +
+                          pickerSection
+                      )
+                    }
                     className="btn-secondary btn-sm"
                   >
                     ＋ 新しい商品を登録

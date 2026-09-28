@@ -11,7 +11,7 @@ const demo = fs.readFileSync(
   'utf8'
 );
 
-describe('見積テンプレート Excel風操作確認画面', () => {
+describe('見積書作成 Excel風操作確認画面', () => {
   it('DB非連動の操作確認画面として表示する', () => {
     expect(page).toContain('EstimateTemplateExcelDemo');
     expect(page).toContain('2026-09-01修正分類表見積書');
@@ -35,10 +35,14 @@ describe('見積テンプレート Excel風操作確認画面', () => {
     expect(demo).not.toContain('原価・売価比較');
   });
 
-  it('本体は参照専用、その他は編集用として分ける', () => {
-    expect(demo).toContain('本体マスター参照・読取専用');
-    expect(demo).toContain('本体明細は見積テンプレート側では直接変更しません');
+  it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
+    expect(demo).toContain('本体マスター自体は変更せず、この見積書内の明細を編集します。');
+    expect(demo).toContain('本体マスターから読込・この見積内で編集可');
     expect(demo).toContain('/admin/base-masters/demo');
+    expect(demo).toContain('onClick={() => addFreeRow(section)}');
+    expect(demo).not.toContain("const readOnly = section === '本体'");
+    expect(demo).not.toContain('本体マスター参照・読取専用');
+    expect(demo).not.toContain('本体明細は見積テンプレート側では直接変更しません');
     expect(demo).toContain('内外装工事');
     expect(demo).toContain('オプション');
     expect(demo).toContain('別途');
@@ -51,6 +55,14 @@ describe('見積テンプレート Excel風操作確認画面', () => {
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("isCollapsed ? '+' : '−'");
     expect(demo).toContain('画面内でDraft保存');
+  });
+
+  it('編集・見積書・プランボード・図面を同じ操作確認画面で切り替える', () => {
+    expect(demo).toContain("type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing'");
+    expect(demo).toContain('aria-label="見積書作成の表示切替"');
+    expect(demo).toContain('data-testid="estimate-live-preview"');
+    expect(demo).toContain('data-testid="plan-live-preview"');
+    expect(demo).toContain('data-testid="drawing-workspace-preview"');
   });
 
   it('IME変換中のEnterをセル移動に使わない', () => {

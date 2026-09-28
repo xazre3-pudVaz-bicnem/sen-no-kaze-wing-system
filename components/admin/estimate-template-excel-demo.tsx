@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -8,7 +7,7 @@ import { Button } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
 type Section = '本体' | '内外装工事' | 'オプション' | '別途';
-type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing';
+type DemoTab = 'estimate' | 'plan' | 'drawing';
 
 type DemoRow = {
   id: string;
@@ -70,13 +69,13 @@ export function EstimateTemplateExcelDemo() {
   const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
-  const [selectedCell, setSelectedCell] = useState('セルを選択すると内容を表示します');
   const [markupRate, setMarkupRate] = useState(160);
   const [expenseRate, setExpenseRate] = useState(15);
   const [adjustment, setAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<DemoTab>('edit');
+  const [tab, setTab] = useState<DemoTab>('estimate');
+  const [showEstimatePreview, setShowEstimatePreview] = useState(false);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
@@ -254,7 +253,6 @@ export function EstimateTemplateExcelDemo() {
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex items-center gap-1 border-b border-slate-200 px-3" role="tablist" aria-label="見積書作成の表示切替">
           {([
-            ['edit', '編集'],
             ['estimate', '見積書'],
             ['plan', 'プランボード'],
             ['drawing', '図面'],
@@ -276,11 +274,11 @@ export function EstimateTemplateExcelDemo() {
           ))}
         </div>
         <div className="bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          編集した内容は、見積書・プランボード・図面の確認にも同じ内容で反映されます。
+          見積書を編集し、同じ内容をプランボード・図面にも反映します。
         </div>
       </section>
 
-      {tab === 'edit' && (
+      {tab === 'estimate' && (
         <>
       <section className="sticky top-0 z-30 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -299,6 +297,14 @@ export function EstimateTemplateExcelDemo() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowEstimatePreview((current) => !current)}
+            >
+              {showEstimatePreview ? 'プレビューを閉じる' : '見積書プレビュー'}
+            </Button>
             <Button type="button" variant="secondary" size="sm" disabled title="Draft接続後に利用できます">
               下書き保存
             </Button>
@@ -392,22 +398,9 @@ export function EstimateTemplateExcelDemo() {
           </div>
         </div>
 
-        <div className="flex border-b border-slate-200 text-xs">
-          <div className="w-20 border-r border-slate-200 bg-slate-100 px-3 py-1.5 font-semibold text-slate-500">選択中</div>
-          <div className="min-h-7 flex-1 px-3 py-1.5">{selectedCell}</div>
-        </div>
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
-          <p>
-            <strong className="text-emerald-900">本体マスターから読み込み済み：</strong>
-            Wing ホテル仕様 v4
-            <span className="ml-2 text-slate-500">本体マスター自体は変更せず、この見積書内の明細を編集します。</span>
-          </p>
-          <Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">本体マスターの操作確認画面を開く</Link>
-        </div>
-
         <div className="max-h-[68vh] overflow-auto">
           <table className="min-w-[76rem] border-collapse text-sm">
             <thead>
@@ -482,7 +475,6 @@ export function EstimateTemplateExcelDemo() {
                             <input
                               {...cellProps('name', rowIndex)}
                               value={row.name}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { name: event.target.value })}
                               className={inputClass}
                             />
@@ -494,7 +486,6 @@ export function EstimateTemplateExcelDemo() {
                               min={0}
                               step={0.01}
                               value={row.quantity}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { quantity: Math.max(0, Number(event.target.value) || 0) })}
                               className={inputClass + ' text-right'}
                             />
@@ -503,7 +494,6 @@ export function EstimateTemplateExcelDemo() {
                             <input
                               {...cellProps('unit', rowIndex)}
                               value={row.unit}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { unit: event.target.value })}
                               className={inputClass}
                             />
@@ -515,7 +505,6 @@ export function EstimateTemplateExcelDemo() {
                               min={0}
                               step={1}
                               value={row.cost}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })}
                               className={inputClass + ' text-right'}
                             />
@@ -535,7 +524,6 @@ export function EstimateTemplateExcelDemo() {
                                   min={0}
                                   step={1}
                                   value={row.sale}
-                                  onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                                   onChange={(event) => updateRow(row.id, { sale: Math.max(0, Number(event.target.value) || 0), manualSale: true })}
                                   className={inputClass + ' min-w-0 flex-1 text-right'}
                                 />
@@ -554,7 +542,6 @@ export function EstimateTemplateExcelDemo() {
                             <input
                               {...cellProps('remark', rowIndex)}
                               value={row.remark}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { remark: event.target.value })}
                               className={inputClass}
                             />
@@ -651,7 +638,7 @@ export function EstimateTemplateExcelDemo() {
         </>
       )}
 
-      {tab === 'estimate' && (
+      {tab === 'estimate' && showEstimatePreview && (
         <section data-testid="estimate-live-preview" className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-6 py-5">
             <p className="text-xs text-slate-500">見積書プレビュー・画面内編集と連動</p>

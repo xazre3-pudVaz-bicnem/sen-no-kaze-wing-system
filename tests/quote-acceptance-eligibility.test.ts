@@ -208,14 +208,22 @@ describe('Quote acceptance eligibility', () => {
     expect(staleRequest?.quote_id).toBeNull();
   });
 
-  it('uses lineage, not revision number, to distinguish preliminary and formal quotes', () => {
+  it('uses explicit quote_kind for new rows while keeping the legacy lineage fallback', () => {
     const preliminary = quote('preliminary', 'issued', null);
     preliminary.revision = 99;
-    const formal = quote('formal', 'issued', preliminary.id);
-    formal.revision = 1;
+    preliminary.quote_kind = 'preliminary';
+
+    const nonWebFormalRev1 = quote('non-web-formal', 'issued', null);
+    nonWebFormalRev1.revision = 1;
+    nonWebFormalRev1.quote_kind = 'formal';
+
+    const legacyFormal = quote('legacy-formal', 'issued', preliminary.id);
+    legacyFormal.revision = 1;
+    legacyFormal.quote_kind = null;
 
     expect(isFormalQuote(preliminary)).toBe(false);
-    expect(isFormalQuote(formal)).toBe(true);
+    expect(isFormalQuote(nonWebFormalRev1)).toBe(true);
+    expect(isFormalQuote(legacyFormal)).toBe(true);
   });
 
   it('separates preliminary and unconfirmed formal accepted history without advancing either to contract', () => {

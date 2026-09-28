@@ -874,7 +874,7 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if q.user_id is null or q.user_id <> auth.uid() then
+  if q.user_id is null or q.user_id is distinct from auth.uid() then
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
   if q.status <> 'issued' then

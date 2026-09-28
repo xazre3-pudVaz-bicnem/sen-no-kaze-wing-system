@@ -113,10 +113,17 @@ describe('Admin case management UI', () => {
 
   it('keeps the list dense and shows the selected case workspace on the same page', () => {
     expect(list).toContain('data-testid="case-summary-strip"');
-    expect(list).toContain('案件状況');
-    expect(list).toContain('各案件の現在金額合計');
+    expect(list).toContain('data-testid="case-summary-current"');
+    expect(list).toContain('現在案件');
+    expect(list).toContain("{filtered ? '表示中の見積額' : '見積額'}");
     expect(list).toContain('data-testid="case-summary-finance"');
     expect(list).toContain('data-testid="case-summary-disaster"');
+    expect(list).toContain('data-testid="case-summary-cumulative"');
+    expect(list).toContain('累計実績');
+    expect(list).toContain('未集計');
+    for (const label of ['成約件数', '引渡し棟数', '売上']) {
+      expect(list).toContain(label);
+    }
     expect(list).toContain('完成個体登録後に供給可否を管理');
     expect(list).not.toContain('災害時供給 <strong');
     expect(list).not.toContain('契約・製造・原価・利益・災害時供給は今後対応予定');
@@ -162,6 +169,12 @@ describe('Admin case management UI', () => {
     }
     expect(list).toContain('未登録');
     expect(list).toContain('更新 {formatDate(updatedAt, true)}');
+    expect(list).toContain("import { MapPin } from 'lucide-react'");
+    expect(list).toContain('googleMapsHref');
+    expect(list).toContain('https://www.google.com/maps/search/?api=1&query=');
+    expect(list).toContain('data-testid="case-map-link"');
+    expect(list).toContain('title="Googleマップで開く"');
+    expect(list).toContain('<MapPin className="h-3.5 w-3.5"');
     expect(list).not.toContain('>更新</th>');
   });
 

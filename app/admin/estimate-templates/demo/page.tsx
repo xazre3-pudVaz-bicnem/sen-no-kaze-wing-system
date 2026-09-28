@@ -11,7 +11,7 @@ export default async function EstimateTemplateDemoPage() {
       title="操作確認用 Wing ホテルUB 非防火"
       lead="本体マスターと見積テンプレートの見た目・操作感を揃えるためのDB非連動サンプルです。変更内容は保存されません。"
     >
-      <BackLink href="/admin/estimate-templates" label="見積テンプレート一覧へ戻る" />
+      <BackLink href="/admin/estimate-templates" label="見積書作成・管理へ戻る" />
 
       <section className="card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-5">
         <div>

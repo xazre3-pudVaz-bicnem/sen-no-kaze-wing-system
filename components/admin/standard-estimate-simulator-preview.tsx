@@ -289,7 +289,7 @@ function StandardEstimateSimulatorPreviewBody({
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-sand/20 px-4 py-4 sm:px-5">
             <div>
               <p className="text-xs font-semibold text-forest">
-                {sampleMode ? '動作確認サンプル' : '選択中の標準見積'}
+                {sampleMode ? '動作確認サンプル' : '選択中の見積書'}
               </p>
               <h2 className="mt-1 text-lg font-semibold">
                 {displayModelName} / {specName}
@@ -310,19 +310,19 @@ function StandardEstimateSimulatorPreviewBody({
               )}
               {template && showEditLink && (
                 <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-primary btn-sm">
-                  標準見積を編集
+                  見積書を編集
                 </Link>
               )}
               {!template && createHref && showEditLink && !sampleMode && (
                 <Link href={createHref} className="btn-primary btn-sm">
-                  この標準見積を作成
+                  この見積書を作成
                 </Link>
               )}
             </div>
           </div>
 
           {showContentTabs && (
-            <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="標準見積の確認内容">
+            <div className="flex items-center gap-1 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="見積書の確認内容">
               <button
                 type="button"
                 role="tab"
@@ -360,7 +360,7 @@ function StandardEstimateSimulatorPreviewBody({
                 <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
                 {sampleMode
                   ? '見積書の商品を変更して、金額表示とプランボードへの反映を確認できます。正式データには反映されません。'
-                  : '見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。'}
+                  : '見積書の商品変更はプランボードへ反映します。正式な変更は「見積書を編集」から行います。'}
               </div>
             )}
             <QuoteSheet

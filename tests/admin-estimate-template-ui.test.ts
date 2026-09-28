@@ -51,130 +51,46 @@ const adminActions = fs.readFileSync(
   'utf8'
 );
 
-describe('見積テンプレート管理UI', () => {
-  it('シミュレーターで選べる標準見積を同じロジックで一覧表示する', () => {
-    expect(listPage).toContain('title="標準見積"');
-    expect(listPage).toContain('標準見積一覧');
-    expect(listPage).toContain('＋ 新規標準見積を作成');
-    expect(listPage).toContain('simulatorEstimateChoices');
-    expect(listPage).toContain("model.status === 'published'");
-    expect(listPage).toContain('store.getEstimateTemplateBundle');
-    expect(listPage).toContain('未登録');
-    expect(listPage).toContain('登録済み');
-    expect(listPage).not.toContain('シミュレーターで算出');
-    expect(listPage).not.toContain('SAMPLE_WING_ROWS');
-    expect(listPage).not.toContain('添付HTMLに合わせた画面見本');
-    expect(listPage).not.toContain('/admin/estimate-templates/demo');
-    expect(listPage).toContain('selected_model');
-    expect(listPage).toContain('selected_spec');
-    expect(listPage).toContain('#estimate-preview');
-    expect(listPage).toContain('StandardEstimateSimulatorPreview');
-    expect(listPage).toContain('min-w-[40rem]');
-    expect(listPage).toContain('grid-cols-[minmax(14rem,2fr)_6.75rem_7rem_5.5rem_5.5rem_1.5rem]');
-    expect(listPage).not.toContain('min-w-[58rem]');
-    expect(listPage).toContain('商品モデル');
-    expect(listPage).toContain('防火仕様');
-    expect(listPage).toContain('非防火');
-    expect(listPage).toContain('見積名');
-    expect(listPage).toContain("sp.fire === 'fire' || sp.fire === 'non_fire'");
-    expect(listPage).toContain('CURRENT_FIRE_VARIANTS');
-    expect(listPage).toContain("'wing-01': ['hotel', 'residence', 'office']");
-    expect(listPage).toContain("box: ['water-kit']");
-    expect(listPage).toContain("flat: ['base']");
-    expect(listPage).toContain('expandCurrentEstimateChoices');
-    expect(listPage).toContain("registrationKey: `${choice.code}:non_fire`");
-    expect(listPage).toContain("registrationKey: `${choice.code}:fire`");
-    expect(listPage).not.toContain("source_sheet_name.startsWith('【防火】')");
-    expect(listPage).toContain('modelCounts');
-    expect(listPage).toContain('fireCounts');
-    expect(listPage).toContain("params.set('selected_fire', selectedFire)");
-    expect(listPage).toContain("choice.fireSpec === 'fire' ? '防火' : '非防火'");
-    expect(listPage).toContain('min-h-8');
-    expect(listPage).not.toContain('placeholder="見積名を検索"');
-    expect(listPage).not.toContain('name="q"');
-    expect(listPage).not.toContain('絞り込む');
-    expect(listPage).not.toContain('クリア');
-    expect(listPage).not.toContain('表示例（サンプル）');
-    expect(listPage).toContain('Wing ホテル仕様');
-    expect(listPage).toContain('動作確認用');
-    expect(listPage).not.toContain('保存されない画面確認用データ');
-    expect(listPage).toContain('const sampleGroup = sampleModel?.id === group.model.id;');
-    expect(listPage).toContain('＋確認用1件');
-    expect(listPage).toContain("fireFilter !== 'fire'");
-    expect(listPage).toContain("selected?.choice.fireSpec === 'non_fire'");
-    expect(listPage).toContain('sampleVisible && (');
-    expect(listPage).toContain('sampleSelected && sampleGroup');
-    expect(listPage).toContain('<Badge tone="success">登録済み</Badge>');
-    expect(listPage).toContain('<Badge tone="neutral">未登録</Badge>');
-    expect(listPage).toContain('aria-hidden="true">›</div>');
-    expect(listPage).toContain('border-l-4 border-l-forest bg-sand/15');
-    expect(listPage).toContain('min-h-10 px-3 py-1.5');
-    expect(listPage).toContain("bg-[#e4f1e8]");
-    expect(listPage).toContain('選択中');
-    expect(listPage).toContain('rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white');
-    expect(listPage).toContain('pl-4');
-    expect(listPage).toContain('costTaxIncluded: 2_100_000');
-    expect(listPage).toContain('saleTaxIncluded: 2_822_600');
-    expect(listPage).toContain("marginRate: '25.6%'");
-    expect(listPage).toContain("params.set('sample', '1')");
-    expect(listPage).toContain('sampleMode');
-    expect(listPage).not.toContain('クリックで展開');
-    expect(listPage).not.toContain('別選択');
+describe('見積書作成・管理UI', () => {
+  it('トップを一覧ではなくExcel編集ワークスペースとして表示する', () => {
+    expect(listPage).toContain('title="見積書作成・管理"');
+    expect(listPage).toContain('開いたらすぐ明細を編集できる');
+    expect(listPage).toContain('＋ 新しい見積書を作成');
+    expect(listPage).toContain('見積書を選ぶ');
+    expect(listPage).toContain('編集中の見積書');
+    expect(listPage).toContain('<EstimateTemplateWorkbench');
+    expect(listPage).toContain('<EstimateTemplateDetailTabs');
+    expect(listPage).toContain('<StandardEstimateSimulatorPreview');
+    expect(listPage).toContain('selectedTemplate');
+    expect(listPage).toContain("templates.find((template) => template.id === sp.estimate)");
+    expect(listPage).toContain('returnPath={workspaceReturnPath}');
+    expect(listPage).not.toContain('標準見積一覧');
+    expect(listPage).not.toContain('登録済み');
+    expect(listPage).not.toContain('未登録');
   });
 
-  it('動作確認サンプル行から見積書とプランボードを表示できる', () => {
-    expect(listPage).toContain("const sampleSelected = sp.sample === '1'");
-    expect(listPage).toContain("model.slug === 'wing-01'");
-    expect(listPage).toContain("preset.code === 'hotel'");
-    expect(listPage).toContain('template={null}');
-    expect(listPage).toContain('sampleMode');
-    expect(simulatorPreview).toContain('sampleMode?: boolean');
-    expect(simulatorPreview).toContain("sampleMode ? '動作確認サンプル' : '選択中の標準見積'");
-    expect(simulatorPreview).toContain('見積書とプランボードの動作確認用です');
-    expect(simulatorPreview).toContain('正式データには反映されません');
+  it('見積書切替・新規作成・標準指定の入口を編集画面上部に置く', () => {
+    expect(listPage).toContain('見積書を選ぶ');
+    expect(listPage).toContain('作成済み見積書');
+    expect(listPage).toContain('複製');
+    expect(listPage).toContain('標準に設定');
+    expect(listPage).toContain('正式な複製保存の接続後に利用できます');
+    expect(listPage).toContain('標準指定の正式接続後に利用できます');
   });
 
-  it('選択した標準見積の下にシミュレーターと同じ見積書とプランボードを表示する', () => {
-    expect(simulatorPreview).toContain('computeStandardEstimatePricing');
-    expect(simulatorPreview).toContain('computePricing');
-    expect(simulatorPreview).toContain('buildEstimateBaselineSelection');
-    expect(simulatorPreview).toContain('buildPresetSelection');
+  it('編集・見積書・プランボードを同じ見積書ワークスペースで切り替える', () => {
+    expect(detailTabs).toContain("type DetailTab = 'edit' | 'estimate' | 'plan'");
+    expect(detailTabs).toContain('aria-label="見積書の表示切替"');
+    expect(detailTabs).toContain('編集');
+    expect(detailTabs).toContain('見積書');
+    expect(detailTabs).toContain('プランボード');
+    expect(simulatorPreview).toContain("sampleMode ? '動作確認サンプル' : '選択中の見積書'");
+    expect(simulatorPreview).toContain('見積書を編集');
+    expect(simulatorPreview).toContain('この見積書を作成');
+    expect(simulatorPreview).toContain('aria-label="見積書の確認内容"');
+    expect(simulatorPreview).toContain('見積書とプランボードを確認できます');
     expect(simulatorPreview).toContain('<QuoteSheet');
     expect(simulatorPreview).toContain('<PlanBoard');
-    expect(simulatorPreview).toContain('<PreviewStage');
-    expect(simulatorPreview).toContain('<ElevationStrip');
-    expect(simulatorPreview).toContain('<EquipmentBoard');
-    expect(simulatorPreview).toContain('<SimulatorCaseImagesProvider');
-    expect(simulatorPreview).toContain('VIEW_KEYS.map');
-    expect(simulatorPreview).toContain("image.kind === 'case'");
-    expect(simulatorPreview).toContain("image.kind === 'elevation'");
-    expect(simulatorPreview).toContain('categoriesInScope');
-    expect(simulatorPreview).toContain('baselineVariantIds');
-    expect(simulatorPreview).toContain('readOnly');
-    expect(simulatorPreview).toContain('見積書とプランボードを確認できます');
-    expect(simulatorPreview).toContain('標準見積を編集');
-    expect(simulatorPreview).toContain('この標準見積を作成');
-    expect(simulatorPreview).toContain('createHref?: string');
-    expect(simulatorPreview).toContain('className="btn-primary btn-sm"');
-    expect(listPage).toContain('createTargetHref');
-    expect(listPage).toContain('/admin/estimate-templates/new?');
-    expect(listPage).toContain('防火仕様の標準見積は未登録です。基準本体を選んで新規作成へ進めます。');
-    expect(simulatorPreview).not.toContain('シミュレーターで確認');
-    expect(simulatorPreview).toContain('<OptionPickerDialog');
-    expect(simulatorPreview).toContain('allowStandardEstimateCategoryPick');
-    expect(simulatorPreview).toContain('画面内試算');
-    expect(simulatorPreview).toContain('プランボード確認');
-    expect(simulatorPreview).toContain('useState<ContentTab>(initialContentTab)');
-    expect(simulatorPreview).toContain('role="tablist"');
-    expect(simulatorPreview).toContain('aria-label="標準見積の確認内容"');
-    expect(simulatorPreview).toContain("contentTab === 'estimate'");
-    expect(simulatorPreview).toContain("contentTab === 'plan'");
-    expect(simulatorPreview).toContain('試算をリセット');
-    expect(simulatorPreview).toContain('explainBlocked');
-    expect(simulatorPreview).toContain('toggleOption');
-    expect(quoteSheet).toContain('allowStandardEstimateCategoryPick');
-    expect(quoteSheet).toContain('商品を変更');
-    expect(quoteSheet).toContain("category.code === 'ub' ? 'ユニットバス'");
   });
 
   it('新規作成画面は基準本体を先に選びExcel形式の明細編集へ進める', () => {
@@ -198,7 +114,7 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('画面確認用サンプルでExcel明細編集を見る');
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
-    expect(newForm).toContain("samplePreview ? '画面確認用' : '新規標準見積'");
+    expect(newForm).toContain("samplePreview ? '画面確認用' : '新規見積書'");
     expect(newForm).not.toContain('※画面確認用です。変更内容は保存・公開されません。');
     expect(newForm).not.toContain('黄色いセルを編集できます。変更内容は保存されません。');
     expect(newForm).toContain('const SAMPLE_EDIT_LINES');
@@ -217,8 +133,8 @@ describe('見積テンプレート管理UI', () => {
     expect(newForm).toContain('地域：{regionLabel || \'—\'}');
     expect(newForm).not.toContain('lg:grid-cols-5');
     expect(newForm).not.toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
-    expect(newPage).toContain('title="標準見積を新規作成"');
-    expect(newPage).toContain('label="標準見積一覧へ戻る"');
+    expect(newPage).toContain('title="見積書を新規作成"');
+    expect(newPage).toContain('label="見積書作成・管理へ戻る"');
     expect(newPage).toContain('estimateTemplatesFor(model).map');
     expect(newPage).toContain('loadPublishedBaseMasters()');
     expect(newPage).toContain('BASE_BREAKDOWN_ITEMS');
@@ -263,7 +179,7 @@ describe('見積テンプレート管理UI', () => {
     expect(detailPage).toContain('showEditLink={false}');
     expect(detailPage).toContain('previewOnly');
     expect(detailTabs).toContain("type DetailTab = 'edit' | 'estimate' | 'plan'");
-    expect(detailTabs).toContain('標準見積の表示切替');
+    expect(detailTabs).toContain('見積書の表示切替');
     expect(detailTabs).toContain('編集');
     expect(detailTabs).toContain('見積書');
     expect(detailTabs).toContain('プランボード');
@@ -280,7 +196,7 @@ describe('見積テンプレート管理UI', () => {
 
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
-    expect(workbench).toContain('標準見積編集');
+    expect(workbench).toContain('見積書編集');
     expect(workbench).toContain('bg-amber-50/35 px-3 py-1.5');
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋商品');

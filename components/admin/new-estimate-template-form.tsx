@@ -168,7 +168,7 @@ function SelectWithArrow({
 
 function StepIndicator({ current }: { current: 'setup' | 'edit' }) {
   return (
-    <div className="flex w-full max-w-[390px] items-center gap-3 text-xs" aria-label="新規標準見積の作成手順">
+    <div className="flex w-full max-w-[390px] items-center gap-3 text-xs" aria-label="新しい見積書の作成手順">
       <div className="flex shrink-0 items-center gap-2">
         <span
           className={
@@ -328,7 +328,7 @@ export function NewEstimateTemplateForm({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-semibold">{name || '名称未設定'}</h2>
               <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                {samplePreview ? '画面確認用' : '新規標準見積'}
+                {samplePreview ? '画面確認用' : '新規見積書'}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted">
@@ -504,7 +504,7 @@ export function NewEstimateTemplateForm({
           </div>
 
           <label className="block max-w-[620px]">
-            <span className="label">標準見積名</span>
+            <span className="label">見積書名</span>
             <Input
               className="mt-1 h-10 w-full"
               value={name}

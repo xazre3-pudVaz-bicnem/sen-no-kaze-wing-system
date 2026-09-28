@@ -41,6 +41,7 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
 import { hasRoleAtLeast } from '@/lib/domain/types';
+import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
   isQuoteAcceptanceEligible,
@@ -79,6 +80,9 @@ import {
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
+  type AccessibleCustomerListResult,
+  type AccessibleCustomerDetail,
+  type AccessibleCustomerQuote,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
@@ -462,6 +466,169 @@ export class LocalStore implements DataStore {
     return this.read((db) => [...db.profiles].sort((a, b) => b.created_at.localeCompare(a.created_at)));
   }
 
+  private buildAccessibleCustomerView(db: LocalDb, actor: SessionUser) {
+    if (!hasRoleAtLeast(actor.role, 'dealer')) {
+      throw new StoreError('FORBIDDEN', '顧客管理を閲覧できるのは代理店以上です');
+    }
+
+    const accessibleRequestIds = new Set(
+      actor.role === 'admin'
+        ? db.quoteRequests.map((request) => request.id)
+        : db.quotes.filter((quote) => quote.dealer_id === actor.id).map((quote) => quote.quote_request_id)
+    );
+    const requests = db.quoteRequests.filter((request) => accessibleRequestIds.has(request.id));
+    const quotes = db.quotes.filter((quote) => accessibleRequestIds.has(quote.quote_request_id));
+    const configurationIds = new Set([
+      ...requests.map((request) => request.configuration_id),
+      ...quotes.map((quote) => quote.configuration_id),
+    ]);
+    const configurations = db.configurations.filter((configuration) => configurationIds.has(configuration.id));
+    const view = buildCustomerManagementView({
+      profiles: db.profiles,
+      quotes,
+      requests,
+      configurations,
+    });
+
+    if (actor.role === 'admin') return view;
+    return {
+      customers: view.customers.filter((customer) => customer.cases.length > 0),
+      unlinkedCases: view.unlinkedCases,
+    };
+  }
+
+  private accessibleCaseOpenQuoteId(
+    quotes: Quote[],
+    latestQuote: Quote | null,
+    actor: SessionUser
+  ): string | null {
+    if (actor.role === 'admin') return latestQuote?.id ?? null;
+    return quotes.find((quote) => quote.dealer_id === actor.id)?.id ?? null;
+  }
+
+  async listAccessibleCustomers(actor: SessionUser): Promise<AccessibleCustomerListResult> {
+    return this.read((db) => {
+      const view = this.buildAccessibleCustomerView(db, actor);
+      return {
+        customers: view.customers.map((customer) => ({
+          id: customer.profile.id,
+          customer_no: customer.profile.customer_no,
+          full_name: customer.profile.full_name,
+          company_name: customer.profile.company_name,
+          email: customer.profile.email,
+          phone: customer.profile.phone,
+          address: customer.profile.address,
+          ongoing_case_count: customer.ongoingCases.length,
+          recent_case: customer.recentCase
+            ? {
+                id: customer.recentCase.id,
+                open_quote_id: this.accessibleCaseOpenQuoteId(
+                  customer.recentCase.quotes,
+                  customer.recentCase.latestQuote,
+                  actor
+                ),
+                quote_no: customer.recentCase.latestQuote?.quote_no ?? null,
+                model_name: customer.recentCase.latestQuote?.base_model_name ?? null,
+                site_address: customer.recentCase.siteAddress,
+                activity_at: customer.recentCase.activityAt,
+                dealer_name: customer.recentCase.dealer?.full_name ?? null,
+              }
+            : null,
+        })),
+        unlinked_cases: view.unlinkedCases.map((customerCase) => ({
+          id: customerCase.id,
+          full_name:
+            customerCase.contact?.full_name ||
+            customerCase.latestQuote?.customer_name ||
+            '顧客名未登録',
+          company_name:
+            customerCase.contact?.company_name ||
+            customerCase.latestQuote?.customer_company ||
+            null,
+          identity_issue:
+            customerCase.identityIssue === 'none' ? 'missing_profile' : customerCase.identityIssue,
+          open_quote_id: this.accessibleCaseOpenQuoteId(
+            customerCase.quotes,
+            customerCase.latestQuote,
+            actor
+          ),
+          quote_no: customerCase.latestQuote?.quote_no ?? null,
+          model_name: customerCase.latestQuote?.base_model_name ?? null,
+          site_address: customerCase.siteAddress,
+          activity_at: customerCase.activityAt,
+          dealer_name: customerCase.dealer?.full_name ?? null,
+        })),
+      };
+    });
+  }
+
+  async getAccessibleCustomerDetail(
+    customerId: string,
+    actor: SessionUser
+  ): Promise<AccessibleCustomerDetail | null> {
+    return this.read((db) => {
+      const view = this.buildAccessibleCustomerView(db, actor);
+      const customer = view.customers.find((entry) => entry.profile.id === customerId);
+      if (!customer) return null;
+
+      const quoteCaseById = new Map<string, string>();
+      for (const customerCase of customer.cases) {
+        for (const quote of customerCase.quotes) quoteCaseById.set(quote.id, customerCase.id);
+      }
+
+      const toQuote = (quote: Quote, caseId: string): AccessibleCustomerQuote => ({
+        id: quote.id,
+        case_id: caseId,
+        quote_no: quote.quote_no,
+        revision: quote.revision,
+        status: quote.status,
+        base_model_name: quote.base_model_name,
+        issued_at: quote.issued_at,
+        total: quote.total,
+        can_open_quote: actor.role === 'admin' || quote.dealer_id === actor.id,
+      });
+
+      return {
+        customer: {
+          id: customer.profile.id,
+          customer_no: customer.profile.customer_no,
+          full_name: customer.profile.full_name,
+          company_name: customer.profile.company_name,
+          email: customer.profile.email,
+          phone: customer.profile.phone,
+          postal_code: customer.profile.postal_code,
+          address: customer.profile.address,
+          created_at: customer.profile.created_at,
+        },
+        latest_contact: customer.latestContact,
+        cases: customer.cases.map((customerCase) => ({
+          id: customerCase.id,
+          request_status: customerCase.request?.status ?? null,
+          message: customerCase.request?.message ?? null,
+          contact: customerCase.contact,
+          site_address: customerCase.siteAddress,
+          site_source: customerCase.siteSource,
+          ongoing: customerCase.ongoing,
+          activity_at: customerCase.activityAt,
+          model_name: customerCase.latestQuote?.base_model_name ?? null,
+          dealer_name: customerCase.dealer?.full_name ?? null,
+          dealer_company: customerCase.dealer?.company_name ?? null,
+          open_quote_id: this.accessibleCaseOpenQuoteId(
+            customerCase.quotes,
+            customerCase.latestQuote,
+            actor
+          ),
+          latest_quote: customerCase.latestQuote
+            ? toQuote(customerCase.latestQuote, customerCase.id)
+            : null,
+        })),
+        quote_history: customer.quoteHistory.map((quote) =>
+          toQuote(quote, quoteCaseById.get(quote.id) ?? quote.quote_request_id)
+        ),
+      };
+    });
+  }
+
   // ---------- 仕様 ----------
   private canAccess(actor: SessionUser, ownerId: string | null) {
     return actor.role === 'admin' || (ownerId !== null && actor.id === ownerId);
@@ -484,8 +651,7 @@ export class LocalStore implements DataStore {
       if (!quote) return null;
       const isStaff = hasRoleAtLeast(actor.role, 'dealer');
       if (!isStaff) return null;
-      const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');
-      if (!canViewAny && quote.dealer_id !== actor.id) return null;
+      if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;
       const configuration = db.configurations.find((row) => row.id === quote.configuration_id);
       if (!configuration) return null;
       const exteriorFaces = (configuration as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces;
@@ -1054,10 +1220,9 @@ export class LocalStore implements DataStore {
   async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
     return this.read((db) => {
       const quote = db.quotes.find((q) => q.id === id);
-      // 顧客本人・管理者に加え、担当代理店も閲覧できる（別途工事を入力するため）。
-      // 総代理店は本体明細を編集するため全件を見られる
-      const dealerAccess =
-        hasRoleAtLeast(actor.role, 'master_dealer') || (hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id);
+      // 顧客本人・管理者に加え、担当中の代理店/総代理店だけが閲覧できる。
+      // 商品台帳編集権限と案件閲覧権限は分離する。
+      const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;
       if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return null;
       return {
         quote,
@@ -1071,9 +1236,7 @@ export class LocalStore implements DataStore {
   async listCaseDocuments(quoteId: string, actor: SessionUser): Promise<CaseDocument[]> {
     return this.read((db) => {
       const quote = db.quotes.find((row) => row.id === quoteId);
-      const dealerAccess =
-        hasRoleAtLeast(actor.role, 'master_dealer') ||
-        (hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id);
+      const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;
       if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return [];
       return db.caseDocuments
         .filter((row) => row.quote_id === quoteId)
@@ -1150,7 +1313,7 @@ export class LocalStore implements DataStore {
           const request = db.quoteRequests.find((r) => r.id === q.quote_request_id);
           return {
             ...q,
-            user_email: q.user_id ? email.get(q.user_id) ?? '' : '',
+            user_email: email.get(q.user_id) ?? '',
             request_status: request?.status ?? null,
             site_address: request?.contact.site_address ?? null,
           };
@@ -1162,8 +1325,9 @@ export class LocalStore implements DataStore {
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
-      // 代理店は担当案件のオプション・別途等を編集可能。本体は総代理店・本部だけ。
-      const canEditAnyQuote = hasRoleAtLeast(actor.role, 'master_dealer');
+      // 全案件を改訂できるのは本部だけ。総代理店・代理店は自分の担当案件に限る。
+      // 本体明細を編集できるかは別判定とし、総代理店は担当案件内でのみ許可する。
+      const canEditAnyQuote = actor.role === 'admin';
       const canEditBase = hasRoleAtLeast(actor.role, 'master_dealer');
       if (!(canEditAnyQuote || (hasRoleAtLeast(actor.role, 'dealer') && parent.dealer_id === actor.id))) {
         throw new StoreError('FORBIDDEN', 'この見積を編集できる権限がありません');

@@ -36,7 +36,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
-    expect(demo).toContain('本体マスター自体は変更せず、この見積書内の明細を編集します。');
+    expect(demo).toContain('本体マスター自体は変更しません。');
     expect(demo).toContain('本体マスターから読込・この見積内で編集可');
     expect(demo).not.toContain('/admin/base-masters/demo');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');

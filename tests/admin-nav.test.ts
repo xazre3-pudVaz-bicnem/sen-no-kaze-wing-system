@@ -9,10 +9,10 @@ const navSource = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/
 
 describe('管理画面の業務領域ナビゲーション', () => {
   it('本部には4つの業務領域だけを表示する', () => {
-    expect(labelsFor('admin')).toEqual(['案件管理', '商品台帳', '標準見積', '管理設定']);
+    expect(labelsFor('admin')).toEqual(['案件管理', '商品台帳', '見積書作成・管理', '管理設定']);
   });
 
-  it.each(['master_dealer', 'dealer'] as const)('%sには標準見積を表示しない', (role) => {
+  it.each(['master_dealer', 'dealer'] as const)('%sには見積書作成・管理を表示しない', (role) => {
     expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
   });
 
@@ -20,7 +20,7 @@ describe('管理画面の業務領域ナビゲーション', () => {
     const sections = getAdminNavSections('admin');
     const cases = sections.find((section) => section.label === '案件管理');
     const ledger = sections.find((section) => section.label === '商品台帳');
-    const estimates = sections.find((section) => section.label === '標準見積');
+    const estimates = sections.find((section) => section.label === '見積書作成・管理');
 
     expect(cases?.match).toEqual(expect.arrayContaining([
       '/admin/quotes',

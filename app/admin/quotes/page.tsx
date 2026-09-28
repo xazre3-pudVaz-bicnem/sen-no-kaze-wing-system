@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui';
 import { CaseWorkspace } from '@/components/admin/case-workspace';
 import { ClickableCaseRow } from '@/components/admin/clickable-case-row';
 import { matchesRegion, parseAddress, PREFECTURES, readRegionFilter } from '@/lib/domain/address';
+import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -27,6 +28,29 @@ function quoteStatusTone(status: keyof typeof QUOTE_STATUS_LABELS) {
   if (status === 'accepted') return 'success' as const;
   if (status === 'issued') return 'navy' as const;
   return 'neutral' as const;
+}
+
+function caseQuoteStatusLabel(quote: {
+  status: keyof typeof QUOTE_STATUS_LABELS;
+  parent_quote_id: string | null;
+}) {
+  const kind = isFormalQuote(quote) ? '確定見積' : '概算見積';
+  if (quote.status === 'accepted') {
+    return isFormalQuote(quote) ? '確定見積 承諾済み' : '概算見積 承諾履歴';
+  }
+  return `${kind} ${QUOTE_STATUS_LABELS[quote.status]}`;
+}
+
+function casePhaseLabel(quote: {
+  status: keyof typeof QUOTE_STATUS_LABELS;
+  parent_quote_id: string | null;
+  dealer_id: string | null;
+}) {
+  if (isFormalQuote(quote)) return quote.status === 'accepted' ? '契約' : '確定見積';
+  if (quote.status === 'issued' || quote.status === 'accepted') {
+    return quote.dealer_id ? '現地確認' : '担当決定';
+  }
+  return '見積確認';
 }
 
 function CaseSummary({
@@ -59,7 +83,7 @@ function CaseSummary({
           <strong className={newCount > 0 ? 'rounded-full bg-[#fff1d7] px-1.5 py-0.5 text-[#8a5a20]' : 'text-ink'}>{newCount}</strong>
           <span className="text-muted">見積あり</span>
           <strong className="text-ink">{quotedCount}</strong>
-          <span className="text-muted">承諾</span>
+          <span className="text-muted">見積承諾</span>
           <strong className="text-ink">{acceptedCount}</strong>
         </div>
 
@@ -81,12 +105,7 @@ function CaseSummary({
 
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1" data-testid="case-summary-disaster">
           <span className="font-semibold text-[#315745]">災害時供給</span>
-          <span className="text-muted">登録</span>
-          <strong className="text-muted">—</strong>
-          <span className="text-muted">供給可</span>
-          <strong className="text-muted">—</strong>
-          <span className="text-muted">要確認</span>
-          <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 text-[#8a5a20]">未登録</strong>
+          <span className="text-muted">完成個体登録後に供給可否を管理</span>
         </div>
       </div>
     </section>
@@ -193,7 +212,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
                   <th className="w-[22%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                  <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">状態</th>
+                  <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">工程・状態</th>
                   <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                   <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
                   <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積額</th>
@@ -225,7 +244,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <span className="mt-0.5 block font-mono text-[0.62rem] text-muted">見積番号 {q.quote_no}／第{q.revision}版</span>
                       </td>
                       <td className="px-2.5 py-1.5 align-top">
-                        <Badge tone={quoteStatusTone(q.status)}>{QUOTE_STATUS_LABELS[q.status]}</Badge>
+                        <span className="mb-1 block text-[0.6rem] font-semibold text-[#315745]">現在工程：{casePhaseLabel(q)}</span>
+                        <Badge tone={quoteStatusTone(q.status)}>{caseQuoteStatusLabel(q)}</Badge>
                         {q.request_status && <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[q.request_status]}</span>}
                         <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(q.updated_at, true)}</span>
                       </td>
@@ -247,7 +267,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                           <span>原価 <strong className="font-semibold text-muted">—</strong></span>
                           <span>利益 <strong className="font-semibold text-muted">—</strong></span>
                           <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
-                          <span>災害時供給 <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 font-semibold text-[#8a5a20]">未登録</strong></span>
                         </div>
                       </td>
                     </tr>,
@@ -444,7 +463,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
                 <th className="w-[22%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">状態</th>
+                <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">工程・状態</th>
                 <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
                 <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
                 <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積額</th>
@@ -508,13 +527,17 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     <td className="px-2.5 py-1.5 align-top">
                       {quote ? (
                         <>
-                          <Badge tone={quoteStatusTone(quote.status)}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+                          <span className="mb-1 block text-[0.6rem] font-semibold text-[#315745]">現在工程：{casePhaseLabel(quote)}</span>
+                          <Badge tone={quoteStatusTone(quote.status)}>{caseQuoteStatusLabel(quote)}</Badge>
                           <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</span>
                         </>
                       ) : (
-                        <Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>
-                          {QUOTE_REQUEST_STATUS_LABELS[request.status]}
-                        </Badge>
+                        <>
+                          <span className="mb-1 block text-[0.6rem] font-semibold text-[#315745]">現在工程：案件受付</span>
+                          <Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>
+                            見積依頼 {QUOTE_REQUEST_STATUS_LABELS[request.status]}
+                          </Badge>
+                        </>
                       )}
                       <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(updatedAt, true)}</span>
                     </td>
@@ -541,7 +564,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <span>原価 <strong className="font-semibold text-muted">—</strong></span>
                         <span>利益 <strong className="font-semibold text-muted">—</strong></span>
                         <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
-                        <span>災害時供給 <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 font-semibold text-[#8a5a20]">未登録</strong></span>
                       </div>
                     </td>
                   </tr>,

@@ -250,7 +250,26 @@ export async function CaseWorkspace({
   const contractDocuments = caseDocuments.filter((row) => row.kind === 'contract');
   const nonContractDocuments = caseDocuments.filter((row) => row.kind !== 'contract');
   const drawingDocuments = nonContractDocuments.filter((row) => row.preview_url);
-  const currentPhaseLabel = isFormalAccepted ? '契約確認' : '見積';
+  const isPreliminaryQuote = !isFormal;
+  const needsDealerAssignment =
+    isPreliminaryQuote &&
+    !quote.dealer_id &&
+    (quote.status === 'issued' || quote.status === 'accepted');
+  const needsSiteConfirmation =
+    isPreliminaryQuote &&
+    Boolean(quote.dealer_id) &&
+    (quote.status === 'issued' || quote.status === 'accepted');
+  const currentPhaseLabel = isFormalAccepted
+    ? '契約'
+    : isFormalAcceptedUnconfirmed
+      ? '確定見積'
+      : needsDealerAssignment
+        ? '担当決定'
+        : needsSiteConfirmation
+          ? '現地確認'
+          : isFormal
+            ? '確定見積'
+            : '見積確認';
   const siteEvidenceText = [
     request?.message ?? '',
     ...caseDocuments.filter((row) => row.kind === 'site').flatMap((row) => [row.title, row.note ?? '']),
@@ -303,18 +322,18 @@ export async function CaseWorkspace({
     },
     {
       label: '概算見積',
-      value: '発行済み',
+      value: isPreliminaryAccepted ? '承諾履歴あり' : '発行済み',
       state: 'done',
     },
     {
       label: '担当決定',
       value: quote.dealer_id ? '割当済み' : '未割当',
-      state: quote.dealer_id ? 'done' : 'pending',
+      state: quote.dealer_id ? 'done' : needsDealerAssignment ? 'current' : 'pending',
     },
     {
       label: '現地確認',
-      value: quote.parent_quote_id ? '完了記録なし' : '要確認',
-      state: quote.status === 'issued' && quote.parent_quote_id === null && quote.dealer_id ? 'current' : 'pending',
+      value: isFormal ? '正式完了状態は未保存' : '要確認',
+      state: needsSiteConfirmation ? 'current' : 'pending',
     },
     {
       label: '確定見積',
@@ -322,9 +341,9 @@ export async function CaseWorkspace({
         ? '承諾済み'
         : isFormalAcceptedUnconfirmed
           ? '確定見積の承諾履歴'
-          : isPreliminaryAccepted
-            ? '概算承諾履歴'
-            : `第${quote.revision}版`,
+          : isFormal
+            ? `第${quote.revision}版`
+            : '未発行',
       state: isFormalAccepted ? 'done' : quote.status === 'issued' && isCurrentFormal ? 'current' : 'pending',
     },
     {
@@ -342,23 +361,27 @@ export async function CaseWorkspace({
       ? '契約確認'
       : isFormalAcceptedUnconfirmed
         ? '確定見積の承諾履歴（最新状態要確認）'
-        : isPreliminaryAccepted
-        ? '概算見積の回答履歴'
-      : quote.status === 'issued' && quote.parent_quote_id === null
-        ? '現地確認・施工金額入力'
-        : quote.status === 'issued'
-          ? '見積内容の確認・更新'
-          : `見積：${QUOTE_STATUS_LABELS[quote.status]}`;
+        : needsDealerAssignment
+          ? '担当代理店の決定'
+          : needsSiteConfirmation
+            ? '現地確認・施工金額入力'
+            : quote.status === 'issued' && isFormal
+              ? '確定見積の確認・更新'
+              : isPreliminaryAccepted
+                ? '概算見積の承諾履歴'
+                : `見積：${QUOTE_STATUS_LABELS[quote.status]}`;
   const nextWorkflowLabel =
     isFormalAccepted
       ? '契約条件の確認'
       : isFormalAcceptedUnconfirmed
         ? '最新の見積状態を確認'
-      : quote.status === 'issued' && quote.parent_quote_id === null
-        ? '施工金額を見積へ反映'
-        : quote.status === 'issued'
-          ? 'お客様へ見積内容を案内'
-          : '—';
+        : needsDealerAssignment
+          ? '担当代理店を設定'
+          : needsSiteConfirmation
+            ? '施工金額を見積へ反映'
+            : quote.status === 'issued' && isFormal
+              ? 'お客様へ確定見積を案内'
+              : '—';
 
   const tabHref = (nextTab: TabKey, openEditor = false) =>
     embedded
@@ -370,7 +393,7 @@ export async function CaseWorkspace({
       ? {
           title: '次にやること：契約内容を確認',
           description:
-            'お客様は見積を承諾済みです。契約条件と資料を確認し、次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
+            'お客様は確定見積を承諾済みです。契約条件と資料を確認し、次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
           href: tabHref('documents'),
           action: '契約・資料を確認',
         }
@@ -382,36 +405,38 @@ export async function CaseWorkspace({
             href: tabHref('estimate'),
             action: '最新の見積状態を確認',
           }
-        : isPreliminaryAccepted
-        ? {
-            title: '次にやること：確定見積を発行',
-            description:
-              'この概算見積の承諾は過去の回答履歴です。正式な契約には進めず、現地確認と施工金額を反映した確定見積を新たに発行してください。',
-            href: tabHref('estimate'),
-            action: '見積書を確認',
-          }
-      : quote.status === 'issued' && quote.parent_quote_id === null
-        ? {
-            title: '次にやること：現地を確認して施工金額を入力',
-            description:
-              '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
-            href: tabHref('estimate', true),
-            action: '施工金額を入力する',
-          }
-        : quote.status === 'issued'
+        : needsDealerAssignment
           ? {
-              title: '次にやること：見積内容を確認',
-              description:
-                '現地で決めた施工金額や変更内容を確認してください。修正があれば「見積内容を更新」から反映し、内容がよければお客様へ見積をご案内します。',
-              href: tabHref('estimate', true),
-              action: '見積を確認・更新',
+              title: '次にやること：担当代理店を決める',
+              description: isPreliminaryAccepted
+                ? '概算見積の承諾履歴がありますが、担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。'
+                : '担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。',
+              href: '#case-workspace',
+              action: isAdmin ? '案件設定で担当を選ぶ' : '案件内容を確認',
             }
-          : {
-              title: '次にやること：案件の状態を確認',
-              description: `この案件は現在「${QUOTE_STATUS_LABELS[quote.status]}」です。見積内容と案内を確認してください。`,
-              href: tabHref('estimate'),
-              action: '見積書を確認',
-            };
+          : needsSiteConfirmation
+            ? {
+                title: '次にやること：現地を確認して施工金額を入力',
+                description: isPreliminaryAccepted
+                  ? '概算見積の承諾履歴があります。正式な契約へ進む前に、搬入経路、基礎、電気、給排水、設置工事などを確認し、必要な施工金額を見積へ反映してください。現地確認の完了状態そのものはまだ保存されません。'
+                  : '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
+                href: tabHref('estimate', true),
+                action: '施工金額を入力する',
+              }
+            : quote.status === 'issued' && isFormal
+              ? {
+                  title: '次にやること：確定見積の内容を確認',
+                  description:
+                    '現地で決めた施工金額や変更内容を確認してください。修正があれば「見積内容を更新」から反映し、内容がよければお客様へ確定見積をご案内します。',
+                  href: tabHref('estimate', true),
+                  action: '確定見積を確認・更新',
+                }
+              : {
+                  title: '次にやること：案件の状態を確認',
+                  description: `この案件は現在「${QUOTE_STATUS_LABELS[quote.status]}」です。見積内容と案内を確認してください。`,
+                  href: tabHref('estimate'),
+                  action: '見積書を確認',
+                };
 
   return (
     <div id="case-workspace" className="scroll-mt-3 space-y-2" data-testid="case-workspace">

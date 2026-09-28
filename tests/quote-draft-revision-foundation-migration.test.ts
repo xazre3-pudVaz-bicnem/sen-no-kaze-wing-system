@@ -11,7 +11,7 @@ const migration = fs.readFileSync(
 );
 
 describe('quote draft / revision foundation migration', () => {
-  it('adds forward-compatible metadata and safely widens issued item quantity precision', () => {
+  it('adds forward-compatible metadata without rewriting issued Quote quantities', () => {
     expect(migration).toContain('alter table public.quotes');
     expect(migration).toContain('add column if not exists quote_kind text');
     expect(migration).toContain('add column if not exists base_model_id uuid');
@@ -19,8 +19,8 @@ describe('quote draft / revision foundation migration', () => {
     expect(migration).toContain('add column if not exists spec_code text');
     expect(migration).toContain('add column if not exists adjustment_reason text');
     expect(migration).toContain('add column if not exists created_by uuid');
-    expect(migration).toContain('alter column quantity type numeric(14, 4)');
-    expect(migration).toContain('using quantity::numeric(14, 4)');
+    expect(migration).not.toMatch(/alter\s+column\s+quantity\s+type/i);
+    expect(migration).toContain('quote_items.quantity is intentionally left as the existing unconstrained');
     expect(migration).toContain('add column if not exists line_key uuid');
     expect(migration).toContain('add column if not exists option_id uuid');
     expect(migration).not.toMatch(/add column if not exists line_key uuid\s+not null/i);

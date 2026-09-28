@@ -37,7 +37,7 @@ describe('quote draft / revision foundation migration', () => {
     expect(migration).not.toContain('create table if not exists public.quote_revisions');
   });
 
-  it('pins Draft model/spec and can pin a Base Master Revision', () => {
+  it('pins Draft model/spec and requires quote kind to be explicit', () => {
     expect(migration).toContain('base_model_id uuid not null');
     expect(migration).toContain('references public.base_models(id) on delete restrict');
     expect(migration).toContain('base_master_revision_id uuid');
@@ -81,7 +81,7 @@ describe('quote draft / revision foundation migration', () => {
     expect(migration).toContain('subtotal = subtotal_raw + adjustment');
     expect(migration).toContain('tax = floor(subtotal::numeric * tax_rate)::integer');
     expect(migration).toContain('total = subtotal + tax');
-    expect(migration).toContain("adjustment = 0");
+    expect(migration).toContain('adjustment = 0');
     expect(migration).toContain('adjustment_reason');
   });
 
@@ -101,70 +101,13 @@ describe('quote draft / revision foundation migration', () => {
   });
 
   it('uses valid tagged dollar quoting for added trigger functions', () => {
-    expect(migration).toContain('as $quote_guard
-    expect(migration).toContain('alter table public.quote_drafts enable row level security');
-    expect(migration).toContain('alter table public.quote_draft_items enable row level security');
-    expect(migration).toContain('revoke all privileges on table public.quote_drafts');
-    expect(migration).toContain('from public, anon, authenticated');
-    expect(migration).toContain('grant all privileges on table public.quote_drafts');
-    expect(migration).toContain('to service_role');
-    expect(migration).not.toContain('create policy quote_drafts');
-  });
-
-  it('does not change existing Quote RPCs or existing row data', () => {
-    expect(migration).not.toContain('create or replace function public.create_quote_from_configuration');
-    expect(migration).not.toContain('create or replace function public.create_quote_revision');
-    expect(migration).not.toContain('create or replace function public.respond_to_quote');
-    expect(migration).not.toContain('alter table public.quote_requests');
-    expect(migration).not.toMatch(/update\s+public\.(quotes|quote_items|quote_requests)/i);
-    expect(migration).not.toMatch(/insert\s+into\s+public\.(quotes|quote_items|quote_requests)/i);
-  });
-});
-);
+    expect(migration).toContain('as $quote_guard$');
     expect(migration).toContain('$quote_guard$;');
-    expect(migration).toContain('as $base_ref_guard
-    expect(migration).toContain('alter table public.quote_drafts enable row level security');
-    expect(migration).toContain('alter table public.quote_draft_items enable row level security');
-    expect(migration).toContain('revoke all privileges on table public.quote_drafts');
-    expect(migration).toContain('from public, anon, authenticated');
-    expect(migration).toContain('grant all privileges on table public.quote_drafts');
-    expect(migration).toContain('to service_role');
-    expect(migration).not.toContain('create policy quote_drafts');
-  });
-
-  it('does not change existing Quote RPCs or existing row data', () => {
-    expect(migration).not.toContain('create or replace function public.create_quote_from_configuration');
-    expect(migration).not.toContain('create or replace function public.create_quote_revision');
-    expect(migration).not.toContain('create or replace function public.respond_to_quote');
-    expect(migration).not.toContain('alter table public.quote_requests');
-    expect(migration).not.toMatch(/update\s+public\.(quotes|quote_items|quote_requests)/i);
-    expect(migration).not.toMatch(/insert\s+into\s+public\.(quotes|quote_items|quote_requests)/i);
-  });
-});
-);
+    expect(migration).toContain('as $base_ref_guard$');
     expect(migration).toContain('$base_ref_guard$;');
-    expect(migration).toContain('as $parent_ref_guard
-    expect(migration).toContain('alter table public.quote_drafts enable row level security');
-    expect(migration).toContain('alter table public.quote_draft_items enable row level security');
-    expect(migration).toContain('revoke all privileges on table public.quote_drafts');
-    expect(migration).toContain('from public, anon, authenticated');
-    expect(migration).toContain('grant all privileges on table public.quote_drafts');
-    expect(migration).toContain('to service_role');
-    expect(migration).not.toContain('create policy quote_drafts');
-  });
-
-  it('does not change existing Quote RPCs or existing row data', () => {
-    expect(migration).not.toContain('create or replace function public.create_quote_from_configuration');
-    expect(migration).not.toContain('create or replace function public.create_quote_revision');
-    expect(migration).not.toContain('create or replace function public.respond_to_quote');
-    expect(migration).not.toContain('alter table public.quote_requests');
-    expect(migration).not.toMatch(/update\s+public\.(quotes|quote_items|quote_requests)/i);
-    expect(migration).not.toMatch(/insert\s+into\s+public\.(quotes|quote_items|quote_requests)/i);
-  });
-});
-);
+    expect(migration).toContain('as $parent_ref_guard$');
     expect(migration).toContain('$parent_ref_guard$;');
-    expect(migration).not.toContain("\nas $\nbegin");
+    expect(migration).not.toContain('\nas $\nbegin');
   });
 
   it('keeps new Draft tables closed to ordinary roles until RPCs are added', () => {

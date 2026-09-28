@@ -15,6 +15,113 @@ create unique index if not exists quotes_non_web_request_revision_uidx
   on public.quotes(quote_request_id, revision)
   where configuration_id is null;
 
+-- Revision Draft access follows the current Quote assignment, not the user who
+-- happened to create the Draft. Initial Rev1 Drafts keep created_by ownership.
+create or replace function public.get_quote_draft(p_draft_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $get_draft$
+declare
+  v_uid uuid := auth.uid();
+  v_rank integer := public.current_role_rank();
+  d public.quote_drafts;
+  parent public.quotes;
+  r public.quote_requests;
+begin
+  if v_uid is null then
+    raise exception 'UNAUTHENTICATED' using errcode = '42501';
+  end if;
+  if v_rank < 1 then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+
+  select * into d
+    from public.quote_drafts
+   where id = p_draft_id;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  if d.parent_quote_id is null then
+    if v_rank < 3 and d.created_by is distinct from v_uid then
+      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    end if;
+  else
+    select * into parent
+      from public.quotes
+     where id = d.parent_quote_id
+       and quote_request_id = d.quote_request_id;
+
+    if not found then
+      raise exception 'NOT_FOUND' using errcode = 'P0002';
+    end if;
+    if v_rank < 3 and parent.dealer_id is distinct from v_uid then
+      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    end if;
+  end if;
+
+  select * into r
+    from public.quote_requests
+   where id = d.quote_request_id;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  return jsonb_build_object(
+    'draft', to_jsonb(d),
+    'request', jsonb_build_object(
+      'id', r.id,
+      'status', r.status,
+      'message', r.message,
+      'contact', r.contact,
+      'created_by', r.created_by,
+      'created_at', r.created_at,
+      'updated_at', r.updated_at
+    ),
+    'items', coalesce((
+      select jsonb_agg(to_jsonb(i) order by i.sort_order, i.id)
+        from public.quote_draft_items i
+       where i.draft_id = d.id
+    ), '[]'::jsonb),
+    'base_revisions', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', rev.id,
+          'base_master_id', master.id,
+          'master_name', master.name,
+          'fire_spec_code', master.fire_spec_code,
+          'version', rev.version,
+          'total', rev.total
+        )
+        order by
+          case master.fire_spec_code when 'non_fire' then 0 else 1 end,
+          master.name,
+          rev.version desc
+      )
+        from public.base_masters master
+        join public.base_master_revisions rev
+          on rev.base_master_id = master.id
+       where master.base_model_id = d.base_model_id
+         and master.status = 'active'
+         and rev.status in ('published', 'superseded')
+         and (
+           rev.id = master.current_published_revision_id
+           or rev.id = d.base_master_revision_id
+         )
+         and (
+           public.can_use_base_master(master.id)
+           or rev.id = d.base_master_revision_id
+         )
+    ), '[]'::jsonb)
+  );
+end;
+$get_draft$;
+
 create or replace function public.create_quote_revision_draft(p_quote_id uuid)
 returns uuid
 language plpgsql
@@ -45,6 +152,9 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
+  if v_rank < 3 and parent.dealer_id is distinct from v_uid then
+    raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
+  end if;
   if parent.configuration_id is not null
      or parent.user_id is not null
      or parent.quote_kind is distinct from 'formal' then
@@ -60,9 +170,6 @@ begin
   if parent.status <> 'issued' then
     raise exception 'LOCKED: 改訂できるのは現在発行中の見積だけです'
       using errcode = 'P0001';
-  end if;
-  if v_rank < 3 and parent.dealer_id is distinct from v_uid then
-    raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
   end if;
 
   select * into r
@@ -88,9 +195,6 @@ begin
     if v_existing.parent_quote_id is distinct from parent.id then
       raise exception 'LOCKED: この案件には別Revisionを親にしたDraftがあります'
         using errcode = 'P0001';
-    end if;
-    if v_rank < 3 and v_existing.created_by is distinct from v_uid then
-      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
     end if;
     return v_existing.id;
   end if;
@@ -178,6 +282,7 @@ as $save_draft$
 declare
   v_uid uuid := auth.uid();
   v_rank integer := public.current_role_rank();
+  v_can_edit_base boolean;
   d public.quote_drafts;
   parent public.quotes;
   r public.quote_requests;
@@ -213,6 +318,7 @@ begin
   if v_rank < 1 then
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
+  v_can_edit_base := v_rank >= 2;
 
   select * into d
     from public.quote_drafts
@@ -222,7 +328,9 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
-  if v_rank < 3 and d.created_by is distinct from v_uid then
+  if d.parent_quote_id is null
+     and v_rank < 3
+     and d.created_by is distinct from v_uid then
     raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
   end if;
   if d.lock_version is distinct from p_expected_lock_version then
@@ -240,6 +348,9 @@ begin
     if not found then
       raise exception 'NOT_FOUND' using errcode = 'P0002';
     end if;
+    if v_rank < 3 and parent.dealer_id is distinct from v_uid then
+      raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
+    end if;
     if parent.configuration_id is not null
        or parent.user_id is not null
        or parent.quote_kind is distinct from 'formal' then
@@ -250,8 +361,10 @@ begin
       raise exception 'LOCKED: 親Revisionはすでに発行中ではありません'
         using errcode = 'P0001';
     end if;
-    if v_rank < 3 and parent.dealer_id is distinct from v_uid then
-      raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
+    if not v_can_edit_base
+       and p_base_master_revision_id is distinct from parent.base_master_revision_id then
+      raise exception 'FORBIDDEN: 本体Revisionを変更できるのは総代理店・本部だけです'
+        using errcode = '42501';
     end if;
 
     select * into r
@@ -370,6 +483,26 @@ begin
       v_has_parent_item := found;
     end if;
 
+    if d.parent_quote_id is not null and not v_can_edit_base then
+      if v_has_parent_item
+         and (
+           v_parent_item.kind in ('base', 'base_expense')
+           or v_kind in ('base', 'base_expense')
+         )
+         and (
+           v_parent_item.kind is distinct from v_kind
+           or v_parent_item.option_id is distinct from v_option_id
+           or v_parent_item.unit_price is distinct from v_unit_price
+           or v_parent_item.quantity is distinct from v_qty
+         ) then
+        raise exception 'FORBIDDEN: 本体明細を変更できるのは総代理店・本部だけです'
+          using errcode = '42501';
+      elsif not v_has_parent_item and v_kind in ('base', 'base_expense') then
+        raise exception 'FORBIDDEN: 本体明細を追加できるのは総代理店・本部だけです'
+          using errcode = '42501';
+      end if;
+    end if;
+
     select * into v_existing_item
       from public.quote_draft_items item
      where item.draft_id = d.id
@@ -447,6 +580,19 @@ begin
           image_url = excluded.image_url,
           sort_order = excluded.sort_order;
   end loop;
+
+  if d.parent_quote_id is not null
+     and not v_can_edit_base
+     and exists (
+       select 1
+         from public.quote_items item
+        where item.quote_id = parent.id
+          and item.kind in ('base', 'base_expense')
+          and not (item.line_key = any(v_seen_line_keys))
+     ) then
+    raise exception 'FORBIDDEN: 本体明細を削除できるのは総代理店・本部だけです'
+      using errcode = '42501';
+  end if;
 
   if array_length(v_seen_line_keys, 1) is null then
     delete from public.quote_draft_items where draft_id = d.id;
@@ -549,6 +695,7 @@ as $finalize_revision_draft$
 declare
   v_uid uuid := auth.uid();
   v_rank integer := public.current_role_rank();
+  v_can_edit_base boolean;
   d public.quote_drafts;
   parent public.quotes;
   r public.quote_requests;
@@ -579,6 +726,7 @@ begin
   if v_rank < 1 then
     raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
+  v_can_edit_base := v_rank >= 2;
 
   select * into d
     from public.quote_drafts
@@ -591,9 +739,6 @@ begin
   if d.parent_quote_id is null then
     raise exception 'VALIDATION: このRPCはRevision 2以降のDraft専用です'
       using errcode = 'P0001';
-  end if;
-  if v_rank < 3 and d.created_by is distinct from v_uid then
-    raise exception 'FORBIDDEN: このDraftを正式保存できません' using errcode = '42501';
   end if;
   if d.lock_version is distinct from p_expected_lock_version then
     raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください'
@@ -617,6 +762,9 @@ begin
   if not found then
     raise exception 'NOT_FOUND' using errcode = 'P0002';
   end if;
+  if v_rank < 3 and parent.dealer_id is distinct from v_uid then
+    raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
+  end if;
   if parent.configuration_id is not null
      or parent.user_id is not null
      or parent.quote_kind is distinct from 'formal' then
@@ -632,8 +780,10 @@ begin
     raise exception 'VALIDATION: Draftと親Revisionのモデル・仕様が一致しません'
       using errcode = 'P0001';
   end if;
-  if v_rank < 3 and parent.dealer_id is distinct from v_uid then
-    raise exception 'FORBIDDEN: この見積を改訂できません' using errcode = '42501';
+  if not v_can_edit_base
+     and d.base_master_revision_id is distinct from parent.base_master_revision_id then
+    raise exception 'FORBIDDEN: 本体Revisionを変更できるのは総代理店・本部だけです'
+      using errcode = '42501';
   end if;
 
   select * into r
@@ -693,6 +843,43 @@ begin
        and item.line_key = i.line_key;
     v_has_parent_item := found;
 
+    if not v_can_edit_base then
+      if v_has_parent_item
+         and (
+           v_parent_item.kind in ('base', 'base_expense')
+           or i.kind in ('base', 'base_expense')
+         )
+         and (
+           v_parent_item.kind is distinct from i.kind
+           or v_parent_item.option_id is distinct from i.option_id
+           or v_parent_item.unit_price is distinct from i.unit_price
+           or v_parent_item.quantity is distinct from i.quantity
+           or v_parent_item.amount is distinct from i.amount
+         ) then
+        raise exception 'FORBIDDEN: 本体明細を変更できるのは総代理店・本部だけです'
+          using errcode = '42501';
+      elsif not v_has_parent_item and i.kind in ('base', 'base_expense') then
+        raise exception 'FORBIDDEN: 本体明細を追加できるのは総代理店・本部だけです'
+          using errcode = '42501';
+      end if;
+    end if;
+
+    if i.option_id is not null
+       and not (
+         v_has_parent_item
+         and v_parent_item.option_id is not distinct from i.option_id
+       )
+       and not exists (
+         select 1
+           from public.options o
+          where o.id = i.option_id
+            and o.status = 'published'
+            and (o.base_model_id is null or o.base_model_id = d.base_model_id)
+       ) then
+      raise exception 'VALIDATION: 正式保存時点で利用できる公開商品を指定してください'
+        using errcode = 'P0001';
+    end if;
+
     if v_has_parent_item
        and v_parent_item.unit_price = i.unit_price
        and v_parent_item.quantity = i.quantity then
@@ -722,6 +909,23 @@ begin
       v_inst := v_inst + i.amount;
     end if;
   end loop;
+
+  if not v_can_edit_base
+     and exists (
+       select 1
+         from public.quote_items item
+        where item.quote_id = parent.id
+          and item.kind in ('base', 'base_expense')
+          and not exists (
+            select 1
+              from public.quote_draft_items draft_item
+             where draft_item.draft_id = d.id
+               and draft_item.line_key = item.line_key
+          )
+     ) then
+    raise exception 'FORBIDDEN: 本体明細を削除できるのは総代理店・本部だけです'
+      using errcode = '42501';
+  end if;
 
   if greatest(
        abs(v_base), abs(v_base_exp), abs(v_int), abs(v_int_exp),
@@ -807,6 +1011,7 @@ begin
 end;
 $finalize_revision_draft$;
 
+alter function public.get_quote_draft(uuid) owner to postgres;
 alter function public.create_quote_revision_draft(uuid) owner to postgres;
 alter function public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text) owner to postgres;
 alter function public.finalize_quote_revision_draft(uuid, integer) owner to postgres;
@@ -817,6 +1022,7 @@ begin
     select 1
       from pg_catalog.pg_proc p
      where p.oid in (
+       'public.get_quote_draft(uuid)'::regprocedure,
        'public.create_quote_revision_draft(uuid)'::regprocedure,
        'public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text)'::regprocedure,
        'public.finalize_quote_revision_draft(uuid, integer)'::regprocedure
@@ -829,6 +1035,8 @@ begin
 end;
 $owner_check$;
 
+revoke execute on function public.get_quote_draft(uuid)
+  from public, anon, authenticated, service_role;
 revoke execute on function public.create_quote_revision_draft(uuid)
   from public, anon, authenticated, service_role;
 revoke execute on function public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text)
@@ -838,6 +1046,7 @@ revoke execute on function public.finalize_quote_revision_draft(uuid, integer)
 revoke execute on function public.guard_non_web_revision_path()
   from public, anon, authenticated, service_role;
 
+grant execute on function public.get_quote_draft(uuid) to authenticated;
 grant execute on function public.create_quote_revision_draft(uuid) to authenticated;
 grant execute on function public.save_quote_draft(uuid, integer, uuid, jsonb, integer, text, text, text) to authenticated;
 grant execute on function public.finalize_quote_revision_draft(uuid, integer) to authenticated;

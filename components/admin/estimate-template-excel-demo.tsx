@@ -8,7 +8,7 @@ import { Button } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
 type Section = '本体' | '内外装工事' | 'オプション' | '別途';
-type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing';
+type DemoTab = 'estimate' | 'plan' | 'drawing';
 
 type DemoRow = {
   id: string;
@@ -76,7 +76,8 @@ export function EstimateTemplateExcelDemo() {
   const [adjustment, setAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<DemoTab>('edit');
+  const [tab, setTab] = useState<DemoTab>('estimate');
+  const [showEstimatePreview, setShowEstimatePreview] = useState(false);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
@@ -254,7 +255,6 @@ export function EstimateTemplateExcelDemo() {
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex items-center gap-1 border-b border-slate-200 px-3" role="tablist" aria-label="見積書作成の表示切替">
           {([
-            ['edit', '編集'],
             ['estimate', '見積書'],
             ['plan', 'プランボード'],
             ['drawing', '図面'],
@@ -276,11 +276,11 @@ export function EstimateTemplateExcelDemo() {
           ))}
         </div>
         <div className="bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          編集した内容は、見積書・プランボード・図面の確認にも同じ内容で反映されます。
+          見積書を編集し、同じ内容をプランボード・図面にも反映します。
         </div>
       </section>
 
-      {tab === 'edit' && (
+      {tab === 'estimate' && (
         <>
       <section className="sticky top-0 z-30 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -299,6 +299,14 @@ export function EstimateTemplateExcelDemo() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowEstimatePreview((current) => !current)}
+            >
+              {showEstimatePreview ? 'プレビューを閉じる' : '見積書プレビュー'}
+            </Button>
             <Button type="button" variant="secondary" size="sm" disabled title="Draft接続後に利用できます">
               下書き保存
             </Button>
@@ -651,7 +659,7 @@ export function EstimateTemplateExcelDemo() {
         </>
       )}
 
-      {tab === 'estimate' && (
+      {tab === 'estimate' && showEstimatePreview && (
         <section data-testid="estimate-live-preview" className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-6 py-5">
             <p className="text-xs text-slate-500">見積書プレビュー・画面内編集と連動</p>

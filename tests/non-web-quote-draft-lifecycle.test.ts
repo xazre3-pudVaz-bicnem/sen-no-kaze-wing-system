@@ -64,7 +64,9 @@ describe('non-Web Quote Draft lifecycle migration', () => {
 
   it('validates quantity precision and recalculates Draft money in PostgreSQL', () => {
     expect(migration).toContain('v_qty <> round(v_qty, 4)');
+    expect(migration).toContain("v_qty::text in ('NaN', 'Infinity', '-Infinity')");
     expect(migration).toContain('v_qty < 0.01 or v_qty > 99999');
+    expect(migration).toContain("v_unit_price_raw::text in ('NaN', 'Infinity', '-Infinity')");
     expect(migration).toContain('v_unit_price_raw <> trunc(v_unit_price_raw)');
     expect(migration).toContain('v_amount_numeric := round(v_unit_price_raw * v_qty)');
     expect(migration).toContain('v_subtotal := v_subtotal_raw + v_adjustment');
@@ -77,6 +79,8 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(migration).toContain('master.base_model_id = d.base_model_id');
     expect(migration).toContain('public.can_use_base_master(v_base_master_id)');
     expect(migration).toContain('d.base_master_revision_id is null');
+    expect(migration).toContain("o.status = 'published'");
+    expect(migration).toContain('(o.base_model_id is null or o.base_model_id = d.base_model_id)');
   });
 
   it('finalizes only an initial formal Draft as immutable Revision 1 in one transaction', () => {
@@ -89,6 +93,7 @@ describe('non-Web Quote Draft lifecycle migration', () => {
     expect(finalizeBody).toContain('d.parent_quote_id is not null');
     expect(finalizeBody).toContain("d.quote_kind <> 'formal'");
     expect(finalizeBody).toContain('r.quote_id is not null');
+    expect(finalizeBody).toContain("raise exception 'VALIDATION: 区分別金額が保存可能範囲を超えています'");
     expect(finalizeBody).toContain('insert into public.quotes');
     expect(finalizeBody).toContain("    1,\n    null,\n    'formal',");
     expect(finalizeBody).toContain('insert into public.quote_items');

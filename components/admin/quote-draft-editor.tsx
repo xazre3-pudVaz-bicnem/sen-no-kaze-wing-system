@@ -27,7 +27,7 @@ const KIND_LABELS: Record<QuoteItemKind, string> = {
   discount: '値引き',
 };
 
-const KINDS = Object.keys(KIND_LABELS) as QuoteItemKind[];
+const KINDS = (Object.keys(KIND_LABELS) as QuoteItemKind[]).filter((kind) => kind !== 'discount');
 const roundLikePostgres = (value: number) => value < 0 ? -Math.round(-value) : Math.round(value);
 
 type EditorRow = QuoteDraftSaveItem & { key: string };

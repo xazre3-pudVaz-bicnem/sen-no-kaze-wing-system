@@ -96,6 +96,11 @@ describe('Admin case management UI', () => {
     expect(newQuote).toContain('Web以外で受けた案件を登録し、概算見積を作成します。作成後はWeb経由の案件と同じ案件管理で進めます。');
     expect(manualQuoteForm).toContain('案件を登録して概算見積を作成');
     expect(manualQuoteForm).toContain('現地確認後は「見積内容を更新」から施工金額や商品変更を反映');
+    expect(manualQuoteForm).toContain('設置予定地（任意）');
+    expect(manualQuoteForm).toContain('name="site_address"');
+    expect(manualQuoteForm).toContain('住所を登録すると案件一覧からGoogleマップを開けます。');
+    expect(adminActions).toContain("site_address: formData.get('site_address')");
+    expect(adminActions).toContain('site_address: parsed.data.site_address || null');
     expect(quoteEstimateSheet).toContain('見積内容を更新');
     expect(quoteEstimateSheet).not.toContain('＋新しい見積書');
     expect(dealerForms).toContain('現地確認後の施工金額やオプション・別途工事等を見積に反映し、改訂見積を発行できます。');

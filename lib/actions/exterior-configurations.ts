@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { saveConfigurationAction, type SaveResult } from './configurations';
-import { saveExteriorFaces } from '@/lib/data/exterior-faces';
 import { validateExteriorFaces, type ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { saveConfigurationSchema } from '@/lib/validation';
 
@@ -25,25 +24,10 @@ export async function saveConfigurationWithExteriorAction(input: unknown): Promi
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: '入力内容が正しくありません。', code: 'VALIDATION' };
 
-  const { exterior_faces, ...baseInput } = parsed.data;
   const store = await getStore();
-  const bundle = await store.getCatalogBundle(baseInput.base_model_id, { includeDraft: false });
+  const bundle = await store.getCatalogBundle(parsed.data.base_model_id, { includeDraft: false });
   if (!bundle) return { ok: false, error: '商品データを確認できませんでした。', code: 'VALIDATION' };
-  const faceError = validateExteriorFaces(bundle, exterior_faces as ExteriorFaceSelection[]);
+  const faceError = validateExteriorFaces(bundle, parsed.data.exterior_faces as ExteriorFaceSelection[]);
   if (faceError) return { ok: false, error: faceError, code: 'VALIDATION' };
-
-  const result = await saveConfigurationAction(baseInput);
-  if (!result.ok) return result;
-
-  try {
-    await saveExteriorFaces(result.configuration.id, exterior_faces as ExteriorFaceSelection[]);
-    return result;
-  } catch (error) {
-    console.error('[wing] exterior face save error', error);
-    return {
-      ok: false,
-      error: '仕様本体は保存されましたが、外壁4面の保存に失敗しました。DB更新の適用状況を確認してください。',
-      code: 'INTERNAL',
-    };
-  }
+  return saveConfigurationAction(parsed.data);
 }

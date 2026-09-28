@@ -450,8 +450,6 @@ export interface Configuration {
   option_expense: number;
   installation_subtotal: number;
   adjustment: number;
-  /** 調整額の理由。旧見積では未保存の場合がある */
-  adjustment_reason?: string | null;
   subtotal: number;
   tax: number;
   total: number;
@@ -550,6 +548,8 @@ export interface Quote {
   option_expense: number;
   installation_subtotal: number;
   adjustment: number;
+  /** 調整額の理由。旧見積では未保存の場合がある */
+  adjustment_reason?: string | null;
   subtotal: number;
   tax_rate: number;
   tax: number;

@@ -402,32 +402,34 @@ export function DealerRevisionForm({
                           <input type="hidden" name={`items.${i}.image_url`} value={r.image_url ?? ''} />
                         </Fragment>
                       ))}
-                      <tr className="bg-ivory">
-                        <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
-                          <span className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              className="flex size-5 items-center justify-center rounded border border-line bg-white text-[0.7rem] font-bold"
-                              aria-expanded={!isCollapsed}
-                              aria-label={isCollapsed ? section.label + 'を開く' : section.label + 'を閉じる'}
-                              onClick={() => toggleSection(section.key)}
-                            >
-                              {isCollapsed ? '+' : '−'}
-                            </button>
-                            <span>{section.label}</span>
-                            {section.key === 'sitework' ? (
-                              <span className="rounded-full bg-[#e8f3ec] px-2 py-0.5 font-normal text-[0.6rem] text-[#315745]">現地確認後に入力</span>
-                            ) : scopeChangeMode ? (
-                              <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 font-normal text-[0.6rem] text-[#8a6416]">変更モード</span>
-                            ) : (
-                              <span className="font-normal text-[0.62rem] text-muted">確定済み・確認のみ</span>
-                            )}
-                            {section.key === 'base' && rows.some(isFireDisplayItem) && (
-                              <span className="font-normal text-[0.62rem] text-muted">防火仕様を含む</span>
-                            )}
-                          </span>
-                        </td>
-                      </tr>
+                      {!isCollapsed && (
+                        <tr className="bg-ivory">
+                          <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
+                            <span className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="flex size-5 items-center justify-center rounded border border-line bg-white text-[0.7rem] font-bold"
+                                aria-expanded
+                                aria-label={section.label + 'を閉じる'}
+                                onClick={() => toggleSection(section.key)}
+                              >
+                                −
+                              </button>
+                              <span>{section.label}</span>
+                              {section.key === 'sitework' ? (
+                                <span className="rounded-full bg-[#e8f3ec] px-2 py-0.5 font-normal text-[0.6rem] text-[#315745]">現地確認後に入力</span>
+                              ) : scopeChangeMode ? (
+                                <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 font-normal text-[0.6rem] text-[#8a6416]">変更モード</span>
+                              ) : (
+                                <span className="font-normal text-[0.62rem] text-muted">確定済み・確認のみ</span>
+                              )}
+                              {section.key === 'base' && rows.some(isFireDisplayItem) && (
+                                <span className="font-normal text-[0.62rem] text-muted">防火仕様を含む</span>
+                              )}
+                            </span>
+                          </td>
+                        </tr>
+                      )}
 
                       {!isCollapsed && locked.map((item, index) => {
                         const previous = locked[index - 1];
@@ -656,10 +658,32 @@ export function DealerRevisionForm({
                         );
                       })}
 
-                      <tr className="border-y border-[#d8e1dd] bg-[#f4f7f5] font-semibold">
-                        <td colSpan={4} className="px-3 py-1.5 text-xs">{section.subtotalLabel}</td>
+                      <tr
+                        className={`border-y border-[#d8e1dd] bg-[#f4f7f5] font-semibold ${isCollapsed ? 'cursor-pointer hover:bg-[#edf3ef]' : ''}`}
+                        data-testid={`revision-section-subtotal-${section.key}`}
+                        onClick={isCollapsed ? () => toggleSection(section.key) : undefined}
+                      >
+                        <td colSpan={4} className="px-3 py-1.5 text-xs">
+                          <span className="inline-flex items-center gap-2">
+                            {isCollapsed && (
+                              <button
+                                type="button"
+                                className="flex size-5 items-center justify-center rounded border border-line bg-white text-[0.7rem] font-bold"
+                                aria-expanded={false}
+                                aria-label={section.label + 'を開く'}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleSection(section.key);
+                                }}
+                              >
+                                +
+                              </button>
+                            )}
+                            <span>{section.subtotalLabel}</span>
+                          </span>
+                        </td>
                         <td className="px-3 py-1.5 text-right text-xs tabular-nums">
-                          {section.label.startsWith('別途工事') && section.amount === 0 ? '別途' : formatYen(section.amount)}
+                          {section.label.startsWith('別途工事') && section.amount === 0 ? '別途見積' : formatYen(section.amount)}
                         </td>
                         <td></td>
                       </tr>

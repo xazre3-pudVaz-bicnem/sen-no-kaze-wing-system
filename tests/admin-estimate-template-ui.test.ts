@@ -56,7 +56,7 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('title="見積書作成・管理"');
     expect(listPage).toContain('開いたらすぐ明細を編集できる');
     expect(listPage).toContain('＋ 新しい見積書を作成');
-    expect(listPage).toContain('作成済み見積書（{templates.length}件）');
+    expect(listPage).toContain('作成済み見積書（{totalCount}件）');
     expect(listPage).toContain('開く見積書を選択します。');
     expect(listPage).toContain("active ? '表示中' : '開く'");
     expect(listPage).toContain('更新 {formatUpdatedAt(template.updated_at)}');

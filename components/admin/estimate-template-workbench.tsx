@@ -675,7 +675,7 @@ export function EstimateTemplateWorkbench({
     <div className="space-y-4">
       {createdProduct && (
         <div className="rounded-lg border border-forest/30 bg-forest/5 px-4 py-3 text-sm">
-          「{createdProduct.name}」を商品登録し、標準見積へ戻りました。
+          「{createdProduct.name}」を商品登録し、見積書へ戻りました。
           画面確認用として「{createdProductSection === 'interior_exterior' ? '内外装工事' : createdProductSection === 'sitework' ? '別途' : 'オプション'}」へ追加しています。
         </div>
       )}
@@ -685,7 +685,7 @@ export function EstimateTemplateWorkbench({
         data-testid="estimate-workbench-sticky-summary"
       >
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[11px]">
-          <span className="mr-1 text-sm font-semibold text-slate-900">標準見積編集</span>
+          <span className="mr-1 text-sm font-semibold text-slate-900">見積書編集</span>
           <span
             className={
               hasLocalChanges

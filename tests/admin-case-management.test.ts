@@ -120,7 +120,7 @@ describe('Admin case management UI', () => {
     expect(list).toContain('完成個体登録後に供給可否を管理');
     expect(list).not.toContain('災害時供給 <strong');
     expect(list).not.toContain('契約・製造・原価・利益・災害時供給は今後対応予定');
-    expect(list).toContain('案件を選択すると、下のワークスペースが切り替わります。');
+    expect(list).toContain('全体フローのF5〜F15に対応。案件を選択すると下のワークスペースが切り替わります。');
     expect(list).not.toContain('max-h-[20rem] overflow-auto');
     expect(list).toContain('<ClickableCaseRow');
     expect(clickableCaseRow).toContain("data-selected={selected ? 'true' : undefined}");

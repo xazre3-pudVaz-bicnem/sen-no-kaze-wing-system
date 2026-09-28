@@ -199,7 +199,7 @@ export default async function EstimateTemplatesPage({
       >
         <Alert tone="info">
           {selectedSample
-            ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。主要明細を表示し、残りは集約行にまとめています。DBには保存されません。`
+            ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
             : '現在は正式な見積書データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
         </Alert>
         <EstimateTemplateExcelDemo key={selectedSample?.id ?? 'new-estimate-demo'} sampleId={selectedSample?.id} />

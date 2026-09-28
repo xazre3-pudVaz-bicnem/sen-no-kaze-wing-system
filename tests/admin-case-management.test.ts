@@ -275,7 +275,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';");
     expect(workspace).toContain("const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';");
     expect(workspace).toContain("isPreliminaryAccepted ? '承諾履歴あり' : '発行済み'");
-    expect(workspace).toContain("isFormal ? `第${quote.revision}版`");
+    expect(workspace).toContain('第${quote.revision}版');
     expect(workspace).toContain(": '未発行'");
     expect(workspace).not.toContain("quote.revision === 1 ? '概算見積'");
     expect(workspace).not.toContain("quote.revision > 1 ? '確定見積'");

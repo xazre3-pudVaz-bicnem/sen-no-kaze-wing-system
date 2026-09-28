@@ -647,8 +647,7 @@ export class LocalStore implements DataStore {
       if (!quote) return null;
       const isStaff = hasRoleAtLeast(actor.role, 'dealer');
       if (!isStaff) return null;
-      const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');
-      if (!canViewAny && quote.dealer_id !== actor.id) return null;
+      if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;
       const configuration = db.configurations.find((row) => row.id === quote.configuration_id);
       if (!configuration) return null;
       const exteriorFaces = (configuration as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces;
@@ -1199,10 +1198,9 @@ export class LocalStore implements DataStore {
   async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
     return this.read((db) => {
       const quote = db.quotes.find((q) => q.id === id);
-      // 顧客本人・管理者に加え、担当代理店も閲覧できる（別途工事を入力するため）。
-      // 総代理店は本体明細を編集するため全件を見られる
-      const dealerAccess =
-        hasRoleAtLeast(actor.role, 'master_dealer') || (hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id);
+      // 顧客本人・管理者に加え、担当中の代理店/総代理店だけが閲覧できる。
+      // 商品台帳編集権限と案件閲覧権限は分離する。
+      const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;
       if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return null;
       return {
         quote,
@@ -1216,9 +1214,7 @@ export class LocalStore implements DataStore {
   async listCaseDocuments(quoteId: string, actor: SessionUser): Promise<CaseDocument[]> {
     return this.read((db) => {
       const quote = db.quotes.find((row) => row.id === quoteId);
-      const dealerAccess =
-        hasRoleAtLeast(actor.role, 'master_dealer') ||
-        (hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id);
+      const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;
       if (!quote || !(this.canAccess(actor, quote.user_id) || dealerAccess)) return [];
       return db.caseDocuments
         .filter((row) => row.quote_id === quoteId)

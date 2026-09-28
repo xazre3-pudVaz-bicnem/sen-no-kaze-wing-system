@@ -36,9 +36,9 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
-    expect(demo).toContain('本体マスター自体は変更せず、この見積書内の明細を編集します。');
+    expect(demo).toContain('本体マスター自体は変更しません。');
     expect(demo).toContain('本体マスターから読込・この見積内で編集可');
-    expect(demo).toContain('/admin/base-masters/demo');
+    expect(demo).not.toContain('/admin/base-masters/demo');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
     expect(demo).not.toContain("const readOnly = section === '本体'");
     expect(demo).not.toContain('本体マスター参照・読取専用');
@@ -69,7 +69,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('売価を再計算');
     expect(demo).toContain('aria-label="経費率"');
     expect(demo).toContain('aria-label="掛率"');
-    expect(demo).toContain('選択中');
+    expect(demo).not.toContain('選択中');
     expect(demo).not.toContain('売価倍率');
     expect(demo).not.toContain('売価諸費用');
   });
@@ -89,6 +89,14 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('Draftの操作');
   });
 
+  it('見積条件と重複する本体マスター案内・セル選択表示を明細上部から外す', () => {
+    expect(demo).not.toContain('本体マスターから読み込み済み：');
+    expect(demo).not.toContain('本体マスターの操作確認画面を開く');
+    expect(demo).not.toContain('セルを選択すると内容を表示します');
+    expect(demo).not.toContain('setSelectedCell');
+    expect(demo).not.toContain("import Link from 'next/link'");
+  });
+
   it('表を従来よりコンパクトな横幅で表示する', () => {
     expect(demo).toContain('min-w-[76rem] border-collapse text-sm');
     expect(demo).toContain('min-w-[16rem]');
@@ -96,9 +104,17 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('min-w-[20rem]');
   });
 
-  it('編集・見積書・プランボード・図面を同じ操作確認画面で切り替える', () => {
-    expect(demo).toContain("type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing'");
+  it('見積書に編集とプレビューをまとめ、プランボード・図面と3タブにする', () => {
+    expect(demo).toContain("type DemoTab = 'estimate' | 'plan' | 'drawing'");
+    expect(demo).toContain("useState<DemoTab>('estimate')");
     expect(demo).toContain('aria-label="見積書作成の表示切替"');
+    expect(demo).toContain("['estimate', '見積書']");
+    expect(demo).toContain("['plan', 'プランボード']");
+    expect(demo).toContain("['drawing', '図面']");
+    expect(demo).not.toContain("['edit', '編集']");
+    expect(demo).toContain('見積書プレビュー');
+    expect(demo).toContain('プレビューを閉じる');
+    expect(demo).toContain('showEstimatePreview');
     expect(demo).toContain('data-testid="estimate-live-preview"');
     expect(demo).toContain('data-testid="plan-live-preview"');
     expect(demo).toContain('data-testid="drawing-workspace-preview"');

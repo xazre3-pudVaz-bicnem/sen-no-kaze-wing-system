@@ -77,9 +77,18 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('非防火');
     expect(listPage).toContain('見積名');
     expect(listPage).toContain("sp.fire === 'fire' || sp.fire === 'non_fire'");
-    expect(listPage).toContain("source_sheet_name.startsWith('【防火】')");
+    expect(listPage).toContain('CURRENT_FIRE_VARIANTS');
+    expect(listPage).toContain("'wing-01': ['hotel', 'residence', 'office']");
+    expect(listPage).toContain("box: ['water-kit']");
+    expect(listPage).toContain("flat: ['base']");
+    expect(listPage).toContain('expandCurrentEstimateChoices');
+    expect(listPage).toContain("registrationKey: `${choice.code}:non_fire`");
+    expect(listPage).toContain("registrationKey: `${choice.code}:fire`");
+    expect(listPage).not.toContain("source_sheet_name.startsWith('【防火】')");
     expect(listPage).toContain('modelCounts');
     expect(listPage).toContain('fireCounts');
+    expect(listPage).toContain("params.set('selected_fire', selectedFire)");
+    expect(listPage).toContain("choice.fireSpec === 'fire' ? '防火' : '非防火'");
     expect(listPage).toContain('min-h-8');
     expect(listPage).not.toContain('placeholder="見積名を検索"');
     expect(listPage).not.toContain('name="q"');
@@ -92,6 +101,7 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).toContain('const sampleGroup = sampleModel?.id === group.model.id;');
     expect(listPage).toContain('＋確認用1件');
     expect(listPage).toContain("fireFilter !== 'fire'");
+    expect(listPage).toContain("selected?.choice.fireSpec === 'non_fire'");
     expect(listPage).toContain('sampleVisible && (');
     expect(listPage).toContain('sampleSelected && sampleGroup');
     expect(listPage).toContain('<Badge tone="success">登録済み</Badge>');

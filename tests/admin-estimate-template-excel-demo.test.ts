@@ -49,12 +49,29 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('折り畳み・掛率再計算・別途見積・商品追加を画面内で試せる', () => {
-    expect(demo).toContain('掛率から売価を再計算');
+    expect(demo).toContain('売価を再計算');
     expect(demo).toContain('別途見積');
     expect(demo).toContain('商品を追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("isCollapsed ? '+' : '−'");
     expect(demo).toContain('編集内容を一時保持');
+  });
+
+  it('見積条件と価格設定を分け、技術の杜のExcelと同じ用語で表示する', () => {
+    expect(demo).toContain('見積条件');
+    expect(demo).toContain('価格設定');
+    expect(demo).toContain('販売費');
+    expect(demo).toContain('原価側');
+    expect(demo).toContain('経費');
+    expect(demo).toContain('区分に加算');
+    expect(demo).toContain('掛率');
+    expect(demo).toContain('原価→売価');
+    expect(demo).toContain('売価を再計算');
+    expect(demo).toContain('aria-label="経費率"');
+    expect(demo).toContain('aria-label="掛率"');
+    expect(demo).toContain('選択中');
+    expect(demo).not.toContain('売価倍率');
+    expect(demo).not.toContain('売価諸費用');
   });
 
   it('本番接続前の一時保持と正式保存を誤認しない表記にする', () => {

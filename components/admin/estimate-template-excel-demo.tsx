@@ -71,7 +71,7 @@ export function EstimateTemplateExcelDemo() {
   const [savedRows, setSavedRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
-  const [selectedCell, setSelectedCell] = useState('選択したセルの内容を表示');
+  const [selectedCell, setSelectedCell] = useState('セルを選択すると内容を表示します');
   const [markupRate, setMarkupRate] = useState(160);
   const [savedMarkupRate, setSavedMarkupRate] = useState(160);
   const [expenseRate, setExpenseRate] = useState(15);
@@ -326,49 +326,92 @@ export function EstimateTemplateExcelDemo() {
           </div>
         </div>
 
-        <div className="flex flex-wrap divide-x divide-slate-200 border-b border-slate-200 text-sm">
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>Wing</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>ホテルUB</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>非防火</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>標準地域</strong></div>
-          <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>Wing ホテル仕様 v4</strong></div>
-          <label className="flex items-center gap-2 px-4 py-2">
-            <span className="text-xs text-slate-500">売価倍率</span>
-            <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={markupRate}
-              onChange={(event) => {
-                setMarkupRate(Math.max(0, Number(event.target.value) || 0));
-                markDirty();
-              }}
-              className="h-8 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
-            />
-            <span>%</span>
-            <button type="button" className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold" onClick={applyMarkup}>
-              掛率から売価を再計算
-            </button>
-          </label>
-          <label className="flex items-center gap-2 px-4 py-2">
-            <span className="text-xs text-slate-500">売価諸費用</span>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={expenseRate}
-              onChange={(event) => {
-                setExpenseRate(Math.max(0, Number(event.target.value) || 0));
-                markDirty();
-              }}
-              className="h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
-            />
-            <span>%</span>
-          </label>
+        <div className="border-b border-slate-200 text-sm">
+          <div className="flex flex-wrap items-stretch border-b border-slate-200">
+            <div className="flex w-20 shrink-0 items-center bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+              見積条件
+            </div>
+            <div className="flex flex-wrap divide-x divide-slate-200">
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>Wing</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>ホテルUB</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>非防火</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>標準地域</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>Wing ホテル仕様 v4</strong></div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-stretch bg-slate-50/50">
+            <div className="flex w-20 shrink-0 items-center bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+              価格設定
+            </div>
+            <div className="flex flex-1 flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2">
+              <div className="flex items-center gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">販売費</p>
+                  <p className="text-[10px] text-slate-500">原価側</p>
+                </div>
+                <div
+                  className="flex h-8 min-w-20 items-center justify-end rounded border border-slate-300 bg-slate-100 px-2 text-sm font-semibold text-slate-600"
+                  title="原価側の正式計算を接続後に変更できるようにします"
+                >
+                  100 <span className="ml-1 font-normal">%</span>
+                </div>
+                <span className="text-[10px] text-slate-400">接続後</span>
+              </div>
+
+              <label className="flex items-center gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">経費</p>
+                  <p className="text-[10px] text-slate-500">区分に加算</p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={expenseRate}
+                  onChange={(event) => {
+                    setExpenseRate(Math.max(0, Number(event.target.value) || 0));
+                    markDirty();
+                  }}
+                  className="h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  aria-label="経費率"
+                />
+                <span>%</span>
+              </label>
+
+              <label className="flex items-center gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">掛率</p>
+                  <p className="text-[10px] text-slate-500">原価→売価</p>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={markupRate}
+                  onChange={(event) => {
+                    setMarkupRate(Math.max(0, Number(event.target.value) || 0));
+                    markDirty();
+                  }}
+                  className="h-8 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  aria-label="掛率"
+                />
+                <span>%</span>
+              </label>
+
+              <button
+                type="button"
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm"
+                onClick={applyMarkup}
+              >
+                売価を再計算
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="flex border-b border-slate-200 text-xs">
-          <div className="w-16 border-r border-slate-200 bg-slate-100 px-2 py-1.5 font-semibold text-slate-500">内容</div>
+          <div className="w-20 border-r border-slate-200 bg-slate-100 px-3 py-1.5 font-semibold text-slate-500">選択中</div>
           <div className="min-h-7 flex-1 px-3 py-1.5">{selectedCell}</div>
         </div>
       </section>
@@ -598,7 +641,7 @@ export function EstimateTemplateExcelDemo() {
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>売価諸費用 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
+        <div className="flex justify-between gap-4 py-1"><span>経費 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
           <input

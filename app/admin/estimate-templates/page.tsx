@@ -99,6 +99,7 @@ export default async function EstimateTemplatesPage({
 
   const sampleSelected = sp.sample === '1';
   const sampleModel = simulatorModels.find((model) => model.slug === 'wing-01') ?? null;
+  const sampleVisible = Boolean(sampleModel && groups.some((group) => group.model.id === sampleModel.id));
   const sampleSpecCode = sampleModel?.presets.some((preset) => preset.code === 'hotel') ? 'hotel' : null;
 
   const requestedModelId = sp.selected_model ?? '';
@@ -138,8 +139,12 @@ export default async function EstimateTemplatesPage({
           <h2 className="text-base font-semibold">標準見積一覧</h2>
           <div className="flex items-center gap-2 text-xs text-muted">
             <span>{totalChoices}件</span>
-            <span aria-hidden="true">・</span>
-            <span>動作確認用 1件</span>
+            {sampleVisible && (
+              <>
+                <span aria-hidden="true">・</span>
+                <span>動作確認用 1件</span>
+              </>
+            )}
           </div>
         </div>
 

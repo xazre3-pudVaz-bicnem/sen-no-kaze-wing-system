@@ -11,6 +11,7 @@ import {
 } from '@/components/admin/estimate-template-workbench';
 import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
+import { EstimateTemplateExcelDemo } from '@/components/admin/estimate-template-excel-demo';
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -59,20 +60,18 @@ export default async function EstimateTemplatesPage({
     return (
       <AdminPage
         title="見積書作成・管理"
-        lead="見積書をExcelに近い操作感で作成・編集し、見積書とプランボードを同じ内容から確認します。"
+        lead="見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
             ＋ 新しい見積書を作成
           </Link>
         }
       >
-        <section className="card px-6 py-12 text-center">
-          <h2 className="font-semibold">見積書がまだありません</h2>
-          <p className="mt-2 text-sm text-muted">新しい見積書を作成すると、この画面で直接明細を編集できます。</p>
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm mt-5">
-            ＋ 新しい見積書を作成
-          </Link>
-        </section>
+        <Alert tone="info">
+          現在は正式な見積書データが未登録のため、作成画面を直接表示しています。
+          画面内の変更はまだDBへ保存されません。
+        </Alert>
+        <EstimateTemplateExcelDemo />
       </AdminPage>
     );
   }

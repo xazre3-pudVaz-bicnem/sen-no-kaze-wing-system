@@ -4,38 +4,46 @@ import { getStore } from '@/lib/data/store';
 import { simulatorEstimateChoices } from '@/lib/domain/estimate-template';
 import { formatYen } from '@/lib/domain/pricing';
 import type { EstimateTemplateBundle } from '@/lib/domain/types';
-import { Badge, Input } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
 
-function filterHref(model: string, q: string) {
+type FireFilter = '' | 'non_fire' | 'fire';
+
+function filterHref(model: string, fire: FireFilter) {
   const params = new URLSearchParams();
   if (model) params.set('model', model);
-  if (q) params.set('q', q);
+  if (fire) params.set('fire', fire);
   const query = params.toString();
   return query ? `/admin/estimate-templates?${query}` : '/admin/estimate-templates';
 }
 
 function selectionHref(
   model: string,
-  q: string,
+  fire: FireFilter,
   selectedModel: string,
   selectedSpec: string
 ) {
   const params = new URLSearchParams();
   if (model) params.set('model', model);
-  if (q) params.set('q', q);
+  if (fire) params.set('fire', fire);
   params.set('selected_model', selectedModel);
   params.set('selected_spec', selectedSpec);
   return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
 }
 
-function sampleHref(model: string, q: string) {
+function sampleHref(model: string, fire: FireFilter) {
   const params = new URLSearchParams();
   if (model) params.set('model', model);
-  if (q) params.set('q', q);
+  if (fire) params.set('fire', fire);
   params.set('sample', '1');
   return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
+}
+
+function fireSpecForChoice(
+  choice: ReturnType<typeof simulatorEstimateChoices>[number]
+): Exclude<FireFilter, ''> {
+  return choice.template?.template.source_sheet_name.startsWith('【防火】') ? 'fire' : 'non_fire';
 }
 
 const LIST_GRID =
@@ -77,29 +85,49 @@ export default async function EstimateTemplatesPage({
 
   const simulatorModels = models.filter((model) => model.status === 'published');
   const modelId = sp.model ?? '';
-  const qRaw = (sp.q ?? '').trim();
-  const q = qRaw.toLowerCase();
-  const hasFilters = Boolean(modelId || q);
+  const fireFilter: FireFilter =
+    sp.fire === 'fire' || sp.fire === 'non_fire' ? sp.fire : '';
 
-  const groups = simulatorModels
-    .filter((model) => !modelId || model.id === modelId)
-    .map((model) => {
-      const choices = simulatorEstimateChoices(model, bundlesByModel.get(model.id) ?? [])
-        .filter((choice) => {
-          if (!q) return true;
-          return [model.name, choice.name, choice.code, choice.description]
-            .join(' ')
-            .toLowerCase()
-            .includes(q);
-        });
-
-      return { model, choices };
-    })
+  const allGroups = simulatorModels.map((model) => ({
+    model,
+    choices: simulatorEstimateChoices(model, bundlesByModel.get(model.id) ?? []),
+  }));
+  const modelScopeGroups = allGroups.filter((group) => !modelId || group.model.id === modelId);
+  const groups = modelScopeGroups
+    .map((group) => ({
+      ...group,
+      choices: group.choices.filter(
+        (choice) => !fireFilter || fireSpecForChoice(choice) === fireFilter
+      ),
+    }))
     .filter((group) => group.choices.length > 0);
 
-  const sampleSelected = sp.sample === '1';
+  const modelCounts = new Map(
+    allGroups.map((group) => [
+      group.model.id,
+      group.choices.filter((choice) => !fireFilter || fireSpecForChoice(choice) === fireFilter).length,
+    ])
+  );
+  const allModelCount = [...modelCounts.values()].reduce((sum, count) => sum + count, 0);
+  const fireCounts = {
+    all: modelScopeGroups.reduce((sum, group) => sum + group.choices.length, 0),
+    non_fire: modelScopeGroups.reduce(
+      (sum, group) => sum + group.choices.filter((choice) => fireSpecForChoice(choice) === 'non_fire').length,
+      0
+    ),
+    fire: modelScopeGroups.reduce(
+      (sum, group) => sum + group.choices.filter((choice) => fireSpecForChoice(choice) === 'fire').length,
+      0
+    ),
+  };
+
+  const sampleSelected = sp.sample === '1' && fireFilter !== 'fire';
   const sampleModel = simulatorModels.find((model) => model.slug === 'wing-01') ?? null;
-  const sampleVisible = Boolean(sampleModel && groups.some((group) => group.model.id === sampleModel.id));
+  const sampleVisible = Boolean(
+    sampleModel &&
+      fireFilter !== 'fire' &&
+      groups.some((group) => group.model.id === sampleModel.id)
+  );
   const sampleSpecCode = sampleModel?.presets.some((preset) => preset.code === 'hotel') ? 'hotel' : null;
 
   const requestedModelId = sp.selected_model ?? '';
@@ -149,59 +177,70 @@ export default async function EstimateTemplatesPage({
         </div>
 
         <div className="border-b border-line bg-sand/15 px-4 py-2.5 sm:px-5">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
-              <Link
-                href={filterHref('', qRaw)}
-                aria-current={!modelId ? 'page' : undefined}
-                className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                  !modelId
-                    ? 'border-ink bg-ink text-white'
-                    : 'border-line bg-white text-ink hover:bg-sand'
-                }`}
-              >
-                すべて
-              </Link>
-              {simulatorModels.map((model) => {
-                const active = model.id === modelId;
-                return (
-                  <Link
-                    key={model.id}
-                    href={filterHref(model.id, qRaw)}
-                    aria-current={active ? 'page' : undefined}
-                    className={`inline-flex min-h-9 items-center rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                      active
-                        ? 'border-forest bg-forest text-white'
-                        : 'border-line bg-white text-ink hover:bg-sand'
-                    }`}
-                  >
-                    {model.name === 'フラット' ? 'Flat' : model.name}
-                  </Link>
-                );
-              })}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-16 shrink-0 text-xs font-semibold text-ink-soft">モデル</span>
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="商品モデル">
+                <Link
+                  href={filterHref('', fireFilter)}
+                  aria-current={!modelId ? 'page' : undefined}
+                  className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium transition ${
+                    !modelId
+                      ? 'border-ink bg-ink text-white'
+                      : 'border-line bg-white text-ink hover:bg-sand'
+                  }`}
+                >
+                  <span>すべて</span>
+                  <span className="text-[10px] opacity-70">{allModelCount}</span>
+                </Link>
+                {simulatorModels.map((model) => {
+                  const active = model.id === modelId;
+                  return (
+                    <Link
+                      key={model.id}
+                      href={filterHref(model.id, fireFilter)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium transition ${
+                        active
+                          ? 'border-forest bg-forest text-white'
+                          : 'border-line bg-white text-ink hover:bg-sand'
+                      }`}
+                    >
+                      <span>{model.name === 'フラット' ? 'Flat' : model.name}</span>
+                      <span className="text-[10px] opacity-70">{modelCounts.get(model.id) ?? 0}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
 
-            <form method="get" className="flex min-w-0 flex-1 items-center gap-1.5 lg:max-w-[34rem]">
-              {modelId && <input type="hidden" name="model" value={modelId} />}
-              <label className="min-w-0 flex-1">
-                <span className="sr-only">見積名</span>
-                <Input
-                  type="search"
-                  name="q"
-                  defaultValue={sp.q ?? ''}
-                  placeholder="見積名を検索"
-                  className="h-9 min-h-9 w-full px-3 text-sm"
-                />
-              </label>
-              <button type="submit" className="btn-secondary btn-sm min-h-9 shrink-0 px-3.5">
-                絞り込む
-              </button>
-              {hasFilters && (
-                <Link href="/admin/estimate-templates" className="btn-ghost btn-sm min-h-9 shrink-0 px-2.5">
-                  クリア
-                </Link>
-              )}
-            </form>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-16 shrink-0 text-xs font-semibold text-ink-soft">防火仕様</span>
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="防火仕様">
+                {[
+                  { value: '' as const, label: 'すべて', count: fireCounts.all },
+                  { value: 'non_fire' as const, label: '非防火', count: fireCounts.non_fire },
+                  { value: 'fire' as const, label: '防火', count: fireCounts.fire },
+                ].map((item) => {
+                  const active = fireFilter === item.value;
+                  return (
+                    <Link
+                      key={item.value || 'all'}
+                      href={filterHref(modelId, item.value)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium transition ${
+                        active
+                          ? 'border-forest bg-forest text-white'
+                          : 'border-line bg-white text-ink hover:bg-sand'
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      <span className="text-[10px] opacity-70">{item.count}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -242,7 +281,7 @@ export default async function EstimateTemplatesPage({
                     <div className="divide-y divide-line">
                       {sampleGroup && (
                         <Link
-                          href={sampleHref(modelId, qRaw)}
+                          href={sampleHref(modelId, fireFilter)}
                           aria-current={sampleSelected ? 'true' : undefined}
                           className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
                             sampleSelected
@@ -274,7 +313,7 @@ export default async function EstimateTemplatesPage({
                         return (
                           <Link
                             key={choice.code}
-                            href={selectionHref(modelId, qRaw, group.model.id, choice.code)}
+                            href={selectionHref(modelId, fireFilter, group.model.id, choice.code)}
                             aria-current={active ? 'true' : undefined}
                             className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
                               active
@@ -316,7 +355,7 @@ export default async function EstimateTemplatesPage({
               }) : (
                 <div className="col-span-6 px-6 py-8 text-center">
                   <p className="text-sm font-semibold">条件に一致する正式な標準見積がありません</p>
-                  <p className="mt-1 text-xs text-muted">商品モデルや検索条件を変更して確認してください。</p>
+                  <p className="mt-1 text-xs text-muted">商品モデルや防火仕様を変更して確認してください。</p>
                 </div>
               )}
           </div>

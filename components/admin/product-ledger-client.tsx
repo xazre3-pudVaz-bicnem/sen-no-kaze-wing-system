@@ -221,8 +221,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
         {viewMode === 'list' ? (
           <div data-testid="ledger-table-view">
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[680px] table-fixed text-left text-sm">
+            <div className="hidden md:block">
+              <table className="w-full table-fixed text-left text-sm">
                 <thead className="bg-forest/5 text-xs text-muted">
                   <tr>
                     <th className="w-[36%] px-3 py-2.5">商品</th>
@@ -244,13 +244,13 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                           </span>
                           <span className="min-w-0">
                             <span className="block truncate font-semibold text-ink">{o.name}</span>
-                            <span className="mt-0.5 block truncate text-[0.68rem] text-muted">{o.product_no || '商品番号未採番'}</span>
+                            <span className="mt-0.5 block truncate text-[0.68rem] text-muted">{o.product_no || dash}</span>
                           </span>
                         </button>
                       </td>
                       <td className="px-3 py-2">
                         <span className="block truncate">{o.manufacturer || dash}</span>
-                        <span className="mt-0.5 block truncate text-xs text-muted">{o.model_no || '型番未設定'}</span>
+                        <span className="mt-0.5 block truncate text-xs text-muted">{o.model_no || dash}</span>
                       </td>
                       <td className="truncate px-3 py-2">{categoryMap.get(o.category_id)?.name ?? dash}</td>
                       <td className="px-3 py-2">

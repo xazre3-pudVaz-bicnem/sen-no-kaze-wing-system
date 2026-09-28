@@ -1261,7 +1261,8 @@ export async function finalizeQuoteDraftAction(
     return errState(e);
   }
 
-  redirect(`/admin/quotes/${quoteId}?created=1&revision=${encodeURIComponent(String(quoteRevision))}`);
+  const resultFlag = quoteRevision > 1 ? 'revised=1' : 'created=1';
+  redirect(`/admin/quotes/${quoteId}?${resultFlag}&revision=${encodeURIComponent(String(quoteRevision))}`);
 }
 
 /* ---------------- 標準見積テンプレート ---------------- */

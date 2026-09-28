@@ -16,10 +16,10 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
   });
 
-  it('案件管理の補助導線は本部向けだけを大分類の右側に置く', () => {
+  it('顧客管理は全スタッフ、問い合わせは本部だけの補助導線にする', () => {
     expect(getAdminUtilityLinks('admin').map((item) => item.label)).toEqual(['顧客管理', '問い合わせ']);
-    expect(getAdminUtilityLinks('master_dealer')).toEqual([]);
-    expect(getAdminUtilityLinks('dealer')).toEqual([]);
+    expect(getAdminUtilityLinks('master_dealer').map((item) => item.label)).toEqual(['顧客管理']);
+    expect(getAdminUtilityLinks('dealer').map((item) => item.label)).toEqual(['顧客管理']);
   });
 
   it('補助画面は大分類のactive判定にだけ含め、二段目メニューを描画しない', () => {

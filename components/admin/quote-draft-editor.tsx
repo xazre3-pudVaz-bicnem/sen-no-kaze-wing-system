@@ -51,9 +51,11 @@ function newRow(kind: QuoteItemKind = 'installation'): EditorRow {
 export function QuoteDraftEditor({
   detail,
   modelName,
+  canEditBase,
 }: {
   detail: QuoteDraftDetail;
   modelName: string;
+  canEditBase: boolean;
 }) {
   const [saveState, saveAction, savePending] = useActionState(saveQuoteDraftAction, initialState);
   const [finalizeState, finalizeAction, finalizePending] = useActionState(finalizeQuoteDraftAction, initialState);
@@ -79,6 +81,7 @@ export function QuoteDraftEditor({
   const [notes, setNotes] = useState(detail.draft.notes ?? '');
 
   const isRevisionDraft = detail.draft.parent_quote_id !== null;
+  const baseLocked = isRevisionDraft && !canEditBase;
   const formalRevisionLabel = isRevisionDraft ? '次のRevision' : 'Revision 1';
   const lockVersion = saveState.savedVersion ?? detail.draft.lock_version;
   const [editGeneration, setEditGeneration] = useState(0);
@@ -196,10 +199,14 @@ export function QuoteDraftEditor({
               <label className="text-xs font-semibold text-muted" htmlFor="draft-base-revision">
                 基準本体Revision
               </label>
+              {baseLocked && (
+                <input type="hidden" name="base_master_revision_id" value={baseRevisionId} />
+              )}
               <Select
                 id="draft-base-revision"
-                name="base_master_revision_id"
+                name={baseLocked ? undefined : 'base_master_revision_id'}
                 value={baseRevisionId}
+                disabled={baseLocked}
                 onChange={(event) => {
                   setBaseRevisionId(event.target.value);
                   markDirty();
@@ -212,6 +219,11 @@ export function QuoteDraftEditor({
                   </option>
                 ))}
               </Select>
+              {baseLocked && (
+                <p className="mt-1 text-[0.7rem] text-muted">
+                  代理店は改訂時の本体Revisionを変更できません。
+                </p>
+              )}
             </div>
           </div>
 
@@ -233,22 +245,28 @@ export function QuoteDraftEditor({
               <tbody>
                 {rows.map((row, index) => {
                   const amount = amountForRow(row);
+                  const rowBaseLocked = baseLocked && (row.kind === 'base' || row.kind === 'base_expense');
+                  const selectableKinds = baseLocked && !rowBaseLocked
+                    ? KINDS.filter((kind) => kind !== 'base' && kind !== 'base_expense')
+                    : KINDS;
                   return (
                     <tr key={row.key} className="border-b border-slate-200">
                       <td className="border-r border-slate-200 px-2 py-1 text-center text-muted">{index + 1}</td>
                       <td className="border-r border-slate-200 p-1">
                         <Select
                           value={row.kind}
+                          disabled={rowBaseLocked}
                           onChange={(event) => updateRow(row.key, { kind: event.target.value as QuoteItemKind })}
                           className="h-8 text-xs"
                           aria-label={`区分 ${index + 1}`}
                         >
-                          {KINDS.map((kind) => <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>)}
+                          {selectableKinds.map((kind) => <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>)}
                         </Select>
                       </td>
                       <td className="border-r border-slate-200 p-1">
                         <Input
                           value={row.name}
+                          disabled={rowBaseLocked}
                           onChange={(event) => updateRow(row.key, { name: event.target.value })}
                           className="h-8 text-xs"
                           aria-label={`品名 ${index + 1}`}
@@ -261,6 +279,7 @@ export function QuoteDraftEditor({
                           max="99999"
                           step="0.0001"
                           value={row.quantity}
+                          disabled={rowBaseLocked}
                           onChange={(event) => updateRow(row.key, { quantity: Number(event.target.value) || 0 })}
                           className="h-8 text-right text-xs"
                           aria-label={`数量 ${index + 1}`}
@@ -269,6 +288,7 @@ export function QuoteDraftEditor({
                       <td className="border-r border-slate-200 p-1">
                         <Input
                           value={row.unit ?? ''}
+                          disabled={rowBaseLocked}
                           onChange={(event) => updateRow(row.key, { unit: event.target.value })}
                           className="h-8 text-xs"
                           aria-label={`単位 ${index + 1}`}
@@ -279,6 +299,7 @@ export function QuoteDraftEditor({
                           type="number"
                           step="1"
                           value={row.unit_price}
+                          disabled={rowBaseLocked}
                           onChange={(event) => updateRow(row.key, { unit_price: Number(event.target.value) || 0 })}
                           className="h-8 text-right text-xs"
                           aria-label={`単価 ${index + 1}`}
@@ -290,6 +311,7 @@ export function QuoteDraftEditor({
                       <td className="border-r border-slate-200 p-1">
                         <Input
                           value={row.remark ?? ''}
+                          disabled={rowBaseLocked}
                           onChange={(event) => updateRow(row.key, { remark: event.target.value })}
                           className="h-8 text-xs"
                           aria-label={`備考 ${index + 1}`}
@@ -298,8 +320,9 @@ export function QuoteDraftEditor({
                       <td className="p-1 text-center">
                         <button
                           type="button"
+                          disabled={rowBaseLocked}
                           onClick={() => removeRow(row.key)}
-                          className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-700"
+                          className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label={`${index + 1}行目を削除`}
                         >
                           <Trash2 className="size-4" />

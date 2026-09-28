@@ -104,6 +104,12 @@ type TemplateModel = {
   specs: Array<{ code: string; name: string }>;
 };
 
+export interface InitialEstimateTarget {
+  modelId: string;
+  specCode: string;
+  fireSpec: 'non_fire' | 'fire';
+}
+
 export interface EstimateBaseMasterChoice {
   id: string;
   revisionId: string;
@@ -204,6 +210,7 @@ export function NewEstimateTemplateForm({
   baseMasters,
   baseMasterSourceReady,
   sampleBaseMaster,
+  initialTarget,
   products,
 }: {
   role: 'admin' | 'master_dealer' | 'dealer' | 'customer';
@@ -211,12 +218,22 @@ export function NewEstimateTemplateForm({
   baseMasters: EstimateBaseMasterChoice[];
   baseMasterSourceReady: boolean;
   sampleBaseMaster: EstimateBaseMasterChoice | null;
+  initialTarget?: InitialEstimateTarget | null;
   products: EstimateTemplateWorkbenchProduct[];
 }) {
-  const [selectedBaseMasterId, setSelectedBaseMasterId] = useState('');
-  const [pickerBaseMasterId, setPickerBaseMasterId] = useState('');
+  const availableBaseMasters = initialTarget
+    ? baseMasters.filter(
+        (baseMaster) =>
+          baseMaster.modelId === initialTarget.modelId &&
+          baseMaster.fireSpec === initialTarget.fireSpec
+      )
+    : baseMasters;
+  const initialBaseMaster = availableBaseMasters.length === 1 ? availableBaseMasters[0] : null;
+
+  const [selectedBaseMasterId, setSelectedBaseMasterId] = useState(initialBaseMaster?.id ?? '');
+  const [pickerBaseMasterId, setPickerBaseMasterId] = useState(initialBaseMaster?.id ?? '');
   const [basePickerOpen, setBasePickerOpen] = useState(false);
-  const [spec, setSpec] = useState('');
+  const [spec, setSpec] = useState(initialTarget?.specCode ?? '');
   const [region, setRegion] = useState<(typeof REGION_OPTIONS)[number]['value']>('all');
   const [customName, setCustomName] = useState<string | null>(null);
   const [step, setStep] = useState<'setup' | 'edit'>('setup');
@@ -230,11 +247,11 @@ export function NewEstimateTemplateForm({
   const samplePreview = Boolean(sampleBaseMaster && selectedBaseMasterId === sampleBaseMaster.id);
   const pickerBaseMaster = useMemo(
     () =>
-      baseMasters.find((baseMaster) => baseMaster.id === pickerBaseMasterId) ??
+      availableBaseMasters.find((baseMaster) => baseMaster.id === pickerBaseMasterId) ??
       selectedBaseMaster ??
-      baseMasters[0] ??
+      availableBaseMasters[0] ??
       null,
-    [baseMasters, pickerBaseMasterId, selectedBaseMaster]
+    [availableBaseMasters, pickerBaseMasterId, selectedBaseMaster]
   );
   const selectedModel = useMemo(
     () => models.find((model) => model.id === selectedBaseMaster?.modelId) ?? null,
@@ -245,6 +262,10 @@ export function NewEstimateTemplateForm({
   const modelName = selectedModel?.name ?? '';
   const specLabel = selectedSpec?.name ?? '';
   const selectedFireLabel = selectedBaseMaster ? fireLabel(selectedBaseMaster.fireSpec) : '';
+  const targetModel = initialTarget
+    ? models.find((model) => model.id === initialTarget.modelId) ?? null
+    : null;
+  const targetSpec = targetModel?.specs.find((item) => item.code === initialTarget?.specCode) ?? null;
   const regionLabel = REGION_OPTIONS.find((item) => item.value === region)?.label ?? '';
   const generatedName = useMemo(
     () => [modelName, specLabel, selectedFireLabel].filter(Boolean).join(' '),
@@ -257,15 +278,19 @@ export function NewEstimateTemplateForm({
     models.find((model) => model.id === baseMaster.modelId)?.name ?? '—';
 
   const openBasePicker = () => {
-    setPickerBaseMasterId(selectedBaseMaster?.id ?? baseMasters[0]?.id ?? '');
+    setPickerBaseMasterId(selectedBaseMaster?.id ?? availableBaseMasters[0]?.id ?? '');
     setBasePickerOpen(true);
   };
 
   const chooseBaseMaster = (baseMaster: EstimateBaseMasterChoice) => {
     const model = models.find((item) => item.id === baseMaster.modelId) ?? null;
+    const preferredSpec =
+      initialTarget && initialTarget.modelId === baseMaster.modelId
+        ? model?.specs.find((item) => item.code === initialTarget.specCode) ?? null
+        : null;
     setSelectedBaseMasterId(baseMaster.id);
     setPickerBaseMasterId(baseMaster.id);
-    setSpec(model?.specs[0]?.code ?? '');
+    setSpec(preferredSpec?.code ?? model?.specs[0]?.code ?? '');
     setCustomName(null);
     setBasePickerOpen(false);
   };
@@ -352,6 +377,11 @@ export function NewEstimateTemplateForm({
             <p className="mt-0.5 text-xs text-muted">
               先に基準本体を選びます。商品モデルと防火仕様は、選んだ本体から自動設定されます。
             </p>
+            {initialTarget && targetModel && targetSpec && (
+              <p className="mt-2 inline-flex rounded-full border border-forest/20 bg-forest/5 px-3 py-1 text-xs font-semibold text-forest">
+                作成対象：{targetModel.name === 'フラット' ? 'Flat' : targetModel.name} ／ {targetSpec.name} ／ {fireLabel(initialTarget.fireSpec)}
+              </p>
+            )}
           </div>
 
           <section className="overflow-hidden rounded-xl border border-line">
@@ -516,11 +546,11 @@ export function NewEstimateTemplateForm({
               <button type="button" className="btn-ghost btn-sm" onClick={() => setBasePickerOpen(false)}>閉じる</button>
             </div>
 
-            {baseMasters.length > 0 ? (
+            {availableBaseMasters.length > 0 ? (
               <div className="grid min-h-0 flex-1 lg:grid-cols-[19rem_1fr]">
                 <aside className="max-h-[72vh] overflow-y-auto border-b border-line bg-sand/10 p-3 lg:border-b-0 lg:border-r">
                   <div className="space-y-2">
-                    {baseMasters.map((baseMaster) => {
+                    {availableBaseMasters.map((baseMaster) => {
                       const active = pickerBaseMaster?.id === baseMaster.id;
                       return (
                         <button
@@ -622,9 +652,11 @@ export function NewEstimateTemplateForm({
               <div className="px-6 py-12 text-center">
                 <p className="font-semibold">選択できる公開中の本体がありません。</p>
                 <p className="mt-2 text-sm text-muted">
-                  {baseMasterSourceReady
-                    ? '本体マスターで公開版を作成すると、この画面から選択できます。'
-                    : '本体マスターの正式な読込環境が接続されると、この画面から選択できます。'}
+                  {initialTarget && baseMasterSourceReady
+                    ? '作成対象の商品モデル・防火仕様に一致する公開中の本体がありません。'
+                    : baseMasterSourceReady
+                      ? '本体マスターで公開版を作成すると、この画面から選択できます。'
+                      : '本体マスターの正式な読込環境が接続されると、この画面から選択できます。'}
                 </p>
               </div>
             )}

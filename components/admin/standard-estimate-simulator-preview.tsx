@@ -39,6 +39,7 @@ interface Props {
   initialContentTab?: ContentTab;
   showContentTabs?: boolean;
   showEditLink?: boolean;
+  createHref?: string;
   previewOnly?: boolean;
 }
 
@@ -55,6 +56,7 @@ function StandardEstimateSimulatorPreviewBody({
   initialContentTab = 'estimate',
   showContentTabs = true,
   showEditLink = true,
+  createHref,
   previewOnly = false,
 }: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
@@ -307,8 +309,13 @@ function StandardEstimateSimulatorPreviewBody({
                 </button>
               )}
               {template && showEditLink && (
-                <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-secondary btn-sm">
+                <Link href={`/admin/estimate-templates/${template.template.id}`} className="btn-primary btn-sm">
                   標準見積を編集
+                </Link>
+              )}
+              {!template && createHref && showEditLink && !sampleMode && (
+                <Link href={createHref} className="btn-primary btn-sm">
+                  この標準見積を作成
                 </Link>
               )}
             </div>

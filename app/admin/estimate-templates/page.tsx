@@ -79,6 +79,15 @@ function sampleHref(model: string, fire: FireFilter) {
   return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
 }
 
+function createTargetHref(modelId: string, specCode: string, fireSpec: FireSpec) {
+  const params = new URLSearchParams({
+    model: modelId,
+    spec: specCode,
+    fire: fireSpec,
+  });
+  return `/admin/estimate-templates/new?${params.toString()}`;
+}
+
 const LIST_GRID =
   'grid grid-cols-[minmax(14rem,2fr)_6.75rem_7rem_5.5rem_5.5rem_1.5rem] items-center gap-x-2';
 
@@ -421,7 +430,32 @@ export default async function EstimateTemplatesPage({
           bundle={selectedCatalog}
           specCode={selected.choice.code}
           template={selected.choice.template}
+          createHref={
+            selected.choice.template
+              ? undefined
+              : createTargetHref(selected.model.id, selected.choice.code, selected.choice.fireSpec)
+          }
         />
+      ) : selected && selected.choice.fireSpec === 'fire' ? (
+        <section className="card overflow-hidden" id="estimate-preview">
+          <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4 sm:px-5">
+            <div>
+              <p className="text-xs font-semibold text-forest">選択中の標準見積</p>
+              <h2 className="mt-1 text-lg font-semibold">
+                {selected.model.name === 'フラット' ? 'Flat' : selected.model.name} / {selected.choice.name}
+              </h2>
+              <p className="mt-1 text-xs text-muted">
+                防火仕様の標準見積は未登録です。基準本体を選んで新規作成へ進めます。
+              </p>
+            </div>
+            <Link
+              href={createTargetHref(selected.model.id, selected.choice.code, selected.choice.fireSpec)}
+              className="btn-primary btn-sm"
+            >
+              この標準見積を作成
+            </Link>
+          </div>
+        </section>
       ) : null}
     </AdminPage>
   );

@@ -445,7 +445,7 @@ export function EstimateTemplateExcelDemo() {
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">売価金額</th>
                 <th className="sticky top-0 z-10 w-28 border-r border-slate-300 bg-slate-100 px-2 py-1 text-right text-xs font-semibold text-slate-600">粗利</th>
                 <th className="sticky top-0 z-10 min-w-40 border-r border-slate-300 bg-slate-100 px-2 py-1 text-left text-xs font-semibold text-slate-600">備考</th>
-                <th className="sticky top-0 z-10 w-20 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
+                <th className="sticky top-0 z-10 w-36 min-w-36 bg-slate-100 px-2 py-1 text-center text-xs font-semibold text-slate-600">操作</th>
               </tr>
             </thead>
             <tbody>

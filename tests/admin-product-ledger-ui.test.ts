@@ -19,19 +19,25 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('catalogCategories');
   });
 
-  it('一覧を主役にし、台帳向けの検索・絞り込み・表示切替を備える', () => {
+  it('カテゴリーを上部固定し、低頻度フィルターを常設しない', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品一覧');
-    expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号で検索');
-    expect(client).toContain('カテゴリー：すべて');
-    expect(client).toContain('メーカー：すべて');
-    expect(client).toContain('対象モデル：すべて');
-    expect(client).toContain('全モデル共通');
-    expect(client).toContain('並び替え：更新が新しい順');
+    expect(client).toContain('data-testid="ledger-sticky-category-bar"');
+    expect(client).toContain('sticky top-0 z-30');
+    expect(client).toContain('aria-label="商品カテゴリー"');
+    expect(client).toContain('overflow-x-auto');
+    expect(client).toContain('categoryCounts.get(item.id)');
     expect(client).toContain('すべて <span');
     expect(client).toContain('公開中 <span');
     expect(client).toContain('下書き <span');
     expect(client).toContain('要確認のみ');
+    expect(client).toContain('aria-expanded={searchOpen}');
+    expect(client).toContain('data-testid="ledger-collapsible-search"');
+    expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号で検索');
+    expect(client).not.toContain('メーカー：すべて');
+    expect(client).not.toContain('対象モデル：すべて');
+    expect(client).not.toContain('並び替え：更新が新しい順');
+    expect(client).not.toContain('hidden md:sticky md:top-4 md:block');
     expect(client).toContain('一覧表示');
     expect(client).toContain('画像表示');
     expect(client).toContain("useState<'list' | 'grid'>('list')");
@@ -42,8 +48,6 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('data-testid="ledger-grid-view"');
     expect(client).toContain('hidden overflow-x-auto md:block');
     expect(client).toContain('space-y-2 p-3 md:hidden');
-    expect(client).toContain('hidden md:sticky md:top-4 md:block');
-    expect(client).toContain('sticky top-0');
     expect(client).toContain("useState(50)");
     expect(client).toContain('表示件数');
     expect(client).toContain('25件');

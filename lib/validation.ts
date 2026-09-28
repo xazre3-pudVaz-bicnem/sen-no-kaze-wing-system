@@ -321,7 +321,6 @@ export const quoteDraftSaveItemSchema = z.object({
     'option_expense',
     'installation',
     'free',
-    'discount',
   ]),
   option_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
   name: trimmed(120).min(1, '品名を入力してください'),
@@ -335,18 +334,11 @@ export const quoteDraftSaveItemSchema = z.object({
   ),
   image_url: optional(500).nullable(),
 }).superRefine((row, ctx) => {
-  if (row.unit_price < 0 && row.kind !== 'discount') {
+  if (row.unit_price < 0) {
     ctx.addIssue({
       code: 'custom',
       path: ['unit_price'],
-      message: 'マイナス単価は値引き行だけに使用できます',
-    });
-  }
-  if (row.kind === 'discount' && row.unit_price > 0) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['unit_price'],
-      message: '値引き行の単価は0円以下で入力してください',
+      message: '明細単価は0円以上で入力し、値引きは調整額を使用してください',
     });
   }
 });

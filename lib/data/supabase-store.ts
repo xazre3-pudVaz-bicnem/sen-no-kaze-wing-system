@@ -59,7 +59,7 @@ import {
   type CatalogImportBatch,
   type EstimateTemplateImportInput,
 } from './store';
-import { isMissingFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
+import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 
@@ -429,6 +429,66 @@ export class SupabaseStore implements DataStore {
       throw new StoreError('VALIDATION', '設置予定地の市区町村を確認してください。');
     }
 
+    const atomicInput = {
+      p_configuration_id: input.id,
+      p_base_model_id: input.base_model_id,
+      p_name: input.name,
+      p_option_ids: input.option_ids,
+      p_preview_image_url: input.preview_image_url,
+      p_notes: input.notes,
+      p_finish_level: input.finish_level ?? 'full',
+      p_variant_choice_ids: input.variant_choice_ids ?? [],
+      p_spec_code: input.spec_code ?? null,
+      p_exterior_faces: input.exterior_faces ?? [],
+      p_site_prefecture: sitePrefecture,
+      p_site_municipality: siteMunicipality,
+      p_site_location_undecided: undecided,
+    };
+    const atomic = await db.rpc('save_configuration_atomic', atomicInput);
+    if (!atomic.error) return atomic.data as Configuration;
+    if (!isMissingNamedFunction(atomic.error, 'save_configuration_atomic')) mapPgError(atomic.error);
+
+    // Temporary deployment compatibility: only a definitely missing RPC uses
+    // the old save path. The fallback is allowed only when the requested state
+    // is fully representable by the legacy one-product exterior model.
+    const exteriorFaces = input.exterior_faces ?? [];
+    const legacyBundle = await this.getCatalogBundle(input.base_model_id, { includeDraft: false });
+    if (!legacyBundle) throw new StoreError('VALIDATION', '商品データを確認できませんでした。');
+
+    const wallCategory = legacyBundle.categories.find((category) => category.code === 'exterior-wall');
+    const legacyExteriorOptionIds = wallCategory
+      ? input.option_ids.filter((optionId) =>
+          legacyBundle.options.some((option) => option.id === optionId && option.category_id === wallCategory.id)
+        )
+      : [];
+    const legacyExteriorOptionId = legacyExteriorOptionIds.length === 1 ? legacyExteriorOptionIds[0] : null;
+    const legacyExteriorGroupIds = new Set(
+      legacyExteriorOptionId
+        ? legacyBundle.variantGroups.filter((group) => group.option_id === legacyExteriorOptionId).map((group) => group.id)
+        : []
+    );
+    const legacyChoiceById = new Map(legacyBundle.variantChoices.map((choice) => [choice.id, choice]));
+    const legacyExteriorVariantChoiceIds = (input.variant_choice_ids ?? []).filter((choiceId) => {
+      const choice = legacyChoiceById.get(choiceId);
+      return Boolean(choice && legacyExteriorGroupIds.has(choice.group_id));
+    });
+
+    if (
+      !isLegacyConfigurationSaveCompatible({
+        site_prefecture: sitePrefecture,
+        site_municipality: siteMunicipality,
+        site_location_undecided: undecided,
+        exterior_faces: exteriorFaces,
+        legacy_exterior_option_ids: legacyExteriorOptionIds,
+        legacy_exterior_variant_choice_ids: legacyExteriorVariantChoiceIds,
+      })
+    ) {
+      throw new StoreError(
+        'INTERNAL',
+        '現在のDBでは設置予定地または外壁4面の内容を正しく保存できません。DB更新後に再度お試しください。'
+      );
+    }
+
     const { data, error } = await db.rpc('save_configuration', {
       p_configuration_id: input.id,
       p_base_model_id: input.base_model_id,
@@ -441,27 +501,7 @@ export class SupabaseStore implements DataStore {
       p_spec_code: input.spec_code ?? null,
     });
     if (error) mapPgError(error);
-
-    const configuration = data as Configuration;
-    const hasSiteInput =
-      input.site_prefecture !== undefined ||
-      input.site_municipality !== undefined ||
-      input.site_location_undecided !== undefined;
-    if (!hasSiteInput) return configuration;
-
-    // 金額・権限を扱う SECURITY DEFINER RPC は変更せず、設置予定地だけを既存RLS下で保存する。
-    const { data: saved, error: siteError } = await db
-      .from('configurations')
-      .update({
-        site_prefecture: sitePrefecture,
-        site_municipality: siteMunicipality,
-        site_location_undecided: undecided,
-      })
-      .eq('id', configuration.id)
-      .select('*')
-      .single();
-    if (siteError) mapPgError(siteError);
-    return saved as Configuration;
+    return data as Configuration;
   }
   async duplicateConfiguration(id: string) {
     const db = await this.db();

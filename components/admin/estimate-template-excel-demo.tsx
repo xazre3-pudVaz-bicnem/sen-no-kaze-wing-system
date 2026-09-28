@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -70,7 +69,6 @@ export function EstimateTemplateExcelDemo() {
   const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
-  const [selectedCell, setSelectedCell] = useState('セルを選択すると内容を表示します');
   const [markupRate, setMarkupRate] = useState(160);
   const [expenseRate, setExpenseRate] = useState(15);
   const [adjustment, setAdjustment] = useState(-2500);
@@ -400,22 +398,9 @@ export function EstimateTemplateExcelDemo() {
           </div>
         </div>
 
-        <div className="flex border-b border-slate-200 text-xs">
-          <div className="w-20 border-r border-slate-200 bg-slate-100 px-3 py-1.5 font-semibold text-slate-500">選択中</div>
-          <div className="min-h-7 flex-1 px-3 py-1.5">{selectedCell}</div>
-        </div>
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
-          <p>
-            <strong className="text-emerald-900">本体マスターから読み込み済み：</strong>
-            Wing ホテル仕様 v4
-            <span className="ml-2 text-slate-500">本体マスター自体は変更せず、この見積書内の明細を編集します。</span>
-          </p>
-          <Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">本体マスターの操作確認画面を開く</Link>
-        </div>
-
         <div className="max-h-[68vh] overflow-auto">
           <table className="min-w-[76rem] border-collapse text-sm">
             <thead>
@@ -490,7 +475,6 @@ export function EstimateTemplateExcelDemo() {
                             <input
                               {...cellProps('name', rowIndex)}
                               value={row.name}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { name: event.target.value })}
                               className={inputClass}
                             />
@@ -502,7 +486,6 @@ export function EstimateTemplateExcelDemo() {
                               min={0}
                               step={0.01}
                               value={row.quantity}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { quantity: Math.max(0, Number(event.target.value) || 0) })}
                               className={inputClass + ' text-right'}
                             />
@@ -511,7 +494,6 @@ export function EstimateTemplateExcelDemo() {
                             <input
                               {...cellProps('unit', rowIndex)}
                               value={row.unit}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { unit: event.target.value })}
                               className={inputClass}
                             />
@@ -523,7 +505,6 @@ export function EstimateTemplateExcelDemo() {
                               min={0}
                               step={1}
                               value={row.cost}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })}
                               className={inputClass + ' text-right'}
                             />
@@ -543,7 +524,6 @@ export function EstimateTemplateExcelDemo() {
                                   min={0}
                                   step={1}
                                   value={row.sale}
-                                  onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                                   onChange={(event) => updateRow(row.id, { sale: Math.max(0, Number(event.target.value) || 0), manualSale: true })}
                                   className={inputClass + ' min-w-0 flex-1 text-right'}
                                 />
@@ -562,7 +542,6 @@ export function EstimateTemplateExcelDemo() {
                             <input
                               {...cellProps('remark', rowIndex)}
                               value={row.remark}
-                              onFocus={(event) => setSelectedCell(event.currentTarget.value)}
                               onChange={(event) => updateRow(row.id, { remark: event.target.value })}
                               className={inputClass}
                             />

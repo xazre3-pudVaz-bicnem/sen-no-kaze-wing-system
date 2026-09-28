@@ -278,7 +278,7 @@ export default async function EstimateTemplatesPage({
                               {template ? (
                                 <span className="tabular-nums">{formatYen(template.total)}</span>
                               ) : (
-                                <span className="text-xs font-normal leading-tight text-muted">シミュレーターで算出</span>
+                                <span className="font-normal text-muted">—</span>
                               )}
                             </div>
                             <div className="text-right text-muted">—</div>

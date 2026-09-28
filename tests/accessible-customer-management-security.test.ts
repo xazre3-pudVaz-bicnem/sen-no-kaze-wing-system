@@ -26,6 +26,11 @@ function functionBody(name: string): string {
 }
 
 describe('担当案件限定の顧客管理 security contract', () => {
+  it('applies the access corrective after the current Quote Draft foundation and customer RPC migration', () => {
+    expect(Number('20260928173000')).toBeGreaterThan(Number('20260928130000'));
+    expect(Number('20260928173000')).toBeGreaterThan(Number('20260928170000'));
+  });
+
   it('adds exactly the two external SECURITY DEFINER RPCs with empty search_path', () => {
     const definitions = migration.match(/create or replace function public\./g) ?? [];
     expect(definitions).toHaveLength(2);

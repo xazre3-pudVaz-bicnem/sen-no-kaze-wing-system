@@ -27,7 +27,7 @@ export function optionMatchesLedgerFilters(
 ): boolean {
   if (filters.categoryId && option.category_id !== filters.categoryId) return false;
   if (filters.status && option.status !== filters.status) return false;
-  if (filters.manufacturer && option.manufacturer !== filters.manufacturer) return false;
+  if (filters.manufacturer && (option.manufacturer?.trim() ?? '') !== filters.manufacturer) return false;
   if (filters.baseModelId === '__shared__' && option.base_model_id !== null) return false;
   if (filters.baseModelId && filters.baseModelId !== '__shared__' && option.base_model_id !== filters.baseModelId) return false;
   if (filters.quick === 'draft' && option.status !== 'draft') return false;

@@ -1132,6 +1132,7 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
   const parsed = manualQuoteSchema.safeParse({
     customer_name: formData.get('customer_name'),
     customer_company: formData.get('customer_company'),
+    site_address: formData.get('site_address'),
     base_model_id: formData.get('base_model_id'),
     spec_code: formData.get('spec_code'),
     finish_level: formData.get('finish_level'),
@@ -1172,7 +1173,7 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
         email: actor.email,
         phone: '',
         address: '',
-        site_address: null,
+        site_address: parsed.data.site_address || null,
       },
       parsed.data.memo
     );

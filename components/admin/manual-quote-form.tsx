@@ -35,6 +35,21 @@ export function ManualQuoteForm({ models }: { models: ManualQuoteModel[] }) {
         <Field label="会社名（任意）" htmlFor="mq-company" errors={e.customer_company}>
           <Input id="mq-company" name="customer_company" />
         </Field>
+        <div className="sm:col-span-2">
+          <Field
+            label="設置予定地（任意）"
+            htmlFor="mq-site-address"
+            hint="分かる範囲で入力してください。住所を登録すると案件一覧からGoogleマップを開けます。"
+            errors={e.site_address}
+          >
+            <Input
+              id="mq-site-address"
+              name="site_address"
+              placeholder="例：石川県鳳珠郡穴水町○○"
+              data-testid="mq-site-address"
+            />
+          </Field>
+        </div>
         <Field label="本体（モデル）" htmlFor="mq-model" required errors={e.base_model_id}>
           <Select id="mq-model" name="base_model_id" value={modelId} onChange={(ev) => setModelId(ev.target.value)} data-testid="mq-model">
             {models.map((m) => (

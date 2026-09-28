@@ -25,6 +25,7 @@ import type {
   RoleCode,
   Quote,
   QuoteItem,
+  QuoteDraft,
   QuoteContact,
   QuoteDocument,
   CaseDocument,
@@ -75,6 +76,9 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type DealerRevisionItem,
+  type ManualQuoteDraftInput,
+  type QuoteDraftDetail,
+  type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
   type AccessibleCustomerListResult,
   type AccessibleCustomerDetail,
@@ -626,8 +630,8 @@ export class LocalStore implements DataStore {
   }
 
   // ---------- 仕様 ----------
-  private canAccess(actor: SessionUser, ownerId: string) {
-    return actor.role === 'admin' || actor.id === ownerId;
+  private canAccess(actor: SessionUser, ownerId: string | null) {
+    return actor.role === 'admin' || (ownerId !== null && actor.id === ownerId);
   }
   async listConfigurations(userId: string) {
     return this.read((db) =>
@@ -941,6 +945,22 @@ export class LocalStore implements DataStore {
     db.quoteSequences[ym] = n;
     return `Q${ym}-${String(n).padStart(4, '0')}`;
   }
+  async createManualQuoteDraft(_actor: SessionUser, _input: ManualQuoteDraftInput): Promise<QuoteDraft> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async getQuoteDraft(_id: string, _actor: SessionUser): Promise<QuoteDraftDetail | null> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async saveQuoteDraft(_id: string, _input: QuoteDraftSaveInput, _actor: SessionUser): Promise<number> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async finalizeQuoteDraft(_id: string, _expectedLockVersion: number, _actor: SessionUser): Promise<Quote> {
+    throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
   async createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null) {
     return this.mutate((db) => {
       const cfg = db.configurations.find((c) => c.id === configurationId);
@@ -1192,7 +1212,9 @@ export class LocalStore implements DataStore {
   async listQuotesByConfiguration(userId: string) {
     const list = await this.listQuotes(userId);
     const map = new Map<string, Quote>();
-    for (const q of list) if (!map.has(q.configuration_id)) map.set(q.configuration_id, q);
+    for (const q of list) {
+      if (q.configuration_id && !map.has(q.configuration_id)) map.set(q.configuration_id, q);
+    }
     return map;
   }
   async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
@@ -1291,7 +1313,7 @@ export class LocalStore implements DataStore {
           const request = db.quoteRequests.find((r) => r.id === q.quote_request_id);
           return {
             ...q,
-            user_email: email.get(q.user_id) ?? '',
+            user_email: q.user_id ? email.get(q.user_id) ?? '' : '',
             request_status: request?.status ?? null,
             site_address: request?.contact.site_address ?? null,
           };

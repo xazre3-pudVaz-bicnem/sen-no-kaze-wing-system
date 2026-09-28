@@ -481,7 +481,7 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                       <tr key={quote.id} data-testid="quote-row">
                         <td className="px-4 py-3 font-mono">{quote.quote_no}</td>
                         <td className="px-4 py-3" data-testid="quote-history-case-name">
-                          {configurationNameOf.get(quote.configuration_id) ?? '—'}
+                          {quote.configuration_id ? configurationNameOf.get(quote.configuration_id) ?? '—' : '—'}
                         </td>
                         <td className="px-4 py-3">{formatDate(quote.issued_at)}</td>
                         <td className="px-4 py-3">{formatDate(quote.valid_until)}</td>

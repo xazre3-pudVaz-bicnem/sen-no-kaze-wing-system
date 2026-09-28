@@ -182,7 +182,10 @@ export async function CaseWorkspace({
   const canEditBase = canEditCatalog(actor.role);
   if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();
 
-  const canRevise = quote.status === 'issued' && (canViewAllQuotes || quote.dealer_id === actor.id);
+  const canRevise =
+    quote.configuration_id !== null &&
+    quote.status === 'issued' &&
+    (canViewAllQuotes || quote.dealer_id === actor.id);
   const activeTab: TabKey = isTabKey(tab) ? tab : 'estimate';
 
   const [profiles, categories, options, casePlanConfiguration, caseDocuments] = await Promise.all([

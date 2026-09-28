@@ -1,16 +1,20 @@
 import type { Quote, QuoteRequest } from './types';
 
-type QuoteLifecycleFields = Pick<Quote, 'id' | 'status' | 'parent_quote_id'>;
+type QuoteLifecycleFields = Pick<Quote, 'id' | 'status' | 'parent_quote_id' | 'quote_kind'>;
 
-/** A quote produced from a previous snapshot is a formal quote. */
-export function isFormalQuote(quote: Pick<Quote, 'parent_quote_id'>) {
-  return quote.parent_quote_id !== null;
+/**
+ * New Quote revisions carry an explicit semantic kind.
+ * Legacy rows without quote_kind keep the previous lineage fallback until a
+ * separately reviewed backfill can remove it.
+ */
+export function isFormalQuote(quote: Pick<Quote, 'parent_quote_id' | 'quote_kind'>) {
+  return quote.quote_kind === 'formal'
+    || (quote.quote_kind == null && quote.parent_quote_id !== null);
 }
 
 /**
- * A formal quote is a snapshot created by the revision RPC.  The initial
- * quote has no parent and is always an estimate, regardless of its revision
- * number.
+ * Formality is semantic, not inferred from having a parent. This allows a
+ * non-Web Revision 1 to be formal while keeping legacy Web revisions working.
  */
 export function isCurrentFormalQuote(quote: QuoteLifecycleFields, request: Pick<QuoteRequest, 'quote_id'> | null) {
   return isFormalQuote(quote) && request?.quote_id === quote.id;

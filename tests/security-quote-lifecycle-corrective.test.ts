@@ -206,9 +206,9 @@ describe('Security / Quote lifecycle corrective', () => {
     expect(revisionBody).toContain("set status = 'superseded'");
   });
 
-  it('Quote改訂UIはissuedだけ表示可能にする', () => {
+  it('Quote改訂UIはWeb系issuedだけ表示し、非Web Rev1はPR #3まで旧改訂導線を閉じる', () => {
     expect(adminQuoteWorkspace).toContain(
-      "const canRevise = quote.status === 'issued' && (canViewAllQuotes || quote.dealer_id === actor.id);"
+      "const canRevise =\n    quote.configuration_id !== null &&\n    quote.status === 'issued' &&\n    (canViewAllQuotes || quote.dealer_id === actor.id);"
     );
   });
 

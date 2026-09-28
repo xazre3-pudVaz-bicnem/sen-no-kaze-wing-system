@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
+import { canEditCatalog } from '@/lib/domain/types';
 import { QuoteDraftEditor } from '@/components/admin/quote-draft-editor';
 import { Alert } from '@/components/ui';
 
@@ -53,6 +54,7 @@ export default async function AdminQuoteDraftPage({
       <QuoteDraftEditor
         detail={detail}
         modelName={model?.name ?? '商品モデル'}
+        canEditBase={canEditCatalog(actor.role)}
       />
     </div>
   );

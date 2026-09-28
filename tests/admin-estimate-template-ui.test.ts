@@ -114,7 +114,7 @@ describe('見積書作成・管理UI', () => {
     expect(newForm).toContain('画面確認用サンプルでExcel明細編集を見る');
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
-    expect(newForm).toContain("samplePreview ? '画面確認用' : '新規標準見積'");
+    expect(newForm).toContain("samplePreview ? '画面確認用' : '新規見積書'");
     expect(newForm).not.toContain('※画面確認用です。変更内容は保存・公開されません。');
     expect(newForm).not.toContain('黄色いセルを編集できます。変更内容は保存されません。');
     expect(newForm).toContain('const SAMPLE_EDIT_LINES');
@@ -133,8 +133,8 @@ describe('見積書作成・管理UI', () => {
     expect(newForm).toContain('地域：{regionLabel || \'—\'}');
     expect(newForm).not.toContain('lg:grid-cols-5');
     expect(newForm).not.toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
-    expect(newPage).toContain('title="標準見積を新規作成"');
-    expect(newPage).toContain('label="標準見積一覧へ戻る"');
+    expect(newPage).toContain('title="見積書を新規作成"');
+    expect(newPage).toContain('label="見積書作成・管理へ戻る"');
     expect(newPage).toContain('estimateTemplatesFor(model).map');
     expect(newPage).toContain('loadPublishedBaseMasters()');
     expect(newPage).toContain('BASE_BREAKDOWN_ITEMS');

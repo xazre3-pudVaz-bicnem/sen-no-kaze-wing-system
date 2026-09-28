@@ -564,7 +564,7 @@ export interface Quote {
   dealer_id: string | null;
   /** 代理店からの申し送り（現地条件・工期など） */
   dealer_note: string | null;
-  /** 版数。1 = 技術の杜の概算見積、2 以降 = 代理店が別途工事を入れた確定見積 */
+  /** 案件内の版数。WebはRev1がpreliminaryの場合があり、非WebはRev1からformalになり得る */
   revision: number;
   /** 直前の版 */
   parent_quote_id: string | null;

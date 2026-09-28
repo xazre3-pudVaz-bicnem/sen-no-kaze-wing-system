@@ -28,6 +28,15 @@ describe('商品台帳の絞り込み', () => {
     expect(optionMatchesLedgerFilters(option({ product_no: 'PRD-000123' }), { query: 'prd-000123', categoryId: '', status: '', quick: 'all' })).toBe(true);
   });
 
+  it('メーカーと対象モデルで絞り込める', () => {
+    const modelOnly = option({ manufacturer: 'LIXIL', base_model_id: 'wing-01' });
+    expect(optionMatchesLedgerFilters(modelOnly, { query: '', categoryId: '', status: '', quick: 'all', manufacturer: 'LIXIL' })).toBe(true);
+    expect(optionMatchesLedgerFilters(modelOnly, { query: '', categoryId: '', status: '', quick: 'all', manufacturer: 'TOTO' })).toBe(false);
+    expect(optionMatchesLedgerFilters(modelOnly, { query: '', categoryId: '', status: '', quick: 'all', baseModelId: 'wing-01' })).toBe(true);
+    expect(optionMatchesLedgerFilters(modelOnly, { query: '', categoryId: '', status: '', quick: 'all', baseModelId: '__shared__' })).toBe(false);
+    expect(optionMatchesLedgerFilters(option({ base_model_id: null }), { query: '', categoryId: '', status: '', quick: 'all', baseModelId: '__shared__' })).toBe(true);
+  });
+
   it('使用中・非公開の重複クイックフィルターを持たない', () => {
     expect(optionMatchesLedgerFilters(option(), { query: '', categoryId: '', status: '', quick: 'draft' })).toBe(false);
   });

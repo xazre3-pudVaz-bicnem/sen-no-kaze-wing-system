@@ -50,17 +50,18 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(navSource).not.toContain("label: '商品登録・編集'");
   });
 
-  it('管理設定ランディングにお問い合わせカードを残さない', () => {
+  it('管理設定ランディングは日常管理・監査・ヘルプに整理する', () => {
     expect(settingsPage).not.toContain('href="/admin/contacts"');
-    for (const label of ['組織・代理店', 'ユーザー・担当者', '権限', '変更履歴', 'その他設定', '操作マニュアル']) {
+    for (const label of ['日常の管理', '組織・代理店', 'ユーザー・担当者', '管理・監査', '権限・役割', '変更履歴', 'ヘルプ', '操作マニュアル']) {
       expect(settingsPage).toContain(label);
     }
+    expect(settingsPage).not.toContain('その他設定');
   });
 
   it('管理設定の準備中項目を正式設定として誤表示しない', () => {
     expect(settingsPage).toContain('準備中');
-    expect(settingsPage).toContain('正式な組織階層・地域権限の接続後に有効化します。');
-    expect(settingsPage).toContain('正式な権限テンプレートとRLS／ACL接続後に有効化します。');
+    expect(settingsPage).toContain('正式な組織階層と所属管理の接続後に有効化します。');
+    expect(settingsPage).toContain('正式な権限基盤とRLS／ACL接続後に有効化します。');
     expect(settingsPage).not.toContain('販売基準は「販売基準」から管理します。');
   });
 });

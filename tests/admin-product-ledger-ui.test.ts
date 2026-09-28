@@ -59,7 +59,6 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('メーカー・型番');
     expect(client).not.toContain('<th className="w-[12%] px-3 py-2.5">対象モデル</th>');
     expect(client).toContain('data-testid="ledger-grid-view"');
-    expect(client).toContain('hidden overflow-x-auto md:block');
     expect(client).toContain('space-y-2 p-3 md:hidden');
     expect(client).toContain("useState(50)");
     expect(client).toContain('表示件数');

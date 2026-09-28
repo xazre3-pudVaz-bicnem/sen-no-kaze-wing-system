@@ -436,7 +436,11 @@ export function QuoteDraftEditor({
             type="submit"
             disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
           >
-            {finalizePending ? '正式保存中…' : `正式保存（${formalRevisionLabel}）`}
+            {finalizePending
+              ? '正式保存中…'
+              : isRevisionDraft
+                ? '正式保存（次のRevision）'
+                : '正式保存（Revision 1）'}
           </Button>
         </div>
       </form>

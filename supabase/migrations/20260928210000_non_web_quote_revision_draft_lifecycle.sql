@@ -376,8 +376,7 @@ begin
        and item.line_key = v_line_key;
     v_has_existing_item := found;
 
-    if d.parent_quote_id is not null
-       and not v_has_parent_item
+    if not v_has_parent_item
        and not v_has_existing_item
        and (
          exists (select 1 from public.quote_items item where item.line_key = v_line_key)

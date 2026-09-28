@@ -50,10 +50,18 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(joined).toContain('"sourceTotal":1732500');
   });
 
-  it('画面確認用の集約行を明示し、DB保存しないことを表示する', () => {
+  it('Excelの金額明細と別途見積項目を表示し、DB保存しないことを明示する', () => {
     const joined = sampleFiles.join('\n');
-    expect(joined).toContain('その他明細（Excel原本');
-    expect(joined).toContain('画面確認用にExcel原本の残り明細を集約');
+    expect(joined).toContain('単管パイプ2.5m');
+    expect(joined).toContain('壁モクボードラワン');
+    expect(joined).toContain('3点ユニットバス1216');
+    expect(joined).toContain('エアコン取付');
+    expect(joined).toContain('シャワーユニット1116');
+    expect(joined).toContain('室内造作（建具取付まで）');
+    expect(joined).toContain('床フローリング');
+    expect(joined).toContain('１．運送費');
+    expect(joined).not.toContain('その他明細（Excel原本');
+    expect(demo).toContain('0円の未選択候補は除外しています');
     expect(demo).toContain('DBには保存されません');
     expect(demo).toContain('Excel原本 税込合計');
     expect(demo).toContain("sample ? 0 : 15");

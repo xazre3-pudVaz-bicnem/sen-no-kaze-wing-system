@@ -20,7 +20,7 @@ describe('技術の杜確認用 見積書作成デモ', () => {
   });
 
   it('本体マスターを壊さず見積書内の本体明細を編集できる', () => {
-    expect(demo).toContain('本体マスター自体は変更せず、この見積書内の明細を編集します。');
+    expect(demo).toContain('本体マスター自体は変更しません。');
     expect(demo).toContain('（本体マスターから読込・この見積内で編集可）');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
     expect(demo).not.toContain("const readOnly = section === '本体'");

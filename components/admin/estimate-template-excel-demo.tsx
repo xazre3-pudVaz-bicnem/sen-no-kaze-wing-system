@@ -68,16 +68,12 @@ const makeId = () => `estimate-demo-${Date.now()}-${++seq}`;
 
 export function EstimateTemplateExcelDemo() {
   const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
-  const [savedRows, setSavedRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
   const [selectedCell, setSelectedCell] = useState('セルを選択すると内容を表示します');
   const [markupRate, setMarkupRate] = useState(160);
-  const [savedMarkupRate, setSavedMarkupRate] = useState(160);
   const [expenseRate, setExpenseRate] = useState(15);
-  const [savedExpenseRate, setSavedExpenseRate] = useState(15);
   const [adjustment, setAdjustment] = useState(-2500);
-  const [savedAdjustment, setSavedAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('edit');
@@ -131,24 +127,6 @@ export function EstimateTemplateExcelDemo() {
   }, [query]);
 
   const markDirty = () => setDirty(true);
-
-  const saveLocal = () => {
-    setSavedRows(cloneRows(rows));
-    setSavedMarkupRate(markupRate);
-    setSavedExpenseRate(expenseRate);
-    setSavedAdjustment(adjustment);
-    setDirty(false);
-  };
-
-  const resetToSaved = () => {
-    if (dirty && !window.confirm('一時保持していない変更を破棄して、直前の一時保持時点へ戻しますか？')) return;
-    setRows(cloneRows(savedRows));
-    setMarkupRate(savedMarkupRate);
-    setExpenseRate(savedExpenseRate);
-    setAdjustment(savedAdjustment);
-    setCollapsed(new Set());
-    setDirty(false);
-  };
 
   const updateRow = (id: string, patch: Partial<DemoRow>) => {
     setRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
@@ -311,9 +289,9 @@ export function EstimateTemplateExcelDemo() {
               <h2 className="font-semibold">見積書作成</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
-                : 'rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800'}
+                : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
               >
-                {dirty ? '変更あり' : '一時保持済み'}
+                {dirty ? '編集中' : '下書き'}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
@@ -321,8 +299,12 @@ export function EstimateTemplateExcelDemo() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetToSaved}>一時保持時点に戻す</Button>
-            <Button type="button" size="sm" onClick={saveLocal}>編集内容を一時保持</Button>
+            <Button type="button" variant="secondary" size="sm" disabled title="Draft接続後に利用できます">
+              下書き保存
+            </Button>
+            <Button type="button" size="sm" disabled title="Draft→正式Revision接続後に利用できます">
+              正式保存
+            </Button>
           </div>
         </div>
 
@@ -666,18 +648,6 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex justify-between gap-4 py-1 text-xs text-slate-500"><span>別途見積</span><strong>{totals.onRequest}件</strong></div>
       </section>
 
-      <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="font-semibold">正式保存</h2>
-            <p className="mt-1 text-xs text-slate-500">正式保存・Revision発行・下書きの破棄は、DB接続後に利用できます。</p>
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" disabled>正式保存（接続後）</Button>
-            <Button type="button" variant="ghost" disabled>下書きを破棄（接続後）</Button>
-          </div>
-        </div>
-      </section>
         </>
       )}
 

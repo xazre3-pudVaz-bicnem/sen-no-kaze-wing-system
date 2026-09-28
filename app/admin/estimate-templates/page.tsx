@@ -8,7 +8,44 @@ import { Badge } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
 
-type FireFilter = '' | 'non_fire' | 'fire';
+type FireSpec = 'non_fire' | 'fire';
+type FireFilter = '' | FireSpec;
+type SimulatorChoice = ReturnType<typeof simulatorEstimateChoices>[number];
+type EstimateListChoice = SimulatorChoice & {
+  fireSpec: FireSpec;
+  registrationKey: string;
+};
+
+const CURRENT_FIRE_VARIANTS: Record<string, readonly string[]> = {
+  'wing-01': ['hotel', 'residence', 'office'],
+  box: ['water-kit'],
+  flat: ['base'],
+};
+
+function expandCurrentEstimateChoices(
+  modelSlug: string,
+  choices: SimulatorChoice[]
+): EstimateListChoice[] {
+  const fireSpecs = new Set(CURRENT_FIRE_VARIANTS[modelSlug] ?? []);
+  return choices.flatMap((choice) => {
+    const rows: EstimateListChoice[] = [
+      {
+        ...choice,
+        fireSpec: 'non_fire',
+        registrationKey: `${choice.code}:non_fire`,
+      },
+    ];
+    if (fireSpecs.has(choice.code)) {
+      rows.push({
+        ...choice,
+        template: null,
+        fireSpec: 'fire',
+        registrationKey: `${choice.code}:fire`,
+      });
+    }
+    return rows;
+  });
+}
 
 function filterHref(model: string, fire: FireFilter) {
   const params = new URLSearchParams();
@@ -22,13 +59,15 @@ function selectionHref(
   model: string,
   fire: FireFilter,
   selectedModel: string,
-  selectedSpec: string
+  selectedSpec: string,
+  selectedFire: FireSpec
 ) {
   const params = new URLSearchParams();
   if (model) params.set('model', model);
   if (fire) params.set('fire', fire);
   params.set('selected_model', selectedModel);
   params.set('selected_spec', selectedSpec);
+  params.set('selected_fire', selectedFire);
   return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
 }
 
@@ -38,12 +77,6 @@ function sampleHref(model: string, fire: FireFilter) {
   if (fire) params.set('fire', fire);
   params.set('sample', '1');
   return `/admin/estimate-templates?${params.toString()}#estimate-preview`;
-}
-
-function fireSpecForChoice(
-  choice: ReturnType<typeof simulatorEstimateChoices>[number]
-): Exclude<FireFilter, ''> {
-  return choice.template?.template.source_sheet_name.startsWith('【防火】') ? 'fire' : 'non_fire';
 }
 
 const LIST_GRID =
@@ -90,14 +123,17 @@ export default async function EstimateTemplatesPage({
 
   const allGroups = simulatorModels.map((model) => ({
     model,
-    choices: simulatorEstimateChoices(model, bundlesByModel.get(model.id) ?? []),
+    choices: expandCurrentEstimateChoices(
+      model.slug,
+      simulatorEstimateChoices(model, bundlesByModel.get(model.id) ?? [])
+    ),
   }));
   const modelScopeGroups = allGroups.filter((group) => !modelId || group.model.id === modelId);
   const groups = modelScopeGroups
     .map((group) => ({
       ...group,
       choices: group.choices.filter(
-        (choice) => !fireFilter || fireSpecForChoice(choice) === fireFilter
+        (choice) => !fireFilter || choice.fireSpec === fireFilter
       ),
     }))
     .filter((group) => group.choices.length > 0);
@@ -105,18 +141,18 @@ export default async function EstimateTemplatesPage({
   const modelCounts = new Map(
     allGroups.map((group) => [
       group.model.id,
-      group.choices.filter((choice) => !fireFilter || fireSpecForChoice(choice) === fireFilter).length,
+      group.choices.filter((choice) => !fireFilter || choice.fireSpec === fireFilter).length,
     ])
   );
   const allModelCount = [...modelCounts.values()].reduce((sum, count) => sum + count, 0);
   const fireCounts = {
     all: modelScopeGroups.reduce((sum, group) => sum + group.choices.length, 0),
     non_fire: modelScopeGroups.reduce(
-      (sum, group) => sum + group.choices.filter((choice) => fireSpecForChoice(choice) === 'non_fire').length,
+      (sum, group) => sum + group.choices.filter((choice) => choice.fireSpec === 'non_fire').length,
       0
     ),
     fire: modelScopeGroups.reduce(
-      (sum, group) => sum + group.choices.filter((choice) => fireSpecForChoice(choice) === 'fire').length,
+      (sum, group) => sum + group.choices.filter((choice) => choice.fireSpec === 'fire').length,
       0
     ),
   };
@@ -132,19 +168,25 @@ export default async function EstimateTemplatesPage({
 
   const requestedModelId = sp.selected_model ?? '';
   const requestedSpecCode = sp.selected_spec ?? '';
+  const requestedFireSpec: FireSpec =
+    sp.selected_fire === 'fire' ? 'fire' : 'non_fire';
   const requestedSelection = groups
     .flatMap((group) =>
       group.choices.map((choice) => ({ model: group.model, choice }))
     )
     .find(
       ({ model, choice }) =>
-        model.id === requestedModelId && choice.code === requestedSpecCode
+        model.id === requestedModelId &&
+        choice.code === requestedSpecCode &&
+        choice.fireSpec === requestedFireSpec
     );
   const firstSelection =
     groups[0]?.choices[0] ? { model: groups[0].model, choice: groups[0].choices[0] } : null;
   const selected = sampleSelected ? null : requestedSelection ?? firstSelection;
   const [selectedCatalog, sampleCatalog] = await Promise.all([
-    selected ? store.getCatalogBundle(selected.model.id) : Promise.resolve(null),
+    selected?.choice.fireSpec === 'non_fire'
+      ? store.getCatalogBundle(selected.model.id)
+      : Promise.resolve(null),
     sampleSelected && sampleModel && sampleSpecCode
       ? store.getCatalogBundle(sampleModel.id)
       : Promise.resolve(null),
@@ -309,11 +351,12 @@ export default async function EstimateTemplatesPage({
                         const template = choice.template?.template ?? null;
                         const active =
                           selected?.model.id === group.model.id &&
-                          selected?.choice.code === choice.code;
+                          selected?.choice.code === choice.code &&
+                          selected?.choice.fireSpec === choice.fireSpec;
                         return (
                           <Link
-                            key={choice.code}
-                            href={selectionHref(modelId, fireFilter, group.model.id, choice.code)}
+                            key={choice.registrationKey}
+                            href={selectionHref(modelId, fireFilter, group.model.id, choice.code, choice.fireSpec)}
                             aria-current={active ? 'true' : undefined}
                             className={`${LIST_GRID} min-h-10 px-3 py-1.5 text-sm transition ${
                               active
@@ -323,6 +366,9 @@ export default async function EstimateTemplatesPage({
                           >
                             <div className="flex min-w-0 items-center gap-2 pl-4">
                               <span className="truncate font-semibold text-ink">{choice.name}</span>
+                              <Badge tone={choice.fireSpec === 'fire' ? 'warn' : 'neutral'} className="shrink-0">
+                                {choice.fireSpec === 'fire' ? '防火' : '非防火'}
+                              </Badge>
                               {active && (
                                 <span className="shrink-0 rounded-full bg-forest px-1.5 py-0.5 text-[10px] font-semibold text-white">
                                   選択中
@@ -370,7 +416,7 @@ export default async function EstimateTemplatesPage({
           template={null}
           sampleMode
         />
-      ) : selected && selectedCatalog ? (
+      ) : selected && selectedCatalog && selected.choice.fireSpec === 'non_fire' ? (
         <StandardEstimateSimulatorPreview
           bundle={selectedCatalog}
           specCode={selected.choice.code}

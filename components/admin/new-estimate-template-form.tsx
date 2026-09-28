@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
+import { saveStandardEstimateDraftAction } from '@/lib/actions/standard-estimate';
 import {
   EstimateTemplateWorkbench,
   type EstimateTemplateWorkbenchLine,
@@ -110,6 +112,20 @@ export interface InitialEstimateTarget {
   fireSpec: 'non_fire' | 'fire';
 }
 
+export interface StandardEstimateDraftInitialData {
+  revisionId: string;
+  lockVersion: number;
+  name: string;
+  modelId: string;
+  baseMasterId: string;
+  baseMasterRevisionId: string;
+  specCode: string;
+  taxRate: number;
+  adjustment: number;
+  adjustmentReason: string;
+  lines: EstimateTemplateWorkbenchLine[];
+}
+
 export interface EstimateBaseMasterChoice {
   id: string;
   revisionId: string;
@@ -211,6 +227,7 @@ export function NewEstimateTemplateForm({
   baseMasterSourceReady,
   sampleBaseMaster,
   initialTarget,
+  initialDraft,
   products,
 }: {
   role: 'admin' | 'master_dealer' | 'dealer' | 'customer';
@@ -219,8 +236,10 @@ export function NewEstimateTemplateForm({
   baseMasterSourceReady: boolean;
   sampleBaseMaster: EstimateBaseMasterChoice | null;
   initialTarget?: InitialEstimateTarget | null;
+  initialDraft?: StandardEstimateDraftInitialData | null;
   products: EstimateTemplateWorkbenchProduct[];
 }) {
+  const router = useRouter();
   const availableBaseMasters = initialTarget
     ? baseMasters.filter(
         (baseMaster) =>
@@ -228,15 +247,26 @@ export function NewEstimateTemplateForm({
           baseMaster.fireSpec === initialTarget.fireSpec
       )
     : baseMasters;
-  const initialBaseMaster = availableBaseMasters.length === 1 ? availableBaseMasters[0] : null;
+  const initialBaseMaster =
+    (initialDraft
+      ? availableBaseMasters.find((baseMaster) => baseMaster.id === initialDraft.baseMasterId) ?? null
+      : null) ??
+    (availableBaseMasters.length === 1 ? availableBaseMasters[0] : null);
 
-  const [selectedBaseMasterId, setSelectedBaseMasterId] = useState(initialBaseMaster?.id ?? '');
-  const [pickerBaseMasterId, setPickerBaseMasterId] = useState(initialBaseMaster?.id ?? '');
+  const [selectedBaseMasterId, setSelectedBaseMasterId] = useState(
+    initialDraft?.baseMasterId ?? initialBaseMaster?.id ?? ''
+  );
+  const [pickerBaseMasterId, setPickerBaseMasterId] = useState(
+    initialDraft?.baseMasterId ?? initialBaseMaster?.id ?? ''
+  );
   const [basePickerOpen, setBasePickerOpen] = useState(false);
-  const [spec, setSpec] = useState(initialTarget?.specCode ?? '');
+  const [spec, setSpec] = useState(initialDraft?.specCode ?? initialTarget?.specCode ?? '');
   const [region, setRegion] = useState<(typeof REGION_OPTIONS)[number]['value']>('all');
-  const [customName, setCustomName] = useState<string | null>(null);
-  const [step, setStep] = useState<'setup' | 'edit'>('setup');
+  const [customName, setCustomName] = useState<string | null>(initialDraft?.name ?? null);
+  const [draftRevisionId, setDraftRevisionId] = useState<string | null>(initialDraft?.revisionId ?? null);
+  const [draftLockVersion, setDraftLockVersion] = useState<number | null>(initialDraft?.lockVersion ?? null);
+  const [step, setStep] = useState<'setup' | 'edit'>(initialDraft ? 'edit' : 'setup');
+  const identityLocked = Boolean(draftRevisionId);
 
   const selectedBaseMaster = useMemo(
     () =>
@@ -273,6 +303,69 @@ export function NewEstimateTemplateForm({
   );
   const name = customName ?? generatedName;
   const canContinue = Boolean(selectedBaseMaster && selectedSpec?.code);
+
+  const customerSelectionCode = (value: string) => {
+    if (value === '標準・固定') return 'standard_fixed' as const;
+    if (value === '任意オプション') return 'optional' as const;
+    if (value === 'お客様には表示しない') return 'hidden' as const;
+    return 'standard_changeable' as const;
+  };
+
+  const saveDraft = async ({
+    lines,
+    adjustment,
+    adjustmentReason,
+  }: {
+    lines: EstimateTemplateWorkbenchLine[];
+    adjustment: number;
+    adjustmentReason: string;
+  }) => {
+    if (!selectedBaseMaster || !selectedSpec) {
+      return { ok: false, error: '基準本体と仕様を確認してください。' };
+    }
+
+    const result = await saveStandardEstimateDraftAction({
+      revisionId: draftRevisionId,
+      expectedLockVersion: draftLockVersion,
+      baseModelId: selectedBaseMaster.modelId,
+      baseMasterId: selectedBaseMaster.id,
+      baseMasterRevisionId: selectedBaseMaster.revisionId,
+      specCode: selectedSpec.code,
+      name,
+      taxRate: initialDraft?.taxRate ?? 0.1,
+      adjustment,
+      adjustmentReason,
+      lines: lines.map((line) => ({
+        lineKey: line.lineKey ?? null,
+        section: line.section,
+        groupLabel: line.groupLabel,
+        name: line.name,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitPrice: line.saleUnitPrice,
+        remark: line.remark,
+        sourceKind: line.source === 'product' && line.optionId ? 'product' : 'free',
+        optionId: line.source === 'product' && line.optionId ? line.optionId : null,
+        customerSelection:
+          line.source === 'product' && line.optionId
+            ? customerSelectionCode(line.customerSelection)
+            : 'none',
+      })),
+    });
+
+    if (!result.ok || !result.revisionId || result.lockVersion === undefined) {
+      return { ok: false, error: result.error || '下書きの保存に失敗しました。' };
+    }
+
+    setDraftRevisionId(result.revisionId);
+    setDraftLockVersion(result.lockVersion);
+
+    const draftUrl = '/admin/estimate-templates/new?draft=' + encodeURIComponent(result.revisionId);
+    if (!draftRevisionId) router.replace(draftUrl);
+    else router.refresh();
+
+    return { ok: true };
+  };
 
   const modelNameFor = (baseMaster: EstimateBaseMasterChoice) =>
     models.find((model) => model.id === baseMaster.modelId)?.name ?? '—';
@@ -328,7 +421,7 @@ export function NewEstimateTemplateForm({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-semibold">{name || '名称未設定'}</h2>
               <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                {samplePreview ? '画面確認用' : '新規見積書'}
+                {samplePreview ? '画面確認用' : draftRevisionId ? '下書き' : '新規見積書'}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted">
@@ -342,23 +435,28 @@ export function NewEstimateTemplateForm({
         </section>
 
         {!samplePreview && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-2 text-xs leading-relaxed text-ink-soft">
-            <strong className="font-semibold text-ink">現在は画面確認用です。</strong>
-            {' 編集内容は保存されません。保存・公開機能は準備中です。'}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-xs leading-relaxed text-ink-soft">
+            <strong className="font-semibold text-ink">下書き保存に対応しています。</strong>
+            {' 公開処理はまだ接続していません。販売費・経費・掛率は画面内試算のみです。'}
           </div>
         )}
 
         <EstimateTemplateWorkbench
-          templateId="new-standard-estimate-preview"
+          templateId={draftRevisionId ?? 'new-standard-estimate-preview'}
           role={role}
           baseLines={selectedBaseMaster?.lines ?? []}
           baseTotal={selectedBaseMaster?.total ?? 0}
-          initialLines={samplePreview ? SAMPLE_EDIT_LINES : []}
+          initialLines={samplePreview ? SAMPLE_EDIT_LINES : initialDraft?.lines ?? []}
           sections={PREVIEW_SECTIONS}
           products={products}
-          taxRate={0.1}
-          adjustment={0}
-          demoMode
+          taxRate={initialDraft?.taxRate ?? 0.1}
+          adjustment={initialDraft?.adjustment ?? 0}
+          initialAdjustmentReason={initialDraft?.adjustmentReason ?? ''}
+          draftPersisted={Boolean(draftRevisionId)}
+          externalDirty={Boolean(initialDraft && name.trim() !== initialDraft.name.trim())}
+          onSaveDraft={samplePreview ? undefined : saveDraft}
+          allowProductRegistration={false}
+          demoMode={samplePreview}
         />
       </div>
     );
@@ -390,7 +488,7 @@ export function NewEstimateTemplateForm({
                 <h3 className="text-sm font-semibold">基準本体</h3>
                 <p className="mt-0.5 text-[11px] text-muted">公開中の本体Revisionから、明細を確認して選択します。</p>
               </div>
-              {selectedBaseMaster && (
+              {selectedBaseMaster && !identityLocked && (
                 <button type="button" className="btn-secondary btn-sm" onClick={openBasePicker}>
                   変更する
                 </button>
@@ -415,8 +513,13 @@ export function NewEstimateTemplateForm({
                     <p className="text-[10px] text-muted">本体価格計</p>
                     <p className="text-base font-semibold">{formatYen(selectedBaseMaster.total)}</p>
                   </div>
-                  <button type="button" className="text-xs font-semibold underline underline-offset-4" onClick={openBasePicker}>
-                    明細を見る
+                  <button
+                    type="button"
+                    className="text-xs font-semibold underline underline-offset-4"
+                    onClick={openBasePicker}
+                    disabled={identityLocked}
+                  >
+                    {identityLocked ? '基準本体Revision固定' : '明細を見る'}
                   </button>
                 </div>
               ) : (
@@ -468,7 +571,7 @@ export function NewEstimateTemplateForm({
               <SelectWithArrow
                 value={selectedSpec?.code ?? ''}
                 onChange={handleSpecChange}
-                disabled={!selectedBaseMaster || availableSpecs.length === 0}
+                disabled={identityLocked || !selectedBaseMaster || availableSpecs.length === 0}
               >
                 {!selectedBaseMaster ? (
                   <option value="">先に基準本体を選択</option>

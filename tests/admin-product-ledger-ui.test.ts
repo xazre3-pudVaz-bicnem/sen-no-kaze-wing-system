@@ -25,7 +25,8 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('data-testid="ledger-sticky-category-bar"');
     expect(client).toContain('sticky top-0 z-30');
     expect(client).toContain('aria-label="商品カテゴリー"');
-    expect(client).toContain('overflow-x-auto');
+    expect(client).toContain('flex flex-wrap items-center gap-1');
+    expect(client).not.toContain('<nav className="overflow-x-auto px-3 py-2 sm:px-4" aria-label="商品カテゴリー">');
     expect(client).toContain('categoryCounts.get(item.id)');
     expect(client).toContain('すべて <span');
     expect(client).toContain('公開中 <span');
@@ -42,9 +43,9 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('画像表示');
     expect(client).toContain("useState<'list' | 'grid'>('list')");
     expect(client).toContain('data-testid="ledger-table-view"');
-    expect(client).toContain('<table className="w-full min-w-[760px] table-fixed text-left text-sm">');
+    expect(client).toContain('<table className="w-full min-w-[680px] table-fixed text-left text-sm">');
     expect(client).toContain('メーカー・型番');
-    expect(client).toContain('対象モデル');
+    expect(client).not.toContain('<th className="w-[12%] px-3 py-2.5">対象モデル</th>');
     expect(client).toContain('data-testid="ledger-grid-view"');
     expect(client).toContain('hidden overflow-x-auto md:block');
     expect(client).toContain('space-y-2 p-3 md:hidden');

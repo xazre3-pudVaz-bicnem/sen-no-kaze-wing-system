@@ -113,6 +113,10 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
       expect(body).toContain('本体明細を削除できるのは総代理店・本部だけです');
       expect(body).toContain("item.kind in ('base', 'base_expense')");
     }
+    expect(saveBody).toContain('v_lock_parent_base');
+    expect(saveBody).toContain('case when v_lock_parent_base then v_parent_item.name else v_name end');
+    expect(finalizeBody).toContain('v_parent_item.name is distinct from i.name');
+    expect(finalizeBody).toContain('v_parent_item.image_url is distinct from i.image_url');
 
     expect(draftPage).toContain('canEditBase={canEditCatalog(actor.role)}');
     expect(editor).toContain('const baseLocked = isRevisionDraft && !canEditBase;');

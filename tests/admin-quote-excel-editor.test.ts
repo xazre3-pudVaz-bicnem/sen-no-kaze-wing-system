@@ -7,6 +7,7 @@ const sheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-s
 const form = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const quoteTable = fs.readFileSync(path.join(root, 'components/mypage/quote-table.tsx'), 'utf8');
+const catalogPicker = fs.readFileSync(path.join(root, 'components/admin/catalog-picker.tsx'), 'utf8');
 
 describe('Admin quote Excel-like editor', () => {
   it('switches the quote between read mode and edit mode in the same place', () => {
@@ -108,6 +109,20 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('data-testid="revision-preview"');
     expect(form).toContain('この内容で改訂見積を発行');
     expect(form).toContain('この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。');
+  });
+
+  it('lets an editable estimate row choose an existing catalog product without removing free entry', () => {
+    expect(form).toContain('const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);');
+    expect(form).toContain('data-testid={`select-catalog-row-${i}`}');
+    expect(form).toContain('商品から選ぶ');
+    expect(form).toContain('applyCatalogItemToRow');
+    expect(form).toContain("mode={pickerTargetRow ? 'replace' : 'add'}");
+    expect(form).toContain('unit_price: item.price_on_request ? 0 : item.price');
+    expect(form).toContain('readOnly={!rowEditable}');
+    expect(catalogPicker).toContain("mode?: 'add' | 'replace'");
+    expect(catalogPicker).toContain("mode === 'replace' ? '既存商品から選択' : '商品台帳から行を追加'");
+    expect(catalogPicker).toContain("if (mode === 'replace')");
+    expect(catalogPicker).toContain('onClose();');
   });
 
   it('keeps the immutable issued-quote lifecycle wording in edit mode', () => {

@@ -46,11 +46,15 @@ function casePhaseLabel(quote: {
   parent_quote_id: string | null;
   dealer_id: string | null;
 }) {
-  if (isFormalQuote(quote)) return quote.status === 'accepted' ? '契約' : '確定見積';
-  if (quote.status === 'issued' || quote.status === 'accepted') {
-    return quote.dealer_id ? '現地確認' : '担当決定';
+  if (isFormalQuote(quote)) {
+    if (quote.status === 'accepted') return 'F10/15 契約';
+    if (quote.status === 'issued') return 'F8/15 正式見積';
+    return 'F9/15 見積後の判断';
   }
-  return '見積確認';
+  if (quote.status === 'issued' || quote.status === 'accepted') {
+    return quote.dealer_id ? 'F7/15 現地確認' : 'F6/15 担当者決定';
+  }
+  return 'F5/15 見積依頼';
 }
 
 function CaseSummary({
@@ -201,22 +205,22 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           <div className="flex flex-wrap items-end justify-between gap-2 border-b border-line px-3 py-2">
             <div>
               <h2 className="text-sm font-semibold">担当案件</h2>
-              <p className="text-[0.68rem] text-muted">案件を選択すると、下のワークスペースが切り替わります。</p>
+              <p className="text-[0.64rem] text-muted">全体フローのF5〜F15に対応。案件を選択すると下のワークスペースが切り替わります。</p>
             </div>
             <span className="rounded-full border border-[#d7e2dc] bg-[#f3f8f5] px-2 py-0.5 text-[0.65rem] font-semibold text-[#3d6450]">
               {latest.length}件
             </span>
           </div>
           <div data-testid="case-list-scroll">
-            <table className="w-full table-fixed text-[0.72rem]">
+            <table className="w-full table-fixed text-[0.69rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
-                  <th className="w-[22%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                  <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">工程・状態</th>
-                  <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
-                  <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                  <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                  <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">担当</th>
+                  <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
+                  <th className="w-[16%] px-2 py-1 text-left font-semibold">工程・状態</th>
+                  <th className="w-[20%] px-2 py-1 text-left font-semibold">設置予定地</th>
+                  <th className="w-[12%] px-2 py-1 text-left font-semibold">商品モデル</th>
+                  <th className="w-[14%] px-2 py-1 text-right font-semibold">見積額</th>
+                  <th className="w-[16%] px-2 py-1 text-left font-semibold">担当</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,38 +235,41 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       selected={selected}
                       ariaLabel={`${q.customer_name}の案件を開く`}
                     >
-                      <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
-                        <div className="flex items-center gap-1.5">
+                      <td className={`border-l-4 px-2 py-1 align-middle ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                        <div className="flex min-w-0 items-center gap-1.5">
                           <Link href={caseSelectionHref(q.id, sp)} className="min-w-0 truncate font-semibold text-ink hover:underline">
                             {q.customer_name}
                           </Link>
+                          {q.customer_company && <span className="min-w-0 truncate text-[0.6rem] text-muted">{q.customer_company}</span>}
                           {selected && (
-                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.56rem] font-semibold text-white">選択中</span>
+                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.54rem] font-semibold text-white">選択中</span>
                           )}
                         </div>
-                        {q.customer_company && <span className="ml-1 text-[0.64rem] text-muted">{q.customer_company}</span>}
-                        <span className="mt-0.5 block font-mono text-[0.62rem] text-muted">見積番号 {q.quote_no}／第{q.revision}版</span>
+                        <span className="mt-0.5 block font-mono text-[0.58rem] leading-3 text-muted">見積番号 {q.quote_no}／第{q.revision}版</span>
                       </td>
-                      <td className="px-2.5 py-1.5 align-top">
-                        <span className="mb-1 block text-[0.6rem] font-semibold text-[#315745]">現在工程：{casePhaseLabel(q)}</span>
-                        <Badge tone={quoteStatusTone(q.status)}>{caseQuoteStatusLabel(q)}</Badge>
-                        {q.request_status && <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[q.request_status]}</span>}
-                        <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(q.updated_at, true)}</span>
+                      <td className="px-2 py-1 align-middle">
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span className="text-[0.6rem] font-semibold text-[#315745]">{casePhaseLabel(q)}</span>
+                          <Badge tone={quoteStatusTone(q.status)}>{caseQuoteStatusLabel(q)}</Badge>
+                        </div>
+                        <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">
+                          {q.request_status ? `依頼：${QUOTE_REQUEST_STATUS_LABELS[q.request_status]} ／ ` : ''}更新 {formatDate(q.updated_at, true)}
+                        </span>
                       </td>
-                      <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{q.site_address || '未登録'}</td>
-                      <td className="px-2.5 py-1.5 align-top">
+                      <td className="px-2 py-1 align-middle text-[0.64rem]">{q.site_address || '未登録'}</td>
+                      <td className="px-2 py-1 align-middle">
                         <strong>{q.base_model_name}</strong>
                       </td>
-                      <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">{formatYen(q.total)}</td>
-                      <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{selected ? '選択中' : '担当中'}</td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right align-middle font-semibold tabular-nums">{formatYen(q.total)}</td>
+                      <td className="px-2 py-1 align-middle text-[0.64rem]">{selected ? '選択中' : '担当中'}</td>
                     </ClickableCaseRow>,
                     <tr
                       key={`${q.id}-meta`}
                       className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
                       data-testid="case-row-meta"
                     >
-                      <td colSpan={6} className={`border-l-4 px-2.5 pb-1.5 pt-0.5 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.64rem] text-muted">
+                      <td colSpan={6} className={`border-l-4 px-2 pb-0.5 pt-0 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.59rem] leading-4 text-muted">
                           <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
                           <span>原価 <strong className="font-semibold text-muted">—</strong></span>
                           <span>利益 <strong className="font-semibold text-muted">—</strong></span>
@@ -394,7 +401,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             <div className="flex flex-wrap items-end gap-2">
               <div>
                 <h2 className="text-sm font-semibold">案件一覧</h2>
-                <p className="text-[0.68rem] text-muted">案件を選択すると、下のワークスペースが切り替わります。</p>
+                <p className="text-[0.64rem] text-muted">全体フローのF5〜F15に対応。案件を選択すると下のワークスペースが切り替わります。</p>
               </div>
               <span className="mb-0.5 rounded-full border border-[#d7e2dc] bg-[#f3f8f5] px-2 py-0.5 text-[0.65rem] font-semibold text-[#3d6450]">
                 表示 {shown.length}件 / 全{requests.length}件
@@ -459,15 +466,15 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
         </div>
 
         <div data-testid="case-list-scroll">
-          <table className="w-full table-fixed text-[0.72rem]">
+          <table className="w-full table-fixed text-[0.69rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[22%] px-2.5 py-1.5 text-left font-semibold">案件・顧客</th>
-                <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">工程・状態</th>
-                <th className="w-[20%] px-2.5 py-1.5 text-left font-semibold">設置予定地</th>
-                <th className="w-[12%] px-2.5 py-1.5 text-left font-semibold">商品モデル</th>
-                <th className="w-[14%] px-2.5 py-1.5 text-right font-semibold">見積額</th>
-                <th className="w-[16%] px-2.5 py-1.5 text-left font-semibold">担当組織／担当者</th>
+                <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
+                <th className="w-[16%] px-2 py-1 text-left font-semibold">工程・状態</th>
+                <th className="w-[20%] px-2 py-1 text-left font-semibold">設置予定地</th>
+                <th className="w-[12%] px-2 py-1 text-left font-semibold">商品モデル</th>
+                <th className="w-[14%] px-2 py-1 text-right font-semibold">見積額</th>
+                <th className="w-[16%] px-2 py-1 text-left font-semibold">担当組織／担当者</th>
               </tr>
             </thead>
             <tbody>
@@ -494,18 +501,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     selected={selected}
                     ariaLabel={`${request.contact.full_name}の案件を開く`}
                   >
-                    <td className={`border-l-4 px-2.5 py-1.5 align-top ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
-                      {quote ? (
-                        <div className="flex items-center gap-1.5">
+                    <td className={`border-l-4 px-2 py-1 align-middle ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        {quote ? (
                           <Link href={caseSelectionHref(quote.id, sp)} className="min-w-0 truncate font-semibold text-ink hover:underline">
                             {request.contact.full_name}
                           </Link>
-                          {selected && (
-                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.56rem] font-semibold text-white">選択中</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
+                        ) : (
                           <Link
                             href={requestSelectionHref(request.id, sp)}
                             className="min-w-0 truncate font-semibold text-ink hover:underline"
@@ -513,43 +515,49 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                           >
                             {request.contact.full_name}
                           </Link>
-                          {selected && (
-                            <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.56rem] font-semibold text-white">選択中</span>
-                          )}
-                        </div>
-                      )}
-                      {request.contact.company_name && <span className="ml-1 text-[0.64rem] text-muted">{request.contact.company_name}</span>}
-                      <span className="mt-0.5 block font-mono text-[0.62rem] text-muted">
+                        )}
+                        {request.contact.company_name && <span className="min-w-0 truncate text-[0.6rem] text-muted">{request.contact.company_name}</span>}
+                        {selected && (
+                          <span className="shrink-0 rounded-full bg-[#7b5a22] px-1.5 py-0.5 text-[0.54rem] font-semibold text-white">選択中</span>
+                        )}
+                      </div>
+                      <span className="mt-0.5 block font-mono text-[0.58rem] leading-3 text-muted">
                         見積番号 {request.quote_no ?? '未発行'}
                         {quote && quote.revision > 1 && <>／第{quote.revision}版</>}
                       </span>
                     </td>
-                    <td className="px-2.5 py-1.5 align-top">
+                    <td className="px-2 py-1 align-middle">
                       {quote ? (
                         <>
-                          <span className="mb-1 block text-[0.6rem] font-semibold text-[#315745]">現在工程：{casePhaseLabel(quote)}</span>
-                          <Badge tone={quoteStatusTone(quote.status)}>{caseQuoteStatusLabel(quote)}</Badge>
-                          <span className="ml-1 text-[0.62rem] text-muted">依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]}</span>
+                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            <span className="text-[0.6rem] font-semibold text-[#315745]">{casePhaseLabel(quote)}</span>
+                            <Badge tone={quoteStatusTone(quote.status)}>{caseQuoteStatusLabel(quote)}</Badge>
+                          </div>
+                          <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">
+                            依頼：{QUOTE_REQUEST_STATUS_LABELS[request.status]} ／ 更新 {formatDate(updatedAt, true)}
+                          </span>
                         </>
                       ) : (
                         <>
-                          <span className="mb-1 block text-[0.6rem] font-semibold text-[#315745]">現在工程：案件受付</span>
-                          <Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>
-                            見積依頼 {QUOTE_REQUEST_STATUS_LABELS[request.status]}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            <span className="text-[0.6rem] font-semibold text-[#315745]">F5/15 見積依頼</span>
+                            <Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>
+                              {QUOTE_REQUEST_STATUS_LABELS[request.status]}
+                            </Badge>
+                          </div>
+                          <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">更新 {formatDate(updatedAt, true)}</span>
                         </>
                       )}
-                      <span className="mt-1 block whitespace-nowrap text-[0.6rem] text-muted">更新 {formatDate(updatedAt, true)}</span>
                     </td>
-                    <td className="px-2.5 py-1.5 align-top text-[0.68rem]">{request.contact.site_address || '—'}</td>
-                    <td className="px-2.5 py-1.5 align-top">
+                    <td className="px-2 py-1 align-middle text-[0.64rem]">{request.contact.site_address || '—'}</td>
+                    <td className="px-2 py-1 align-middle">
                       <strong>{modelName ?? '—'}</strong>
-                      {specName ? <span className="ml-1 text-[0.62rem] text-muted">{specName}</span> : null}
+                      {specName ? <span className="ml-1 text-[0.6rem] text-muted">{specName}</span> : null}
                     </td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right align-top font-semibold tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-1 text-right align-middle font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
                     </td>
-                    <td className="px-2.5 py-1.5 align-top text-[0.68rem]">
+                    <td className="px-2 py-1 align-middle text-[0.64rem]">
                       {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
                     </td>
                   </ClickableCaseRow>,

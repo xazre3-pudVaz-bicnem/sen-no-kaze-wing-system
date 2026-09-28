@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Button } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
+import { estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 
 type Section = '本体' | '内外装工事' | 'オプション' | '別途';
 type DemoTab = 'estimate' | 'plan' | 'drawing';
@@ -64,13 +65,14 @@ const rowSale = (row: DemoRow) => row.priceOnRequest ? 0 : Math.round(row.quanti
 let seq = 0;
 const makeId = () => `estimate-demo-${Date.now()}-${++seq}`;
 
-export function EstimateTemplateExcelDemo() {
-  const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(INITIAL_ROWS));
+export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | null }) {
+  const sample = estimateDemoSampleById(sampleId);
+  const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(sample?.rows ?? INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
   const [markupRate, setMarkupRate] = useState(160);
-  const [expenseRate, setExpenseRate] = useState(15);
-  const [adjustment, setAdjustment] = useState(-2500);
+  const [expenseRate, setExpenseRate] = useState(sample ? 0 : 15);
+  const [adjustment, setAdjustment] = useState(sample?.adjustment ?? -2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -79,6 +81,25 @@ export function EstimateTemplateExcelDemo() {
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
+    const onRequest = rows.filter((row) => row.priceOnRequest).length;
+
+    if (sample && !dirty) {
+      const subtotal = sample.sourceSubtotal + sample.adjustment;
+      const saleGrand = sample.sourceTotal;
+      const profit = saleGrand - cost;
+      return {
+        cost,
+        saleLines: sample.sourceSubtotal,
+        saleExpense: 0,
+        subtotal,
+        tax: sample.tax,
+        saleGrand,
+        profit,
+        margin: saleGrand > 0 ? profit / saleGrand * 100 : 0,
+        onRequest,
+      };
+    }
+
     const saleLines = rows.reduce((sum, row) => sum + rowSale(row), 0);
     const expenseBase = rows
       .filter((row) => row.section !== '別途')
@@ -97,9 +118,9 @@ export function EstimateTemplateExcelDemo() {
       saleGrand,
       profit,
       margin: saleGrand > 0 ? profit / saleGrand * 100 : 0,
-      onRequest: rows.filter((row) => row.priceOnRequest).length,
+      onRequest,
     };
-  }, [rows, expenseRate, adjustment]);
+  }, [rows, expenseRate, adjustment, sample, dirty]);
 
   const sectionTotals = useMemo(() => {
     const map = new Map<Section, { cost: number; sale: number; profit: number; onRequest: number }>();
@@ -312,16 +333,20 @@ export function EstimateTemplateExcelDemo() {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">見積書作成</h2>
+              <h2 className="font-semibold">{sample?.name ?? '見積書作成'}</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
-                : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
+                : sample
+                  ? 'rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800'
+                  : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
               >
-                {dirty ? '編集中' : '下書き'}
+                {dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。
+              {sample
+                ? `Excel「${sample.sourceSheet}」の金額が入っている明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外しています。DBには保存されません。`
+                : '本体明細も含めて、この見積書内の明細をExcelのように編集できます。本体マスター自体は変更しません。'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -333,10 +358,21 @@ export function EstimateTemplateExcelDemo() {
             >
               {showEstimatePreview ? 'プレビューを閉じる' : '見積書プレビュー'}
             </Button>
-            <Button type="button" variant="secondary" size="sm" disabled title="Draft接続後に利用できます">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled
+              title={sample ? 'サンプルはDBへ保存されません' : 'Draft接続後に利用できます'}
+            >
               下書き保存
             </Button>
-            <Button type="button" size="sm" disabled title="Draft→正式Revision接続後に利用できます">
+            <Button
+              type="button"
+              size="sm"
+              disabled
+              title={sample ? 'サンプルは正式見積として保存されません' : 'Draft→正式Revision接続後に利用できます'}
+            >
               正式保存
             </Button>
           </div>
@@ -348,11 +384,11 @@ export function EstimateTemplateExcelDemo() {
               見積条件
             </div>
             <div className="flex flex-wrap divide-x divide-slate-200">
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>Wing</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>ホテルUB</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>非防火</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>標準地域</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>Wing ホテル仕様 v4</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>{sample?.model ?? 'Wing'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>{sample?.spec ?? 'ホテルUB'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>{sample?.fireSpec ?? '非防火'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>{sample?.region ?? '標準地域'}</strong></div>
+              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>{sample?.baseMaster ?? 'Wing ホテル仕様 v4'}</strong></div>
             </div>
           </div>
 
@@ -378,18 +414,22 @@ export function EstimateTemplateExcelDemo() {
               <label className="flex items-center gap-2">
                 <div>
                   <p className="text-xs font-semibold text-slate-700">経費</p>
-                  <p className="text-[10px] text-slate-500">区分に加算</p>
+                  <p className="text-[10px] text-slate-500">{sample ? 'Excel明細に反映済み' : '区分に加算'}</p>
                 </div>
                 <input
                   type="number"
                   min={0}
                   step={0.1}
                   value={expenseRate}
+                  disabled={Boolean(sample)}
+                  title={sample ? 'Excel原本の経費行を明細として反映済みです' : undefined}
                   onChange={(event) => {
                     setExpenseRate(Math.max(0, Number(event.target.value) || 0));
                     markDirty();
                   }}
-                  className="h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  className={sample
+                    ? 'h-8 w-20 rounded border border-slate-300 bg-slate-100 px-2 text-right text-sm text-slate-500'
+                    : 'h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm'}
                   aria-label="経費率"
                 />
                 <span>%</span>
@@ -417,7 +457,9 @@ export function EstimateTemplateExcelDemo() {
 
               <button
                 type="button"
-                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm"
+                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                disabled={Boolean(sample)}
+                title={sample ? 'Excelサンプルでは原本の売価をそのまま表示します' : undefined}
                 onClick={applyMarkup}
               >
                 売価を再計算
@@ -702,7 +744,10 @@ export function EstimateTemplateExcelDemo() {
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>経費 {expenseRate.toFixed(1)}%</span><strong>{formatYen(totals.saleExpense)}</strong></div>
+        <div className="flex justify-between gap-4 py-1">
+          <span>{sample ? '追加経費（Excel明細に反映済み）' : `経費 ${expenseRate.toFixed(1)}%`}</span>
+          <strong>{sample ? '—' : formatYen(totals.saleExpense)}</strong>
+        </div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
           <input
@@ -720,6 +765,11 @@ export function EstimateTemplateExcelDemo() {
         <div className="mt-2 flex justify-between gap-4 border-t-2 border-slate-700 pt-3 text-lg">
           <span>見積金額</span><strong>{formatYen(totals.saleGrand)}</strong>
         </div>
+        {sample && (
+          <div className="flex justify-between gap-4 py-1 text-xs text-slate-500">
+            <span>Excel原本 税込合計</span><strong>{formatYen(sample.sourceTotal)}</strong>
+          </div>
+        )}
         <div className="mt-2 flex justify-between gap-4 rounded bg-emerald-50 px-3 py-2">
           <span>粗利</span><strong>{formatYen(totals.profit)}</strong>
         </div>
@@ -737,7 +787,7 @@ export function EstimateTemplateExcelDemo() {
             <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">御見積書</h2>
-                <p className="mt-1 text-sm text-slate-600">Wing ホテルUB／非防火</p>
+                <p className="mt-1 text-sm text-slate-600">{sample ? `${sample.model} ${sample.spec}／${sample.fireSpec}` : 'Wing ホテルUB／非防火'}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500">見積金額（税込）</p>
@@ -791,7 +841,7 @@ export function EstimateTemplateExcelDemo() {
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
               <p className="text-xs text-slate-500">プランボード・画面内編集と連動</p>
-              <h2 className="mt-1 text-xl font-semibold">Wing ホテルUB プラン</h2>
+              <h2 className="mt-1 text-xl font-semibold">{sample ? `${sample.model} ${sample.spec} プラン` : 'Wing ホテルUB プラン'}</h2>
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-500">現在の見積金額</p>

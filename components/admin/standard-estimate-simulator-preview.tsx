@@ -39,6 +39,7 @@ interface Props {
   initialContentTab?: ContentTab;
   showContentTabs?: boolean;
   showEditLink?: boolean;
+  previewOnly?: boolean;
 }
 
 export function StandardEstimateSimulatorPreview(props: Props) {
@@ -54,6 +55,7 @@ function StandardEstimateSimulatorPreviewBody({
   initialContentTab = 'estimate',
   showContentTabs = true,
   showEditLink = true,
+  previewOnly = false,
 }: Props) {
   const [view, setView] = useState<ViewKey>('exterior');
   const [contentTab, setContentTab] = useState<ContentTab>(initialContentTab);
@@ -293,7 +295,9 @@ function StandardEstimateSimulatorPreviewBody({
               <p className="mt-1 text-xs text-muted">
                 {sampleMode
                   ? '見積書とプランボードの動作確認用です。変更内容や金額は保存・公開されません。'
-                  : '見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。'}
+                  : previewOnly
+                    ? '保存済み・取込済み内容の確認です。変更は「編集」タブで行います。'
+                    : '見積書とプランボードを確認できます。ここでの商品変更は画面内試算で、保存されません。'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -344,12 +348,14 @@ function StandardEstimateSimulatorPreviewBody({
 
           {contentTab === 'estimate' && (
           <div className="px-4 py-4 sm:px-5">
-            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
-              <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
-              {sampleMode
-                ? '見積書の商品を変更して、金額表示とプランボードへの反映を確認できます。正式データには反映されません。'
-                : '見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。'}
-            </div>
+            {!previewOnly && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-ink-soft">
+                <strong className="font-semibold text-ink">{sampleMode ? 'サンプル操作：' : '画面内試算：'}</strong>
+                {sampleMode
+                  ? '見積書の商品を変更して、金額表示とプランボードへの反映を確認できます。正式データには反映されません。'
+                  : '見積書の商品変更はプランボードへ反映します。正式な変更は「標準見積を編集」から行います。'}
+              </div>
+            )}
             <QuoteSheet
               modelName={displayModelName}
               specName={specName}
@@ -358,8 +364,8 @@ function StandardEstimateSimulatorPreviewBody({
               standardEstimate={standardEstimate}
               categories={bundle.categories}
               options={bundle.options}
-              readOnly={false}
-              allowStandardEstimateCategoryPick
+              readOnly={previewOnly}
+              allowStandardEstimateCategoryPick={!previewOnly}
               onPickCategory={openPicker}
             />
           </div>

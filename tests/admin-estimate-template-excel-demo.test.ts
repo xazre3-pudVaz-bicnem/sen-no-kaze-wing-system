@@ -96,9 +96,17 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('min-w-[20rem]');
   });
 
-  it('編集・見積書・プランボード・図面を同じ操作確認画面で切り替える', () => {
-    expect(demo).toContain("type DemoTab = 'edit' | 'estimate' | 'plan' | 'drawing'");
+  it('見積書に編集とプレビューをまとめ、プランボード・図面と3タブにする', () => {
+    expect(demo).toContain("type DemoTab = 'estimate' | 'plan' | 'drawing'");
+    expect(demo).toContain("useState<DemoTab>('estimate')");
     expect(demo).toContain('aria-label="見積書作成の表示切替"');
+    expect(demo).toContain("['estimate', '見積書']");
+    expect(demo).toContain("['plan', 'プランボード']");
+    expect(demo).toContain("['drawing', '図面']");
+    expect(demo).not.toContain("['edit', '編集']");
+    expect(demo).toContain('見積書プレビュー');
+    expect(demo).toContain('プレビューを閉じる');
+    expect(demo).toContain('showEstimatePreview');
     expect(demo).toContain('data-testid="estimate-live-preview"');
     expect(demo).toContain('data-testid="plan-live-preview"');
     expect(demo).toContain('data-testid="drawing-workspace-preview"');

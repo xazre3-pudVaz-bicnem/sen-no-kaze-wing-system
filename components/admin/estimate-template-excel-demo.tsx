@@ -73,6 +73,7 @@ export function EstimateTemplateExcelDemo() {
   const [expenseRate, setExpenseRate] = useState(15);
   const [adjustment, setAdjustment] = useState(-2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
+  const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
@@ -180,26 +181,54 @@ export function EstimateTemplateExcelDemo() {
     markDirty();
   };
 
+  const openProductPicker = (section: Exclude<Section, '本体'>, targetRowId: string | null = null) => {
+    setPickerSection(section);
+    setPickerTargetRowId(targetRowId);
+    setQuery('');
+  };
+
+  const closeProductPicker = () => {
+    setPickerSection(null);
+    setPickerTargetRowId(null);
+    setQuery('');
+  };
+
   const addProduct = (product: DemoProduct) => {
     if (!pickerSection) return;
-    setRows((current) => [
-      ...current,
-      {
-        id: makeId(),
-        section: pickerSection,
-        name: product.name,
-        quantity: 1,
-        unit: product.priceOnRequest ? '式' : '台',
-        cost: 0,
-        sale: product.price,
-        manualSale: true,
-        priceOnRequest: product.priceOnRequest,
-        remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
-        source: 'product',
-      },
-    ]);
-    setPickerSection(null);
-    setQuery('');
+    if (pickerTargetRowId) {
+      setRows((current) => current.map((row) =>
+        row.id === pickerTargetRowId
+          ? {
+              ...row,
+              name: product.name,
+              unit: product.priceOnRequest ? '式' : '台',
+              sale: product.price,
+              manualSale: true,
+              priceOnRequest: product.priceOnRequest,
+              remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
+              source: 'product',
+            }
+          : row
+      ));
+    } else {
+      setRows((current) => [
+        ...current,
+        {
+          id: makeId(),
+          section: pickerSection,
+          name: product.name,
+          quantity: 1,
+          unit: product.priceOnRequest ? '式' : '台',
+          cost: 0,
+          sale: product.price,
+          manualSale: true,
+          priceOnRequest: product.priceOnRequest,
+          remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
+          source: 'product',
+        },
+      ]);
+    }
+    closeProductPicker();
     markDirty();
   };
 
@@ -426,39 +455,41 @@ export function EstimateTemplateExcelDemo() {
                 const sectionSummary = sectionTotals.get(section)!;
                 return (
                   <Fragment key={section}>
-                    <tr className="border-b border-slate-300 bg-emerald-900 text-white">
-                      <th className="bg-slate-100"></th>
-                      <td className="px-1 text-center">
-                        <button
-                          type="button"
-                          className="size-6 rounded border border-white/60 bg-white text-slate-800"
-                          aria-label={isCollapsed ? section + 'を展開' : section + 'を折り畳む'}
-                          onClick={() => toggleSection(section)}
-                        >
-                          {isCollapsed ? '+' : '−'}
-                        </button>
-                      </td>
-                      <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">
-                        {section}
-                        {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスターから読込・この見積内で編集可）</span>}
-                      </td>
-                      <td colSpan={4} className="px-3 text-right text-xs">
-                        {section === '別途' && sectionSummary.onRequest > 0
-                          ? `別途見積 ${sectionSummary.onRequest}件`
-                          : `原価 ${formatYen(sectionSummary.cost)} ／ 売価 ${formatYen(sectionSummary.sale)} ／ 粗利 ${formatYen(sectionSummary.profit)}`}
-                      </td>
-                      <td className="px-2 text-center">
-                        {section !== '本体' && (
+                    {!isCollapsed && (
+                      <tr className="border-b border-slate-300 bg-emerald-900 text-white">
+                        <th className="bg-slate-100"></th>
+                        <td className="px-1 text-center">
                           <button
                             type="button"
-                            className="text-[11px] underline"
-                            onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
+                            className="size-6 rounded border border-white/60 bg-white text-slate-800"
+                            aria-label={section + 'を折り畳む'}
+                            onClick={() => toggleSection(section)}
                           >
-                            商品追加
+                            −
                           </button>
-                        )}
-                      </td>
-                    </tr>
+                        </td>
+                        <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">
+                          {section}
+                          {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体マスターから読込・この見積内で編集可）</span>}
+                        </td>
+                        <td colSpan={4} className="px-3 text-right text-xs">
+                          {section === '別途' && sectionSummary.onRequest > 0
+                            ? `別途見積 ${sectionSummary.onRequest}件`
+                            : `原価 ${formatYen(sectionSummary.cost)} ／ 売価 ${formatYen(sectionSummary.sale)} ／ 粗利 ${formatYen(sectionSummary.profit)}`}
+                        </td>
+                        <td className="px-2 text-center">
+                          {section !== '本体' && (
+                            <button
+                              type="button"
+                              className="text-[11px] underline"
+                              onClick={() => openProductPicker(section as Exclude<Section, '本体'>)}
+                            >
+                              商品追加
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )}
 
                     {!isCollapsed && sectionRows.map((row) => {
                       rowCounter += 1;
@@ -550,11 +581,11 @@ export function EstimateTemplateExcelDemo() {
                             {section !== '本体' && (
                               <button
                                 type="button"
-                                title="商品マスターから選択"
-                                className="rounded px-1 text-xs font-semibold text-emerald-800"
-                                onClick={() => setPickerSection(section as Exclude<Section, '本体'>)}
+                                title="既存の商品から選択"
+                                className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-100"
+                                onClick={() => openProductPicker(section as Exclude<Section, '本体'>, row.id)}
                               >
-                                …
+                                商品から選ぶ
                               </button>
                             )}
                             {section !== '本体' && (
@@ -575,9 +606,27 @@ export function EstimateTemplateExcelDemo() {
                       );
                     })}
 
-                    <tr className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold">
+                    <tr
+                      className={`border-y-2 border-emerald-800 bg-emerald-50 font-semibold ${isCollapsed ? 'cursor-pointer hover:bg-emerald-100/70' : ''}`}
+                      data-testid={`estimate-demo-section-total-${section}`}
+                      onClick={isCollapsed ? () => toggleSection(section) : undefined}
+                    >
                       <th className="bg-slate-100"></th>
-                      <td></td>
+                      <td className="px-1 text-center">
+                        {isCollapsed && (
+                          <button
+                            type="button"
+                            className="size-6 rounded border border-emerald-300 bg-white text-slate-800"
+                            aria-label={section + 'を展開'}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleSection(section);
+                            }}
+                          >
+                            +
+                          </button>
+                        )}
+                      </td>
                       <td className="px-3 py-1">{section} 計</td>
                       <td></td><td></td>
                       <td className="px-3 text-right tabular-nums">{formatYen(sectionSummary.cost)}</td>
@@ -587,9 +636,11 @@ export function EstimateTemplateExcelDemo() {
                       <td className="px-3 text-right tabular-nums">{section === '別途' && sectionSummary.onRequest ? '—' : formatYen(sectionSummary.profit)}</td>
                       <td></td>
                       <td className="px-2 text-right">
-                        <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section)}>
-                          ＋明細
-                        </button>
+                        {!isCollapsed && (
+                          <button type="button" className="text-[11px] text-emerald-800 underline" onClick={() => addFreeRow(section)}>
+                            ＋明細
+                          </button>
+                        )}
                       </td>
                     </tr>
                   </Fragment>
@@ -760,14 +811,18 @@ export function EstimateTemplateExcelDemo() {
       )}
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を追加">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="既存の商品から選択">
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">商品を追加</h2>
-                <p className="mt-1 text-xs text-slate-500">追加先：{pickerSection} ／ この一覧もDB非連動の確認用サンプルです。</p>
+                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '既存の商品から選択' : '商品を追加'}</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {pickerTargetRowId
+                    ? `選択した商品を現在の明細行へ反映します。区分：${pickerSection}`
+                    : `追加先：${pickerSection} ／ この一覧もDB非連動の確認用サンプルです。`}
+                </p>
               </div>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setPickerSection(null)}>閉じる</button>
+              <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
             <div className="space-y-4 p-5">
@@ -787,7 +842,9 @@ export function EstimateTemplateExcelDemo() {
                     <p className="mt-1 text-xs text-slate-500">{product.modelNo || '型番なし'}</p>
                     <p className="mt-3 text-sm font-semibold">{product.priceOnRequest ? '別途見積' : '追加金額 ' + formatYen(product.price)}</p>
                     <div className="mt-4 flex justify-end">
-                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>追加</button>
+                      <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>
+                        {pickerTargetRowId ? 'この商品を選ぶ' : '追加'}
+                      </button>
                     </div>
                   </article>
                 ))}

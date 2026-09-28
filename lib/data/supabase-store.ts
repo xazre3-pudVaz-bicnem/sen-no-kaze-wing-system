@@ -598,12 +598,13 @@ export class SupabaseStore implements DataStore {
     if (error) mapPgError(error);
     if (!data) return null;
     const quote = toQuote(data as Record<string, unknown>);
+    const staffScoped = actor.role === 'dealer' || actor.role === 'master_dealer';
     const [items, request, dealerRequestCurrent, document, profile] = await Promise.all([
       db.from('quote_items').select('*').eq('quote_id', id).order('sort_order'),
-      actor.role === 'dealer'
+      staffScoped
         ? Promise.resolve({ data: null, error: null })
         : db.from('quote_requests').select('*').eq('id', quote.quote_request_id).maybeSingle(),
-      actor.role === 'dealer'
+      staffScoped
         ? db.rpc('get_dealer_quote_request_current', { p_quote_id: id })
         : Promise.resolve({ data: null, error: null }),
       db.from('quote_documents').select('*').eq('quote_id', id).order('generated_at', { ascending: false }).limit(1).maybeSingle(),

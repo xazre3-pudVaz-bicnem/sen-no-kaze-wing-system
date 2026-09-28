@@ -14,7 +14,7 @@ export default async function AdminNewQuotePage() {
   return (
     <AdminPage
       title="対面・電話・紹介の案件受付"
-      lead="Web以外で受けた案件を登録し、概算見積を作成します。作成後はWeb経由の案件と同じ案件管理で進めます。"
+      lead="Web以外で受けた案件を登録し、空の見積Draftから明細編集を始めます。案件登録だけではRevision 1は発行しません。"
     >
       <BackLink href="/admin/quotes" label="案件一覧へ戻る" />
       <ManualQuoteForm

@@ -38,7 +38,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
   it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
     expect(demo).toContain('本体マスター自体は変更せず、この見積書内の明細を編集します。');
     expect(demo).toContain('本体マスターから読込・この見積内で編集可');
-    expect(demo).toContain('/admin/base-masters/demo');
+    expect(demo).not.toContain('/admin/base-masters/demo');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
     expect(demo).not.toContain("const readOnly = section === '本体'");
     expect(demo).not.toContain('本体マスター参照・読取専用');
@@ -69,7 +69,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('売価を再計算');
     expect(demo).toContain('aria-label="経費率"');
     expect(demo).toContain('aria-label="掛率"');
-    expect(demo).toContain('選択中');
+    expect(demo).not.toContain('選択中');
     expect(demo).not.toContain('売価倍率');
     expect(demo).not.toContain('売価諸費用');
   });
@@ -87,6 +87,14 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('下書きを破棄（接続後）');
     expect(demo).not.toContain('画面内でDraft保存');
     expect(demo).not.toContain('Draftの操作');
+  });
+
+  it('見積条件と重複する本体マスター案内・セル選択表示を明細上部から外す', () => {
+    expect(demo).not.toContain('本体マスターから読み込み済み：');
+    expect(demo).not.toContain('本体マスターの操作確認画面を開く');
+    expect(demo).not.toContain('セルを選択すると内容を表示します');
+    expect(demo).not.toContain('setSelectedCell');
+    expect(demo).not.toContain("import Link from 'next/link'");
   });
 
   it('表を従来よりコンパクトな横幅で表示する', () => {

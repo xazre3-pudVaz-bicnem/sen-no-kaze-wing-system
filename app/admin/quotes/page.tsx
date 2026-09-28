@@ -564,7 +564,6 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         <span>原価 <strong className="font-semibold text-muted">—</strong></span>
                         <span>利益 <strong className="font-semibold text-muted">—</strong></span>
                         <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
-                        <span>災害時供給 <strong className="rounded-full border border-[#ead6a9] bg-[#fff8e8] px-1.5 py-0.5 font-semibold text-[#8a5a20]">未登録</strong></span>
                       </div>
                     </td>
                   </tr>,

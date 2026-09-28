@@ -1,17 +1,16 @@
 -- =============================================================
 -- Generic Quote Draft / Revision foundation
 --
--- This migration is forward-compatible foundation work. Most changes are
--- additive, but quote_items.quantity is widened from integer to
--- numeric(14,4), which may rewrite/lock quote_items during migration
--- execution. It prepares the existing quote_requests -> quotes ->
--- quote_items lifecycle for a shared Draft / Revision flow used by both
--- Web and non-Web cases.
+-- This migration is forward-compatible foundation work. It prepares the
+-- existing quote_requests -> quotes -> quote_items lifecycle for a shared
+-- Draft / Revision flow used by both Web and non-Web cases.
 --
 -- IMPORTANT:
 -- - No RPC is added or replaced here.
--- - Existing quote rows/items are not backfilled or semantically rewritten;
---   the quantity type widening preserves existing integer values exactly.
+-- - Existing quote rows/items are not backfilled or semantically rewritten.
+-- - quote_items.quantity is intentionally left as the existing unconstrained
+--   numeric type so historical issued snapshots are never rounded by this
+--   foundation migration.
 -- - Existing Quote lifecycle behavior is unchanged in this migration.
 -- - Draft tables are intentionally closed to ordinary roles until the
 --   follow-up Draft RPC / RLS policies are introduced.
@@ -94,8 +93,6 @@ $quote_guard$;
 -- need a data rewrite. A later lifecycle migration will backfill and enforce
 -- Revision-level identity before relying on it.
 alter table public.quote_items
-  alter column quantity type numeric(14, 4)
-    using quantity::numeric(14, 4),
   add column if not exists line_key uuid,
   add column if not exists option_id uuid references public.options(id) on delete restrict;
 

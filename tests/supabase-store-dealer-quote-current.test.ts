@@ -75,8 +75,21 @@ describe('SupabaseStore dealer current-quote compatibility', () => {
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 
-  it('does not use the dealer metadata RPC for customer, admin, or master dealer reads', async () => {
-    for (const role of ['customer', 'admin', 'master_dealer'] as const) {
+  it('uses the restricted request metadata RPC for dealer and master dealer reads', async () => {
+    for (const role of ['dealer', 'master_dealer'] as const) {
+      const { rpc } = configureDb({ data: null, error: { code: 'PGRST202' } });
+
+      const detail = await new SupabaseStore().getQuote(quote.id, {
+        id: role, email: `${role}@example.test`, role, full_name: role,
+      });
+
+      expect(detail?.request).toBeNull();
+      expect(rpc).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('keeps direct QuoteRequest reads for the customer and admin paths only', async () => {
+    for (const role of ['customer', 'admin'] as const) {
       const { rpc } = configureDb({ data: null, error: { code: 'PGRST202' } });
 
       const detail = await new SupabaseStore().getQuote(quote.id, {

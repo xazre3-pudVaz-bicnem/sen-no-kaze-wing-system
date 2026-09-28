@@ -1,28 +1,21 @@
 import Link from 'next/link';
-import { requireAdmin } from '@/lib/auth/session';
-import { getStore } from '@/lib/data/store';
-import {
-  buildCustomerManagementView,
-  customerCaseHref,
-  customerCaseLabel,
-  type CustomerCaseView,
-} from '@/lib/domain/customer-management';
+import { requireStaff } from '@/lib/auth/session';
+import { getStore, type AccessibleUnlinkedCustomerCase } from '@/lib/data/store';
 import { formatDate } from '@/lib/utils';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { Badge, Button, Input } from '@/components/ui';
 
-function unlinkedReason(customerCase: CustomerCaseView): string {
-  if (customerCase.identityIssue === 'inconsistent_user_id') return '顧客情報の確認が必要';
-  if (customerCase.identityIssue === 'non_customer_profile') return '顧客アカウント未確定';
+function unlinkedReason(customerCase: AccessibleUnlinkedCustomerCase): string {
+  if (customerCase.identity_issue === 'inconsistent_user_id') return '顧客情報の確認が必要';
+  if (customerCase.identity_issue === 'non_customer_profile') return '顧客アカウント未確定';
   return '顧客アカウント未確認';
 }
 
-function unlinkedDisplayName(customerCase: CustomerCaseView): string {
-  return customerCase.contact?.full_name || customerCase.latestQuote?.customer_name || '顧客名未登録';
-}
-
-function unlinkedCompanyName(customerCase: CustomerCaseView): string | null {
-  return customerCase.contact?.company_name || customerCase.latestQuote?.customer_company || null;
+function caseHref(caseId: string, openQuoteId: string | null): string {
+  if (openQuoteId) {
+    return `/admin/quotes?case=${encodeURIComponent(openQuoteId)}#case-workspace`;
+  }
+  return `/admin/quotes?request=${encodeURIComponent(caseId)}#pending-quote-request`;
 }
 
 export default async function AdminCustomerManagementPage({
@@ -30,30 +23,24 @@ export default async function AdminCustomerManagementPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireAdmin('/admin/customer-management');
+  const actor = await requireStaff('/admin/customer-management');
   const sp = await searchParams;
   const store = await getStore();
-  const [profiles, quotes, requests, configurations] = await Promise.all([
-    store.listProfiles(),
-    store.listAllQuotes(),
-    store.listQuoteRequests(),
-    store.listAllConfigurations(),
-  ]);
+  const view = await store.listAccessibleCustomers(actor);
 
-  const view = buildCustomerManagementView({ profiles, quotes, requests, configurations });
   const query = (sp.q ?? '').trim().toLocaleLowerCase('ja-JP');
   const shown = view.customers.filter((customer) => {
     if (!query) return true;
-    const recent = customer.recentCase;
+    const recent = customer.recent_case;
     return [
-      customer.profile.full_name,
-      customer.profile.company_name,
-      customer.profile.email,
-      customer.profile.phone,
-      customer.profile.address,
-      recent?.siteAddress,
-      recent?.latestQuote?.quote_no,
-      recent?.latestQuote?.base_model_name,
+      customer.full_name,
+      customer.company_name,
+      customer.email,
+      customer.phone,
+      customer.address,
+      recent?.site_address,
+      recent?.quote_no,
+      recent?.model_name,
     ]
       .filter(Boolean)
       .some((value) => String(value).toLocaleLowerCase('ja-JP').includes(query));
@@ -62,13 +49,13 @@ export default async function AdminCustomerManagementPage({
   return (
     <AdminPage
       title="顧客管理"
-      lead="顧客を探し、案件・見積・設置予定地を確認するための参照画面です。"
+      lead="参照できる顧客を探し、案件・見積・設置予定地を確認するための画面です。"
       notice={
         <div className="space-y-1">
           <p className="font-semibold text-ink">現在は参照専用です。</p>
           <p>
-            登録されている顧客情報と、案件受付時の情報を確認できます。ここでは情報の編集・統合は行いません。
-            同姓同名やメールアドレスの一致だけで、自動的に同じ顧客としてまとめることもありません。
+            本部は全顧客を参照し、総代理店・代理店は自分が担当する案件に関係する顧客だけを参照します。
+            ここでは情報の編集・統合は行いません。同姓同名やメールアドレスの一致だけで自動的に同じ顧客としてまとめることもありません。
           </p>
         </div>
       }
@@ -77,7 +64,7 @@ export default async function AdminCustomerManagementPage({
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ink-soft">
-              顧客名・法人名・連絡先・住所・案件名で検索
+              顧客名・法人名・連絡先・住所・案件情報で検索
             </span>
             <Input
               name="q"
@@ -96,19 +83,15 @@ export default async function AdminCustomerManagementPage({
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3 text-xs text-muted">
-          <span>顧客アカウント {view.customers.length} 名</span>
+          <span>参照可能な顧客 {view.customers.length} 名</span>
           <span>表示 {shown.length} 名</span>
         </div>
       </form>
 
       <section className="space-y-2" aria-labelledby="customer-list-heading">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 id="customer-list-heading" className="text-lg font-semibold">顧客一覧</h2>
-            <p className="mt-1 text-xs text-muted">
-              顧客ごとに、連絡先と現在の案件状況を確認できます。
-            </p>
-          </div>
+        <div>
+          <h2 id="customer-list-heading" className="text-lg font-semibold">顧客一覧</h2>
+          <p className="mt-1 text-xs text-muted">顧客ごとに、連絡先と参照可能な案件状況を確認できます。</p>
         </div>
 
         <Table minWidth="58rem">
@@ -130,41 +113,39 @@ export default async function AdminCustomerManagementPage({
               </tr>
             ) : (
               shown.map((customer) => {
-                const recent = customer.recentCase;
+                const recent = customer.recent_case;
                 return (
-                  <tr key={customer.profile.id} data-testid="customer-management-row">
+                  <tr key={customer.id} data-testid="customer-management-row">
                     <Td>
-                      <p className="font-semibold">{customer.profile.full_name || '氏名未登録'}</p>
-                      <p className="mt-1 text-xs text-muted">{customer.profile.company_name ?? '法人名なし'}</p>
-                      {customer.profile.customer_no && (
-                        <p className="mt-1 text-[0.68rem] text-muted">顧客番号 {customer.profile.customer_no}</p>
+                      <p className="font-semibold">{customer.full_name || '氏名未登録'}</p>
+                      <p className="mt-1 text-xs text-muted">{customer.company_name ?? '法人名なし'}</p>
+                      {customer.customer_no && (
+                        <p className="mt-1 text-[0.68rem] text-muted">顧客番号 {customer.customer_no}</p>
                       )}
                     </Td>
                     <Td className="max-w-64 text-xs">
-                      <span className="block">{customer.profile.email || 'メール未登録'}</span>
-                      <span className="mt-1 block text-muted">{customer.profile.phone ?? '電話未登録'}</span>
-                      <span className="mt-1 block text-muted">{customer.profile.address ?? '住所未登録'}</span>
+                      <span className="block">{customer.email || 'メール未登録'}</span>
+                      <span className="mt-1 block text-muted">{customer.phone ?? '電話未登録'}</span>
+                      <span className="mt-1 block text-muted">{customer.address ?? '住所未登録'}</span>
                     </Td>
                     <Td>
-                      <span className="text-lg font-semibold tabular-nums">{customer.ongoingCases.length}</span>
+                      <span className="text-lg font-semibold tabular-nums">{customer.ongoing_case_count}</span>
                       <span className="ml-1 text-xs text-muted">件</span>
                     </Td>
                     <Td className="text-xs">
                       {recent ? (
                         <div className="space-y-1">
                           <Link
-                            href={customerCaseHref(recent)}
+                            href={caseHref(recent.id, recent.open_quote_id)}
                             className="font-semibold text-ink underline-offset-4 hover:underline"
                           >
-                            {customerCaseLabel(recent)}
+                            {recent.quote_no ?? '見積未発行'}
                           </Link>
-                          <p>{recent.latestQuote?.base_model_name ?? '見積未発行'}</p>
+                          <p>{recent.model_name ?? '商品モデル未登録'}</p>
                           <p className="text-muted">
-                            {recent.siteAddress ?? '設置予定地未登録'}／{formatDate(recent.activityAt)}
+                            {recent.site_address ?? '設置予定地未登録'}／{formatDate(recent.activity_at)}
                           </p>
-                          <p className="text-muted">
-                            担当：{recent.dealer?.full_name ?? '未割り当て'}
-                          </p>
+                          <p className="text-muted">担当：{recent.dealer_name ?? '未割り当て'}</p>
                         </div>
                       ) : (
                         <span className="text-muted">案件なし</span>
@@ -172,7 +153,7 @@ export default async function AdminCustomerManagementPage({
                     </Td>
                     <Td>
                       <Link
-                        href={`/admin/customer-management/${encodeURIComponent(customer.profile.id)}`}
+                        href={`/admin/customer-management/${encodeURIComponent(customer.id)}`}
                         className="btn-secondary btn-sm"
                       >
                         顧客を見る
@@ -190,17 +171,17 @@ export default async function AdminCustomerManagementPage({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 id="unlinked-cases-heading" className="text-lg font-semibold">顧客未紐付け案件</h2>
-            <Badge tone={view.unlinkedCases.length > 0 ? 'warn' : 'neutral'}>
-              {view.unlinkedCases.length} 件
+            <Badge tone={view.unlinked_cases.length > 0 ? 'warn' : 'neutral'}>
+              {view.unlinked_cases.length} 件
             </Badge>
           </div>
           <p className="mt-1 max-w-4xl text-xs leading-5 text-muted">
-            顧客アカウントとの紐付けを確認できていない案件です。
-            同姓同名や会社名・メールアドレスの一致だけでは自動的に顧客へ統合せず、案件として個別に残しています。
+            参照可能な案件のうち、顧客アカウントとの紐付けを確認できていない案件です。
+            同姓同名や会社名・メールアドレスの一致だけでは自動的に顧客へ統合しません。
           </p>
         </div>
 
-        {view.unlinkedCases.length > 0 ? (
+        {view.unlinked_cases.length > 0 ? (
           <Table minWidth="48rem">
             <thead className="bg-[#fff8e8]">
               <tr>
@@ -212,25 +193,30 @@ export default async function AdminCustomerManagementPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {view.unlinkedCases.map((customerCase) => (
+              {view.unlinked_cases.map((customerCase) => (
                 <tr key={customerCase.id} data-testid="unlinked-customer-case-row">
                   <Td>
-                    <p className="font-semibold">{unlinkedDisplayName(customerCase)}</p>
-                    <p className="mt-1 text-xs text-muted">{unlinkedCompanyName(customerCase) ?? '法人名なし'}</p>
+                    <p className="font-semibold">{customerCase.full_name}</p>
+                    <p className="mt-1 text-xs text-muted">{customerCase.company_name ?? '法人名なし'}</p>
                   </Td>
                   <Td className="text-xs">
                     <Badge tone="warn">{unlinkedReason(customerCase)}</Badge>
                   </Td>
                   <Td className="text-xs">
-                    <span className="block font-semibold">{customerCaseLabel(customerCase)}</span>
+                    <span className="block font-semibold">{customerCase.quote_no ?? '見積未発行'}</span>
                     <span className="mt-1 block text-muted">
-                      {customerCase.latestQuote?.base_model_name ?? '見積未発行'}／{formatDate(customerCase.activityAt)}
+                      {customerCase.model_name ?? '商品モデル未登録'}／{formatDate(customerCase.activity_at)}
                     </span>
-                    <span className="mt-1 block text-muted">設置予定地：{customerCase.siteAddress ?? '未登録'}</span>
+                    <span className="mt-1 block text-muted">
+                      設置予定地：{customerCase.site_address ?? '未登録'}
+                    </span>
                   </Td>
-                  <Td className="text-xs">{customerCase.dealer?.full_name ?? '未割り当て'}</Td>
+                  <Td className="text-xs">{customerCase.dealer_name ?? '未割り当て'}</Td>
                   <Td>
-                    <Link href={customerCaseHref(customerCase)} className="btn-secondary btn-sm">
+                    <Link
+                      href={caseHref(customerCase.id, customerCase.open_quote_id)}
+                      className="btn-secondary btn-sm"
+                    >
                       案件を見る
                     </Link>
                   </Td>
@@ -239,7 +225,7 @@ export default async function AdminCustomerManagementPage({
             </tbody>
           </Table>
         ) : (
-          <div className="card p-4 text-sm text-muted">現在、顧客未紐付けとして分離される案件はありません。</div>
+          <div className="card p-4 text-sm text-muted">現在、参照可能な顧客未紐付け案件はありません。</div>
         )}
       </section>
     </AdminPage>

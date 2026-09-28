@@ -49,7 +49,7 @@ const sections: NavSection[] = [
 ];
 
 const utilityLinks: NavUtilityLink[] = [
-  { href: '/admin/customer-management', label: '顧客管理', need: 'admin' },
+  { href: '/admin/customer-management', label: '顧客管理' },
   { href: '/admin/contacts', label: '問い合わせ', need: 'admin' },
 ];
 

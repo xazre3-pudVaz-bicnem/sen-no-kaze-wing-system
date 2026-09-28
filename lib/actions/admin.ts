@@ -23,6 +23,7 @@ import {
   assignDealerSchema,
   dealerRevisionSchema,
   manualQuoteSchema,
+  quoteRevisionDraftSchema,
   quoteDraftSaveSchema,
   quoteDraftFinalizeSchema,
   baseBreakdownSchema,
@@ -1161,6 +1162,26 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
   redirect(`/admin/quotes/drafts/${draftId}?created=1`);
 }
 
+export async function createQuoteRevisionDraftAction(
+  _prev: AdminFormState,
+  formData: FormData
+): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const parsed = quoteRevisionDraftSchema.safeParse({ quote_id: formData.get('quote_id') });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+
+  let draftId: string;
+  try {
+    const store = await getStore();
+    const draft = await store.createQuoteRevisionDraft(parsed.data.quote_id, actor);
+    draftId = draft.id;
+  } catch (e) {
+    return errState(e);
+  }
+
+  redirect(`/admin/quotes/drafts/${draftId}?revisionDraft=1`);
+}
+
 export interface QuoteDraftFormState extends AdminFormState {
   savedVersion?: number;
 }
@@ -1224,6 +1245,7 @@ export async function finalizeQuoteDraftAction(
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
   let quoteId: string;
+  let quoteRevision: number;
   try {
     const store = await getStore();
     const quote = await store.finalizeQuoteDraft(
@@ -1232,13 +1254,14 @@ export async function finalizeQuoteDraftAction(
       actor
     );
     quoteId = quote.id;
+    quoteRevision = quote.revision;
     revalidatePath('/admin/quotes');
     revalidatePath(`/admin/quotes/${quoteId}`);
   } catch (e) {
     return errState(e);
   }
 
-  redirect(`/admin/quotes/${quoteId}?created=1&revision=1`);
+  redirect(`/admin/quotes/${quoteId}?created=1&revision=${encodeURIComponent(String(quoteRevision))}`);
 }
 
 /* ---------------- 標準見積テンプレート ---------------- */

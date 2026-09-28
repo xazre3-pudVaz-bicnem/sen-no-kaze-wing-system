@@ -79,6 +79,8 @@ describe('見積テンプレート管理UI', () => {
     expect(listPage).not.toContain('保存されない画面確認用データ');
     expect(listPage).toContain('const sampleGroup = sampleModel?.id === group.model.id;');
     expect(listPage).toContain('＋確認用1件');
+    expect(listPage).toContain('const sampleVisible = Boolean(sampleModel && groups.some');
+    expect(listPage).toContain('sampleVisible && (');
     expect(listPage).toContain('sampleSelected && sampleGroup');
     expect(listPage).toContain('<Badge tone="success">登録済み</Badge>');
     expect(listPage).toContain('<Badge tone="neutral">未登録</Badge>');

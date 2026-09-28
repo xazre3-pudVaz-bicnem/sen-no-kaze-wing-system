@@ -25,6 +25,8 @@ import type {
   QuoteDocument,
   CaseDocument,
   QuoteItem,
+  QuoteDraft,
+  QuoteDraftItem,
   QuoteRequest,
   QuoteRequestStatus,
   ContactMessage,
@@ -56,6 +58,9 @@ import {
   type SessionUser,
   type UploadInput,
   type DealerRevisionInput,
+  type ManualQuoteDraftInput,
+  type QuoteDraftDetail,
+  type QuoteDraftSaveInput,
   type CatalogImportBatch,
   type EstimateTemplateImportInput,
 } from './store';
@@ -537,6 +542,94 @@ export class SupabaseStore implements DataStore {
   }
 
   // ---------- 見積 ----------
+  async createManualQuoteDraft(_actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_manual_quote_case', {
+      p_contact: {
+        full_name: input.customer_name,
+        company_name: input.customer_company,
+        email: '',
+        phone: '',
+        address: '',
+        site_address: input.site_address,
+      },
+      p_message: input.memo,
+      p_base_model_id: input.base_model_id,
+      p_spec_code: input.spec_code,
+      p_finish_level: input.finish_level,
+    });
+    if (error) mapPgError(error);
+    const detail = await this.getQuoteDraft(data as string, _actor);
+    if (!detail) throw new StoreError('INTERNAL', '作成したDraftを取得できませんでした');
+    return detail.draft;
+  }
+
+  async getQuoteDraft(id: string, _actor: SessionUser): Promise<QuoteDraftDetail | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_quote_draft', { p_draft_id: id });
+    if (error) mapPgError(error);
+    if (!data) return null;
+    const payload = data as {
+      draft: QuoteDraft;
+      items: QuoteDraftItem[];
+      request: QuoteDraftDetail['request'];
+      base_revisions: QuoteDraftDetail['baseRevisions'];
+    };
+    return {
+      draft: {
+        ...payload.draft,
+        tax_rate: num(payload.draft.tax_rate),
+        adjustment: num(payload.draft.adjustment),
+        subtotal_raw: num(payload.draft.subtotal_raw),
+        subtotal: num(payload.draft.subtotal),
+        tax: num(payload.draft.tax),
+        total: num(payload.draft.total),
+        lock_version: num(payload.draft.lock_version),
+      },
+      items: (payload.items ?? []).map((item) => ({
+        ...item,
+        unit_price: num(item.unit_price),
+        quantity: num(item.quantity),
+        amount: num(item.amount),
+        sort_order: num(item.sort_order),
+      })),
+      request: payload.request,
+      baseRevisions: (payload.base_revisions ?? []).map((revision) => ({
+        ...revision,
+        version: num(revision.version),
+        total: num(revision.total),
+      })),
+    };
+  }
+
+  async saveQuoteDraft(id: string, input: QuoteDraftSaveInput, _actor: SessionUser): Promise<number> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('save_quote_draft', {
+      p_draft_id: id,
+      p_expected_lock_version: input.expected_lock_version,
+      p_base_master_revision_id: input.base_master_revision_id,
+      p_items: input.items,
+      p_adjustment: input.adjustment,
+      p_adjustment_reason: input.adjustment_reason,
+      p_dealer_note: input.dealer_note,
+      p_notes: input.notes,
+    });
+    if (error) mapPgError(error);
+    return num(data);
+  }
+
+  async finalizeQuoteDraft(id: string, expectedLockVersion: number, _actor: SessionUser): Promise<Quote> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('finalize_quote_draft', {
+      p_draft_id: id,
+      p_expected_lock_version: expectedLockVersion,
+    });
+    if (error) mapPgError(error);
+    const { data: quote, error: quoteError } = await db.from('quotes').select('*').eq('id', data as string).single();
+    if (quoteError) mapPgError(quoteError);
+    return toQuote(quote as Record<string, unknown>);
+  }
+
   async createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null) {
     const db = await this.db();
     const { data, error } = await db.rpc('create_quote_from_configuration', {
@@ -558,7 +651,9 @@ export class SupabaseStore implements DataStore {
   async listQuotesByConfiguration(userId: string) {
     const list = await this.listQuotes(userId);
     const map = new Map<string, Quote>();
-    for (const q of list) if (!map.has(q.configuration_id)) map.set(q.configuration_id, q);
+    for (const q of list) {
+      if (q.configuration_id && !map.has(q.configuration_id)) map.set(q.configuration_id, q);
+    }
     return map;
   }
   async getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null> {
@@ -576,7 +671,9 @@ export class SupabaseStore implements DataStore {
         ? db.rpc('get_dealer_quote_request_current', { p_quote_id: id })
         : Promise.resolve({ data: null, error: null }),
       db.from('quote_documents').select('*').eq('quote_id', id).order('generated_at', { ascending: false }).limit(1).maybeSingle(),
-      actor.role === 'admin' ? db.from('profiles').select('*').eq('id', quote.user_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      actor.role === 'admin' && quote.user_id
+        ? db.from('profiles').select('*').eq('id', quote.user_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
     if (items.error) mapPgError(items.error);
     const dealerRequest = dealerQuoteRequestFromRpcResult(quote, {

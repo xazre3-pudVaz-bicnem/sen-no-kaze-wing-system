@@ -141,14 +141,22 @@ describe('Admin case management UI', () => {
     expect(list).toContain('工程・状態');
     expect(list).toContain('caseQuoteStatusLabel');
     expect(list).toContain('casePhaseLabel');
+    for (const phase of ['F5/15 見積依頼', 'F6/15 担当者決定', 'F7/15 現地確認', 'F8/15 正式見積', 'F9/15 見積後の判断', 'F10/15 契約']) {
+      expect(list).toContain(phase);
+    }
+    expect(list).toContain('全体フローのF5〜F15に対応');
     expect(list).toContain('概算見積 承諾履歴');
     expect(list).toContain('確定見積 承諾済み');
-    expect(list).toContain('現在工程：{casePhaseLabel');
+    expect(list).toContain('{casePhaseLabel(quote)}');
+    expect(list).toContain('{casePhaseLabel(q)}');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
     expect(list).toContain('>選択中</span>');
     expect(list).toContain('data-testid="case-row-meta"');
     expect(list).not.toContain('min-w-[56rem]');
     expect(list).toContain('colSpan={6}');
+    expect(list).toContain('px-2 py-1 align-middle');
+    expect(list).toContain('px-2 pb-0.5 pt-0');
+    expect(list).toContain('gap-x-3 gap-y-0.5 text-[0.59rem] leading-4');
     for (const label of ['棟数', '見積額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
       expect(list).toContain(label);
     }

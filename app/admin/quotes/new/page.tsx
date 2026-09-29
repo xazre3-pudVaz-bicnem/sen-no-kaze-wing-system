@@ -5,22 +5,25 @@ import { AdminPage } from '@/components/admin/ui';
 import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
 
 /**
- * 案件管理から直接開く、見積書作成の共通ワークスペース。
- * 案件情報を別画面で先に登録せず、Excel型明細と同じ画面で初回Draftを作る。
+ * 案件管理・見積書管理のどちらからでも開く、正式な見積編集ワークスペース。
+ * Quote Draft lifecycleは変更せず、案件情報とExcel型明細を同じ画面で扱う。
  */
 export default async function AdminNewQuotePage() {
   await requireAdmin('/admin/quotes/new');
   const store = await getStore();
-  const [models, quotes] = await Promise.all([
+  const [models, quotes, requests] = await Promise.all([
     store.listModels(),
     store.listAllQuotes(),
+    store.listQuoteRequests(),
   ]);
+  const requestById = new Map(requests.map((request) => [request.id, request] as const));
 
   const estimates = quotes
     .filter((quote) => quote.status !== 'superseded')
     .map((quote) => ({
       id: quote.id,
       quote_no: quote.quote_no,
+      case_name: requestById.get(quote.quote_request_id)?.case_name ?? null,
       customer_name: quote.customer_name,
       customer_company: quote.customer_company,
       base_model_name: quote.base_model_name,
@@ -32,8 +35,8 @@ export default async function AdminNewQuotePage() {
 
   return (
     <AdminPage
-      title="見積書を作成"
-      lead="下書き保存後に正式保存できます。"
+      title="見積書管理"
+      lead="見積書を作成"
     >
       <ManualQuoteWorkbench
         models={models.map((model) => ({

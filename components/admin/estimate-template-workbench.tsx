@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { Package } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
@@ -155,6 +155,18 @@ export function EstimateTemplateWorkbench({
   const [markupRate, setMarkupRate] = useState(150);
   const [localAdjustment, setLocalAdjustment] = useState(adjustment);
   const [collapsedSections, setCollapsedSections] = useState<Set<CollapsibleSection>>(() => new Set());
+
+  useEffect(() => {
+    if (!pickerSection) return;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setPickerSection(null);
+      setPickerTargetRowId(null);
+      setPickerCategoryId('');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pickerSection]);
   const rateSettingsDirty =
     salesExpenseRate !== 100 ||
     expenseRate !== 15 ||
@@ -396,19 +408,21 @@ export function EstimateTemplateWorkbench({
               value={row.name}
               data-estimate-grid-col="name"
               onKeyDown={handleGridKeyDown}
-              onDoubleClick={() => openProductPicker(row.section, row.id)}
+              onDoubleClick={row.section === 'sitework' ? undefined : () => openProductPicker(row.section, row.id)}
               onChange={(event) => updateRow(row.id, { name: event.target.value })}
               className="h-6 min-h-6 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
             />
-            <button
-              type="button"
-              title="商品台帳から選ぶ"
-              aria-label={row.name + 'を商品台帳から選び直す'}
-              className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700"
-              onClick={() => openProductPicker(row.section, row.id)}
-            >
-              <Package className="size-3.5" aria-hidden="true" />
-            </button>
+            {row.section !== 'sitework' && (
+              <button
+                type="button"
+                title="商品台帳から選ぶ"
+                aria-label={row.name + 'を商品台帳から選び直す'}
+                className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700"
+                onClick={() => openProductPicker(row.section, row.id)}
+              >
+                <Package className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
           </div>
         </td>
         <td className="w-16 border-r border-slate-200 bg-amber-50 px-0.5">
@@ -619,13 +633,15 @@ export function EstimateTemplateWorkbench({
             <span className="text-[11px] text-white/75">{rowCount}行</span>
             {editable && (
               <span className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="text-[11px] font-semibold underline underline-offset-2"
-                  onClick={() => openProductPicker(key as SectionCode)}
-                >
-                  ＋商品
-                </button>
+                {key !== 'sitework' && (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold underline underline-offset-2"
+                    onClick={() => openProductPicker(key as SectionCode)}
+                  >
+                    ＋商品
+                  </button>
+                )}
                 <button
                   type="button"
                   className="text-[11px] font-semibold underline underline-offset-2"
@@ -888,33 +904,31 @@ export function EstimateTemplateWorkbench({
       </section>
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を選択">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="商品を選択"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeProductPicker();
+          }}
+        >
           <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="shrink-0 flex items-center justify-between border-b border-line bg-white px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
-                <p className="mt-1 text-xs text-muted">
-                  {pickerTargetRowId
-                    ? '商品台帳の公開済み商品から選び、選択した明細行へ反映します。'
-                    : '商品台帳の公開済み商品から選択した区分へ追加します。'}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
-                    追加先：{pickerSectionLabel}
-                  </span>
-                </div>
-              </div>
+              <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
               <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
             <div className="shrink-0 border-b border-line px-5 py-3">
               <p className="text-[11px] text-muted">
-                「{pickerSectionLabel}」で選べる商品を表示しています。
+                {pickerTargetRowId
+                  ? `「${pickerSectionLabel}」で選べる商品です。選択すると現在の明細へ反映します。`
+                  : `「${pickerSectionLabel}」に追加できる商品です。選択すると明細へ追加します。`}
               </p>
 
               {pickerCategories.length > 1 && (
                 <div
-                  className="mt-3 flex gap-2 overflow-x-auto pb-1"
+                  className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-x-visible sm:pb-0"
                   role="tablist"
                   aria-label={pickerSectionLabel + 'の商品カテゴリー'}
                 >

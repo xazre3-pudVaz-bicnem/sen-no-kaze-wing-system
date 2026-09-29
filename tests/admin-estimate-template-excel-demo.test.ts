@@ -153,11 +153,12 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
   it('品名右側から商品台帳を開き、自由明細も商品へ置き換えられる', () => {
     expect(demo).toContain('title="商品台帳から選ぶ"');
-    expect(demo).toContain("section !== '本体'");
+    expect(demo).toContain("section !== '本体' && section !== '別途'");
     expect(demo).toContain('Package className="size-3.5"');
     expect(demo).toContain("openProductPicker(section, row.id)");
     expect(demo).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
-    expect(demo).toContain('商品台帳の公開済み商品から選び、現在の明細行へ反映します。');
+    expect(demo).toContain('で選べる商品です。選択すると現在の明細へ反映します。');
+    expect(demo).not.toContain('商品台帳の公開済み商品から選び、現在の明細行へ反映します。');
     expect(demo).not.toContain('detailProductId');
     expect(demo).not.toContain('商品詳細を表示');
   });
@@ -172,12 +173,24 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("const [pickerCategoryCode, setPickerCategoryCode] = useState('')");
     expect(demo).toContain('pickerCategories.length > 1');
     expect(demo).toContain('role="tablist"');
+    expect(demo).toContain('sm:flex-wrap sm:overflow-x-visible sm:pb-0');
     expect(demo).toContain("aria-selected={pickerCategoryCode === ''}");
     expect(demo).toContain('すべて');
     expect(demo).toContain('onClick={() => setPickerCategoryCode(code)}');
     expect(demo).toContain('grid gap-3 sm:grid-cols-2');
     expect(demo).toContain('{visiblePickerProducts.map((product) => (');
     expect(demo).toContain('この区分で選べる商品はまだありません。');
+  });
+
+  it('商品台帳ポップアップは枠外クリックとEscでキャンセルできる', () => {
+    expect(demo).toContain("if (event.key !== 'Escape') return;");
+    expect(demo).toContain("window.addEventListener('keydown', handleKeyDown)");
+    expect(demo).toContain('if (event.target === event.currentTarget) closeProductPicker();');
+  });
+
+  it('別途では商品台帳ポップアップを開く導線を出さない', () => {
+    expect(demo).toContain("section !== '本体' && section !== '別途'");
+    expect(demo).toContain("section !== '本体' && section !== '別途' && (");
   });
 
   it('親画面から渡された公開済み商品台帳を優先して表示する', () => {

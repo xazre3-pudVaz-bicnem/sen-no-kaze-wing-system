@@ -153,7 +153,9 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
   it('品名右側から商品台帳を開き、自由明細も商品へ置き換えられる', () => {
     expect(demo).toContain('title="商品台帳から選ぶ"');
-    expect(demo).toContain("openProductPicker(section as Exclude<Section, '本体'>, row.id)");
+    expect(demo).toContain("section !== '本体'");
+    expect(demo).toContain('Package className="size-3.5"');
+    expect(demo).toContain("openProductPicker(section, row.id)");
     expect(demo).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
     expect(demo).toContain('商品台帳の公開済み商品から選び、現在の明細行へ反映します。');
     expect(demo).not.toContain('detailProductId');
@@ -162,6 +164,14 @@ describe('見積書作成 Excel風操作確認画面', () => {
 
   it('見積書タブ直下の説明文は表示しない', () => {
     expect(demo).not.toContain('見積書を編集し、同じ内容をプランボード・図面にも反映します。');
+  });
+
+  it('商品台帳ポップアップは検索を置かず、対象区分の商品を直接比較する', () => {
+    expect(demo).not.toContain('type="search"');
+    expect(demo).not.toContain('メーカー・商品名・型番で検索');
+    expect(demo).toContain('grid gap-3 sm:grid-cols-2');
+    expect(demo).toContain('{pickerProducts.map((product) => (');
+    expect(demo).toContain('この区分で選べる商品はまだありません。');
   });
 
   it('親画面から渡された公開済み商品台帳を優先して表示する', () => {

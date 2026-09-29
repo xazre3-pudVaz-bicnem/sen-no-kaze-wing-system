@@ -218,6 +218,14 @@ export interface ManualQuoteDraftInput {
   memo: string | null;
 }
 
+export interface ManualQuoteWorkbenchInput extends ManualQuoteDraftInput {
+  case_name: string | null;
+  base_master_revision_id: string | null;
+  items: QuoteDraftSaveItem[];
+  adjustment: number;
+  adjustment_reason: string | null;
+}
+
 export interface QuoteDraftSaveItem {
   line_key?: string | null;
   kind: QuoteItemKind;
@@ -385,6 +393,8 @@ export interface DataStore {
   // ---- 見積 ----
   /** 非Web案件を登録し、Quoteを発行せず空Draftを作る */
   createManualQuoteDraft(actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft>;
+  /** 案件情報と初期明細を1 transactionで保存し、Quoteを発行せずDraftを作る */
+  createManualQuoteDraftWithItems(actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft>;
   /** 現在の非Web formal Revisionを親に、編集用Draftを作成または再開する */
   createQuoteRevisionDraft(id: string, actor: SessionUser): Promise<QuoteDraft>;
   /** RLSを迂回せずSECURITY DEFINER RPCの権限境界でDraftを読む */

@@ -96,7 +96,7 @@ describe('Admin case management UI', () => {
     expect(shell).toContain('href="/admin/notifications"');
     expect(shell).toContain('aria-label="お知らせ"');
     expect(nav).toContain("href: '/admin/customer-management'");
-    expect(nav).toContain("href: '/admin/contacts'");
+    expect(nav).not.toContain("href: '/admin/contacts'");
   });
 
   it('uses one case flow for Web and staff-received orders without calling revisions new quotes', () => {

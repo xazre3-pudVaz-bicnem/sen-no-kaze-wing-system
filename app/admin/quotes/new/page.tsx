@@ -1,7 +1,7 @@
 import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
-import { AdminPage, BackLink } from '@/components/admin/ui';
+import { AdminPage } from '@/components/admin/ui';
 import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
 
 /**
@@ -35,7 +35,6 @@ export default async function AdminNewQuotePage() {
       title="見積書を作成"
       lead="案件情報と見積明細を同じ画面で入力します。下書き保存までは正式な見積Revisionを発行しません。"
     >
-      <BackLink href="/admin/quotes" label="案件管理へ戻る" />
       <ManualQuoteWorkbench
         models={models.map((model) => ({
           id: model.id,

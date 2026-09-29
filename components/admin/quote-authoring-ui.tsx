@@ -230,6 +230,17 @@ export function QuoteAuthoringGrid({
     });
   };
 
+  const rowNumberByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    let number = 0;
+    for (const section of SECTION_META) {
+      for (const row of rows) {
+        if (sectionForKind(row.kind) === section.key) map.set(row.key, ++number);
+      }
+    }
+    return map;
+  }, [rows]);
+
   const handleGridKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
     const col = event.currentTarget.dataset.quoteGridCol;
@@ -246,8 +257,6 @@ export function QuoteAuthoringGrid({
     target.focus();
     target.select();
   };
-
-  let rowNo = 0;
 
   return (
     <section className="overflow-hidden bg-white" data-testid="unified-quote-excel-grid">
@@ -281,10 +290,9 @@ export function QuoteAuthoringGrid({
               const isCollapsed = collapsed.has(section.key);
               const sectionSale = currentRows.reduce((sum, row) => sum + row.amount, 0);
               const separate = currentRows.some((row) => row.unitPrice === 0 && row.remark?.trim() === '別途見積');
-              const collapsedAmount = section.key === 'installation' && separate
-                ? '別途見積'
-                : formatYen(sectionSale);
-              const summaryRemark = separate
+              const hasSeparatePrice = section.key === 'installation' && separate;
+              const collapsedAmount = hasSeparatePrice ? '別途見積' : formatYen(sectionSale);
+              const summaryRemark = hasSeparatePrice
                 ? `${currentRows.length}行 ／ 別途見積を含む`
                 : `${currentRows.length}行の明細を集約`;
 
@@ -367,8 +375,7 @@ export function QuoteAuthoringGrid({
                   </tr>
 
                   {currentRows.map((row) => {
-                    rowNo += 1;
-                    const number = rowNo;
+                    const number = rowNumberByKey.get(row.key) ?? 0;
                     const detailLabel = KIND_DETAIL_LABELS[row.kind];
                     const separatePrice = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
                     const editCellClass = row.locked ? 'bg-slate-100' : 'bg-amber-50';

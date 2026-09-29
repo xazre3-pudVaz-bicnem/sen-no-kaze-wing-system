@@ -41,6 +41,10 @@ function sampleEstimateHref(id: string) {
   return `/admin/estimate-templates?${params.toString()}`;
 }
 
+function formatWholeYen(value: number) {
+  return formatYen(Math.round(value));
+}
+
 function formatUpdatedAt(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
@@ -162,7 +166,7 @@ function SavedEstimateMenu({
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3 sm:justify-end">
-                    <strong className="tabular-nums">{formatYen(sample.sourceTotal)}</strong>
+                    <strong className="tabular-nums">{formatWholeYen(sample.sourceTotal)}</strong>
                     <span className="text-xs font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </span>
                 </Link>

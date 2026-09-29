@@ -60,6 +60,11 @@ const DEMO_PRODUCTS: DemoProduct[] = [
 
 const cloneRows = (rows: DemoRow[]) => rows.map((row) => ({ ...row }));
 const floorYen = (value: number) => Math.floor(value + 1e-9);
+const formatDisplayYen = (value: number) => formatYen(Math.round(value));
+const formatEditableNumber = (value: number) =>
+  value.toLocaleString('ja-JP', { maximumFractionDigits: 4 });
+const parseEditableNumber = (value: string) =>
+  Math.max(0, Number(value.replace(/,/g, '')) || 0);
 const rowCost = (row: DemoRow) => Math.round(row.quantity * row.cost);
 const rowSale = (row: DemoRow) => row.priceOnRequest ? 0 : Math.round(row.quantity * row.sale);
 let seq = 0;
@@ -388,7 +393,17 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
               <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>{sample?.spec ?? 'ホテルUB'}</strong></div>
               <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>{sample?.fireSpec ?? '非防火'}</strong></div>
               <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>{sample?.region ?? '標準地域'}</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">基準本体</span><strong>{sample?.baseMaster ?? 'Wing ホテル仕様 v4'}</strong></div>
+              {sample ? (
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <span className="text-xs text-slate-500">取込元</span>
+                  <strong>Excel原本</strong>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <span className="text-xs text-slate-500">基準本体</span>
+                  <strong>Wing ホテル仕様 v4</strong>
+                </div>
+              )}
             </div>
           </div>
 
@@ -530,7 +545,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                         <td colSpan={4} className="whitespace-nowrap px-1 text-right text-[10px]">
                           {section === '別途' && sectionSummary.onRequest > 0
                             ? `別途見積 ${sectionSummary.onRequest}件`
-                            : `売価 ${formatYen(sectionSummary.sale)}`}
+                            : `売価 ${formatDisplayYen(sectionSummary.sale)}`}
                         </td>
                         <td className="px-2 text-center">
                           {section !== '本体' && (
@@ -587,15 +602,14 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             <input
                               {...cellProps('cost', rowIndex)}
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={row.cost}
-                              onChange={(event) => updateRow(row.id, { cost: Math.max(0, Number(event.target.value) || 0) })}
-                              className={inputClass + ' appearance-none text-right tabular-nums'}
+                              type="text"
+                              inputMode="decimal"
+                              value={formatEditableNumber(row.cost)}
+                              onChange={(event) => updateRow(row.id, { cost: parseEditableNumber(event.target.value) })}
+                              className={inputClass + ' text-right tabular-nums'}
                             />
                           </td>
-                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{formatYen(costAmount)}</td>
+                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{formatDisplayYen(costAmount)}</td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             {row.priceOnRequest ? (
                               <div className="flex h-6 items-center justify-end px-0.5">
@@ -605,12 +619,11 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                               <div className="flex h-6 min-w-0 items-center gap-0.5">
                                 <input
                                   {...cellProps('sale', rowIndex)}
-                                  type="number"
-                                  min={0}
-                                  step={1}
-                                  value={row.sale}
-                                  onChange={(event) => updateRow(row.id, { sale: Math.max(0, Number(event.target.value) || 0), manualSale: true })}
-                                  className={inputClass + ' min-w-0 flex-1 appearance-none px-0.5 text-right text-[10px] tabular-nums'}
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={formatEditableNumber(row.sale)}
+                                  onChange={(event) => updateRow(row.id, { sale: parseEditableNumber(event.target.value), manualSale: true })}
+                                  className={inputClass + ' min-w-0 flex-1 px-0.5 text-right text-[10px] tabular-nums'}
                                 />
                                 <span className={row.manualSale
                                   ? 'shrink-0 rounded border border-orange-300 bg-orange-50 px-0.5 text-[8px] font-semibold text-orange-800'
@@ -621,8 +634,8 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                               </div>
                             )}
                           </td>
-                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{row.priceOnRequest ? '—' : formatYen(saleAmount)}</td>
-                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{profit == null ? '—' : formatYen(profit)}</td>
+                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{row.priceOnRequest ? '—' : formatDisplayYen(saleAmount)}</td>
+                          <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right text-[10px] tabular-nums">{profit == null ? '—' : formatDisplayYen(profit)}</td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             <input
                               {...cellProps('remark', rowIndex)}
@@ -706,11 +719,11 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                       </td>
                       <td className="px-3 py-1">{section} 計</td>
                       <td></td><td></td>
-                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{formatYen(sectionSummary.cost)}</td>
+                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{formatDisplayYen(sectionSummary.cost)}</td>
                       <td></td>
-                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{section === '別途' && sectionSummary.onRequest ? '別途見積' : formatYen(sectionSummary.sale)}</td>
+                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{section === '別途' && sectionSummary.onRequest ? '別途見積' : formatDisplayYen(sectionSummary.sale)}</td>
                       <td></td>
-                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{section === '別途' && sectionSummary.onRequest ? '—' : formatYen(sectionSummary.profit)}</td>
+                      <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{section === '別途' && sectionSummary.onRequest ? '—' : formatDisplayYen(sectionSummary.profit)}</td>
                       <td></td>
                       <td className="px-0.5 text-center">
                         {!isCollapsed && (
@@ -742,11 +755,11 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
       </section>
 
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
-        <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatYen(totals.cost)}</strong></div>
-        <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatYen(totals.saleLines)}</strong></div>
+        <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatDisplayYen(totals.cost)}</strong></div>
+        <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatDisplayYen(totals.saleLines)}</strong></div>
         <div className="flex justify-between gap-4 py-1">
           <span>{sample ? '追加経費（Excel明細に反映済み）' : `経費 ${expenseRate.toFixed(1)}%`}</span>
-          <strong>{sample ? '—' : formatYen(totals.saleExpense)}</strong>
+          <strong>{sample ? '—' : formatDisplayYen(totals.saleExpense)}</strong>
         </div>
         <label className="flex items-center justify-between gap-4 py-1">
           <span>調整額</span>
@@ -761,17 +774,17 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             className="h-8 w-32 rounded border border-amber-300 bg-amber-50 px-2 text-right"
           />
         </label>
-        <div className="flex justify-between gap-4 py-1"><span>消費税</span><strong>{formatYen(totals.tax)}</strong></div>
+        <div className="flex justify-between gap-4 py-1"><span>消費税</span><strong>{formatDisplayYen(totals.tax)}</strong></div>
         <div className="mt-2 flex justify-between gap-4 border-t-2 border-slate-700 pt-3 text-lg">
-          <span>見積金額</span><strong>{formatYen(totals.saleGrand)}</strong>
+          <span>見積金額</span><strong>{formatDisplayYen(totals.saleGrand)}</strong>
         </div>
         {sample && (
           <div className="flex justify-between gap-4 py-1 text-xs text-slate-500">
-            <span>Excel原本 税込合計</span><strong>{formatYen(sample.sourceTotal)}</strong>
+            <span>Excel原本 税込合計</span><strong>{formatDisplayYen(sample.sourceTotal)}</strong>
           </div>
         )}
         <div className="mt-2 flex justify-between gap-4 rounded bg-emerald-50 px-3 py-2">
-          <span>粗利</span><strong>{formatYen(totals.profit)}</strong>
+          <span>粗利</span><strong>{formatDisplayYen(totals.profit)}</strong>
         </div>
         <div className="flex justify-between gap-4 py-1"><span>粗利率</span><strong>{totals.margin.toFixed(1)}%</strong></div>
         <div className="flex justify-between gap-4 py-1 text-xs text-slate-500"><span>別途見積</span><strong>{totals.onRequest}件</strong></div>
@@ -791,7 +804,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-500">見積金額（税込）</p>
-                <p className="text-2xl font-bold">{formatYen(totals.saleGrand)}</p>
+                <p className="text-2xl font-bold">{formatDisplayYen(totals.saleGrand)}</p>
               </div>
             </div>
           </div>
@@ -818,8 +831,8 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                         <td className="px-3 py-2">{row.name}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{row.quantity}</td>
                         <td className="px-3 py-2">{row.unit}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.priceOnRequest ? '別途見積' : formatYen(row.sale)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.priceOnRequest ? '—' : formatYen(rowSale(row))}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.priceOnRequest ? '別途見積' : formatDisplayYen(row.sale)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.priceOnRequest ? '—' : formatDisplayYen(rowSale(row))}</td>
                         <td className="px-3 py-2 text-slate-600">{row.remark}</td>
                       </tr>
                     ))}
@@ -829,9 +842,9 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             </table>
           </div>
           <div className="ml-auto max-w-md space-y-1 border-t border-slate-200 px-6 py-5 text-sm">
-            <div className="flex justify-between gap-4"><span>明細・諸費用・調整後</span><strong>{formatYen(totals.subtotal)}</strong></div>
-            <div className="flex justify-between gap-4"><span>消費税</span><strong>{formatYen(totals.tax)}</strong></div>
-            <div className="flex justify-between gap-4 border-t border-slate-400 pt-2 text-lg"><span>税込合計</span><strong>{formatYen(totals.saleGrand)}</strong></div>
+            <div className="flex justify-between gap-4"><span>明細・諸費用・調整後</span><strong>{formatDisplayYen(totals.subtotal)}</strong></div>
+            <div className="flex justify-between gap-4"><span>消費税</span><strong>{formatDisplayYen(totals.tax)}</strong></div>
+            <div className="flex justify-between gap-4 border-t border-slate-400 pt-2 text-lg"><span>税込合計</span><strong>{formatDisplayYen(totals.saleGrand)}</strong></div>
           </div>
         </section>
       )}
@@ -845,7 +858,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-500">現在の見積金額</p>
-              <p className="text-xl font-bold">{formatYen(totals.saleGrand)}</p>
+              <p className="text-xl font-bold">{formatDisplayYen(totals.saleGrand)}</p>
             </div>
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -859,7 +872,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                         <p className="font-medium">{row.name}</p>
                         <p className="text-xs text-slate-500">{row.quantity}{row.unit}{row.remark ? ' ／ ' + row.remark : ''}</p>
                       </div>
-                      <span className="shrink-0 text-xs font-semibold">{row.priceOnRequest ? '別途見積' : formatYen(rowSale(row))}</span>
+                      <span className="shrink-0 text-xs font-semibold">{row.priceOnRequest ? '別途見積' : formatDisplayYen(rowSale(row))}</span>
                     </div>
                   ))}
                 </div>
@@ -931,7 +944,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                     <p className="text-xs text-slate-500">{product.category} ／ {product.manufacturer || '—'}</p>
                     <h3 className="mt-1 font-semibold">{product.name}</h3>
                     <p className="mt-1 text-xs text-slate-500">{product.modelNo || '型番なし'}</p>
-                    <p className="mt-3 text-sm font-semibold">{product.priceOnRequest ? '別途見積' : '追加金額 ' + formatYen(product.price)}</p>
+                    <p className="mt-3 text-sm font-semibold">{product.priceOnRequest ? '別途見積' : '追加金額 ' + formatDisplayYen(product.price)}</p>
                     <div className="mt-4 flex justify-end">
                       <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>
                         {pickerTargetRowId ? 'この商品を選ぶ' : '追加'}

@@ -33,6 +33,7 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(page).toContain('画面確認用サンプル');
     expect(page).toContain('sampleEstimateHref(sample.id)');
     expect(page).toContain('Badge tone="neutral">サンプル');
+    expect(sampleFiles.join('\n')).not.toContain('（サンプル）');
   });
 
   it('5件とも添付Excel名・シート名・税込合計を保持する', () => {
@@ -67,5 +68,17 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(demo).toContain("sample ? 0 : 15");
     expect(demo).toContain('if (sample && !dirty)');
     expect(demo).toContain('saleGrand = sample.sourceTotal');
+  });
+
+  it('サンプル表示は整数円・桁区切り・取込元表示に整理する', () => {
+    expect(page).toContain('function formatWholeYen(value: number)');
+    expect(page).toContain('formatWholeYen(sample.sourceTotal)');
+    expect(demo).toContain('const formatDisplayYen = (value: number) => formatYen(Math.round(value));');
+    expect(demo).toContain("value.toLocaleString('ja-JP', { maximumFractionDigits: 4 })");
+    expect(demo).toContain('inputMode="decimal"');
+    expect(demo).toContain('formatEditableNumber(row.cost)');
+    expect(demo).toContain('formatEditableNumber(row.sale)');
+    expect(demo).toContain('取込元');
+    expect(demo).toContain('Excel原本');
   });
 });

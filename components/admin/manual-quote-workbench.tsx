@@ -15,6 +15,7 @@ import {
   QuoteInternalRateStrip,
   type QuoteAuthoringRow,
   type QuoteAuthoringSection,
+  type QuoteCatalogProduct,
   type QuotePickerRow,
 } from '@/components/admin/quote-authoring-ui';
 
@@ -26,14 +27,14 @@ type WorkbenchRow = {
   key: string;
   line_key: string;
   kind: EditableKind;
-  option_id: null;
+  option_id: string | null;
   name: string;
-  description: null;
+  description: string | null;
   unit: string;
   remark: string;
   unit_price: number;
   quantity: number;
-  image_url: null;
+  image_url: string | null;
 };
 
 export interface ManualQuoteWorkbenchModel {
@@ -103,14 +104,17 @@ function kindForSection(section: QuoteAuthoringSection): EditableKind {
 export function ManualQuoteWorkbench({
   models,
   estimates,
+  products,
   canEditBase,
 }: {
   models: ManualQuoteWorkbenchModel[];
   estimates: EstimatePickerRow[];
+  products: QuoteCatalogProduct[];
   canEditBase: boolean;
 }) {
   const [state, action, pending] = useActionState(createManualQuoteWorkbenchAction, initialState);
   const [modelId, setModelId] = useState('');
+  const [specCode, setSpecCode] = useState('');
   const model = models.find((row) => row.id === modelId);
   const [rows, setRows] = useState<WorkbenchRow[]>([]);
   const [adjustment, setAdjustment] = useState(0);
@@ -167,6 +171,7 @@ export function ManualQuoteWorkbench({
     unitPrice: row.unit_price,
     amount: roundLikePostgres(row.unit_price * row.quantity),
     remark: row.remark || null,
+    optionId: row.option_id,
     locked: !canEditBase && (row.kind === 'base' || row.kind === 'base_expense'),
   }));
 
@@ -193,6 +198,38 @@ export function ManualQuoteWorkbench({
   const addAuthoringRow = (section: QuoteAuthoringSection) => {
     if (section === 'base' && !canEditBase) return;
     setRows((current) => [...current, createRow(kindForSection(section))]);
+    markDirty();
+  };
+
+  const selectCatalogProduct = (
+    section: QuoteAuthoringSection,
+    targetKey: string | null,
+    product: QuoteCatalogProduct
+  ) => {
+    if (section === 'base' && !canEditBase) return;
+    const productRemark = product.priceOnRequest
+      ? '別途見積'
+      : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ ');
+    const productPatch = {
+      option_id: product.id,
+      name: product.name,
+      unit_price: product.priceOnRequest ? 0 : product.price,
+      remark: productRemark,
+      image_url: product.imageUrl,
+    };
+
+    setRows((current) => {
+      if (targetKey) {
+        return current.map((row) => (row.key === targetKey ? { ...row, ...productPatch } : row));
+      }
+      return [
+        ...current,
+        {
+          ...createRow(kindForSection(section)),
+          ...productPatch,
+        },
+      ];
+    });
     markDirty();
   };
 
@@ -339,7 +376,10 @@ export function ManualQuoteWorkbench({
                     name="base_model_id"
                     value={modelId}
                     required
-                    onChange={(event) => setModelId(event.target.value)}
+                    onChange={(event) => {
+                      setModelId(event.target.value);
+                      setSpecCode('');
+                    }}
                     className="h-7 min-h-7 text-sm"
                   >
                     <option value="">選択してください</option>
@@ -355,7 +395,8 @@ export function ManualQuoteWorkbench({
                     id="quote-spec"
                     name="spec_code"
                     key={modelId}
-                    defaultValue=""
+                    value={specCode}
+                    onChange={(event) => setSpecCode(event.target.value)}
                     required
                     disabled={!modelId}
                     className="h-7 min-h-7 text-sm"
@@ -410,9 +451,13 @@ export function ManualQuoteWorkbench({
           <QuoteInternalRateStrip />
           <QuoteAuthoringGrid
             rows={authoringRows}
+            products={products}
+            baseModelId={modelId}
+            specCode={specCode}
             onUpdate={updateAuthoringRow}
             onRemove={removeAuthoringRow}
-            onAdd={addAuthoringRow}
+            onAddFree={addAuthoringRow}
+            onSelectProduct={selectCatalogProduct}
           />
         </div>
 

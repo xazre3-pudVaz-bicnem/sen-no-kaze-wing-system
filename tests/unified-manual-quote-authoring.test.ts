@@ -39,6 +39,13 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('label="案件名"');
     expect(workbench).toContain('label="防火仕様"');
     expect(workbench).toContain('label="適用地域"');
+    expect(workbench).toContain('label="電話番号"');
+    expect(workbench).toContain('label="メールアドレス"');
+    expect(workbench).toContain('label="お客様住所"');
+    expect(workbench).toContain('電話・メール・お客様住所は保存連携準備中');
+    expect(workbench).not.toContain('name="customer_phone"');
+    expect(workbench).not.toContain('name="customer_email"');
+    expect(workbench).not.toContain('name="customer_address"');
     expect(workbench).not.toContain('label="注文範囲"');
     expect(workbench).toContain('name="finish_level" value="full"');
     expect(workbench).not.toContain('（任意）');

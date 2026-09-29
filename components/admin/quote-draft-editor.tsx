@@ -168,7 +168,7 @@ export function QuoteDraftEditor({
     };
   });
 
-  const revisionEditableKinds = baseLocked
+  const revisionEditableKinds: QuoteItemKind[] = baseLocked
     ? KINDS.filter((kind) => kind !== 'base' && kind !== 'base_expense')
     : KINDS;
 

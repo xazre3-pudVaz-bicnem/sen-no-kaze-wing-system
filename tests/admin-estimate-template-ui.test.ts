@@ -131,7 +131,7 @@ describe('見積書作成・管理UI', () => {
     expect(newForm).toContain('demoMode');
     expect(newForm).toContain('現在は画面確認用です');
     expect(newForm).toContain('編集内容は保存されません。保存・公開機能は準備中です');
-    expect(newForm).toContain('画面確認用サンプルでExcel明細編集を見る');
+    expect(newForm).toContain('サンプルで明細編集を見る');
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
     expect(newForm).toContain("samplePreview ? '画面確認用' : '新規見積書'");
@@ -143,12 +143,12 @@ describe('見積書作成・管理UI', () => {
     expect(newForm).toContain("name: 'エアコン'");
     expect(newForm).toContain("name: '運送費'");
     expect(newForm).toContain('initialLines={samplePreview ? SAMPLE_EDIT_LINES : []}');
-    expect(newForm).toContain('将来は設置予定地から自動判定する想定です');
-    expect(newForm).toContain('基準本体を選ぶ');
-    expect(newForm).toContain('明細を見る');
-    expect(newForm).toContain('この本体を選択');
+    expect(newForm).toContain('この見積書を適用する地域を選択します。');
+    expect(newForm).toContain('本体を選ぶ');
+    expect(newForm).toContain('明細を確認');
+    expect(newForm).toContain('この本体を使う');
     expect(newForm).toContain('適用地域');
-    expect(newForm).toContain('基準本体：{selectedBaseMaster ? selectedBaseMaster.name');
+    expect(newForm).toContain('本体：{selectedBaseMaster ? selectedBaseMaster.name');
     expect(newForm).toContain('防火：{selectedFireLabel || \'—\'}');
     expect(newForm).toContain('地域：{regionLabel || \'—\'}');
     expect(newForm).not.toContain('lg:grid-cols-5');

@@ -504,6 +504,8 @@ export interface QuoteRequest {
   user_id: string | null;
   quote_id: string | null;
   status: QuoteRequestStatus;
+  /** 案件管理で使う業務上の案件名。既存/Web案件は未設定の場合がある */
+  case_name?: string | null;
   message: string | null;
   contact: QuoteContact;
   /** 非Web案件を登録したスタッフ。Web案件では未設定の場合がある */

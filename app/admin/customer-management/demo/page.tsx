@@ -97,7 +97,7 @@ export default async function AdminCustomerManagementDemoPage({
           <Badge tone="navy">DEMO</Badge>
         </div>
 
-        <Table minWidth="58rem">
+        <Table minWidth="46rem">
           <thead className="bg-sand/60">
             <tr>
               <Th>顧客名 / 法人名</Th>
@@ -176,7 +176,7 @@ export default async function AdminCustomerManagementDemoPage({
           </p>
         </div>
 
-        <Table minWidth="48rem">
+        <Table minWidth="44rem">
           <thead className="bg-[#fff8e8]">
             <tr>
               <Th>案件上のお客様</Th>

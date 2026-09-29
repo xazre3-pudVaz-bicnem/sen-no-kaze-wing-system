@@ -8,23 +8,24 @@ const settingsPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/sett
 const navSource = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/admin-nav.tsx'), 'utf8');
 
 describe('管理画面の業務領域ナビゲーション', () => {
-  it('本部には4つの業務領域だけを表示する', () => {
-    expect(labelsFor('admin')).toEqual(['案件管理', '商品台帳', '見積書作成・管理', '管理設定']);
+  it('本部には5つの主要業務領域を表示する', () => {
+    expect(labelsFor('admin')).toEqual(['案件管理', '顧客管理', '商品台帳', '見積書作成・管理', '管理設定']);
   });
 
   it.each(['master_dealer', 'dealer'] as const)('%sには見積書作成・管理を表示しない', (role) => {
-    expect(labelsFor(role)).toEqual(['案件管理', '商品台帳', '管理設定']);
+    expect(labelsFor(role)).toEqual(['案件管理', '顧客管理', '商品台帳', '管理設定']);
   });
 
-  it('顧客管理は全スタッフ、問い合わせは本部だけの補助導線にする', () => {
-    expect(getAdminUtilityLinks('admin').map((item) => item.label)).toEqual(['顧客管理', '問い合わせ']);
-    expect(getAdminUtilityLinks('master_dealer').map((item) => item.label)).toEqual(['顧客管理']);
-    expect(getAdminUtilityLinks('dealer').map((item) => item.label)).toEqual(['顧客管理']);
+  it('問い合わせは上部補助導線に出さない', () => {
+    expect(getAdminUtilityLinks('admin')).toEqual([]);
+    expect(getAdminUtilityLinks('master_dealer')).toEqual([]);
+    expect(getAdminUtilityLinks('dealer')).toEqual([]);
   });
 
-  it('補助画面は大分類のactive判定にだけ含め、二段目メニューを描画しない', () => {
+  it('顧客管理を独立した主要領域にし、問い合わせ等は案件管理のactive判定だけに含める', () => {
     const sections = getAdminNavSections('admin');
     const cases = sections.find((section) => section.label === '案件管理');
+    const customers = sections.find((section) => section.label === '顧客管理');
     const ledger = sections.find((section) => section.label === '商品台帳');
     const estimates = sections.find((section) => section.label === '見積書作成・管理');
 
@@ -33,8 +34,9 @@ describe('管理画面の業務領域ナビゲーション', () => {
       '/admin/configurations',
       '/admin/contacts',
       '/admin/notifications',
-      '/admin/customer-management',
     ]));
+    expect(cases?.match).not.toContain('/admin/customer-management');
+    expect(customers?.match).toEqual(['/admin/customer-management']);
     expect(ledger?.match).toEqual(expect.arrayContaining([
       '/admin/ledger',
       '/admin/free-products',

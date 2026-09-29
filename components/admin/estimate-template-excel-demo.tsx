@@ -462,8 +462,7 @@ export function EstimateTemplateExcelDemo({
 
         <div className="divide-y divide-slate-200">
           <section className="px-4 py-1.5">
-            <div className="text-[11px] font-semibold text-slate-600">見積条件</div>
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-[10px] text-slate-500">商品モデル</span>
                 <strong className="text-xs">{sample?.model ?? 'Wing'}</strong>
@@ -495,8 +494,7 @@ export function EstimateTemplateExcelDemo({
           </section>
 
           <section className="px-4 py-1.5">
-            <div className="text-[11px] font-semibold text-slate-600">価格設定</div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <div className="flex items-center gap-1.5">
                 <div>
                   <p className="text-[10px] font-semibold text-slate-700">販売費</p>

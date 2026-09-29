@@ -492,12 +492,12 @@ export function BaseMasterExcelDemo() {
       <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold">Draftの操作</h2>
+            <h2 className="font-semibold">公開前の確認</h2>
             <p className="mt-1 text-xs text-slate-500">UI確認版のため、公開・破棄は実行しません。</p>
           </div>
           <div className="flex gap-2">
-            <Button type="button" disabled>このDraftを公開</Button>
-            <Button type="button" variant="ghost" disabled>Draftを破棄</Button>
+            <Button type="button" disabled>この内容で公開</Button>
+            <Button type="button" variant="ghost" disabled>下書きを破棄</Button>
           </div>
         </div>
       </section>

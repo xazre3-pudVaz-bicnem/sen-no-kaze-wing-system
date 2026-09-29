@@ -26,7 +26,7 @@ const initialState: QuoteDraftFormState = { ok: false };
 
 const roundLikePostgres = (value: number) => value < 0 ? -Math.round(-value) : Math.round(value);
 
-const KINDS: QuoteItemKind[] = [
+const KINDS = ([
   'base',
   'base_expense',
   'interior_exterior',
@@ -36,7 +36,7 @@ const KINDS: QuoteItemKind[] = [
   'installation',
   'free',
   'discount',
-].filter((kind) => kind !== 'discount');
+] as QuoteItemKind[]).filter((kind) => kind !== 'discount');
 
 type EditorRow = QuoteDraftSaveItem & { key: string };
 

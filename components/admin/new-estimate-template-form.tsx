@@ -166,40 +166,6 @@ function SelectWithArrow({
   );
 }
 
-function StepIndicator({ current }: { current: 'setup' | 'edit' }) {
-  return (
-    <div className="flex w-full max-w-[390px] items-center gap-3 text-xs" aria-label="新しい見積書の作成手順">
-      <div className="flex shrink-0 items-center gap-2">
-        <span
-          className={
-            current === 'setup'
-              ? 'flex size-6 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-white'
-              : 'flex size-6 items-center justify-center rounded-full border border-line bg-white text-[11px] font-semibold text-ink'
-          }
-        >
-          1
-        </span>
-        <span className="whitespace-nowrap font-semibold text-ink">本体・条件設定</span>
-      </div>
-      <div className="h-px min-w-8 flex-1 bg-line" />
-      <div className="flex shrink-0 items-center gap-2">
-        <span
-          className={
-            current === 'edit'
-              ? 'flex size-6 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-white'
-              : 'flex size-6 items-center justify-center rounded-full border border-line bg-white text-[11px] font-semibold text-muted'
-          }
-        >
-          2
-        </span>
-        <span className={current === 'edit' ? 'whitespace-nowrap font-semibold text-ink' : 'whitespace-nowrap font-semibold text-muted'}>
-          明細編集
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function fireLabel(code: EstimateBaseMasterChoice['fireSpec']) {
   return code === 'fire' ? '防火' : '非防火';
 }
@@ -236,7 +202,6 @@ export function NewEstimateTemplateForm({
   const [spec, setSpec] = useState(initialTarget?.specCode ?? '');
   const [region, setRegion] = useState<(typeof REGION_OPTIONS)[number]['value']>('all');
   const [customName, setCustomName] = useState<string | null>(null);
-  const [step, setStep] = useState<'setup' | 'edit'>('setup');
 
   const selectedBaseMaster = useMemo(
     () =>
@@ -266,13 +231,11 @@ export function NewEstimateTemplateForm({
     ? models.find((model) => model.id === initialTarget.modelId) ?? null
     : null;
   const targetSpec = targetModel?.specs.find((item) => item.code === initialTarget?.specCode) ?? null;
-  const regionLabel = REGION_OPTIONS.find((item) => item.value === region)?.label ?? '';
   const generatedName = useMemo(
     () => [modelName, specLabel, selectedFireLabel].filter(Boolean).join(' '),
     [modelName, specLabel, selectedFireLabel]
   );
   const name = customName ?? generatedName;
-  const canContinue = Boolean(selectedBaseMaster && selectedSpec?.code);
 
   const modelNameFor = (baseMaster: EstimateBaseMasterChoice) =>
     models.find((model) => model.id === baseMaster.modelId)?.name ?? '—';
@@ -283,6 +246,14 @@ export function NewEstimateTemplateForm({
   };
 
   const chooseBaseMaster = (baseMaster: EstimateBaseMasterChoice) => {
+    if (
+      selectedBaseMaster &&
+      selectedBaseMaster.id !== baseMaster.id &&
+      !window.confirm('本体を変更すると、現在表示中の本体明細は選択した本体の内容に置き換わります。変更しますか？')
+    ) {
+      return;
+    }
+
     const model = models.find((item) => item.id === baseMaster.modelId) ?? null;
     const preferredSpec =
       initialTarget && initialTarget.modelId === baseMaster.modelId
@@ -305,7 +276,6 @@ export function NewEstimateTemplateForm({
     setRegion('all');
     setCustomName('Wing ホテル仕様（画面確認用）');
     setBasePickerOpen(false);
-    setStep('edit');
   };
 
   const handleSpecChange = (value: string) => {
@@ -313,31 +283,136 @@ export function NewEstimateTemplateForm({
     setCustomName(null);
   };
 
-  if (step === 'edit') {
-    return (
+  return (
+    <>
       <div className="space-y-4">
-        <section className="card overflow-hidden">
+        <section className="card overflow-hidden" data-testid="new-estimate-conditions">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-            <StepIndicator current="edit" />
-            <button type="button" className="btn-secondary btn-sm" onClick={() => setStep('setup')}>
-              本体・条件設定へ戻る
-            </button>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="truncate text-lg font-semibold">{name || '新しい見積書'}</h2>
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                  {samplePreview ? '画面確認用' : '新規見積書'}
+                </span>
+                {initialTarget && targetModel && targetSpec && (
+                  <span className="rounded-full border border-forest/20 bg-forest/5 px-2 py-0.5 text-[11px] font-semibold text-forest">
+                    作成対象：{targetModel.name === 'フラット' ? 'Flat' : targetModel.name} ／ {targetSpec.name} ／ {fireLabel(initialTarget.fireSpec)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                本体・仕様・適用地域をここで設定し、そのまま下の明細を編集できます。
+              </p>
+            </div>
+            <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">見積書作成・管理へ戻る</Link>
           </div>
 
-          <div className="px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-semibold">{name || '名称未設定'}</h2>
-              <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                {samplePreview ? '画面確認用' : '新規見積書'}
-              </span>
+          <div className="space-y-3 p-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="block">
+                <span className="label">使用する本体</span>
+                {selectedBaseMaster ? (
+                  <button
+                    type="button"
+                    className="mt-1 flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 text-left text-sm hover:border-forest/40"
+                    onClick={openBasePicker}
+                  >
+                    <span className="min-w-0 truncate font-semibold">{selectedBaseMaster.name}</span>
+                    <span className="shrink-0 text-[10px] text-muted">公開版 v{selectedBaseMaster.revisionVersion}</span>
+                  </button>
+                ) : (
+                  <button type="button" className="btn-primary mt-1 h-10 w-full justify-center" onClick={openBasePicker}>
+                    本体を選ぶ
+                  </button>
+                )}
+                <span className="mt-1 block text-[10px] text-muted">
+                  {selectedBaseMaster
+                    ? '本体管理元：' + selectedBaseMaster.ownerName
+                    : '本体が未選択です。'}
+                </span>
+              </div>
+
+              <div className="block">
+                <span className="label">商品モデル</span>
+                <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
+                  {modelName || '本体を選ぶと自動設定'}
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="label">仕様</span>
+                <SelectWithArrow
+                  value={selectedSpec?.code ?? ''}
+                  onChange={handleSpecChange}
+                  disabled={!selectedBaseMaster || availableSpecs.length === 0}
+                >
+                  {!selectedBaseMaster ? (
+                    <option value="">先に本体を選択</option>
+                  ) : availableSpecs.length > 0 ? (
+                    availableSpecs.map((item) => (
+                      <option key={item.code} value={item.code}>{item.name}</option>
+                    ))
+                  ) : (
+                    <option value="">仕様が登録されていません</option>
+                  )}
+                </SelectWithArrow>
+              </label>
+
+              <div className="block">
+                <span className="label">防火仕様</span>
+                <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
+                  {selectedFireLabel || '本体を選ぶと自動設定'}
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="label">適用地域</span>
+                <SelectWithArrow value={region} onChange={(value) => setRegion(value as typeof region)}>
+                  {REGION_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </SelectWithArrow>
+              </label>
             </div>
-            <p className="mt-1 text-xs text-muted">
-              本体：{selectedBaseMaster ? selectedBaseMaster.name + (samplePreview ? '' : ' ／ 公開版 v' + selectedBaseMaster.revisionVersion) : '—'}
-              <span className="mx-2">｜</span>
-              防火：{selectedFireLabel || '—'}
-              <span className="mx-2">｜</span>
-              地域：{regionLabel || '—'}
-            </p>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="min-w-[18rem] flex-1">
+                <span className="label">見積書名</span>
+                <Input
+                  className="mt-1 h-10 w-full"
+                  value={name}
+                  placeholder="本体を選ぶと自動入力します"
+                  onChange={(event) => setCustomName(event.target.value)}
+                />
+              </label>
+              {selectedBaseMaster && (
+                <button type="button" className="btn-secondary btn-sm h-10" onClick={openBasePicker}>
+                  本体を変更・明細確認
+                </button>
+              )}
+            </div>
+
+            {!baseMasterSourceReady && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-ink-soft">
+                <span>本体マスターの正式データが未接続のため、画面確認用サンプルで明細編集を確認できます。</span>
+                {sampleBaseMaster && (
+                  <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
+                    サンプルを表示
+                  </button>
+                )}
+              </div>
+            )}
+
+            {baseMasterSourceReady && baseMasters.length === 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/20 px-3 py-2 text-[11px] text-muted">
+                <span>公開中の本体マスターがありません。公開版を用意すると、この画面から選択できます。</span>
+                {sampleBaseMaster && (
+                  <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
+                    サンプルを表示
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -345,6 +420,16 @@ export function NewEstimateTemplateForm({
           <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-2 text-xs leading-relaxed text-ink-soft">
             <strong className="font-semibold text-ink">現在は画面確認用です。</strong>
             {' 編集内容は保存されません。保存・公開機能は準備中です。'}
+          </div>
+        )}
+
+        {!selectedBaseMaster && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/20 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold">本体が未選択です</p>
+              <p className="mt-0.5 text-xs text-muted">本体を選ぶと、この見積書の本体明細を読み込みます。</p>
+            </div>
+            <button type="button" className="btn-primary btn-sm" onClick={openBasePicker}>本体を選ぶ</button>
           </div>
         )}
 
@@ -361,177 +446,6 @@ export function NewEstimateTemplateForm({
           demoMode
         />
       </div>
-    );
-  }
-
-  return (
-    <>
-      <section className="card overflow-hidden">
-        <div className="border-b border-line px-4 py-3">
-          <StepIndicator current="setup" />
-        </div>
-
-        <div className="space-y-4 p-4 sm:p-5">
-          <div>
-            <h2 className="font-semibold">本体・条件設定</h2>
-            <p className="mt-0.5 text-xs text-muted">
-              先に使用する本体を選びます。商品モデルと防火仕様は、選んだ本体マスターから自動設定されます。
-            </p>
-            {initialTarget && targetModel && targetSpec && (
-              <p className="mt-2 inline-flex rounded-full border border-forest/20 bg-forest/5 px-3 py-1 text-xs font-semibold text-forest">
-                作成対象：{targetModel.name === 'フラット' ? 'Flat' : targetModel.name} ／ {targetSpec.name} ／ {fireLabel(initialTarget.fireSpec)}
-              </p>
-            )}
-          </div>
-
-          <section className="overflow-hidden rounded-xl border border-line">
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-sand/20 px-4 py-2.5">
-              <div>
-                <h3 className="text-sm font-semibold">使用する本体</h3>
-                <p className="mt-0.5 text-[11px] text-muted">公開中の本体マスターから、明細と金額を確認して選びます。</p>
-              </div>
-              {selectedBaseMaster && (
-                <button type="button" className="btn-secondary btn-sm" onClick={openBasePicker}>
-                  変更する
-                </button>
-              )}
-            </div>
-
-            <div className="px-4 py-3">
-              {selectedBaseMaster ? (
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <div className="min-w-[15rem] flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <strong>{selectedBaseMaster.name}</strong>
-                      <span className="rounded-full border border-line bg-sand/30 px-2 py-0.5 text-[10px] font-semibold">
-                        公開版 v{selectedBaseMaster.revisionVersion}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted">
-                      {modelNameFor(selectedBaseMaster)} ／ {fireLabel(selectedBaseMaster.fireSpec)} ／ 本体管理元：{selectedBaseMaster.ownerName}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-muted">本体価格計</p>
-                    <p className="text-base font-semibold">{formatYen(selectedBaseMaster.total)}</p>
-                  </div>
-                  <button type="button" className="text-xs font-semibold underline underline-offset-4" onClick={openBasePicker}>
-                    明細を確認
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium">使用する本体が未選択です</p>
-                    <p className="mt-0.5 text-[11px] text-muted">
-                      公開版の明細・数量・単価・金額を確認して選べます。
-                    </p>
-                  </div>
-                  <button type="button" className="btn-primary btn-sm" onClick={openBasePicker}>
-                    本体を選ぶ
-                  </button>
-                </div>
-              )}
-            </div>
-          </section>
-
-          {!baseMasterSourceReady && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-ink-soft">
-              <span>本体マスターの正式データが未接続のため、画面確認用サンプルで明細編集を確認できます。</span>
-              {sampleBaseMaster && (
-                <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
-                  サンプルで明細編集を見る
-                </button>
-              )}
-            </div>
-          )}
-
-          {baseMasterSourceReady && baseMasters.length === 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/20 px-3 py-2 text-[11px] text-muted">
-              <span>公開中の本体マスターがありません。公開版を用意すると、この画面から選択できます。</span>
-              {sampleBaseMaster && (
-                <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
-                  サンプルで明細編集を見る
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            <div className="block">
-              <span className="label">商品モデル</span>
-              <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
-                {modelName || '本体を選ぶと自動設定'}
-              </div>
-            </div>
-
-            <label className="block">
-              <span className="label">仕様</span>
-              <SelectWithArrow
-                value={selectedSpec?.code ?? ''}
-                onChange={handleSpecChange}
-                disabled={!selectedBaseMaster || availableSpecs.length === 0}
-              >
-                {!selectedBaseMaster ? (
-                  <option value="">先に本体を選択</option>
-                ) : availableSpecs.length > 0 ? (
-                  availableSpecs.map((item) => (
-                    <option key={item.code} value={item.code}>{item.name}</option>
-                  ))
-                ) : (
-                  <option value="">仕様が登録されていません</option>
-                )}
-              </SelectWithArrow>
-            </label>
-
-            <div className="block">
-              <span className="label">防火仕様</span>
-              <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
-                {selectedFireLabel || '本体を選ぶと自動設定'}
-              </div>
-            </div>
-
-            <label className="block">
-              <span className="label">適用地域</span>
-              <SelectWithArrow value={region} onChange={(value) => setRegion(value as typeof region)}>
-                {REGION_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </SelectWithArrow>
-            </label>
-          </div>
-
-          <label className="block max-w-[620px]">
-            <span className="label">見積書名</span>
-            <Input
-              className="mt-1 h-10 w-full"
-              value={name}
-              placeholder="本体を選ぶと自動入力します"
-              onChange={(event) => setCustomName(event.target.value)}
-            />
-            <span className="mt-1 block text-[10px] text-muted">
-              商品モデル・仕様・防火仕様から自動入力します。必要な場合だけ変更してください。
-            </span>
-          </label>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-            <p className="text-xs text-muted">
-              次の画面では、選択した本体明細をもとにExcelのような形式で明細を編集できます。
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">キャンセル</Link>
-              <button
-                type="button"
-                className="btn-primary btn-sm"
-                disabled={!canContinue}
-                onClick={() => setStep('edit')}
-              >
-                明細編集へ進む
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {basePickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="使用する本体を選択">

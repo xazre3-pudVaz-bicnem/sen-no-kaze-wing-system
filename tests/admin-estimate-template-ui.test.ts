@@ -113,19 +113,19 @@ describe('見積書作成・管理UI', () => {
     expect(simulatorPreview).toContain('<PlanBoard');
   });
 
-  it('新規作成画面は基準本体を先に選びExcel形式の明細編集へ進める', () => {
+  it('新規作成画面は使用する本体を先に選び明細編集へ進める', () => {
     expect(newForm).toContain('▼');
-    expect(newForm).toContain('基準本体');
-    expect(newForm).toContain('先に基準本体を選びます。商品モデルと防火仕様は、選んだ本体から自動設定されます。');
+    expect(newForm).toContain('使用する本体');
+    expect(newForm).toContain('先に使用する本体を選びます。商品モデルと防火仕様は、選んだ本体マスターから自動設定されます。');
     expect(newForm).toContain('商品モデル・仕様・防火仕様から自動入力');
-    expect(newForm).toContain('現在の本体マスターでは仕様は別項目のため、ここで選択します。');
+    expect(newForm).toContain('本体管理元：');
     expect(newForm).not.toContain('SPEC_OPTIONS');
     expect(newForm).toContain('space-y-4 p-4 sm:p-5');
     expect(newForm).toContain('max-w-[620px]');
     expect(newForm).toContain('キャンセル');
     expect(newForm).toContain("setStep('edit')");
-    expect(newForm).toContain('Excel明細編集へ進む');
-    expect(newForm).toContain('初期設定へ戻る');
+    expect(newForm).toContain('明細編集へ進む');
+    expect(newForm).toContain('本体・条件設定へ戻る');
     expect(newForm).toContain('<EstimateTemplateWorkbench');
     expect(newForm).toContain('new-standard-estimate-preview');
     expect(newForm).toContain('demoMode');

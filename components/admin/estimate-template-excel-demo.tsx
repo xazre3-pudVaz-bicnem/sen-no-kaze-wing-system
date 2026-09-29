@@ -405,7 +405,7 @@ export function EstimateTemplateExcelDemo({
       {tab === 'estimate' && (
         <>
       <section
-        className="sticky top-0 z-30 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
+        className="sticky top-0 z-30 overflow-hidden rounded-t-xl rounded-b-none border border-slate-300 bg-white shadow-sm"
         data-testid="estimate-demo-header-summary"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
@@ -567,7 +567,7 @@ export function EstimateTemplateExcelDemo({
         </div>
       </section>
 
-      <section className="overflow-visible rounded-xl border border-slate-300 bg-white shadow-sm">
+      <section className="!mt-0 overflow-visible rounded-b-xl rounded-t-none border border-t-0 border-slate-300 bg-white shadow-sm">
         <div className="w-full">
           <table className="w-full table-fixed border-collapse text-[11px]" data-testid="estimate-demo-fit-table">
             <colgroup>

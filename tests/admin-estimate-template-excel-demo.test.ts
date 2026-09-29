@@ -62,6 +62,11 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('下書きを保存');
   });
 
+  it('価格設定と明細表の間を空けず一体表示する', () => {
+    expect(demo).toContain('rounded-t-xl rounded-b-none');
+    expect(demo).toContain('!mt-0 overflow-visible rounded-b-xl rounded-t-none border border-t-0');
+  });
+
   it('見積条件と価格設定を上下2段で分け、技術の杜のExcelと同じ用語で表示する', () => {
     expect(demo).toContain('data-testid="estimate-demo-header-summary"');
     expect(demo).toContain('見積条件');

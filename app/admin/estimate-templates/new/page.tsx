@@ -165,10 +165,10 @@ export default async function NewEstimateTemplatePage({
 
   return (
     <AdminPage
-      title="見積書を新規作成"
-      lead="本体・仕様・適用地域を画面上部で設定し、そのまま明細を編集できます。"
+      title="見積テンプレートを新規作成"
+      lead="本体・仕様・適用地域を画面上部で設定し、そのまま標準見積の明細を編集できます。"
     >
-      <BackLink href="/admin/estimate-templates" label="見積書作成・管理へ戻る" />
+      <BackLink href="/admin/estimate-templates" label="見積テンプレートへ戻る" />
 
       <NewEstimateTemplateForm
         role={actor.role}

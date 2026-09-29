@@ -62,9 +62,20 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('下書きを保存');
   });
 
-  it('価格設定と明細表の間を空けず一体表示する', () => {
-    expect(demo).toContain('rounded-t-xl rounded-b-none');
-    expect(demo).toContain('!mt-0 overflow-visible rounded-b-xl rounded-t-none border border-t-0');
+  it('見積条件・価格設定・明細表を同じ枠の中で一体表示する', () => {
+    expect(demo).toContain('data-testid="estimate-demo-editor-shell"');
+    expect(demo).toContain('rounded-xl border border-slate-300 bg-white shadow-sm');
+    expect(demo).toContain('sticky top-0 z-30 overflow-hidden rounded-t-xl bg-white');
+    expect(demo).toContain('overflow-visible rounded-b-xl bg-white');
+    expect(demo).not.toContain('!mt-0 overflow-visible');
+  });
+
+  it('見積上部の上下余白をコンパクトにする', () => {
+    expect(demo).toContain('border-b border-slate-200 px-4 py-1.5');
+    expect(demo).toContain('className="px-4 py-1.5"');
+    expect(demo).toContain('mt-1 flex flex-wrap gap-x-4 gap-y-1');
+    expect(demo).toContain('mt-1 flex flex-wrap items-center gap-x-3 gap-y-1');
+    expect(demo).not.toContain('px-4 py-2.5');
   });
 
   it('見積条件と価格設定を上下2段で分け、技術の杜のExcelと同じ用語で表示する', () => {

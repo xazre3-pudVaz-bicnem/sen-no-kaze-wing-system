@@ -230,6 +230,7 @@ describe('見積書作成・管理UI', () => {
 
   it('品名右側から商品台帳を開き、現在行の商品を置き換えられる', () => {
     expect(workbench).toContain('title="商品台帳から選ぶ"');
+    expect(workbench).toContain('Package className="size-3.5"');
     expect(workbench).toContain("openProductPicker(row.section, row.id)");
     expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
     expect(workbench).toContain('商品台帳の公開済み商品から選び、選択した明細行へ反映します。');
@@ -238,7 +239,7 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).not.toContain('商品詳細を表示');
   });
 
-  it('商品選択は追加先区分に対応するカテゴリーだけを表示する', () => {
+  it('商品選択は追加先区分に対応する商品だけを表示する', () => {
     expect(workbench).toContain('SECTION_PRODUCT_CATEGORY_CODES');
     expect(workbench).toContain("'roof'");
     expect(workbench).toContain("'exterior-wall'");
@@ -246,30 +247,28 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain("'sitework'");
     expect(workbench).toContain("'free-product'");
     expect(workbench).toContain('allowedCodes.has(product.categoryCode)');
-    expect(workbench).toContain('すべてのカテゴリー');
-    expect(workbench).not.toContain('この区分のすべてのカテゴリー');
     expect(workbench).toContain('追加先：{pickerSectionLabel}');
-    expect(workbench).toContain('カテゴリー：{pickerCategoryName}');
-    expect(workbench).toContain('「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。');
+    expect(workbench).toContain('「{pickerSectionLabel}」で選べる商品をカテゴリーごとに表示しています。');
+    expect(workbench).not.toContain('すべてのカテゴリー');
+    expect(workbench).not.toContain('pickerCategory');
+    expect(workbench).not.toContain('pickerQuery');
     expect(detailPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
     expect(newPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
   });
 
-  it('商品選択はカテゴリ別の折り畳み一覧でコンパクトに比較できる', () => {
+  it('商品選択は検索なしのカテゴリー別2列カードで直接比較できる', () => {
     expect(workbench).toContain('pickerProductGroups');
-    expect(workbench).toContain('collapsedPickerCategories');
-    expect(workbench).toContain('togglePickerCategory');
-    expect(workbench).toContain("group.categoryName + 'を開く'");
-    expect(workbench).toContain("group.categoryName + 'を閉じる'");
+    expect(workbench).not.toContain('collapsedPickerCategories');
+    expect(workbench).not.toContain('togglePickerCategory');
+    expect(workbench).not.toContain('type="search"');
+    expect(workbench).not.toContain('メーカー・商品名・シリーズ・型番で検索');
+    expect(workbench).toContain('{group.categoryName}');
     expect(workbench).toContain('{group.products.length}件');
-    expect(workbench).toContain('divide-y divide-line');
-    expect(workbench).toContain('flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden');
-    expect(workbench).toContain('shrink-0 space-y-3 border-b border-line px-5 py-4');
-    expect(workbench).toContain('min-h-0 flex-1 overflow-y-auto p-5 pt-4');
-    expect(workbench).toContain('flex items-center gap-3 px-3 py-2');
-    expect(workbench).toContain('size-12 shrink-0');
+    expect(workbench).toContain('grid gap-3 sm:grid-cols-2');
+    expect(workbench).toContain('rounded-xl border border-line bg-white p-3');
+    expect(workbench).toContain('size-14 shrink-0');
     expect(workbench).toContain("product.priceOnRequest ? '別途見積' : formatYen(product.price)");
-    expect(workbench).not.toContain('grid gap-3 sm:grid-cols-2');
+    expect(workbench).toContain("pickerTargetRowId ? 'この商品を選ぶ' : '追加'");
   });
 
   it('区分を折り畳むと数量1・単位式・区分計を1行で表示する', () => {

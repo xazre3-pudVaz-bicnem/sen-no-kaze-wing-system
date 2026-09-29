@@ -35,6 +35,112 @@ $case_name_constraint$;
 comment on column public.quote_requests.case_name is
   '案件管理で使う案件名。顧客名・会社名とは別の業務上の案件タイトル。';
 
+-- Draft再表示でも案件名を同じ編集画面に返す。
+create or replace function public.get_quote_draft(p_draft_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $get_draft$
+declare
+  v_uid uuid := auth.uid();
+  v_rank integer := public.current_role_rank();
+  d public.quote_drafts;
+  parent public.quotes;
+  r public.quote_requests;
+begin
+  if v_uid is null then
+    raise exception 'UNAUTHENTICATED' using errcode = '42501';
+  end if;
+  if v_rank < 1 then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+
+  select * into d
+    from public.quote_drafts
+   where id = p_draft_id;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  if d.parent_quote_id is null then
+    if v_rank < 3 and d.created_by is distinct from v_uid then
+      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    end if;
+  else
+    select * into parent
+      from public.quotes
+     where id = d.parent_quote_id
+       and quote_request_id = d.quote_request_id;
+
+    if not found then
+      raise exception 'NOT_FOUND' using errcode = 'P0002';
+    end if;
+    if v_rank < 3 and parent.dealer_id is distinct from v_uid then
+      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    end if;
+  end if;
+
+  select * into r
+    from public.quote_requests
+   where id = d.quote_request_id;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+
+  return jsonb_build_object(
+    'draft', to_jsonb(d),
+    'request', jsonb_build_object(
+      'id', r.id,
+      'case_name', r.case_name,
+      'status', r.status,
+      'message', r.message,
+      'contact', r.contact,
+      'created_by', r.created_by,
+      'created_at', r.created_at,
+      'updated_at', r.updated_at
+    ),
+    'items', coalesce((
+      select jsonb_agg(to_jsonb(i) order by i.sort_order, i.id)
+        from public.quote_draft_items i
+       where i.draft_id = d.id
+    ), '[]'::jsonb),
+    'base_revisions', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', rev.id,
+          'base_master_id', master.id,
+          'master_name', master.name,
+          'fire_spec_code', master.fire_spec_code,
+          'version', rev.version,
+          'total', rev.total
+        )
+        order by
+          case master.fire_spec_code when 'non_fire' then 0 else 1 end,
+          master.name,
+          rev.version desc
+      )
+        from public.base_masters master
+        join public.base_master_revisions rev
+          on rev.base_master_id = master.id
+       where master.base_model_id = d.base_model_id
+         and rev.status in ('published', 'superseded')
+         and (
+           rev.id = d.base_master_revision_id
+           or (
+             master.status = 'active'
+             and rev.id = master.current_published_revision_id
+             and public.can_use_base_master(master.id)
+           )
+         )
+    ), '[]'::jsonb)
+  );
+end;
+$get_draft$;
+
 create or replace function public.create_manual_quote_draft_with_items(
   p_case_name text,
   p_contact jsonb,

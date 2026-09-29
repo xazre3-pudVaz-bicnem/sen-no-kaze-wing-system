@@ -10,10 +10,6 @@ const demo = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/estimate-template-excel-demo.tsx'),
   'utf8'
 );
-const page = fs.readFileSync(
-  path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'),
-  'utf8'
-);
 const savedEstimateMenu = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/saved-estimate-menu.tsx'),
   'utf8'

@@ -54,7 +54,8 @@ const adminActions = fs.readFileSync(
 describe('見積書作成・管理UI', () => {
   it('トップを一覧ではなくExcel編集ワークスペースとして表示する', () => {
     expect(listPage).toContain('title="見積書作成・管理"');
-    expect(listPage).toContain('開いたらすぐ明細を編集できる');
+    expect(listPage).not.toContain('開いたらすぐ明細を編集できる');
+    expect(listPage).not.toContain('見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。');
     expect(listPage).toContain('＋ 新しい見積書を作成');
     expect(listPage).toContain('見積書一覧（{totalCount}件）');
     expect(listPage).toContain('シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。');
@@ -219,6 +220,18 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('標準・固定');
     expect(workbench).toContain('任意オプション');
     expect(workbench).toContain('お客様には表示しない');
+  });
+
+
+  it('商品マスター由来の明細だけ品名右側から商品詳細を開ける', () => {
+    expect(workbench).toContain('productId?: string');
+    expect(workbench).toContain("row.source === 'product' && row.productId");
+    expect(workbench).toContain('商品詳細を表示');
+    expect(workbench).toContain('setDetailProductId(linkedProduct.id)');
+    expect(workbench).toContain('aria-label="商品詳細"');
+    expect(workbench).toContain('product.imageUrl');
+    expect(workbench).toContain('product.modelNo');
+    expect(workbench).toContain('product.sizeNote');
   });
 
   it('商品選択は追加先区分に対応するカテゴリーだけを表示する', () => {

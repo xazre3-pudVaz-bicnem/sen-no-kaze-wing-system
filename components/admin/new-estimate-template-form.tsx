@@ -404,7 +404,7 @@ export function NewEstimateTemplateForm({
                     <div className="flex flex-wrap items-center gap-2">
                       <strong>{selectedBaseMaster.name}</strong>
                       <span className="rounded-full border border-line bg-sand/30 px-2 py-0.5 text-[10px] font-semibold">
-                        v{selectedBaseMaster.revisionVersion}
+                        公開版 v{selectedBaseMaster.revisionVersion}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-muted">
@@ -457,10 +457,12 @@ export function NewEstimateTemplateForm({
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-line bg-sand/15 px-3 py-2.5">
-              <p className="text-[10px] text-muted">商品モデル</p>
-              <p className="mt-1 text-sm font-semibold">{modelName || '本体を選ぶと自動設定'}</p>
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            <div className="block">
+              <span className="label">商品モデル</span>
+              <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
+                {modelName || '本体を選ぶと自動設定'}
+              </div>
             </div>
 
             <label className="block">
@@ -480,14 +482,13 @@ export function NewEstimateTemplateForm({
                   <option value="">仕様が登録されていません</option>
                 )}
               </SelectWithArrow>
-              <span className="mt-1 block text-[10px] text-muted">
-                見積書に適用する仕様を選択します。
-              </span>
             </label>
 
-            <div className="rounded-lg border border-line bg-sand/15 px-3 py-2.5">
-              <p className="text-[10px] text-muted">防火仕様</p>
-              <p className="mt-1 text-sm font-semibold">{selectedFireLabel || '本体を選ぶと自動設定'}</p>
+            <div className="block">
+              <span className="label">防火仕様</span>
+              <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
+                {selectedFireLabel || '本体を選ぶと自動設定'}
+              </div>
             </div>
 
             <label className="block">
@@ -497,9 +498,6 @@ export function NewEstimateTemplateForm({
                   <option key={item.value} value={item.value}>{item.label}</option>
                 ))}
               </SelectWithArrow>
-              <span className="mt-1 block text-[10px] text-muted">
-                この見積書を適用する地域を選択します。
-              </span>
             </label>
           </div>
 
@@ -565,7 +563,7 @@ export function NewEstimateTemplateForm({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <strong className="text-sm">{baseMaster.name}</strong>
-                            <span className="shrink-0 text-[10px] text-muted">v{baseMaster.revisionVersion}</span>
+                            <span className="shrink-0 text-[10px] text-muted">公開版 v{baseMaster.revisionVersion}</span>
                           </div>
                           <p className="mt-1 text-[11px] text-muted">
                             {modelNameFor(baseMaster)} ／ {fireLabel(baseMaster.fireSpec)}

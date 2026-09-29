@@ -81,13 +81,13 @@ function SavedEstimateMenu({
   return (
     <details className="relative">
       <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        見積書一覧（{totalCount}件）
+        見積テンプレート一覧（{totalCount}件）
       </summary>
       <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(92vw,42rem)] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
         <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
           <div>
-            <p className="text-sm font-semibold">見積書一覧</p>
-            <p className="mt-0.5 text-[11px] text-muted">シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。</p>
+            <p className="text-sm font-semibold">見積テンプレート一覧</p>
+            <p className="mt-0.5 text-[11px] text-muted">シミュレーターで選択できる標準見積と、作成済み見積テンプレートをここで確認します。</p>
           </div>
           <span className="text-[11px] text-muted">{totalCount}件</span>
         </div>
@@ -96,14 +96,14 @@ function SavedEstimateMenu({
           <p className="text-[10px] font-semibold tracking-wide text-muted">シミュレーター標準</p>
           <p className="mt-1 text-xs font-semibold">シミュレーターの選択対象</p>
           <p className="mt-0.5 text-[11px] text-muted">
-            標準に指定された正式見積書だけを、見積シミュレーターの選択肢に表示します。初期表示を決める設定ではありません。現在は指定機能の接続準備中です。
+            標準に指定された見積テンプレートだけを、見積シミュレーターの選択肢に表示します。初期表示を決める設定ではありません。現在は指定機能の接続準備中です。
           </p>
         </div>
 
         <div className="border-t border-line pt-2">
-          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">作成済み見積書</p>
+          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">作成済み見積テンプレート</p>
           {templates.length === 0 && (
-            <p className="px-3 py-2 text-[11px] text-muted">正式保存済みの見積書はまだありません。</p>
+            <p className="px-3 py-2 text-[11px] text-muted">保存済みの見積テンプレートはまだありません。</p>
           )}
           {templates.length > 0 && (
           <div className="divide-y divide-line">
@@ -222,12 +222,12 @@ export default async function EstimateTemplatesPage({
   if (!selectedTemplate) {
     return (
       <AdminPage
-        title="見積書作成・管理"
+        title="見積テンプレート"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} selectedSampleId={selectedSample?.id} />
             <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-              ＋ 新しい見積書を作成
+              ＋ 見積テンプレートを作成
             </Link>
           </div>
         }
@@ -235,7 +235,7 @@ export default async function EstimateTemplatesPage({
         <Alert tone="info">
           {selectedSample
             ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
-            : '現在は正式な見積書データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
+            : '現在は保存済みの見積テンプレートが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
         </Alert>
         <EstimateTemplateExcelDemo
           key={selectedSample?.id ?? 'new-estimate-demo'}
@@ -256,20 +256,20 @@ export default async function EstimateTemplatesPage({
   if (!bundle) {
     return (
       <AdminPage
-        title="見積書作成・管理"
-        lead="見積書をExcelに近い操作感で作成・編集します。"
+        title="見積テンプレート"
+        lead="標準見積をExcelに近い操作感で作成・編集します。"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} selectedId={selectedTemplate.id} />
             <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-              ＋ 新しい見積書を作成
+              ＋ 見積テンプレートを作成
             </Link>
           </div>
         }
       >
-        <Alert tone="warn">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
+        <Alert tone="warn">選択した見積テンプレートの明細を読み込めませんでした。別の見積テンプレートを選択してください。</Alert>
         <section className="card p-4 text-sm text-muted">
-          右上の「見積書一覧」から別の見積書を開けます。
+          右上の「見積テンプレート一覧」から別の見積テンプレートを開けます。
         </section>
       </AdminPage>
     );
@@ -330,19 +330,19 @@ export default async function EstimateTemplatesPage({
 
   const unavailablePreview = (
     <section className="card px-5 py-8 text-center">
-      <p className="font-semibold">この見積書の表示データを準備中です</p>
-      <p className="mt-1 text-sm text-muted">編集画面は利用できます。見積書・プランボード表示は正式接続後に確認できます。</p>
+      <p className="font-semibold">この見積テンプレートの表示データを準備中です</p>
+      <p className="mt-1 text-sm text-muted">編集画面は利用できます。見積書・プランボードのプレビューは正式接続後に確認できます。</p>
     </section>
   );
 
   return (
     <AdminPage
-      title="見積書作成・管理"
+      title="見積テンプレート"
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} selectedId={selectedTemplate.id} />
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい見積書を作成
+            ＋ 見積テンプレートを作成
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
             複製
@@ -361,14 +361,14 @@ export default async function EstimateTemplatesPage({
       <section className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted">編集中の見積書</p>
+            <p className="text-[11px] font-semibold text-muted">編集中の見積テンプレート</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-semibold">{selectedTemplate.name}</h2>
               <Badge tone="neutral">編集画面</Badge>
             </div>
           </div>
 
-          <span className="text-xs text-muted">別の見積書は右上の「見積書一覧」から開けます。</span>
+          <span className="text-xs text-muted">別の見積テンプレートは右上の「見積テンプレート一覧」から開けます。</span>
         </div>
 
         <div className="flex flex-wrap divide-x divide-line text-xs">

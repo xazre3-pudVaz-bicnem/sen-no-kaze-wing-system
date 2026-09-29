@@ -9,7 +9,7 @@ import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench'
  * 案件情報を別画面で先に登録せず、Excel型明細と同じ画面で初回Draftを作る。
  */
 export default async function AdminNewQuotePage() {
-  const actor = await requireAdmin('/admin/quotes/new');
+  await requireAdmin('/admin/quotes/new');
   const store = await getStore();
   const [models, quotes] = await Promise.all([
     store.listModels(),

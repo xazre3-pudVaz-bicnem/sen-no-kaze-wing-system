@@ -234,9 +234,12 @@ export function ManualQuoteWorkbench({
 
         <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="manual-quote-editor-shell">
           <section className="border-b border-slate-200 bg-white" data-testid="case-info-panel">
-            <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
               <h2 className="text-sm font-semibold">案件情報</h2>
-              <span className="text-[0.65rem] text-muted">* 必須</span>
+              <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-muted">
+                <span>電話・メール・お客様住所は保存連携準備中</span>
+                <span>* 必須</span>
+              </div>
             </div>
 
             <div className="grid gap-x-2 gap-y-1 p-2.5 sm:grid-cols-2 lg:grid-cols-12">
@@ -272,6 +275,46 @@ export function ManualQuoteWorkbench({
                     name="customer_company"
                     value={companyName}
                     onChange={(event) => setCompanyName(event.target.value)}
+                    className="h-7 min-h-7 px-2 text-sm"
+                  />
+                </CompactField>
+              </div>
+
+              <div className="lg:col-span-3">
+                <CompactField label="電話番号" htmlFor="quote-phone">
+                  <Input
+                    id="quote-phone"
+                    value=""
+                    readOnly
+                    disabled
+                    placeholder="保存連携準備中"
+                    title="電話番号の保存はDB/RPC接続後に利用できます"
+                    className="h-7 min-h-7 px-2 text-sm"
+                  />
+                </CompactField>
+              </div>
+              <div className="lg:col-span-4">
+                <CompactField label="メールアドレス" htmlFor="quote-email">
+                  <Input
+                    id="quote-email"
+                    value=""
+                    readOnly
+                    disabled
+                    placeholder="保存連携準備中"
+                    title="メールアドレスの保存はDB/RPC接続後に利用できます"
+                    className="h-7 min-h-7 px-2 text-sm"
+                  />
+                </CompactField>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-5">
+                <CompactField label="お客様住所" htmlFor="quote-customer-address">
+                  <Input
+                    id="quote-customer-address"
+                    value=""
+                    readOnly
+                    disabled
+                    placeholder="保存連携準備中"
+                    title="お客様住所の保存はDB/RPC接続後に利用できます"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>

@@ -26,6 +26,18 @@ const initialState: QuoteDraftFormState = { ok: false };
 
 const roundLikePostgres = (value: number) => value < 0 ? -Math.round(-value) : Math.round(value);
 
+const KINDS: QuoteItemKind[] = [
+  'base',
+  'base_expense',
+  'interior_exterior',
+  'interior_exterior_expense',
+  'option',
+  'option_expense',
+  'installation',
+  'free',
+  'discount',
+].filter((kind) => kind !== 'discount');
+
 type EditorRow = QuoteDraftSaveItem & { key: string };
 
 function kindForSection(section: QuoteAuthoringSection): QuoteItemKind {
@@ -141,17 +153,24 @@ export function QuoteDraftEditor({
     }))
   );
 
-  const authoringRows: QuoteAuthoringRow[] = rows.map((row) => ({
-    key: row.key,
-    kind: row.kind,
-    name: row.name,
-    quantity: row.quantity,
-    unit: row.unit ?? '',
-    unitPrice: row.unit_price,
-    amount: amountForRow(row),
-    remark: row.remark ?? '',
-    locked: baseLocked && (row.kind === 'base' || row.kind === 'base_expense'),
-  }));
+  const authoringRows: QuoteAuthoringRow[] = rows.map((row) => {
+    const rowBaseLocked = baseLocked && (row.kind === 'base' || row.kind === 'base_expense');
+    return {
+      key: row.key,
+      kind: row.kind,
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit ?? '',
+      unitPrice: row.unit_price,
+      amount: amountForRow(row),
+      remark: row.remark ?? '',
+      locked: rowBaseLocked,
+    };
+  });
+
+  const revisionEditableKinds = baseLocked
+    ? KINDS.filter((kind) => kind !== 'base' && kind !== 'base_expense')
+    : KINDS;
 
   const updateAuthoringRow = (
     key: string,
@@ -174,8 +193,9 @@ export function QuoteDraftEditor({
   };
 
   const addAuthoringRow = (section: QuoteAuthoringSection) => {
-    if (section === 'base' && baseLocked) return;
-    setRows((current) => [...current, newRow(kindForSection(section))]);
+    const kind = kindForSection(section);
+    if (!revisionEditableKinds.includes(kind)) return;
+    setRows((current) => [...current, newRow(kind)]);
     markDirty();
   };
 
@@ -336,7 +356,7 @@ export function QuoteDraftEditor({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
           <div>
             <p className="text-sm font-semibold">{dirty ? '未保存の変更があります' : 'Draftは保存済みです'}</p>
-            <p className="mt-0.5 text-[10px] text-muted">保存時の金額再計算は既存DB処理を使用します。</p>
+            <p className="mt-0.5 text-[10px] text-muted">Draftを保存すると、DBが数量×単価・税額・合計を再計算します。</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>
@@ -352,7 +372,7 @@ export function QuoteDraftEditor({
         onSubmit={(event) => {
           if (dirty) {
             event.preventDefault();
-            window.alert('未保存の変更があります。先に下書きを保存してください。');
+            window.alert('未保存の変更があります。先にDraftを保存してください。');
             return;
           }
           if (!window.confirm(`この内容を正式な${formalRevisionLabel}として保存しますか？保存後、このDraftは編集できません。`)) {
@@ -372,7 +392,11 @@ export function QuoteDraftEditor({
           type="submit"
           disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
         >
-          {finalizePending ? '正式保存中…' : '正式保存'}
+          {finalizePending
+            ? '正式保存中…'
+            : isRevisionDraft
+              ? '正式保存（次のRevision）'
+              : '正式保存（Revision 1）'}
         </Button>
       </form>
     </div>

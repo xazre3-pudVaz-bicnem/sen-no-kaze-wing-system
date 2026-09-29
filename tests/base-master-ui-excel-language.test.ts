@@ -46,6 +46,7 @@ describe('本体マスター UI', () => {
     expect(lines).toContain("event.key === 'Tab'");
     expect(lines).toContain("event.key === 'Enter'");
     expect(lines).toContain('event.nativeEvent.isComposing');
+    expect(lines).toContain('event.keyCode === 229');
     expect(lines).toContain('toggleSection');
     expect(lines).toContain('行の操作');
     expect(lines).toContain('工事区分を追加');

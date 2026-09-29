@@ -36,10 +36,10 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
-    expect(demo).toContain('本体所有者として操作する場合は、本体明細も含めてこの見積書内で編集できます。');
+    expect(demo).toContain('本体管理元として操作する場合は、本体明細も含めてこの見積書内で編集できます。');
     expect(demo).toContain('見積内の変更は本体マスター自体に反映しません。');
-    expect(demo).toContain('非所有者は本体明細を変更せず、案件販売調整で対応します。');
-    expect(demo).toContain('本体所有者のみ、この見積内で編集可');
+    expect(demo).toContain('管理元以外は本体明細を変更できません。');
+    expect(demo).toContain('本体管理元のみ、この見積内で編集可');
     expect(demo).not.toContain('/admin/base-masters/demo');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
     expect(demo).not.toContain("const readOnly = section === '本体'");

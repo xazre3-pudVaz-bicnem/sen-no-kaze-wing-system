@@ -283,10 +283,10 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('※別途見積を含むため合計は確定額ではありません。');
   });
 
-  it('本体明細は所有者のみ案件内編集可とし、所有者判定接続前は参照専用にする', () => {
-    expect(workbench).toContain('本体所有者のみ案件内編集可・所有者判定接続前は参照専用');
-    expect(workbench).toContain('本体明細は所有者のみ案件内編集可。現在は所有者判定未接続のため参照専用です。');
-    expect(workbench).toContain('非所有者は案件販売調整で対応します（正式接続後）。');
+  it('本体明細は管理元のみ案件内編集可とし、管理元判定接続前は参照専用にする', () => {
+    expect(workbench).toContain('本体管理元のみ案件内編集可・管理元判定接続前は参照専用');
+    expect(workbench).toContain('本体明細は管理元のみ案件内編集可。現在は管理元判定未接続のため参照専用です。');
+    expect(workbench).toContain('管理元以外は本体明細を変更できません。');
     expect(workbench).toContain('editable: false');
   });
 

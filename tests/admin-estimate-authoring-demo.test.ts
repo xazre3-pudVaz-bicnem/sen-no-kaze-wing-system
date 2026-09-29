@@ -19,9 +19,9 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('見積書プレビュー');
   });
 
-  it('本体マスターを壊さず見積書内の本体明細を編集できる', () => {
-    expect(demo).toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
-    expect(demo).toContain('見積内の変更は本体マスターには反映しません。');
+  it('本体明細の常時説明を外し、見積条件と明細操作に集中できる', () => {
+    expect(demo).not.toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
+    expect(demo).not.toContain('見積内の変更は本体マスターには反映しません。');
     expect(demo).toContain('使用中の本体');
     expect(demo).toContain('（本体管理元のみ、この見積内で編集可）');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
@@ -71,4 +71,10 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
   });
+  it('商品行の品名から商品詳細を開ける', () => {
+    expect(demo).toContain('detailProductId');
+    expect(demo).toContain('商品詳細を表示');
+    expect(demo).toContain("row.source === 'product' && row.productId");
+  });
+
 });

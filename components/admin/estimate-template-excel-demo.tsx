@@ -21,6 +21,7 @@ type DemoRow = {
   priceOnRequest: boolean;
   remark: string;
   source: 'base' | 'product' | 'free';
+  productId?: string;
 };
 
 type DemoProduct = {
@@ -43,7 +44,7 @@ const INITIAL_ROWS: DemoRow[] = [
   { id: 'i1', section: '内外装工事', name: 'ガルバリウム鋼板関係', quantity: 1, unit: '式', cost: 174235, sale: 278776, manualSale: false, priceOnRequest: false, remark: '屋根外壁1式', source: 'free' },
   { id: 'i2', section: '内外装工事', name: '下見板張り（防腐剤塗り共）', quantity: 17.6, unit: '㎡', cost: 7800, sale: 12480, manualSale: false, priceOnRequest: false, remark: '', source: 'free' },
 
-  { id: 'o1', section: 'オプション', name: 'ユニットバス1216', quantity: 1, unit: '台', cost: 380000, sale: 608000, manualSale: false, priceOnRequest: false, remark: '', source: 'product' },
+  { id: 'o1', section: 'オプション', name: 'ユニットバス1216', quantity: 1, unit: '台', cost: 380000, sale: 608000, manualSale: false, priceOnRequest: false, remark: '', source: 'product', productId: 'prod-ub' },
   { id: 'o2', section: 'オプション', name: '設備取付関係', quantity: 5, unit: '人', cost: 25000, sale: 25000, manualSale: true, priceOnRequest: false, remark: '手動売価', source: 'free' },
 
   { id: 's1', section: '別途', name: '運送費', quantity: 1, unit: '式', cost: 0, sale: 0, manualSale: false, priceOnRequest: true, remark: '', source: 'free' },
@@ -83,6 +84,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
+  const [detailProductId, setDetailProductId] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
@@ -150,6 +152,10 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
       [product.category, product.name, product.manufacturer, product.modelNo].join(' ').toLowerCase().includes(q)
     );
   }, [query]);
+
+  const detailProduct = detailProductId
+    ? DEMO_PRODUCTS.find((product) => product.id === detailProductId) ?? null
+    : null;
 
   const markDirty = () => setDirty(true);
 
@@ -232,6 +238,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
               priceOnRequest: product.priceOnRequest,
               remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
               source: 'product',
+              productId: product.id,
             }
           : row
       ));
@@ -250,6 +257,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
           priceOnRequest: product.priceOnRequest,
           remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
           source: 'product',
+          productId: product.id,
         },
       ]);
     }
@@ -327,9 +335,6 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             </button>
           ))}
         </div>
-        <div className="bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          見積書を編集し、同じ内容をプランボード・図面にも反映します。
-        </div>
       </section>
 
       {tab === 'estimate' && (
@@ -383,18 +388,13 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
           </div>
         </div>
 
-        <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-1.5 text-[11px] leading-relaxed text-slate-500">
-          {sample
-            ? `Excel「${sample.sourceSheet}」の金額入り明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外し、DBには保存されません。`
-            : (
-              <>
-                <strong className="font-semibold text-slate-700">本体明細は本体管理元のみ、この見積書内で編集できます。</strong>
-                <span className="ml-1.5">見積内の変更は本体マスターには反映しません。</span>
-              </>
-            )}
-        </div>
+        {sample && (
+          <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-1.5 text-[11px] leading-relaxed text-slate-500">
+            Excel「{sample.sourceSheet}」の金額入り明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外し、DBには保存されません。
+          </div>
+        )}
 
-        <div className="grid md:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)] md:divide-x md:divide-slate-200">
+        <div className="divide-y divide-slate-200">
           <section className="px-4 py-2.5">
             <div className="text-[11px] font-semibold text-slate-600">見積条件</div>
             <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
@@ -428,7 +428,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             </div>
           </section>
 
-          <section className="bg-slate-50/50 px-4 py-2.5">
+          <section className="px-4 py-2.5">
             <div className="text-[11px] font-semibold text-slate-600">価格設定</div>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2">
               <div className="flex items-center gap-1.5">
@@ -590,12 +590,25 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                           <th className="bg-slate-100 px-0.5 text-center text-[10px] font-normal text-slate-500">{rowIndex}</th>
                           <td className="border-r border-slate-200"></td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
-                            <input
-                              {...cellProps('name', rowIndex)}
-                              value={row.name}
-                              onChange={(event) => updateRow(row.id, { name: event.target.value })}
-                              className={inputClass}
-                            />
+                            <div className="flex min-w-0 items-center gap-0.5">
+                              <input
+                                {...cellProps('name', rowIndex)}
+                                value={row.name}
+                                onChange={(event) => updateRow(row.id, { name: event.target.value })}
+                                className={inputClass + ' min-w-0 flex-1'}
+                              />
+                              {row.source === 'product' && row.productId && (
+                                <button
+                                  type="button"
+                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-bold text-emerald-800 hover:border-emerald-700"
+                                  title="商品詳細を表示"
+                                  aria-label={row.name + 'の商品詳細を表示'}
+                                  onClick={() => setDetailProductId(row.productId ?? null)}
+                                >
+                                  ⓘ
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
                             <input
@@ -929,6 +942,34 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             現在は配置確認だけです。図面ファイル保存・作図機能・Revisionとの正式な紐付けは後続工程で接続します。
           </p>
         </section>
+      )}
+
+      {detailProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品詳細">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <p className="text-xs text-slate-500">{detailProduct.category}</p>
+                <h2 className="mt-0.5 text-lg font-semibold">{detailProduct.name}</h2>
+              </div>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => setDetailProductId(null)}>閉じる</button>
+            </div>
+            <dl className="grid gap-3 px-5 py-4 text-sm">
+              <div className="grid grid-cols-[6rem_1fr] gap-3">
+                <dt className="text-slate-500">メーカー</dt>
+                <dd className="font-medium">{detailProduct.manufacturer || '—'}</dd>
+              </div>
+              <div className="grid grid-cols-[6rem_1fr] gap-3">
+                <dt className="text-slate-500">型番</dt>
+                <dd className="font-medium">{detailProduct.modelNo || '—'}</dd>
+              </div>
+              <div className="grid grid-cols-[6rem_1fr] gap-3">
+                <dt className="text-slate-500">金額</dt>
+                <dd className="font-semibold">{detailProduct.priceOnRequest ? '別途見積' : formatDisplayYen(detailProduct.price)}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
       )}
 
       {pickerSection && (

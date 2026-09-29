@@ -82,4 +82,3 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(demo).toContain('Excel原本');
   });
 });
-});

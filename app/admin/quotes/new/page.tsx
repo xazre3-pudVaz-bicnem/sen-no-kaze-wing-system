@@ -1,6 +1,6 @@
-import { requireStaff } from '@/lib/auth/session';
+import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
+import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
 
@@ -9,11 +9,11 @@ import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench'
  * 案件情報を別画面で先に登録せず、Excel型明細と同じ画面で初回Draftを作る。
  */
 export default async function AdminNewQuotePage() {
-  const actor = await requireStaff();
+  const actor = await requireAdmin('/admin/quotes/new');
   const store = await getStore();
   const [models, quotes] = await Promise.all([
     store.listModels(),
-    actor.role === 'admin' ? store.listAllQuotes() : store.listDealerQuotes(actor.id),
+    store.listAllQuotes(),
   ]);
 
   const estimates = quotes
@@ -47,7 +47,7 @@ export default async function AdminNewQuotePage() {
           })),
         }))}
         estimates={estimates}
-        canEditBase={canEditCatalog(actor.role)}
+        canEditBase
       />
     </AdminPage>
   );

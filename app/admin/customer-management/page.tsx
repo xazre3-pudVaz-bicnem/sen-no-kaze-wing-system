@@ -47,7 +47,10 @@ export default async function AdminCustomerManagementPage({
           <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-soft">
             顧客が0件なのではなく、顧客管理用migrationの本番適用待ちです。DB更新後はこの画面から通常どおり顧客を確認できます。
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/admin/customer-management/demo" className="btn-primary btn-sm">
+              サンプル画面を確認
+            </Link>
             <Link href="/admin/quotes" className="btn-secondary btn-sm">
               案件管理を開く
             </Link>

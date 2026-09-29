@@ -334,47 +334,47 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
 
       {tab === 'estimate' && (
         <>
-      <section className="sticky top-0 z-30 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">{sample?.name ?? '見積書作成'}</h2>
-              <span className={dirty
-                ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
-                : sample
-                  ? 'rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800'
-                  : 'rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700'}
-              >
-                {dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              {sample
-                ? `Excel「${sample.sourceSheet}」の金額が入っている明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外しています。DBには保存されません。`
-                : '本体管理元として操作する場合は、本体明細も含めてこの見積書内で編集できます。見積内の変更は本体マスター自体に反映しません。管理元以外は本体明細を変更できません。'}
-            </p>
+      <section
+        className="sticky top-0 z-30 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
+        data-testid="estimate-demo-header-summary"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="truncate font-semibold">{sample?.name ?? '見積書作成'}</h2>
+            <span className={dirty
+              ? 'rounded-full border border-amber-400 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900'
+              : sample
+                ? 'rounded-full border border-sky-300 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800'
+                : 'rounded-full border border-slate-300 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700'}
+            >
+              {dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               type="button"
               variant="secondary"
               size="sm"
+              className="h-8 min-h-8"
               onClick={() => setShowEstimatePreview((current) => !current)}
             >
-              {showEstimatePreview ? 'プレビューを閉じる' : '見積書プレビュー'}
+              {showEstimatePreview ? 'プレビューを閉じる' : 'プレビュー'}
             </Button>
             <Button
               type="button"
               variant="secondary"
               size="sm"
+              className="h-8 min-h-8"
               disabled
               title={sample ? 'サンプルはDBへ保存されません' : 'Draft接続後に利用できます'}
             >
-              下書き保存
+              下書きを保存
             </Button>
             <Button
               type="button"
               size="sm"
+              className="h-8 min-h-8"
               disabled
               title={sample ? 'サンプルは正式見積として保存されません' : 'Draft→正式Revision接続後に利用できます'}
             >
@@ -383,53 +383,71 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
           </div>
         </div>
 
-        <div className="border-b border-slate-200 text-sm">
-          <div className="flex flex-wrap items-stretch border-b border-slate-200">
-            <div className="flex w-20 shrink-0 items-center bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
-              見積条件
-            </div>
-            <div className="flex flex-wrap divide-x divide-slate-200">
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">商品モデル</span><strong>{sample?.model ?? 'Wing'}</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">仕様</span><strong>{sample?.spec ?? 'ホテルUB'}</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">防火仕様</span><strong>{sample?.fireSpec ?? '非防火'}</strong></div>
-              <div className="flex items-center gap-2 px-4 py-2"><span className="text-xs text-slate-500">利用地域</span><strong>{sample?.region ?? '標準地域'}</strong></div>
+        <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-1.5 text-[11px] leading-relaxed text-slate-500">
+          {sample
+            ? `Excel「${sample.sourceSheet}」の金額入り明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外し、DBには保存されません。`
+            : (
+              <>
+                <strong className="font-semibold text-slate-700">本体明細は本体管理元のみ、この見積書内で編集できます。</strong>
+                <span className="ml-1.5">見積内の変更は本体マスターには反映しません。</span>
+              </>
+            )}
+        </div>
+
+        <div className="grid md:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)] md:divide-x md:divide-slate-200">
+          <section className="px-4 py-2.5">
+            <div className="text-[11px] font-semibold text-slate-600">見積条件</div>
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-slate-500">商品モデル</span>
+                <strong className="text-xs">{sample?.model ?? 'Wing'}</strong>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-slate-500">仕様</span>
+                <strong className="text-xs">{sample?.spec ?? 'ホテルUB'}</strong>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-slate-500">防火仕様</span>
+                <strong className="text-xs">{sample?.fireSpec ?? '非防火'}</strong>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-slate-500">適用地域</span>
+                <strong className="text-xs">{sample?.region ?? '標準地域'}</strong>
+              </div>
               {sample ? (
-                <div className="flex items-center gap-2 px-4 py-2">
-                  <span className="text-xs text-slate-500">取込元</span>
-                  <strong>Excel原本</strong>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[10px] text-slate-500">取込元</span>
+                  <strong className="text-xs">Excel原本</strong>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 px-4 py-2">
-                  <span className="text-xs text-slate-500">基準本体</span>
-                  <strong>Wing ホテル仕様 v4</strong>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[10px] text-slate-500">使用中の本体</span>
+                  <strong className="text-xs">Wing ホテル仕様 v4</strong>
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
-          <div className="flex flex-wrap items-stretch bg-slate-50/50">
-            <div className="flex w-20 shrink-0 items-center bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
-              価格設定
-            </div>
-            <div className="flex flex-1 flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2">
-              <div className="flex items-center gap-2">
+          <section className="bg-slate-50/50 px-4 py-2.5">
+            <div className="text-[11px] font-semibold text-slate-600">価格設定</div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="flex items-center gap-1.5">
                 <div>
-                  <p className="text-xs font-semibold text-slate-700">販売費</p>
-                  <p className="text-[10px] text-slate-500">原価側</p>
+                  <p className="text-[10px] font-semibold text-slate-700">販売費</p>
+                  <p className="text-[9px] text-slate-500">原価側</p>
                 </div>
                 <div
-                  className="flex h-8 min-w-20 items-center justify-end rounded border border-slate-300 bg-slate-100 px-2 text-sm font-semibold text-slate-600"
+                  className="flex h-7 min-w-16 items-center justify-end rounded border border-slate-300 bg-slate-100 px-2 text-xs font-semibold text-slate-600"
                   title="原価側の正式計算を接続後に変更できるようにします"
                 >
                   100 <span className="ml-1 font-normal">%</span>
                 </div>
-                <span className="text-[10px] text-slate-400">接続後</span>
               </div>
 
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5">
                 <div>
-                  <p className="text-xs font-semibold text-slate-700">経費</p>
-                  <p className="text-[10px] text-slate-500">{sample ? 'Excel明細に反映済み' : '区分に加算'}</p>
+                  <p className="text-[10px] font-semibold text-slate-700">経費</p>
+                  <p className="text-[9px] text-slate-500">{sample ? 'Excel明細に反映済み' : '区分に加算'}</p>
                 </div>
                 <input
                   type="number"
@@ -443,17 +461,17 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                     markDirty();
                   }}
                   className={sample
-                    ? 'h-8 w-20 rounded border border-slate-300 bg-slate-100 px-2 text-right text-sm text-slate-500'
-                    : 'h-8 w-20 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm'}
+                    ? 'h-7 w-16 rounded border border-slate-300 bg-slate-100 px-1.5 text-right text-xs text-slate-500'
+                    : 'h-7 w-16 rounded border border-amber-300 bg-amber-50 px-1.5 text-right text-xs'}
                   aria-label="経費率"
                 />
-                <span>%</span>
+                <span className="text-xs">%</span>
               </label>
 
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5">
                 <div>
-                  <p className="text-xs font-semibold text-slate-700">掛率</p>
-                  <p className="text-[10px] text-slate-500">原価→売価</p>
+                  <p className="text-[10px] font-semibold text-slate-700">掛率</p>
+                  <p className="text-[9px] text-slate-500">原価→売価</p>
                 </div>
                 <input
                   type="number"
@@ -464,15 +482,15 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                     setMarkupRate(Math.max(0, Number(event.target.value) || 0));
                     markDirty();
                   }}
-                  className="h-8 w-24 rounded border border-amber-300 bg-amber-50 px-2 text-right text-sm"
+                  className="h-7 w-20 rounded border border-amber-300 bg-amber-50 px-1.5 text-right text-xs"
                   aria-label="掛率"
                 />
-                <span>%</span>
+                <span className="text-xs">%</span>
               </label>
 
               <button
                 type="button"
-                className="rounded border border-slate-300 bg-white px-3 py-2 text-[11px] font-semibold shadow-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                className="ml-auto h-7 rounded border border-slate-300 bg-white px-2.5 text-[10px] font-semibold shadow-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 disabled={Boolean(sample)}
                 title={sample ? 'Excelサンプルでは原本の売価をそのまま表示します' : undefined}
                 onClick={applyMarkup}
@@ -480,9 +498,8 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                 売価を再計算
               </button>
             </div>
-          </div>
+          </section>
         </div>
-
       </section>
 
       <section className="overflow-visible rounded-xl border border-slate-300 bg-white shadow-sm">

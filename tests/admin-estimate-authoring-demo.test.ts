@@ -20,9 +20,9 @@ describe('技術の杜確認用 見積書作成デモ', () => {
   });
 
   it('本体マスターを壊さず見積書内の本体明細を編集できる', () => {
-    expect(demo).toContain('本体管理元として操作する場合は、本体明細も含めてこの見積書内で編集できます。');
-    expect(demo).toContain('見積内の変更は本体マスター自体に反映しません。');
-    expect(demo).toContain('管理元以外は本体明細を変更できません。');
+    expect(demo).toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
+    expect(demo).toContain('見積内の変更は本体マスターには反映しません。');
+    expect(demo).toContain('使用中の本体');
     expect(demo).toContain('（本体管理元のみ、この見積内で編集可）');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
     expect(demo).not.toContain("const readOnly = section === '本体'");
@@ -67,7 +67,7 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('立面図');
     expect(demo).toContain('配置図');
     expect(demo).toContain('図面ファイル保存・作図機能・Revisionとの正式な紐付けは後続工程で接続します。');
-    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('下書きを保存');
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
   });

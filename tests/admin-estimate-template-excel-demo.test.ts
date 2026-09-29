@@ -57,7 +57,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("aria-label={section + 'を展開'}");
     expect(demo).toContain("data-testid={`estimate-demo-section-total-${section}`}");
-    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain('商品台帳から選択');
     expect(demo).toContain('⋯');
     expect(demo).toContain('下書きを保存');
   });
@@ -151,17 +151,24 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("event.key === 'Tab'");
     expect(demo).toContain("event.key === 'Enter'");
   });
-  it('商品マスター由来の行だけ品名右側から商品詳細を開ける', () => {
-    expect(demo).toContain('productId?: string');
-    expect(demo).toContain("row.source === 'product' && row.productId");
-    expect(demo).toContain('商品詳細を表示');
-    expect(demo).toContain('aria-label="商品詳細"');
-    expect(demo).toContain('detailProduct.manufacturer');
-    expect(demo).toContain('detailProduct.modelNo');
+  it('品名右側から商品台帳を開き、自由明細も商品へ置き換えられる', () => {
+    expect(demo).toContain('title="商品台帳から選ぶ"');
+    expect(demo).toContain("openProductPicker(section as Exclude<Section, '本体'>, row.id)");
+    expect(demo).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
+    expect(demo).toContain('商品台帳の公開済み商品から選び、現在の明細行へ反映します。');
+    expect(demo).not.toContain('detailProductId');
+    expect(demo).not.toContain('商品詳細を表示');
   });
 
   it('見積書タブ直下の説明文は表示しない', () => {
     expect(demo).not.toContain('見積書を編集し、同じ内容をプランボード・図面にも反映します。');
+  });
+
+  it('親画面から渡された公開済み商品台帳を優先して表示する', () => {
+    expect(demo).toContain('products?: EstimateTemplateExcelDemoProduct[]');
+    expect(demo).toContain('products && products.length > 0 ? products : DEMO_PRODUCTS');
+    expect(demo).toContain('SECTION_PRODUCT_CATEGORY_CODES[pickerSection]');
+    expect(demo).toContain('allowedCodes.has(product.categoryCode)');
   });
 
 });

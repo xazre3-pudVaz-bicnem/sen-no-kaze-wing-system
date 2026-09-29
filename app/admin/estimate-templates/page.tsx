@@ -11,7 +11,10 @@ import {
 } from '@/components/admin/estimate-template-workbench';
 import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
-import { EstimateTemplateExcelDemo } from '@/components/admin/estimate-template-excel-demo';
+import {
+  EstimateTemplateExcelDemo,
+  type EstimateTemplateExcelDemoProduct,
+} from '@/components/admin/estimate-template-excel-demo';
 import { ESTIMATE_DEMO_SAMPLES, estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 
 const SPEC_LABELS: Record<string, string> = {
@@ -194,6 +197,20 @@ export default async function EstimateTemplatesPage({
     store.listOptions(),
     store.listCategories(),
   ]);
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+  const demoProducts: EstimateTemplateExcelDemoProduct[] = options
+    .filter((option) => option.status === 'published')
+    .map((option) => ({
+      id: option.id,
+      category: categoryMap.get(option.category_id)?.name ?? '未分類',
+      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+      name: option.name,
+      manufacturer: option.manufacturer ?? '',
+      modelNo: option.model_no ?? '',
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+      imageUrl: option.image_url,
+    }));
 
   const selectedSample = estimateDemoSampleById(sp.sample);
   const selectedTemplate = selectedSample
@@ -220,7 +237,11 @@ export default async function EstimateTemplatesPage({
             ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
             : '現在は正式な見積書データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
         </Alert>
-        <EstimateTemplateExcelDemo key={selectedSample?.id ?? 'new-estimate-demo'} sampleId={selectedSample?.id} />
+        <EstimateTemplateExcelDemo
+          key={selectedSample?.id ?? 'new-estimate-demo'}
+          sampleId={selectedSample?.id}
+          products={demoProducts}
+        />
       </AdminPage>
     );
   }
@@ -231,7 +252,6 @@ export default async function EstimateTemplatesPage({
   ]);
 
   const model = models.find((row) => row.id === selectedTemplate.base_model_id) ?? null;
-  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
 
   if (!bundle) {
     return (

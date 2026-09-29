@@ -24,17 +24,51 @@ type DemoRow = {
   productId?: string;
 };
 
-type DemoProduct = {
+export type EstimateTemplateExcelDemoProduct = {
   id: string;
   category: string;
+  categoryCode: string;
   name: string;
   manufacturer: string;
   modelNo: string;
   price: number;
   priceOnRequest: boolean;
+  imageUrl?: string | null;
 };
 
+type DemoProduct = EstimateTemplateExcelDemoProduct;
+
 const SECTIONS: Section[] = ['本体', '内外装工事', 'オプション', '別途'];
+
+const SECTION_PRODUCT_CATEGORY_CODES: Record<Exclude<Section, '本体'>, readonly string[]> = {
+  '内外装工事': [
+    'roof',
+    'exterior-wall',
+    'floor',
+    'wall-ceiling',
+    'entrance-door',
+    'sash',
+    'interior-door',
+    'carpentry',
+    'fireproof',
+    'insulation',
+  ],
+  'オプション': [
+    'ub',
+    'kitchen',
+    'washbasin',
+    'toilet',
+    'boiler',
+    'aircon',
+    'lighting',
+    'furniture',
+    'appliances',
+    'smartlock',
+    'exterior-parts',
+    'office-supplies',
+  ],
+  '別途': ['sitework', 'free-product'],
+};
 
 const INITIAL_ROWS: DemoRow[] = [
   { id: 'b1', section: '本体', name: '単管パイプ2.5m', quantity: 12, unit: '本', cost: 1349, sale: 2158, manualSale: false, priceOnRequest: false, remark: '', source: 'base' },
@@ -53,10 +87,10 @@ const INITIAL_ROWS: DemoRow[] = [
 ];
 
 const DEMO_PRODUCTS: DemoProduct[] = [
-  { id: 'prod-ub', category: 'ユニットバス', name: 'ユニットバス 1216', manufacturer: 'メーカーA', modelNo: 'UB-1216', price: 608000, priceOnRequest: false },
-  { id: 'prod-toilet', category: 'トイレ', name: '節水トイレ', manufacturer: 'メーカーB', modelNo: 'WC-01', price: 240000, priceOnRequest: false },
-  { id: 'prod-door', category: '玄関ドア', name: '断熱玄関ドア', manufacturer: 'メーカーC', modelNo: 'DR-100', price: 288000, priceOnRequest: false },
-  { id: 'prod-site', category: '別途工事', name: '現場設置工事', manufacturer: '', modelNo: '', price: 0, priceOnRequest: true },
+  { id: 'prod-ub', category: 'ユニットバス', categoryCode: 'ub', name: 'ユニットバス 1216', manufacturer: 'メーカーA', modelNo: 'UB-1216', price: 608000, priceOnRequest: false },
+  { id: 'prod-toilet', category: 'トイレ', categoryCode: 'toilet', name: '節水トイレ', manufacturer: 'メーカーB', modelNo: 'WC-01', price: 240000, priceOnRequest: false },
+  { id: 'prod-door', category: '玄関ドア', categoryCode: 'entrance-door', name: '断熱玄関ドア', manufacturer: 'メーカーC', modelNo: 'DR-100', price: 288000, priceOnRequest: false },
+  { id: 'prod-site', category: '別途工事', categoryCode: 'sitework', name: '現場設置工事', manufacturer: '', modelNo: '', price: 0, priceOnRequest: true },
 ];
 
 const cloneRows = (rows: DemoRow[]) => rows.map((row) => ({ ...row }));
@@ -71,8 +105,15 @@ const rowSale = (row: DemoRow) => row.priceOnRequest ? 0 : Math.round(row.quanti
 let seq = 0;
 const makeId = () => `estimate-demo-${Date.now()}-${++seq}`;
 
-export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | null }) {
+export function EstimateTemplateExcelDemo({
+  sampleId,
+  products,
+}: {
+  sampleId?: string | null;
+  products?: EstimateTemplateExcelDemoProduct[];
+}) {
   const sample = estimateDemoSampleById(sampleId);
+  const catalogProducts = products && products.length > 0 ? products : DEMO_PRODUCTS;
   const [rows, setRows] = useState<DemoRow[]>(() => cloneRows(sample?.rows ?? INITIAL_ROWS));
   const [collapsed, setCollapsed] = useState<Set<Section>>(() => new Set());
   const [dirty, setDirty] = useState(false);
@@ -84,7 +125,6 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
-  const [detailProductId, setDetailProductId] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
@@ -146,16 +186,18 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
   }, [rows]);
 
   const filteredProducts = useMemo(() => {
+    if (!pickerSection) return [];
+    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection]);
     const q = query.trim().toLowerCase();
-    if (!q) return DEMO_PRODUCTS;
-    return DEMO_PRODUCTS.filter((product) =>
-      [product.category, product.name, product.manufacturer, product.modelNo].join(' ').toLowerCase().includes(q)
-    );
-  }, [query]);
-
-  const detailProduct = detailProductId
-    ? DEMO_PRODUCTS.find((product) => product.id === detailProductId) ?? null
-    : null;
+    return catalogProducts.filter((product) => {
+      if (!allowedCodes.has(product.categoryCode)) return false;
+      if (!q) return true;
+      return [product.category, product.name, product.manufacturer, product.modelNo]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [catalogProducts, pickerSection, query]);
 
   const markDirty = () => setDirty(true);
 
@@ -232,11 +274,13 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
           ? {
               ...row,
               name: product.name,
-              unit: product.priceOnRequest ? '式' : '台',
+              unit: row.unit || (product.priceOnRequest ? '式' : '台'),
               sale: product.price,
               manualSale: true,
               priceOnRequest: product.priceOnRequest,
-              remark: product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim(),
+              remark:
+                row.remark ||
+                (product.priceOnRequest ? '別途見積' : `${product.manufacturer} ${product.modelNo}`.trim()),
               source: 'product',
               productId: product.id,
             }
@@ -597,17 +641,15 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                                 onChange={(event) => updateRow(row.id, { name: event.target.value })}
                                 className={inputClass + ' min-w-0 flex-1'}
                               />
-                              {row.source === 'product' && row.productId && (
-                                <button
-                                  type="button"
-                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-bold text-emerald-800 hover:border-emerald-700"
-                                  title="商品詳細を表示"
-                                  aria-label={row.name + 'の商品詳細を表示'}
-                                  onClick={() => setDetailProductId(row.productId ?? null)}
-                                >
-                                  ⓘ
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="flex h-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white px-1 text-[9px] font-semibold text-emerald-800 hover:border-emerald-700"
+                                title="商品台帳から選ぶ"
+                                aria-label={row.name + 'を商品台帳から選び直す'}
+                                onClick={() => openProductPicker(section as Exclude<Section, '本体'>, row.id)}
+                              >
+                                商品
+                              </button>
                             </div>
                           </td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
@@ -694,7 +736,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                                       openProductPicker(section as Exclude<Section, '本体'>, row.id);
                                     }}
                                   >
-                                    既存の商品から選択
+                                    商品台帳から選択
                                   </button>
                                 )}
                                 {section !== '本体' && (
@@ -944,44 +986,16 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
         </section>
       )}
 
-      {detailProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品詳細">
-          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div>
-                <p className="text-xs text-slate-500">{detailProduct.category}</p>
-                <h2 className="mt-0.5 text-lg font-semibold">{detailProduct.name}</h2>
-              </div>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => setDetailProductId(null)}>閉じる</button>
-            </div>
-            <dl className="grid gap-3 px-5 py-4 text-sm">
-              <div className="grid grid-cols-[6rem_1fr] gap-3">
-                <dt className="text-slate-500">メーカー</dt>
-                <dd className="font-medium">{detailProduct.manufacturer || '—'}</dd>
-              </div>
-              <div className="grid grid-cols-[6rem_1fr] gap-3">
-                <dt className="text-slate-500">型番</dt>
-                <dd className="font-medium">{detailProduct.modelNo || '—'}</dd>
-              </div>
-              <div className="grid grid-cols-[6rem_1fr] gap-3">
-                <dt className="text-slate-500">金額</dt>
-                <dd className="font-semibold">{detailProduct.priceOnRequest ? '別途見積' : formatDisplayYen(detailProduct.price)}</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-      )}
-
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="既存の商品から選択">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品台帳から選択">
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '既存の商品から選択' : '商品を追加'}</h2>
+                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
                 <p className="mt-1 text-xs text-slate-500">
                   {pickerTargetRowId
-                    ? `選択した商品を現在の明細行へ反映します。区分：${pickerSection}`
-                    : `追加先：${pickerSection} ／ この一覧もDB非連動の確認用サンプルです。`}
+                    ? `商品台帳の公開済み商品から選び、現在の明細行へ反映します。区分：${pickerSection}`
+                    : `追加先：${pickerSection} ／ 商品台帳の公開済み商品から選択します。`}
                 </p>
               </div>
               <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
@@ -999,10 +1013,22 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
               <div className="grid gap-3 sm:grid-cols-2">
                 {filteredProducts.map((product) => (
                   <article key={product.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex gap-3">
+                      <div
+                        className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand bg-cover bg-center text-[10px] text-slate-400"
+                        style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
+                        role={product.imageUrl ? 'img' : undefined}
+                        aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
+                      >
+                        {!product.imageUrl && '画像なし'}
+                      </div>
+                      <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500">{product.category} ／ {product.manufacturer || '—'}</p>
                     <h3 className="mt-1 font-semibold">{product.name}</h3>
                     <p className="mt-1 text-xs text-slate-500">{product.modelNo || '型番なし'}</p>
                     <p className="mt-3 text-sm font-semibold">{product.priceOnRequest ? '別途見積' : '追加金額 ' + formatDisplayYen(product.price)}</p>
+                      </div>
+                    </div>
                     <div className="mt-4 flex justify-end">
                       <button type="button" className="btn-primary btn-sm" onClick={() => addProduct(product)}>
                         {pickerTargetRowId ? 'この商品を選ぶ' : '追加'}

@@ -75,9 +75,14 @@ describe('見積書作成・管理UI', () => {
 
   it('見積書が未登録でも空画面ではなく作成画面を直接表示する', () => {
     expect(listPage).toContain('if (!selectedTemplate)');
-    expect(listPage).toContain('<EstimateTemplateExcelDemo key={selectedSample?.id ?? \'new-estimate-demo\'} sampleId={selectedSample?.id} />');
+    expect(listPage).toContain('<EstimateTemplateExcelDemo');
+    expect(listPage).toContain("key={selectedSample?.id ?? 'new-estimate-demo'}");
+    expect(listPage).toContain('sampleId={selectedSample?.id}');
     expect(listPage).toContain('正式な見積書データが未登録のため、作成画面を直接表示しています。');
     expect(listPage).not.toContain('見積書がまだありません');
+    expect(listPage).toContain('products={demoProducts}');
+    expect(listPage).toContain("option.status === 'published'");
+    expect(listPage).toContain('categoryCode: categoryMap.get(option.category_id)?.code');
   });
 
   it('見積書一覧・新規作成・シミュレーター標準指定の入口を編集画面上部に置く', () => {
@@ -213,8 +218,8 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋商品');
     expect(workbench).toContain('＋自由明細');
-    expect(workbench).toContain('商品マスターから選び直す');
-    expect(workbench).toContain("pickerTargetRowId ? '商品を変更' : '商品を追加'");
+    expect(workbench).toContain('商品台帳から選ぶ');
+    expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
     expect(workbench).toContain("pickerTargetRowId ? '変更' : '追加'");
     expect(workbench).toContain('標準・変更可');
     expect(workbench).toContain('標準・固定');
@@ -223,15 +228,14 @@ describe('見積書作成・管理UI', () => {
   });
 
 
-  it('商品マスター由来の明細だけ品名右側から商品詳細を開ける', () => {
-    expect(workbench).toContain('productId?: string');
-    expect(workbench).toContain("row.source === 'product' && row.productId");
-    expect(workbench).toContain('商品詳細を表示');
-    expect(workbench).toContain('setDetailProductId(linkedProduct.id)');
-    expect(workbench).toContain('aria-label="商品詳細"');
-    expect(workbench).toContain('product.imageUrl');
-    expect(workbench).toContain('product.modelNo');
-    expect(workbench).toContain('product.sizeNote');
+  it('品名右側から商品台帳を開き、現在行の商品を置き換えられる', () => {
+    expect(workbench).toContain('title="商品台帳から選ぶ"');
+    expect(workbench).toContain("openProductPicker(row.section, row.id)");
+    expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
+    expect(workbench).toContain('商品台帳の公開済み商品から選び、選択した明細行へ反映します。');
+    expect(workbench).toContain('row.remark ||');
+    expect(workbench).not.toContain('detailProductId');
+    expect(workbench).not.toContain('商品詳細を表示');
   });
 
   it('商品選択は追加先区分に対応するカテゴリーだけを表示する', () => {

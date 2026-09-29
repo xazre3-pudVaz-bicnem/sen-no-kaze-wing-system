@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Package } from 'lucide-react';
 import { Button } from '@/components/ui';
@@ -126,6 +126,18 @@ export function EstimateTemplateExcelDemo({
   const [pickerCategoryCode, setPickerCategoryCode] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
+
+  useEffect(() => {
+    if (!pickerSection) return;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setPickerSection(null);
+      setPickerTargetRowId(null);
+      setPickerCategoryCode('');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pickerSection]);
 
   const totals = useMemo(() => {
     const cost = rows.reduce((sum, row) => sum + rowCost(row), 0);
@@ -618,11 +630,11 @@ export function EstimateTemplateExcelDemo({
                             : `売価 ${formatDisplayYen(sectionSummary.sale)}`}
                         </td>
                         <td className="px-2 text-center">
-                          {section !== '本体' && (
+                          {section !== '本体' && section !== '別途' && (
                             <button
                               type="button"
                               className="text-[11px] underline"
-                              onClick={() => openProductPicker(section as Exclude<Section, '本体'>)}
+                              onClick={() => openProductPicker(section)}
                             >
                               商品追加
                             </button>
@@ -650,7 +662,7 @@ export function EstimateTemplateExcelDemo({
                                 onChange={(event) => updateRow(row.id, { name: event.target.value })}
                                 className={inputClass + ' min-w-0 flex-1'}
                               />
-                              {section !== '本体' && (
+                              {section !== '本体' && section !== '別途' && (
                                 <button
                                   type="button"
                                   className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700"
@@ -738,13 +750,13 @@ export function EstimateTemplateExcelDemo({
                                 ⋯
                               </summary>
                               <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left text-[11px] font-normal shadow-lg">
-                                {section !== '本体' && (
+                                {section !== '本体' && section !== '別途' && (
                                   <button
                                     type="button"
                                     className="block w-full px-3 py-2 text-left hover:bg-slate-50"
                                     onClick={(event) => {
                                       event.currentTarget.closest('details')?.removeAttribute('open');
-                                      openProductPicker(section as Exclude<Section, '本体'>, row.id);
+                                      openProductPicker(section, row.id);
                                     }}
                                   >
                                     商品台帳から選択
@@ -998,27 +1010,30 @@ export function EstimateTemplateExcelDemo({
       )}
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品台帳から選択">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="商品台帳から選択"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeProductPicker();
+          }}
+        >
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  {pickerTargetRowId
-                    ? `商品台帳の公開済み商品から選び、現在の明細行へ反映します。区分：${pickerSection}`
-                    : `追加先：${pickerSection} ／ 商品台帳の公開済み商品から選択します。`}
-                </p>
-              </div>
+              <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
               <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
             <div className="space-y-4 p-5">
               <p className="text-xs text-slate-500">
-                {pickerSection}で選べる商品を表示しています。商品を選ぶと現在の明細へ反映します。
+                {pickerTargetRowId
+                  ? `${pickerSection}で選べる商品です。選択すると現在の明細へ反映します。`
+                  : `${pickerSection}に追加できる商品です。選択すると明細へ追加します。`}
               </p>
 
               {pickerCategories.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label={pickerSection + 'の商品カテゴリー'}>
+                <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-x-visible sm:pb-0" role="tablist" aria-label={pickerSection + 'の商品カテゴリー'}>
                   <button
                     type="button"
                     role="tab"

@@ -91,6 +91,38 @@ describe('unified manual quote authoring', () => {
     expect(migration).toContain('to authenticated;');
   });
 
+  it('temporarily limits initial manual Quote creation/save/finalize to headquarters admin', () => {
+    expect(newQuotePage).toContain("requireAdmin('/admin/quotes/new')");
+    expect(actions).toContain("requireAdmin('/admin/quotes/new')");
+    expect(casePage).toContain("canCreateQuote={actor.role === 'admin'}");
+    expect(migration).toContain("FORBIDDEN: 初回見積書作成は現在本部管理者のみ利用できます");
+    expect(migration).toContain("FORBIDDEN: 初回見積Draftの作成・編集は現在本部管理者のみ利用できます");
+    expect(migration).toContain("FORBIDDEN: 初回Revision 1の正式保存は現在本部管理者のみ利用できます");
+  });
+
+  it('allows only current published Base Master Revision for a new pin while preserving an existing pin', () => {
+    expect(migration).toContain("p_base_master_revision_id is not distinct from d.base_master_revision_id");
+    expect(migration).toContain("rev.status in ('published', 'superseded')");
+    expect(migration).toContain("rev.status = 'published'");
+    expect(migration).toContain("master.status = 'active'");
+    expect(migration).toContain('rev.id = master.current_published_revision_id');
+    expect(migration).toContain('public.can_use_base_master(v_base_master_id)');
+    expect(migration).toContain('新しく選べるのは現在公開中の本体Revisionだけです');
+  });
+
+  it('keeps the old case-only RPC internal so authenticated users cannot bypass atomic creation', () => {
+    expect(migration).toContain('revoke execute on function public.create_manual_quote_case(jsonb, text, uuid, text, text)');
+    expect(migration).toContain('from public, anon, authenticated, service_role;');
+    expect(supabaseStore).not.toContain("db.rpc('create_manual_quote_case'");
+  });
+
+  it('warns before leaving an unsaved new estimate and describes tabs by actual availability', () => {
+    expect(workbench).toContain("window.confirm('保存していない内容があります。保存せずに別の画面へ移動しますか？')");
+    expect(workbench).toContain("window.addEventListener('beforeunload'");
+    expect(workbench).toContain('if (!confirmLeave()) event.preventDefault();');
+    expect(workbench).toContain('プランボード・図面は正式保存後に案件画面から利用できます');
+  });
+
   it('returns the persisted case name when the Draft editor is reopened', () => {
     expect(migration).toContain("'case_name', r.case_name");
     expect(store).toContain("'id' | 'case_name' | 'status'");

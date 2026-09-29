@@ -17,7 +17,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(adminNav).toContain("label: '見積書管理'");
     expect(managementTabs).toContain('案件見積');
     expect(managementTabs).toContain('シミュレーター標準');
-    expect(managementTabs).toContain('href="/admin/quotes/new"');
+    expect(managementTabs).toContain('href="/admin/quote-management"');
     expect(managementTabs).toContain('href="/admin/estimate-templates"');
     expect(newQuotePage).toContain('<QuoteManagementTabs active="case" />');
     expect(draftPage).toContain('<QuoteManagementTabs active="case" />');

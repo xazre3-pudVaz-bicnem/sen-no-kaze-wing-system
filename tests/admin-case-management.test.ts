@@ -91,7 +91,7 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('href="/admin/contacts"');
     expect(list).not.toContain('href="/admin/notifications"');
     expect(list).not.toContain('＋対面・電話・紹介の案件受付');
-    expect(list).toContain('＋案件を登録');
+    expect(list).toContain('＋見積書を作成');
     expect(list).toContain('href="/admin/quotes/new"');
     expect(shell).toContain('href="/admin/notifications"');
     expect(shell).toContain('aria-label="お知らせ"');
@@ -101,7 +101,8 @@ describe('Admin case management UI', () => {
 
   it('uses one case flow for Web and staff-received orders without calling revisions new quotes', () => {
     expect(list).toContain('Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。');
-    expect(newQuote).toContain('Web以外で受けた案件を登録し、空の見積Draftから明細編集を始めます。案件登録だけではRevision 1は発行しません。');
+    expect(newQuote).toContain('案件情報と見積明細を同じ画面で入力します。下書き保存までは正式な見積Revisionを発行しません。');
+    expect(newQuote).toContain('<ManualQuoteWorkbench');
     expect(manualQuoteForm).toContain('案件を登録して見積Draftを開く');
     expect(manualQuoteForm).toContain('登録時点では見積Revisionを発行しません。');
     expect(manualQuoteForm).toContain('設置予定地（任意）');

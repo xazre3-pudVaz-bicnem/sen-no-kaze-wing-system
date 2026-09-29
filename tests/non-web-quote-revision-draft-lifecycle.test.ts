@@ -62,6 +62,8 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
   it('keeps parent-pinned history usable while validating changed references', () => {
     expect(migration).toContain('v_parent_item.option_id is not distinct from v_option_id');
     expect(migration).toContain("rev.status in ('published', 'superseded')");
+    expect(migration).toContain('rev.id = d.base_master_revision_id');
+    expect(migration).toContain("master.status = 'active'");
     expect(migration).toContain('p_base_master_revision_id is not distinct from parent.base_master_revision_id');
     expect(migration).toContain('public.can_use_base_master(v_base_master_id)');
   });

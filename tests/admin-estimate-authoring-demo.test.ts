@@ -53,7 +53,7 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('data-testid="estimate-live-preview"');
     expect(demo).toContain('data-testid="plan-live-preview"');
     expect(demo).toContain('rows.filter((row) => row.section === section)');
-    expect(demo).toContain('{formatYen(totals.saleGrand)}');
+    expect(demo).toContain('{formatDisplayYen(totals.saleGrand)}');
     expect(demo).toContain('見積書プレビュー・画面内編集と連動');
     expect(demo).toContain('プランボード・画面内編集と連動');
   });

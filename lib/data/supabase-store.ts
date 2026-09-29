@@ -575,26 +575,15 @@ export class SupabaseStore implements DataStore {
   }
 
   // ---------- 見積 ----------
-  async createManualQuoteDraft(_actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft> {
-    const db = await this.db();
-    const { data, error } = await db.rpc('create_manual_quote_case', {
-      p_contact: {
-        full_name: input.customer_name,
-        company_name: input.customer_company,
-        email: '',
-        phone: '',
-        address: '',
-        site_address: input.site_address,
-      },
-      p_message: input.memo,
-      p_base_model_id: input.base_model_id,
-      p_spec_code: input.spec_code,
-      p_finish_level: input.finish_level,
+  async createManualQuoteDraft(actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft> {
+    return this.createManualQuoteDraftWithItems(actor, {
+      ...input,
+      case_name: null,
+      base_master_revision_id: null,
+      items: [],
+      adjustment: 0,
+      adjustment_reason: null,
     });
-    if (error) mapPgError(error);
-    const detail = await this.getQuoteDraft(data as string, _actor);
-    if (!detail) throw new StoreError('INTERNAL', '作成したDraftを取得できませんでした');
-    return detail.draft;
   }
 
   async createManualQuoteDraftWithItems(_actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {

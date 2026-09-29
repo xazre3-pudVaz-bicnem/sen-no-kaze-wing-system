@@ -5,6 +5,7 @@ import { getStore, StoreError } from '@/lib/data/store';
 import { canEditCatalog, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { QuoteDraftEditor } from '@/components/admin/quote-draft-editor';
 import { Alert } from '@/components/ui';
+import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 export default async function AdminQuoteDraftPage({
   params,
@@ -69,6 +70,7 @@ export default async function AdminQuoteDraftPage({
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2">
+      <QuoteManagementTabs active="case" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/admin/quotes" className="text-sm text-ink-soft underline-offset-4 hover:underline">
           ← 案件一覧へ戻る

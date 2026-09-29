@@ -399,7 +399,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 シミュレーター画面と同じ商品詳細です。ここで変更した仕様は確認用で、保存されません。
               </div>
               <div className="card p-4 sm:p-5">
-                <ProductDetail key={selected.id} category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} onVariantChange={onPreviewVariantChange} />
+                <ProductDetail key={selected.id} category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} compactMedia onVariantChange={onPreviewVariantChange} />
               </div>
             </section>
           ) : (

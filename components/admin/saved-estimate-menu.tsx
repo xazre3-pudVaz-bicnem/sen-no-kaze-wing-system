@@ -28,6 +28,8 @@ type SavedEstimateSample = {
   sourceTotal: number;
 };
 
+const SIMULATOR_STANDARD_DEMO_SAMPLE_IDS = new Set(['wing-hotel', 'box-hotel-single', 'flat-office']);
+
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
   hotel: 'ホテル',
@@ -176,11 +178,6 @@ export function SavedEstimateMenu({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 px-2 py-2 text-[11px] text-muted">
-          <Badge tone="neutral">シミュレーター標準</Badge>
-          <span>シミュレーターで選べる正式見積書（指定機能は接続準備中）</span>
-        </div>
-
         <div className="border-t border-line pt-2">
           <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">作成済み見積書</p>
           {filteredTemplates.length === 0 && (
@@ -236,6 +233,7 @@ export function SavedEstimateMenu({
             <div className="divide-y divide-line">
               {filteredSamples.map((sample) => {
                 const active = sample.id === selectedSampleId;
+                const simulatorStandard = SIMULATOR_STANDARD_DEMO_SAMPLE_IDS.has(sample.id);
                 return (
                   <Link
                     key={sample.id}
@@ -251,6 +249,7 @@ export function SavedEstimateMenu({
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="truncate font-semibold">{sample.name}</span>
                         <Badge tone="neutral">サンプル</Badge>
+                        {simulatorStandard && <Badge tone="neutral">シミュレーター標準</Badge>}
                         {active && <Badge tone="neutral">表示中</Badge>}
                       </span>
                       <span className="mt-0.5 block text-[11px] text-muted">

@@ -159,7 +159,7 @@ export function ManualQuoteWorkbench({
 
   return (
     <div className="space-y-3" data-testid="manual-quote-workbench">
-      <a
+      <Link
         href="/admin/quotes"
         className="inline-flex text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
         onClick={(event) => {
@@ -167,7 +167,7 @@ export function ManualQuoteWorkbench({
         }}
       >
         ← 案件管理へ戻る
-      </a>
+      </Link>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-xs font-semibold text-muted">見積書</span>

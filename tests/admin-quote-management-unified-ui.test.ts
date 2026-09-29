@@ -64,7 +64,7 @@ describe('見積書管理の正式編集UI統合', () => {
     const start = authoringUi.indexOf('export function CustomerQuotePreview');
     expect(start).toBeGreaterThan(-1);
     const preview = authoringUi.slice(start);
-    for (const label of ['会社名', 'お客様名', '住所', 'TEL', '顧客番号', '件名', '見積提出日', '受注契約日', '発行者情報', '適格請求書番号', '支払条件', '振込先']) {
+    for (const label of ['会社名', 'お客様名', '住所', 'TEL', '顧客番号', '件名', '見積提出日', '受注契約日', '発行者情報', '発行会社名／代理店名', '担当者', '適格請求書発行事業者登録番号', '支払情報', '支払条件', '振込先', '銀行名', '支店名', '口座種別', '口座番号', '口座名義']) {
       expect(preview).toContain(label);
     }
     for (const label of ['区分', '品名', '数量', '単位', '単価', '金額', '備考', '税抜小計', '値引き・調整額', '消費税', '税込合計']) {
@@ -81,11 +81,12 @@ describe('見積書管理の正式編集UI統合', () => {
   it('発行者・振込先は固定値をハードコードせず未設定として分離する', () => {
     const start = authoringUi.indexOf('export function CustomerQuotePreview');
     const preview = authoringUi.slice(start);
-    expect(preview).toContain('<dt className="text-muted">発行者情報</dt><dd>未設定</dd>');
-    expect(preview).toContain('<dt className="text-muted">振込先</dt><dd>未設定</dd>');
+    for (const label of ['発行会社名／代理店名', '担当者', '適格請求書発行事業者登録番号', '振込先', '銀行名', '支店名', '口座種別', '口座番号', '口座名義']) {
+      expect(preview).toContain(label);
+    }
     expect(preview).not.toContain('株式会社技術の杜');
-    expect(preview).not.toContain('銀行名');
-    expect(preview).not.toContain('口座番号');
+    expect(preview).not.toContain('北日本銀行');
+    expect(preview).not.toContain('7084800');
   });
 
   it('プランボード・図面は同じワークスペース内で未接続状態を明示する', () => {

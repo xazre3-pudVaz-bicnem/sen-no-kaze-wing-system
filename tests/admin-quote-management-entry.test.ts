@@ -23,6 +23,17 @@ describe('見積書管理の案件見積入口', () => {
     expect(page).toContain('正式見積');
   });
 
+
+  it('PCでは案件見積一覧を横スクロールなしで収める', () => {
+    expect(page).toContain('min-w-[62rem]');
+    expect(page).toContain('lg:min-w-0');
+    expect(page).toContain('w-[31%]');
+    expect(page).toContain('w-[14%]');
+    expect(page).toContain('w-[12%]');
+    expect(page).toContain('w-[10%]');
+    expect(page).toContain('whitespace-nowrap px-2 py-2 align-middle text-xs text-muted');
+  });
+
   it('シミュレーター標準は別タブのまま維持する', () => {
     expect(tabs).toContain('href="/admin/estimate-templates"');
     expect(tabs).toContain('シミュレーター標準');

@@ -184,7 +184,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-        <CasePageHeading caseCount={latest.length} canCreateQuote={actor.role === 'admin'} />
+        <CasePageHeading caseCount={latest.length} canCreateQuote={false} />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}
@@ -395,7 +395,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-      <CasePageHeading caseCount={requests.length} canCreateQuote={actor.role === 'admin'} />
+      <CasePageHeading caseCount={requests.length} canCreateQuote />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}

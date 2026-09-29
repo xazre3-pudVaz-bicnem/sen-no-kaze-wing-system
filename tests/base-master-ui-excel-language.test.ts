@@ -22,6 +22,14 @@ const form = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/base-master-form.tsx'),
   'utf8'
 );
+const demoPage = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/base-masters/demo/page.tsx'),
+  'utf8'
+);
+const demo = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/base-master-excel-demo.tsx'),
+  'utf8'
+);
 
 describe('本体マスター UI', () => {
   it('利用者向けに本体管理元・下書き・公開履歴の表現を使う', () => {
@@ -68,4 +76,23 @@ describe('本体マスター UI', () => {
     expect(lines).not.toContain('cost_price');
     expect(lines).not.toContain('sale_price');
   });
+  it('見積書側に合わせて本体条件と保存・公開操作を編集枠へ集約する', () => {
+    expect(page).not.toContain('card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4');
+    expect(page).toContain('modelName={model?.name');
+    expect(page).toContain('ownerName={owner?.name');
+    expect(editor).toContain('本体マスター編集');
+    expect(editor).toContain('商品モデル');
+    expect(editor).toContain('本体管理元');
+    expect(editor).toContain('現在の公開版');
+    expect(editor).toContain('form="base-master-save-form"');
+    expect(editor).toContain('この内容で公開');
+    expect(demoPage).not.toContain('操作確認用・DB非連動');
+    expect(demo).toContain('この内容で公開');
+  });
+
+  it('工事区分見出しから明細を直接追加できる', () => {
+    expect(lines).toContain('＋明細');
+    expect(lines).toContain('onClick={() => addRow(section.key)}');
+  });
+
 });

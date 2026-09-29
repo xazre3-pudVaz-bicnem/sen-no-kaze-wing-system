@@ -297,7 +297,16 @@ export function BaseMasterLinesEditor({
                       />
                     </td>
                     <td colSpan={2} className="px-3 text-right text-xs">
-                      小計 {formatYen(sectionTotal)}
+                      <div className="flex items-center justify-end gap-3">
+                        <span>小計 {formatYen(sectionTotal)}</span>
+                        <button
+                          type="button"
+                          className="font-semibold text-white underline underline-offset-2 hover:text-emerald-100"
+                          onClick={() => addRow(section.key)}
+                        >
+                          ＋明細
+                        </button>
+                      </div>
                     </td>
                     <td className="relative px-1 text-center">
                       <details className="group relative inline-block">

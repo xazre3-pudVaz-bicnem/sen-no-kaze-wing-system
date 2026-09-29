@@ -6,7 +6,7 @@ import { type RoleCode } from '@/lib/domain/types';
 import { cn } from '@/lib/utils';
 
 type Access = 'admin';
-type NavSection = { href: string; label: string; match: string[]; need?: Access };
+type NavSection = { href: string; label: string; match: string[]; exclude?: string[]; need?: Access };
 type NavUtilityLink = { href: string; label: string; need?: Access };
 
 const sections: NavSection[] = [
@@ -20,6 +20,7 @@ const sections: NavSection[] = [
       '/admin/notifications',
       '/admin/contacts',
     ],
+    exclude: ['/admin/quotes/new', '/admin/quotes/drafts'],
   },
   {
     href: '/admin/customer-management',
@@ -42,7 +43,13 @@ const sections: NavSection[] = [
   {
     href: '/admin/estimate-templates',
     label: '見積書管理',
-    match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'],
+    match: [
+      '/admin/base-masters',
+      '/admin/estimate-templates',
+      '/admin/base-breakdown',
+      '/admin/quotes/new',
+      '/admin/quotes/drafts',
+    ],
     need: 'admin',
   },
   {
@@ -59,6 +66,9 @@ function isAllowed(item: { need?: Access }, role: RoleCode) {
 }
 
 function sectionIsActive(section: NavSection, pathname: string) {
+  if (section.exclude?.some((href) => pathname === href || pathname.startsWith(`${href}/`))) {
+    return false;
+  }
   return section.match.some((href) => (href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)));
 }
 

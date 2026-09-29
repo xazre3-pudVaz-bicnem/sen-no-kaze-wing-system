@@ -179,7 +179,7 @@ function StepIndicator({ current }: { current: 'setup' | 'edit' }) {
         >
           1
         </span>
-        <span className="whitespace-nowrap font-semibold text-ink">初期設定</span>
+        <span className="whitespace-nowrap font-semibold text-ink">本体・条件設定</span>
       </div>
       <div className="h-px min-w-8 flex-1 bg-line" />
       <div className="flex shrink-0 items-center gap-2">
@@ -320,7 +320,7 @@ export function NewEstimateTemplateForm({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
             <StepIndicator current="edit" />
             <button type="button" className="btn-secondary btn-sm" onClick={() => setStep('setup')}>
-              初期設定へ戻る
+              本体・条件設定へ戻る
             </button>
           </div>
 
@@ -332,7 +332,7 @@ export function NewEstimateTemplateForm({
               </span>
             </div>
             <p className="mt-1 text-xs text-muted">
-              基準本体：{selectedBaseMaster ? selectedBaseMaster.name + (samplePreview ? '' : ' v' + selectedBaseMaster.revisionVersion) : '—'}
+              本体：{selectedBaseMaster ? selectedBaseMaster.name + (samplePreview ? '' : ' ／ 公開版 v' + selectedBaseMaster.revisionVersion) : '—'}
               <span className="mx-2">｜</span>
               防火：{selectedFireLabel || '—'}
               <span className="mx-2">｜</span>
@@ -373,9 +373,9 @@ export function NewEstimateTemplateForm({
 
         <div className="space-y-4 p-4 sm:p-5">
           <div>
-            <h2 className="font-semibold">初期設定</h2>
+            <h2 className="font-semibold">本体・条件設定</h2>
             <p className="mt-0.5 text-xs text-muted">
-              先に基準本体を選びます。商品モデルと防火仕様は、選んだ本体から自動設定されます。
+              先に使用する本体を選びます。商品モデルと防火仕様は、選んだ本体マスターから自動設定されます。
             </p>
             {initialTarget && targetModel && targetSpec && (
               <p className="mt-2 inline-flex rounded-full border border-forest/20 bg-forest/5 px-3 py-1 text-xs font-semibold text-forest">
@@ -387,8 +387,8 @@ export function NewEstimateTemplateForm({
           <section className="overflow-hidden rounded-xl border border-line">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-sand/20 px-4 py-2.5">
               <div>
-                <h3 className="text-sm font-semibold">基準本体</h3>
-                <p className="mt-0.5 text-[11px] text-muted">公開中の本体Revisionから、明細を確認して選択します。</p>
+                <h3 className="text-sm font-semibold">使用する本体</h3>
+                <p className="mt-0.5 text-[11px] text-muted">公開中の本体マスターから、明細と金額を確認して選びます。</p>
               </div>
               {selectedBaseMaster && (
                 <button type="button" className="btn-secondary btn-sm" onClick={openBasePicker}>
@@ -404,11 +404,11 @@ export function NewEstimateTemplateForm({
                     <div className="flex flex-wrap items-center gap-2">
                       <strong>{selectedBaseMaster.name}</strong>
                       <span className="rounded-full border border-line bg-sand/30 px-2 py-0.5 text-[10px] font-semibold">
-                        v{selectedBaseMaster.revisionVersion}
+                        公開版 v{selectedBaseMaster.revisionVersion}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-muted">
-                      {modelNameFor(selectedBaseMaster)} ／ {fireLabel(selectedBaseMaster.fireSpec)} ／ {selectedBaseMaster.ownerName}
+                      {modelNameFor(selectedBaseMaster)} ／ {fireLabel(selectedBaseMaster.fireSpec)} ／ 本体管理元：{selectedBaseMaster.ownerName}
                     </p>
                   </div>
                   <div className="text-right">
@@ -416,19 +416,19 @@ export function NewEstimateTemplateForm({
                     <p className="text-base font-semibold">{formatYen(selectedBaseMaster.total)}</p>
                   </div>
                   <button type="button" className="text-xs font-semibold underline underline-offset-4" onClick={openBasePicker}>
-                    明細を見る
+                    明細を確認
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium">基準本体が未選択です</p>
+                    <p className="text-sm font-medium">使用する本体が未選択です</p>
                     <p className="mt-0.5 text-[11px] text-muted">
-                      本体名だけでなく、公開Revisionの明細・数量・単価・金額を確認して選べます。
+                      公開版の明細・数量・単価・金額を確認して選べます。
                     </p>
                   </div>
                   <button type="button" className="btn-primary btn-sm" onClick={openBasePicker}>
-                    基準本体を選ぶ
+                    本体を選ぶ
                   </button>
                 </div>
               )}
@@ -437,10 +437,10 @@ export function NewEstimateTemplateForm({
 
           {!baseMasterSourceReady && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-[11px] text-ink-soft">
-              <span>本体マスターの正式な読込環境が未接続です。正式データは選べませんが、画面確認用サンプルで明細編集を確認できます。</span>
+              <span>本体マスターの正式データが未接続のため、画面確認用サンプルで明細編集を確認できます。</span>
               {sampleBaseMaster && (
                 <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
-                  画面確認用サンプルでExcel明細編集を見る
+                  サンプルで明細編集を見る
                 </button>
               )}
             </div>
@@ -448,19 +448,21 @@ export function NewEstimateTemplateForm({
 
           {baseMasterSourceReady && baseMasters.length === 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/20 px-3 py-2 text-[11px] text-muted">
-              <span>公開中の基準本体がありません。本体マスターで公開版を用意すると正式データを選択できます。</span>
+              <span>公開中の本体マスターがありません。公開版を用意すると、この画面から選択できます。</span>
               {sampleBaseMaster && (
                 <button type="button" className="btn-secondary btn-sm" onClick={openSampleEditor}>
-                  画面確認用サンプルでExcel明細編集を見る
+                  サンプルで明細編集を見る
                 </button>
               )}
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-line bg-sand/15 px-3 py-2.5">
-              <p className="text-[10px] text-muted">商品モデル</p>
-              <p className="mt-1 text-sm font-semibold">{modelName || '基準本体から自動設定'}</p>
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            <div className="block">
+              <span className="label">商品モデル</span>
+              <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
+                {modelName || '本体を選ぶと自動設定'}
+              </div>
             </div>
 
             <label className="block">
@@ -471,7 +473,7 @@ export function NewEstimateTemplateForm({
                 disabled={!selectedBaseMaster || availableSpecs.length === 0}
               >
                 {!selectedBaseMaster ? (
-                  <option value="">先に基準本体を選択</option>
+                  <option value="">先に本体を選択</option>
                 ) : availableSpecs.length > 0 ? (
                   availableSpecs.map((item) => (
                     <option key={item.code} value={item.code}>{item.name}</option>
@@ -480,14 +482,13 @@ export function NewEstimateTemplateForm({
                   <option value="">仕様が登録されていません</option>
                 )}
               </SelectWithArrow>
-              <span className="mt-1 block text-[10px] text-muted">
-                現在の本体マスターでは仕様は別項目のため、ここで選択します。
-              </span>
             </label>
 
-            <div className="rounded-lg border border-line bg-sand/15 px-3 py-2.5">
-              <p className="text-[10px] text-muted">防火仕様</p>
-              <p className="mt-1 text-sm font-semibold">{selectedFireLabel || '基準本体から自動設定'}</p>
+            <div className="block">
+              <span className="label">防火仕様</span>
+              <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/15 px-3 text-sm font-semibold">
+                {selectedFireLabel || '本体を選ぶと自動設定'}
+              </div>
             </div>
 
             <label className="block">
@@ -497,9 +498,6 @@ export function NewEstimateTemplateForm({
                   <option key={item.value} value={item.value}>{item.label}</option>
                 ))}
               </SelectWithArrow>
-              <span className="mt-1 block text-[10px] text-muted">
-                将来は設置予定地から自動判定する想定です。
-              </span>
             </label>
           </div>
 
@@ -508,7 +506,7 @@ export function NewEstimateTemplateForm({
             <Input
               className="mt-1 h-10 w-full"
               value={name}
-              placeholder="基準本体を選ぶと自動入力します"
+              placeholder="本体を選ぶと自動入力します"
               onChange={(event) => setCustomName(event.target.value)}
             />
             <span className="mt-1 block text-[10px] text-muted">
@@ -518,7 +516,7 @@ export function NewEstimateTemplateForm({
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
             <p className="text-xs text-muted">
-              次の画面では、選択した本体明細を基準にExcel形式の明細編集を確認できます。
+              次の画面では、選択した本体明細をもとにExcelのような形式で明細を編集できます。
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">キャンセル</Link>
@@ -528,7 +526,7 @@ export function NewEstimateTemplateForm({
                 disabled={!canContinue}
                 onClick={() => setStep('edit')}
               >
-                Excel明細編集へ進む
+                明細編集へ進む
               </button>
             </div>
           </div>
@@ -536,12 +534,12 @@ export function NewEstimateTemplateForm({
       </section>
 
       {basePickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="基準本体を選択">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="使用する本体を選択">
           <div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-line px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">基準本体を選択</h2>
-                <p className="mt-1 text-xs text-muted">公開中の本体Revisionを、明細と金額を確認して選択します。</p>
+                <h2 className="text-lg font-semibold">使用する本体を選択</h2>
+                <p className="mt-1 text-xs text-muted">公開中の本体マスターから、明細と金額を確認して選びます。</p>
               </div>
               <button type="button" className="btn-ghost btn-sm" onClick={() => setBasePickerOpen(false)}>閉じる</button>
             </div>
@@ -565,12 +563,12 @@ export function NewEstimateTemplateForm({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <strong className="text-sm">{baseMaster.name}</strong>
-                            <span className="shrink-0 text-[10px] text-muted">v{baseMaster.revisionVersion}</span>
+                            <span className="shrink-0 text-[10px] text-muted">公開版 v{baseMaster.revisionVersion}</span>
                           </div>
                           <p className="mt-1 text-[11px] text-muted">
                             {modelNameFor(baseMaster)} ／ {fireLabel(baseMaster.fireSpec)}
                           </p>
-                          <p className="mt-1 text-[11px] text-muted">{baseMaster.ownerName}</p>
+                          <p className="mt-1 text-[11px] text-muted">本体管理元：{baseMaster.ownerName}</p>
                           <p className="mt-2 text-sm font-semibold">{formatYen(baseMaster.total)}</p>
                         </button>
                       );
@@ -590,11 +588,11 @@ export function NewEstimateTemplateForm({
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-muted">
-                            {modelNameFor(pickerBaseMaster)} ／ {fireLabel(pickerBaseMaster.fireSpec)} ／ {pickerBaseMaster.ownerName}
+                            {modelNameFor(pickerBaseMaster)} ／ {fireLabel(pickerBaseMaster.fireSpec)} ／ 本体管理元：{pickerBaseMaster.ownerName}
                           </p>
                         </div>
                         <button type="button" className="btn-primary btn-sm" onClick={() => chooseBaseMaster(pickerBaseMaster)}>
-                          この本体を選択
+                          この本体を使う
                         </button>
                       </div>
 
@@ -656,7 +654,7 @@ export function NewEstimateTemplateForm({
                     ? '作成対象の商品モデル・防火仕様に一致する公開中の本体がありません。'
                     : baseMasterSourceReady
                       ? '本体マスターで公開版を作成すると、この画面から選択できます。'
-                      : '本体マスターの正式な読込環境が接続されると、この画面から選択できます。'}
+                      : '本体マスターの正式データが接続されると、この画面から選択できます。'}
                 </p>
               </div>
             )}

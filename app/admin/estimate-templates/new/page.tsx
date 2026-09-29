@@ -166,7 +166,7 @@ export default async function NewEstimateTemplatePage({
   return (
     <AdminPage
       title="見積書を新規作成"
-      lead="基準本体を選び、仕様・適用地域を設定してExcel形式の明細編集へ進みます。"
+      lead="本体マスターから使用する本体を選び、仕様・適用地域を設定して明細編集へ進みます。"
     >
       <BackLink href="/admin/estimate-templates" label="見積書作成・管理へ戻る" />
 

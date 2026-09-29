@@ -94,7 +94,8 @@ describe('unified manual quote authoring', () => {
   it('temporarily limits initial manual Quote creation/save/finalize to headquarters admin', () => {
     expect(newQuotePage).toContain("requireAdmin('/admin/quotes/new')");
     expect(actions).toContain("requireAdmin('/admin/quotes/new')");
-    expect(casePage).toContain("canCreateQuote={actor.role === 'admin'}");
+    expect(casePage).toContain('canCreateQuote={false}');
+    expect(casePage).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote />');
     expect(migration).toContain("FORBIDDEN: 初回見積書作成は現在本部管理者のみ利用できます");
     expect(migration).toContain("FORBIDDEN: 初回見積Draftの作成・編集は現在本部管理者のみ利用できます");
     expect(migration).toContain("FORBIDDEN: 初回Revision 1の正式保存は現在本部管理者のみ利用できます");

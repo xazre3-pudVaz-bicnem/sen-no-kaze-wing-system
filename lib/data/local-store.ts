@@ -77,6 +77,7 @@ import {
   type DealerRevisionInput,
   type DealerRevisionItem,
   type ManualQuoteDraftInput,
+  type ManualQuoteWorkbenchInput,
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
@@ -947,6 +948,10 @@ export class LocalStore implements DataStore {
   }
   async createManualQuoteDraft(_actor: SessionUser, _input: ManualQuoteDraftInput): Promise<QuoteDraft> {
     throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
+  }
+
+  async createManualQuoteDraftWithItems(_actor: SessionUser, _input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
+    throw new StoreError('VALIDATION', '統合見積Draft作成はSupabase接続環境で利用してください。');
   }
 
   async createQuoteRevisionDraft(_id: string, _actor: SessionUser): Promise<QuoteDraft> {

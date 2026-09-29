@@ -211,6 +211,11 @@ describe('見積書作成・管理UI', () => {
     expect(simulatorPreview).toContain('変更は「編集」タブで行います');
   });
 
+  it('見積上部とExcel明細表を余白なしで接続表示する', () => {
+    expect(workbench).toContain('rounded-t-lg rounded-b-none');
+    expect(workbench).toContain('!mt-0 overflow-hidden rounded-b-lg rounded-t-none border border-t-0');
+  });
+
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
     expect(workbench).toContain('見積書編集');
@@ -231,12 +236,27 @@ describe('見積書作成・管理UI', () => {
   it('品名右側から商品台帳を開き、現在行の商品を置き換えられる', () => {
     expect(workbench).toContain('title="商品台帳から選ぶ"');
     expect(workbench).toContain('Package className="size-3.5"');
+    expect(workbench).toContain("row.section !== 'sitework'");
     expect(workbench).toContain("openProductPicker(row.section, row.id)");
     expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
-    expect(workbench).toContain('商品台帳の公開済み商品から選び、選択した明細行へ反映します。');
+    expect(workbench).toContain('で選べる商品です。選択すると現在の明細へ反映します。');
+    expect(workbench).not.toContain('商品台帳の公開済み商品から選び、選択した明細行へ反映します。');
     expect(workbench).toContain('row.remark ||');
     expect(workbench).not.toContain('detailProductId');
     expect(workbench).not.toContain('商品詳細を表示');
+  });
+
+  it('商品選択ポップアップは枠外クリックとEscでキャンセルできる', () => {
+    expect(workbench).toContain("if (event.key !== 'Escape') return;");
+    expect(workbench).toContain("window.addEventListener('keydown', handleKeyDown)");
+    expect(workbench).toContain('if (event.target === event.currentTarget) closeProductPicker();');
+  });
+
+  it('別途では商品台帳ポップアップを開かず自由明細だけ追加できる', () => {
+    expect(workbench).toContain("row.section === 'sitework' ? undefined");
+    expect(workbench).toContain("row.section !== 'sitework'");
+    expect(workbench).toContain("key !== 'sitework'");
+    expect(workbench).toContain('＋自由明細');
   });
 
   it('商品選択は追加先区分に対応する商品だけを表示する', () => {
@@ -247,8 +267,8 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain("'sitework'");
     expect(workbench).toContain("'free-product'");
     expect(workbench).toContain('allowedCodes.has(product.categoryCode)');
-    expect(workbench).toContain('追加先：{pickerSectionLabel}');
-    expect(workbench).toContain('「{pickerSectionLabel}」で選べる商品を表示しています。');
+    expect(workbench).not.toContain('追加先：{pickerSectionLabel}');
+    expect(workbench).toContain('pickerSectionLabel}」で選べる商品です。選択すると現在の明細へ反映します。');
     expect(workbench).not.toContain('すべてのカテゴリー');
     expect(workbench).not.toContain('pickerQuery');
     expect(detailPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
@@ -259,6 +279,7 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain("const [pickerCategoryId, setPickerCategoryId] = useState('')");
     expect(workbench).toContain('pickerCategories.length > 1');
     expect(workbench).toContain('role="tablist"');
+    expect(workbench).toContain('sm:flex-wrap sm:overflow-x-visible sm:pb-0');
     expect(workbench).toContain("aria-selected={pickerCategoryId === ''}");
     expect(workbench).toContain('すべて');
     expect(workbench).toContain('onClick={() => setPickerCategoryId(id)}');

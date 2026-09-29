@@ -12,6 +12,7 @@ const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
 const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const editor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
+const authoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
 const draftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
 
 describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
@@ -131,7 +132,8 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
     expect(editor).toContain('disabled={baseLocked}');
     expect(editor).toContain('const rowBaseLocked = baseLocked');
     expect(editor).toContain("kind !== 'base' && kind !== 'base_expense'");
-    expect(editor).toContain('disabled={rowBaseLocked}');
+    expect(editor).toContain('locked: rowBaseLocked');
+    expect(authoringUi).toContain('disabled={row.locked}');
   });
 
   it('revalidates new or changed options again at formalization time', () => {

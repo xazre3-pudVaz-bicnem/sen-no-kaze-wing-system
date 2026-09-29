@@ -311,13 +311,17 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     );
   }
 
-  const [requests, quotes, dealers] = await Promise.all([
+  const [requests, quotes, dealers, initialDraftResumes] = await Promise.all([
     store.listQuoteRequests(),
     store.listAllQuotes(),
-    actor.role === 'admin' ? store.listCaseDealers() : Promise.resolve([]),
+    store.listCaseDealers(),
+    store.listInitialQuoteDraftResumes(actor),
   ]);
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
   const dealerById = new Map(dealers.map((dealer) => [dealer.id, dealer]));
+  const initialDraftByRequestId = new Map(
+    initialDraftResumes.map((draft) => [draft.quote_request_id, draft] as const)
+  );
 
   const filter = readRegionFilter(sp);
   const addrOf = (r: (typeof requests)[number]) => r.contact.site_address || r.contact.address || '';
@@ -385,6 +389,9 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     sp.request && selectablePendingRequestIds.has(sp.request) ? sp.request : null;
   const selectedPendingRequest = requestedPendingRequestId
     ? shown.find((request) => request.id === requestedPendingRequestId && !request.quote_id) ?? null
+    : null;
+  const selectedPendingDraft = selectedPendingRequest
+    ? initialDraftByRequestId.get(selectedPendingRequest.id) ?? null
     : null;
   const selectedQuoteId = selectedPendingRequest ? null : requestedCase;
   const selectedPendingConfiguration = selectedPendingRequest?.configuration;
@@ -497,7 +504,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   : null;
                 const dealer = quote?.dealer_id ? dealerById.get(quote.dealer_id) : undefined;
                 const dealerName = dealer?.company_name ?? dealer?.full_name;
-                const updatedAt = quote?.updated_at ?? request.updated_at;
+                const initialDraft = quote ? undefined : initialDraftByRequestId.get(request.id);
+                const updatedAt = quote?.updated_at ?? initialDraft?.updated_at ?? request.updated_at;
                 const displayCaseName = request.case_name?.trim() || request.contact.full_name;
                 const selected =
                   quote?.id === selectedQuoteId ||
@@ -553,7 +561,9 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       ) : (
                         <>
                           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                            <span className="text-[0.64rem] font-semibold text-[#315745]">F5/15 見積依頼</span>
+                            <span className="text-[0.64rem] font-semibold text-[#315745]">
+                              {initialDraft ? '見積作成中（下書き）' : 'F5/15 見積依頼'}
+                            </span>
                           </div>
                           <span className="mt-0.5 block whitespace-nowrap text-[0.56rem] leading-3 text-muted">更新 {formatDate(updatedAt, true)}</span>
                         </>
@@ -638,6 +648,11 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
                   見積未発行
                 </span>
+                {selectedPendingDraft && (
+                  <span className="rounded-full bg-[#eaf5ef] px-2 py-0.5 text-[0.62rem] font-semibold text-[#315745]">
+                    下書き保存済み
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-xs text-muted">
                 受付 {formatDate(selectedPendingRequest.created_at, true)}／更新 {formatDate(selectedPendingRequest.updated_at, true)}
@@ -682,16 +697,36 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </p>
           </section>
 
-          <section className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3" data-testid="pending-request-next-step">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-[#765d1f]">この依頼から見積を作成</h3>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">正式処理は未実装</span>
-            </div>
-            <p className="mt-1 text-xs leading-5 text-ink-soft">
-              この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
-              右上の「＋見積書を作成」は別の新規見積を作成する入口のため、このWeb受付の引継ぎには使用しません。
-            </p>
-          </section>
+          {selectedPendingDraft ? (
+            <section className="rounded-lg border border-[#bfd6c9] bg-[#f4faf6] p-3" data-testid="pending-draft-resume">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#315745]">保存済みの下書き見積があります</h3>
+                  <p className="mt-1 text-xs leading-5 text-ink-soft">
+                    前回保存した内容から、そのまま見積書作成を再開できます。
+                  </p>
+                </div>
+                <Link
+                  href={`/admin/quotes/drafts/${selectedPendingDraft.draft_id}`}
+                  className="inline-flex rounded-lg bg-[#2f6b4f] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+                  data-testid="resume-initial-quote-draft"
+                >
+                  下書き見積を続ける
+                </Link>
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3" data-testid="pending-request-next-step">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-[#765d1f]">この依頼から見積を作成</h3>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">正式処理は未実装</span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-ink-soft">
+                この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
+                右上の「＋見積書を作成」は別の新規見積を作成する入口のため、このWeb受付の引継ぎには使用しません。
+              </p>
+            </section>
+          )}
         </section>
       ) : (
         shown.length > 0 && (

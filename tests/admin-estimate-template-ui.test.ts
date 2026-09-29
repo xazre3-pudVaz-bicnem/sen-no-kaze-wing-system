@@ -220,7 +220,7 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('＋自由明細');
     expect(workbench).toContain('商品台帳から選ぶ');
     expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
-    expect(workbench).toContain("pickerTargetRowId ? '変更' : '追加'");
+    expect(workbench).toContain("pickerTargetRowId ? 'この商品を選ぶ' : '追加'");
     expect(workbench).toContain('標準・変更可');
     expect(workbench).toContain('標準・固定');
     expect(workbench).toContain('任意オプション');
@@ -317,7 +317,10 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('編集前に戻す');
     expect(workbench).toContain("collapsedSections.has('base')");
     expect(workbench).toContain('toggleSection(key)');
-    expect(workbench).toContain("collapsed ? '+' : '−'");
+    expect(workbench).toContain('aria-label={label + \'の明細を開く\'}');
+    expect(workbench).toContain('aria-label={label + \'の明細を閉じる\'}');
+    expect(workbench).toContain('>\n              +\n            </button>');
+    expect(workbench).toContain('>\n            −\n          </button>');
     expect(workbench).toContain('data-estimate-grid-col="quantity"');
     expect(workbench).toContain('handleGridKeyDown');
     expect(workbench).toContain('event.nativeEvent.isComposing');

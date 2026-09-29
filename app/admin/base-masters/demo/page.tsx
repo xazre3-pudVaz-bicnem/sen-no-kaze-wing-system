@@ -15,7 +15,7 @@ export default async function BaseMasterDemoPage() {
 
       <section className="card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-5">
         <div>
-          <p className="text-xs text-muted">商品</p>
+          <p className="text-xs text-muted">商品モデル</p>
           <p className="mt-1 font-semibold">Wing</p>
         </div>
         <div>
@@ -27,7 +27,7 @@ export default async function BaseMasterDemoPage() {
           <p className="mt-1 font-semibold">非防火</p>
         </div>
         <div>
-          <p className="text-xs text-muted">所有</p>
+          <p className="text-xs text-muted">本体管理元</p>
           <p className="mt-1 font-semibold">本部</p>
         </div>
         <div>

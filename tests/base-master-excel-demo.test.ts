@@ -40,7 +40,7 @@ describe('本体マスター Excel風操作確認画面', () => {
     expect(demo).toContain('工事区分を追加');
     expect(demo).toContain('＋明細');
     expect(demo).toContain('保存時点に戻す');
-    expect(demo).toContain('画面内でDraft保存');
+    expect(demo).toContain('下書きを保存');
     expect(demo).toContain("isCollapsed ? '+' : '−'");
     expect(demo).toContain('UI確認版のため、公開・破棄は実行しません');
   });

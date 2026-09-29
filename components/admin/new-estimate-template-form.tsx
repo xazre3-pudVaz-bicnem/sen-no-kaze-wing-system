@@ -290,9 +290,9 @@ export function NewEstimateTemplateForm({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-lg font-semibold">{name || '新しい見積テンプレート'}</h2>
+                <h2 className="truncate text-lg font-semibold">{name || '新しい見積書'}</h2>
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                  {samplePreview ? '画面確認用' : '新規テンプレート'}
+                  {samplePreview ? '画面確認用' : '新規見積書'}
                 </span>
                 {initialTarget && targetModel && targetSpec && (
                   <span className="rounded-full border border-forest/20 bg-forest/5 px-2 py-0.5 text-[11px] font-semibold text-forest">
@@ -304,7 +304,7 @@ export function NewEstimateTemplateForm({
                 本体・仕様・適用地域をここで設定し、そのまま下の明細を編集できます。
               </p>
             </div>
-            <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">見積テンプレートへ戻る</Link>
+            <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">見積書作成・管理へ戻る</Link>
           </div>
 
           <div className="space-y-3 p-4">
@@ -377,7 +377,7 @@ export function NewEstimateTemplateForm({
 
             <div className="flex flex-wrap items-end gap-3">
               <label className="min-w-[18rem] flex-1">
-                <span className="label">テンプレート名</span>
+                <span className="label">見積書名</span>
                 <Input
                   className="mt-1 h-10 w-full"
                   value={name}
@@ -427,7 +427,7 @@ export function NewEstimateTemplateForm({
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-sand/20 px-4 py-3">
             <div>
               <p className="text-sm font-semibold">本体が未選択です</p>
-              <p className="mt-0.5 text-xs text-muted">本体を選ぶと、この見積テンプレートの本体明細を読み込みます。</p>
+              <p className="mt-0.5 text-xs text-muted">本体を選ぶと、この見積書の本体明細を読み込みます。</p>
             </div>
             <button type="button" className="btn-primary btn-sm" onClick={openBasePicker}>本体を選ぶ</button>
           </div>

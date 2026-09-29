@@ -73,15 +73,17 @@ describe('見積書作成 Excel風操作確認画面', () => {
   it('見積上部の上下余白をコンパクトにする', () => {
     expect(demo).toContain('border-b border-slate-200 px-4 py-1.5');
     expect(demo).toContain('className="px-4 py-1.5"');
-    expect(demo).toContain('mt-1 flex flex-wrap gap-x-4 gap-y-1');
-    expect(demo).toContain('mt-1 flex flex-wrap items-center gap-x-3 gap-y-1');
+    expect(demo).toContain('flex flex-wrap gap-x-4 gap-y-1');
+    expect(demo).toContain('flex flex-wrap items-center gap-x-3 gap-y-1');
+    expect(demo).not.toContain('mt-1 flex flex-wrap gap-x-4 gap-y-1');
+    expect(demo).not.toContain('mt-1 flex flex-wrap items-center gap-x-3 gap-y-1');
     expect(demo).not.toContain('px-4 py-2.5');
   });
 
-  it('見積条件と価格設定を上下2段で分け、技術の杜のExcelと同じ用語で表示する', () => {
+  it('条件と価格設定は見出しを置かず上下2段でコンパクトに表示する', () => {
     expect(demo).toContain('data-testid="estimate-demo-header-summary"');
-    expect(demo).toContain('見積条件');
-    expect(demo).toContain('価格設定');
+    expect(demo).not.toContain('>見積条件<');
+    expect(demo).not.toContain('>価格設定<');
     expect(demo).toContain('divide-y divide-slate-200');
     expect(demo).not.toContain('grid md:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]');
     expect(demo).toContain('適用地域');

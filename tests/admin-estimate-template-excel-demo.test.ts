@@ -35,9 +35,9 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('原価・売価比較');
   });
 
-  it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
-    expect(demo).toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
-    expect(demo).toContain('見積内の変更は本体マスターには反映しません。');
+  it('本体マスターの編集ルール説明は常時表示せず、見積条件から本体を確認できる', () => {
+    expect(demo).not.toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
+    expect(demo).not.toContain('見積内の変更は本体マスターには反映しません。');
     expect(demo).toContain('使用中の本体');
     expect(demo).toContain('本体管理元のみ、この見積内で編集可');
     expect(demo).not.toContain('/admin/base-masters/demo');
@@ -62,10 +62,12 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('下書きを保存');
   });
 
-  it('見積条件と価格設定を分け、技術の杜のExcelと同じ用語で表示する', () => {
+  it('見積条件と価格設定を上下2段で分け、技術の杜のExcelと同じ用語で表示する', () => {
     expect(demo).toContain('data-testid="estimate-demo-header-summary"');
     expect(demo).toContain('見積条件');
     expect(demo).toContain('価格設定');
+    expect(demo).toContain('divide-y divide-slate-200');
+    expect(demo).not.toContain('grid md:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]');
     expect(demo).toContain('適用地域');
     expect(demo).toContain('使用中の本体');
     expect(demo).toContain('販売費');
@@ -149,4 +151,17 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("event.key === 'Tab'");
     expect(demo).toContain("event.key === 'Enter'");
   });
+  it('商品マスター由来の行だけ品名右側から商品詳細を開ける', () => {
+    expect(demo).toContain('productId?: string');
+    expect(demo).toContain("row.source === 'product' && row.productId");
+    expect(demo).toContain('商品詳細を表示');
+    expect(demo).toContain('aria-label="商品詳細"');
+    expect(demo).toContain('detailProduct.manufacturer');
+    expect(demo).toContain('detailProduct.modelNo');
+  });
+
+  it('見積書タブ直下の説明文は表示しない', () => {
+    expect(demo).not.toContain('見積書を編集し、同じ内容をプランボード・図面にも反映します。');
+  });
+
 });

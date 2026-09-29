@@ -35,6 +35,10 @@ describe('管理画面の業務領域ナビゲーション', () => {
       '/admin/contacts',
       '/admin/notifications',
     ]));
+    expect(cases?.exclude).toEqual(expect.arrayContaining([
+      '/admin/quotes/new',
+      '/admin/quotes/drafts',
+    ]));
     expect(cases?.match).not.toContain('/admin/customer-management');
     expect(customers?.match).toEqual(['/admin/customer-management']);
     expect(ledger?.match).toEqual(expect.arrayContaining([
@@ -50,6 +54,8 @@ describe('管理画面の業務領域ナビゲーション', () => {
       '/admin/base-masters',
       '/admin/estimate-templates',
       '/admin/base-breakdown',
+      '/admin/quotes/new',
+      '/admin/quotes/drafts',
     ]));
 
     expect(navSource).not.toContain('activeSection.items.map');

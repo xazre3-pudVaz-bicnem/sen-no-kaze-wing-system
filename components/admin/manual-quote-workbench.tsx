@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
-import { FINISH_LEVELS, FINISH_LEVEL_INFO, type FinishLevel, type QuoteItemKind } from '@/lib/domain/types';
+import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
 import {
@@ -110,8 +110,8 @@ export function ManualQuoteWorkbench({
   canEditBase: boolean;
 }) {
   const [state, action, pending] = useActionState(createManualQuoteWorkbenchAction, initialState);
-  const [modelId, setModelId] = useState(models[0]?.id ?? '');
-  const model = models.find((row) => row.id === modelId) ?? models[0];
+  const [modelId, setModelId] = useState('');
+  const model = models.find((row) => row.id === modelId);
   const [rows, setRows] = useState<WorkbenchRow[]>([]);
   const [adjustment, setAdjustment] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState('');
@@ -228,6 +228,7 @@ export function ManualQuoteWorkbench({
         <input type="hidden" name="base_master_revision_id" value="" />
         <input type="hidden" name="adjustment" value={adjustment} />
         <input type="hidden" name="adjustment_reason" value={adjustmentReason} />
+        <input type="hidden" name="finish_level" value="full" />
 
         <Status state={state} />
 
@@ -294,9 +295,11 @@ export function ManualQuoteWorkbench({
                     id="quote-model"
                     name="base_model_id"
                     value={modelId}
+                    required
                     onChange={(event) => setModelId(event.target.value)}
                     className="h-7 min-h-7 text-sm"
                   >
+                    <option value="">選択してください</option>
                     {models.map((row) => (
                       <option key={row.id} value={row.id}>{row.name}</option>
                     ))}
@@ -309,9 +312,12 @@ export function ManualQuoteWorkbench({
                     id="quote-spec"
                     name="spec_code"
                     key={modelId}
-                    defaultValue={model?.presets[0]?.code}
+                    defaultValue=""
+                    required
+                    disabled={!modelId}
                     className="h-7 min-h-7 text-sm"
                   >
+                    <option value="">{modelId ? '選択してください' : '商品モデルを先に選択'}</option>
                     {(model?.presets ?? []).map((preset) => (
                       <option key={preset.code} value={preset.code}>{preset.name}</option>
                     ))}
@@ -343,18 +349,7 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
-              <div className="lg:col-span-3">
-                <CompactField label="注文範囲" htmlFor="quote-finish" required errors={errors.finish_level}>
-                  <Select id="quote-finish" name="finish_level" defaultValue="full" className="h-7 min-h-7 text-sm">
-                    {FINISH_LEVELS.map((level: FinishLevel) => (
-                      <option key={level} value={level}>
-                        {FINISH_LEVEL_INFO[level].name}
-                      </option>
-                    ))}
-                  </Select>
-                </CompactField>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-9">
+              <div className="sm:col-span-2 lg:col-span-12">
                 <CompactField label="メモ" htmlFor="quote-memo" errors={errors.memo}>
                   <Textarea
                     id="quote-memo"

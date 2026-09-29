@@ -28,7 +28,27 @@ export default async function AdminQuoteDraftPage({
   }
   if (!detail) notFound();
 
-  const model = await store.getModelById(detail.draft.base_model_id, { includeDraft: true });
+  const [model, catalog] = await Promise.all([
+    store.getModelById(detail.draft.base_model_id, { includeDraft: true }),
+    store.getCatalogBundle(detail.draft.base_model_id),
+  ]);
+
+  const categoryMap = new Map((catalog?.categories ?? []).map((category) => [category.id, category] as const));
+  const products = (catalog?.options ?? []).map((option) => ({
+    id: option.id,
+    baseModelId: option.base_model_id,
+    categoryId: option.category_id,
+    categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+    categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
+    name: option.name,
+    manufacturer: option.manufacturer ?? '',
+    modelNo: option.model_no ?? '',
+    sizeNote: option.size_note ?? '',
+    price: option.price,
+    priceOnRequest: option.price_on_request,
+    imageUrl: option.image_url,
+    specCodes: option.spec_codes ?? [],
+  }));
 
   const estimates =
     actor.role === 'admin'
@@ -96,6 +116,7 @@ export default async function AdminQuoteDraftPage({
         modelName={model?.name ?? '商品モデル'}
         canEditBase={canEditCatalog(actor.role)}
         estimates={estimates}
+        products={products}
       />
     </div>
   );

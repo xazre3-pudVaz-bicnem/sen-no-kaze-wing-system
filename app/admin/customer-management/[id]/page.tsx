@@ -45,12 +45,11 @@ function CaseTable({
   emptyLabel: string;
 }) {
   return (
-    <Table minWidth="62rem">
+    <Table minWidth="46rem">
       <thead className="bg-sand/60">
         <tr>
-          <Th>案件</Th>
+          <Th>案件 / 商品モデル</Th>
           <Th>状態</Th>
-          <Th>商品モデル</Th>
           <Th>設置予定地</Th>
           <Th>担当代理店</Th>
           <Th>最終更新</Th>
@@ -60,13 +59,14 @@ function CaseTable({
       <tbody className="divide-y divide-line">
         {cases.length === 0 ? (
           <tr>
-            <Td colSpan={7} className="py-8 text-center text-sm text-muted">{emptyLabel}</Td>
+            <Td colSpan={6} className="py-8 text-center text-sm text-muted">{emptyLabel}</Td>
           </tr>
         ) : (
           cases.map((customerCase) => (
             <tr key={customerCase.id} data-testid="customer-case-row">
               <Td>
                 <p className="font-semibold">{customerCase.latest_quote?.quote_no ?? '見積未発行'}</p>
+                <p className="mt-1 text-xs text-muted">{customerCase.model_name ?? '商品モデル未登録'}</p>
                 {customerCase.message && (
                   <p className="mt-1 max-w-64 truncate text-xs text-muted">{customerCase.message}</p>
                 )}
@@ -74,7 +74,6 @@ function CaseTable({
               <Td>
                 <Badge tone={caseStatusTone(customerCase)}>{caseStatus(customerCase)}</Badge>
               </Td>
-              <Td className="text-xs">{customerCase.model_name ?? '見積未発行'}</Td>
               <Td className="text-xs">
                 <span className="block">{customerCase.site_address ?? '未登録'}</span>
                 <span className="mt-1 block text-muted">{siteSourceLabel(customerCase)}</span>
@@ -155,9 +154,9 @@ export default async function AdminCustomerDetailPage({
       }
       notice={
         <div className="space-y-1">
-          <p className="font-semibold text-ink">顧客情報の正本は未確定です。</p>
+          <p className="font-semibold text-ink">この画面は現在の顧客情報を確認する場所です。</p>
           <p>
-            Profile と案件受付時の情報は別々の既存情報として表示しています。
+            発行済みの正式見積は発行時点の情報を保持し、現在の顧客情報が変わってもこの画面から過去の見積内容を書き換えません。
             総代理店・代理店には、自分が担当する案件系列に由来する情報だけを表示します。
           </p>
         </div>
@@ -169,15 +168,14 @@ export default async function AdminCustomerDetailPage({
         <div>
           <h2 id="customer-basic-heading" className="text-lg font-semibold">基本情報</h2>
           <p className="mt-1 text-xs text-muted">
-            アカウント情報と参照可能な最新案件の受付情報を、出典を分けて確認します。
+            現在のお客様情報を中心に、最新案件の受付時情報を分けて確認します。
           </p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="card p-5" data-testid="customer-profile-card">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold">Profile（アカウント情報）</h3>
-              <Badge tone="neutral">正本未決定</Badge>
+              <h3 className="font-semibold">現在の顧客情報</h3>
             </div>
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <div>
@@ -215,8 +213,8 @@ export default async function AdminCustomerDetailPage({
 
           <div className="card p-5" data-testid="customer-quote-contact-card">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold">QuoteContact（最新案件受付情報）</h3>
-              <Badge tone="neutral">正本未決定</Badge>
+              <h3 className="font-semibold">最新案件受付情報</h3>
+              <Badge tone="neutral">案件受付時</Badge>
             </div>
             {contact ? (
               <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
@@ -278,33 +276,34 @@ export default async function AdminCustomerDetailPage({
         <div>
           <h2 id="quote-history-heading" className="text-lg font-semibold">見積履歴</h2>
           <p className="mt-1 text-xs text-muted">
-            担当する案件系列のRevision履歴だけを表示します。発行済みの内容はここでは変更しません。
+            正式見積の改訂履歴を確認する領域です。発行済みの見積は発行時点の記録として扱い、現在の顧客情報には自動追従させません。
           </p>
         </div>
-        <Table minWidth="58rem">
+        <Table minWidth="46rem">
           <thead className="bg-sand/60">
             <tr>
-              <Th>見積番号</Th>
+              <Th>見積番号 / 商品モデル</Th>
               <Th>版</Th>
               <Th>状態</Th>
-              <Th>商品モデル</Th>
               <Th>発行日</Th>
               <Th>金額（税込）</Th>
-              <Th>案件</Th>
+              <Th>見積書</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {detail.quote_history.length === 0 ? (
               <tr>
-                <Td colSpan={7} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
+                <Td colSpan={6} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
               </tr>
             ) : (
               detail.quote_history.map((quote) => (
                 <tr key={quote.id} data-testid="customer-quote-history-row">
-                  <Td className="font-semibold">{quote.quote_no}</Td>
+                  <Td>
+                    <p className="font-semibold">{quote.quote_no}</p>
+                    <p className="mt-1 text-xs text-muted">{quote.base_model_name}</p>
+                  </Td>
                   <Td className="whitespace-nowrap">第{quote.revision}版</Td>
                   <Td><Badge tone={quote.status === 'accepted' ? 'success' : 'neutral'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge></Td>
-                  <Td className="text-xs">{quote.base_model_name}</Td>
                   <Td className="whitespace-nowrap text-xs">{formatDate(quote.issued_at)}</Td>
                   <Td right className="whitespace-nowrap">{formatYen(quote.total)}</Td>
                   <Td>
@@ -313,7 +312,7 @@ export default async function AdminCustomerDetailPage({
                         href={`/admin/quotes/${encodeURIComponent(quote.id)}`}
                         className="text-xs font-semibold underline-offset-4 hover:underline"
                       >
-                        案件を見る
+                        見積書を見る
                       </Link>
                     ) : (
                       <span className="text-xs text-muted">履歴のみ</span>

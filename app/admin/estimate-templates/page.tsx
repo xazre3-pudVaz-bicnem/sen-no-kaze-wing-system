@@ -88,7 +88,7 @@ export default async function EstimateTemplatesPage({
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
-            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            <Link href="/admin/quotes/new" className="btn-primary btn-sm">
               ＋ 新しい見積書を作成
             </Link>
           </div>
@@ -123,7 +123,7 @@ export default async function EstimateTemplatesPage({
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            <Link href="/admin/quotes/new" className="btn-primary btn-sm">
               ＋ 新しい見積書を作成
             </Link>
           </div>
@@ -203,7 +203,7 @@ export default async function EstimateTemplatesPage({
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+          <Link href="/admin/quotes/new" className="btn-primary btn-sm">
             ＋ 新しい見積書を作成
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">

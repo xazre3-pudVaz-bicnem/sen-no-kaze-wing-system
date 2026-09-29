@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
-import { canEditCatalog } from '@/lib/domain/types';
+import { canEditCatalog, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { QuoteDraftEditor } from '@/components/admin/quote-draft-editor';
 import { Alert } from '@/components/ui';
 
@@ -29,8 +29,46 @@ export default async function AdminQuoteDraftPage({
 
   const model = await store.getModelById(detail.draft.base_model_id, { includeDraft: true });
 
+  const estimates =
+    actor.role === 'admin'
+      ? await (async () => {
+          const [quotes, requests] = await Promise.all([
+            store.listAllQuotes(),
+            store.listQuoteRequests(),
+          ]);
+          const requestById = new Map(requests.map((request) => [request.id, request] as const));
+          return quotes
+            .filter((quote) => quote.status !== 'superseded')
+            .map((quote) => ({
+              id: quote.id,
+              quote_no: quote.quote_no,
+              case_name: requestById.get(quote.quote_request_id)?.case_name ?? null,
+              customer_name: quote.customer_name,
+              customer_company: quote.customer_company,
+              base_model_name: quote.base_model_name,
+              revision: quote.revision,
+              total: quote.total,
+              status_label: QUOTE_STATUS_LABELS[quote.status],
+              updated_at: quote.updated_at,
+            }));
+        })()
+      : (await store.listDealerQuotes(actor.id))
+          .filter((quote) => quote.status !== 'superseded')
+          .map((quote) => ({
+            id: quote.id,
+            quote_no: quote.quote_no,
+            case_name: null,
+            customer_name: quote.customer_name,
+            customer_company: quote.customer_company,
+            base_model_name: quote.base_model_name,
+            revision: quote.revision,
+            total: quote.total,
+            status_label: QUOTE_STATUS_LABELS[quote.status],
+            updated_at: quote.updated_at,
+          }));
+
   return (
-    <div className="mx-auto w-full max-w-[96rem] space-y-4">
+    <div className="mx-auto w-full max-w-[96rem] space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/admin/quotes" className="text-sm text-ink-soft underline-offset-4 hover:underline">
           ← 案件一覧へ戻る
@@ -55,6 +93,7 @@ export default async function AdminQuoteDraftPage({
         detail={detail}
         modelName={model?.name ?? '商品モデル'}
         canEditBase={canEditCatalog(actor.role)}
+        estimates={estimates}
       />
     </div>
   );

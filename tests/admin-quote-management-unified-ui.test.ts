@@ -68,10 +68,12 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('data-quote-grid-col="sale"');
     expect(authoringUi).toContain('data-quote-grid-col="remark"');
     expect(authoringUi).toContain('sticky left-0 top-0 z-40');
-    expect(authoringUi).toContain('sticky left-[2.75rem] top-0 z-40');
-    expect(authoringUi).toContain('sticky left-[5rem] top-0 z-40');
-    expect(authoringUi).toContain('w-[16rem] min-w-[16rem] max-w-[16rem]');
-    expect(authoringUi).toContain('min-w-[92rem] w-full border-collapse');
+    expect(authoringUi).toContain('sticky left-[1.75rem] top-0 z-40');
+    expect(authoringUi).toContain('sticky left-[3.5rem] top-0 z-40');
+    expect(authoringUi).toContain('w-[10.5rem]');
+    expect(authoringUi).toContain('overflow-x-auto md:overflow-x-visible');
+    expect(authoringUi).toContain('w-full min-w-[46rem] table-fixed border-collapse');
+    expect(authoringUi).toContain('md:min-w-0');
     expect(authoringUi).toContain('data-testid={\`quote-section-summary-\${section.key}\`}');
     expect(authoringUi).toContain('const rowNumberByKey = useMemo');
     expect(authoringUi).toContain(">1</td>");
@@ -81,6 +83,17 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).not.toContain('標準・変更可');
     expect(authoringUi).not.toContain('標準・固定');
     expect(authoringUi).not.toContain('任意オプション');
+  });
+
+  it('PCでは横スクロールを避け、空区分と金額欄をコンパクトにする', () => {
+    expect(authoringUi).toContain('<col className="w-[10.5rem]" />');
+    expect(authoringUi).toContain('<col className="w-10" />');
+    expect(authoringUi).toContain('<col className="w-9" />');
+    expect(authoringUi).toContain('text-[9px] font-semibold leading-tight');
+    expect(authoringUi).toContain('h-5 min-h-5');
+    expect(authoringUi).toContain('currentRows.length > 0 && <tr');
+    expect(authoringUi).toContain('max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs');
+    expect(authoringUi).toContain('className="h-6 w-28 text-right text-xs"');
   });
 
   it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {

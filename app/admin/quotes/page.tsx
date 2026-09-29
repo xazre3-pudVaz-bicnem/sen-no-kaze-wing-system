@@ -495,6 +495,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 const dealer = quote?.dealer_id ? dealerById.get(quote.dealer_id) : undefined;
                 const dealerName = dealer?.company_name ?? dealer?.full_name;
                 const updatedAt = quote?.updated_at ?? request.updated_at;
+                const displayCaseName = request.case_name?.trim() || request.contact.full_name;
                 const selected =
                   quote?.id === selectedQuoteId ||
                   (!quote && request.id === selectedPendingRequest?.id);
@@ -506,13 +507,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     className={selected ? 'bg-[#fff7df] shadow-[inset_0_1px_0_#ead7a8]' : 'hover:bg-[#f8fbf9]'}
                     testId="admin-quote-row"
                     selected={selected}
-                    ariaLabel={`${request.contact.full_name}の案件を開く`}
+                    ariaLabel={`${displayCaseName}を開く`}
                   >
                     <td className={`border-l-4 px-2 py-1 align-middle ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
                       <div className="flex min-w-0 items-center gap-1.5">
                         {quote ? (
                           <Link href={caseSelectionHref(quote.id, sp)} className="min-w-0 truncate font-semibold text-ink hover:underline">
-                            {request.contact.full_name}
+                            {displayCaseName}
                           </Link>
                         ) : (
                           <Link
@@ -520,8 +521,11 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                             className="min-w-0 truncate font-semibold text-ink hover:underline"
                             data-testid="pending-request-link"
                           >
-                            {request.contact.full_name}
+                            {displayCaseName}
                           </Link>
+                        )}
+                        {request.case_name && (
+                          <span className="min-w-0 truncate text-[0.6rem] text-muted">顧客 {request.contact.full_name}</span>
                         )}
                         {request.contact.company_name && <span className="min-w-0 truncate text-[0.6rem] text-muted">{request.contact.company_name}</span>}
                         {selected && (

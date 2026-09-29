@@ -841,12 +841,6 @@ export function EstimateTemplateExcelDemo({
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-          <p className="text-[11px] text-slate-500">
-            黄色＝入力 ／ グレー＝自動計算・参照 ／ Tab＝右 ／ Shift+Tab＝左 ／ Enter＝下 ／ Shift+Enter＝上
-          </p>
-          <p className="text-[11px] text-slate-500">自動売価＝ROUNDDOWN(原価単価×掛率,0) ／ 粗利＝売価－原価</p>
-        </div>
       </section>
       </div>
 
@@ -885,6 +879,14 @@ export function EstimateTemplateExcelDemo({
         <div className="flex justify-between gap-4 py-1"><span>粗利率</span><strong>{totals.margin.toFixed(1)}%</strong></div>
         <div className="flex justify-between gap-4 py-1 text-xs text-slate-500"><span>別途見積</span><strong>{totals.onRequest}件</strong></div>
       </section>
+
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 px-4 py-1 text-[11px] text-slate-500"
+        data-testid="estimate-demo-operation-help"
+      >
+        <p>黄色＝入力 ／ グレー＝自動計算・参照 ／ Tab＝右 ／ Shift+Tab＝左 ／ Enter＝下 ／ Shift+Enter＝上</p>
+        <p>自動売価＝ROUNDDOWN(原価単価×掛率,0) ／ 粗利＝売価－原価</p>
+      </div>
       </div>
 
         </>

@@ -78,6 +78,7 @@ import {
   type DealerRevisionItem,
   type ManualQuoteDraftInput,
   type ManualQuoteWorkbenchInput,
+  type InitialQuoteDraftResume,
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
@@ -1274,6 +1275,10 @@ export class LocalStore implements DataStore {
         })
     );
   }
+  async listInitialQuoteDraftResumes(_actor: SessionUser): Promise<InitialQuoteDraftResume[]> {
+    return [];
+  }
+
   async listCaseDealers() {
     return this.read((db) => db.profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer').map(({ id, role_code, full_name, company_name }) => ({ id, role_code, full_name, company_name })).sort((a, b) => a.full_name.localeCompare(b.full_name)));
   }

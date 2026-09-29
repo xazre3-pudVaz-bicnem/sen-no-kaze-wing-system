@@ -56,26 +56,26 @@ const adminActions = fs.readFileSync(
   'utf8'
 );
 
-describe('見積書作成・管理UI', () => {
+describe('シミュレーター標準管理UI', () => {
   it('トップを一覧ではなくExcel編集ワークスペースとして表示する', () => {
-    expect(listPage).toContain('title="見積書作成・管理"');
+    expect(listPage).toContain('title="見積書管理"');
+    expect(listPage).toContain('lead="シミュレーター標準"');
     expect(listPage).not.toContain('開いたらすぐ明細を編集できる');
     expect(listPage).not.toContain('見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。');
-    expect(listPage).toContain('＋ 新しい見積書を作成');
-    expect(savedEstimateMenu).toContain('見積書一覧（{totalCount}件）');
-    expect(savedEstimateMenu).toContain('商品モデルで絞り込み、作成済み見積書と画面確認用サンプルを確認します。');
+    expect(listPage).toContain('＋ 案件見積を作成');
+    expect(savedEstimateMenu).toContain('シミュレーター標準一覧（{totalCount}件）');
+    expect(savedEstimateMenu).toContain('商品モデルで絞り込み、登録済みの基準見積と画面確認用サンプルを確認します。');
     expect(savedEstimateMenu).toContain("active ? '表示中' : '開く'");
     expect(savedEstimateMenu).toContain('更新 {formatUpdatedAt(template.updated_at)}');
     expect(listPage).not.toContain('見積書を選ぶ');
-    expect(listPage).toContain('編集中の見積書');
+    expect(listPage).toContain('編集中のシミュレーター標準');
     expect(listPage).toContain('<EstimateTemplateWorkbench');
     expect(listPage).toContain('<EstimateTemplateDetailTabs');
     expect(listPage).toContain('<StandardEstimateSimulatorPreview');
     expect(listPage).toContain('selectedTemplate');
     expect(listPage).toContain("templates.find((template) => template.id === sp.estimate)");
     expect(listPage).toContain('returnPath={workspaceReturnPath}');
-    expect(listPage).not.toContain('標準見積一覧');
-    expect(listPage).not.toContain('登録済み');
+    expect(listPage).toContain('<QuoteManagementTabs active="standard" />');
   });
 
   it('見積書が未登録でも空画面ではなく作成画面を直接表示する', () => {
@@ -83,20 +83,20 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('<EstimateTemplateExcelDemo');
     expect(listPage).toContain("key={selectedSample?.id ?? 'new-estimate-demo'}");
     expect(listPage).toContain('sampleId={selectedSample?.id}');
-    expect(listPage).toContain('正式な見積書データが未登録のため、作成画面を直接表示しています。');
+    expect(listPage).toContain('シミュレーター標準の正式データが未登録のため、作成画面を直接表示しています。');
     expect(listPage).not.toContain('見積書がまだありません');
     expect(listPage).toContain('products={demoProducts}');
     expect(listPage).toContain("option.status === 'published'");
     expect(listPage).toContain('categoryCode: categoryMap.get(option.category_id)?.code');
   });
 
-  it('見積書一覧・新規作成・シミュレーター標準指定の入口を編集画面上部に置く', () => {
-    expect(listPage).toContain('見積書一覧');
-    expect(savedEstimateMenu).toContain('見積書一覧（{totalCount}件）');
+  it('シミュレーター標準一覧と案件見積への入口を編集画面上部に置く', () => {
+    expect(listPage).toContain('シミュレーター標準一覧');
+    expect(savedEstimateMenu).toContain('シミュレーター標準一覧（{totalCount}件）');
     expect(savedEstimateMenu).toContain('<Badge tone="neutral">シミュレーター標準</Badge>');
     expect(savedEstimateMenu).not.toContain('シミュレーターで選べる正式見積書（指定機能は接続準備中）');
     expect(savedEstimateMenu).not.toContain('flex flex-wrap items-center gap-2 px-2 py-2 text-[11px] text-muted');
-    expect(savedEstimateMenu).toContain('作成済み見積書');
+    expect(savedEstimateMenu).toContain('登録済み基準見積');
     expect(savedEstimateMenu).toContain('画面確認用サンプル');
     expect(savedEstimateMenu).toContain('sampleEstimateHref');
     expect(listPage).toContain('selectedSampleId={selectedSample?.id}');
@@ -115,7 +115,7 @@ describe('見積書作成・管理UI', () => {
     expect(savedEstimateMenu).not.toContain('シミュレーターで選べる正式見積書（指定機能は接続準備中）');
   });
 
-  it('見積書一覧は登録済み商品モデルで絞り込める', () => {
+  it('シミュレーター標準一覧は登録済み商品モデルで絞り込める', () => {
     expect(savedEstimateMenu).toContain("const [selectedModelId, setSelectedModelId] = useState('')");
     expect(savedEstimateMenu).toContain('models.map((model) =>');
     expect(savedEstimateMenu).toContain('aria-label="商品モデルで絞り込み"');
@@ -125,7 +125,7 @@ describe('見積書作成・管理UI', () => {
     expect(savedEstimateMenu).toContain('sm:flex-wrap sm:overflow-x-visible');
   });
 
-  it('見積書一覧は枠外クリックとEscで閉じる', () => {
+  it('シミュレーター標準一覧は枠外クリックとEscで閉じる', () => {
     expect(savedEstimateMenu).toContain("document.addEventListener('pointerdown', handlePointerDown)");
     expect(savedEstimateMenu).toContain("if (event.target instanceof Node && details.contains(event.target)) return;");
     expect(savedEstimateMenu).toContain('detailsRef.current.open = false');

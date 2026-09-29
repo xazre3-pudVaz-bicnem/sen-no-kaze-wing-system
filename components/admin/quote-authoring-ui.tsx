@@ -90,7 +90,7 @@ export function QuoteEditorTopbar({
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
-            見積書一覧
+            案件見積一覧
           </Button>
           {mode === 'edit' && (
             <Link
@@ -117,13 +117,13 @@ export function QuoteEditorTopbar({
           <section
             role="dialog"
             aria-modal="true"
-            aria-label="見積書一覧"
+            aria-label="案件見積一覧"
             className="max-h-[78vh] w-full max-w-3xl overflow-hidden rounded-xl border border-line bg-white shadow-2xl"
             data-testid="estimate-picker-dialog"
           >
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
-                <h2 className="font-semibold">見積書一覧</h2>
+                <h2 className="font-semibold">案件見積一覧</h2>
                 <p className="mt-0.5 text-xs text-muted">案件名・顧客名・見積番号・商品モデルから開けます。</p>
               </div>
               <button

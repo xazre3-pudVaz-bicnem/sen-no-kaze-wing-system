@@ -3,6 +3,7 @@ import { getStore } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { AdminPage } from '@/components/admin/ui';
 import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
+import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 /**
  * 案件管理・見積書管理のどちらからでも開く、正式な見積編集ワークスペース。
@@ -36,8 +37,9 @@ export default async function AdminNewQuotePage() {
   return (
     <AdminPage
       title="見積書管理"
-      lead="見積書を作成"
+      lead="案件見積を作成"
     >
+      <QuoteManagementTabs active="case" />
       <ManualQuoteWorkbench
         models={models.map((model) => ({
           id: model.id,

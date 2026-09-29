@@ -25,7 +25,7 @@ describe('unified manual quote authoring', () => {
 
   it('opens the Excel-style workbench immediately instead of a separate case registration form', () => {
     expect(newQuotePage).toContain('title="見積書管理"');
-    expect(newQuotePage).toContain('lead="見積書を作成"');
+    expect(newQuotePage).toContain('lead="案件見積を作成"');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(newQuotePage).not.toContain('<ManualQuoteForm');
     expect(workbench).toContain('data-testid="manual-quote-workbench"');
@@ -70,10 +70,10 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain("disabled={!modelId}");
   });
 
-  it('opens an estimate-list popup from the top of the estimate frame', () => {
+  it('opens a case-estimate list popup from the top of the estimate frame', () => {
     expect(workbench).toContain('<QuoteEditorTopbar');
     expect(authoringUi).toContain('data-testid="estimate-picker-dialog"');
-    expect(authoringUi).toContain('見積書一覧');
+    expect(authoringUi).toContain('案件見積一覧');
     expect(authoringUi).toContain('案件名・顧客名・見積番号・商品モデルで検索');
     expect(authoringUi).toContain('data-testid="estimate-picker-row"');
   });

@@ -132,13 +132,13 @@ export function SavedEstimateMenu({
   return (
     <details ref={detailsRef} className="relative">
       <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        見積書一覧（{totalCount}件）
+        シミュレーター標準一覧（{totalCount}件）
       </summary>
       <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(92vw,42rem)] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
         <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
           <div>
-            <p className="text-sm font-semibold">見積書一覧</p>
-            <p className="mt-0.5 text-[11px] text-muted">商品モデルで絞り込み、作成済み見積書と画面確認用サンプルを確認します。</p>
+            <p className="text-sm font-semibold">シミュレーター標準一覧</p>
+            <p className="mt-0.5 text-[11px] text-muted">商品モデルで絞り込み、登録済みの基準見積と画面確認用サンプルを確認します。</p>
           </div>
           <span className="shrink-0 text-[11px] text-muted">
             {selectedModel ? `${visibleCount} / ${totalCount}件` : `${totalCount}件`}
@@ -179,10 +179,10 @@ export function SavedEstimateMenu({
         </div>
 
         <div className="border-t border-line pt-2">
-          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">作成済み見積書</p>
+          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">登録済み基準見積</p>
           {filteredTemplates.length === 0 && (
             <p className="px-3 py-2 text-[11px] text-muted">
-              {selectedModel ? `${selectedModel.name}の正式保存済み見積書はまだありません。` : '正式保存済みの見積書はまだありません。'}
+              {selectedModel ? `${selectedModel.name}の保存済み基準見積はまだありません。` : '保存済みの基準見積はまだありません。'}
             </p>
           )}
           {filteredTemplates.length > 0 && (

@@ -10,11 +10,19 @@ const newQuotePage = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.
 const draftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
 const estimateTemplatesPage = fs.readFileSync(path.join(root, 'app/admin/estimate-templates/page.tsx'), 'utf8');
 const adminNav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx'), 'utf8');
+const managementTabs = fs.readFileSync(path.join(root, 'components/admin/quote-management-tabs.tsx'), 'utf8');
 
 describe('見積書管理の正式編集UI統合', () => {
-  it('見積書管理と案件管理の新規入口を同じ正式エディタへ集約する', () => {
+  it('見積書管理で案件見積とシミュレーター標準を明確に分ける', () => {
     expect(adminNav).toContain("label: '見積書管理'");
-    expect(estimateTemplatesPage).toContain('href="/admin/quotes/new"');
+    expect(managementTabs).toContain('案件見積');
+    expect(managementTabs).toContain('シミュレーター標準');
+    expect(managementTabs).toContain('href="/admin/quotes/new"');
+    expect(managementTabs).toContain('href="/admin/estimate-templates"');
+    expect(newQuotePage).toContain('<QuoteManagementTabs active="case" />');
+    expect(draftPage).toContain('<QuoteManagementTabs active="case" />');
+    expect(estimateTemplatesPage).toContain('<QuoteManagementTabs active="standard" />');
+    expect(estimateTemplatesPage).toContain('＋ 案件見積を作成');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(manualWorkbench).toContain('<QuoteEditorTopbar mode="new"');
     expect(draftEditor).toContain('<QuoteEditorTopbar mode="edit"');
@@ -55,7 +63,8 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftEditor).toContain('detail.draft.tax_rate');
   });
 
-  it('見積書一覧は案件名・顧客名・見積番号・商品モデルで検索する', () => {
+  it('案件見積一覧は案件名・顧客名・見積番号・商品モデルで検索する', () => {
+    expect(authoringUi).toContain('案件見積一覧');
     expect(authoringUi).toContain('estimate.case_name');
     expect(authoringUi).toContain('estimate.customer_name');
     expect(authoringUi).toContain('estimate.quote_no');

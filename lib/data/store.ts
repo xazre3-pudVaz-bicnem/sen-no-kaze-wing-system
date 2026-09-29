@@ -115,6 +115,7 @@ export interface AccessibleUnlinkedCustomerCase {
 }
 
 export interface AccessibleCustomerListResult {
+  availability: 'available' | 'migration_pending';
   customers: AccessibleCustomerListItem[];
   unlinked_cases: AccessibleUnlinkedCustomerCase[];
 }
@@ -162,6 +163,11 @@ export interface AccessibleCustomerDetail {
   latest_contact: QuoteContact | null;
   cases: AccessibleCustomerCase[];
   quote_history: AccessibleCustomerQuote[];
+}
+
+export interface AccessibleCustomerDetailResult {
+  availability: 'available' | 'migration_pending';
+  detail: AccessibleCustomerDetail | null;
 }
 
 export interface SaveConfigurationInput {
@@ -383,8 +389,8 @@ export interface DataStore {
   updateUserRole(userId: string, role: RoleCode, actor: SessionUser): Promise<Profile>;
   /** 顧客管理。adminは全顧客、総代理店・代理店は担当案件由来の顧客だけを返す。 */
   listAccessibleCustomers(actor: SessionUser): Promise<AccessibleCustomerListResult>;
-  /** 顧客詳細。アクセスできない顧客は null を返し、存在有無を区別しない。 */
-  getAccessibleCustomerDetail(customerId: string, actor: SessionUser): Promise<AccessibleCustomerDetail | null>;
+  /** 顧客詳細。アクセスできない顧客は detail=null とし、存在有無を区別しない。 */
+  getAccessibleCustomerDetail(customerId: string, actor: SessionUser): Promise<AccessibleCustomerDetailResult>;
 
   // ---- 保存した仕様 ----
   listConfigurations(userId: string): Promise<Configuration[]>;

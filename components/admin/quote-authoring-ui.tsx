@@ -290,12 +290,12 @@ export function QuoteAuthoringGrid({
               <th className="sticky top-0 z-20 w-10 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">数量</th>
               <th className="sticky top-0 z-20 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[9px] font-semibold leading-tight text-slate-600">単位</th>
               <th className="sticky top-0 z-20 w-14 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">原価</th>
-              <th className="sticky top-0 z-20 w-10 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">原価金額</th>
+              <th className="sticky top-0 z-20 w-16 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">原価金額</th>
               <th className="sticky top-0 z-20 w-14 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">売価</th>
               <th className="sticky top-0 z-20 w-16 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">売価金額</th>
               <th className="sticky top-0 z-20 w-16 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">粗利</th>
               <th className="sticky top-0 z-20 w-24 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[9px] font-semibold leading-tight text-slate-600">備考</th>
-              <th className="sticky top-0 z-20 w-16 border-b border-slate-300 bg-slate-100 px-1 py-1 text-center text-[9px] font-semibold leading-tight text-slate-600">操作</th>
+              <th className="sticky top-0 z-20 w-10 border-b border-slate-300 bg-slate-100 px-1 py-1 text-center text-[9px] font-semibold leading-tight text-slate-600">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -338,10 +338,10 @@ export function QuoteAuthoringGrid({
                     <td className="w-10 border-r border-emerald-800 px-2 text-right text-[10px] font-semibold tabular-nums">1</td>
                     <td className="w-9 border-r border-emerald-800 px-1 text-[10px] font-semibold">式</td>
                     <td className="w-14 border-r border-emerald-800 px-1 text-right text-white/60">—</td>
-                    <td className="w-14 border-r border-emerald-800 px-1 text-right text-white/60">—</td>
+                    <td className="w-16 border-r border-emerald-800 px-1 text-right text-white/60">—</td>
                     <td className="w-14 border-r border-emerald-800 px-1 text-right text-[10px] font-semibold tabular-nums">{collapsedAmount}</td>
-                    <td className="w-14 border-r border-emerald-800 px-1 text-right text-[10px] font-semibold tabular-nums">{collapsedAmount}</td>
-                    <td className="w-14 border-r border-emerald-800 px-1 text-right text-white/60">—</td>
+                    <td className="w-16 border-r border-emerald-800 px-1 text-right text-[10px] font-semibold tabular-nums">{collapsedAmount}</td>
+                    <td className="w-16 border-r border-emerald-800 px-1 text-right text-white/60">—</td>
                     <td className="w-24 border-r border-emerald-800 px-2 text-[9px] text-white/75">{summaryRemark}</td>
                     <td className="w-10 px-0.5 text-center text-[9px] text-white/60">—</td>
                   </tr>
@@ -424,7 +424,7 @@ export function QuoteAuthoringGrid({
                             aria-label={`数量 ${number}`}
                           />
                         </td>
-                        <td className={`w-10 border-r border-slate-200 px-0.5 ${editCellClass}`}>
+                        <td className={`w-9 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.unit ?? ''}
                             disabled={row.locked}
@@ -436,10 +436,10 @@ export function QuoteAuthoringGrid({
                           />
                         </td>
                         <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
-                        <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
                         <td className={`w-14 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           {separatePrice ? (
-                            <div className="flex h-6 items-center justify-end px-1 text-[9px] font-semibold text-amber-900">別途見積</div>
+                            <div className="flex h-5 items-center justify-end px-1 text-[9px] font-semibold text-amber-900">別途見積</div>
                           ) : (
                             <Input
                               type="number"
@@ -455,7 +455,7 @@ export function QuoteAuthoringGrid({
                           )}
                         </td>
                         <td className="w-16 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-2 text-right tabular-nums">{separatePrice ? '—' : formatYen(row.amount)}</td>
-                        <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
                         <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.remark ?? ''}
@@ -484,7 +484,7 @@ export function QuoteAuthoringGrid({
                   {currentRows.length > 0 && <tr className="border-y border-emerald-800 bg-emerald-50 font-semibold">
                     <th className="sticky left-0 z-10 w-7 bg-slate-100"></th>
                     <td className="sticky left-[1.75rem] z-10 w-7 bg-emerald-50"></td>
-                    <td className="sticky left-[3.5rem] z-10 w-[10.5rem] bg-emerald-50 px-3 py-1">{section.label} 計</td>
+                    <td className="sticky left-[3.5rem] z-10 w-[10.5rem] bg-emerald-50 px-1.5 py-0.5 text-[10px]">{section.label} 計</td>
                     <td></td>
                     <td></td>
                     <td className="px-1 text-right text-slate-400">—</td>

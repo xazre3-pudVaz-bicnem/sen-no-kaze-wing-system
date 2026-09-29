@@ -23,7 +23,7 @@ export default async function BaseMastersPage({
     return (
       <AdminPage
         title="本体マスター"
-        lead="本体の製造明細・価格をRevision管理します。"
+        lead="本体の製造明細・価格・公開履歴を管理します。"
         actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
       >
         <Alert tone="info">この画面はSupabase接続環境で利用できます。ローカルJSONモードでは参照・編集しません。</Alert>
@@ -56,7 +56,7 @@ export default async function BaseMastersPage({
   const loadError = membershipError || organizationError || masterError;
   if (loadError) {
     return (
-      <AdminPage title="本体マスター" lead="本体の製造明細・価格をRevision管理します。">
+      <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
         <Alert tone="danger">{loadError.message}</Alert>
       </AdminPage>
     );
@@ -74,7 +74,7 @@ export default async function BaseMastersPage({
 
   if (revisionResult.error) {
     return (
-      <AdminPage title="本体マスター" lead="本体の製造明細・価格をRevision管理します。">
+      <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
         <Alert tone="danger">{revisionResult.error.message}</Alert>
       </AdminPage>
     );
@@ -103,10 +103,10 @@ export default async function BaseMastersPage({
   return (
     <AdminPage
       title="本体マスター"
-      lead="Wing・BOXなどの商品モデルの下に、会社ごとの本体製造明細と価格を版管理します。"
+      lead="Wing・BOXなどの商品モデルごとに、本体基準明細・価格・公開履歴を管理します。"
       actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
     >
-      {sp.discarded && <Alert tone="success">Draftを破棄しました。</Alert>}
+      {sp.discarded && <Alert tone="success">下書きを破棄しました。</Alert>}
       <Alert tone="info">
         既存の標準見積・旧本体内訳はまだこの新本体マスターへ自動移行していません。現在は新しく登録した本体だけを管理します。
       </Alert>
@@ -115,13 +115,13 @@ export default async function BaseMastersPage({
         <thead className="bg-sand/60">
           <tr>
             <Th>本体名</Th>
-            <Th>ベースモデル</Th>
-            <Th>所有組織</Th>
+            <Th>商品モデル</Th>
+            <Th>本体管理元</Th>
             <Th>防火</Th>
             <Th>状態</Th>
-            <Th>現在版</Th>
+            <Th>現在の公開版</Th>
             <Th right>本体価格</Th>
-            <Th>Draft</Th>
+            <Th>下書き</Th>
             <Th></Th>
           </tr>
         </thead>
@@ -145,7 +145,7 @@ export default async function BaseMastersPage({
                 <Td>{current ? `v${current.version}` : '未公開'}</Td>
                 <Td right>{current ? formatYen(current.total) : '—'}</Td>
                 <Td>
-                  {draft ? <Badge tone="warn">v{draft.version}編集中</Badge> : <span className="text-muted">なし</span>}
+                  {draft ? <Badge tone="warn">v{draft.version}・編集中</Badge> : <span className="text-muted">なし</span>}
                 </Td>
                 <Td right>
                   <Link href={`/admin/base-masters/${master.id}`} className="btn-secondary btn-sm">

@@ -36,9 +36,9 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
-    expect(demo).toContain('本体管理元として操作する場合は、本体明細も含めてこの見積書内で編集できます。');
-    expect(demo).toContain('見積内の変更は本体マスター自体に反映しません。');
-    expect(demo).toContain('管理元以外は本体明細を変更できません。');
+    expect(demo).toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
+    expect(demo).toContain('見積内の変更は本体マスターには反映しません。');
+    expect(demo).toContain('使用中の本体');
     expect(demo).toContain('本体管理元のみ、この見積内で編集可');
     expect(demo).not.toContain('/admin/base-masters/demo');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
@@ -59,12 +59,15 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("data-testid={`estimate-demo-section-total-${section}`}");
     expect(demo).toContain('既存の商品から選択');
     expect(demo).toContain('⋯');
-    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('下書きを保存');
   });
 
   it('見積条件と価格設定を分け、技術の杜のExcelと同じ用語で表示する', () => {
+    expect(demo).toContain('data-testid="estimate-demo-header-summary"');
     expect(demo).toContain('見積条件');
     expect(demo).toContain('価格設定');
+    expect(demo).toContain('適用地域');
+    expect(demo).toContain('使用中の本体');
     expect(demo).toContain('販売費');
     expect(demo).toContain('原価側');
     expect(demo).toContain('経費');
@@ -80,7 +83,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('保存操作は本番の最終形だけを表示し、接続前は実行できない', () => {
-    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('下書きを保存');
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft接続後に利用できます');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');

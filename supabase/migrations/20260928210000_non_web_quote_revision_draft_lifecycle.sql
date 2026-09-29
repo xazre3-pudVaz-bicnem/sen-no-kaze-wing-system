@@ -107,15 +107,14 @@ begin
         join public.base_master_revisions rev
           on rev.base_master_id = master.id
        where master.base_model_id = d.base_model_id
-         and master.status = 'active'
          and rev.status in ('published', 'superseded')
          and (
-           rev.id = master.current_published_revision_id
-           or rev.id = d.base_master_revision_id
-         )
-         and (
-           public.can_use_base_master(master.id)
-           or rev.id = d.base_master_revision_id
+           rev.id = d.base_master_revision_id
+           or (
+             master.status = 'active'
+             and rev.id = master.current_published_revision_id
+             and public.can_use_base_master(master.id)
+           )
          )
     ), '[]'::jsonb)
   );

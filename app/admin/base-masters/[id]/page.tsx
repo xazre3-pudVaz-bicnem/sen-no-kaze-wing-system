@@ -220,25 +220,6 @@ export default async function BaseMasterDetailPage({
       {sp.published && <Alert tone="success">新しい公開版を作成しました。</Alert>}
       {sp.draft && <Alert tone="success">現在の公開版から新しい下書きを作成しました。</Alert>}
 
-      <section className="card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <p className="text-xs text-muted">商品モデル</p>
-          <p className="mt-1 font-semibold">{model?.name ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">本体管理元</p>
-          <p className="mt-1 font-semibold">{owner?.name ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">現在の公開版</p>
-          <p className="mt-1 font-semibold">{current ? `v${current.version}・${formatYen(current.total)}` : '未公開'}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted">編集中の下書き</p>
-          <p className="mt-1 font-semibold">{draft ? `v${draft.version}` : 'なし'}</p>
-        </div>
-      </section>
-
       {detailView.accessKind === 'owner_viewer' && (
         <Alert tone="info">この本体は本体管理元の参照権限です。下書きと公開版を確認できますが、編集・公開はできません。</Alert>
       )}
@@ -290,6 +271,9 @@ export default async function BaseMasterDetailPage({
           revision={draft}
           lines={linesByRevision.get(draft.id) ?? []}
           identityLocked={identityLocked}
+          modelName={model?.name ?? '—'}
+          ownerName={owner?.name ?? '—'}
+          currentPublishedVersion={current?.version ?? null}
         />
       )}
 

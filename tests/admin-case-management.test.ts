@@ -489,6 +489,15 @@ describe('Admin case management UI', () => {
     expect(contacts).toContain('title="問い合わせ受付"');
   });
 
+  it('shows a normal resume path for a saved initial Quote Draft', () => {
+    expect(list).toContain('store.listInitialQuoteDraftResumes(actor)');
+    expect(list).toContain('initialDraftByRequestId');
+    expect(list).toContain('見積作成中（下書き）');
+    expect(list).toContain('下書き保存済み');
+    expect(list).toContain('data-testid="resume-initial-quote-draft"');
+    expect(list).toContain('下書き見積を続ける');
+  });
+
   it('includes the saved case name in case-list search', () => {
     expect(list).toContain('request.case_name');
     expect(list).toContain('const haystack = [');

@@ -54,6 +54,35 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('原価正本はQuote Draftへ未接続');
   });
 
+  it('シミュレーター標準のExcel操作性を案件見積表へ取り入れる', () => {
+    expect(authoringUi).toContain('data-testid="quote-grid-help"');
+    expect(authoringUi).toContain('Tab→ ／ Enter↓ ／ Shift+Enter↑');
+    expect(authoringUi).toContain('黄色＝入力 ／ グレー＝参照');
+    expect(authoringUi).toContain('handleGridKeyDown');
+    expect(authoringUi).toContain('event.nativeEvent.isComposing');
+    expect(authoringUi).toContain("event.key !== 'Enter'");
+    expect(authoringUi).toContain('event.shiftKey ? index - 1 : index + 1');
+    expect(authoringUi).toContain('data-quote-grid-col="name"');
+    expect(authoringUi).toContain('data-quote-grid-col="quantity"');
+    expect(authoringUi).toContain('data-quote-grid-col="unit"');
+    expect(authoringUi).toContain('data-quote-grid-col="sale"');
+    expect(authoringUi).toContain('data-quote-grid-col="remark"');
+    expect(authoringUi).toContain('sticky left-0 top-0 z-40');
+    expect(authoringUi).toContain('sticky left-[2.75rem] top-0 z-40');
+    expect(authoringUi).toContain('sticky left-[5rem] top-0 z-40');
+    expect(authoringUi).toContain('w-[16rem] min-w-[16rem] max-w-[16rem]');
+    expect(authoringUi).toContain('min-w-[92rem] w-full border-collapse');
+    expect(authoringUi).toContain('data-testid={\`quote-section-summary-\${section.key}\`}');
+    expect(authoringUi).toContain('const rowNumberByKey = useMemo');
+    expect(authoringUi).toContain(">1</td>");
+    expect(authoringUi).toContain(">式</td>");
+    expect(authoringUi).toContain("section.key === 'installation' ? '＋自由明細' : '＋行追加'");
+    expect(authoringUi).toContain("row.locked ? 'bg-slate-100' : 'bg-amber-50'");
+    expect(authoringUi).not.toContain('標準・変更可');
+    expect(authoringUi).not.toContain('標準・固定');
+    expect(authoringUi).not.toContain('任意オプション');
+  });
+
   it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {
     expect(authoringUi).toContain('Quote Draftの正式金額ロジックは変更していません');
     expect(authoringUi).toContain('販売費 <strong className="text-slate-400">未接続</strong>');

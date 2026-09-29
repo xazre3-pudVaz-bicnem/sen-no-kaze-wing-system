@@ -404,11 +404,12 @@ export function EstimateTemplateExcelDemo({
 
       {tab === 'estimate' && (
         <>
+      <div className="rounded-xl border border-slate-300 bg-white shadow-sm" data-testid="estimate-demo-editor-shell">
       <section
-        className="sticky top-0 z-30 overflow-hidden rounded-t-xl rounded-b-none border border-slate-300 bg-white shadow-sm"
+        className="sticky top-0 z-30 overflow-hidden rounded-t-xl bg-white"
         data-testid="estimate-demo-header-summary"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate font-semibold">{sample?.name ?? '見積書作成'}</h2>
             <span className={dirty
@@ -426,7 +427,7 @@ export function EstimateTemplateExcelDemo({
               type="button"
               variant="secondary"
               size="sm"
-              className="h-8 min-h-8"
+              className="h-7 min-h-7"
               onClick={() => setShowEstimatePreview((current) => !current)}
             >
               {showEstimatePreview ? 'プレビューを閉じる' : 'プレビュー'}
@@ -435,7 +436,7 @@ export function EstimateTemplateExcelDemo({
               type="button"
               variant="secondary"
               size="sm"
-              className="h-8 min-h-8"
+              className="h-7 min-h-7"
               disabled
               title={sample ? 'サンプルはDBへ保存されません' : 'Draft接続後に利用できます'}
             >
@@ -444,7 +445,7 @@ export function EstimateTemplateExcelDemo({
             <Button
               type="button"
               size="sm"
-              className="h-8 min-h-8"
+              className="h-7 min-h-7"
               disabled
               title={sample ? 'サンプルは正式見積として保存されません' : 'Draft→正式Revision接続後に利用できます'}
             >
@@ -460,9 +461,8 @@ export function EstimateTemplateExcelDemo({
         )}
 
         <div className="divide-y divide-slate-200">
-          <section className="px-4 py-2.5">
-            <div className="text-[11px] font-semibold text-slate-600">見積条件</div>
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
+          <section className="px-4 py-1.5">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-[10px] text-slate-500">商品モデル</span>
                 <strong className="text-xs">{sample?.model ?? 'Wing'}</strong>
@@ -493,9 +493,8 @@ export function EstimateTemplateExcelDemo({
             </div>
           </section>
 
-          <section className="px-4 py-2.5">
-            <div className="text-[11px] font-semibold text-slate-600">価格設定</div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <section className="px-4 py-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <div className="flex items-center gap-1.5">
                 <div>
                   <p className="text-[10px] font-semibold text-slate-700">販売費</p>
@@ -567,7 +566,7 @@ export function EstimateTemplateExcelDemo({
         </div>
       </section>
 
-      <section className="!mt-0 overflow-visible rounded-b-xl rounded-t-none border border-t-0 border-slate-300 bg-white shadow-sm">
+      <section className="overflow-visible rounded-b-xl bg-white">
         <div className="w-full">
           <table className="w-full table-fixed border-collapse text-[11px]" data-testid="estimate-demo-fit-table">
             <colgroup>
@@ -848,6 +847,7 @@ export function EstimateTemplateExcelDemo({
           <p className="text-[11px] text-slate-500">自動売価＝ROUNDDOWN(原価単価×掛率,0) ／ 粗利＝売価－原価</p>
         </div>
       </section>
+      </div>
 
       <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatDisplayYen(totals.cost)}</strong></div>

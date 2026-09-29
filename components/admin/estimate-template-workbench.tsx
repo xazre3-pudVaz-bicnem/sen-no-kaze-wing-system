@@ -672,8 +672,9 @@ export function EstimateTemplateWorkbench({
         </div>
       )}
 
+      <div className="rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="estimate-workbench-editor-shell">
       <section
-        className="sticky top-0 z-30 overflow-hidden rounded-t-lg rounded-b-none border border-slate-300 bg-white/95 shadow-sm backdrop-blur"
+        className="sticky top-0 z-30 overflow-hidden rounded-t-lg bg-white/95 backdrop-blur"
         data-testid="estimate-workbench-sticky-summary"
       >
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[11px]">
@@ -808,7 +809,7 @@ export function EstimateTemplateWorkbench({
         </div>
       </section>
 
-      <section className="!mt-0 overflow-hidden rounded-b-lg rounded-t-none border border-t-0 border-slate-300 bg-white shadow-sm" data-testid="estimate-excel-grid">
+      <section className="overflow-hidden rounded-b-lg bg-white" data-testid="estimate-excel-grid">
         <div className="max-h-[68vh] overflow-auto">
           <table className={showCost ? 'min-w-[82rem] w-full border-collapse text-xs' : 'min-w-[62rem] w-full border-collapse text-xs'}>
             <thead>
@@ -902,6 +903,7 @@ export function EstimateTemplateWorkbench({
           <span>販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。</span>
         </div>
       </section>
+      </div>
 
       {pickerSection && (
         <div

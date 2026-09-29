@@ -111,7 +111,7 @@ describe('見積書作成・管理UI', () => {
   it('見積書一覧は登録済み商品モデルで絞り込める', () => {
     expect(savedEstimateMenu).toContain("const [selectedModelId, setSelectedModelId] = useState('')");
     expect(savedEstimateMenu).toContain('models.map((model) =>');
-    expect(savedEstimateMenu).toContain("aria-label="商品モデルで絞り込み"");
+    expect(savedEstimateMenu).toContain('aria-label="商品モデルで絞り込み"');
     expect(savedEstimateMenu).toContain('すべて');
     expect(savedEstimateMenu).toContain('template.base_model_id === selectedModelId');
     expect(savedEstimateMenu).toContain('normalizedModelName(sample.model) === modelName');

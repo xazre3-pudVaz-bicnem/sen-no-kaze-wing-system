@@ -1,0 +1,97 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const root = process.cwd();
+const authoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
+const manualWorkbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote-workbench.tsx'), 'utf8');
+const draftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
+const newQuotePage = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
+const draftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
+const estimateTemplatesPage = fs.readFileSync(path.join(root, 'app/admin/estimate-templates/page.tsx'), 'utf8');
+const adminNav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx'), 'utf8');
+
+describe('見積書管理の正式編集UI統合', () => {
+  it('見積書管理と案件管理の新規入口を同じ正式エディタへ集約する', () => {
+    expect(adminNav).toContain("label: '見積書管理'");
+    expect(estimateTemplatesPage).toContain('href="/admin/quotes/new"');
+    expect(newQuotePage).toContain('<ManualQuoteWorkbench');
+    expect(manualWorkbench).toContain('<QuoteEditorTopbar mode="new"');
+    expect(draftEditor).toContain('<QuoteEditorTopbar mode="edit"');
+    expect(manualWorkbench).toContain('<QuoteAuthoringGrid');
+    expect(draftEditor).toContain('<QuoteAuthoringGrid');
+  });
+
+  it('案件情報をExcel型編集の上部へまとめる', () => {
+    for (const label of ['案件名', 'お客様名', '会社名', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', '注文範囲', 'メモ']) {
+      expect(manualWorkbench).toContain(label);
+    }
+    expect(manualWorkbench).not.toContain('（任意）');
+    expect(manualWorkbench).toContain('data-testid="case-info-panel"');
+  });
+
+  it('本体・内外装工事・オプション・別途と社内列を同じExcel型表に維持する', () => {
+    for (const label of ['本体', '内外装工事', 'オプション', '別途', '原価', '原価金額', '売価', '売価金額', '粗利', '備考']) {
+      expect(authoringUi).toContain(label);
+    }
+    expect(authoringUi).toContain('data-testid="unified-quote-excel-grid"');
+    expect(authoringUi).toContain('販売費');
+    expect(authoringUi).toContain('経費');
+    expect(authoringUi).toContain('掛率');
+    expect(authoringUi).toContain('原価正本はQuote Draftへ未接続');
+  });
+
+  it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {
+    expect(authoringUi).toContain('Quote Draftの正式金額ロジックは変更していません');
+    expect(authoringUi).toContain('販売費 <strong className="text-slate-400">未接続</strong>');
+    expect(authoringUi).toContain('経費 <strong className="text-slate-400">未接続</strong>');
+    expect(authoringUi).toContain('掛率 <strong className="text-slate-400">未接続</strong>');
+    expect(manualWorkbench).toContain('roundLikePostgres');
+    expect(draftEditor).toContain('detail.draft.tax_rate');
+  });
+
+  it('見積書一覧は案件名・顧客名・見積番号・商品モデルで検索する', () => {
+    expect(authoringUi).toContain('estimate.case_name');
+    expect(authoringUi).toContain('estimate.customer_name');
+    expect(authoringUi).toContain('estimate.quote_no');
+    expect(authoringUi).toContain('estimate.base_model_name');
+    expect(authoringUi).toContain('案件名・顧客名・見積番号・商品モデルで検索');
+    expect(newQuotePage).toContain('case_name: requestById.get(quote.quote_request_id)?.case_name ?? null');
+    expect(draftPage).toContain('case_name: requestById.get(quote.quote_request_id)?.case_name ?? null');
+  });
+
+  it('お客様プレビューには内部原価・掛率・粗利列を出さない', () => {
+    const start = authoringUi.indexOf('export function CustomerQuotePreview');
+    expect(start).toBeGreaterThan(-1);
+    const preview = authoringUi.slice(start);
+    for (const label of ['会社名', 'お客様名', '住所', 'TEL', '顧客番号', '件名', '見積提出日', '受注契約日', '発行者情報', '適格請求書番号', '支払条件', '振込先']) {
+      expect(preview).toContain(label);
+    }
+    for (const label of ['区分', '品名', '数量', '単位', '単価', '金額', '備考', '税抜小計', '値引き・調整額', '消費税', '税込合計']) {
+      expect(preview).toContain(label);
+    }
+    expect(preview).not.toContain('原価</th>');
+    expect(preview).not.toContain('原価金額</th>');
+    expect(preview).not.toContain('掛率</th>');
+    expect(preview).not.toContain('粗利</th>');
+    expect(preview).not.toContain('粗利率</th>');
+    expect(preview).toContain('正式PDF発行処理は今回の対象外です');
+  });
+
+  it('発行者・振込先は固定値をハードコードせず未設定として分離する', () => {
+    const start = authoringUi.indexOf('export function CustomerQuotePreview');
+    const preview = authoringUi.slice(start);
+    expect(preview).toContain('<dt className="text-muted">発行者情報</dt><dd>未設定</dd>');
+    expect(preview).toContain('<dt className="text-muted">振込先</dt><dd>未設定</dd>');
+    expect(preview).not.toContain('株式会社技術の杜');
+    expect(preview).not.toContain('銀行名');
+    expect(preview).not.toContain('口座番号');
+  });
+
+  it('プランボード・図面は同じワークスペース内で未接続状態を明示する', () => {
+    expect(authoringUi).toContain('見積書');
+    expect(authoringUi).toContain('プランボード');
+    expect(authoringUi).toContain('図面');
+    expect(authoringUi).toContain('type="button" disabled');
+  });
+});

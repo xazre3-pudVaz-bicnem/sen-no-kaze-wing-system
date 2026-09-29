@@ -75,7 +75,9 @@ describe('見積書作成・管理UI', () => {
 
   it('見積書が未登録でも空画面ではなく作成画面を直接表示する', () => {
     expect(listPage).toContain('if (!selectedTemplate)');
-    expect(listPage).toContain('<EstimateTemplateExcelDemo key={selectedSample?.id ?? \'new-estimate-demo\'} sampleId={selectedSample?.id} />');
+    expect(listPage).toContain('<EstimateTemplateExcelDemo');
+    expect(listPage).toContain("key={selectedSample?.id ?? 'new-estimate-demo'}");
+    expect(listPage).toContain('sampleId={selectedSample?.id}');
     expect(listPage).toContain('正式な見積書データが未登録のため、作成画面を直接表示しています。');
     expect(listPage).not.toContain('見積書がまだありません');
     expect(listPage).toContain('products={demoProducts}');

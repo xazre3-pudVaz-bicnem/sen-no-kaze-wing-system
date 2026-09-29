@@ -176,11 +176,9 @@ export function SavedEstimateMenu({
           </div>
         </div>
 
-        <div className="my-2 rounded-lg border border-line bg-sand/25 px-3 py-2">
-          <p className="text-[10px] font-semibold tracking-wide text-muted">シミュレーター標準</p>
-          <p className="mt-0.5 text-[11px] text-muted">
-            標準指定された正式見積書をシミュレーターの選択肢に表示します。現在は指定機能の接続準備中です。
-          </p>
+        <div className="flex flex-wrap items-center gap-2 px-2 py-2 text-[11px] text-muted">
+          <Badge tone="neutral">シミュレーター標準</Badge>
+          <span>シミュレーターで選べる正式見積書（指定機能は接続準備中）</span>
         </div>
 
         <div className="border-t border-line pt-2">

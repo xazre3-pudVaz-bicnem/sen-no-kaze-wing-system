@@ -283,6 +283,13 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('※別途見積を含むため合計は確定額ではありません。');
   });
 
+  it('本体明細は所有者のみ案件内編集可とし、所有者判定接続前は参照専用にする', () => {
+    expect(workbench).toContain('本体所有者のみ案件内編集可・所有者判定接続前は参照専用');
+    expect(workbench).toContain('本体明細は所有者のみ案件内編集可。現在は所有者判定未接続のため参照専用です。');
+    expect(workbench).toContain('非所有者は案件販売調整で対応します（正式接続後）。');
+    expect(workbench).toContain('editable: false');
+  });
+
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-sticky-summary"');
     expect(workbench).toContain('data-testid="estimate-excel-grid"');

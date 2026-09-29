@@ -33,7 +33,7 @@ export default async function AdminNewQuotePage() {
   return (
     <AdminPage
       title="見積書を作成"
-      lead="案件情報と見積明細を同じ画面で入力します。下書き保存までは正式な見積Revisionを発行しません。"
+      lead="下書き保存後に正式保存できます。"
     >
       <ManualQuoteWorkbench
         models={models.map((model) => ({

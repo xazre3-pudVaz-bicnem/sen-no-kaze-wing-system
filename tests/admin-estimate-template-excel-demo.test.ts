@@ -166,11 +166,17 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('見積書を編集し、同じ内容をプランボード・図面にも反映します。');
   });
 
-  it('商品台帳ポップアップは検索を置かず、対象区分の商品を直接比較する', () => {
+  it('商品台帳ポップアップは検索なしで区分連動カテゴリータブから絞り込める', () => {
     expect(demo).not.toContain('type="search"');
     expect(demo).not.toContain('メーカー・商品名・型番で検索');
+    expect(demo).toContain("const [pickerCategoryCode, setPickerCategoryCode] = useState('')");
+    expect(demo).toContain('pickerCategories.length > 1');
+    expect(demo).toContain('role="tablist"');
+    expect(demo).toContain("aria-selected={pickerCategoryCode === ''}");
+    expect(demo).toContain('すべて');
+    expect(demo).toContain('onClick={() => setPickerCategoryCode(code)}');
     expect(demo).toContain('grid gap-3 sm:grid-cols-2');
-    expect(demo).toContain('{pickerProducts.map((product) => (');
+    expect(demo).toContain('{visiblePickerProducts.map((product) => (');
     expect(demo).toContain('この区分で選べる商品はまだありません。');
   });
 

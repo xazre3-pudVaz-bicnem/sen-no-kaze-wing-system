@@ -42,9 +42,9 @@ describe('技術の杜確認用 見積書作成デモ', () => {
   it('自由入力を残したまま、明細行から既存商品を選んで置換できる', () => {
     expect(demo).toContain('const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);');
     expect(demo).toContain('openProductPicker(section as Exclude<Section, \'本体\'>, row.id)');
-    expect(demo).toContain('既存の商品から選択');
-    expect(demo).toContain('⋯');
-    expect(demo).toContain("pickerTargetRowId ? '既存の商品から選択' : '商品を追加'");
+    expect(demo).toContain('商品台帳から選択');
+    expect(demo).toContain('title="商品台帳から選ぶ"');
+    expect(demo).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
     expect(demo).toContain("row.id === pickerTargetRowId");
     expect(demo).toContain("source: 'product'");
     expect(demo).toContain("pickerTargetRowId ? 'この商品を選ぶ' : '追加'");
@@ -71,10 +71,11 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
   });
-  it('商品行の品名から商品詳細を開ける', () => {
-    expect(demo).toContain('detailProductId');
-    expect(demo).toContain('商品詳細を表示');
-    expect(demo).toContain("row.source === 'product' && row.productId");
+  it('品名右側から商品台帳を開き、現在行の商品を選び直せる', () => {
+    expect(demo).toContain('title="商品台帳から選ぶ"');
+    expect(demo).toContain("openProductPicker(section as Exclude<Section, '本体'>, row.id)");
+    expect(demo).toContain('row.remark ||');
+    expect(demo).not.toContain('detailProductId');
   });
 
 });

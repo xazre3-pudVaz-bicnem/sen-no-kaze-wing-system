@@ -686,7 +686,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </div>
             <p className="mt-1 text-xs leading-5 text-ink-soft">
               この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
-              右上の「＋案件を登録」は別の案件を新規作成するため、このWeb受付の引継ぎには使用しません。
+              右上の「＋見積書を作成」は別の新規見積を作成する入口のため、このWeb受付の引継ぎには使用しません。
             </p>
           </section>
         </section>

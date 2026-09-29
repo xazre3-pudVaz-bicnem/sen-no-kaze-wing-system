@@ -13,6 +13,7 @@ const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspa
 const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
 const dealerForms = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const manualQuoteForm = fs.readFileSync(path.join(root, 'components/admin/manual-quote-form.tsx'), 'utf8');
+const manualQuoteWorkbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote-workbench.tsx'), 'utf8');
 const casePlanBoard = fs.readFileSync(path.join(root, 'components/admin/case-plan-board.tsx'), 'utf8');
 const clickableCaseRow = fs.readFileSync(path.join(root, 'components/admin/clickable-case-row.tsx'), 'utf8');
 const caseAdminControls = fs.readFileSync(path.join(root, 'components/admin/case-admin-controls.tsx'), 'utf8');
@@ -93,6 +94,7 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('＋対面・電話・紹介の案件受付');
     expect(list).toContain('＋見積書を作成');
     expect(list).toContain('href="/admin/quotes/new"');
+    expect(list).toContain("canCreateQuote={actor.role === 'admin'}");
     expect(shell).toContain('href="/admin/notifications"');
     expect(shell).toContain('aria-label="お知らせ"');
     expect(nav).toContain("href: '/admin/customer-management'");
@@ -479,7 +481,8 @@ describe('Admin case management UI', () => {
     for (const route of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
       expect(nav).toContain(route);
     }
-    expect(newQuote).toContain('<BackLink href="/admin/quotes" label="案件管理へ戻る" />');
+    expect(manualQuoteWorkbench).toContain('href="/admin/quotes"');
+    expect(manualQuoteWorkbench).toContain('← 案件管理へ戻る');
     expect(newQuote).toContain('title="見積書を作成"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');

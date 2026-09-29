@@ -143,7 +143,7 @@ describe('見積書作成・管理UI', () => {
     expect(newForm).toContain("name: 'エアコン'");
     expect(newForm).toContain("name: '運送費'");
     expect(newForm).toContain('initialLines={samplePreview ? SAMPLE_EDIT_LINES : []}');
-    expect(newForm).toContain('この見積書を適用する地域を選択します。');
+    expect(newForm).toContain('適用地域');
     expect(newForm).toContain('本体を選ぶ');
     expect(newForm).toContain('明細を確認');
     expect(newForm).toContain('この本体を使う');

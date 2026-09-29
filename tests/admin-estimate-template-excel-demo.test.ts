@@ -54,6 +54,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('売価を再計算');
     expect(demo).toContain('別途見積');
     expect(demo).toContain('商品を追加');
+    expect(demo).toContain('行追加');
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("aria-label={section + 'を展開'}");
     expect(demo).toContain("data-testid={`estimate-demo-section-total-${section}`}");
@@ -66,7 +67,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('data-testid="estimate-demo-editor-shell"');
     expect(demo).toContain('rounded-xl border border-slate-300 bg-white shadow-sm');
     expect(demo).toContain('sticky top-0 z-30 overflow-hidden rounded-t-xl bg-white');
-    expect(demo).toContain('overflow-visible rounded-b-xl bg-white');
+    expect(demo).toContain('overflow-visible rounded-b-xl border-t border-slate-300 bg-white');
     expect(demo).not.toContain('!mt-0 overflow-visible');
   });
 

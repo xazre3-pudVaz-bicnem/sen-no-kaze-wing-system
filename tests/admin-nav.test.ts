@@ -50,7 +50,9 @@ describe('管理画面の業務領域ナビゲーション', () => {
       '/admin/import',
       '/admin/preview-rules',
     ]));
+    expect(estimates?.href).toBe('/admin/quote-management');
     expect(estimates?.match).toEqual(expect.arrayContaining([
+      '/admin/quote-management',
       '/admin/base-masters',
       '/admin/estimate-templates',
       '/admin/base-breakdown',

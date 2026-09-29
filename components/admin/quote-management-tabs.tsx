@@ -10,7 +10,7 @@ export function QuoteManagementTabs({ active }: { active: 'case' | 'standard' })
       className="flex flex-wrap gap-1 rounded-lg border border-line bg-white p-1 shadow-sm"
     >
       <Link
-        href="/admin/quotes/new"
+        href="/admin/quote-management"
         aria-current={active === 'case' ? 'page' : undefined}
         className={
           active === 'case'

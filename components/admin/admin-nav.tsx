@@ -41,9 +41,10 @@ const sections: NavSection[] = [
     ],
   },
   {
-    href: '/admin/estimate-templates',
+    href: '/admin/quote-management',
     label: '見積書管理',
     match: [
+      '/admin/quote-management',
       '/admin/base-masters',
       '/admin/estimate-templates',
       '/admin/base-breakdown',

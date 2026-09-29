@@ -404,6 +404,7 @@ export function EstimateTemplateExcelDemo({
 
       {tab === 'estimate' && (
         <>
+      <div className="space-y-1" data-testid="estimate-demo-editor-and-summary">
       <div className="rounded-xl border border-slate-300 bg-white shadow-sm" data-testid="estimate-demo-editor-shell">
       <section
         className="sticky top-0 z-30 overflow-hidden rounded-t-xl bg-white"
@@ -487,7 +488,7 @@ export function EstimateTemplateExcelDemo({
               ) : (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[10px] text-slate-500">使用中の本体</span>
-                  <strong className="text-xs">Wing ホテル仕様 v4</strong>
+                  <strong className="text-xs">Wing ホテル仕様</strong>
                 </div>
               )}
             </div>
@@ -849,7 +850,7 @@ export function EstimateTemplateExcelDemo({
       </section>
       </div>
 
-      <section className="ml-auto max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
+      <section className="ml-auto w-full max-w-xl rounded-xl border border-slate-300 bg-white p-5 text-sm shadow-sm">
         <div className="flex justify-between gap-4 py-1"><span>原価合計</span><strong>{formatDisplayYen(totals.cost)}</strong></div>
         <div className="flex justify-between gap-4 py-1"><span>売価明細合計</span><strong>{formatDisplayYen(totals.saleLines)}</strong></div>
         <div className="flex justify-between gap-4 py-1">
@@ -884,6 +885,7 @@ export function EstimateTemplateExcelDemo({
         <div className="flex justify-between gap-4 py-1"><span>粗利率</span><strong>{totals.margin.toFixed(1)}%</strong></div>
         <div className="flex justify-between gap-4 py-1 text-xs text-slate-500"><span>別途見積</span><strong>{totals.onRequest}件</strong></div>
       </section>
+      </div>
 
         </>
       )}

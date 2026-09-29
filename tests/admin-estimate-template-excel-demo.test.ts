@@ -71,6 +71,18 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('!mt-0 overflow-visible');
   });
 
+  it('明細表と最終集計欄を近接表示し、スマホでは集計欄を横幅いっぱいにする', () => {
+    expect(demo).toContain('data-testid="estimate-demo-editor-and-summary"');
+    expect(demo).toContain('className="space-y-1"');
+    expect(demo).toContain('ml-auto w-full max-w-xl rounded-xl border border-slate-300');
+  });
+
+  it('使用中の本体は通常表示で内部Revision番号を強く見せない', () => {
+    expect(demo).toContain('>使用中の本体<');
+    expect(demo).toContain('>Wing ホテル仕様<');
+    expect(demo).not.toContain('Wing ホテル仕様 v4');
+  });
+
   it('見積上部の上下余白をコンパクトにする', () => {
     expect(demo).toContain('border-b border-slate-200 px-4 py-1.5');
     expect(demo).toContain('className="px-4 py-1.5"');

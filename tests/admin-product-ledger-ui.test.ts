@@ -101,7 +101,11 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');
     expect(client).toContain('<ProductDetail key={selected.id} category={category} option={selected}');
+    expect(client).toContain('compactMedia');
     expect(client).toContain('onVariantChange={onPreviewVariantChange}');
+    const detail = fs.readFileSync(path.resolve(process.cwd(), 'components/simulator/product-detail.tsx'), 'utf8');
+    expect(detail).toContain('compactMedia?: boolean');
+    expect(detail).toContain("compactMedia ? 'h-[clamp(14rem,55vw,19rem)]' : 'aspect-[3/2]'");
   });
 
   it('管理情報は正式に取得できる値と未取得の仕入情報を分離する', () => {

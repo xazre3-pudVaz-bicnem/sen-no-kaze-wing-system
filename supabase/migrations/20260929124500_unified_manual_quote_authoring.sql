@@ -215,8 +215,9 @@ begin
   end if;
 
   if d.parent_quote_id is null then
-    if v_rank < 3 and d.created_by is distinct from v_uid then
-      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    if v_rank < 3 then
+      raise exception 'FORBIDDEN: 初回見積Draftの作成・編集は現在本部管理者のみ利用できます'
+        using errcode = '42501';
     end if;
   else
     select * into parent

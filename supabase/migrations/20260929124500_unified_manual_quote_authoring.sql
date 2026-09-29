@@ -141,6 +141,11 @@ begin
 end;
 $get_draft$;
 
+alter function public.get_quote_draft(uuid) owner to postgres;
+revoke execute on function public.get_quote_draft(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_quote_draft(uuid) to authenticated;
+
 create or replace function public.create_manual_quote_draft_with_items(
   p_case_name text,
   p_contact jsonb,

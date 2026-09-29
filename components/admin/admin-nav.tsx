@@ -65,8 +65,11 @@ function isAllowed(item: { need?: Access }, role: RoleCode) {
   return item.need === 'admin' ? role === 'admin' : true;
 }
 
-function sectionIsActive(section: NavSection, pathname: string) {
-  if (section.exclude?.some((href) => pathname === href || pathname.startsWith(`${href}/`))) {
+function sectionIsActive(section: NavSection, pathname: string, role: RoleCode) {
+  if (
+    role === 'admin' &&
+    section.exclude?.some((href) => pathname === href || pathname.startsWith(`${href}/`))
+  ) {
     return false;
   }
   return section.match.some((href) => (href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)));
@@ -100,7 +103,7 @@ export function AdminNav({ role, migrationOnly = false }: { role: RoleCode; migr
           </Link>
         )}
         {visible.map((section) => {
-          const active = sectionIsActive(section, pathname);
+          const active = sectionIsActive(section, pathname, role);
           return (
             <Link
               key={section.href}

@@ -23,9 +23,11 @@ describe('見積書管理の正式編集UI統合', () => {
   });
 
   it('案件情報をExcel型編集の上部へまとめる', () => {
-    for (const label of ['案件名', 'お客様名', '会社名', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', 'メモ']) {
+    for (const label of ['案件名', 'お客様名', '会社名', '電話番号', 'メールアドレス', 'お客様住所', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', 'メモ']) {
       expect(manualWorkbench).toContain(label);
     }
+    expect(manualWorkbench).toContain('電話・メール・お客様住所は保存連携準備中');
+    expect(manualWorkbench).toContain('placeholder="保存連携準備中"');
     expect(manualWorkbench).not.toContain('（任意）');
     expect(manualWorkbench).not.toContain('label="注文範囲"');
     expect(draftEditor).not.toContain('<span className="text-muted">注文範囲</span>');

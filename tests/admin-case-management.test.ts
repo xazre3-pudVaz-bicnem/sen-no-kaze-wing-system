@@ -94,7 +94,8 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('＋対面・電話・紹介の案件受付');
     expect(list).toContain('＋見積書を作成');
     expect(list).toContain('href="/admin/quotes/new"');
-    expect(list).toContain("canCreateQuote={actor.role === 'admin'}");
+    expect(list).toContain('canCreateQuote={false}');
+    expect(list).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote />');
     expect(shell).toContain('href="/admin/notifications"');
     expect(shell).toContain('aria-label="お知らせ"');
     expect(nav).toContain("href: '/admin/customer-management'");

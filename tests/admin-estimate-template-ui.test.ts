@@ -215,7 +215,7 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('data-testid="estimate-workbench-editor-shell"');
     expect(workbench).toContain('rounded-lg border border-slate-300 bg-white shadow-sm');
     expect(workbench).toContain('sticky top-0 z-30 overflow-hidden rounded-t-lg bg-white/95 backdrop-blur');
-    expect(workbench).toContain('overflow-hidden rounded-b-lg bg-white');
+    expect(workbench).toContain('overflow-hidden rounded-b-lg border-t border-slate-300 bg-white');
     expect(workbench).not.toContain('!mt-0 overflow-hidden');
   });
 
@@ -224,7 +224,7 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain('見積書編集');
     expect(workbench).toContain('bg-amber-50/35 px-3 py-1.5');
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
-    expect(workbench).toContain('＋商品');
+    expect(workbench).toContain('＋行追加');
     expect(workbench).toContain('＋自由明細');
     expect(workbench).toContain('商品台帳から選ぶ');
     expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");

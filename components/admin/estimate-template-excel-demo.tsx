@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { Package } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 import { estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
@@ -122,7 +123,6 @@ export function EstimateTemplateExcelDemo({
   const [adjustment, setAdjustment] = useState(sample?.adjustment ?? -2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
 
@@ -185,19 +185,11 @@ export function EstimateTemplateExcelDemo({
     return map;
   }, [rows]);
 
-  const filteredProducts = useMemo(() => {
+  const pickerProducts = useMemo(() => {
     if (!pickerSection) return [];
     const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection]);
-    const q = query.trim().toLowerCase();
-    return catalogProducts.filter((product) => {
-      if (!allowedCodes.has(product.categoryCode)) return false;
-      if (!q) return true;
-      return [product.category, product.name, product.manufacturer, product.modelNo]
-        .join(' ')
-        .toLowerCase()
-        .includes(q);
-    });
-  }, [catalogProducts, pickerSection, query]);
+    return catalogProducts.filter((product) => allowedCodes.has(product.categoryCode));
+  }, [catalogProducts, pickerSection]);
 
   const markDirty = () => setDirty(true);
 
@@ -257,13 +249,11 @@ export function EstimateTemplateExcelDemo({
   const openProductPicker = (section: Exclude<Section, '本体'>, targetRowId: string | null = null) => {
     setPickerSection(section);
     setPickerTargetRowId(targetRowId);
-    setQuery('');
   };
 
   const closeProductPicker = () => {
     setPickerSection(null);
     setPickerTargetRowId(null);
-    setQuery('');
   };
 
   const addProduct = (product: DemoProduct) => {
@@ -641,15 +631,17 @@ export function EstimateTemplateExcelDemo({
                                 onChange={(event) => updateRow(row.id, { name: event.target.value })}
                                 className={inputClass + ' min-w-0 flex-1'}
                               />
-                              <button
-                                type="button"
-                                className="flex h-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white px-1 text-[9px] font-semibold text-emerald-800 hover:border-emerald-700"
-                                title="商品台帳から選ぶ"
-                                aria-label={row.name + 'を商品台帳から選び直す'}
-                                onClick={() => openProductPicker(section as Exclude<Section, '本体'>, row.id)}
-                              >
-                                商品
-                              </button>
+                              {section !== '本体' && (
+                                <button
+                                  type="button"
+                                  className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700"
+                                  title="商品台帳から選ぶ"
+                                  aria-label={row.name + 'を商品台帳から選び直す'}
+                                  onClick={() => openProductPicker(section, row.id)}
+                                >
+                                  <Package className="size-3.5" aria-hidden="true" />
+                                </button>
+                              )}
                             </div>
                           </td>
                           <td className="border-r border-slate-200 bg-amber-50 px-0.5">
@@ -1002,16 +994,12 @@ export function EstimateTemplateExcelDemo({
             </div>
 
             <div className="space-y-4 p-5">
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="メーカー・商品名・型番で検索"
-                className="h-10 w-full rounded border border-slate-300 px-3 text-sm"
-              />
+              <p className="text-xs text-slate-500">
+                {pickerSection}で選べる商品を表示しています。商品を選ぶと現在の明細へ反映します。
+              </p>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                {filteredProducts.map((product) => (
+                {pickerProducts.map((product) => (
                   <article key={product.id} className="rounded-xl border border-slate-200 p-4">
                     <div className="flex gap-3">
                       <div
@@ -1037,6 +1025,12 @@ export function EstimateTemplateExcelDemo({
                   </article>
                 ))}
               </div>
+
+              {pickerProducts.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">
+                  この区分で選べる商品はまだありません。
+                </div>
+              )}
             </div>
           </div>
         </div>

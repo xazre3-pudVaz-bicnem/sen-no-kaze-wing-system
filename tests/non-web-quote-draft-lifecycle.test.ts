@@ -159,7 +159,7 @@ describe('non-Web manual case application wiring', () => {
     const end = actions.indexOf('export interface QuoteDraftFormState');
     const body = actions.slice(start, end);
 
-    expect(body).toContain('store.createManualQuoteDraft');
+    expect(body).toContain('store.createManualQuoteDraftWithItems');
     expect(body).toContain('redirect(`/admin/quotes/drafts/${draftId}?created=1`)');
     expect(body).not.toContain('saveConfiguration');
     expect(body).not.toContain('createQuoteFromConfiguration');
@@ -177,7 +177,8 @@ describe('non-Web manual case application wiring', () => {
   });
 
   it('connects Supabase only through the new lifecycle RPCs', () => {
-    expect(supabaseStore).toContain("db.rpc('create_manual_quote_case'");
+    expect(supabaseStore).toContain("db.rpc('create_manual_quote_draft_with_items'");
+    expect(supabaseStore).not.toContain("db.rpc('create_manual_quote_case'");
     expect(supabaseStore).toContain("db.rpc('get_quote_draft'");
     expect(supabaseStore).toContain("db.rpc('save_quote_draft'");
     expect(supabaseStore).toContain("db.rpc('finalize_quote_draft'");

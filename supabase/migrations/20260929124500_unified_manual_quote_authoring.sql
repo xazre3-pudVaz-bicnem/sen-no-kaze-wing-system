@@ -66,8 +66,9 @@ begin
   end if;
 
   if d.parent_quote_id is null then
-    if v_rank < 3 and d.created_by is distinct from v_uid then
-      raise exception 'FORBIDDEN: このDraftを編集できません' using errcode = '42501';
+    if v_rank < 3 then
+      raise exception 'FORBIDDEN: 初回見積Draftの作成・編集は現在本部管理者のみ利用できます'
+        using errcode = '42501';
     end if;
   else
     select * into parent
@@ -265,24 +266,38 @@ begin
   end if;
 
   if p_base_master_revision_id is not null then
-    select rev.base_master_id into v_base_master_id
-      from public.base_master_revisions rev
-      join public.base_masters master on master.id = rev.base_master_id
-     where rev.id = p_base_master_revision_id
-       and rev.status in ('published', 'superseded')
-       and master.base_model_id = d.base_model_id;
+    if p_base_master_revision_id is not distinct from d.base_master_revision_id then
+      -- すでにこのDraftへpin済みの同一Revisionは、後からsuperseded/archivedになっても維持できる。
+      select rev.base_master_id into v_base_master_id
+        from public.base_master_revisions rev
+        join public.base_masters master on master.id = rev.base_master_id
+       where rev.id = p_base_master_revision_id
+         and rev.status in ('published', 'superseded')
+         and master.base_model_id = d.base_model_id;
 
-    if not found then
-      raise exception 'VALIDATION: この本体Revisionは案件に使用できません'
-        using errcode = 'P0001';
-    end if;
+      if not found then
+        raise exception 'VALIDATION: 既存の本体Revision pinが不正です'
+          using errcode = 'P0001';
+      end if;
+    else
+      -- 新規pin/変更先はactive masterのcurrent publishedだけを許可する。
+      select rev.base_master_id into v_base_master_id
+        from public.base_master_revisions rev
+        join public.base_masters master on master.id = rev.base_master_id
+       where rev.id = p_base_master_revision_id
+         and rev.status = 'published'
+         and master.status = 'active'
+         and rev.id = master.current_published_revision_id
+         and master.base_model_id = d.base_model_id;
 
-    if not (
-      d.parent_quote_id is not null
-      and p_base_master_revision_id is not distinct from parent.base_master_revision_id
-    ) and not public.can_use_base_master(v_base_master_id) then
-      raise exception 'FORBIDDEN: この本体Revisionは案件に使用できません'
-        using errcode = '42501';
+      if not found then
+        raise exception 'VALIDATION: 新しく選べるのは現在公開中の本体Revisionだけです'
+          using errcode = 'P0001';
+      end if;
+      if not public.can_use_base_master(v_base_master_id) then
+        raise exception 'FORBIDDEN: この本体Revisionは案件に使用できません'
+          using errcode = '42501';
+      end if;
     end if;
   end if;
 
@@ -572,6 +587,302 @@ grant execute on function public.save_quote_draft(
   uuid, integer, uuid, jsonb, integer, text, text, text
 ) to authenticated;
 
+create or replace function public.finalize_quote_draft(
+  p_draft_id uuid,
+  p_expected_lock_version integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $finalize_draft$
+declare
+  v_uid uuid := auth.uid();
+  v_rank integer := public.current_role_rank();
+  d public.quote_drafts;
+  r public.quote_requests;
+  v_model public.base_models;
+  v_base_master_id uuid;
+  v_quote_id uuid;
+  v_quote_no text;
+  v_customer_name text;
+  v_customer_company text;
+  v_dealer_id uuid;
+  v_base numeric := 0;
+  v_base_exp numeric := 0;
+  v_int numeric := 0;
+  v_int_exp numeric := 0;
+  v_opt numeric := 0;
+  v_opt_exp numeric := 0;
+  v_inst numeric := 0;
+  v_subtotal_raw numeric := 0;
+  v_subtotal numeric;
+  v_tax numeric;
+  v_total numeric;
+  i public.quote_draft_items;
+  v_expected_amount numeric;
+begin
+  if v_uid is null then
+    raise exception 'UNAUTHENTICATED' using errcode = '42501';
+  end if;
+  if v_rank < 3 then
+    raise exception 'FORBIDDEN: 初回Revision 1の正式保存は現在本部管理者のみ利用できます'
+      using errcode = '42501';
+  end if;
+
+  select * into d
+    from public.quote_drafts
+   where id = p_draft_id
+   for update;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+  if v_rank < 3 and d.created_by is distinct from v_uid then
+    raise exception 'FORBIDDEN: このDraftを正式保存できません' using errcode = '42501';
+  end if;
+  if d.lock_version is distinct from p_expected_lock_version then
+    raise exception 'LOCKED: 他の画面でDraftが更新されています。再読み込みしてください' using errcode = 'P0001';
+  end if;
+  if d.parent_quote_id is not null then
+    raise exception 'LOCKED: このRPCは初回Revision 1専用です' using errcode = 'P0001';
+  end if;
+  if d.quote_kind <> 'formal' then
+    raise exception 'VALIDATION: 非Web初回見積はformalとして正式保存してください' using errcode = 'P0001';
+  end if;
+  if d.base_master_revision_id is null then
+    raise exception 'VALIDATION: 正式保存前に基準本体Revisionを選択してください' using errcode = 'P0001';
+  end if;
+
+  select rev.base_master_id into v_base_master_id
+    from public.base_master_revisions rev
+    join public.base_masters master on master.id = rev.base_master_id
+   where rev.id = d.base_master_revision_id
+     and rev.status in ('published', 'superseded')
+     and master.base_model_id = d.base_model_id;
+
+  if not found then
+    raise exception 'VALIDATION: Draftにpinされた本体Revisionが不正です' using errcode = 'P0001';
+  end if;
+
+  select * into r
+    from public.quote_requests
+   where id = d.quote_request_id
+   for update;
+
+  if not found then
+    raise exception 'NOT_FOUND' using errcode = 'P0002';
+  end if;
+  if r.quote_id is not null
+     or exists (select 1 from public.quotes q where q.quote_request_id = r.id) then
+    raise exception 'LOCKED: この案件にはすでに正式Revisionがあります' using errcode = 'P0001';
+  end if;
+
+  select * into v_model
+    from public.base_models
+   where id = d.base_model_id;
+
+  if not found then
+    raise exception 'VALIDATION: 商品モデルが見つかりません' using errcode = 'P0001';
+  end if;
+
+  v_customer_name := nullif(btrim(coalesce(r.contact ->> 'full_name', '')), '');
+  v_customer_company := nullif(btrim(coalesce(r.contact ->> 'company_name', '')), '');
+  if v_customer_name is null then
+    raise exception 'VALIDATION: お客様名がありません' using errcode = 'P0001';
+  end if;
+
+  if not exists (
+    select 1 from public.quote_draft_items item where item.draft_id = d.id
+  ) then
+    raise exception 'VALIDATION: 明細を1行以上保存してから正式保存してください' using errcode = 'P0001';
+  end if;
+
+  for i in
+    select * from public.quote_draft_items
+     where draft_id = d.id
+     order by sort_order, id
+  loop
+    if i.quantity < 0.01 or i.quantity > 99999 or i.quantity <> round(i.quantity, 4) then
+      raise exception 'VALIDATION: Draftに不正な数量があります' using errcode = 'P0001';
+    end if;
+    v_expected_amount := round(i.unit_price::numeric * i.quantity);
+    if v_expected_amount <> i.amount then
+      raise exception 'VALIDATION: Draft明細金額がDB再計算値と一致しません' using errcode = 'P0001';
+    end if;
+
+    if i.kind = 'base' then
+      v_base := v_base + i.amount;
+    elsif i.kind = 'base_expense' then
+      v_base_exp := v_base_exp + i.amount;
+    elsif i.kind = 'interior_exterior' then
+      v_int := v_int + i.amount;
+    elsif i.kind = 'interior_exterior_expense' then
+      v_int_exp := v_int_exp + i.amount;
+    elsif i.kind = 'option' then
+      v_opt := v_opt + i.amount;
+    elsif i.kind = 'option_expense' then
+      v_opt_exp := v_opt_exp + i.amount;
+    else
+      v_inst := v_inst + i.amount;
+    end if;
+  end loop;
+
+  if greatest(
+       abs(v_base), abs(v_base_exp),
+       abs(v_int), abs(v_int_exp),
+       abs(v_opt), abs(v_opt_exp),
+       abs(v_inst)
+     ) > 2147483647 then
+    raise exception 'VALIDATION: 区分別金額が保存可能範囲を超えています'
+      using errcode = 'P0001';
+  end if;
+
+  v_subtotal_raw := v_base + v_base_exp + v_int + v_int_exp + v_opt + v_opt_exp + v_inst;
+  if v_subtotal_raw <> d.subtotal_raw then
+    raise exception 'VALIDATION: Draft明細合計がDB保存値と一致しません' using errcode = 'P0001';
+  end if;
+
+  v_subtotal := v_subtotal_raw + d.adjustment;
+  v_tax := floor(v_subtotal * d.tax_rate);
+  v_total := v_subtotal + v_tax;
+
+  if v_subtotal <> d.subtotal or v_tax <> d.tax or v_total <> d.total then
+    raise exception 'VALIDATION: Draft合計がDB再計算値と一致しません' using errcode = 'P0001';
+  end if;
+
+  v_quote_no := public.next_quote_no();
+  v_dealer_id := case when v_rank between 1 and 2 then v_uid else null end;
+
+  insert into public.quotes(
+    quote_no,
+    quote_request_id,
+    configuration_id,
+    user_id,
+    status,
+    issued_at,
+    valid_until,
+    customer_no,
+    customer_name,
+    customer_company,
+    base_model_name,
+    finish_level,
+    base_price,
+    base_expense,
+    option_subtotal,
+    option_expense,
+    installation_subtotal,
+    adjustment,
+    subtotal,
+    tax_rate,
+    tax,
+    total,
+    preview_image_url,
+    notes,
+    dealer_id,
+    dealer_note,
+    revision,
+    parent_quote_id,
+    quote_kind,
+    base_model_id,
+    base_master_revision_id,
+    spec_code,
+    adjustment_reason,
+    created_by
+  )
+  values(
+    v_quote_no,
+    r.id,
+    null,
+    null,
+    'issued',
+    now(),
+    now() + interval '30 days',
+    null,
+    v_customer_name,
+    v_customer_company,
+    v_model.name,
+    d.finish_level,
+    v_base::integer,
+    v_base_exp::integer,
+    (v_int + v_opt)::integer,
+    (v_int_exp + v_opt_exp)::integer,
+    v_inst::integer,
+    d.adjustment,
+    v_subtotal::integer,
+    d.tax_rate,
+    v_tax::integer,
+    v_total::integer,
+    null,
+    d.notes,
+    v_dealer_id,
+    d.dealer_note,
+    1,
+    null,
+    'formal',
+    d.base_model_id,
+    d.base_master_revision_id,
+    d.spec_code,
+    d.adjustment_reason,
+    v_uid
+  )
+  returning id into v_quote_id;
+
+  insert into public.quote_items(
+    quote_id,
+    line_key,
+    kind,
+    option_id,
+    name,
+    description,
+    unit,
+    remark,
+    unit_price,
+    quantity,
+    amount,
+    image_url,
+    sort_order
+  )
+  select
+    v_quote_id,
+    item.line_key,
+    item.kind,
+    item.option_id,
+    item.name,
+    item.description,
+    item.unit,
+    item.remark,
+    item.unit_price,
+    item.quantity,
+    round(item.unit_price::numeric * item.quantity)::integer,
+    item.image_url,
+    item.sort_order
+  from public.quote_draft_items item
+  where item.draft_id = d.id
+  order by item.sort_order, item.id;
+
+  update public.quote_requests
+     set quote_id = v_quote_id,
+         status = 'reviewing'
+   where id = r.id;
+
+  delete from public.quote_drafts
+   where id = d.id;
+
+  return v_quote_id;
+end;
+$finalize_draft$;
+
+alter function public.finalize_quote_draft(uuid, integer) owner to postgres;
+revoke execute on function public.finalize_quote_draft(uuid, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function public.finalize_quote_draft(uuid, integer) to authenticated;
+
+-- 旧「案件だけ作成」経路は統合RPCの内部helperとしてのみ利用する。
+alter function public.create_manual_quote_case(jsonb, text, uuid, text, text) owner to postgres;
+revoke execute on function public.create_manual_quote_case(jsonb, text, uuid, text, text)
+  from public, anon, authenticated, service_role;
+
 create or replace function public.create_manual_quote_draft_with_items(
   p_case_name text,
   p_contact jsonb,
@@ -599,8 +910,8 @@ begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
   end if;
-  if v_rank < 1 then
-    raise exception 'FORBIDDEN: 見積書を作成できるのは代理店以上です'
+  if v_rank < 3 then
+    raise exception 'FORBIDDEN: 初回見積書作成は現在本部管理者のみ利用できます'
       using errcode = '42501';
   end if;
 

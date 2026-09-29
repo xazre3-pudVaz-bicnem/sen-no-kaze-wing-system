@@ -17,6 +17,7 @@ import {
 } from '@/components/admin/estimate-template-excel-demo';
 import { ESTIMATE_DEMO_SAMPLES, estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 import { SavedEstimateMenu } from '@/components/admin/saved-estimate-menu';
+import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -84,20 +85,22 @@ export default async function EstimateTemplatesPage({
   if (!selectedTemplate) {
     return (
       <AdminPage
-        title="見積書作成・管理"
+        title="見積書管理"
+        lead="シミュレーター標準"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
             <Link href="/admin/quotes/new" className="btn-primary btn-sm">
-              ＋ 新しい見積書を作成
+              ＋ 案件見積を作成
             </Link>
           </div>
         }
       >
+        <QuoteManagementTabs active="standard" />
         <Alert tone="info">
           {selectedSample
             ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
-            : '現在は正式な見積書データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
+            : '現在はシミュレーター標準の正式データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
         </Alert>
         <EstimateTemplateExcelDemo
           key={selectedSample?.id ?? 'new-estimate-demo'}
@@ -118,20 +121,21 @@ export default async function EstimateTemplatesPage({
   if (!bundle) {
     return (
       <AdminPage
-        title="見積書作成・管理"
-        lead="見積書をExcelに近い操作感で作成・編集します。"
+        title="見積書管理"
+        lead="シミュレーター標準"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
             <Link href="/admin/quotes/new" className="btn-primary btn-sm">
-              ＋ 新しい見積書を作成
+              ＋ 案件見積を作成
             </Link>
           </div>
         }
       >
-        <Alert tone="warn">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
+        <QuoteManagementTabs active="standard" />
+        <Alert tone="warn">選択したシミュレーター標準の明細を読み込めませんでした。別の基準見積を選択してください。</Alert>
         <section className="card p-4 text-sm text-muted">
-          右上の「見積書一覧」から別の見積書を開けます。
+          右上の「シミュレーター標準一覧」から別の基準見積を開けます。
         </section>
       </AdminPage>
     );
@@ -192,19 +196,20 @@ export default async function EstimateTemplatesPage({
 
   const unavailablePreview = (
     <section className="card px-5 py-8 text-center">
-      <p className="font-semibold">この見積書の表示データを準備中です</p>
+      <p className="font-semibold">このシミュレーター標準の表示データを準備中です</p>
       <p className="mt-1 text-sm text-muted">編集画面は利用できます。見積書・プランボード表示は正式接続後に確認できます。</p>
     </section>
   );
 
   return (
     <AdminPage
-      title="見積書作成・管理"
+      title="見積書管理"
+      lead="シミュレーター標準"
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
           <Link href="/admin/quotes/new" className="btn-primary btn-sm">
-            ＋ 新しい見積書を作成
+            ＋ 案件見積を作成
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
             複製
@@ -220,17 +225,18 @@ export default async function EstimateTemplatesPage({
         </div>
       }
     >
+      <QuoteManagementTabs active="standard" />
       <section className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted">編集中の見積書</p>
+            <p className="text-[11px] font-semibold text-muted">編集中のシミュレーター標準</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-semibold">{selectedTemplate.name}</h2>
               <Badge tone="neutral">編集画面</Badge>
             </div>
           </div>
 
-          <span className="text-xs text-muted">別の見積書は右上の「見積書一覧」から開けます。</span>
+          <span className="text-xs text-muted">別の基準見積は右上の「シミュレーター標準一覧」から開けます。</span>
         </div>
 
         <div className="flex flex-wrap divide-x divide-line text-xs">

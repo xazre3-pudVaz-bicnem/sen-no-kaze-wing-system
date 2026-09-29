@@ -49,7 +49,7 @@ describe('本体マスターRPC契約', () => {
 
   it('Publish UIは不可逆操作の確認ダイアログを通す', () => {
     expect(revisionForm).toContain('window.confirm');
-    expect(revisionForm).toContain('公開後はこのRevisionを直接編集できません');
+    expect(revisionForm).toContain('公開後、この版の内容は直接変更できません');
   });
 
   it('変更系RPCは本体編集権限をDBで再確認する', () => {

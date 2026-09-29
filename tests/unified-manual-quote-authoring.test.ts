@@ -39,6 +39,15 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('label="案件名"');
     expect(workbench).toContain('label="防火仕様"');
     expect(workbench).toContain('label="適用地域"');
+    expect(workbench).toContain('label="電話番号"');
+    expect(workbench).toContain('label="メールアドレス"');
+    expect(workbench).toContain('label="お客様住所"');
+    expect(workbench).toContain('電話・メール・お客様住所は保存連携準備中');
+    expect(workbench).not.toContain('name="customer_phone"');
+    expect(workbench).not.toContain('name="customer_email"');
+    expect(workbench).not.toContain('name="customer_address"');
+    expect(workbench).not.toContain('label="注文範囲"');
+    expect(workbench).toContain('name="finish_level" value="full"');
     expect(workbench).not.toContain('（任意）');
     expect(authoringUi).toContain('見積書');
     expect(authoringUi).toContain('プランボード');
@@ -52,6 +61,13 @@ describe('unified manual quote authoring', () => {
     expect(workbench).not.toContain('見積書を作りながら、この案件の基本情報も登録できます。');
     expect(workbench).not.toContain('Excelのように明細を追加・修正してから下書き保存します。');
     expect(workbench).not.toContain('まず下書き保存');
+  });
+
+  it('requires explicit model and spec selection for a brand-new case', () => {
+    expect(workbench).toContain("const [modelId, setModelId] = useState('');");
+    expect(workbench).toContain('<option value="">選択してください</option>');
+    expect(workbench).toContain("defaultValue=\"\"");
+    expect(workbench).toContain("disabled={!modelId}");
   });
 
   it('opens an estimate-list popup from the top of the estimate frame', () => {

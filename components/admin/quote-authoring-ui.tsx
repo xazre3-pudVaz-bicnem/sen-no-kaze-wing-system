@@ -85,17 +85,14 @@ export function QuoteEditorTopbar({
   return (
     <>
       <section className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold tracking-wide text-muted">見積書管理</p>
-          <h2 className="truncate text-base font-semibold">{mode === 'new' ? '見積書を作成' : '見積書を編集'}</h2>
-        </div>
+        <span className="rounded-md bg-[#edf3f0] px-3 py-1.5 text-xs font-semibold text-[#315745]">
+          {mode === 'new' ? '新規作成中' : '見積編集中'}
+        </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
             見積書一覧
           </Button>
-          {mode === 'new' ? (
-            <span className="rounded-md bg-[#edf3f0] px-3 py-1.5 text-xs font-semibold text-[#315745]">新規作成中</span>
-          ) : (
+          {mode === 'edit' && (
             <Link
               href="/admin/quotes/new"
               className="btn-primary btn-sm"

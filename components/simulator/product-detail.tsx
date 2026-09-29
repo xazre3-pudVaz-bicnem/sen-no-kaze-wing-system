@@ -15,6 +15,7 @@ interface Props {
   choices: OptionVariantChoice[];
   selectedVariantIds: string[];
   isCurrentlySelected: boolean;
+  compactMedia?: boolean;
   onVariantChange: (choiceId: string, groupId: string) => void;
 }
 
@@ -32,6 +33,7 @@ export function ProductDetail({
   choices,
   selectedVariantIds,
   isCurrentlySelected,
+  compactMedia = false,
   onVariantChange,
 }: Props) {
   const manufacturerDocumentUrl = option.manufacturer_document_url?.trim() || null;
@@ -144,7 +146,10 @@ export function ProductDetail({
           <div
             id="product-media-panel"
             role="tabpanel"
-            className="relative aspect-[3/2] overflow-hidden rounded-lg border border-line bg-sand"
+            className={cn(
+              'relative overflow-hidden rounded-lg border border-line bg-sand',
+              compactMedia ? 'h-[clamp(14rem,55vw,19rem)]' : 'aspect-[3/2]'
+            )}
             onTouchStart={(event) => {
               if (activeMedia !== 'image' || galleryImages.length <= 1) return;
               touchStartX.current = event.touches[0]?.clientX ?? null;

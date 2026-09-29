@@ -171,7 +171,7 @@ describe('旧本体移行Draftの検算・防火区分確認・Publish', () => {
   it('本体詳細ではmigration Draft editorを隠し、同じ明細をread-onlyで表示する', () => {
     expect(detail).toContain("from('legacy_base_migration_draft_outputs')");
     expect(detail).toContain('migrationDraftLocked');
-    expect(detail).toContain('旧本体移行Draft');
+    expect(detail).toContain('旧本体移行中の下書き');
     expect(detail).toContain('明細・金額・諸費用を直接変更できません');
     expect(detail).toContain('readOnlyRevisionIds');
     expect(detail).toContain('旧本体移行監査を開く');

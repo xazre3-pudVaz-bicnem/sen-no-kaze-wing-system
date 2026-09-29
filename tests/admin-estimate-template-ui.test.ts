@@ -211,9 +211,12 @@ describe('見積書作成・管理UI', () => {
     expect(simulatorPreview).toContain('変更は「編集」タブで行います');
   });
 
-  it('見積上部とExcel明細表を余白なしで接続表示する', () => {
-    expect(workbench).toContain('rounded-t-lg rounded-b-none');
-    expect(workbench).toContain('!mt-0 overflow-hidden rounded-b-lg rounded-t-none border border-t-0');
+  it('見積上部とExcel明細表を同じ枠の中で一体表示する', () => {
+    expect(workbench).toContain('data-testid="estimate-workbench-editor-shell"');
+    expect(workbench).toContain('rounded-lg border border-slate-300 bg-white shadow-sm');
+    expect(workbench).toContain('sticky top-0 z-30 overflow-hidden rounded-t-lg bg-white/95 backdrop-blur');
+    expect(workbench).toContain('overflow-hidden rounded-b-lg bg-white');
+    expect(workbench).not.toContain('!mt-0 overflow-hidden');
   });
 
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {

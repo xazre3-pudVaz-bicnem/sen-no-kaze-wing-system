@@ -84,11 +84,11 @@ export default async function EstimateTemplatesPage({
   if (!selectedTemplate) {
     return (
       <AdminPage
-        title="見積書作成・管理"
+        title="見積書管理"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
-            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            <Link href="/admin/quotes/new" className="btn-primary btn-sm">
               ＋ 新しい見積書を作成
             </Link>
           </div>
@@ -118,12 +118,12 @@ export default async function EstimateTemplatesPage({
   if (!bundle) {
     return (
       <AdminPage
-        title="見積書作成・管理"
+        title="見積書管理"
         lead="見積書をExcelに近い操作感で作成・編集します。"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-            <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            <Link href="/admin/quotes/new" className="btn-primary btn-sm">
               ＋ 新しい見積書を作成
             </Link>
           </div>
@@ -199,11 +199,11 @@ export default async function EstimateTemplatesPage({
 
   return (
     <AdminPage
-      title="見積書作成・管理"
+      title="見積書管理"
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+          <Link href="/admin/quotes/new" className="btn-primary btn-sm">
             ＋ 新しい見積書を作成
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">

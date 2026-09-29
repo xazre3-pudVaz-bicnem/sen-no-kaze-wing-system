@@ -61,6 +61,12 @@ export type QuoteRequestListItem = QuoteRequest & {
   user_email: string;
   configuration: { name: string; spec_code: string | null; model_name: string | null } | null;
 };
+
+export interface InitialQuoteDraftResume {
+  quote_request_id: string;
+  draft_id: string;
+  updated_at: string;
+}
 /** 代理店案件一覧用。依頼の状態と設置予定地だけを追加する。 */
 export type DealerQuoteListItem = Quote & {
   user_email: string;
@@ -218,6 +224,14 @@ export interface ManualQuoteDraftInput {
   memo: string | null;
 }
 
+export interface ManualQuoteWorkbenchInput extends ManualQuoteDraftInput {
+  case_name: string | null;
+  base_master_revision_id: string | null;
+  items: QuoteDraftSaveItem[];
+  adjustment: number;
+  adjustment_reason: string | null;
+}
+
 export interface QuoteDraftSaveItem {
   line_key?: string | null;
   kind: QuoteItemKind;
@@ -253,7 +267,7 @@ export interface QuoteDraftBaseRevisionChoice {
 export interface QuoteDraftDetail {
   draft: QuoteDraft;
   items: QuoteDraftItem[];
-  request: Pick<QuoteRequest, 'id' | 'status' | 'message' | 'contact' | 'created_by' | 'created_at' | 'updated_at'>;
+  request: Pick<QuoteRequest, 'id' | 'case_name' | 'status' | 'message' | 'contact' | 'created_by' | 'created_at' | 'updated_at'>;
   baseRevisions: QuoteDraftBaseRevisionChoice[];
 }
 
@@ -385,6 +399,8 @@ export interface DataStore {
   // ---- 見積 ----
   /** 非Web案件を登録し、Quoteを発行せず空Draftを作る */
   createManualQuoteDraft(actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft>;
+  /** 案件情報と初期明細を1 transactionで保存し、Quoteを発行せずDraftを作る */
+  createManualQuoteDraftWithItems(actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft>;
   /** 現在の非Web formal Revisionを親に、編集用Draftを作成または再開する */
   createQuoteRevisionDraft(id: string, actor: SessionUser): Promise<QuoteDraft>;
   /** RLSを迂回せずSECURITY DEFINER RPCの権限境界でDraftを読む */
@@ -402,6 +418,8 @@ export interface DataStore {
   listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
   /** 案件一覧に必要な保存済み仕様の表示項目だけを含む。 */
   listQuoteRequests(): Promise<QuoteRequestListItem[]>;
+  /** 本部管理者向け。正式Quote未発行の初回Draftを案件管理から再開する最小情報。 */
+  listInitialQuoteDraftResumes(actor: SessionUser): Promise<InitialQuoteDraftResume[]>;
   /** 案件一覧の担当者表示・絞り込み用。プロフィール全列は取得しない。 */
   listCaseDealers(): Promise<CaseDealer[]>;
   /** 案件ナビの保存済み仕様バッジ用。仕様本体は取得しない。 */

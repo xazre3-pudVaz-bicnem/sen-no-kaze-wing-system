@@ -13,6 +13,7 @@ const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspa
 const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
 const dealerForms = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const manualQuoteForm = fs.readFileSync(path.join(root, 'components/admin/manual-quote-form.tsx'), 'utf8');
+const manualQuoteWorkbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote-workbench.tsx'), 'utf8');
 const casePlanBoard = fs.readFileSync(path.join(root, 'components/admin/case-plan-board.tsx'), 'utf8');
 const clickableCaseRow = fs.readFileSync(path.join(root, 'components/admin/clickable-case-row.tsx'), 'utf8');
 const caseAdminControls = fs.readFileSync(path.join(root, 'components/admin/case-admin-controls.tsx'), 'utf8');
@@ -91,8 +92,10 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('href="/admin/contacts"');
     expect(list).not.toContain('href="/admin/notifications"');
     expect(list).not.toContain('＋対面・電話・紹介の案件受付');
-    expect(list).toContain('＋案件を登録');
+    expect(list).toContain('＋見積書を作成');
     expect(list).toContain('href="/admin/quotes/new"');
+    expect(list).toContain('canCreateQuote={false}');
+    expect(list).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote />');
     expect(shell).toContain('href="/admin/notifications"');
     expect(shell).toContain('aria-label="お知らせ"');
     expect(nav).toContain("href: '/admin/customer-management'");
@@ -101,7 +104,8 @@ describe('Admin case management UI', () => {
 
   it('uses one case flow for Web and staff-received orders without calling revisions new quotes', () => {
     expect(list).toContain('Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。');
-    expect(newQuote).toContain('Web以外で受けた案件を登録し、空の見積Draftから明細編集を始めます。案件登録だけではRevision 1は発行しません。');
+    expect(newQuote).toContain('案件情報と見積明細を同じ画面で入力します。下書き保存までは正式な見積Revisionを発行しません。');
+    expect(newQuote).toContain('<ManualQuoteWorkbench');
     expect(manualQuoteForm).toContain('案件を登録して見積Draftを開く');
     expect(manualQuoteForm).toContain('登録時点では見積Revisionを発行しません。');
     expect(manualQuoteForm).toContain('設置予定地（任意）');
@@ -170,7 +174,7 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('概算見積 承諾履歴');
     expect(list).not.toContain('確定見積 承諾済み');
     expect(list).not.toContain("<Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>");
-    expect(list).toContain('<span className="text-[0.64rem] font-semibold text-[#315745]">F5/15 見積依頼</span>');
+    expect(list).toContain("{initialDraft ? '見積作成中（下書き）' : 'F5/15 見積依頼'}");
     expect(list).toContain('{casePhaseLabel(quote)}');
     expect(list).toContain('{casePhaseLabel(q)}');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
@@ -245,7 +249,8 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
     expect(workspace).toContain("const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';");
     expect(workspace).toContain('確定見積の承諾履歴（最新状態要確認）');
-    expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName");
+    expect(workspace).toContain("request?.case_name?.trim()");
+    expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim()");
     expect(workspace).toContain('契約条件の確認');
     expect(workspace).toContain("value: isFormalAccepted ? '正式状態未登録' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '未対応'");
     expect(workspace).toContain('未集計');
@@ -477,10 +482,25 @@ describe('Admin case management UI', () => {
     for (const route of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
       expect(nav).toContain(route);
     }
-    expect(newQuote).toContain('<BackLink href="/admin/quotes" label="案件一覧へ戻る" />');
-    expect(newQuote).toContain('title="対面・電話・紹介の案件受付"');
+    expect(manualQuoteWorkbench).toContain('href="/admin/quotes"');
+    expect(manualQuoteWorkbench).toContain('← 案件管理へ戻る');
+    expect(newQuote).toContain('title="見積書を作成"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');
+  });
+
+  it('shows a normal resume path for a saved initial Quote Draft', () => {
+    expect(list).toContain('store.listInitialQuoteDraftResumes(actor)');
+    expect(list).toContain('initialDraftByRequestId');
+    expect(list).toContain('見積作成中（下書き）');
+    expect(list).toContain('下書き保存済み');
+    expect(list).toContain('data-testid="resume-initial-quote-draft"');
+    expect(list).toContain('下書き見積を続ける');
+  });
+
+  it('includes the saved case name in case-list search', () => {
+    expect(list).toContain('request.case_name');
+    expect(list).toContain('const haystack = [');
   });
 
   it('aligns assignment notifications with the current site-work flow', () => {

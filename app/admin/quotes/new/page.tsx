@@ -1,28 +1,52 @@
-import { requireStaff } from '@/lib/auth/session';
+import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { AdminPage, BackLink } from '@/components/admin/ui';
-import { ManualQuoteForm } from '@/components/admin/manual-quote-form';
+import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { AdminPage } from '@/components/admin/ui';
+import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
 
 /**
- * スタッフが管理画面から直接見積を作る（お客様のシミュレーター操作なしで）。
- * 先方要望「ログインしてから見積書を作成する登録画面をつけてほしい」に対応。
+ * 案件管理から直接開く、見積書作成の共通ワークスペース。
+ * 案件情報を別画面で先に登録せず、Excel型明細と同じ画面で初回Draftを作る。
  */
 export default async function AdminNewQuotePage() {
-  await requireStaff();
+  await requireAdmin('/admin/quotes/new');
   const store = await getStore();
-  const models = await store.listModels();
+  const [models, quotes] = await Promise.all([
+    store.listModels(),
+    store.listAllQuotes(),
+  ]);
+
+  const estimates = quotes
+    .filter((quote) => quote.status !== 'superseded')
+    .map((quote) => ({
+      id: quote.id,
+      quote_no: quote.quote_no,
+      customer_name: quote.customer_name,
+      customer_company: quote.customer_company,
+      base_model_name: quote.base_model_name,
+      revision: quote.revision,
+      total: quote.total,
+      status_label: QUOTE_STATUS_LABELS[quote.status],
+      updated_at: quote.updated_at,
+    }));
+
   return (
     <AdminPage
-      title="対面・電話・紹介の案件受付"
-      lead="Web以外で受けた案件を登録し、空の見積Draftから明細編集を始めます。案件登録だけではRevision 1は発行しません。"
+      title="見積書を作成"
+      lead="案件情報と見積明細を同じ画面で入力します。下書き保存までは正式な見積Revisionを発行しません。"
     >
-      <BackLink href="/admin/quotes" label="案件一覧へ戻る" />
-      <ManualQuoteForm
-        models={models.map((m) => ({
-          id: m.id,
-          name: m.name,
-          presets: (m.presets ?? []).map((p) => ({ code: p.code, name: p.name, description: p.description })),
+      <ManualQuoteWorkbench
+        models={models.map((model) => ({
+          id: model.id,
+          name: model.name,
+          presets: (model.presets ?? []).map((preset) => ({
+            code: preset.code,
+            name: preset.name,
+            description: preset.description,
+          })),
         }))}
+        estimates={estimates}
+        canEditBase
       />
     </AdminPage>
   );

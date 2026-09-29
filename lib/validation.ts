@@ -366,6 +366,22 @@ export const quoteDraftSaveSchema = z.object({
   }
 });
 
+export const manualQuoteWorkbenchSchema = manualQuoteSchema.extend({
+  case_name: optional(120),
+  base_master_revision_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
+  items: z.array(quoteDraftSaveItemSchema).max(300),
+  adjustment: z.coerce.number().int().min(-2_000_000_000).max(2_000_000_000),
+  adjustment_reason: optional(500).nullable(),
+}).superRefine((data, ctx) => {
+  if (data.adjustment !== 0 && !data.adjustment_reason?.trim()) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['adjustment_reason'],
+      message: '調整額を設定する場合は理由を入力してください',
+    });
+  }
+});
+
 export const quoteDraftFinalizeSchema = z.object({
   draft_id: z.uuid(),
   expected_lock_version: z.coerce.number().int().min(0),

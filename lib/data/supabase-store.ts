@@ -59,6 +59,8 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type ManualQuoteDraftInput,
+  type ManualQuoteWorkbenchInput,
+  type InitialQuoteDraftResume,
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type CatalogImportBatch,
@@ -574,9 +576,21 @@ export class SupabaseStore implements DataStore {
   }
 
   // ---------- 見積 ----------
-  async createManualQuoteDraft(_actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft> {
+  async createManualQuoteDraft(actor: SessionUser, input: ManualQuoteDraftInput): Promise<QuoteDraft> {
+    return this.createManualQuoteDraftWithItems(actor, {
+      ...input,
+      case_name: null,
+      base_master_revision_id: null,
+      items: [],
+      adjustment: 0,
+      adjustment_reason: null,
+    });
+  }
+
+  async createManualQuoteDraftWithItems(_actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
     const db = await this.db();
-    const { data, error } = await db.rpc('create_manual_quote_case', {
+    const { data, error } = await db.rpc('create_manual_quote_draft_with_items', {
+      p_case_name: input.case_name,
       p_contact: {
         full_name: input.customer_name,
         company_name: input.customer_company,
@@ -589,6 +603,10 @@ export class SupabaseStore implements DataStore {
       p_base_model_id: input.base_model_id,
       p_spec_code: input.spec_code,
       p_finish_level: input.finish_level,
+      p_base_master_revision_id: input.base_master_revision_id,
+      p_items: input.items,
+      p_adjustment: input.adjustment,
+      p_adjustment_reason: input.adjustment_reason,
     });
     if (error) mapPgError(error);
     const detail = await this.getQuoteDraft(data as string, _actor);
@@ -764,6 +782,16 @@ export class SupabaseStore implements DataStore {
       ({ profiles, quotes, configurations, ...r }) => ({ ...r, quote_no: quotes?.quote_no ?? null, user_email: profiles?.email ?? '', configuration: configurations ? { name: configurations.name, spec_code: configurations.spec_code, model_name: configurations.base_models?.name ?? null } : null })
     );
   }
+  async listInitialQuoteDraftResumes(actor: SessionUser): Promise<InitialQuoteDraftResume[]> {
+    if (actor.role !== 'admin') {
+      throw new StoreError('FORBIDDEN', '初回見積Draftを再開できるのは本部管理者だけです');
+    }
+    const db = await this.db();
+    const { data, error } = await db.rpc('list_initial_quote_draft_resumes');
+    if (error) mapPgError(error);
+    return (data ?? []) as InitialQuoteDraftResume[];
+  }
+
   async listCaseDealers(): Promise<CaseDealer[]> {
     const db = await this.db();
     const { data, error } = await db.from('profiles').select('id, role_code, full_name, company_name').in('role_code', ['dealer', 'master_dealer']).order('full_name');

@@ -247,7 +247,11 @@ export async function CaseWorkspace({
     )?.name ?? '未確認';
   const caseStructureNote = quote.dealer_note?.trim() || null;
   const caseUnitCount = extractCaseUnitCount(caseStructureNote);
-  const caseTitle = casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName;
+  const caseTitle =
+    request?.case_name?.trim() ||
+    casePlanConfiguration?.configuration.name?.trim() ||
+    customerCompany ||
+    customerName;
   const caseFloorplanDocument =
     caseDocuments.find((row) => row.kind === 'floorplan' && row.is_latest && row.preview_url) ??
     caseDocuments.find((row) => row.kind === 'floorplan' && row.preview_url) ??

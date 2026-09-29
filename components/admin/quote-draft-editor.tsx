@@ -143,10 +143,10 @@ export function QuoteDraftEditor({
       <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold text-muted">非Web案件・編集中Draft</p>
-            <h1 className="mt-1 text-xl font-semibold">{customer.full_name} 様</h1>
+            <p className="text-xs font-semibold text-muted">案件情報・編集中Draft</p>
+            <h1 className="mt-1 text-xl font-semibold">{detail.request.case_name || `${customer.full_name} 様`}</h1>
             <p className="mt-1 text-sm text-muted">
-              {modelName} ／ {detail.draft.spec_code} ／ {isRevisionDraft ? '既存Revisionから編集中' : 'Revision未発行'}
+              お客様 {customer.full_name} 様 ／ {modelName} ／ {detail.draft.spec_code} ／ {isRevisionDraft ? '既存Revisionから編集中' : 'Revision未発行'}
             </p>
           </div>
           <div className="rounded-lg bg-[#eef4f1] px-3 py-2 text-xs font-semibold text-[#315745]">

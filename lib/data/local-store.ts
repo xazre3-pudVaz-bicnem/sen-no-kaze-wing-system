@@ -77,6 +77,8 @@ import {
   type DealerRevisionInput,
   type DealerRevisionItem,
   type ManualQuoteDraftInput,
+  type ManualQuoteWorkbenchInput,
+  type InitialQuoteDraftResume,
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
@@ -949,6 +951,10 @@ export class LocalStore implements DataStore {
     throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
   }
 
+  async createManualQuoteDraftWithItems(_actor: SessionUser, _input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
+    throw new StoreError('VALIDATION', '統合見積Draft作成はSupabase接続環境で利用してください。');
+  }
+
   async createQuoteRevisionDraft(_id: string, _actor: SessionUser): Promise<QuoteDraft> {
     throw new StoreError('VALIDATION', '非Web案件のRevision Draft機能はSupabase接続環境で利用してください。');
   }
@@ -1269,6 +1275,10 @@ export class LocalStore implements DataStore {
         })
     );
   }
+  async listInitialQuoteDraftResumes(_actor: SessionUser): Promise<InitialQuoteDraftResume[]> {
+    return [];
+  }
+
   async listCaseDealers() {
     return this.read((db) => db.profiles.filter((p) => p.role_code === 'dealer' || p.role_code === 'master_dealer').map(({ id, role_code, full_name, company_name }) => ({ id, role_code, full_name, company_name })).sort((a, b) => a.full_name.localeCompare(b.full_name)));
   }

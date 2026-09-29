@@ -93,9 +93,9 @@ describe('見積書作成・管理UI', () => {
   it('見積書一覧・新規作成・シミュレーター標準指定の入口を編集画面上部に置く', () => {
     expect(listPage).toContain('見積書一覧');
     expect(savedEstimateMenu).toContain('見積書一覧（{totalCount}件）');
-    expect(savedEstimateMenu).toContain('シミュレーター標準');
-    expect(savedEstimateMenu).toContain('標準指定された正式見積書をシミュレーターの選択肢に表示します。');
-    expect(savedEstimateMenu).toContain('現在は指定機能の接続準備中です。');
+    expect(savedEstimateMenu).toContain('<Badge tone="neutral">シミュレーター標準</Badge>');
+    expect(savedEstimateMenu).toContain('シミュレーターで選べる正式見積書（指定機能は接続準備中）');
+    expect(savedEstimateMenu).not.toContain('my-2 rounded-lg border border-line bg-sand/25');
     expect(savedEstimateMenu).toContain('作成済み見積書');
     expect(savedEstimateMenu).toContain('画面確認用サンプル');
     expect(savedEstimateMenu).toContain('sampleEstimateHref');
@@ -106,6 +106,12 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('シミュレーター標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');
     expect(listPage).toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
+  });
+
+  it('シミュレーター標準は大きな説明枠ではなく一覧内の小さなバッジで示す', () => {
+    expect(savedEstimateMenu).toContain('<Badge tone="neutral">シミュレーター標準</Badge>');
+    expect(savedEstimateMenu).toContain('flex flex-wrap items-center gap-2 px-2 py-2 text-[11px] text-muted');
+    expect(savedEstimateMenu).not.toContain('標準指定された正式見積書をシミュレーターの選択肢に表示します。');
   });
 
   it('見積書一覧は登録済み商品モデルで絞り込める', () => {

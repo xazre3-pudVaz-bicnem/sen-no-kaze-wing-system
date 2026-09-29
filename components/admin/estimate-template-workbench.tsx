@@ -849,7 +849,7 @@ export function EstimateTemplateWorkbench({
                 label: '本体',
                 totalAmount: baseTotal,
                 rowCount: baseLines.length,
-                expenseText: '本体所有者のみ案件内編集可・所有者判定接続前は参照専用',
+                expenseText: '本体管理元のみ案件内編集可・管理元判定接続前は参照専用',
                 editable: false,
               })}
               {!collapsedSections.has('base') && baseLines.map(baseRow)}
@@ -904,7 +904,7 @@ export function EstimateTemplateWorkbench({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-500">
           <span>
-            本体明細は所有者のみ案件内編集可。現在は所有者判定未接続のため参照専用です。非所有者は案件販売調整で対応します（正式接続後）。
+            本体明細は管理元のみ案件内編集可。現在は管理元判定未接続のため参照専用です。管理元以外は本体明細を変更できません。
             {hasAnyPriceOnRequest && <strong className="ml-2 text-amber-800">※別途見積を含むため合計は確定額ではありません。</strong>}
           </span>
           <span>販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。</span>

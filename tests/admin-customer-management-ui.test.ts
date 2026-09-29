@@ -56,6 +56,8 @@ describe('顧客管理UI', () => {
     expect(list).toContain("view.availability === 'migration_pending'");
     expect(list).toContain('顧客が0件なのではなく');
     expect(list).toContain('data-testid="customer-management-migration-pending"');
+    expect(list).toContain('href="/admin/customer-management/demo"');
+    expect(list).toContain('サンプル画面を確認');
     expect(detail).toContain("detailResult.availability === 'migration_pending'");
     expect(detail).toContain('顧客が存在しないという意味ではありません。');
     expect(detail).toContain('data-testid="customer-detail-migration-pending"');

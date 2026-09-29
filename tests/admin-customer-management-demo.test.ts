@@ -17,14 +17,7 @@ describe('顧客管理サンプル画面', () => {
     expect(data).not.toContain('Supabase');
     expect(list).toContain('本番DBには保存されず');
     expect(detail).toContain('本番DBには保存されず');
-    it('keeps the demo tables compact while preserving the same information', () => {
-    expect(list).toContain('<Table minWidth="46rem">');
-    expect(list).toContain('<Table minWidth="44rem">');
-    expect(detail).toContain('<Table minWidth="46rem">');
-    expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
-    expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');
   });
-});
 
   it('shows three distinct sample customer states plus an unlinked case', () => {
     for (const customer of ['山田 太郎', '佐藤 花子', '鈴木 一郎']) {
@@ -65,5 +58,13 @@ describe('顧客管理サンプル画面', () => {
     expect(detail).not.toContain('href={`/admin/quotes/');
     expect(detail).not.toContain('href="/admin/quotes"');
     expect(detail).toContain('サンプル顧客一覧へ戻る');
+  });
+
+  it('keeps the demo tables compact while preserving the same information', () => {
+    expect(list).toContain('<Table minWidth="46rem">');
+    expect(list).toContain('<Table minWidth="44rem">');
+    expect(detail).toContain('<Table minWidth="46rem">');
+    expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
+    expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');
   });
 });

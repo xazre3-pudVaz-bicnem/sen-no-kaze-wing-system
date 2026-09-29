@@ -489,6 +489,11 @@ describe('Admin case management UI', () => {
     expect(contacts).toContain('title="問い合わせ受付"');
   });
 
+  it('includes the saved case name in case-list search', () => {
+    expect(list).toContain('request.case_name');
+    expect(list).toContain('const haystack = [');
+  });
+
   it('aligns assignment notifications with the current site-work flow', () => {
     expect(notifications).toContain("n.kind === 'quote_assigned' ? '施工金額を入力' : '開く'");
     expect(notifications).not.toContain('別途工事を入力');

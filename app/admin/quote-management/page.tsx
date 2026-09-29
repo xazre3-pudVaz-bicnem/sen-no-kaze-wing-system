@@ -149,16 +149,16 @@ export default async function AdminQuoteManagementPage({
         </form>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[62rem] table-fixed text-sm">
+          <table className="w-full min-w-[62rem] table-fixed text-sm lg:min-w-0">
             <thead className="bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[26%] px-3 py-2 text-left font-semibold">案件・顧客</th>
-                <th className="w-[16%] px-3 py-2 text-left font-semibold">見積番号</th>
-                <th className="w-[15%] px-3 py-2 text-left font-semibold">商品モデル</th>
-                <th className="w-[13%] px-3 py-2 text-left font-semibold">状態</th>
-                <th className="w-[13%] px-3 py-2 text-right font-semibold">金額</th>
-                <th className="w-[11%] px-3 py-2 text-left font-semibold">更新</th>
-                <th className="w-[6%] px-3 py-2 text-center font-semibold">操作</th>
+                <th className="w-[31%] px-3 py-2 text-left font-semibold">案件・顧客</th>
+                <th className="w-[14%] px-2 py-2 text-left font-semibold">見積番号</th>
+                <th className="w-[12%] px-2 py-2 text-left font-semibold">商品モデル</th>
+                <th className="w-[10%] px-2 py-2 text-left font-semibold">状態</th>
+                <th className="w-[14%] px-2 py-2 text-right font-semibold">金額</th>
+                <th className="w-[12%] px-2 py-2 text-left font-semibold">更新</th>
+                <th className="w-[7%] px-2 py-2 text-center font-semibold">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -171,7 +171,7 @@ export default async function AdminQuoteManagementPage({
                       {row.customerCompany ? ` ／ ${row.customerCompany}` : ''}
                     </p>
                   </td>
-                  <td className="px-3 py-2 align-middle font-mono text-xs">
+                  <td className="px-2 py-2 align-middle font-mono text-xs">
                     {row.draft ? (
                       <span className="text-muted">未発行</span>
                     ) : (
@@ -181,8 +181,8 @@ export default async function AdminQuoteManagementPage({
                       </>
                     )}
                   </td>
-                  <td className="truncate px-3 py-2 align-middle">{row.modelName}</td>
-                  <td className="px-3 py-2 align-middle">
+                  <td className="truncate px-2 py-2 align-middle">{row.modelName}</td>
+                  <td className="px-2 py-2 align-middle">
                     <span
                       className={
                         row.draft
@@ -193,13 +193,13 @@ export default async function AdminQuoteManagementPage({
                       {row.statusLabel}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-right align-middle font-semibold tabular-nums">
+                  <td className="px-2 py-2 text-right align-middle font-semibold tabular-nums">
                     {row.total == null ? '—' : formatYen(row.total)}
                   </td>
-                  <td className="px-3 py-2 align-middle text-xs text-muted">
+                  <td className="whitespace-nowrap px-2 py-2 align-middle text-xs text-muted">
                     {formatDate(row.updatedAt, true)}
                   </td>
-                  <td className="px-3 py-2 text-center align-middle">
+                  <td className="px-2 py-2 text-center align-middle">
                     <Link href={row.href} className="text-sm font-semibold text-forest underline underline-offset-4">
                       開く
                     </Link>

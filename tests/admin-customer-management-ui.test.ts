@@ -8,6 +8,9 @@ const detail = fs.readFileSync(path.join(root, 'app/admin/customer-management/[i
 const existingUsers = fs.readFileSync(path.join(root, 'app/admin/customers/page.tsx'), 'utf8');
 const nav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx'), 'utf8');
 const quotes = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8');
+const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
+const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
+const localStore = fs.readFileSync(path.join(root, 'lib/data/local-store.ts'), 'utf8');
 
 describe('顧客管理UI', () => {
   it('keeps user and permission management separate from customer management', () => {
@@ -42,6 +45,20 @@ describe('顧客管理UI', () => {
     expect(list).toContain('ここでは情報の編集・統合は行いません。');
     expect(list).toContain('顧客未紐付け案件');
     expect(list).toContain('data-testid="unlinked-customer-case-row"');
+  });
+
+  it('shows an explicit DB-update waiting state instead of a false empty list or 500 error', () => {
+    expect(store).toContain("availability: 'available' | 'migration_pending'");
+    expect(supabaseStore).toContain("isMissingNamedFunction(error, 'list_accessible_customers')");
+    expect(supabaseStore).toContain("isMissingNamedFunction(error, 'get_accessible_customer_detail')");
+    expect(supabaseStore).toContain("availability: 'migration_pending'");
+    expect(localStore).toContain("availability: 'available'");
+    expect(list).toContain("view.availability === 'migration_pending'");
+    expect(list).toContain('顧客が0件なのではなく');
+    expect(list).toContain('data-testid="customer-management-migration-pending"');
+    expect(detail).toContain("detailResult.availability === 'migration_pending'");
+    expect(detail).toContain('顧客が存在しないという意味ではありません。');
+    expect(detail).toContain('data-testid="customer-detail-migration-pending"');
   });
 
   it('shows customer details, scoped cases, quotes, installation sites and honest future placeholders', () => {

@@ -28,6 +28,35 @@ export default async function AdminCustomerManagementPage({
   const store = await getStore();
   const view = await store.listAccessibleCustomers(actor);
 
+  if (view.availability === 'migration_pending') {
+    return (
+      <AdminPage
+        title="顧客管理"
+        lead="参照できる顧客を探し、案件・見積・設置予定地を確認するための画面です。"
+        notice={
+          <div className="space-y-1">
+            <p className="font-semibold text-ink">本番DB更新待ちです。</p>
+            <p>
+              顧客管理用のDB機能がまだ本番へ適用されていないため、この画面では現在の顧客データを取得していません。
+            </p>
+          </div>
+        }
+      >
+        <section className="card p-5" data-testid="customer-management-migration-pending">
+          <h2 className="font-semibold">顧客データはまだ表示できません</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-soft">
+            顧客が0件なのではなく、顧客管理用migrationの本番適用待ちです。DB更新後はこの画面から通常どおり顧客を確認できます。
+          </p>
+          <div className="mt-4">
+            <Link href="/admin/quotes" className="btn-secondary btn-sm">
+              案件管理を開く
+            </Link>
+          </div>
+        </section>
+      </AdminPage>
+    );
+  }
+
   const query = (sp.q ?? '').trim().toLocaleLowerCase('ja-JP');
   const shown = view.customers.filter((customer) => {
     if (!query) return true;

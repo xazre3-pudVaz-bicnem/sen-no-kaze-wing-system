@@ -176,11 +176,20 @@ describe('担当案件限定の顧客管理 security contract', () => {
     expect(migration).toContain('ACCESSIBLE_CUSTOMER_DETAIL_OWNER_INVALID');
   });
 
-  it('connects production store only through the dedicated RPCs with no broad fallback', () => {
-    expect(supabaseStore).toContain("db.rpc('list_accessible_customers')");
-    expect(supabaseStore).toContain("db.rpc('get_accessible_customer_detail'");
-    expect(supabaseStore).not.toContain('isMissingNamedFunction(error, \'list_accessible_customers\')');
-    expect(supabaseStore).not.toContain('isMissingNamedFunction(error, \'get_accessible_customer_detail\')');
+  it('connects production store only through the dedicated RPCs and only tolerates those RPCs being missing', () => {
+    const start = supabaseStore.indexOf('async listAccessibleCustomers(actor: SessionUser)');
+    const end = supabaseStore.indexOf('// ---------- 仕様 ----------', start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const customerStore = supabaseStore.slice(start, end);
+
+    expect(customerStore).toContain("db.rpc('list_accessible_customers')");
+    expect(customerStore).toContain("db.rpc('get_accessible_customer_detail'");
+    expect(customerStore).toContain("isMissingNamedFunction(error, 'list_accessible_customers')");
+    expect(customerStore).toContain("isMissingNamedFunction(error, 'get_accessible_customer_detail')");
+    expect(customerStore).toContain("availability: 'migration_pending'");
+    expect(customerStore).not.toContain('db.from(');
+    expect(customerStore).not.toContain('isMissingFunction(error)');
     expect(store).toContain('listAccessibleCustomers(actor: SessionUser)');
     expect(store).toContain('getAccessibleCustomerDetail(customerId: string, actor: SessionUser)');
   });

@@ -205,7 +205,7 @@ export function BaseMasterLinesEditor({
   };
 
   const handleCellKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing) return;
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
 
     const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('[data-base-master-cell="1"]'));
     const current = event.currentTarget;

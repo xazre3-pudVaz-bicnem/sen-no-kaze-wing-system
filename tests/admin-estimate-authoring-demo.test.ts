@@ -41,7 +41,7 @@ describe('技術の杜確認用 見積書作成デモ', () => {
 
   it('自由入力を残したまま、明細行から既存商品を選んで置換できる', () => {
     expect(demo).toContain('const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);');
-    expect(demo).toContain('openProductPicker(section as Exclude<Section, \'本体\'>, row.id)');
+    expect(demo).toContain('openProductPicker(section, row.id)');
     expect(demo).toContain('商品台帳から選択');
     expect(demo).toContain('title="商品台帳から選ぶ"');
     expect(demo).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");

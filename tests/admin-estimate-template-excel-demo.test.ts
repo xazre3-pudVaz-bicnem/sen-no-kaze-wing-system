@@ -123,10 +123,10 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('data-testid={`estimate-demo-row-menu-${row.id}`}');
     expect(demo).toContain('aria-label={row.name + \'の操作\'}');
     expect(demo).toContain('⋯');
-    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain('商品台帳から選択');
     expect(demo).toContain("row.priceOnRequest ? '金額入力に戻す' : '別途見積にする'");
     expect(demo).toContain('行を削除');
-    expect(demo).not.toContain('title="既存の商品から選択"');
+    expect(demo).not.toContain('title="商品台帳から選択"');
   });
 
   it('見積書に編集とプレビューをまとめ、プランボード・図面と3タブにする', () => {

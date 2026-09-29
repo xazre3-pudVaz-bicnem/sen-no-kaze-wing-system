@@ -243,7 +243,6 @@ export function QuoteDraftEditor({
               <div><span className="text-muted">仕様</span><strong className="ml-1">{detail.draft.spec_code}</strong></div>
               <div><span className="text-muted">防火仕様</span><strong className="ml-1">{fireSpecLabel}</strong></div>
               <div><span className="text-muted">適用地域</span><strong className="ml-1">未設定</strong></div>
-              <div><span className="text-muted">注文範囲</span><strong className="ml-1">{detail.draft.finish_level}</strong></div>
               <div><span className="text-muted">状態</span><strong className="ml-1">Draft（正式Revisionではありません）</strong></div>
             </div>
             <div className="border-t border-slate-100 px-3 py-1.5">

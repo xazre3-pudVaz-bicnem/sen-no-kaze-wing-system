@@ -19,6 +19,7 @@ import {
   QuoteInternalRateStrip,
   type QuoteAuthoringRow,
   type QuoteAuthoringSection,
+  type QuoteCatalogProduct,
   type QuotePickerRow,
 } from '@/components/admin/quote-authoring-ui';
 
@@ -68,11 +69,13 @@ export function QuoteDraftEditor({
   modelName,
   canEditBase,
   estimates = [],
+  products = [],
 }: {
   detail: QuoteDraftDetail;
   modelName: string;
   canEditBase: boolean;
   estimates?: QuotePickerRow[];
+  products?: QuoteCatalogProduct[];
 }) {
   const [saveState, saveAction, savePending] = useActionState(saveQuoteDraftAction, initialState);
   const [finalizeState, finalizeAction, finalizePending] = useActionState(finalizeQuoteDraftAction, initialState);
@@ -164,6 +167,7 @@ export function QuoteDraftEditor({
       unitPrice: row.unit_price,
       amount: amountForRow(row),
       remark: row.remark ?? '',
+      optionId: row.option_id ?? null,
       locked: rowBaseLocked,
     };
   });
@@ -196,6 +200,40 @@ export function QuoteDraftEditor({
     const kind = kindForSection(section);
     if (!revisionEditableKinds.includes(kind)) return;
     setRows((current) => [...current, newRow(kind)]);
+    markDirty();
+  };
+
+  const selectCatalogProduct = (
+    section: QuoteAuthoringSection,
+    targetKey: string | null,
+    product: QuoteCatalogProduct
+  ) => {
+    const kind = kindForSection(section);
+    if (!revisionEditableKinds.includes(kind)) return;
+
+    const productRemark = product.priceOnRequest
+      ? '別途見積'
+      : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ ');
+    const productPatch = {
+      option_id: product.id,
+      name: product.name,
+      unit_price: product.priceOnRequest ? 0 : product.price,
+      remark: productRemark,
+      image_url: product.imageUrl,
+    };
+
+    setRows((current) => {
+      if (targetKey) {
+        return current.map((row) => (row.key === targetKey ? { ...row, ...productPatch } : row));
+      }
+      return [
+        ...current,
+        {
+          ...newRow(kind),
+          ...productPatch,
+        },
+      ];
+    });
     markDirty();
   };
 
@@ -297,9 +335,13 @@ export function QuoteDraftEditor({
 
           <QuoteAuthoringGrid
             rows={authoringRows}
+            products={products}
+            baseModelId={detail.draft.base_model_id}
+            specCode={detail.draft.spec_code}
             onUpdate={updateAuthoringRow}
             onRemove={removeAuthoringRow}
-            onAdd={addAuthoringRow}
+            onAddFree={addAuthoringRow}
+            onSelectProduct={selectCatalogProduct}
           />
         </div>
 

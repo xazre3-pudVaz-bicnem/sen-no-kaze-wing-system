@@ -78,7 +78,8 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('const rowNumberByKey = useMemo');
     expect(authoringUi).toContain(">1</td>");
     expect(authoringUi).toContain(">式</td>");
-    expect(authoringUi).toContain("section.key === 'installation' ? '＋自由明細' : '＋行追加'");
+    expect(authoringUi).toContain('＋商品');
+    expect(authoringUi).toContain('＋自由明細');
     expect(authoringUi).toContain("row.locked ? 'bg-slate-100' : 'bg-amber-50'");
     expect(authoringUi).not.toContain('標準・変更可');
     expect(authoringUi).not.toContain('標準・固定');
@@ -94,6 +95,27 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('currentRows.length > 0 && <tr');
     expect(authoringUi).toContain('max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs');
     expect(authoringUi).toContain('className="h-6 w-28 text-right text-xs"');
+  });
+
+  it('案件見積でも商品台帳から商品を追加・差し替えできる', () => {
+    expect(authoringUi).toContain('data-testid="quote-product-picker-dialog"');
+    expect(authoringUi).toContain('商品台帳から選ぶ');
+    expect(authoringUi).toContain('商品台帳から追加');
+    expect(authoringUi).toContain('<Package className="size-3"');
+    expect(authoringUi).toContain('SECTION_PRODUCT_CATEGORY_CODES');
+    expect(authoringUi).toContain('(product.baseModelId === null || product.baseModelId === baseModelId)');
+    expect(authoringUi).toContain('(product.specCodes.length === 0 || product.specCodes.includes(specCode))');
+    expect(authoringUi).toContain('onSelectProduct(pickerSection, pickerTargetKey, product)');
+    expect(manualWorkbench).toContain('option_id: product.id');
+    expect(manualWorkbench).toContain('image_url: product.imageUrl');
+    expect(draftEditor).toContain('option_id: product.id');
+    expect(draftEditor).toContain('image_url: product.imageUrl');
+    expect(newQuotePage).toContain('store.listOptions()');
+    expect(newQuotePage).toContain('store.listCategories()');
+    expect(newQuotePage).toContain("option.status === 'published'");
+    expect(draftPage).toContain('store.getCatalogBundle(detail.draft.base_model_id)');
+    expect(newQuotePage).toContain('products={products}');
+    expect(draftPage).toContain('products={products}');
   });
 
   it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {

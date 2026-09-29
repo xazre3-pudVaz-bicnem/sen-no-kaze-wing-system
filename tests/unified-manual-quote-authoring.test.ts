@@ -140,6 +140,12 @@ describe('unified manual quote authoring', () => {
     expect(casePage).toContain('下書き見積を続ける');
   });
 
+  it('keeps case management available before the Draft-resume migration is applied', () => {
+    expect(supabaseStore).toContain("isMissingNamedFunction(error, 'list_initial_quote_draft_resumes')");
+    expect(supabaseStore).toContain("return [];");
+    expect(supabaseStore).toContain("mapPgError(error);");
+  });
+
   it('returns the persisted case name when the Draft editor is reopened', () => {
     expect(migration).toContain("'case_name', r.case_name");
     expect(store).toContain("'id' | 'case_name' | 'status'");

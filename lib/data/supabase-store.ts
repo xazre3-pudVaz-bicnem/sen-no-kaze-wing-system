@@ -59,6 +59,7 @@ import {
   type UploadInput,
   type DealerRevisionInput,
   type ManualQuoteDraftInput,
+  type ManualQuoteWorkbenchInput,
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type CatalogImportBatch,
@@ -589,6 +590,33 @@ export class SupabaseStore implements DataStore {
       p_base_model_id: input.base_model_id,
       p_spec_code: input.spec_code,
       p_finish_level: input.finish_level,
+    });
+    if (error) mapPgError(error);
+    const detail = await this.getQuoteDraft(data as string, _actor);
+    if (!detail) throw new StoreError('INTERNAL', '作成したDraftを取得できませんでした');
+    return detail.draft;
+  }
+
+  async createManualQuoteDraftWithItems(_actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_manual_quote_draft_with_items', {
+      p_case_name: input.case_name,
+      p_contact: {
+        full_name: input.customer_name,
+        company_name: input.customer_company,
+        email: '',
+        phone: '',
+        address: '',
+        site_address: input.site_address,
+      },
+      p_message: input.memo,
+      p_base_model_id: input.base_model_id,
+      p_spec_code: input.spec_code,
+      p_finish_level: input.finish_level,
+      p_base_master_revision_id: input.base_master_revision_id,
+      p_items: input.items,
+      p_adjustment: input.adjustment,
+      p_adjustment_reason: input.adjustment_reason,
     });
     if (error) mapPgError(error);
     const detail = await this.getQuoteDraft(data as string, _actor);

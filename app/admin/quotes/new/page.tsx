@@ -1,6 +1,6 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { QUOTE_STATUS_LABELS, canEditCatalog } from '@/lib/domain/types';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
 
@@ -47,6 +47,7 @@ export default async function AdminNewQuotePage() {
           })),
         }))}
         estimates={estimates}
+        canEditBase={canEditCatalog(actor.role)}
       />
     </AdminPage>
   );

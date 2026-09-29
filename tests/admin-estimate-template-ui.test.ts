@@ -94,8 +94,8 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('見積書一覧');
     expect(savedEstimateMenu).toContain('見積書一覧（{totalCount}件）');
     expect(savedEstimateMenu).toContain('<Badge tone="neutral">シミュレーター標準</Badge>');
-    expect(savedEstimateMenu).toContain('シミュレーターで選べる正式見積書（指定機能は接続準備中）');
-    expect(savedEstimateMenu).not.toContain('my-2 rounded-lg border border-line bg-sand/25');
+    expect(savedEstimateMenu).not.toContain('シミュレーターで選べる正式見積書（指定機能は接続準備中）');
+    expect(savedEstimateMenu).not.toContain('flex flex-wrap items-center gap-2 px-2 py-2 text-[11px] text-muted');
     expect(savedEstimateMenu).toContain('作成済み見積書');
     expect(savedEstimateMenu).toContain('画面確認用サンプル');
     expect(savedEstimateMenu).toContain('sampleEstimateHref');

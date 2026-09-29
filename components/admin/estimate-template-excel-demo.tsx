@@ -566,7 +566,7 @@ export function EstimateTemplateExcelDemo({
         </div>
       </section>
 
-      <section className="overflow-visible rounded-b-xl bg-white">
+      <section className="overflow-visible rounded-b-xl border-t border-slate-300 bg-white">
         <div className="w-full">
           <table className="w-full table-fixed border-collapse text-[11px]" data-testid="estimate-demo-fit-table">
             <colgroup>
@@ -635,7 +635,7 @@ export function EstimateTemplateExcelDemo({
                               className="text-[11px] underline"
                               onClick={() => openProductPicker(section)}
                             >
-                              商品追加
+                              行追加
                             </button>
                           )}
                         </td>

@@ -639,7 +639,7 @@ export function EstimateTemplateWorkbench({
                     className="text-[11px] font-semibold underline underline-offset-2"
                     onClick={() => openProductPicker(key as SectionCode)}
                   >
-                    ＋商品
+                    ＋行追加
                   </button>
                 )}
                 <button
@@ -809,7 +809,7 @@ export function EstimateTemplateWorkbench({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-b-lg bg-white" data-testid="estimate-excel-grid">
+      <section className="overflow-hidden rounded-b-lg border-t border-slate-300 bg-white" data-testid="estimate-excel-grid">
         <div className="max-h-[68vh] overflow-auto">
           <table className={showCost ? 'min-w-[82rem] w-full border-collapse text-xs' : 'min-w-[62rem] w-full border-collapse text-xs'}>
             <thead>

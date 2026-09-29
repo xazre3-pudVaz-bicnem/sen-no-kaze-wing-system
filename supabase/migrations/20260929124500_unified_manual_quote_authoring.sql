@@ -994,4 +994,48 @@ comment on function public.create_manual_quote_draft_with_items(
 ) is
   '案件情報と見積Draft明細を初回下書き保存時に同一transactionで作成する。正式Quote Revisionは発行しない。';
 
+-- 案件管理から、まだ正式Quoteを発行していない初回Draftだけを再開するための
+-- admin限定read boundary。quote_draftsテーブル自体のSELECT権限は開放しない。
+create or replace function public.list_initial_quote_draft_resumes()
+returns table (
+  quote_request_id uuid,
+  draft_id uuid,
+  updated_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $initial_draft_resumes$
+declare
+  v_uid uuid := auth.uid();
+  v_rank integer := public.current_role_rank();
+begin
+  if v_uid is null then
+    raise exception 'UNAUTHENTICATED' using errcode = '42501';
+  end if;
+  if v_rank < 3 then
+    raise exception 'FORBIDDEN: 初回見積Draft一覧を取得できるのは本部管理者だけです'
+      using errcode = '42501';
+  end if;
+
+  return query
+  select d.quote_request_id, d.id, d.updated_at
+    from public.quote_drafts d
+    join public.quote_requests r on r.id = d.quote_request_id
+   where d.parent_quote_id is null
+     and r.quote_id is null
+   order by d.updated_at desc;
+end;
+$initial_draft_resumes$;
+
+alter function public.list_initial_quote_draft_resumes() owner to postgres;
+
+revoke execute on function public.list_initial_quote_draft_resumes()
+  from public, anon, authenticated, service_role;
+grant execute on function public.list_initial_quote_draft_resumes()
+  to authenticated;
+
+comment on function public.list_initial_quote_draft_resumes() is
+  '本部管理者向け。正式Quote未発行の初回Draftを案件管理から再開するため、案件ID・Draft ID・更新日時だけを返す。';
+
 commit;

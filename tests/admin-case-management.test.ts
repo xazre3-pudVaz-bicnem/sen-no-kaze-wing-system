@@ -246,7 +246,8 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
     expect(workspace).toContain("const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';");
     expect(workspace).toContain('確定見積の承諾履歴（最新状態要確認）');
-    expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim() || customerCompany || customerName");
+    expect(workspace).toContain("request?.case_name?.trim()");
+    expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim()");
     expect(workspace).toContain('契約条件の確認');
     expect(workspace).toContain("value: isFormalAccepted ? '正式状態未登録' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '未対応'");
     expect(workspace).toContain('未集計');
@@ -478,8 +479,8 @@ describe('Admin case management UI', () => {
     for (const route of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
       expect(nav).toContain(route);
     }
-    expect(newQuote).toContain('<BackLink href="/admin/quotes" label="案件一覧へ戻る" />');
-    expect(newQuote).toContain('title="対面・電話・紹介の案件受付"');
+    expect(newQuote).toContain('<BackLink href="/admin/quotes" label="案件管理へ戻る" />');
+    expect(newQuote).toContain('title="見積書を作成"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');
   });

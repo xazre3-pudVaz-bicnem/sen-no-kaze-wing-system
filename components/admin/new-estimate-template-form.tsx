@@ -416,7 +416,7 @@ export function NewEstimateTemplateForm({
                     <p className="text-base font-semibold">{formatYen(selectedBaseMaster.total)}</p>
                   </div>
                   <button type="button" className="text-xs font-semibold underline underline-offset-4" onClick={openBasePicker}>
-                    明細を見る
+                    明細を確認
                   </button>
                 </div>
               ) : (

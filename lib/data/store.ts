@@ -261,7 +261,7 @@ export interface QuoteDraftBaseRevisionChoice {
 export interface QuoteDraftDetail {
   draft: QuoteDraft;
   items: QuoteDraftItem[];
-  request: Pick<QuoteRequest, 'id' | 'status' | 'message' | 'contact' | 'created_by' | 'created_at' | 'updated_at'>;
+  request: Pick<QuoteRequest, 'id' | 'case_name' | 'status' | 'message' | 'contact' | 'created_by' | 'created_at' | 'updated_at'>;
   baseRevisions: QuoteDraftBaseRevisionChoice[];
 }
 

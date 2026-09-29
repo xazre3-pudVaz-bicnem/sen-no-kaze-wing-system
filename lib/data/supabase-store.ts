@@ -60,6 +60,7 @@ import {
   type DealerRevisionInput,
   type ManualQuoteDraftInput,
   type ManualQuoteWorkbenchInput,
+  type InitialQuoteDraftResume,
   type QuoteDraftDetail,
   type QuoteDraftSaveInput,
   type CatalogImportBatch,
@@ -781,6 +782,16 @@ export class SupabaseStore implements DataStore {
       ({ profiles, quotes, configurations, ...r }) => ({ ...r, quote_no: quotes?.quote_no ?? null, user_email: profiles?.email ?? '', configuration: configurations ? { name: configurations.name, spec_code: configurations.spec_code, model_name: configurations.base_models?.name ?? null } : null })
     );
   }
+  async listInitialQuoteDraftResumes(actor: SessionUser): Promise<InitialQuoteDraftResume[]> {
+    if (actor.role !== 'admin') {
+      throw new StoreError('FORBIDDEN', '初回見積Draftを再開できるのは本部管理者だけです');
+    }
+    const db = await this.db();
+    const { data, error } = await db.rpc('list_initial_quote_draft_resumes');
+    if (error) mapPgError(error);
+    return (data ?? []) as InitialQuoteDraftResume[];
+  }
+
   async listCaseDealers(): Promise<CaseDealer[]> {
     const db = await this.db();
     const { data, error } = await db.from('profiles').select('id, role_code, full_name, company_name').in('role_code', ['dealer', 'master_dealer']).order('full_name');

@@ -109,7 +109,33 @@ export default async function AdminCustomerDetailPage({
   const actor = await requireStaff('/admin/customer-management');
   const { id } = await params;
   const store = await getStore();
-  const detail = await store.getAccessibleCustomerDetail(id, actor);
+  const detailResult = await store.getAccessibleCustomerDetail(id, actor);
+
+  if (detailResult.availability === 'migration_pending') {
+    return (
+      <AdminPage
+        title="顧客管理"
+        lead="顧客詳細は本番DB更新後に表示されます。"
+        notice={
+          <div className="space-y-1">
+            <p className="font-semibold text-ink">本番DB更新待ちです。</p>
+            <p>
+              顧客管理用のDB機能がまだ本番へ適用されていないため、顧客詳細は取得していません。
+            </p>
+          </div>
+        }
+      >
+        <BackLink href="/admin/customer-management" label="顧客一覧へ戻る" />
+        <section className="card p-5" data-testid="customer-detail-migration-pending">
+          <p className="text-sm leading-6 text-ink-soft">
+            顧客が存在しないという意味ではありません。DB更新後に顧客一覧から改めて開いてください。
+          </p>
+        </section>
+      </AdminPage>
+    );
+  }
+
+  const detail = detailResult.detail;
   if (!detail) notFound();
 
   const profile = detail.customer;

@@ -71,9 +71,9 @@ describe('技術の杜確認用 見積書作成デモ', () => {
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
   });
-  it('品名右側は本体以外だけ箱アイコンで商品台帳を開ける', () => {
+  it('品名右側は内外装工事・オプションだけ箱アイコンで商品台帳を開ける', () => {
     expect(demo).toContain('title="商品台帳から選ぶ"');
-    expect(demo).toContain("section !== '本体'");
+    expect(demo).toContain("section !== '本体' && section !== '別途'");
     expect(demo).toContain('Package className="size-3.5"');
     expect(demo).toContain("openProductPicker(section, row.id)");
     expect(demo).toContain('row.remark ||');

@@ -206,7 +206,6 @@ export default async function EstimateTemplatesPage({
     return (
       <AdminPage
         title="見積書作成・管理"
-        lead="見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} selectedSampleId={selectedSample?.id} />
@@ -319,7 +318,6 @@ export default async function EstimateTemplatesPage({
   return (
     <AdminPage
       title="見積書作成・管理"
-      lead="開いたらすぐ明細を編集できる、Excelに近い見積書作成画面です。"
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} selectedId={selectedTemplate.id} />

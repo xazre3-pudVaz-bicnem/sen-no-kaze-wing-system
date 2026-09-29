@@ -10,8 +10,8 @@ const demo = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/estimate-template-excel-demo.tsx'),
   'utf8'
 );
-const page = fs.readFileSync(
-  path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'),
+const savedEstimateMenu = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/saved-estimate-menu.tsx'),
   'utf8'
 );
 
@@ -30,9 +30,9 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(index).toContain('WingOfficeSample');
     expect(index).toContain('BoxHotelSingleSample');
     expect(index).toContain('FlatOfficeSample');
-    expect(page).toContain('画面確認用サンプル');
-    expect(page).toContain('sampleEstimateHref(sample.id)');
-    expect(page).toContain('Badge tone="neutral">サンプル');
+    expect(savedEstimateMenu).toContain('画面確認用サンプル');
+    expect(savedEstimateMenu).toContain('sampleEstimateHref(sample.id)');
+    expect(savedEstimateMenu).toContain('Badge tone="neutral">サンプル');
     expect(sampleFiles.join('\n')).not.toContain('（サンプル）');
   });
 
@@ -71,8 +71,8 @@ describe('見積書作成画面のExcelサンプル', () => {
   });
 
   it('サンプル表示は整数円・桁区切り・取込元表示に整理する', () => {
-    expect(page).toContain('function formatWholeYen(value: number)');
-    expect(page).toContain('formatWholeYen(sample.sourceTotal)');
+    expect(savedEstimateMenu).toContain('function formatWholeYen(value: number)');
+    expect(savedEstimateMenu).toContain('formatWholeYen(sample.sourceTotal)');
     expect(demo).toContain('const formatDisplayYen = (value: number) => formatYen(Math.round(value));');
     expect(demo).toContain("value.toLocaleString('ja-JP', { maximumFractionDigits: 4 })");
     expect(demo).toContain('inputMode="decimal"');

@@ -788,7 +788,13 @@ export class SupabaseStore implements DataStore {
     }
     const db = await this.db();
     const { data, error } = await db.rpc('list_initial_quote_draft_resumes');
-    if (error) mapPgError(error);
+    if (error) {
+      // アプリがmigrationより先に配信された場合でも案件管理全体を500にしない。
+      // このRPC自体が未作成と明確に判定できる場合だけ「再開Draftなし」として扱い、
+      // 認可エラーやその他DB障害は従来どおりfail-closedで表面化させる。
+      if (isMissingNamedFunction(error, 'list_initial_quote_draft_resumes')) return [];
+      mapPgError(error);
+    }
     return (data ?? []) as InitialQuoteDraftResume[];
   }
 

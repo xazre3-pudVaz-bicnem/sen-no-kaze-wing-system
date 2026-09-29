@@ -124,6 +124,22 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('プランボード・図面は正式保存後に案件画面から利用できます');
   });
 
+  it('lets headquarters resume a saved initial Draft from case management without opening quote_drafts SELECT', () => {
+    expect(migration).toContain('create or replace function public.list_initial_quote_draft_resumes()');
+    expect(migration).toContain("FORBIDDEN: 初回見積Draft一覧を取得できるのは本部管理者だけです");
+    expect(migration).toContain('d.parent_quote_id is null');
+    expect(migration).toContain('r.quote_id is null');
+    expect(migration).toContain('alter function public.list_initial_quote_draft_resumes() owner to postgres;');
+    expect(migration).toContain('revoke execute on function public.list_initial_quote_draft_resumes()');
+    expect(migration).toContain('grant execute on function public.list_initial_quote_draft_resumes()');
+    expect(store).toContain('listInitialQuoteDraftResumes(actor: SessionUser)');
+    expect(supabaseStore).toContain("db.rpc('list_initial_quote_draft_resumes')");
+    expect(casePage).toContain('store.listInitialQuoteDraftResumes(actor)');
+    expect(casePage).toContain('data-testid="resume-initial-quote-draft"');
+    expect(casePage).toContain('/admin/quotes/drafts/${selectedPendingDraft.draft_id}');
+    expect(casePage).toContain('下書き見積を続ける');
+  });
+
   it('returns the persisted case name when the Draft editor is reopened', () => {
     expect(migration).toContain("'case_name', r.case_name");
     expect(store).toContain("'id' | 'case_name' | 'status'");

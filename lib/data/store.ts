@@ -61,6 +61,12 @@ export type QuoteRequestListItem = QuoteRequest & {
   user_email: string;
   configuration: { name: string; spec_code: string | null; model_name: string | null } | null;
 };
+
+export interface InitialQuoteDraftResume {
+  quote_request_id: string;
+  draft_id: string;
+  updated_at: string;
+}
 /** 代理店案件一覧用。依頼の状態と設置予定地だけを追加する。 */
 export type DealerQuoteListItem = Quote & {
   user_email: string;
@@ -412,6 +418,8 @@ export interface DataStore {
   listAllQuotes(): Promise<(Quote & { user_email: string })[]>;
   /** 案件一覧に必要な保存済み仕様の表示項目だけを含む。 */
   listQuoteRequests(): Promise<QuoteRequestListItem[]>;
+  /** 本部管理者向け。正式Quote未発行の初回Draftを案件管理から再開する最小情報。 */
+  listInitialQuoteDraftResumes(actor: SessionUser): Promise<InitialQuoteDraftResume[]>;
   /** 案件一覧の担当者表示・絞り込み用。プロフィール全列は取得しない。 */
   listCaseDealers(): Promise<CaseDealer[]>;
   /** 案件ナビの保存済み仕様バッジ用。仕様本体は取得しない。 */

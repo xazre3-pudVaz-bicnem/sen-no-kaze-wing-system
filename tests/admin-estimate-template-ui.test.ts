@@ -108,10 +108,11 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
   });
 
-  it('シミュレーター標準は大きな説明枠ではなく一覧内の小さなバッジで示す', () => {
-    expect(savedEstimateMenu).toContain('<Badge tone="neutral">シミュレーター標準</Badge>');
-    expect(savedEstimateMenu).toContain('flex flex-wrap items-center gap-2 px-2 py-2 text-[11px] text-muted');
-    expect(savedEstimateMenu).not.toContain('標準指定された正式見積書をシミュレーターの選択肢に表示します。');
+  it('画面確認用サンプルはWing・BOX・Flatで1件ずつシミュレーター標準を示す', () => {
+    expect(savedEstimateMenu).toContain("new Set(['wing-hotel', 'box-hotel-single', 'flat-office'])");
+    expect(savedEstimateMenu).toContain('SIMULATOR_STANDARD_DEMO_SAMPLE_IDS.has(sample.id)');
+    expect(savedEstimateMenu).toContain('{simulatorStandard && <Badge tone="neutral">シミュレーター標準</Badge>}');
+    expect(savedEstimateMenu).not.toContain('シミュレーターで選べる正式見積書（指定機能は接続準備中）');
   });
 
   it('見積書一覧は登録済み商品モデルで絞り込める', () => {

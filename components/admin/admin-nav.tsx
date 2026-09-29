@@ -19,8 +19,12 @@ const sections: NavSection[] = [
       '/admin/configurations',
       '/admin/notifications',
       '/admin/contacts',
-      '/admin/customer-management',
     ],
+  },
+  {
+    href: '/admin/customer-management',
+    label: '顧客管理',
+    match: ['/admin/customer-management'],
   },
   {
     href: '/admin/ledger',
@@ -37,7 +41,7 @@ const sections: NavSection[] = [
   },
   {
     href: '/admin/estimate-templates',
-    label: '見積書作成・管理',
+    label: '見積マスター',
     match: ['/admin/base-masters', '/admin/estimate-templates', '/admin/base-breakdown'],
     need: 'admin',
   },
@@ -48,10 +52,7 @@ const sections: NavSection[] = [
   },
 ];
 
-const utilityLinks: NavUtilityLink[] = [
-  { href: '/admin/customer-management', label: '顧客管理' },
-  { href: '/admin/contacts', label: '問い合わせ', need: 'admin' },
-];
+const utilityLinks: NavUtilityLink[] = [];
 
 function isAllowed(item: { need?: Access }, role: RoleCode) {
   return item.need === 'admin' ? role === 'admin' : true;
@@ -66,7 +67,7 @@ export function getAdminNavSections(role: RoleCode) {
   return sections.filter((section) => isAllowed(section, role));
 }
 
-/** 大分類を増やさず、案件管理の補助画面だけを右側に置く。 */
+/** 通常ナビに出さない補助画面の入口。現在は上部表示なし。 */
 export function getAdminUtilityLinks(role: RoleCode) {
   return utilityLinks.filter((item) => isAllowed(item, role));
 }

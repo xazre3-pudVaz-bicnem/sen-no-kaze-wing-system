@@ -351,7 +351,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
             <p className="mt-1 text-xs text-slate-500">
               {sample
                 ? `Excel「${sample.sourceSheet}」の金額が入っている明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外しています。DBには保存されません。`
-                : '本体所有者として操作する場合は、本体明細も含めてこの見積書内で編集できます。見積内の変更は本体マスター自体に反映しません。非所有者は本体明細を変更せず、案件販売調整で対応します。'}
+                : '本体管理元として操作する場合は、本体明細も含めてこの見積書内で編集できます。見積内の変更は本体マスター自体に反映しません。管理元以外は本体明細を変更できません。'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -540,7 +540,7 @@ export function EstimateTemplateExcelDemo({ sampleId }: { sampleId?: string | nu
                         </td>
                         <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">
                           {section}
-                          {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体所有者のみ、この見積内で編集可）</span>}
+                          {section === '本体' && <span className="ml-2 font-normal text-white/75">（本体管理元のみ、この見積内で編集可）</span>}
                         </td>
                         <td colSpan={4} className="whitespace-nowrap px-1 text-right text-[10px]">
                           {section === '別途' && sectionSummary.onRequest > 0

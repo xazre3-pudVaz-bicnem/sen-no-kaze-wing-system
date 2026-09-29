@@ -10,6 +10,11 @@ const newPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/estimate-templates/new/page.tsx'),
   'utf8'
 );
+const savedEstimateMenu = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/saved-estimate-menu.tsx'),
+  'utf8'
+);
+
 const simulatorPreview = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/standard-estimate-simulator-preview.tsx'),
   'utf8'
@@ -57,10 +62,10 @@ describe('見積書作成・管理UI', () => {
     expect(listPage).not.toContain('開いたらすぐ明細を編集できる');
     expect(listPage).not.toContain('見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。');
     expect(listPage).toContain('＋ 新しい見積書を作成');
-    expect(listPage).toContain('見積書一覧（{totalCount}件）');
-    expect(listPage).toContain('シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。');
-    expect(listPage).toContain("active ? '表示中' : '開く'");
-    expect(listPage).toContain('更新 {formatUpdatedAt(template.updated_at)}');
+    expect(savedEstimateMenu).toContain('見積書一覧（{totalCount}件）');
+    expect(savedEstimateMenu).toContain('商品モデルで絞り込み、作成済み見積書と画面確認用サンプルを確認します。');
+    expect(savedEstimateMenu).toContain("active ? '表示中' : '開く'");
+    expect(savedEstimateMenu).toContain('更新 {formatUpdatedAt(template.updated_at)}');
     expect(listPage).not.toContain('見積書を選ぶ');
     expect(listPage).toContain('編集中の見積書');
     expect(listPage).toContain('<EstimateTemplateWorkbench');
@@ -87,21 +92,38 @@ describe('見積書作成・管理UI', () => {
 
   it('見積書一覧・新規作成・シミュレーター標準指定の入口を編集画面上部に置く', () => {
     expect(listPage).toContain('見積書一覧');
-    expect(listPage).toContain('見積書一覧（{totalCount}件）');
-    expect(listPage).toContain('シミュレーター標準');
-    expect(listPage).toContain('シミュレーターの選択対象');
-    expect(listPage).toContain('標準に指定された正式見積書だけを、見積シミュレーターの選択肢に表示します。');
-    expect(listPage).toContain('初期表示を決める設定ではありません。');
-    expect(listPage).toContain('作成済み見積書');
-    expect(listPage).toContain('画面確認用サンプル');
-    expect(listPage).toContain('sampleEstimateHref');
+    expect(savedEstimateMenu).toContain('見積書一覧（{totalCount}件）');
+    expect(savedEstimateMenu).toContain('シミュレーター標準');
+    expect(savedEstimateMenu).toContain('標準指定された正式見積書をシミュレーターの選択肢に表示します。');
+    expect(savedEstimateMenu).toContain('現在は指定機能の接続準備中です。');
+    expect(savedEstimateMenu).toContain('作成済み見積書');
+    expect(savedEstimateMenu).toContain('画面確認用サンプル');
+    expect(savedEstimateMenu).toContain('sampleEstimateHref');
     expect(listPage).toContain('selectedSampleId={selectedSample?.id}');
     expect(listPage).toContain('<SavedEstimateMenu');
-    expect(listPage).toContain('aria-current={active ? \'page\' : undefined}');
+    expect(savedEstimateMenu).toContain('aria-current={active ? \'page\' : undefined}');
     expect(listPage).toContain('複製');
     expect(listPage).toContain('シミュレーター標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');
     expect(listPage).toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
+  });
+
+  it('見積書一覧は登録済み商品モデルで絞り込める', () => {
+    expect(savedEstimateMenu).toContain("const [selectedModelId, setSelectedModelId] = useState('')");
+    expect(savedEstimateMenu).toContain('models.map((model) =>');
+    expect(savedEstimateMenu).toContain("aria-label="商品モデルで絞り込み"");
+    expect(savedEstimateMenu).toContain('すべて');
+    expect(savedEstimateMenu).toContain('template.base_model_id === selectedModelId');
+    expect(savedEstimateMenu).toContain('normalizedModelName(sample.model) === modelName');
+    expect(savedEstimateMenu).toContain('sm:flex-wrap sm:overflow-x-visible');
+  });
+
+  it('見積書一覧は枠外クリックとEscで閉じる', () => {
+    expect(savedEstimateMenu).toContain("document.addEventListener('pointerdown', handlePointerDown)");
+    expect(savedEstimateMenu).toContain("if (event.target instanceof Node && details.contains(event.target)) return;");
+    expect(savedEstimateMenu).toContain('detailsRef.current.open = false');
+    expect(savedEstimateMenu).toContain("if (event.key !== 'Escape') return;");
+    expect(savedEstimateMenu).toContain("window.addEventListener('keydown', handleKeyDown)");
   });
 
   it('編集・見積書・プランボードを同じ見積書ワークスペースで切り替える', () => {

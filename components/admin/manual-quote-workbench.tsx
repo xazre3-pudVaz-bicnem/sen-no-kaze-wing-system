@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, type FinishLevel, type QuoteItemKind } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
-import { Button, Field, Input, Select, Textarea } from '@/components/ui';
+import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
 
 const initialState = { ok: false } as const;
@@ -74,6 +74,35 @@ function createRow(kind: EditableKind = 'installation'): WorkbenchRow {
 
 function roundLikePostgres(value: number) {
   return value < 0 ? -Math.round(-value) : Math.round(value);
+}
+
+function CompactField({
+  label,
+  htmlFor,
+  required,
+  errors,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  required?: boolean;
+  errors?: string[];
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <label htmlFor={htmlFor} className="mb-0.5 block text-[10px] font-semibold leading-none text-slate-600">
+        {label}
+        {required && <span className="ml-1 text-danger">*</span>}
+      </label>
+      {children}
+      {errors?.length ? (
+        <p className="mt-0.5 text-xs text-danger" role="alert">
+          {errors[0]}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export function ManualQuoteWorkbench({
@@ -158,7 +187,7 @@ export function ManualQuoteWorkbench({
   };
 
   return (
-    <div className="space-y-3" data-testid="manual-quote-workbench">
+    <div className="space-y-2" data-testid="manual-quote-workbench">
       <Link
         href="/admin/quotes"
         className="inline-flex text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
@@ -168,20 +197,17 @@ export function ManualQuoteWorkbench({
       >
         ← 案件管理へ戻る
       </Link>
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-xs font-semibold text-muted">見積書</span>
-          <button
-            type="button"
-            onClick={() => setPickerOpen(true)}
-            className="inline-flex max-w-full items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-ink hover:bg-sand"
-            data-testid="estimate-picker-open"
-          >
-            新しい見積書
-            <ChevronDown className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-        <span className="text-xs text-muted">案件情報と明細を同じ画面で入力します</span>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-white px-3 py-1.5 shadow-sm">
+        <span className="text-xs font-semibold text-muted">見積書</span>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="inline-flex max-w-full items-center gap-2 rounded-md border border-line bg-white px-2.5 py-1.5 text-sm font-semibold text-ink hover:bg-sand"
+          data-testid="estimate-picker-open"
+        >
+          新しい見積書
+          <ChevronDown className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
 
       {pickerOpen && (
@@ -263,7 +289,7 @@ export function ManualQuoteWorkbench({
 
       <form
         action={action}
-        className="space-y-3"
+        className="space-y-2"
         noValidate
         onChangeCapture={markDirty}
         onSubmit={() => {
@@ -275,87 +301,126 @@ export function ManualQuoteWorkbench({
 
         <Status state={state} />
 
-        <section className="rounded-lg border border-line bg-white shadow-sm" data-testid="case-info-panel">
-          <div className="border-b border-line px-4 py-2.5">
+        <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="manual-quote-editor-shell">
+        <section className="border-b border-slate-200 bg-white" data-testid="case-info-panel">
+          <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
             <h2 className="text-sm font-semibold">案件情報</h2>
-            <p className="mt-0.5 text-[0.68rem] text-muted">
-              見積書を作りながら、この案件の基本情報も登録できます。
-            </p>
+            <span className="text-[0.65rem] text-muted">* 必須</span>
           </div>
-          <div className="grid gap-3 p-4 md:grid-cols-4">
-            <div className="md:col-span-2">
-              <Field label="案件名（任意）" htmlFor="quote-case-name" errors={errors.case_name}>
-                <Input id="quote-case-name" name="case_name" placeholder="例：山田様 穴水宿泊棟" />
-              </Field>
+          <div className="grid gap-x-2 gap-y-1 p-2.5 sm:grid-cols-2 lg:grid-cols-12">
+            <div className="sm:col-span-2 lg:col-span-4">
+              <CompactField label="案件名" htmlFor="quote-case-name" errors={errors.case_name}>
+                <Input
+                  id="quote-case-name"
+                  name="case_name"
+                  placeholder="例：山田様 穴水宿泊棟"
+                  className="h-7 min-h-7 px-2 text-sm"
+                />
+              </CompactField>
             </div>
-            <Field label="お客様名" htmlFor="quote-customer-name" required errors={errors.customer_name}>
-              <Input id="quote-customer-name" name="customer_name" required placeholder="例：山田 太郎" />
-            </Field>
-            <Field label="会社名（任意）" htmlFor="quote-company" errors={errors.customer_company}>
-              <Input id="quote-company" name="customer_company" />
-            </Field>
-            <div className="md:col-span-2">
-              <Field label="設置予定地（任意）" htmlFor="quote-site" errors={errors.site_address}>
-                <Input id="quote-site" name="site_address" placeholder="例：石川県鳳珠郡穴水町○○" />
-              </Field>
+            <div className="lg:col-span-4">
+              <CompactField label="お客様名" htmlFor="quote-customer-name" required errors={errors.customer_name}>
+                <Input
+                  id="quote-customer-name"
+                  name="customer_name"
+                  required
+                  placeholder="例：山田 太郎"
+                  className="h-7 min-h-7 px-2 text-sm"
+                />
+              </CompactField>
             </div>
-            <Field label="商品モデル" htmlFor="quote-model" required errors={errors.base_model_id}>
-              <Select
-                id="quote-model"
-                name="base_model_id"
-                value={modelId}
-                onChange={(event) => setModelId(event.target.value)}
-              >
-                {models.map((row) => (
-                  <option key={row.id} value={row.id}>{row.name}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="仕様" htmlFor="quote-spec" required errors={errors.spec_code}>
-              <Select id="quote-spec" name="spec_code" key={modelId} defaultValue={model?.presets[0]?.code}>
-                {(model?.presets ?? []).map((preset) => (
-                  <option key={preset.code} value={preset.code}>{preset.name}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="注文範囲" htmlFor="quote-finish" required errors={errors.finish_level}>
-              <Select id="quote-finish" name="finish_level" defaultValue="full">
-                {FINISH_LEVELS.map((level: FinishLevel) => (
-                  <option key={level} value={level}>
-                    {FINISH_LEVEL_INFO[level].name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <div className="md:col-span-3">
-              <Field label="メモ（任意）" htmlFor="quote-memo" errors={errors.memo}>
-                <Textarea id="quote-memo" name="memo" rows={2} placeholder="現地条件・お客様のご要望など" />
-              </Field>
+            <div className="lg:col-span-4">
+              <CompactField label="会社名" htmlFor="quote-company" errors={errors.customer_company}>
+                <Input id="quote-company" name="customer_company" className="h-7 min-h-7 px-2 text-sm" />
+              </CompactField>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-4">
+              <CompactField label="設置予定地" htmlFor="quote-site" errors={errors.site_address}>
+                <Input
+                  id="quote-site"
+                  name="site_address"
+                  placeholder="例：石川県鳳珠郡穴水町○○"
+                  className="h-7 min-h-7 px-2 text-sm"
+                />
+              </CompactField>
+            </div>
+            <div className="lg:col-span-3">
+              <CompactField label="商品モデル" htmlFor="quote-model" required errors={errors.base_model_id}>
+                <Select
+                  id="quote-model"
+                  name="base_model_id"
+                  value={modelId}
+                  onChange={(event) => setModelId(event.target.value)}
+                  className="h-7 min-h-7 text-sm"
+                >
+                  {models.map((row) => (
+                    <option key={row.id} value={row.id}>{row.name}</option>
+                  ))}
+                </Select>
+              </CompactField>
+            </div>
+            <div className="lg:col-span-2">
+              <CompactField label="仕様" htmlFor="quote-spec" required errors={errors.spec_code}>
+                <Select
+                  id="quote-spec"
+                  name="spec_code"
+                  key={modelId}
+                  defaultValue={model?.presets[0]?.code}
+                  className="h-7 min-h-7 text-sm"
+                >
+                  {(model?.presets ?? []).map((preset) => (
+                    <option key={preset.code} value={preset.code}>{preset.name}</option>
+                  ))}
+                </Select>
+              </CompactField>
+            </div>
+            <div className="lg:col-span-3">
+              <CompactField label="注文範囲" htmlFor="quote-finish" required errors={errors.finish_level}>
+                <Select id="quote-finish" name="finish_level" defaultValue="full" className="h-7 min-h-7 text-sm">
+                  {FINISH_LEVELS.map((level: FinishLevel) => (
+                    <option key={level} value={level}>
+                      {FINISH_LEVEL_INFO[level].name}
+                    </option>
+                  ))}
+                </Select>
+              </CompactField>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-12">
+              <CompactField label="メモ" htmlFor="quote-memo" errors={errors.memo}>
+                <Textarea
+                  id="quote-memo"
+                  name="memo"
+                  rows={1}
+                  placeholder="現地条件・お客様のご要望など"
+                  className="min-h-7 resize-y py-1 text-sm"
+                />
+              </CompactField>
             </div>
           </div>
         </section>
 
-        <div className="flex items-center gap-1 rounded-lg border border-line bg-white p-1 shadow-sm" aria-label="見積作業タブ">
-          <button type="button" className="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white">見積書</button>
-          <button type="button" disabled className="rounded-md px-4 py-2 text-sm font-semibold text-muted disabled:cursor-not-allowed">
+        <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-100 px-3 pt-1" aria-label="見積作業タブ">
+          <button type="button" className="rounded-t border border-b-white border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800">見積書</button>
+          <button type="button" disabled className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-400">
             プランボード
           </button>
-          <button type="button" disabled className="rounded-md px-4 py-2 text-sm font-semibold text-muted disabled:cursor-not-allowed">
+          <button type="button" disabled className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-400">
             図面
           </button>
-          <span className="ml-auto hidden pr-2 text-[0.68rem] text-muted sm:inline">プランボード・図面は正式保存後に案件画面から利用できます</span>
         </div>
 
-        <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" data-testid="new-estimate-excel">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-            <div>
-              <h2 className="text-sm font-semibold">見積明細</h2>
-              <p className="mt-0.5 text-[0.68rem] text-muted">Excelのように明細を追加・修正してから下書き保存します。</p>
-            </div>
-            <Button type="button" variant="secondary" onClick={() => {
-              setRows((current) => [...current, createRow()]);
-              markDirty();
-            }}>
+        <section className="bg-white" data-testid="new-estimate-excel">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-1.5">
+            <h2 className="text-sm font-semibold">見積明細</h2>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-7 min-h-7 px-2.5 text-xs"
+              onClick={() => {
+                setRows((current) => [...current, createRow()]);
+                markDirty();
+              }}
+            >
               <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
               明細行を追加
             </Button>
@@ -365,14 +430,14 @@ export function ManualQuoteWorkbench({
             <table className="w-full min-w-[72rem] border-collapse text-xs">
               <thead className="bg-slate-100 text-slate-600">
                 <tr>
-                  <th className="w-12 border-b border-r border-slate-300 px-2 py-2 text-center">#</th>
-                  <th className="w-40 border-b border-r border-slate-300 px-2 py-2 text-left">区分</th>
-                  <th className="min-w-[15rem] border-b border-r border-slate-300 px-2 py-2 text-left">品名</th>
-                  <th className="w-24 border-b border-r border-slate-300 px-2 py-2 text-right">数量</th>
-                  <th className="w-20 border-b border-r border-slate-300 px-2 py-2 text-left">単位</th>
-                  <th className="w-32 border-b border-r border-slate-300 px-2 py-2 text-right">単価</th>
-                  <th className="w-32 border-b border-r border-slate-300 px-2 py-2 text-right">金額</th>
-                  <th className="min-w-[12rem] border-b border-r border-slate-300 px-2 py-2 text-left">備考</th>
+                  <th className="w-12 border-b border-r border-slate-300 px-2 py-1 text-center">#</th>
+                  <th className="w-40 border-b border-r border-slate-300 px-2 py-1 text-left">区分</th>
+                  <th className="min-w-[15rem] border-b border-r border-slate-300 px-2 py-1 text-left">品名</th>
+                  <th className="w-24 border-b border-r border-slate-300 px-2 py-1 text-right">数量</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-2 py-1 text-left">単位</th>
+                  <th className="w-32 border-b border-r border-slate-300 px-2 py-1 text-right">単価</th>
+                  <th className="w-32 border-b border-r border-slate-300 px-2 py-1 text-right">金額</th>
+                  <th className="min-w-[12rem] border-b border-r border-slate-300 px-2 py-1 text-left">備考</th>
                   <th className="w-12 border-b border-slate-300 px-2 py-2"></th>
                 </tr>
               </thead>
@@ -384,7 +449,7 @@ export function ManualQuoteWorkbench({
                       <Select
                         value={row.kind}
                         onChange={(event) => updateRow(row.key, { kind: event.target.value as EditableKind })}
-                        className="h-8 text-xs"
+                        className="h-7 text-xs"
                       >
                         {kindEntries.map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
@@ -395,7 +460,7 @@ export function ManualQuoteWorkbench({
                       <Input
                         value={row.name}
                         onChange={(event) => updateRow(row.key, { name: event.target.value })}
-                        className="h-8 text-xs"
+                        className="h-7 text-xs"
                         placeholder="品名"
                       />
                     </td>
@@ -406,14 +471,14 @@ export function ManualQuoteWorkbench({
                         step="0.01"
                         value={row.quantity}
                         onChange={(event) => updateRow(row.key, { quantity: Number(event.target.value) || 0 })}
-                        className="h-8 text-right text-xs"
+                        className="h-7 text-right text-xs"
                       />
                     </td>
                     <td className="border-r border-slate-200 p-1">
                       <Input
                         value={row.unit}
                         onChange={(event) => updateRow(row.key, { unit: event.target.value })}
-                        className="h-8 text-xs"
+                        className="h-7 text-xs"
                       />
                     </td>
                     <td className="border-r border-slate-200 p-1">
@@ -423,7 +488,7 @@ export function ManualQuoteWorkbench({
                         step="1"
                         value={row.unit_price}
                         onChange={(event) => updateRow(row.key, { unit_price: Number(event.target.value) || 0 })}
-                        className="h-8 text-right text-xs"
+                        className="h-7 text-right text-xs"
                       />
                     </td>
                     <td className="border-r border-slate-200 px-2 py-1 text-right font-semibold tabular-nums">
@@ -433,7 +498,7 @@ export function ManualQuoteWorkbench({
                       <Input
                         value={row.remark}
                         onChange={(event) => updateRow(row.key, { remark: event.target.value })}
-                        className="h-8 text-xs"
+                        className="h-7 text-xs"
                       />
                     </td>
                     <td className="p-1 text-center">
@@ -453,7 +518,7 @@ export function ManualQuoteWorkbench({
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted">
+                    <td colSpan={9} className="px-4 py-4 text-center text-sm text-muted">
                       明細はまだありません。「明細行を追加」から入力できます。
                     </td>
                   </tr>
@@ -462,11 +527,8 @@ export function ManualQuoteWorkbench({
             </table>
           </div>
 
-          <div className="grid gap-3 border-t border-line bg-slate-50 p-4 md:grid-cols-[1fr_22rem]">
-            <div className="text-xs text-muted">
-              初回の下書き保存では、案件情報とこの明細を同時に保存します。正式なRevisionはまだ発行しません。
-            </div>
-            <div className="space-y-2 rounded-lg bg-white p-3 text-sm shadow-sm">
+          <div className="flex justify-end border-t border-slate-300 bg-slate-50 p-2">
+            <div className="w-full max-w-[22rem] space-y-1.5 rounded-md bg-white p-2 text-sm shadow-sm">
               <div className="flex justify-between gap-3"><span>明細合計</span><strong>{formatYen(subtotalRaw)}</strong></div>
               <label className="flex items-center justify-between gap-3">
                 <span>調整額</span>
@@ -476,7 +538,7 @@ export function ManualQuoteWorkbench({
                   step="1"
                   value={adjustment}
                   onChange={(event) => setAdjustment(Number(event.target.value) || 0)}
-                  className="h-8 w-32 text-right"
+                  className="h-7 w-32 text-right"
                 />
               </label>
               <label className="block">
@@ -486,25 +548,20 @@ export function ManualQuoteWorkbench({
                   value={adjustmentReason}
                   onChange={(event) => setAdjustmentReason(event.target.value)}
                   placeholder={adjustment === 0 ? '調整なし' : '必須'}
-                  className="mt-1 h-8"
+                  className="mt-0.5 h-7"
                 />
               </label>
-              <div className="flex justify-between gap-3 border-t border-slate-200 pt-2"><span>税抜</span><strong>{formatYen(subtotal)}</strong></div>
+              <div className="flex justify-between gap-3 border-t border-slate-200 pt-1.5"><span>税抜</span><strong>{formatYen(subtotal)}</strong></div>
               <div className="flex justify-between gap-3"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
-              <div className="flex justify-between gap-3 border-t-2 border-slate-500 pt-2 text-base"><span>税込合計</span><strong>{formatYen(total)}</strong></div>
+              <div className="flex justify-between gap-3 border-t-2 border-slate-500 pt-1.5 text-base"><span>税込合計</span><strong>{formatYen(total)}</strong></div>
             </div>
           </div>
         </section>
+        </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white p-4 shadow-sm">
-          <div>
-            <p className="text-sm font-semibold">まず下書き保存</p>
-            <p className="mt-1 text-xs text-muted">案件と見積Draftを同時に作成します。正式保存は次の画面で行います。</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="secondary" disabled>正式保存</Button>
-            <SubmitButton pending={pending} label="下書き保存して続ける" />
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
+          <Button type="button" variant="secondary" disabled>正式保存</Button>
+          <SubmitButton pending={pending} label="下書き保存して続ける" />
         </div>
       </form>
     </div>

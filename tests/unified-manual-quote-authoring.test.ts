@@ -27,13 +27,22 @@ describe('unified manual quote authoring', () => {
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(newQuotePage).not.toContain('<ManualQuoteForm');
     expect(workbench).toContain('data-testid="manual-quote-workbench"');
+    expect(workbench).toContain('data-testid="manual-quote-editor-shell"');
     expect(workbench).toContain('data-testid="case-info-panel"');
     expect(workbench).toContain('data-testid="new-estimate-excel"');
-    expect(workbench).toContain('案件名（任意）');
+    expect(workbench).toContain('rounded-lg border border-slate-300 bg-white shadow-sm');
+    expect(workbench).toContain('function CompactField');
+    expect(workbench).toContain('label="案件名"');
+    expect(workbench).not.toContain('（任意）');
+    expect(workbench).not.toContain("import { Button, Field, Input, Select, Textarea }");
+    expect(newQuotePage).toContain('lead="下書き保存後に正式保存できます。"');
     expect(workbench).toContain('見積書');
     expect(workbench).toContain('プランボード');
     expect(workbench).toContain('図面');
     expect(workbench).toContain('下書き保存して続ける');
+    expect(workbench).not.toContain('見積書を作りながら、この案件の基本情報も登録できます。');
+    expect(workbench).not.toContain('Excelのように明細を追加・修正してから下書き保存します。');
+    expect(workbench).not.toContain('まず下書き保存');
   });
 
   it('opens an estimate-list popup from the top of the estimate frame', () => {
@@ -117,11 +126,12 @@ describe('unified manual quote authoring', () => {
     expect(supabaseStore).not.toContain("db.rpc('create_manual_quote_case'");
   });
 
-  it('warns before leaving an unsaved new estimate and describes tabs by actual availability', () => {
+  it('warns before leaving an unsaved new estimate while keeping unavailable tabs disabled', () => {
     expect(workbench).toContain("window.confirm('保存していない内容があります。保存せずに別の画面へ移動しますか？')");
     expect(workbench).toContain("window.addEventListener('beforeunload'");
     expect(workbench).toContain('if (!confirmLeave()) event.preventDefault();');
-    expect(workbench).toContain('プランボード・図面は正式保存後に案件画面から利用できます');
+    expect(workbench).toContain('type="button" disabled');
+    expect(workbench).not.toContain('プランボード・図面は正式保存後に案件画面から利用できます');
   });
 
   it('lets headquarters resume a saved initial Draft from case management without opening quote_drafts SELECT', () => {

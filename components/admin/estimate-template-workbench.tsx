@@ -148,6 +148,7 @@ export function EstimateTemplateWorkbench({
   const [showCost, setShowCost] = useState(false);
   const [pickerSection, setPickerSection] = useState<SectionCode | null>(null);
   const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
+  const [pickerCategoryId, setPickerCategoryId] = useState('');
   const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
   const [salesExpenseRate, setSalesExpenseRate] = useState(100);
   const [expenseRate, setExpenseRate] = useState(15);
@@ -200,9 +201,25 @@ export function EstimateTemplateWorkbench({
     return products.filter((product) => allowedCodes.has(product.categoryCode));
   }, [pickerSection, products]);
 
+  const pickerCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of pickerProducts) {
+      map.set(product.categoryId, product.categoryName);
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
+  }, [pickerProducts]);
+
+  const visiblePickerProducts = useMemo(
+    () =>
+      pickerCategoryId
+        ? pickerProducts.filter((product) => product.categoryId === pickerCategoryId)
+        : pickerProducts,
+    [pickerCategoryId, pickerProducts]
+  );
+
   const pickerProductGroups = useMemo(() => {
     const map = new Map<string, { categoryId: string; categoryName: string; products: EstimateTemplateWorkbenchProduct[] }>();
-    for (const product of pickerProducts) {
+    for (const product of visiblePickerProducts) {
       const current = map.get(product.categoryId) ?? {
         categoryId: product.categoryId,
         categoryName: product.categoryName,
@@ -212,7 +229,7 @@ export function EstimateTemplateWorkbench({
       map.set(product.categoryId, current);
     }
     return [...map.values()].sort((a, b) => a.categoryName.localeCompare(b.categoryName, 'ja'));
-  }, [pickerProducts]);
+  }, [visiblePickerProducts]);
 
   const pickerSectionLabel = pickerSection
     ? sections.find((section) => section.code === pickerSection)?.label ?? pickerSection
@@ -238,6 +255,7 @@ export function EstimateTemplateWorkbench({
     setRows([...initialLines]);
     setPickerSection(null);
     setPickerTargetRowId(null);
+    setPickerCategoryId('');
     setCollapsedSections(new Set());
     setSalesExpenseRate(100);
     setExpenseRate(15);
@@ -279,11 +297,13 @@ export function EstimateTemplateWorkbench({
   const openProductPicker = (section: SectionCode, rowId: string | null = null) => {
     setPickerSection(section);
     setPickerTargetRowId(rowId);
+    setPickerCategoryId('');
   };
 
   const closeProductPicker = () => {
     setPickerSection(null);
     setPickerTargetRowId(null);
+    setPickerCategoryId('');
   };
 
   const addProduct = (product: EstimateTemplateWorkbenchProduct) => {
@@ -889,8 +909,42 @@ export function EstimateTemplateWorkbench({
 
             <div className="shrink-0 border-b border-line px-5 py-3">
               <p className="text-[11px] text-muted">
-                「{pickerSectionLabel}」で選べる商品をカテゴリーごとに表示しています。
+                「{pickerSectionLabel}」で選べる商品を表示しています。
               </p>
+
+              {pickerCategories.length > 1 && (
+                <div
+                  className="mt-3 flex gap-2 overflow-x-auto pb-1"
+                  role="tablist"
+                  aria-label={pickerSectionLabel + 'の商品カテゴリー'}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={pickerCategoryId === ''}
+                    onClick={() => setPickerCategoryId('')}
+                    className={pickerCategoryId === ''
+                      ? 'shrink-0 rounded-full bg-forest px-3 py-1.5 text-xs font-semibold text-white'
+                      : 'shrink-0 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-forest'}
+                  >
+                    すべて
+                  </button>
+                  {pickerCategories.map(([id, name]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={pickerCategoryId === id}
+                      onClick={() => setPickerCategoryId(id)}
+                      className={pickerCategoryId === id
+                        ? 'shrink-0 rounded-full bg-forest px-3 py-1.5 text-xs font-semibold text-white'
+                        : 'shrink-0 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-forest'}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 pt-4">
@@ -942,9 +996,11 @@ export function EstimateTemplateWorkbench({
                 ))}
               </div>
 
-              {pickerProducts.length === 0 && (
+              {visiblePickerProducts.length === 0 && (
                 <div className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">
-                  この区分で選べる商品はまだありません。
+                  {pickerProducts.length === 0
+                    ? 'この区分で選べる商品はまだありません。'
+                    : 'このカテゴリーに登録されている商品はありません。'}
                 </div>
               )}
 

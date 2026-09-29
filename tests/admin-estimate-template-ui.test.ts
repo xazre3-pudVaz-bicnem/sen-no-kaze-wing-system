@@ -248,20 +248,29 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain("'free-product'");
     expect(workbench).toContain('allowedCodes.has(product.categoryCode)');
     expect(workbench).toContain('追加先：{pickerSectionLabel}');
-    expect(workbench).toContain('「{pickerSectionLabel}」で選べる商品をカテゴリーごとに表示しています。');
+    expect(workbench).toContain('「{pickerSectionLabel}」で選べる商品を表示しています。');
     expect(workbench).not.toContain('すべてのカテゴリー');
-    expect(workbench).not.toContain('pickerCategory');
     expect(workbench).not.toContain('pickerQuery');
     expect(detailPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
     expect(newPage).toContain("categoryCode: categoryMap.get(option.category_id)?.code ?? ''");
   });
 
-  it('商品選択は検索なしのカテゴリー別2列カードで直接比較できる', () => {
+  it('複数カテゴリーの区分だけ横並びタブを表示し、検索なしで絞り込める', () => {
+    expect(workbench).toContain("const [pickerCategoryId, setPickerCategoryId] = useState('')");
+    expect(workbench).toContain('pickerCategories.length > 1');
+    expect(workbench).toContain('role="tablist"');
+    expect(workbench).toContain("aria-selected={pickerCategoryId === ''}");
+    expect(workbench).toContain('すべて');
+    expect(workbench).toContain('onClick={() => setPickerCategoryId(id)}');
+    expect(workbench).toContain('visiblePickerProducts');
+    expect(workbench).not.toContain('type="search"');
+    expect(workbench).not.toContain('メーカー・商品名・シリーズ・型番で検索');
+  });
+
+  it('商品選択はカテゴリー別2列カードで直接比較できる', () => {
     expect(workbench).toContain('pickerProductGroups');
     expect(workbench).not.toContain('collapsedPickerCategories');
     expect(workbench).not.toContain('togglePickerCategory');
-    expect(workbench).not.toContain('type="search"');
-    expect(workbench).not.toContain('メーカー・商品名・シリーズ・型番で検索');
     expect(workbench).toContain('{group.categoryName}');
     expect(workbench).toContain('{group.products.length}件');
     expect(workbench).toContain('grid gap-3 sm:grid-cols-2');

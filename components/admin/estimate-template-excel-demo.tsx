@@ -123,6 +123,7 @@ export function EstimateTemplateExcelDemo({
   const [adjustment, setAdjustment] = useState(sample?.adjustment ?? -2500);
   const [pickerSection, setPickerSection] = useState<Exclude<Section, '本体'> | null>(null);
   const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
+  const [pickerCategoryCode, setPickerCategoryCode] = useState('');
   const [tab, setTab] = useState<DemoTab>('estimate');
   const [showEstimatePreview, setShowEstimatePreview] = useState(false);
 
@@ -191,6 +192,22 @@ export function EstimateTemplateExcelDemo({
     return catalogProducts.filter((product) => allowedCodes.has(product.categoryCode));
   }, [catalogProducts, pickerSection]);
 
+  const pickerCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of pickerProducts) {
+      map.set(product.categoryCode, product.category);
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
+  }, [pickerProducts]);
+
+  const visiblePickerProducts = useMemo(
+    () =>
+      pickerCategoryCode
+        ? pickerProducts.filter((product) => product.categoryCode === pickerCategoryCode)
+        : pickerProducts,
+    [pickerCategoryCode, pickerProducts]
+  );
+
   const markDirty = () => setDirty(true);
 
   const updateRow = (id: string, patch: Partial<DemoRow>) => {
@@ -249,11 +266,13 @@ export function EstimateTemplateExcelDemo({
   const openProductPicker = (section: Exclude<Section, '本体'>, targetRowId: string | null = null) => {
     setPickerSection(section);
     setPickerTargetRowId(targetRowId);
+    setPickerCategoryCode('');
   };
 
   const closeProductPicker = () => {
     setPickerSection(null);
     setPickerTargetRowId(null);
+    setPickerCategoryCode('');
   };
 
   const addProduct = (product: DemoProduct) => {
@@ -998,8 +1017,38 @@ export function EstimateTemplateExcelDemo({
                 {pickerSection}で選べる商品を表示しています。商品を選ぶと現在の明細へ反映します。
               </p>
 
+              {pickerCategories.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label={pickerSection + 'の商品カテゴリー'}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={pickerCategoryCode === ''}
+                    onClick={() => setPickerCategoryCode('')}
+                    className={pickerCategoryCode === ''
+                      ? 'shrink-0 rounded-full bg-emerald-800 px-3 py-1.5 text-xs font-semibold text-white'
+                      : 'shrink-0 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-emerald-700'}
+                  >
+                    すべて
+                  </button>
+                  {pickerCategories.map(([code, name]) => (
+                    <button
+                      key={code}
+                      type="button"
+                      role="tab"
+                      aria-selected={pickerCategoryCode === code}
+                      onClick={() => setPickerCategoryCode(code)}
+                      className={pickerCategoryCode === code
+                        ? 'shrink-0 rounded-full bg-emerald-800 px-3 py-1.5 text-xs font-semibold text-white'
+                        : 'shrink-0 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-emerald-700'}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-2">
-                {pickerProducts.map((product) => (
+                {visiblePickerProducts.map((product) => (
                   <article key={product.id} className="rounded-xl border border-slate-200 p-4">
                     <div className="flex gap-3">
                       <div
@@ -1026,9 +1075,11 @@ export function EstimateTemplateExcelDemo({
                 ))}
               </div>
 
-              {pickerProducts.length === 0 && (
+              {visiblePickerProducts.length === 0 && (
                 <div className="rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">
-                  この区分で選べる商品はまだありません。
+                  {pickerProducts.length === 0
+                    ? 'この区分で選べる商品はまだありません。'
+                    : 'このカテゴリーに登録されている商品はありません。'}
                 </div>
               )}
             </div>

@@ -23,6 +23,7 @@ import {
   assignDealerSchema,
   dealerRevisionSchema,
   manualQuoteSchema,
+  manualQuoteWorkbenchSchema,
   quoteRevisionDraftSchema,
   quoteDraftSaveSchema,
   quoteDraftFinalizeSchema,
@@ -1152,6 +1153,61 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
       spec_code: parsed.data.spec_code,
       finish_level: parsed.data.finish_level,
       memo: parsed.data.memo || null,
+    });
+    draftId = draft.id;
+    revalidatePath('/admin/quotes');
+  } catch (e) {
+    return errState(e);
+  }
+
+  redirect(`/admin/quotes/drafts/${draftId}?created=1`);
+}
+
+export async function createManualQuoteWorkbenchAction(
+  _prev: AdminFormState,
+  formData: FormData
+): Promise<AdminFormState> {
+  const actor = await requireStaff();
+
+  let rawItems: unknown;
+  try {
+    rawItems = JSON.parse(String(formData.get('items_json') ?? '[]'));
+  } catch {
+    return { ok: false, error: '明細データを読み取れませんでした。' };
+  }
+
+  const parsed = manualQuoteWorkbenchSchema.safeParse({
+    case_name: formData.get('case_name'),
+    customer_name: formData.get('customer_name'),
+    customer_company: formData.get('customer_company'),
+    site_address: formData.get('site_address'),
+    base_model_id: formData.get('base_model_id'),
+    spec_code: formData.get('spec_code'),
+    finish_level: formData.get('finish_level'),
+    memo: formData.get('memo'),
+    base_master_revision_id: formData.get('base_master_revision_id'),
+    items: rawItems,
+    adjustment: formData.get('adjustment') ?? 0,
+    adjustment_reason: formData.get('adjustment_reason'),
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+
+  let draftId: string;
+  try {
+    const store = await getStore();
+    const draft = await store.createManualQuoteDraftWithItems(actor, {
+      case_name: parsed.data.case_name || null,
+      customer_name: parsed.data.customer_name,
+      customer_company: parsed.data.customer_company || null,
+      site_address: parsed.data.site_address || null,
+      base_model_id: parsed.data.base_model_id,
+      spec_code: parsed.data.spec_code,
+      finish_level: parsed.data.finish_level,
+      memo: parsed.data.memo || null,
+      base_master_revision_id: parsed.data.base_master_revision_id,
+      items: parsed.data.items,
+      adjustment: parsed.data.adjustment,
+      adjustment_reason: parsed.data.adjustment_reason ?? null,
     });
     draftId = draft.id;
     revalidatePath('/admin/quotes');

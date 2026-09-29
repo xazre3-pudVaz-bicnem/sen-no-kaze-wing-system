@@ -124,7 +124,7 @@ function CaseSummary({
   );
 }
 
-function CasePageHeading({ caseCount }: { caseCount: number }) {
+function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; canCreateQuote: boolean }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -133,13 +133,15 @@ function CasePageHeading({ caseCount }: { caseCount: number }) {
           Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。
         </p>
       </div>
-      <Link
-        href="/admin/quotes/new"
-        className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
-        data-testid="new-quote-link"
-      >
-        ＋見積書を作成
-      </Link>
+      {canCreateQuote && (
+        <Link
+          href="/admin/quotes/new"
+          className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+          data-testid="new-quote-link"
+        >
+          ＋見積書を作成
+        </Link>
+      )}
     </div>
   );
 }
@@ -182,7 +184,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-        <CasePageHeading caseCount={latest.length} />
+        <CasePageHeading caseCount={latest.length} canCreateQuote={actor.role === 'admin'} />
         <CaseSummary
           caseCount={latest.length}
           newCount={newCount}
@@ -342,6 +344,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     if (textQuery) {
       const haystack = [
+        request.case_name,
         request.contact.full_name,
         request.contact.company_name,
         request.contact.site_address,
@@ -392,7 +395,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-2.5">
-      <CasePageHeading caseCount={requests.length} />
+      <CasePageHeading caseCount={requests.length} canCreateQuote={actor.role === 'admin'} />
       <CaseSummary
         caseCount={shown.length}
         newCount={newCount}

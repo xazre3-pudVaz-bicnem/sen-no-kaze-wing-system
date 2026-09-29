@@ -67,6 +67,7 @@ import {
   type EstimateTemplateImportInput,
   type AccessibleCustomerListResult,
   type AccessibleCustomerDetail,
+  type AccessibleCustomerDetailResult,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
@@ -406,9 +407,15 @@ export class SupabaseStore implements DataStore {
     }
     const db = await this.db();
     const { data, error } = await db.rpc('list_accessible_customers');
-    if (error) mapPgError(error);
+    if (error) {
+      if (isMissingNamedFunction(error, 'list_accessible_customers')) {
+        return { availability: 'migration_pending', customers: [], unlinked_cases: [] };
+      }
+      mapPgError(error);
+    }
     const payload = (data ?? {}) as Partial<AccessibleCustomerListResult>;
     return {
+      availability: 'available',
       customers: Array.isArray(payload.customers) ? payload.customers : [],
       unlinked_cases: Array.isArray(payload.unlinked_cases) ? payload.unlinked_cases : [],
     };
@@ -417,7 +424,7 @@ export class SupabaseStore implements DataStore {
   async getAccessibleCustomerDetail(
     customerId: string,
     actor: SessionUser
-  ): Promise<AccessibleCustomerDetail | null> {
+  ): Promise<AccessibleCustomerDetailResult> {
     if (actor.role === 'customer') {
       throw new StoreError('FORBIDDEN', '顧客管理を閲覧できるのは代理店以上です');
     }
@@ -425,8 +432,16 @@ export class SupabaseStore implements DataStore {
     const { data, error } = await db.rpc('get_accessible_customer_detail', {
       p_customer_id: customerId,
     });
-    if (error) mapPgError(error);
-    return (data as AccessibleCustomerDetail | null) ?? null;
+    if (error) {
+      if (isMissingNamedFunction(error, 'get_accessible_customer_detail')) {
+        return { availability: 'migration_pending', detail: null };
+      }
+      mapPgError(error);
+    }
+    return {
+      availability: 'available',
+      detail: (data as AccessibleCustomerDetail | null) ?? null,
+    };
   }
 
   // ---------- 仕様 ----------

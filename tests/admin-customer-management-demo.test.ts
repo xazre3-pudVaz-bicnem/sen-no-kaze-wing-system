@@ -41,8 +41,8 @@ describe('顧客管理サンプル画面', () => {
 
   it('shows the main customer detail sections without linking fake IDs into real case pages', () => {
     for (const label of [
-      'Profile（アカウント情報）',
-      'QuoteContact（最新案件受付情報）',
+      '現在の顧客情報',
+      '最新案件受付情報',
       '進行中案件',
       '過去案件',
       '見積履歴',
@@ -51,9 +51,20 @@ describe('顧客管理サンプル画面', () => {
     ]) {
       expect(detail).toContain(label);
     }
+    expect(detail).not.toContain('Profile（アカウント情報）');
+    expect(detail).not.toContain('QuoteContact（最新案件受付情報）');
     expect(detail).toContain('案件を見る（デモ）');
+    expect(detail).toContain('見積書を見る（デモ）');
     expect(detail).not.toContain('href={`/admin/quotes/');
     expect(detail).not.toContain('href="/admin/quotes"');
     expect(detail).toContain('サンプル顧客一覧へ戻る');
+  });
+
+  it('keeps the demo tables compact while preserving the same information', () => {
+    expect(list).toContain('<Table minWidth="46rem">');
+    expect(list).toContain('<Table minWidth="44rem">');
+    expect(detail).toContain('<Table minWidth="46rem">');
+    expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
+    expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');
   });
 });

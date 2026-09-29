@@ -126,7 +126,7 @@ export default async function AdminCustomerManagementPage({
           <p className="mt-1 text-xs text-muted">顧客ごとに、連絡先と参照可能な案件状況を確認できます。</p>
         </div>
 
-        <Table minWidth="58rem">
+        <Table minWidth="46rem">
           <thead className="bg-sand/60">
             <tr>
               <Th>顧客名 / 法人名</Th>
@@ -214,7 +214,7 @@ export default async function AdminCustomerManagementPage({
         </div>
 
         {view.unlinked_cases.length > 0 ? (
-          <Table minWidth="48rem">
+          <Table minWidth="44rem">
             <thead className="bg-[#fff8e8]">
               <tr>
                 <Th>案件上のお客様</Th>

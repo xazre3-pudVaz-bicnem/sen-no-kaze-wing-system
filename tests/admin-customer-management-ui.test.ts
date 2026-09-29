@@ -63,14 +63,19 @@ describe('顧客管理UI', () => {
     expect(detail).toContain('data-testid="customer-detail-migration-pending"');
   });
 
-  it('shows customer details, scoped cases, quotes, installation sites and honest future placeholders', () => {
-    expect(detail).toContain('Profile（アカウント情報）');
-    expect(detail).toContain('QuoteContact（最新案件受付情報）');
+  it('shows current customer information separately from formal quote history', () => {
+    expect(detail).toContain('現在の顧客情報');
+    expect(detail).toContain('最新案件受付情報');
+    expect(detail).not.toContain('Profile（アカウント情報）');
+    expect(detail).not.toContain('QuoteContact（最新案件受付情報）');
+    expect(detail).toContain('この画面は現在の顧客情報を確認する場所です。');
+    expect(detail).toContain('現在の顧客情報が変わってもこの画面から過去の見積内容を書き換えません。');
     expect(detail).toContain('総代理店・代理店には、自分が担当する案件系列に由来する情報だけを表示します。');
     for (const label of ['進行中案件', '過去案件', '見積履歴', '設置予定地', '契約・所有Wing・アフター']) {
       expect(detail).toContain(label);
     }
-    expect(detail).toContain('担当する案件系列のRevision履歴だけを表示します。');
+    expect(detail).toContain('正式見積の改訂履歴を確認する領域です。');
+    expect(detail).toContain('現在の顧客情報には自動追従させません。');
     expect(detail).toContain('正式データモデル実装後');
     expect(detail).toContain('現在は正式データを表示しません。');
   });
@@ -78,7 +83,16 @@ describe('顧客管理UI', () => {
   it('opens only quote revisions allowed by the scoped payload', () => {
     expect(detail).toContain('quote.can_open_quote ? (');
     expect(detail).toContain('href={`/admin/quotes/${encodeURIComponent(quote.id)}`}');
+    expect(detail).toContain('見積書を見る');
     expect(detail).toContain('履歴のみ');
+  });
+
+  it('keeps dense customer tables compact enough for ordinary desktop widths', () => {
+    expect(list).toContain('<Table minWidth="46rem">');
+    expect(list).toContain('<Table minWidth="44rem">');
+    expect(detail).toContain('<Table minWidth="46rem">');
+    expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
+    expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');
   });
 
   it('shows the latest quote status before the request status', () => {

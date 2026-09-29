@@ -12,10 +12,12 @@ import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 export default async function AdminNewQuotePage() {
   await requireAdmin('/admin/quotes/new');
   const store = await getStore();
-  const [models, quotes, requests] = await Promise.all([
+  const [models, quotes, requests, options, categories] = await Promise.all([
     store.listModels(),
     store.listAllQuotes(),
     store.listQuoteRequests(),
+    store.listOptions(),
+    store.listCategories(),
   ]);
   const requestById = new Map(requests.map((request) => [request.id, request] as const));
 
@@ -32,6 +34,25 @@ export default async function AdminNewQuotePage() {
       total: quote.total,
       status_label: QUOTE_STATUS_LABELS[quote.status],
       updated_at: quote.updated_at,
+    }));
+
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+  const products = options
+    .filter((option) => option.status === 'published')
+    .map((option) => ({
+      id: option.id,
+      baseModelId: option.base_model_id,
+      categoryId: option.category_id,
+      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+      categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
+      name: option.name,
+      manufacturer: option.manufacturer ?? '',
+      modelNo: option.model_no ?? '',
+      sizeNote: option.size_note ?? '',
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+      imageUrl: option.image_url,
+      specCodes: option.spec_codes ?? [],
     }));
 
   return (
@@ -51,6 +72,7 @@ export default async function AdminNewQuotePage() {
           })),
         }))}
         estimates={estimates}
+        products={products}
         canEditBase
       />
     </AdminPage>

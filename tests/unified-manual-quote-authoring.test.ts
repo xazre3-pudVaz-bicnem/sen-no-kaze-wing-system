@@ -66,8 +66,21 @@ describe('unified manual quote authoring', () => {
   it('requires explicit model and spec selection for a brand-new case', () => {
     expect(workbench).toContain("const [modelId, setModelId] = useState('');");
     expect(workbench).toContain('<option value="">選択してください</option>');
-    expect(workbench).toContain("defaultValue=\"\"");
+    expect(workbench).toContain("const [specCode, setSpecCode] = useState('');");
+    expect(workbench).toContain('value={specCode}');
+    expect(workbench).toContain('setSpecCode(\'\')');
     expect(workbench).toContain("disabled={!modelId}");
+  });
+
+  it('keeps product-catalog selection inside the existing Quote Draft item contract', () => {
+    expect(authoringUi).toContain('＋商品');
+    expect(authoringUi).toContain('＋自由明細');
+    expect(authoringUi).toContain('data-testid="quote-product-picker-dialog"');
+    expect(workbench).toContain('option_id: product.id');
+    expect(draftEditor).toContain('option_id: product.id');
+    expect(workbench).toContain('products={products}');
+    expect(draftEditor).toContain('products={products}');
+    expect(store).toContain('option_id?: string | null');
   });
 
   it('opens a case-estimate list popup from the top of the estimate frame', () => {

@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
-import { Search, X } from 'lucide-react';
+import { Package, Search, X } from 'lucide-react';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import { Button, Input } from '@/components/ui';
@@ -18,7 +18,24 @@ export type QuoteAuthoringRow = {
   unitPrice: number;
   amount: number;
   remark: string | null;
+  optionId?: string | null;
   locked?: boolean;
+};
+
+export type QuoteCatalogProduct = {
+  id: string;
+  baseModelId: string | null;
+  categoryId: string;
+  categoryCode: string;
+  categoryName: string;
+  name: string;
+  manufacturer: string;
+  modelNo: string;
+  sizeNote: string;
+  price: number;
+  priceOnRequest: boolean;
+  imageUrl: string | null;
+  specCodes: string[];
 };
 
 export type QuotePickerRow = {
@@ -40,6 +57,35 @@ const SECTION_META: Array<{ key: QuoteAuthoringSection; label: string; kinds: Qu
   { key: 'option', label: 'オプション', kinds: ['option', 'option_expense', 'free'] },
   { key: 'installation', label: '別途', kinds: ['installation'] },
 ];
+
+const SECTION_PRODUCT_CATEGORY_CODES: Partial<Record<QuoteAuthoringSection, readonly string[]>> = {
+  interior_exterior: [
+    'roof',
+    'exterior-wall',
+    'floor',
+    'wall-ceiling',
+    'entrance-door',
+    'sash',
+    'interior-door',
+    'carpentry',
+    'fireproof',
+    'insulation',
+  ],
+  option: [
+    'ub',
+    'kitchen',
+    'washbasin',
+    'toilet',
+    'boiler',
+    'aircon',
+    'lighting',
+    'furniture',
+    'appliances',
+    'smartlock',
+    'exterior-parts',
+    'office-supplies',
+  ],
+};
 
 const KIND_DETAIL_LABELS: Partial<Record<QuoteItemKind, string>> = {
   base_expense: '本体諸費用',
@@ -207,19 +253,67 @@ export function QuoteInternalRateStrip() {
 
 export function QuoteAuthoringGrid({
   rows,
+  products,
+  baseModelId,
+  specCode,
   onUpdate,
   onRemove,
-  onAdd,
+  onAddFree,
+  onSelectProduct,
 }: {
   rows: QuoteAuthoringRow[];
+  products: QuoteCatalogProduct[];
+  baseModelId: string;
+  specCode: string;
   onUpdate: (key: string, patch: Partial<Pick<QuoteAuthoringRow, 'name' | 'quantity' | 'unit' | 'unitPrice' | 'remark'>>) => void;
   onRemove: (key: string) => void;
-  onAdd: (section: QuoteAuthoringSection) => void;
+  onAddFree: (section: QuoteAuthoringSection) => void;
+  onSelectProduct: (section: QuoteAuthoringSection, targetKey: string | null, product: QuoteCatalogProduct) => void;
 }) {
   const [collapsed, setCollapsed] = useState<Set<QuoteAuthoringSection>>(() => new Set());
+  const [pickerSection, setPickerSection] = useState<QuoteAuthoringSection | null>(null);
+  const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);
+  const [pickerCategoryId, setPickerCategoryId] = useState('');
 
   const sectionRows = (section: QuoteAuthoringSection) =>
     rows.filter((row) => sectionForKind(row.kind) === section);
+
+  const pickerProducts = useMemo(() => {
+    if (!pickerSection || !baseModelId || !specCode) return [];
+    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection] ?? []);
+    return products.filter(
+      (product) =>
+        allowedCodes.has(product.categoryCode) &&
+        (product.baseModelId === null || product.baseModelId === baseModelId) &&
+        (product.specCodes.length === 0 || product.specCodes.includes(specCode))
+    );
+  }, [baseModelId, pickerSection, products, specCode]);
+
+  const pickerCategories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of pickerProducts) map.set(product.categoryId, product.categoryName);
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
+  }, [pickerProducts]);
+
+  const visiblePickerProducts = useMemo(
+    () => (pickerCategoryId ? pickerProducts.filter((product) => product.categoryId === pickerCategoryId) : pickerProducts),
+    [pickerCategoryId, pickerProducts]
+  );
+
+  const openProductPicker = (section: QuoteAuthoringSection, targetKey: string | null = null) => {
+    setPickerSection(section);
+    setPickerTargetKey(targetKey);
+    setPickerCategoryId('');
+  };
+
+  const closeProductPicker = () => {
+    setPickerSection(null);
+    setPickerTargetKey(null);
+    setPickerCategoryId('');
+  };
+
+  const canPickProduct = Boolean(baseModelId && specCode);
+
 
   const toggle = (section: QuoteAuthoringSection) => {
     setCollapsed((current) => {
@@ -367,13 +461,34 @@ export function QuoteAuthoringGrid({
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <strong className="text-[10px]">{section.label}</strong>
                         <span className="text-[9px] text-white/75">{currentRows.length}行</span>
-                        <button
-                          type="button"
-                          className="text-[9px] font-semibold underline underline-offset-2"
-                          onClick={() => onAdd(section.key)}
-                        >
-                          {section.key === 'installation' ? '＋自由明細' : '＋行追加'}
-                        </button>
+                        {SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={!canPickProduct}
+                              className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
+                              onClick={() => openProductPicker(section.key)}
+                              title={canPickProduct ? '商品台帳から追加' : '商品モデルと仕様を先に選択してください'}
+                            >
+                              ＋商品
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[9px] font-semibold underline underline-offset-2"
+                              onClick={() => onAddFree(section.key)}
+                            >
+                              ＋自由明細
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-[9px] font-semibold underline underline-offset-2"
+                            onClick={() => onAddFree(section.key)}
+                          >
+                            ＋自由明細
+                          </button>
+                        )}
                       </div>
                     </td>
                     <td colSpan={9} className="bg-emerald-900 px-1.5 py-0.5">
@@ -399,15 +514,29 @@ export function QuoteAuthoringGrid({
                         <th className="sticky left-0 z-10 w-7 border-r border-slate-200 bg-slate-100 px-1 text-center text-[10px] font-normal text-slate-500">{number}</th>
                         <td className="sticky left-[1.75rem] z-10 w-7 border-r border-slate-200 bg-white"></td>
                         <td className={`sticky left-[3.5rem] z-10 w-[10.5rem] border-r border-slate-200 px-0.5 ${editCellClass}`}>
-                          <Input
-                            value={row.name}
-                            disabled={row.locked}
-                            data-quote-grid-col="name"
-                            onKeyDown={handleGridKeyDown}
-                            onChange={(event) => onUpdate(row.key, { name: event.target.value })}
-                            className="h-5 min-h-5 min-w-0 border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
-                            aria-label={`品名 ${number}`}
-                          />
+                          <div className="flex items-center gap-0.5">
+                            <Input
+                              value={row.name}
+                              disabled={row.locked}
+                              data-quote-grid-col="name"
+                              onKeyDown={handleGridKeyDown}
+                              onChange={(event) => onUpdate(row.key, { name: event.target.value })}
+                              className="h-5 min-h-5 min-w-0 flex-1 border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
+                              aria-label={`品名 ${number}`}
+                            />
+                            {!row.locked && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
+                              <button
+                                type="button"
+                                disabled={!canPickProduct}
+                                title={canPickProduct ? '商品台帳から選ぶ' : '商品モデルと仕様を先に選択してください'}
+                                aria-label={`${row.name || 'この明細'}を商品台帳から選び直す`}
+                                className="flex size-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700 disabled:cursor-not-allowed disabled:opacity-35"
+                                onClick={() => openProductPicker(section.key, row.key)}
+                              >
+                                <Package className="size-3" aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </div>
                           {detailLabel && <span className="block truncate px-1 text-[9px] text-slate-500">{detailLabel}</span>}
                         </td>
                         <td className={`w-10 border-r border-slate-200 px-0.5 ${editCellClass}`}>
@@ -501,6 +630,109 @@ export function QuoteAuthoringGrid({
           </tbody>
         </table>
       </div>
+
+      {pickerSection && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/35 px-3 py-[7vh]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) closeProductPicker();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="商品台帳から選択"
+            className="max-h-[82vh] w-full max-w-4xl overflow-hidden rounded-xl border border-line bg-white shadow-2xl"
+            data-testid="quote-product-picker-dialog"
+          >
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <div>
+                <h2 className="font-semibold">{pickerTargetKey ? '商品台帳から選択' : '商品台帳から追加'}</h2>
+                <p className="mt-0.5 text-xs text-muted">
+                  {SECTION_META.find((section) => section.key === pickerSection)?.label}で使用できる公開商品です。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeProductPicker}
+                className="rounded-md p-2 text-muted hover:bg-sand hover:text-ink"
+                aria-label="閉じる"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {pickerCategories.length > 1 && (
+              <div className="flex flex-wrap gap-1 border-b border-line px-4 py-2">
+                <button
+                  type="button"
+                  aria-pressed={pickerCategoryId === ''}
+                  onClick={() => setPickerCategoryId('')}
+                  className={pickerCategoryId === '' ? 'rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white' : 'rounded-full border border-line px-3 py-1 text-xs'}
+                >
+                  すべて
+                </button>
+                {pickerCategories.map(([id, name]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={pickerCategoryId === id}
+                    onClick={() => setPickerCategoryId(id)}
+                    className={pickerCategoryId === id ? 'rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white' : 'rounded-full border border-line px-3 py-1 text-xs'}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="max-h-[64vh] overflow-y-auto p-4">
+              {visiblePickerProducts.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {visiblePickerProducts.map((product) => (
+                    <article key={product.id} className="overflow-hidden rounded-xl border border-line bg-white">
+                      <div
+                        className="flex h-28 items-center justify-center bg-slate-100 bg-cover bg-center text-xs text-muted"
+                        style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
+                        role={product.imageUrl ? 'img' : undefined}
+                        aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
+                      >
+                        {!product.imageUrl && <span>画像なし</span>}
+                      </div>
+                      <div className="space-y-1.5 p-3">
+                        <p className="text-[10px] font-semibold text-muted">{product.categoryName}</p>
+                        <h3 className="truncate text-sm font-semibold">{product.name}</h3>
+                        <p className="truncate text-xs text-muted">{product.manufacturer || 'メーカー未登録'}</p>
+                        <p className="truncate text-xs text-muted">
+                          {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
+                        </p>
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <strong className="text-sm">{product.priceOnRequest ? '別途見積' : formatYen(product.price)}</strong>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              onSelectProduct(pickerSection, pickerTargetKey, product);
+                              closeProductPicker();
+                            }}
+                          >
+                            {pickerTargetKey ? 'この商品を選ぶ' : '追加'}
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-10 text-center text-sm text-muted">
+                  この商品モデル・仕様で選択できる公開商品はありません。
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

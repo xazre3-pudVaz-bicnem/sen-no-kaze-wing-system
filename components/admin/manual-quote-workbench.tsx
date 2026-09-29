@@ -79,9 +79,11 @@ function roundLikePostgres(value: number) {
 export function ManualQuoteWorkbench({
   models,
   estimates,
+  canEditBase,
 }: {
   models: ManualQuoteWorkbenchModel[];
   estimates: EstimatePickerRow[];
+  canEditBase: boolean;
 }) {
   const [state, action, pending] = useActionState(createManualQuoteWorkbenchAction, initialState);
   const [modelId, setModelId] = useState(models[0]?.id ?? '');
@@ -92,6 +94,10 @@ export function ManualQuoteWorkbench({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
   const errors = state.fieldErrors ?? {};
+
+  const kindEntries = Object.entries(KIND_LABELS).filter(
+    ([kind]) => canEditBase || (kind !== 'base' && kind !== 'base_expense')
+  );
 
   const filteredEstimates = useMemo(() => {
     const query = pickerQuery.trim().toLocaleLowerCase('ja');
@@ -335,7 +341,7 @@ export function ManualQuoteWorkbench({
                         onChange={(event) => updateRow(row.key, { kind: event.target.value as EditableKind })}
                         className="h-8 text-xs"
                       >
-                        {Object.entries(KIND_LABELS).map(([value, label]) => (
+                        {kindEntries.map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </Select>

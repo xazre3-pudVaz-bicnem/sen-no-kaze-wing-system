@@ -77,6 +77,15 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('ml-auto w-full max-w-xl rounded-xl border border-slate-300');
   });
 
+  it('操作説明は明細表と集計欄の間に挟まず、最終集計欄の下へ表示する', () => {
+    const summaryIndex = demo.indexOf('原価合計');
+    const helpIndex = demo.indexOf('黄色＝入力 ／ グレー＝自動計算・参照');
+    expect(summaryIndex).toBeGreaterThan(-1);
+    expect(helpIndex).toBeGreaterThan(summaryIndex);
+    expect(demo).toContain('data-testid="estimate-demo-operation-help"');
+    expect(demo).toContain('gap-2 px-4 py-1 text-[11px] text-slate-500');
+  });
+
   it('使用中の本体は通常表示で内部Revision番号を強く見せない', () => {
     expect(demo).toContain('>使用中の本体<');
     expect(demo).toContain('>Wing ホテル仕様<');

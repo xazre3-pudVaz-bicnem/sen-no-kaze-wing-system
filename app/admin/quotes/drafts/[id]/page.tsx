@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
+import { canEditCatalog } from '@/lib/domain/types';
 import { QuoteDraftEditor } from '@/components/admin/quote-draft-editor';
 import { Alert } from '@/components/ui';
 
@@ -44,10 +45,16 @@ export default async function AdminQuoteDraftPage({
           案件を登録しました。まだ見積Revisionは発行していません。Draftを編集・保存してください。
         </Alert>
       )}
+      {sp.revisionDraft && (
+        <Alert tone="success">
+          現在の正式Revisionをコピーして改訂Draftを作成しました。Draft保存だけでは正式Revisionは増えません。
+        </Alert>
+      )}
 
       <QuoteDraftEditor
         detail={detail}
         modelName={model?.name ?? '商品モデル'}
+        canEditBase={canEditCatalog(actor.role)}
       />
     </div>
   );

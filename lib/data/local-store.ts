@@ -949,6 +949,10 @@ export class LocalStore implements DataStore {
     throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
   }
 
+  async createQuoteRevisionDraft(_id: string, _actor: SessionUser): Promise<QuoteDraft> {
+    throw new StoreError('VALIDATION', '非Web案件のRevision Draft機能はSupabase接続環境で利用してください。');
+  }
+
   async getQuoteDraft(_id: string, _actor: SessionUser): Promise<QuoteDraftDetail | null> {
     throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
   }

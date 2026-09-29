@@ -206,10 +206,14 @@ describe('Security / Quote lifecycle corrective', () => {
     expect(revisionBody).toContain("set status = 'superseded'");
   });
 
-  it('Quote改訂UIはWeb系issuedだけ表示し、非Web Rev1はPR #3まで旧改訂導線を閉じる', () => {
+  it('Quote改訂UIはWeb系をlegacy導線、非Web current formalをDraft導線へ分離する', () => {
     expect(adminQuoteWorkspace).toContain(
-      "const canRevise =\n    quote.configuration_id !== null &&\n    quote.status === 'issued' &&\n    (canViewAllQuotes || quote.dealer_id === actor.id);"
+      "const canUseLegacyRevision =\n    quote.configuration_id !== null &&\n    quote.status === 'issued' &&\n    (canViewAllQuotes || quote.dealer_id === actor.id);"
     );
+    expect(adminQuoteWorkspace).toContain('const canCreateRevisionDraft =');
+    expect(adminQuoteWorkspace).toContain('quote.configuration_id === null');
+    expect(adminQuoteWorkspace).toContain('isCurrentFormal');
+    expect(adminQuoteWorkspace).toContain('<QuoteRevisionDraftForm quoteId={quote.id} revision={quote.revision} />');
   });
 
   it('LocalStoreもissuedだけRevision可能にする', () => {

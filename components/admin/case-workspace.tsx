@@ -17,6 +17,7 @@ import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AssignDealerForm } from '@/components/admin/dealer-forms';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
+import { QuoteRevisionDraftForm } from '@/components/admin/quote-revision-draft-form';
 import { CasePlanBoard } from '@/components/admin/case-plan-board';
 import { CaseAdminControls } from '@/components/admin/case-admin-controls';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
@@ -182,8 +183,13 @@ export async function CaseWorkspace({
   const canEditBase = canEditCatalog(actor.role);
   if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();
 
-  const canRevise =
+  const canUseLegacyRevision =
     quote.configuration_id !== null &&
+    quote.status === 'issued' &&
+    (canViewAllQuotes || quote.dealer_id === actor.id);
+  const canCreateRevisionDraft =
+    quote.configuration_id === null &&
+    isCurrentFormal &&
     quote.status === 'issued' &&
     (canViewAllQuotes || quote.dealer_id === actor.id);
   const activeTab: TabKey = isTabKey(tab) ? tab : 'estimate';
@@ -658,10 +664,14 @@ export async function CaseWorkspace({
               この確定見積が現在の見積であることを確認できません。契約へは進めず、最新の見積Revisionと回答状態を確認してください。
             </Alert>
           )}
-          {from === 'mail' && canRevise && (
+          {from === 'mail' && canUseLegacyRevision && (
             <Alert tone="info" title="メールからお越しの方へ">
               この案件の見積内容を更新し、改訂見積を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。
             </Alert>
+          )}
+
+          {canCreateRevisionDraft && (
+            <QuoteRevisionDraftForm quoteId={quote.id} revision={quote.revision} />
           )}
 
           <QuoteEstimateSheet
@@ -671,7 +681,7 @@ export async function CaseWorkspace({
             freeProducts={freeProducts}
             catalog={catalog}
             canEditBase={canEditBase}
-            canRevise={canRevise}
+            canRevise={canUseLegacyRevision}
             startInEditMode={Boolean(created) || edit === '1'}
           />
 

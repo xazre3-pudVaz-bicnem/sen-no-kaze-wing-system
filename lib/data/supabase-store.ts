@@ -596,6 +596,15 @@ export class SupabaseStore implements DataStore {
     return detail.draft;
   }
 
+  async createQuoteRevisionDraft(id: string, actor: SessionUser): Promise<QuoteDraft> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_quote_revision_draft', { p_quote_id: id });
+    if (error) mapPgError(error);
+    const detail = await this.getQuoteDraft(data as string, actor);
+    if (!detail) throw new StoreError('INTERNAL', '作成したRevision Draftを取得できませんでした');
+    return detail.draft;
+  }
+
   async getQuoteDraft(id: string, _actor: SessionUser): Promise<QuoteDraftDetail | null> {
     const db = await this.db();
     const { data, error } = await db.rpc('get_quote_draft', { p_draft_id: id });
@@ -650,12 +659,20 @@ export class SupabaseStore implements DataStore {
     return num(data);
   }
 
-  async finalizeQuoteDraft(id: string, expectedLockVersion: number, _actor: SessionUser): Promise<Quote> {
+  async finalizeQuoteDraft(id: string, expectedLockVersion: number, actor: SessionUser): Promise<Quote> {
+    const detail = await this.getQuoteDraft(id, actor);
+    if (!detail) throw new StoreError('NOT_FOUND', 'Draftが見つかりません');
+
     const db = await this.db();
-    const { data, error } = await db.rpc('finalize_quote_draft', {
-      p_draft_id: id,
-      p_expected_lock_version: expectedLockVersion,
-    });
+    const { data, error } = detail.draft.parent_quote_id
+      ? await db.rpc('finalize_quote_revision_draft', {
+          p_draft_id: id,
+          p_expected_lock_version: expectedLockVersion,
+        })
+      : await db.rpc('finalize_quote_draft', {
+          p_draft_id: id,
+          p_expected_lock_version: expectedLockVersion,
+        });
     if (error) mapPgError(error);
     const { data: quote, error: quoteError } = await db.from('quotes').select('*').eq('id', data as string).single();
     if (quoteError) mapPgError(quoteError);

@@ -310,6 +310,10 @@ export const manualQuoteSchema = z.object({
   memo: optional(1000),
 });
 
+export const quoteRevisionDraftSchema = z.object({
+  quote_id: z.uuid(),
+});
+
 export const quoteDraftSaveItemSchema = z.object({
   line_key: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
   kind: z.enum([

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { Search, X } from 'lucide-react';
 import type { QuoteItemKind } from '@/lib/domain/types';
@@ -230,40 +230,49 @@ export function QuoteAuthoringGrid({
     });
   };
 
+  const handleGridKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
+    const col = event.currentTarget.dataset.quoteGridCol;
+    if (!col) return;
+
+    event.preventDefault();
+    const grid = event.currentTarget.closest('[data-testid="unified-quote-excel-grid"]');
+    const cells = Array.from(
+      grid?.querySelectorAll<HTMLInputElement>(`[data-quote-grid-col="${col}"]`) ?? []
+    ).filter((element) => !element.disabled && element.offsetParent !== null);
+    const index = cells.indexOf(event.currentTarget);
+    const target = cells[event.shiftKey ? index - 1 : index + 1];
+    if (!target) return;
+    target.focus();
+    target.select();
+  };
+
   let rowNo = 0;
 
   return (
     <section className="overflow-hidden bg-white" data-testid="unified-quote-excel-grid">
+      <div
+        className="border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] text-slate-500"
+        data-testid="quote-grid-help"
+      >
+        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[76rem] table-fixed border-collapse text-[11px]">
-          <colgroup>
-            <col className="w-[3%]" />
-            <col className="w-[3%]" />
-            <col className="w-[22%]" />
-            <col className="w-[7%]" />
-            <col className="w-[6%]" />
-            <col className="w-[9%]" />
-            <col className="w-[10%]" />
-            <col className="w-[9%]" />
-            <col className="w-[10%]" />
-            <col className="w-[9%]" />
-            <col className="w-[10%]" />
-            <col className="w-[5%]" />
-          </colgroup>
+        <table className="min-w-[92rem] w-full border-collapse text-[11px]">
           <thead>
             <tr>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-center text-[10px] font-semibold text-slate-600">#</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1.5 py-1 text-left text-[10px] font-semibold text-slate-600">品名</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">数量</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[10px] font-semibold text-slate-600">単位</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">原価</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">原価金額</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">売価</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">売価金額</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">粗利</th>
-              <th className="border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[10px] font-semibold text-slate-600">備考</th>
-              <th className="border-b border-slate-300 bg-slate-100 px-1 py-1 text-center text-[10px] font-semibold text-slate-600">操作</th>
+              <th className="sticky left-0 top-0 z-40 w-11 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-center text-[10px] font-semibold text-slate-600">#</th>
+              <th className="sticky left-[2.75rem] top-0 z-40 w-9 border-b border-r border-slate-300 bg-slate-100 px-1 py-1"></th>
+              <th className="sticky left-[5rem] top-0 z-40 w-[16rem] min-w-[16rem] max-w-[16rem] border-b border-r border-slate-300 bg-slate-100 px-1.5 py-1 text-left text-[10px] font-semibold text-slate-600">品名</th>
+              <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">数量</th>
+              <th className="sticky top-0 z-20 w-20 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[10px] font-semibold text-slate-600">単位</th>
+              <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">原価</th>
+              <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">原価金額</th>
+              <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">売価</th>
+              <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">売価金額</th>
+              <th className="sticky top-0 z-20 w-28 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[10px] font-semibold text-slate-600">粗利</th>
+              <th className="sticky top-0 z-20 min-w-48 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[10px] font-semibold text-slate-600">備考</th>
+              <th className="sticky top-0 z-20 w-16 border-b border-slate-300 bg-slate-100 px-1 py-1 text-center text-[10px] font-semibold text-slate-600">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -272,73 +281,142 @@ export function QuoteAuthoringGrid({
               const isCollapsed = collapsed.has(section.key);
               const sectionSale = currentRows.reduce((sum, row) => sum + row.amount, 0);
               const separate = currentRows.some((row) => row.unitPrice === 0 && row.remark?.trim() === '別途見積');
+              const collapsedAmount = section.key === 'installation' && separate
+                ? '別途見積'
+                : formatYen(sectionSale);
+              const summaryRemark = separate
+                ? `${currentRows.length}行 ／ 別途見積を含む`
+                : `${currentRows.length}行の明細を集約`;
+
+              if (isCollapsed) {
+                return (
+                  <tr
+                    key={section.key}
+                    className="border-b border-emerald-950 bg-emerald-900 text-white"
+                    data-testid={`quote-section-summary-${section.key}`}
+                  >
+                    <th className="sticky left-0 z-20 w-11 bg-slate-100"></th>
+                    <td className="sticky left-[2.75rem] z-20 w-9 border-r border-emerald-800 bg-emerald-900 px-1 text-center">
+                      <button
+                        type="button"
+                        className="my-0.5 flex size-5 items-center justify-center rounded border border-white/60 bg-white text-xs font-bold text-slate-800"
+                        onClick={() => toggle(section.key)}
+                        aria-expanded={false}
+                        aria-label={section.label + 'の明細を開く'}
+                      >
+                        +
+                      </button>
+                    </td>
+                    <td className="sticky left-[5rem] z-20 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-xs">{section.label}</strong>
+                        <span className="text-[11px] text-white/75">{currentRows.length}行</span>
+                      </div>
+                    </td>
+                    <td className="w-20 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">1</td>
+                    <td className="w-20 border-r border-emerald-800 px-2 text-xs font-semibold">式</td>
+                    <td className="w-28 border-r border-emerald-800 px-2 text-right text-white/60">—</td>
+                    <td className="w-28 border-r border-emerald-800 px-2 text-right text-white/60">—</td>
+                    <td className="w-28 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">{collapsedAmount}</td>
+                    <td className="w-28 border-r border-emerald-800 px-2 text-right text-xs font-semibold tabular-nums">{collapsedAmount}</td>
+                    <td className="w-28 border-r border-emerald-800 px-2 text-right text-white/60">—</td>
+                    <td className="min-w-48 border-r border-emerald-800 px-2 text-[11px] text-white/75">{summaryRemark}</td>
+                    <td className="w-16 px-1 text-center text-[10px] text-white/60">—</td>
+                  </tr>
+                );
+              }
 
               return (
                 <Fragment key={section.key}>
-                  <tr className="border-b border-slate-300 bg-emerald-900 text-white">
-                    <th className="bg-slate-100"></th>
-                    <td className="px-1 text-center">
+                  <tr className="border-b border-emerald-950 bg-emerald-900 text-white">
+                    <th className="sticky left-0 z-20 w-11 bg-slate-100"></th>
+                    <td className="sticky left-[2.75rem] z-20 w-9 border-r border-emerald-800 bg-emerald-900 px-1 text-center">
                       <button
                         type="button"
-                        className="size-6 rounded border border-white/60 bg-white text-slate-800"
+                        className="my-0.5 flex size-5 items-center justify-center rounded border border-white/60 bg-white text-xs font-bold text-slate-800"
                         onClick={() => toggle(section.key)}
-                        aria-label={section.label + (isCollapsed ? 'を展開' : 'を折り畳む')}
+                        aria-expanded={true}
+                        aria-label={section.label + 'の明細を閉じる'}
                       >
-                        {isCollapsed ? '+' : '−'}
+                        −
                       </button>
                     </td>
-                    <td colSpan={5} className="px-3 py-1 text-[13px] font-semibold">{section.label}</td>
-                    <td colSpan={4} className="px-2 text-right text-[10px]">
-                      {section.key === 'installation' && separate ? '別途見積を含む' : `売価 ${formatYen(sectionSale)}`}
+                    <td className="sticky left-[5rem] z-20 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-emerald-800 bg-emerald-900 px-2 py-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <strong className="text-xs">{section.label}</strong>
+                        <span className="text-[11px] text-white/75">{currentRows.length}行</span>
+                        <button
+                          type="button"
+                          className="text-[11px] font-semibold underline underline-offset-2"
+                          onClick={() => onAdd(section.key)}
+                        >
+                          {section.key === 'installation' ? '＋自由明細' : '＋行追加'}
+                        </button>
+                      </div>
                     </td>
-                    <td className="px-1 text-center">
-                      <button type="button" className="text-[11px] underline" onClick={() => onAdd(section.key)}>行追加</button>
+                    <td colSpan={9} className="bg-emerald-900 px-2 py-1">
+                      <div className="flex items-center justify-end gap-3">
+                        {section.key === 'installation' && separate && (
+                          <span className="text-[11px] text-white/75">別途見積を含む</span>
+                        )}
+                        <span className="text-xs font-semibold">
+                          {section.key === 'installation' && separate ? '別途見積' : formatYen(sectionSale)}
+                        </span>
+                      </div>
                     </td>
                   </tr>
 
-                  {!isCollapsed && currentRows.map((row) => {
+                  {currentRows.map((row) => {
                     rowNo += 1;
                     const number = rowNo;
                     const detailLabel = KIND_DETAIL_LABELS[row.kind];
                     const separatePrice = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
+                    const editCellClass = row.locked ? 'bg-slate-100' : 'bg-amber-50';
+
                     return (
                       <tr key={row.key} className="border-b border-slate-200 bg-white">
-                        <th className="bg-slate-100 px-0.5 text-center text-[10px] font-normal text-slate-500">{number}</th>
-                        <td className="border-r border-slate-200"></td>
-                        <td className="border-r border-slate-200 bg-amber-50 px-0.5">
+                        <th className="sticky left-0 z-10 w-11 border-r border-slate-200 bg-slate-100 px-1 text-center text-[10px] font-normal text-slate-500">{number}</th>
+                        <td className="sticky left-[2.75rem] z-10 w-9 border-r border-slate-200 bg-white"></td>
+                        <td className={`sticky left-[5rem] z-10 w-[16rem] min-w-[16rem] max-w-[16rem] border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.name}
                             disabled={row.locked}
+                            data-quote-grid-col="name"
+                            onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { name: event.target.value })}
-                            className="h-6 min-h-6 border-0 bg-transparent px-1 text-[11px]"
+                            className="h-6 min-h-6 min-w-0 border-0 bg-transparent px-1 text-[11px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                             aria-label={`品名 ${number}`}
                           />
                           {detailLabel && <span className="block truncate px-1 text-[9px] text-slate-500">{detailLabel}</span>}
                         </td>
-                        <td className="border-r border-slate-200 bg-amber-50 px-0.5">
+                        <td className={`w-20 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             type="number"
                             min="0.01"
                             step="0.01"
                             value={row.quantity}
                             disabled={row.locked}
+                            data-quote-grid-col="quantity"
+                            onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { quantity: Number(event.target.value) || 0 })}
-                            className="h-6 min-h-6 border-0 bg-transparent px-1 text-right text-[11px]"
+                            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                             aria-label={`数量 ${number}`}
                           />
                         </td>
-                        <td className="border-r border-slate-200 bg-amber-50 px-0.5">
+                        <td className={`w-20 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.unit ?? ''}
                             disabled={row.locked}
+                            data-quote-grid-col="unit"
+                            onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { unit: event.target.value })}
-                            className="h-6 min-h-6 border-0 bg-transparent px-1 text-[11px]"
+                            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-[11px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                             aria-label={`単位 ${number}`}
                           />
                         </td>
-                        <td className="border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
-                        <td className="border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
-                        <td className="border-r border-slate-200 bg-amber-50 px-0.5">
+                        <td className="w-28 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className="w-28 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className={`w-28 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           {separatePrice ? (
                             <div className="flex h-6 items-center justify-end px-1 text-[9px] font-semibold text-amber-900">別途見積</div>
                           ) : (
@@ -347,24 +425,28 @@ export function QuoteAuthoringGrid({
                               step="1"
                               value={row.unitPrice}
                               disabled={row.locked}
+                              data-quote-grid-col="sale"
+                              onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { unitPrice: Number(event.target.value) || 0 })}
-                              className="h-6 min-h-6 border-0 bg-transparent px-1 text-right text-[11px]"
+                              className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-right text-[11px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                               aria-label={`売価 ${number}`}
                             />
                           )}
                         </td>
-                        <td className="whitespace-nowrap border-r border-slate-200 bg-slate-50 px-1 text-right tabular-nums">{separatePrice ? '—' : formatYen(row.amount)}</td>
-                        <td className="border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
-                        <td className="border-r border-slate-200 bg-amber-50 px-0.5">
+                        <td className="w-28 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-2 text-right tabular-nums">{separatePrice ? '—' : formatYen(row.amount)}</td>
+                        <td className="w-28 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className={`min-w-48 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.remark ?? ''}
                             disabled={row.locked}
+                            data-quote-grid-col="remark"
+                            onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { remark: event.target.value })}
-                            className="h-6 min-h-6 border-0 bg-transparent px-1 text-[11px]"
+                            className="h-6 min-h-6 w-full border-0 bg-transparent px-1 text-[11px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                             aria-label={`備考 ${number}`}
                           />
                         </td>
-                        <td className="px-0.5 text-center">
+                        <td className="w-16 px-0.5 text-center">
                           <button
                             type="button"
                             disabled={row.locked}
@@ -379,10 +461,11 @@ export function QuoteAuthoringGrid({
                   })}
 
                   <tr className="border-y-2 border-emerald-800 bg-emerald-50 font-semibold">
-                    <th className="bg-slate-100"></th>
+                    <th className="sticky left-0 z-10 w-11 bg-slate-100"></th>
+                    <td className="sticky left-[2.75rem] z-10 w-9 bg-emerald-50"></td>
+                    <td className="sticky left-[5rem] z-10 w-[16rem] min-w-[16rem] max-w-[16rem] bg-emerald-50 px-3 py-1">{section.label} 計</td>
                     <td></td>
-                    <td className="px-3 py-1">{section.label} 計</td>
-                    <td></td><td></td>
+                    <td></td>
                     <td className="px-1 text-right text-slate-400">—</td>
                     <td></td>
                     <td className="px-1 text-right">{section.key === 'installation' && separate ? '別途見積' : formatYen(sectionSale)}</td>

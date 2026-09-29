@@ -83,7 +83,6 @@ import {
   type QuoteDraftSaveInput,
   type EstimateTemplateImportInput,
   type AccessibleCustomerListResult,
-  type AccessibleCustomerDetail,
   type AccessibleCustomerDetailResult,
   type AccessibleCustomerQuote,
 } from './store';
@@ -510,7 +509,7 @@ export class LocalStore implements DataStore {
   }
 
   async listAccessibleCustomers(actor: SessionUser): Promise<AccessibleCustomerListResult> {
-    return this.read((db) => {
+    return this.read<AccessibleCustomerListResult>((db) => {
       const view = this.buildAccessibleCustomerView(db, actor);
       return {
         availability: 'available',
@@ -570,7 +569,7 @@ export class LocalStore implements DataStore {
     customerId: string,
     actor: SessionUser
   ): Promise<AccessibleCustomerDetailResult> {
-    return this.read((db) => {
+    return this.read<AccessibleCustomerDetailResult>((db) => {
       const view = this.buildAccessibleCustomerView(db, actor);
       const customer = view.customers.find((entry) => entry.profile.id === customerId);
       if (!customer) return { availability: 'available', detail: null };

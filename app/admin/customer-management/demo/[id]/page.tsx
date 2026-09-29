@@ -39,12 +39,11 @@ function CaseTable({
   emptyLabel: string;
 }) {
   return (
-    <Table minWidth="62rem">
+    <Table minWidth="46rem">
       <thead className="bg-sand/60">
         <tr>
-          <Th>案件</Th>
+          <Th>案件 / 商品モデル</Th>
           <Th>状態</Th>
-          <Th>商品モデル</Th>
           <Th>設置予定地</Th>
           <Th>担当代理店</Th>
           <Th>最終更新</Th>
@@ -54,13 +53,14 @@ function CaseTable({
       <tbody className="divide-y divide-line">
         {cases.length === 0 ? (
           <tr>
-            <Td colSpan={7} className="py-8 text-center text-sm text-muted">{emptyLabel}</Td>
+            <Td colSpan={6} className="py-8 text-center text-sm text-muted">{emptyLabel}</Td>
           </tr>
         ) : (
           cases.map((customerCase) => (
             <tr key={customerCase.id} data-testid="customer-demo-case-row">
               <Td>
                 <p className="font-semibold">{customerCase.latest_quote?.quote_no ?? '見積未発行'}</p>
+                <p className="mt-1 text-xs text-muted">{customerCase.model_name ?? '商品モデル未登録'}</p>
                 {customerCase.message && (
                   <p className="mt-1 max-w-64 truncate text-xs text-muted">{customerCase.message}</p>
                 )}
@@ -68,7 +68,6 @@ function CaseTable({
               <Td>
                 <Badge tone={caseStatusTone(customerCase)}>{caseStatus(customerCase)}</Badge>
               </Td>
-              <Td className="text-xs">{customerCase.model_name ?? '見積未発行'}</Td>
               <Td className="text-xs">
                 <span className="block">{customerCase.site_address ?? '未登録'}</span>
                 <span className="mt-1 block text-muted">{siteSourceLabel(customerCase)}</span>
@@ -117,7 +116,7 @@ export default async function AdminCustomerManagementDemoDetailPage({
       lead="参照権限のある案件だけを、顧客単位で確認する画面です。編集や顧客統合は行いません。"
       actions={
         <Link href="/admin/customer-management" className="btn-secondary btn-sm">
-          実際の顧客管理へ戻る
+          実際の顧客管理
         </Link>
       }
       notice={
@@ -136,14 +135,14 @@ export default async function AdminCustomerManagementDemoDetailPage({
         <div>
           <h2 id="customer-basic-heading" className="text-lg font-semibold">基本情報</h2>
           <p className="mt-1 text-xs text-muted">
-            アカウント情報と最新案件の受付情報を、実画面と同じ構成で確認します。
+            現在のお客様情報を中心に、最新案件の受付時情報を分けて確認します。
           </p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="card p-5" data-testid="customer-demo-profile-card">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold">Profile（アカウント情報）</h3>
+              <h3 className="font-semibold">現在の顧客情報</h3>
               <Badge tone="navy">DEMO</Badge>
             </div>
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
@@ -182,7 +181,7 @@ export default async function AdminCustomerManagementDemoDetailPage({
 
           <div className="card p-5" data-testid="customer-demo-contact-card">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold">QuoteContact（最新案件受付情報）</h3>
+              <h3 className="font-semibold">最新案件受付情報</h3>
               <Badge tone="navy">DEMO</Badge>
             </div>
             {contact ? (
@@ -245,41 +244,42 @@ export default async function AdminCustomerManagementDemoDetailPage({
         <div>
           <h2 id="quote-history-heading" className="text-lg font-semibold">見積履歴</h2>
           <p className="mt-1 text-xs text-muted">
-            Revision履歴が複数ある場合の表示を確認できます。
+            正式見積の改訂履歴を確認する表示例です。発行済みの見積は、現在の顧客情報とは別の記録として扱います。
           </p>
         </div>
-        <Table minWidth="58rem">
+        <Table minWidth="46rem">
           <thead className="bg-sand/60">
             <tr>
-              <Th>見積番号</Th>
+              <Th>見積番号 / 商品モデル</Th>
               <Th>版</Th>
               <Th>状態</Th>
-              <Th>商品モデル</Th>
               <Th>発行日</Th>
               <Th>金額（税込）</Th>
-              <Th>案件</Th>
+              <Th>見積書</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {detail.quote_history.length === 0 ? (
               <tr>
-                <Td colSpan={7} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
+                <Td colSpan={6} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
               </tr>
             ) : (
               detail.quote_history.map((quote) => (
                 <tr key={quote.id} data-testid="customer-demo-quote-history-row">
-                  <Td className="font-semibold">{quote.quote_no}</Td>
+                  <Td>
+                    <p className="font-semibold">{quote.quote_no}</p>
+                    <p className="mt-1 text-xs text-muted">{quote.base_model_name}</p>
+                  </Td>
                   <Td className="whitespace-nowrap">第{quote.revision}版</Td>
                   <Td>
                     <Badge tone={quote.status === 'accepted' ? 'success' : 'neutral'}>
                       {QUOTE_STATUS_LABELS[quote.status]}
                     </Badge>
                   </Td>
-                  <Td className="text-xs">{quote.base_model_name}</Td>
                   <Td className="whitespace-nowrap text-xs">{formatDate(quote.issued_at)}</Td>
                   <Td right className="whitespace-nowrap">{formatYen(quote.total)}</Td>
                   <Td>
-                    <span className="text-xs font-semibold text-muted">案件を見る（デモ）</span>
+                    <span className="text-xs font-semibold text-muted">見積書を見る（デモ）</span>
                   </Td>
                 </tr>
               ))

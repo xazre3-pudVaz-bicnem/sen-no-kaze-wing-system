@@ -45,12 +45,26 @@ export function BaseMasterDraftEditor({
   const [saveState, saveAction, saving] = useActionState(saveBaseMasterDraftAction, initial);
   const [publishState, publishAction, publishing] = useActionState(publishBaseMasterDraftAction, initial);
   const [discardState, discardAction, discarding] = useActionState(discardBaseMasterDraftAction, initial);
+  const initialRate = revision.expense_rate == null ? 15 : Math.round(revision.expense_rate * 10000) / 100;
+  const initialFixed = revision.expense_method === 'fixed' ? revision.expense_amount : 0;
   const [name, setName] = useState(master.name);
   const [fireSpec, setFireSpec] = useState(master.fire_spec_code);
   const [method, setMethod] = useState<BaseMasterRevisionView['expense_method']>(revision.expense_method);
-  const [rate, setRate] = useState(revision.expense_rate == null ? 15 : Math.round(revision.expense_rate * 10000) / 100);
-  const [fixed, setFixed] = useState(revision.expense_method === 'fixed' ? revision.expense_amount : 0);
+  const [rate, setRate] = useState(initialRate);
+  const [fixed, setFixed] = useState(initialFixed);
   const [dirty, setDirty] = useState(false);
+  const [resetVersion, setResetVersion] = useState(0);
+
+  const resetDraft = () => {
+    if (dirty && !window.confirm('未保存の変更を破棄して、保存時点の内容に戻しますか？')) return;
+    setName(master.name);
+    setFireSpec(master.fire_spec_code);
+    setMethod(revision.expense_method);
+    setRate(initialRate);
+    setFixed(initialFixed);
+    setDirty(false);
+    setResetVersion((current) => current + 1);
+  };
 
   return (
     <div className="space-y-4">
@@ -73,7 +87,10 @@ export function BaseMasterDraftEditor({
               下書きの保存中は現在の公開版に影響しません。内容を確認してから公開します。
             </p>
           </div>
-          <BaseMasterPendingButton pending={saving}>下書きを保存</BaseMasterPendingButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={resetDraft}>保存時点に戻す</Button>
+            <BaseMasterPendingButton pending={saving}>下書きを保存</BaseMasterPendingButton>
+          </div>
         </div>
 
         <div className="space-y-3 border-b border-line px-4 py-3">
@@ -119,6 +136,7 @@ export function BaseMasterDraftEditor({
             expenseRatePercent={rate}
             fixedExpense={fixed}
             onDirty={() => setDirty(true)}
+            resetVersion={resetVersion}
           />
         </div>
 

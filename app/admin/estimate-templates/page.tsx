@@ -84,7 +84,7 @@ export default async function EstimateTemplatesPage({
   if (!selectedTemplate) {
     return (
       <AdminPage
-        title="見積書管理"
+        title="見積書作成・管理"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
@@ -118,7 +118,7 @@ export default async function EstimateTemplatesPage({
   if (!bundle) {
     return (
       <AdminPage
-        title="見積書管理"
+        title="見積書作成・管理"
         lead="見積書をExcelに近い操作感で作成・編集します。"
         actions={
           <div className="flex flex-wrap gap-2">
@@ -199,7 +199,7 @@ export default async function EstimateTemplatesPage({
 
   return (
     <AdminPage
-      title="見積書管理"
+      title="見積書作成・管理"
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />

@@ -484,23 +484,44 @@ export function CustomerQuotePreview({
         </div>
       </div>
 
-      <div className="grid gap-4 border-b border-slate-200 p-4 text-xs md:grid-cols-2">
-        <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1">
-          <dt className="text-muted">会社名</dt><dd className="font-semibold">{companyName || '未設定'}</dd>
-          <dt className="text-muted">お客様名</dt><dd className="font-semibold">{customerName || '未設定'}</dd>
-          <dt className="text-muted">住所</dt><dd>{address || '未設定'}</dd>
-          <dt className="text-muted">TEL</dt><dd>{phone || '未設定'}</dd>
-          <dt className="text-muted">顧客番号</dt><dd>{customerNo || '未設定'}</dd>
-          <dt className="text-muted">件名</dt><dd className="font-semibold">{caseName || '未設定'}</dd>
-        </dl>
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1">
-          <dt className="text-muted">見積提出日</dt><dd>{submittedAt || '未設定'}</dd>
-          <dt className="text-muted">受注契約日</dt><dd>{contractedAt || '未設定'}</dd>
-          <dt className="text-muted">発行者情報</dt><dd>未設定</dd>
-          <dt className="text-muted">適格請求書番号</dt><dd>未設定</dd>
-          <dt className="text-muted">支払条件</dt><dd>未設定</dd>
-          <dt className="text-muted">振込先</dt><dd>未設定</dd>
-        </dl>
+      <div className="grid gap-4 border-b border-slate-200 p-4 text-xs xl:grid-cols-3">
+        <section>
+          <h3 className="mb-2 text-[10px] font-semibold tracking-wide text-muted">お客様情報</h3>
+          <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1">
+            <dt className="text-muted">会社名</dt><dd className="font-semibold">{companyName || '未設定'}</dd>
+            <dt className="text-muted">お客様名</dt><dd className="font-semibold">{customerName || '未設定'}</dd>
+            <dt className="text-muted">住所</dt><dd>{address || '未設定'}</dd>
+            <dt className="text-muted">TEL</dt><dd>{phone || '未設定'}</dd>
+            <dt className="text-muted">顧客番号</dt><dd>{customerNo || '未設定'}</dd>
+            <dt className="text-muted">件名</dt><dd className="font-semibold">{caseName || '未設定'}</dd>
+            <dt className="text-muted">見積提出日</dt><dd>{submittedAt || '未設定'}</dd>
+            <dt className="text-muted">受注契約日</dt><dd>{contractedAt || '未設定'}</dd>
+          </dl>
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-[10px] font-semibold tracking-wide text-muted">発行者情報</h3>
+          <dl className="grid grid-cols-[7.5rem_1fr] gap-x-2 gap-y-1">
+            <dt className="text-muted">発行会社名／代理店名</dt><dd>未設定</dd>
+            <dt className="text-muted">担当者</dt><dd>未設定</dd>
+            <dt className="text-muted">住所</dt><dd>未設定</dd>
+            <dt className="text-muted">TEL</dt><dd>未設定</dd>
+            <dt className="text-muted">適格請求書発行事業者登録番号</dt><dd>未設定</dd>
+          </dl>
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-[10px] font-semibold tracking-wide text-muted">支払情報</h3>
+          <dl className="grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1">
+            <dt className="text-muted">支払条件</dt><dd>未設定</dd>
+            <dt className="text-muted">振込先</dt><dd>未設定</dd>
+            <dt className="text-muted">銀行名</dt><dd>未設定</dd>
+            <dt className="text-muted">支店名</dt><dd>未設定</dd>
+            <dt className="text-muted">口座種別</dt><dd>未設定</dd>
+            <dt className="text-muted">口座番号</dt><dd>未設定</dd>
+            <dt className="text-muted">口座名義</dt><dd>未設定</dd>
+          </dl>
+        </section>
       </div>
 
       <div className="overflow-x-auto p-4">

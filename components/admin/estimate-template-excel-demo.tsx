@@ -736,7 +736,7 @@ export function EstimateTemplateExcelDemo({
                                       openProductPicker(section as Exclude<Section, '本体'>, row.id);
                                     }}
                                   >
-                                    既存の商品から選択
+                                    商品台帳から選択
                                   </button>
                                 )}
                                 {section !== '本体' && (
@@ -987,7 +987,7 @@ export function EstimateTemplateExcelDemo({
       )}
 
       {pickerSection && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="既存の商品から選択">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品台帳から選択">
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <div>

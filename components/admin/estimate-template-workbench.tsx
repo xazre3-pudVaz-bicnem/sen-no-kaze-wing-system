@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Fragment, useMemo, useState, type KeyboardEvent } from 'react';
+import { Package } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -147,9 +148,6 @@ export function EstimateTemplateWorkbench({
   const [showCost, setShowCost] = useState(false);
   const [pickerSection, setPickerSection] = useState<SectionCode | null>(null);
   const [pickerTargetRowId, setPickerTargetRowId] = useState<string | null>(null);
-  const [pickerCategory, setPickerCategory] = useState('');
-  const [pickerQuery, setPickerQuery] = useState('');
-  const [collapsedPickerCategories, setCollapsedPickerCategories] = useState<Set<string>>(() => new Set());
   const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
   const [salesExpenseRate, setSalesExpenseRate] = useState(100);
   const [expenseRate, setExpenseRate] = useState(15);
@@ -196,52 +194,28 @@ export function EstimateTemplateWorkbench({
   const tax = Math.floor(subtotal * taxRate);
   const total = subtotal + tax;
 
-  const pickerCategories = useMemo(() => {
-    if (!pickerSection) return [];
-    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection]);
-    const map = new Map<string, string>();
-    for (const product of products) {
-      if (!allowedCodes.has(product.categoryCode)) continue;
-      map.set(product.categoryId, product.categoryName);
-    }
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
-  }, [pickerSection, products]);
-
   const pickerProducts = useMemo(() => {
     if (!pickerSection) return [];
     const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[pickerSection]);
-    const query = pickerQuery.trim().toLowerCase();
-    return products.filter((product) => {
-      if (!allowedCodes.has(product.categoryCode)) return false;
-      if (pickerCategory && product.categoryId !== pickerCategory) return false;
-      if (!query) return true;
-      return [
-        product.name,
-        product.manufacturer,
-        product.modelNo,
-        product.sizeNote,
-        product.categoryName,
-      ].join(' ').toLowerCase().includes(query);
-    });
-  }, [pickerSection, products, pickerCategory, pickerQuery]);
+    return products.filter((product) => allowedCodes.has(product.categoryCode));
+  }, [pickerSection, products]);
 
-  const pickerProductGroups = useMemo(
-    () =>
-      pickerCategories
-        .map(([categoryId, categoryName]) => ({
-          categoryId,
-          categoryName,
-          products: pickerProducts.filter((product) => product.categoryId === categoryId),
-        }))
-        .filter((group) => group.products.length > 0),
-    [pickerCategories, pickerProducts]
-  );
+  const pickerProductGroups = useMemo(() => {
+    const map = new Map<string, { categoryId: string; categoryName: string; products: EstimateTemplateWorkbenchProduct[] }>();
+    for (const product of pickerProducts) {
+      const current = map.get(product.categoryId) ?? {
+        categoryId: product.categoryId,
+        categoryName: product.categoryName,
+        products: [],
+      };
+      current.products.push(product);
+      map.set(product.categoryId, current);
+    }
+    return [...map.values()].sort((a, b) => a.categoryName.localeCompare(b.categoryName, 'ja'));
+  }, [pickerProducts]);
 
   const pickerSectionLabel = pickerSection
     ? sections.find((section) => section.code === pickerSection)?.label ?? pickerSection
-    : '';
-  const pickerCategoryName = pickerCategory
-    ? pickerCategories.find(([id]) => id === pickerCategory)?.[1] ?? ''
     : '';
 
   const visibleColumnCount = showCost ? 13 : 10;
@@ -264,8 +238,6 @@ export function EstimateTemplateWorkbench({
     setRows([...initialLines]);
     setPickerSection(null);
     setPickerTargetRowId(null);
-    setPickerCategory('');
-    setPickerQuery('');
     setCollapsedSections(new Set());
     setSalesExpenseRate(100);
     setExpenseRate(15);
@@ -305,35 +277,13 @@ export function EstimateTemplateWorkbench({
   };
 
   const openProductPicker = (section: SectionCode, rowId: string | null = null) => {
-    const target = rowId ? rows.find((row) => row.id === rowId) : null;
-    const allowedCodes = new Set(SECTION_PRODUCT_CATEGORY_CODES[section]);
-    const currentCategoryId = target
-      ? products.find(
-          (product) => product.categoryName === target.groupLabel && allowedCodes.has(product.categoryCode)
-        )?.categoryId ?? ''
-      : '';
     setPickerSection(section);
     setPickerTargetRowId(rowId);
-    setPickerCategory(currentCategoryId);
-    setPickerQuery('');
-    setCollapsedPickerCategories(new Set());
   };
 
   const closeProductPicker = () => {
     setPickerSection(null);
     setPickerTargetRowId(null);
-    setPickerCategory('');
-    setPickerQuery('');
-    setCollapsedPickerCategories(new Set());
-  };
-
-  const togglePickerCategory = (categoryId: string) => {
-    setCollapsedPickerCategories((current) => {
-      const next = new Set(current);
-      if (next.has(categoryId)) next.delete(categoryId);
-      else next.add(categoryId);
-      return next;
-    });
   };
 
   const addProduct = (product: EstimateTemplateWorkbenchProduct) => {
@@ -434,10 +384,10 @@ export function EstimateTemplateWorkbench({
               type="button"
               title="商品台帳から選ぶ"
               aria-label={row.name + 'を商品台帳から選び直す'}
-              className="flex h-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white px-1 text-[9px] font-semibold text-emerald-800 hover:border-emerald-700"
+              className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-emerald-800 hover:border-emerald-700"
               onClick={() => openProductPicker(row.section, row.id)}
             >
-              商品
+              <Package className="size-3.5" aria-hidden="true" />
             </button>
           </div>
         </td>
@@ -932,117 +882,69 @@ export function EstimateTemplateWorkbench({
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
                     追加先：{pickerSectionLabel}
                   </span>
-                  {pickerCategoryName && (
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
-                      カテゴリー：{pickerCategoryName}
-                    </span>
-                  )}
                 </div>
               </div>
               <button type="button" className="btn-ghost btn-sm" onClick={closeProductPicker}>閉じる</button>
             </div>
 
-            <div className="shrink-0 space-y-3 border-b border-line px-5 py-4">
-              <div className="grid gap-3 sm:grid-cols-[14rem_1fr]">
-                <Select
-                  value={pickerCategory}
-                  onChange={(event) => {
-                    const categoryId = event.target.value;
-                    setPickerCategory(categoryId);
-                    if (categoryId) {
-                      setCollapsedPickerCategories((current) => {
-                        const next = new Set(current);
-                        next.delete(categoryId);
-                        return next;
-                      });
-                    }
-                  }}
-                >
-                  <option value="">すべてのカテゴリー</option>
-                  {pickerCategories.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                </Select>
-                <Input
-                  type="search"
-                  value={pickerQuery}
-                  onChange={(event) => setPickerQuery(event.target.value)}
-                  placeholder="メーカー・商品名・シリーズ・型番で検索"
-                />
-              </div>
-
+            <div className="shrink-0 border-b border-line px-5 py-3">
               <p className="text-[11px] text-muted">
-                「{pickerSectionLabel}」に分類したカテゴリーの商品だけを表示しています。
+                「{pickerSectionLabel}」で選べる商品をカテゴリーごとに表示しています。
               </p>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-5 pt-4">
-              <div className="space-y-3">
-                {pickerProductGroups.map((group) => {
-                  const collapsed = collapsedPickerCategories.has(group.categoryId);
-                  return (
-                    <section key={group.categoryId} className="overflow-hidden rounded-xl border border-line bg-white">
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
-                        aria-expanded={!collapsed}
-                        aria-label={collapsed ? group.categoryName + 'を開く' : group.categoryName + 'を閉じる'}
-                        onClick={() => togglePickerCategory(group.categoryId)}
-                      >
-                        <span className="flex size-5 items-center justify-center rounded border border-slate-300 bg-white text-[11px] font-bold text-slate-700">
-                          {collapsed ? '+' : '−'}
-                        </span>
-                        <strong className="text-sm">{group.categoryName}</strong>
-                        <span className="text-[11px] text-muted">{group.products.length}件</span>
-                      </button>
-
-                      {!collapsed && (
-                        <div className="divide-y divide-line">
-                          {group.products.map((product) => (
-                            <div key={product.id} className="flex items-center gap-3 px-3 py-2">
-                              <div
-                                className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand bg-cover bg-center text-[10px] text-muted"
-                                style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
-                                role={product.imageUrl ? 'img' : undefined}
-                                aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
-                              >
-                                {!product.imageUrl && <span>画像なし</span>}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                  <h3 className="truncate text-sm font-semibold">{product.name}</h3>
-                                  <span className="text-[11px] text-muted">{product.manufacturer || 'メーカー未登録'}</span>
-                                </div>
-                                <p className="mt-0.5 truncate text-[11px] text-muted">
-                                  {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
-                                </p>
-                              </div>
-
-                              <div className="w-28 shrink-0 text-right">
-                                <p className="text-[10px] text-muted">追加金額</p>
-                                <p className="text-sm font-semibold">
-                                  {product.priceOnRequest ? '別途見積' : formatYen(product.price)}
-                                </p>
-                              </div>
-
-                              <button
-                                type="button"
-                                className="btn-primary btn-sm shrink-0"
-                                onClick={() => addProduct(product)}
-                              >
-                                {pickerTargetRowId ? '変更' : '追加'}
-                              </button>
+              <div className="space-y-4">
+                {pickerProductGroups.map((group) => (
+                  <section key={group.categoryId}>
+                    <div className="mb-2 flex items-center gap-2">
+                      <strong className="text-sm">{group.categoryName}</strong>
+                      <span className="text-[11px] text-muted">{group.products.length}件</span>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {group.products.map((product) => (
+                        <article key={product.id} className="rounded-xl border border-line bg-white p-3">
+                          <div className="flex gap-3">
+                            <div
+                              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sand bg-cover bg-center text-[10px] text-muted"
+                              style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
+                              role={product.imageUrl ? 'img' : undefined}
+                              aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
+                            >
+                              {!product.imageUrl && <span>画像なし</span>}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate text-sm font-semibold">{product.name}</h3>
+                              <p className="mt-0.5 truncate text-[11px] text-muted">
+                                {product.manufacturer || 'メーカー未登録'}
+                              </p>
+                              <p className="mt-0.5 truncate text-[11px] text-muted">
+                                {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
+                              </p>
+                              <p className="mt-2 text-sm font-semibold">
+                                {product.priceOnRequest ? '別途見積' : formatYen(product.price)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="button"
+                              className="btn-primary btn-sm"
+                              onClick={() => addProduct(product)}
+                            >
+                              {pickerTargetRowId ? 'この商品を選ぶ' : '追加'}
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ))}
               </div>
 
               {pickerProducts.length === 0 && (
                 <div className="rounded-xl border border-dashed border-line px-5 py-8 text-center text-sm text-muted">
-                  この区分・カテゴリーの条件に一致する商品がありません。
+                  この区分で選べる商品はまだありません。
                 </div>
               )}
 

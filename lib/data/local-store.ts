@@ -84,6 +84,7 @@ import {
   type EstimateTemplateImportInput,
   type AccessibleCustomerListResult,
   type AccessibleCustomerDetail,
+  type AccessibleCustomerDetailResult,
   type AccessibleCustomerQuote,
 } from './store';
 
@@ -512,6 +513,7 @@ export class LocalStore implements DataStore {
     return this.read((db) => {
       const view = this.buildAccessibleCustomerView(db, actor);
       return {
+        availability: 'available',
         customers: view.customers.map((customer) => ({
           id: customer.profile.id,
           customer_no: customer.profile.customer_no,
@@ -567,11 +569,11 @@ export class LocalStore implements DataStore {
   async getAccessibleCustomerDetail(
     customerId: string,
     actor: SessionUser
-  ): Promise<AccessibleCustomerDetail | null> {
+  ): Promise<AccessibleCustomerDetailResult> {
     return this.read((db) => {
       const view = this.buildAccessibleCustomerView(db, actor);
       const customer = view.customers.find((entry) => entry.profile.id === customerId);
-      if (!customer) return null;
+      if (!customer) return { availability: 'available', detail: null };
 
       const quoteCaseById = new Map<string, string>();
       for (const customerCase of customer.cases) {
@@ -591,7 +593,9 @@ export class LocalStore implements DataStore {
       });
 
       return {
-        customer: {
+        availability: 'available',
+        detail: {
+          customer: {
           id: customer.profile.id,
           customer_no: customer.profile.customer_no,
           full_name: customer.profile.full_name,
@@ -624,9 +628,10 @@ export class LocalStore implements DataStore {
             ? toQuote(customerCase.latestQuote, customerCase.id)
             : null,
         })),
-        quote_history: customer.quoteHistory.map((quote) =>
-          toQuote(quote, quoteCaseById.get(quote.id) ?? quote.quote_request_id)
-        ),
+          quote_history: customer.quoteHistory.map((quote) =>
+            toQuote(quote, quoteCaseById.get(quote.id) ?? quote.quote_request_id)
+          ),
+        },
       };
     });
   }

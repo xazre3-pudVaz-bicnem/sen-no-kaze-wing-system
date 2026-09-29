@@ -150,7 +150,6 @@ export function EstimateTemplateWorkbench({
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
   const [collapsedPickerCategories, setCollapsedPickerCategories] = useState<Set<string>>(() => new Set());
-  const [detailProductId, setDetailProductId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(Boolean(createdProduct));
   const [salesExpenseRate, setSalesExpenseRate] = useState(100);
   const [expenseRate, setExpenseRate] = useState(15);
@@ -268,7 +267,6 @@ export function EstimateTemplateWorkbench({
     setPickerCategory('');
     setPickerQuery('');
     setCollapsedSections(new Set());
-    setDetailProductId(null);
     setSalesExpenseRate(100);
     setExpenseRate(15);
     setMarkupRate(150);
@@ -351,9 +349,11 @@ export function EstimateTemplateWorkbench({
                 name: product.name,
                 unit: row.unit || '式',
                 saleUnitPrice: product.priceOnRequest ? 0 : product.price,
-                remark: product.priceOnRequest
-                  ? '別途見積'
-                  : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
+                remark:
+                  row.remark ||
+                  (product.priceOnRequest
+                    ? '別途見積'
+                    : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ ')),
                 source: 'product',
                 customerSelection:
                   row.customerSelection === '—' ? '標準・変更可' : row.customerSelection,
@@ -414,10 +414,6 @@ export function EstimateTemplateWorkbench({
   const editableRow = (row: EstimateTemplateWorkbenchLine) => {
     const displayRowNumber = rowNumberByKey.get('row:' + row.id) ?? 0;
     const amount = Math.round(row.quantity * row.saleUnitPrice);
-    const linkedProduct =
-      row.source === 'product' && row.productId
-        ? products.find((product) => product.id === row.productId) ?? null
-        : null;
     return (
       <tr key={row.id} className="border-b border-slate-200 bg-white">
         <th className="sticky left-0 z-10 w-11 border-r border-slate-200 bg-slate-100 px-2 text-center text-xs font-normal text-slate-500">
@@ -434,25 +430,14 @@ export function EstimateTemplateWorkbench({
               onChange={(event) => updateRow(row.id, { name: event.target.value })}
               className="h-6 min-h-6 min-w-0 flex-1 border-0 bg-transparent px-1.5 text-xs shadow-none focus:ring-2 focus:ring-emerald-700/30"
             />
-            {linkedProduct && (
-              <button
-                type="button"
-                title="商品詳細を表示"
-                aria-label={row.name + 'の商品詳細を表示'}
-                className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-bold text-emerald-800 hover:border-emerald-700"
-                onClick={() => setDetailProductId(linkedProduct.id)}
-              >
-                ⓘ
-              </button>
-            )}
             <button
               type="button"
-              title="商品マスターから選び直す"
-              aria-label={row.name + 'の商品を変更'}
-              className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
+              title="商品台帳から選ぶ"
+              aria-label={row.name + 'を商品台帳から選び直す'}
+              className="flex h-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white px-1 text-[9px] font-semibold text-emerald-800 hover:border-emerald-700"
               onClick={() => openProductPicker(row.section, row.id)}
             >
-              …
+              商品
             </button>
           </div>
         </td>
@@ -832,7 +817,7 @@ export function EstimateTemplateWorkbench({
             原価・売価比較（準備中）
           </button>
           <span className="ml-auto pb-1.5 text-[9px] text-slate-500">
-            Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ／ 「…」＝商品選択 ｜ 正式計算は未接続
+            Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ／ 「商品」＝商品台帳から選択 ｜ 正式計算は未接続
           </span>
         </div>
       </section>
@@ -932,61 +917,16 @@ export function EstimateTemplateWorkbench({
         </div>
       </section>
 
-      {detailProductId && (() => {
-        const product = products.find((item) => item.id === detailProductId) ?? null;
-        if (!product) return null;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品詳細">
-            <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl">
-              <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
-                <div>
-                  <p className="text-xs text-muted">{product.categoryName}</p>
-                  <h2 className="mt-0.5 text-lg font-semibold">{product.name}</h2>
-                  {product.manufacturer && <p className="mt-1 text-xs text-muted">{product.manufacturer}</p>}
-                </div>
-                <button type="button" className="btn-ghost btn-sm" onClick={() => setDetailProductId(null)}>閉じる</button>
-              </div>
-              <div className="grid gap-4 p-5 sm:grid-cols-[12rem_1fr]">
-                <div
-                  className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-line bg-sand bg-contain bg-center bg-no-repeat text-xs text-muted"
-                  style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
-                  role={product.imageUrl ? 'img' : undefined}
-                  aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
-                >
-                  {!product.imageUrl && '画像なし'}
-                </div>
-                <dl className="grid content-start gap-3 text-sm">
-                  <div className="grid grid-cols-[6rem_1fr] gap-3">
-                    <dt className="text-muted">メーカー</dt>
-                    <dd className="font-medium">{product.manufacturer || '—'}</dd>
-                  </div>
-                  <div className="grid grid-cols-[6rem_1fr] gap-3">
-                    <dt className="text-muted">型番</dt>
-                    <dd className="font-medium">{product.modelNo || '—'}</dd>
-                  </div>
-                  <div className="grid grid-cols-[6rem_1fr] gap-3">
-                    <dt className="text-muted">サイズ・仕様</dt>
-                    <dd className="font-medium">{product.sizeNote || '—'}</dd>
-                  </div>
-                  <div className="grid grid-cols-[6rem_1fr] gap-3">
-                    <dt className="text-muted">金額</dt>
-                    <dd className="font-semibold">{product.priceOnRequest ? '別途見積' : formatYen(product.price)}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {pickerSection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="商品を選択">
           <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="shrink-0 flex items-center justify-between border-b border-line bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品を変更' : '商品を追加'}</h2>
+                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
                 <p className="mt-1 text-xs text-muted">
-                  {pickerTargetRowId ? '選択した明細行へ商品情報を反映します。' : '選択した区分へ商品を追加します。'}
+                  {pickerTargetRowId
+                    ? '商品台帳の公開済み商品から選び、選択した明細行へ反映します。'
+                    : '商品台帳の公開済み商品から選択した区分へ追加します。'}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">

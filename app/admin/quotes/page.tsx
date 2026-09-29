@@ -138,7 +138,7 @@ function CasePageHeading({ caseCount }: { caseCount: number }) {
         className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
         data-testid="new-quote-link"
       >
-        ＋案件を登録
+        ＋見積書を作成
       </Link>
     </div>
   );

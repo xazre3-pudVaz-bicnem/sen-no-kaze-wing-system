@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Plus, Search, Trash2, X } from 'lucide-react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import { FINISH_LEVELS, FINISH_LEVEL_INFO, type FinishLevel, type QuoteItemKind } from '@/lib/domain/types';
@@ -93,7 +93,28 @@ export function ManualQuoteWorkbench({
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const allowLeaveRef = useRef(false);
   const errors = state.fieldErrors ?? {};
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty || allowLeaveRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!pending && !state.ok) allowLeaveRef.current = false;
+  }, [pending, state.ok]);
+
+  const markDirty = () => setDirty(true);
+  const confirmLeave = () =>
+    !dirty ||
+    window.confirm('保存していない内容があります。保存せずに別の画面へ移動しますか？');
 
   const kindEntries = Object.entries(KIND_LABELS).filter(
     ([kind]) => canEditBase || (kind !== 'base' && kind !== 'base_expense')
@@ -133,10 +154,20 @@ export function ManualQuoteWorkbench({
 
   const updateRow = (key: string, patch: Partial<WorkbenchRow>) => {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    markDirty();
   };
 
   return (
     <div className="space-y-3" data-testid="manual-quote-workbench">
+      <a
+        href="/admin/quotes"
+        className="inline-flex text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+        onClick={(event) => {
+          if (!confirmLeave()) event.preventDefault();
+        }}
+      >
+        ← 案件管理へ戻る
+      </a>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-xs font-semibold text-muted">見積書</span>
@@ -200,6 +231,9 @@ export function ManualQuoteWorkbench({
                   href={`/admin/quotes?case=${estimate.id}&tab=estimate#case-workspace`}
                   className="grid gap-1 border-b border-line px-4 py-3 hover:bg-[#f7faf8] sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]"
                   data-testid="estimate-picker-row"
+                  onClick={(event) => {
+                    if (!confirmLeave()) event.preventDefault();
+                  }}
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">
@@ -227,7 +261,15 @@ export function ManualQuoteWorkbench({
         </div>
       )}
 
-      <form action={action} className="space-y-3" noValidate>
+      <form
+        action={action}
+        className="space-y-3"
+        noValidate
+        onChangeCapture={markDirty}
+        onSubmit={() => {
+          allowLeaveRef.current = true;
+        }}
+      >
         <input type="hidden" name="items_json" value={itemsJson} />
         <input type="hidden" name="base_master_revision_id" value="" />
 
@@ -301,7 +343,7 @@ export function ManualQuoteWorkbench({
           <button type="button" disabled className="rounded-md px-4 py-2 text-sm font-semibold text-muted disabled:cursor-not-allowed">
             図面
           </button>
-          <span className="ml-auto hidden pr-2 text-[0.68rem] text-muted sm:inline">プランボード・図面は下書き保存後に利用できます</span>
+          <span className="ml-auto hidden pr-2 text-[0.68rem] text-muted sm:inline">プランボード・図面は正式保存後に案件画面から利用できます</span>
         </div>
 
         <section className="overflow-hidden rounded-lg border border-line bg-white shadow-sm" data-testid="new-estimate-excel">
@@ -310,7 +352,10 @@ export function ManualQuoteWorkbench({
               <h2 className="text-sm font-semibold">見積明細</h2>
               <p className="mt-0.5 text-[0.68rem] text-muted">Excelのように明細を追加・修正してから下書き保存します。</p>
             </div>
-            <Button type="button" variant="secondary" onClick={() => setRows((current) => [...current, createRow()])}>
+            <Button type="button" variant="secondary" onClick={() => {
+              setRows((current) => [...current, createRow()]);
+              markDirty();
+            }}>
               <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
               明細行を追加
             </Button>
@@ -394,7 +439,10 @@ export function ManualQuoteWorkbench({
                     <td className="p-1 text-center">
                       <button
                         type="button"
-                        onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}
+                        onClick={() => {
+                          setRows((current) => current.filter((item) => item.key !== row.key));
+                          markDirty();
+                        }}
                         className="rounded p-1.5 text-muted hover:bg-red-50 hover:text-red-700"
                         aria-label={`${index + 1}行目を削除`}
                       >

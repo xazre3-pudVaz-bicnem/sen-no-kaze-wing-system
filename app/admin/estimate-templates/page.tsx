@@ -11,7 +11,10 @@ import {
 } from '@/components/admin/estimate-template-workbench';
 import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
 import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
-import { EstimateTemplateExcelDemo } from '@/components/admin/estimate-template-excel-demo';
+import {
+  EstimateTemplateExcelDemo,
+  type EstimateTemplateExcelDemoProduct,
+} from '@/components/admin/estimate-template-excel-demo';
 import { ESTIMATE_DEMO_SAMPLES, estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 
 const SPEC_LABELS: Record<string, string> = {
@@ -39,6 +42,10 @@ function estimateHref(id: string) {
 function sampleEstimateHref(id: string) {
   const params = new URLSearchParams({ sample: id });
   return `/admin/estimate-templates?${params.toString()}`;
+}
+
+function formatWholeYen(value: number) {
+  return formatYen(Math.round(value));
 }
 
 function formatUpdatedAt(value: string) {
@@ -74,17 +81,31 @@ function SavedEstimateMenu({
   return (
     <details className="relative">
       <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        作成済み見積書（{totalCount}件）
+        見積書一覧（{totalCount}件）
       </summary>
       <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(92vw,42rem)] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
         <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
           <div>
-            <p className="text-sm font-semibold">作成済み見積書</p>
-            <p className="mt-0.5 text-[11px] text-muted">開く見積書を選択します。</p>
+            <p className="text-sm font-semibold">見積書一覧</p>
+            <p className="mt-0.5 text-[11px] text-muted">シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。</p>
           </div>
           <span className="text-[11px] text-muted">{totalCount}件</span>
         </div>
-        {templates.length > 0 && (
+
+        <div className="mb-2 rounded-lg border border-line bg-sand/25 px-3 py-2">
+          <p className="text-[10px] font-semibold tracking-wide text-muted">シミュレーター標準</p>
+          <p className="mt-1 text-xs font-semibold">シミュレーターの選択対象</p>
+          <p className="mt-0.5 text-[11px] text-muted">
+            標準に指定された正式見積書だけを、見積シミュレーターの選択肢に表示します。初期表示を決める設定ではありません。現在は指定機能の接続準備中です。
+          </p>
+        </div>
+
+        <div className="border-t border-line pt-2">
+          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">作成済み見積書</p>
+          {templates.length === 0 && (
+            <p className="px-3 py-2 text-[11px] text-muted">正式保存済みの見積書はまだありません。</p>
+          )}
+          {templates.length > 0 && (
           <div className="divide-y divide-line">
           {templates.map((template) => {
             const active = template.id === selectedId;
@@ -118,9 +139,10 @@ function SavedEstimateMenu({
             );
           })}
           </div>
-        )}
-        <div className={templates.length > 0 ? 'mt-2 border-t border-line pt-2' : ''}>
-          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">EXCELサンプル</p>
+          )}
+        </div>
+        <div className="mt-2 border-t border-line pt-2">
+          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">画面確認用サンプル</p>
           <div className="divide-y divide-line">
             {ESTIMATE_DEMO_SAMPLES.map((sample) => {
               const active = sample.id === selectedSampleId;
@@ -147,7 +169,7 @@ function SavedEstimateMenu({
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3 sm:justify-end">
-                    <strong className="tabular-nums">{formatYen(sample.sourceTotal)}</strong>
+                    <strong className="tabular-nums">{formatWholeYen(sample.sourceTotal)}</strong>
                     <span className="text-xs font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </span>
                 </Link>
@@ -175,6 +197,20 @@ export default async function EstimateTemplatesPage({
     store.listOptions(),
     store.listCategories(),
   ]);
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+  const demoProducts: EstimateTemplateExcelDemoProduct[] = options
+    .filter((option) => option.status === 'published')
+    .map((option) => ({
+      id: option.id,
+      category: categoryMap.get(option.category_id)?.name ?? '未分類',
+      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+      name: option.name,
+      manufacturer: option.manufacturer ?? '',
+      modelNo: option.model_no ?? '',
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+      imageUrl: option.image_url,
+    }));
 
   const selectedSample = estimateDemoSampleById(sp.sample);
   const selectedTemplate = selectedSample
@@ -187,7 +223,6 @@ export default async function EstimateTemplatesPage({
     return (
       <AdminPage
         title="見積書作成・管理"
-        lead="見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。"
         actions={
           <div className="flex flex-wrap gap-2">
             <SavedEstimateMenu templates={templates} models={models} selectedSampleId={selectedSample?.id} />
@@ -202,7 +237,11 @@ export default async function EstimateTemplatesPage({
             ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
             : '現在は正式な見積書データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
         </Alert>
-        <EstimateTemplateExcelDemo key={selectedSample?.id ?? 'new-estimate-demo'} sampleId={selectedSample?.id} />
+        <EstimateTemplateExcelDemo
+          key={selectedSample?.id ?? 'new-estimate-demo'}
+          sampleId={selectedSample?.id}
+          products={demoProducts}
+        />
       </AdminPage>
     );
   }
@@ -213,7 +252,6 @@ export default async function EstimateTemplatesPage({
   ]);
 
   const model = models.find((row) => row.id === selectedTemplate.base_model_id) ?? null;
-  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
 
   if (!bundle) {
     return (
@@ -231,7 +269,7 @@ export default async function EstimateTemplatesPage({
       >
         <Alert tone="warn">選択した見積書の明細を読み込めませんでした。別の見積書を選択してください。</Alert>
         <section className="card p-4 text-sm text-muted">
-          右上の「作成済み見積書」から別の見積書を開けます。
+          右上の「見積書一覧」から別の見積書を開けます。
         </section>
       </AdminPage>
     );
@@ -300,7 +338,6 @@ export default async function EstimateTemplatesPage({
   return (
     <AdminPage
       title="見積書作成・管理"
-      lead="開いたらすぐ明細を編集できる、Excelに近い見積書作成画面です。"
       actions={
         <div className="flex flex-wrap gap-2">
           <SavedEstimateMenu templates={templates} models={models} selectedId={selectedTemplate.id} />
@@ -314,9 +351,9 @@ export default async function EstimateTemplatesPage({
             type="button"
             className="btn-secondary btn-sm"
             disabled
-            title="正式見積書の標準指定接続後に利用できます"
+            title="シミュレーターの選択対象となる標準指定の接続後に利用できます"
           >
-            この見積書を標準に設定
+            シミュレーター標準に設定
           </button>
         </div>
       }
@@ -331,7 +368,7 @@ export default async function EstimateTemplatesPage({
             </div>
           </div>
 
-          <span className="text-xs text-muted">別の見積書は右上の「作成済み見積書」から開けます。</span>
+          <span className="text-xs text-muted">別の見積書は右上の「見積書一覧」から開けます。</span>
         </div>
 
         <div className="flex flex-wrap divide-x divide-line text-xs">

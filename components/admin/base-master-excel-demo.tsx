@@ -235,7 +235,7 @@ export function BaseMasterExcelDemo() {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold">本体マスター ― Excel操作確認版</h2>
+              <h2 className="font-semibold">本体マスター ― Excel型操作確認</h2>
               <span className={dirty
                 ? 'rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900'
                 : 'rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800'}
@@ -249,7 +249,8 @@ export function BaseMasterExcelDemo() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" size="sm" onClick={resetToSaved}>保存時点に戻す</Button>
-            <Button type="button" size="sm" onClick={saveLocal}>画面内でDraft保存</Button>
+            <Button type="button" size="sm" onClick={saveLocal}>下書きを保存</Button>
+            <Button type="button" size="sm" disabled>この内容で公開</Button>
           </div>
         </div>
 
@@ -278,7 +279,7 @@ export function BaseMasterExcelDemo() {
             </select>
           </label>
           <div className="flex items-center gap-2 px-4 py-2">
-            <span className="whitespace-nowrap text-xs text-slate-500">所有</span>
+            <span className="whitespace-nowrap text-xs text-slate-500">本体管理元</span>
             <span className="rounded border border-slate-200 bg-slate-100 px-3 py-1.5 text-xs">本部</span>
           </div>
           <label className="flex items-center gap-2 px-4 py-2">
@@ -492,13 +493,10 @@ export function BaseMasterExcelDemo() {
       <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold">Draftの操作</h2>
+            <h2 className="font-semibold">公開前の確認</h2>
             <p className="mt-1 text-xs text-slate-500">UI確認版のため、公開・破棄は実行しません。</p>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" disabled>このDraftを公開</Button>
-            <Button type="button" variant="ghost" disabled>Draftを破棄</Button>
-          </div>
+          <Button type="button" variant="ghost" disabled>下書きを破棄</Button>
         </div>
       </section>
     </div>

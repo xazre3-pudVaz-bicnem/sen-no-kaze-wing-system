@@ -18,6 +18,7 @@ export interface EstimateTemplateWorkbenchLine {
   remark: string;
   source: 'legacy' | 'product' | 'free';
   customerSelection: string;
+  productId?: string;
 }
 
 export interface EstimateTemplateWorkbenchProduct {
@@ -139,6 +140,7 @@ export function EstimateTemplateWorkbench({
         remark: createdProduct.priceOnRequest ? '別途見積' : '',
         source: 'product',
         customerSelection: '標準・変更可',
+        productId: createdProduct.id,
       },
     ];
   });
@@ -347,12 +349,15 @@ export function EstimateTemplateWorkbench({
                 name: product.name,
                 unit: row.unit || '式',
                 saleUnitPrice: product.priceOnRequest ? 0 : product.price,
-                remark: product.priceOnRequest
-                  ? '別途見積'
-                  : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
+                remark:
+                  row.remark ||
+                  (product.priceOnRequest
+                    ? '別途見積'
+                    : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ ')),
                 source: 'product',
                 customerSelection:
                   row.customerSelection === '—' ? '標準・変更可' : row.customerSelection,
+                productId: product.id,
               }
             : row
         )
@@ -373,6 +378,7 @@ export function EstimateTemplateWorkbench({
             : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ '),
           source: 'product',
           customerSelection: '標準・変更可',
+          productId: product.id,
         },
       ]);
     }
@@ -426,12 +432,12 @@ export function EstimateTemplateWorkbench({
             />
             <button
               type="button"
-              title="商品マスターから選び直す"
-              aria-label={row.name + 'の商品を変更'}
-              className="flex size-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-[10px] font-bold text-slate-600 hover:border-emerald-700 hover:text-emerald-800"
+              title="商品台帳から選ぶ"
+              aria-label={row.name + 'を商品台帳から選び直す'}
+              className="flex h-5 shrink-0 items-center justify-center rounded border border-slate-300 bg-white px-1 text-[9px] font-semibold text-emerald-800 hover:border-emerald-700"
               onClick={() => openProductPicker(row.section, row.id)}
             >
-              …
+              商品
             </button>
           </div>
         </td>
@@ -811,7 +817,7 @@ export function EstimateTemplateWorkbench({
             原価・売価比較（準備中）
           </button>
           <span className="ml-auto pb-1.5 text-[9px] text-slate-500">
-            Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ／ 「…」＝商品選択 ｜ 正式計算は未接続
+            Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ／ 「商品」＝商品台帳から選択 ｜ 正式計算は未接続
           </span>
         </div>
       </section>
@@ -849,7 +855,7 @@ export function EstimateTemplateWorkbench({
                 label: '本体',
                 totalAmount: baseTotal,
                 rowCount: baseLines.length,
-                expenseText: '本体マスター参照・読取専用',
+                expenseText: '本体管理元のみ案件内編集可・管理元判定接続前は参照専用',
                 editable: false,
               })}
               {!collapsedSections.has('base') && baseLines.map(baseRow)}
@@ -904,7 +910,7 @@ export function EstimateTemplateWorkbench({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-300 bg-white px-3 py-2 text-[11px] text-slate-500">
           <span>
-            本体は参照専用。内外装工事・オプション・別途はセルで編集できます。
+            本体明細は管理元のみ案件内編集可。現在は管理元判定未接続のため参照専用です。管理元以外は本体明細を変更できません。
             {hasAnyPriceOnRequest && <strong className="ml-2 text-amber-800">※別途見積を含むため合計は確定額ではありません。</strong>}
           </span>
           <span>販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です。</span>
@@ -916,9 +922,11 @@ export function EstimateTemplateWorkbench({
           <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="shrink-0 flex items-center justify-between border-b border-line bg-white px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品を変更' : '商品を追加'}</h2>
+                <h2 className="text-lg font-semibold">{pickerTargetRowId ? '商品台帳から選択' : '商品を追加'}</h2>
                 <p className="mt-1 text-xs text-muted">
-                  {pickerTargetRowId ? '選択した明細行へ商品情報を反映します。' : '選択した区分へ商品を追加します。'}
+                  {pickerTargetRowId
+                    ? '商品台帳の公開済み商品から選び、選択した明細行へ反映します。'
+                    : '商品台帳の公開済み商品から選択した区分へ追加します。'}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">

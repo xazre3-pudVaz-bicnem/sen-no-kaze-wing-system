@@ -35,9 +35,11 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).not.toContain('原価・売価比較');
   });
 
-  it('本体マスターを壊さず、この見積書内の本体明細も編集できる', () => {
-    expect(demo).toContain('本体マスター自体は変更しません。');
-    expect(demo).toContain('本体マスターから読込・この見積内で編集可');
+  it('本体マスターの編集ルール説明は常時表示せず、見積条件から本体を確認できる', () => {
+    expect(demo).not.toContain('本体明細は本体管理元のみ、この見積書内で編集できます。');
+    expect(demo).not.toContain('見積内の変更は本体マスターには反映しません。');
+    expect(demo).toContain('使用中の本体');
+    expect(demo).toContain('本体管理元のみ、この見積内で編集可');
     expect(demo).not.toContain('/admin/base-masters/demo');
     expect(demo).toContain('onClick={() => addFreeRow(section)}');
     expect(demo).not.toContain("const readOnly = section === '本体'");
@@ -55,14 +57,19 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("row.manualSale ? '手動' : '自動'");
     expect(demo).toContain("aria-label={section + 'を展開'}");
     expect(demo).toContain("data-testid={`estimate-demo-section-total-${section}`}");
-    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain('商品台帳から選択');
     expect(demo).toContain('⋯');
-    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('下書きを保存');
   });
 
-  it('見積条件と価格設定を分け、技術の杜のExcelと同じ用語で表示する', () => {
+  it('見積条件と価格設定を上下2段で分け、技術の杜のExcelと同じ用語で表示する', () => {
+    expect(demo).toContain('data-testid="estimate-demo-header-summary"');
     expect(demo).toContain('見積条件');
     expect(demo).toContain('価格設定');
+    expect(demo).toContain('divide-y divide-slate-200');
+    expect(demo).not.toContain('grid md:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]');
+    expect(demo).toContain('適用地域');
+    expect(demo).toContain('使用中の本体');
     expect(demo).toContain('販売費');
     expect(demo).toContain('原価側');
     expect(demo).toContain('経費');
@@ -78,7 +85,7 @@ describe('見積書作成 Excel風操作確認画面', () => {
   });
 
   it('保存操作は本番の最終形だけを表示し、接続前は実行できない', () => {
-    expect(demo).toContain('下書き保存');
+    expect(demo).toContain('下書きを保存');
     expect(demo).toContain('正式保存');
     expect(demo).toContain('Draft接続後に利用できます');
     expect(demo).toContain('Draft→正式Revision接続後に利用できます');
@@ -116,10 +123,10 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain('data-testid={`estimate-demo-row-menu-${row.id}`}');
     expect(demo).toContain('aria-label={row.name + \'の操作\'}');
     expect(demo).toContain('⋯');
-    expect(demo).toContain('既存の商品から選択');
+    expect(demo).toContain('商品台帳から選択');
     expect(demo).toContain("row.priceOnRequest ? '金額入力に戻す' : '別途見積にする'");
     expect(demo).toContain('行を削除');
-    expect(demo).not.toContain('title="既存の商品から選択"');
+    expect(demo).not.toContain('title="商品台帳から選択"');
   });
 
   it('見積書に編集とプレビューをまとめ、プランボード・図面と3タブにする', () => {
@@ -144,4 +151,24 @@ describe('見積書作成 Excel風操作確認画面', () => {
     expect(demo).toContain("event.key === 'Tab'");
     expect(demo).toContain("event.key === 'Enter'");
   });
+  it('品名右側から商品台帳を開き、自由明細も商品へ置き換えられる', () => {
+    expect(demo).toContain('title="商品台帳から選ぶ"');
+    expect(demo).toContain("openProductPicker(section as Exclude<Section, '本体'>, row.id)");
+    expect(demo).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
+    expect(demo).toContain('商品台帳の公開済み商品から選び、現在の明細行へ反映します。');
+    expect(demo).not.toContain('detailProductId');
+    expect(demo).not.toContain('商品詳細を表示');
+  });
+
+  it('見積書タブ直下の説明文は表示しない', () => {
+    expect(demo).not.toContain('見積書を編集し、同じ内容をプランボード・図面にも反映します。');
+  });
+
+  it('親画面から渡された公開済み商品台帳を優先して表示する', () => {
+    expect(demo).toContain('products?: EstimateTemplateExcelDemoProduct[]');
+    expect(demo).toContain('products && products.length > 0 ? products : DEMO_PRODUCTS');
+    expect(demo).toContain('SECTION_PRODUCT_CATEGORY_CODES[pickerSection]');
+    expect(demo).toContain('allowedCodes.has(product.categoryCode)');
+  });
+
 });

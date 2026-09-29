@@ -54,10 +54,11 @@ const adminActions = fs.readFileSync(
 describe('見積書作成・管理UI', () => {
   it('トップを一覧ではなくExcel編集ワークスペースとして表示する', () => {
     expect(listPage).toContain('title="見積書作成・管理"');
-    expect(listPage).toContain('開いたらすぐ明細を編集できる');
+    expect(listPage).not.toContain('開いたらすぐ明細を編集できる');
+    expect(listPage).not.toContain('見積書を開いたらすぐ、Excelに近い明細編集から作業を始めます。');
     expect(listPage).toContain('＋ 新しい見積書を作成');
-    expect(listPage).toContain('作成済み見積書（{totalCount}件）');
-    expect(listPage).toContain('開く見積書を選択します。');
+    expect(listPage).toContain('見積書一覧（{totalCount}件）');
+    expect(listPage).toContain('シミュレーターで選択できる標準見積と、作成済み見積書をここで確認します。');
     expect(listPage).toContain("active ? '表示中' : '開く'");
     expect(listPage).toContain('更新 {formatUpdatedAt(template.updated_at)}');
     expect(listPage).not.toContain('見積書を選ぶ');
@@ -74,23 +75,33 @@ describe('見積書作成・管理UI', () => {
 
   it('見積書が未登録でも空画面ではなく作成画面を直接表示する', () => {
     expect(listPage).toContain('if (!selectedTemplate)');
-    expect(listPage).toContain('<EstimateTemplateExcelDemo key={selectedSample?.id ?? \'new-estimate-demo\'} sampleId={selectedSample?.id} />');
+    expect(listPage).toContain('<EstimateTemplateExcelDemo');
+    expect(listPage).toContain("key={selectedSample?.id ?? 'new-estimate-demo'}");
+    expect(listPage).toContain('sampleId={selectedSample?.id}');
     expect(listPage).toContain('正式な見積書データが未登録のため、作成画面を直接表示しています。');
     expect(listPage).not.toContain('見積書がまだありません');
+    expect(listPage).toContain('products={demoProducts}');
+    expect(listPage).toContain("option.status === 'published'");
+    expect(listPage).toContain('categoryCode: categoryMap.get(option.category_id)?.code');
   });
 
-  it('作成済み見積書・新規作成・標準指定の入口を編集画面上部に置く', () => {
+  it('見積書一覧・新規作成・シミュレーター標準指定の入口を編集画面上部に置く', () => {
+    expect(listPage).toContain('見積書一覧');
+    expect(listPage).toContain('見積書一覧（{totalCount}件）');
+    expect(listPage).toContain('シミュレーター標準');
+    expect(listPage).toContain('シミュレーターの選択対象');
+    expect(listPage).toContain('標準に指定された正式見積書だけを、見積シミュレーターの選択肢に表示します。');
+    expect(listPage).toContain('初期表示を決める設定ではありません。');
     expect(listPage).toContain('作成済み見積書');
-    expect(listPage).toContain('作成済み見積書（{totalCount}件）');
-    expect(listPage).toContain('EXCELサンプル');
+    expect(listPage).toContain('画面確認用サンプル');
     expect(listPage).toContain('sampleEstimateHref');
     expect(listPage).toContain('selectedSampleId={selectedSample?.id}');
     expect(listPage).toContain('<SavedEstimateMenu');
     expect(listPage).toContain('aria-current={active ? \'page\' : undefined}');
     expect(listPage).toContain('複製');
-    expect(listPage).toContain('この見積書を標準に設定');
+    expect(listPage).toContain('シミュレーター標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');
-    expect(listPage).toContain('正式見積書の標準指定接続後に利用できます');
+    expect(listPage).toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
   });
 
   it('編集・見積書・プランボードを同じ見積書ワークスペースで切り替える', () => {
@@ -108,48 +119,39 @@ describe('見積書作成・管理UI', () => {
     expect(simulatorPreview).toContain('<PlanBoard');
   });
 
-  it('新規作成画面は基準本体を先に選びExcel形式の明細編集へ進める', () => {
-    expect(newForm).toContain('▼');
-    expect(newForm).toContain('基準本体');
-    expect(newForm).toContain('先に基準本体を選びます。商品モデルと防火仕様は、選んだ本体から自動設定されます。');
-    expect(newForm).toContain('商品モデル・仕様・防火仕様から自動入力');
-    expect(newForm).toContain('現在の本体マスターでは仕様は別項目のため、ここで選択します。');
-    expect(newForm).not.toContain('SPEC_OPTIONS');
-    expect(newForm).toContain('space-y-4 p-4 sm:p-5');
-    expect(newForm).toContain('max-w-[620px]');
-    expect(newForm).toContain('キャンセル');
-    expect(newForm).toContain("setStep('edit')");
-    expect(newForm).toContain('Excel明細編集へ進む');
-    expect(newForm).toContain('初期設定へ戻る');
+  it('新規作成画面は前段の設定画面を挟まず直接明細編集を表示する', () => {
+    expect(newForm).toContain('data-testid="new-estimate-conditions"');
+    expect(newForm).toContain('本体・仕様・適用地域をここで設定し、そのまま下の明細を編集できます。');
+    expect(newForm).toContain('使用する本体');
+    expect(newForm).toContain('本体が未選択です');
+    expect(newForm).toContain('本体を選ぶ');
+    expect(newForm).toContain('本体管理元：');
+    expect(newForm).toContain('商品モデル');
+    expect(newForm).toContain('仕様');
+    expect(newForm).toContain('防火仕様');
+    expect(newForm).toContain('適用地域');
+    expect(newForm).toContain('見積書名');
+    expect(newForm).toContain('本体を変更・明細確認');
     expect(newForm).toContain('<EstimateTemplateWorkbench');
     expect(newForm).toContain('new-standard-estimate-preview');
     expect(newForm).toContain('demoMode');
+    expect(newForm).not.toContain('StepIndicator');
+    expect(newForm).not.toContain("setStep('edit')");
+    expect(newForm).not.toContain('明細編集へ進む');
+    expect(newForm).not.toContain('本体・条件設定へ戻る');
     expect(newForm).toContain('現在は画面確認用です');
     expect(newForm).toContain('編集内容は保存されません。保存・公開機能は準備中です');
-    expect(newForm).toContain('画面確認用サンプルでExcel明細編集を見る');
+    expect(newForm).toContain('サンプルを表示');
     expect(newForm).toContain('openSampleEditor');
     expect(newForm).toContain("setCustomName('Wing ホテル仕様（画面確認用）')");
-    expect(newForm).toContain("samplePreview ? '画面確認用' : '新規見積書'");
-    expect(newForm).not.toContain('※画面確認用です。変更内容は保存・公開されません。');
-    expect(newForm).not.toContain('黄色いセルを編集できます。変更内容は保存されません。');
-    expect(newForm).toContain('const SAMPLE_EDIT_LINES');
-    expect(newForm).toContain("name: 'ユニットバス 1216（浴槽付）'");
-    expect(newForm).toContain("name: 'ガス給湯器 16号'");
-    expect(newForm).toContain("name: 'エアコン'");
-    expect(newForm).toContain("name: '運送費'");
     expect(newForm).toContain('initialLines={samplePreview ? SAMPLE_EDIT_LINES : []}');
-    expect(newForm).toContain('将来は設置予定地から自動判定する想定です');
-    expect(newForm).toContain('基準本体を選ぶ');
-    expect(newForm).toContain('明細を見る');
-    expect(newForm).toContain('この本体を選択');
-    expect(newForm).toContain('適用地域');
-    expect(newForm).toContain('基準本体：{selectedBaseMaster ? selectedBaseMaster.name');
-    expect(newForm).toContain('防火：{selectedFireLabel || \'—\'}');
-    expect(newForm).toContain('地域：{regionLabel || \'—\'}');
-    expect(newForm).not.toContain('lg:grid-cols-5');
-    expect(newForm).not.toContain('この段階ではDBに標準見積・下書き・Revisionを作成しません');
+    expect(newForm).toContain('baseLines={selectedBaseMaster?.lines ?? []}');
+    expect(newForm).toContain('baseTotal={selectedBaseMaster?.total ?? 0}');
+    expect(newForm).toContain("window.confirm('本体を変更すると、現在表示中の本体明細は選択した本体の内容に置き換わります。変更しますか？')");
+    expect(newForm).toContain('この本体を使う');
     expect(newPage).toContain('title="見積書を新規作成"');
     expect(newPage).toContain('label="見積書作成・管理へ戻る"');
+    expect(newPage).toContain('本体・仕様・適用地域を画面上部で設定し、そのまま明細を編集できます。');
     expect(newPage).toContain('estimateTemplatesFor(model).map');
     expect(newPage).toContain('loadPublishedBaseMasters()');
     expect(newPage).toContain('BASE_BREAKDOWN_ITEMS');
@@ -216,13 +218,24 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋商品');
     expect(workbench).toContain('＋自由明細');
-    expect(workbench).toContain('商品マスターから選び直す');
-    expect(workbench).toContain("pickerTargetRowId ? '商品を変更' : '商品を追加'");
+    expect(workbench).toContain('商品台帳から選ぶ');
+    expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
     expect(workbench).toContain("pickerTargetRowId ? '変更' : '追加'");
     expect(workbench).toContain('標準・変更可');
     expect(workbench).toContain('標準・固定');
     expect(workbench).toContain('任意オプション');
     expect(workbench).toContain('お客様には表示しない');
+  });
+
+
+  it('品名右側から商品台帳を開き、現在行の商品を置き換えられる', () => {
+    expect(workbench).toContain('title="商品台帳から選ぶ"');
+    expect(workbench).toContain("openProductPicker(row.section, row.id)");
+    expect(workbench).toContain("pickerTargetRowId ? '商品台帳から選択' : '商品を追加'");
+    expect(workbench).toContain('商品台帳の公開済み商品から選び、選択した明細行へ反映します。');
+    expect(workbench).toContain('row.remark ||');
+    expect(workbench).not.toContain('detailProductId');
+    expect(workbench).not.toContain('商品詳細を表示');
   });
 
   it('商品選択は追加先区分に対応するカテゴリーだけを表示する', () => {
@@ -276,6 +289,13 @@ describe('見積書作成・管理UI', () => {
     expect(workbench).toContain("const collapsedAmountText = hasPriceOnRequest ? '別途見積' : formatYen(totalAmount);");
     expect(workbench).toContain("hasPriceOnRequest: priceOnRequestSections[section.code]");
     expect(workbench).toContain('※別途見積を含むため合計は確定額ではありません。');
+  });
+
+  it('本体明細は管理元のみ案件内編集可とし、管理元判定接続前は参照専用にする', () => {
+    expect(workbench).toContain('本体管理元のみ案件内編集可・管理元判定接続前は参照専用');
+    expect(workbench).toContain('本体明細は管理元のみ案件内編集可。現在は管理元判定未接続のため参照専用です。');
+    expect(workbench).toContain('管理元以外は本体明細を変更できません。');
+    expect(workbench).toContain('editable: false');
   });
 
   it('実画面でもExcel風の主要操作性を安全な範囲で使える', () => {

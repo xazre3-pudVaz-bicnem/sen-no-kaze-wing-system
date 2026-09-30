@@ -281,7 +281,7 @@ export function QuoteDraftEditor({
               <div><span className="text-muted">仕様</span><strong className="ml-1">{detail.draft.spec_code}</strong></div>
               <div><span className="text-muted">防火仕様</span><strong className="ml-1">{fireSpecLabel}</strong></div>
               <div><span className="text-muted">適用地域</span><strong className="ml-1">未設定</strong></div>
-              <div><span className="text-muted">状態</span><strong className="ml-1">Draft（正式Revisionではありません）</strong></div>
+              <div><span className="text-muted">状態</span><strong className="ml-1">下書き（正式見積ではありません）</strong></div>
             </div>
             <div className="border-t border-slate-100 px-3 py-1.5">
               <label className="grid gap-1 sm:grid-cols-[5rem_1fr] sm:items-center">
@@ -306,7 +306,7 @@ export function QuoteDraftEditor({
           <section className="flex flex-wrap items-end gap-3 border-b border-slate-200 bg-white px-3 py-1.5">
             <div className="min-w-[18rem] max-w-xl flex-1">
               <label className="text-[10px] font-semibold text-muted" htmlFor="draft-base-revision">
-                基準本体Revision（正式保存用）
+                使用する基準本体
               </label>
               {baseLocked && <input type="hidden" name="base_master_revision_id" value={baseRevisionId} />}
               <Select
@@ -329,7 +329,7 @@ export function QuoteDraftEditor({
               </Select>
             </div>
             <p className="pb-1 text-[10px] text-muted">
-              既存のBase Master Revision pin処理は変更していません。
+              選択した基準本体は正式保存時に使用されます。
             </p>
           </section>
 
@@ -397,7 +397,7 @@ export function QuoteDraftEditor({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
           <div>
             <p className="text-sm font-semibold">{dirty ? '未保存の変更があります' : 'Draftは保存済みです'}</p>
-            <p className="mt-0.5 text-[10px] text-muted">Draftを保存すると、DBが数量×単価・税額・合計を再計算します。</p>
+            <p className="mt-0.5 text-[10px] text-muted">下書き保存時に数量×単価・税額・合計を確認します。</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>
@@ -427,7 +427,7 @@ export function QuoteDraftEditor({
         <Status state={finalizeState} />
         <div>
           <p className="text-sm font-semibold">正式保存</p>
-          <p className="mt-0.5 text-[10px] text-muted">既存のQuote Revision lifecycleをそのまま使用します。</p>
+          <p className="mt-0.5 text-[10px] text-muted">正式保存すると、この下書きは編集できなくなります。</p>
         </div>
         <Button
           type="submit"

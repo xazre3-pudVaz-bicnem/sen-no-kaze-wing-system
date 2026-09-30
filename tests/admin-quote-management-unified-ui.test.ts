@@ -34,8 +34,8 @@ describe('見積書管理の正式編集UI統合', () => {
     for (const label of ['案件名', 'お客様名', '会社名', '電話番号', 'メールアドレス', 'お客様住所', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', 'メモ']) {
       expect(manualWorkbench).toContain(label);
     }
-    expect(manualWorkbench).toContain('電話・メール・お客様住所は保存連携準備中');
-    expect(manualWorkbench).toContain('placeholder="保存連携準備中"');
+    expect(manualWorkbench).toContain('電話・メール・お客様住所は現在この画面では入力できません');
+    expect(manualWorkbench).toContain('placeholder="未設定"');
     expect(manualWorkbench).not.toContain('（任意）');
     expect(manualWorkbench).not.toContain('label="注文範囲"');
     expect(draftEditor).not.toContain('<span className="text-muted">注文範囲</span>');
@@ -51,7 +51,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('販売費');
     expect(authoringUi).toContain('経費');
     expect(authoringUi).toContain('掛率');
-    expect(authoringUi).toContain('原価正本はQuote Draftへ未接続');
+    expect(authoringUi).toContain('原価は現在この画面では表示していません');
   });
 
   it('シミュレーター標準のExcel操作性を案件見積表へ取り入れる', () => {
@@ -119,10 +119,10 @@ describe('見積書管理の正式編集UI統合', () => {
   });
 
   it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {
-    expect(authoringUi).toContain('Quote Draftの正式金額ロジックは変更していません');
-    expect(authoringUi).toContain('販売費 <strong className="text-slate-400">未接続</strong>');
-    expect(authoringUi).toContain('経費 <strong className="text-slate-400">未接続</strong>');
-    expect(authoringUi).toContain('掛率 <strong className="text-slate-400">未接続</strong>');
+    expect(authoringUi).toContain('販売費・経費・掛率は現在の見積では使用していません');
+    expect(authoringUi).toContain('販売費 <strong className="text-slate-400">—</strong>');
+    expect(authoringUi).toContain('経費 <strong className="text-slate-400">—</strong>');
+    expect(authoringUi).toContain('掛率 <strong className="text-slate-400">—</strong>');
     expect(manualWorkbench).toContain('roundLikePostgres');
     expect(draftEditor).toContain('detail.draft.tax_rate');
   });

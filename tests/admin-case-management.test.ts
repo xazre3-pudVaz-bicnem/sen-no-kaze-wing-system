@@ -276,6 +276,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('次にやること：担当代理店を決める');
     expect(workspace).toContain('担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。');
     expect(workspace).toContain('案件設定で担当を選ぶ');
+    expect(workspace).toContain("buildInlineTabHref(quote.id, 'estimate', listSearchParams, false, 'dealer')");
+    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
+    expect(caseAdminControls).toContain('detailsRef.current.open = true');
     expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
     expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。');
     expect(workspace).toContain('現地確認の完了状態そのものはまだ保存されません。');

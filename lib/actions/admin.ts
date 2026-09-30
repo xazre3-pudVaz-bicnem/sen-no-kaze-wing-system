@@ -1220,7 +1220,10 @@ export async function createManualQuoteWorkbenchAction(
     return errState(e);
   }
 
-  redirect(`/admin/quotes/drafts/${draftId}?created=1`);
+  const returnTo = safeAdminReturnTo(formData.get('return_to'));
+  const params = new URLSearchParams({ created: '1' });
+  if (returnTo) params.set('return_to', returnTo);
+  redirect(`/admin/quotes/drafts/${draftId}?${params.toString()}`);
 }
 
 export async function createQuoteRevisionDraftAction(
@@ -1323,7 +1326,9 @@ export async function finalizeQuoteDraftAction(
   }
 
   const resultFlag = quoteRevision > 1 ? 'revised=1' : 'created=1';
-  redirect(`/admin/quotes/${quoteId}?${resultFlag}&revision=${encodeURIComponent(String(quoteRevision))}`);
+  redirect(
+    `/admin/quotes?case=${encodeURIComponent(quoteId)}&tab=estimate&${resultFlag}&revision=${encodeURIComponent(String(quoteRevision))}#case-workspace`
+  );
 }
 
 /* ---------------- 標準見積テンプレート ---------------- */

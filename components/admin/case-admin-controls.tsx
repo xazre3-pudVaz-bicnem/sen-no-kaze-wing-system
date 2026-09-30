@@ -1,13 +1,23 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
-export function CaseAdminControls({ children }: { children: ReactNode }) {
+export function CaseAdminControls({
+  children,
+  defaultOpen = false,
+}: {
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
+  useEffect(() => {
+    if (defaultOpen && detailsRef.current) detailsRef.current.open = true;
+  }, [defaultOpen]);
+
   return (
-    <details ref={detailsRef} className="relative text-xs" data-testid="case-admin-controls">
+    <details id="case-admin-controls" ref={detailsRef} className="relative text-xs" data-testid="case-admin-controls">
       <summary className="cursor-pointer list-none rounded-md border border-white/35 px-2.5 py-1.5 font-semibold text-white hover:bg-white/10 [&::-webkit-details-marker]:hidden">
         案件設定
       </summary>

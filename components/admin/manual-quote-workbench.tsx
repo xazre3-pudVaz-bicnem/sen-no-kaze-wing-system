@@ -105,11 +105,13 @@ export function ManualQuoteWorkbench({
   models,
   estimates,
   products,
+  returnTo,
   canEditBase,
 }: {
   models: ManualQuoteWorkbenchModel[];
   estimates: EstimatePickerRow[];
   products: QuoteCatalogProduct[];
+  returnTo: '/admin/quotes' | '/admin/quote-management';
   canEditBase: boolean;
 }) {
   const [state, action, pending] = useActionState(createManualQuoteWorkbenchAction, initialState);
@@ -241,13 +243,13 @@ export function ManualQuoteWorkbench({
   return (
     <div className="space-y-2" data-testid="manual-quote-workbench">
       <Link
-        href="/admin/quotes"
+        href={returnTo}
         className="inline-flex text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
         onClick={(event) => {
           if (!confirmLeave()) event.preventDefault();
         }}
       >
-        ← 案件管理へ戻る
+        ← {returnTo === '/admin/quote-management' ? '見積書管理' : '案件管理'}へ戻る
       </Link>
 
       <QuoteEditorTopbar mode="new" estimates={estimates} confirmLeave={confirmLeave} />
@@ -261,6 +263,7 @@ export function ManualQuoteWorkbench({
           allowLeaveRef.current = true;
         }}
       >
+        <input type="hidden" name="return_to" value={returnTo} />
         <input type="hidden" name="items_json" value={itemsJson} />
         <input type="hidden" name="base_master_revision_id" value="" />
         <input type="hidden" name="adjustment" value={adjustment} />
@@ -274,7 +277,7 @@ export function ManualQuoteWorkbench({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
               <h2 className="text-sm font-semibold">案件情報</h2>
               <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-muted">
-                <span>電話・メール・お客様住所は保存連携準備中</span>
+                <span>電話・メール・お客様住所は現在この画面では入力できません</span>
                 <span>* 必須</span>
               </div>
             </div>
@@ -324,8 +327,8 @@ export function ManualQuoteWorkbench({
                     value=""
                     readOnly
                     disabled
-                    placeholder="保存連携準備中"
-                    title="電話番号の保存はDB/RPC接続後に利用できます"
+                    placeholder="未設定"
+                    title="電話番号は現在この画面では入力できません"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -337,8 +340,8 @@ export function ManualQuoteWorkbench({
                     value=""
                     readOnly
                     disabled
-                    placeholder="保存連携準備中"
-                    title="メールアドレスの保存はDB/RPC接続後に利用できます"
+                    placeholder="未設定"
+                    title="メールアドレスは現在この画面では入力できません"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -350,8 +353,8 @@ export function ManualQuoteWorkbench({
                     value=""
                     readOnly
                     disabled
-                    placeholder="保存連携準備中"
-                    title="お客様住所の保存はDB/RPC接続後に利用できます"
+                    placeholder="未設定"
+                    title="お客様住所は現在この画面では入力できません"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>

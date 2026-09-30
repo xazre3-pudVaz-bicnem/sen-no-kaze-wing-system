@@ -52,16 +52,18 @@ function buildInlineTabHref(
   quoteId: string,
   tab: TabKey,
   searchParams: Record<string, string | undefined> | undefined,
-  edit = false
+  edit = false,
+  settings?: string
 ) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams ?? {})) {
-    if (!value || key === 'tab' || key === 'created' || key === 'revised' || key === 'from' || key === 'edit') continue;
+    if (!value || key === 'tab' || key === 'created' || key === 'revised' || key === 'from' || key === 'edit' || key === 'settings') continue;
     query.set(key, value);
   }
   query.set('case', quoteId);
   query.set('tab', tab);
   if (edit) query.set('edit', '1');
+  if (settings) query.set('settings', settings);
   return `/admin/quotes?${query.toString()}#case-workspace`;
 }
 
@@ -154,6 +156,7 @@ export async function CaseWorkspace({
   revised,
   from,
   edit,
+  settings,
   embedded = false,
   listSearchParams,
 }: {
@@ -164,6 +167,7 @@ export async function CaseWorkspace({
   revised?: string;
   from?: string;
   edit?: string;
+  settings?: string;
   embedded?: boolean;
   listSearchParams?: Record<string, string | undefined>;
 }) {
@@ -400,6 +404,9 @@ export async function CaseWorkspace({
     embedded
       ? buildInlineTabHref(quote.id, nextTab, listSearchParams, openEditor)
       : `/admin/quotes/${quote.id}?tab=${nextTab}${openEditor ? '&edit=1' : ''}`;
+  const dealerSettingsHref = embedded
+    ? buildInlineTabHref(quote.id, 'estimate', listSearchParams, false, 'dealer')
+    : `/admin/quotes/${quote.id}?tab=estimate&settings=dealer#case-admin-controls`;
 
   const nextAction =
     isFormalAccepted
@@ -424,7 +431,7 @@ export async function CaseWorkspace({
               description: isPreliminaryAccepted
                 ? '概算見積の承諾履歴がありますが、担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。'
                 : '担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。',
-              href: '#case-workspace',
+              href: isAdmin ? dealerSettingsHref : '#case-workspace',
               action: isAdmin ? '案件設定で担当を選ぶ' : '案件内容を確認',
             }
           : needsSiteConfirmation
@@ -470,7 +477,7 @@ export async function CaseWorkspace({
           </div>
 
           {isAdmin && (
-            <CaseAdminControls>
+            <CaseAdminControls defaultOpen={settings === 'dealer'}>
               <div>
                 <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
                 <AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />

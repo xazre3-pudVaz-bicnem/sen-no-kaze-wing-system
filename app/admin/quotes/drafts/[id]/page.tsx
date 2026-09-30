@@ -17,6 +17,8 @@ export default async function AdminQuoteDraftPage({
   const actor = await requireStaff();
   const { id } = await params;
   const sp = await searchParams;
+  const returnTo = sp.return_to === '/admin/quote-management' ? '/admin/quote-management' : '/admin/quotes';
+  const returnLabel = returnTo === '/admin/quote-management' ? '見積書管理' : '案件管理';
   const store = await getStore();
 
   let detail;
@@ -92,8 +94,8 @@ export default async function AdminQuoteDraftPage({
     <div className="mx-auto w-full max-w-[96rem] space-y-2">
       <QuoteManagementTabs active="case" />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/admin/quotes" className="text-sm text-ink-soft underline-offset-4 hover:underline">
-          ← 案件一覧へ戻る
+        <Link href={returnTo} className="text-sm text-ink-soft underline-offset-4 hover:underline">
+          ← {returnLabel}へ戻る
         </Link>
         <span className="rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">
           Draft編集中
@@ -102,12 +104,12 @@ export default async function AdminQuoteDraftPage({
 
       {sp.created && (
         <Alert tone="success">
-          案件を登録しました。まだ見積Revisionは発行していません。Draftを編集・保存してください。
+          案件を登録しました。まだ正式見積は発行していません。下書きを編集・保存してください。
         </Alert>
       )}
       {sp.revisionDraft && (
         <Alert tone="success">
-          現在の正式Revisionをコピーして改訂Draftを作成しました。Draft保存だけでは正式Revisionは増えません。
+          現在の正式見積をコピーして改訂用の下書きを作成しました。下書き保存だけでは正式見積は更新されません。
         </Alert>
       )}
 

@@ -1220,10 +1220,10 @@ export async function createManualQuoteWorkbenchAction(
     return errState(e);
   }
 
-  const returnTo = safeAdminReturnTo(formData.get('return_to'));
-  const params = new URLSearchParams({ created: '1' });
-  if (returnTo) params.set('return_to', returnTo);
-  redirect(`/admin/quotes/drafts/${draftId}?${params.toString()}`);
+  // 非Web案件の新規登録後は案件管理へ合流する。
+  // 現地確認後の見積編集・正式発行は案件管理から保存済みDraftを再開して行う。
+  void draftId;
+  redirect('/admin/quotes');
 }
 
 export async function createQuoteRevisionDraftAction(

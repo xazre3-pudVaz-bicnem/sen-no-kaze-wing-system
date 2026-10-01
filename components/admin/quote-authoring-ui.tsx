@@ -8,6 +8,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import { Button, Input } from '@/components/ui';
 
 export type QuoteAuthoringSection = 'base' | 'interior_exterior' | 'option' | 'installation';
+export type QuoteAuthoringTab = 'estimate' | 'planboard' | 'drawings';
 
 export type QuoteAuthoringRow = {
   key: string;
@@ -145,6 +146,8 @@ export function QuoteEditorTopbar({
     );
   }, [estimates, query]);
 
+  const isClonePicker = mode === 'new';
+
   return (
     <>
       <section className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
@@ -153,7 +156,7 @@ export function QuoteEditorTopbar({
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
-            案件見積一覧
+            {isClonePicker ? '過去見積から複製' : '案件見積一覧'}
           </Button>
           {mode === 'edit' && (
             <Link
@@ -180,14 +183,20 @@ export function QuoteEditorTopbar({
           <section
             role="dialog"
             aria-modal="true"
-            aria-label="案件見積一覧"
+            aria-label={isClonePicker ? '複製する過去見積を選択' : '案件見積一覧'}
             className="max-h-[78vh] w-full max-w-3xl overflow-hidden rounded-xl border border-line bg-white shadow-2xl"
             data-testid="estimate-picker-dialog"
           >
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
-                <h2 className="font-semibold">案件見積一覧</h2>
-                <p className="mt-0.5 text-xs text-muted">案件名・顧客名・見積番号・商品モデルから開けます。</p>
+                <h2 className="font-semibold">
+                  {isClonePicker ? '複製する過去見積を選択' : '案件見積一覧'}
+                </h2>
+                <p className="mt-0.5 text-xs text-muted">
+                  {isClonePicker
+                    ? '案件名・顧客名・見積番号・商品モデルから正式Quote Revisionの複製元候補を確認できます。保存済みDraftを含む正式な複製処理はDB基盤接続後に利用できます。'
+                    : '案件名・顧客名・見積番号・商品モデルから開けます。'}
+                </p>
               </div>
               <button
                 type="button"
@@ -210,33 +219,68 @@ export function QuoteEditorTopbar({
               </label>
             </div>
             <div className="max-h-[55vh] overflow-y-auto">
-              {filtered.map((estimate) => (
-                <Link
-                  key={estimate.id}
-                  href={`/admin/quotes?case=${estimate.id}&tab=estimate#case-workspace`}
-                  className="grid gap-1 border-b border-line px-4 py-3 hover:bg-[#f7faf8] sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]"
-                  data-testid="estimate-picker-row"
-                  onClick={(event) => {
-                    if (confirmLeave && !confirmLeave()) event.preventDefault();
-                  }}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{estimate.case_name || estimate.customer_name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted">
-                      {estimate.customer_name}
-                      {estimate.customer_company ? ` ／ ${estimate.customer_company}` : ''}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ Revision {estimate.revision}</p>
+              {filtered.map((estimate) =>
+                isClonePicker ? (
+                  <div
+                    key={estimate.id}
+                    className="grid gap-2 border-b border-line px-4 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]"
+                    data-testid="estimate-clone-source-row"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{estimate.case_name || estimate.customer_name}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted">
+                        {estimate.customer_name}
+                        {estimate.customer_company ? ` ／ ${estimate.customer_company}` : ''}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ Revision {estimate.revision}</p>
+                    </div>
+                    <div className="min-w-0 text-xs">
+                      <p className="truncate font-semibold">{estimate.base_model_name}</p>
+                      <p className="mt-0.5 text-muted">{estimate.status_label}</p>
+                    </div>
+                    <div className="flex min-w-[9rem] flex-col items-end justify-center gap-1.5">
+                      <span className="text-sm font-semibold tabular-nums">{formatYen(estimate.total)}</span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled
+                        title="正式な複製処理はDB基盤接続後に利用できます"
+                      >
+                        この見積を複製
+                      </Button>
+                    </div>
                   </div>
-                  <div className="min-w-0 text-xs">
-                    <p className="truncate font-semibold">{estimate.base_model_name}</p>
-                    <p className="mt-0.5 text-muted">{estimate.status_label}</p>
-                  </div>
-                  <div className="text-right text-sm font-semibold tabular-nums">{formatYen(estimate.total)}</div>
-                </Link>
-              ))}
+                ) : (
+                  <Link
+                    key={estimate.id}
+                    href={`/admin/quotes?case=${estimate.id}&tab=estimate#case-workspace`}
+                    className="grid gap-1 border-b border-line px-4 py-3 hover:bg-[#f7faf8] sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]"
+                    data-testid="estimate-picker-row"
+                    onClick={(event) => {
+                      if (confirmLeave && !confirmLeave()) event.preventDefault();
+                    }}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{estimate.case_name || estimate.customer_name}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted">
+                        {estimate.customer_name}
+                        {estimate.customer_company ? ` ／ ${estimate.customer_company}` : ''}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ Revision {estimate.revision}</p>
+                    </div>
+                    <div className="min-w-0 text-xs">
+                      <p className="truncate font-semibold">{estimate.base_model_name}</p>
+                      <p className="mt-0.5 text-muted">{estimate.status_label}</p>
+                    </div>
+                    <div className="text-right text-sm font-semibold tabular-nums">{formatYen(estimate.total)}</div>
+                  </Link>
+                )
+              )}
               {filtered.length === 0 && (
-                <p className="px-4 py-10 text-center text-sm text-muted">該当する見積書がありません。</p>
+                <p className="px-4 py-10 text-center text-sm text-muted">
+                  {isClonePicker ? '複製元にできる見積がありません。' : '該当する見積書がありません。'}
+                </p>
               )}
             </div>
           </section>
@@ -246,12 +290,47 @@ export function QuoteEditorTopbar({
   );
 }
 
-export function QuoteAuthoringTabs() {
+export function QuoteAuthoringTabs({
+  active = 'estimate',
+  onChange,
+}: {
+  active?: QuoteAuthoringTab;
+  onChange?: (tab: QuoteAuthoringTab) => void;
+} = {}) {
+  const enabled = Boolean(onChange);
+  const buttonClass = (tab: QuoteAuthoringTab) =>
+    active === tab
+      ? 'rounded-t border border-b-white border-slate-300 bg-white px-3 py-1.5 text-[10px] font-semibold text-emerald-800'
+      : 'rounded-t border border-slate-300 bg-slate-100 px-3 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-white';
+
   return (
     <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-100 px-3 pt-1" aria-label="見積作業タブ">
-      <button type="button" className="rounded-t border border-b-white border-slate-300 bg-white px-3 py-1.5 text-[10px] font-semibold text-emerald-800">見積書</button>
-      <button type="button" disabled className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-400">プランボード</button>
-      <button type="button" disabled className="cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-400">図面</button>
+      <button
+        type="button"
+        className={buttonClass('estimate')}
+        aria-pressed={active === 'estimate'}
+        onClick={() => onChange?.('estimate')}
+      >
+        見積書
+      </button>
+      <button
+        type="button"
+        disabled={!enabled}
+        className={enabled ? buttonClass('planboard') : 'cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-400'}
+        aria-pressed={active === 'planboard'}
+        onClick={() => onChange?.('planboard')}
+      >
+        プランボード
+      </button>
+      <button
+        type="button"
+        disabled={!enabled}
+        className={enabled ? buttonClass('drawings') : 'cursor-not-allowed rounded-t border border-slate-300 bg-slate-200 px-3 py-1.5 text-[10px] font-semibold text-slate-400'}
+        aria-pressed={active === 'drawings'}
+        onClick={() => onChange?.('drawings')}
+      >
+        図面
+      </button>
     </div>
   );
 }

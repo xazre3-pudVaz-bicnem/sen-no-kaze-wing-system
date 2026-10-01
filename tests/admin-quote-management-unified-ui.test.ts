@@ -31,9 +31,11 @@ describe('見積書管理の正式編集UI統合', () => {
   });
 
   it('案件情報をExcel型編集の上部へまとめる', () => {
-    for (const label of ['案件名', 'お客様名', '会社名', '電話番号', 'メールアドレス', 'お客様住所', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', 'メモ']) {
+    for (const label of ['案件名', 'お客様名（姓）', 'お客様名（名）', '会社名', '電話番号', 'メールアドレス', 'お客様住所', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', 'メモ']) {
       expect(manualWorkbench).toContain(label);
     }
+    expect(manualWorkbench).toContain('name="customer_name" value={customerName}');
+    expect(manualWorkbench).toContain('customerLastName.trim() && customerFirstName.trim()');
     expect(manualWorkbench).toContain('電話・メール・お客様住所は現在この画面では入力できません');
     expect(manualWorkbench).toContain('placeholder="未設定"');
     expect(manualWorkbench).not.toContain('（任意）');
@@ -166,7 +168,11 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftEditor).toContain('detail.draft.tax_rate');
   });
 
-  it('案件見積一覧は案件名・顧客名・見積番号・商品モデルで検索する', () => {
+  it('新規見積では過去見積の複製元候補を検索し、編集画面では案件見積一覧を維持する', () => {
+    expect(authoringUi).toContain('過去見積から複製');
+    expect(authoringUi).toContain('複製する過去見積を選択');
+    expect(authoringUi).toContain('この見積を複製');
+    expect(authoringUi).toContain('正式な複製処理はDB基盤接続後に利用できます');
     expect(authoringUi).toContain('案件見積一覧');
     expect(authoringUi).toContain('estimate.case_name');
     expect(authoringUi).toContain('estimate.customer_name');
@@ -174,6 +180,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('estimate.base_model_name');
     expect(authoringUi).toContain('案件名・顧客名・見積番号・商品モデルで検索');
     expect(newQuotePage).toContain('case_name: requestById.get(quote.quote_request_id)?.case_name ?? null');
+    expect(newQuotePage).not.toContain("filter((quote) => quote.status !== 'superseded')");
     expect(draftPage).toContain('case_name: requestById.get(quote.quote_request_id)?.case_name ?? null');
   });
 
@@ -242,10 +249,19 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(preview).not.toContain('7084800');
   });
 
-  it('プランボード・図面は同じワークスペース内で未接続状態を明示する', () => {
+  it('新規見積ではプランボード・図面タブを開け、正式接続前の状態を明示する', () => {
     expect(authoringUi).toContain('見積書');
     expect(authoringUi).toContain('プランボード');
     expect(authoringUi).toContain('図面');
-    expect(authoringUi).toContain('type="button" disabled');
+    expect(authoringUi).toContain("active?: QuoteAuthoringTab");
+    expect(authoringUi).toContain("onChange?: (tab: QuoteAuthoringTab) => void");
+    expect(manualWorkbench).toContain('active={activeTab} onChange={setActiveTab}');
+    expect(manualWorkbench).toContain('data-testid="new-quote-planboard-state"');
+    expect(manualWorkbench).toContain('案件専用のplan stateへ接続して表示します');
+    expect(manualWorkbench).toContain('data-testid="new-quote-drawings-state"');
+    expect(manualWorkbench).toContain('案件側でversion管理');
+    expect(manualWorkbench).toContain('案件として登録');
+    expect(manualWorkbench).toContain('登録すると案件一覧に追加されます。現地確認後の見積編集・正式発行は案件管理から行います。');
+    expect(manualWorkbench).not.toContain('初回Draft保存後に正式発行できます');
   });
 });

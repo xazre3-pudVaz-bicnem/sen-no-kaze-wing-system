@@ -13,6 +13,10 @@ const workbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote
 const draftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
 const authoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
 const actions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
+const workbenchAction = actions.slice(
+  actions.indexOf('export async function createManualQuoteWorkbenchAction'),
+  actions.indexOf('export async function createQuoteRevisionDraftAction')
+);
 const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
 const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
 
@@ -24,8 +28,8 @@ describe('unified manual quote authoring', () => {
   });
 
   it('opens the Excel-style workbench immediately instead of a separate case registration form', () => {
-    expect(newQuotePage).toContain('title="見積書管理"');
-    expect(newQuotePage).toContain('lead="案件見積を作成"');
+    expect(newQuotePage).toContain('title="新規案件見積"');
+    expect(newQuotePage).toContain('lead="対面・電話・紹介などの案件を登録し、最初の見積下書きを作成"');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(newQuotePage).not.toContain('<ManualQuoteForm');
     expect(workbench).toContain('data-testid="manual-quote-workbench"');
@@ -57,7 +61,10 @@ describe('unified manual quote authoring', () => {
     expect(authoringUi).toContain('売価');
     expect(authoringUi).toContain('売価金額');
     expect(authoringUi).toContain('粗利');
-    expect(workbench).toContain('label="下書き保存"');
+    expect(workbench).toContain('label="案件として登録"');
+    expect(workbench).toContain('data-testid="manual-quote-role-note"');
+    expect(workbench).toContain('案件として登録した後は、案件管理で現地確認・現場工事の入力・正式見積の発行を進めます。');
+    expect(workbench).not.toContain('初回Draft保存後に正式発行できます');
     expect(workbench).not.toContain('見積書を作りながら、この案件の基本情報も登録できます。');
     expect(workbench).not.toContain('Excelのように明細を追加・修正してから下書き保存します。');
     expect(workbench).not.toContain('まず下書き保存');
@@ -83,11 +90,14 @@ describe('unified manual quote authoring', () => {
     expect(store).toContain('option_id?: string | null');
   });
 
-  it('opens a case-estimate list popup from the top of the estimate frame', () => {
+  it('opens the past-estimate clone source picker on a new estimate while keeping the edit list popup', () => {
     expect(workbench).toContain('<QuoteEditorTopbar');
     expect(authoringUi).toContain('data-testid="estimate-picker-dialog"');
+    expect(authoringUi).toContain('過去見積から複製');
+    expect(authoringUi).toContain('複製する過去見積を選択');
     expect(authoringUi).toContain('案件見積一覧');
     expect(authoringUi).toContain('案件名・顧客名・見積番号・商品モデルで検索');
+    expect(authoringUi).toContain('data-testid="estimate-clone-source-row"');
     expect(authoringUi).toContain('data-testid="estimate-picker-row"');
   });
 
@@ -108,8 +118,10 @@ describe('unified manual quote authoring', () => {
       expect(workbench).toContain(`name="${name}"`);
     }
     expect(workbench).toContain('createManualQuoteWorkbenchAction');
-    expect(actions).toContain('manualQuoteWorkbenchSchema.safeParse');
-    expect(actions).toContain('store.createManualQuoteDraftWithItems(actor');
+    expect(workbenchAction).toContain('manualQuoteWorkbenchSchema.safeParse');
+    expect(workbenchAction).toContain('store.createManualQuoteDraftWithItems(actor');
+    expect(workbenchAction).toContain("redirect('/admin/quotes')");
+    expect(workbenchAction).not.toContain('redirect(`/admin/quotes/drafts/${draftId}?');
   });
 
   it('creates case + Draft + initial lines atomically without issuing formal Revision 1', () => {
@@ -164,13 +176,16 @@ describe('unified manual quote authoring', () => {
     expect(supabaseStore).not.toContain("db.rpc('create_manual_quote_case'");
   });
 
-  it('warns before leaving an unsaved new estimate while keeping unavailable tabs disabled', () => {
+  it('warns before leaving an unsaved new estimate and exposes non-fake plan/drawing states', () => {
     expect(workbench).toContain("window.confirm('保存していない内容があります。保存せずに別の画面へ移動しますか？')");
     expect(workbench).toContain("window.addEventListener('beforeunload'");
     expect(workbench).toContain('if (!confirmLeave()) event.preventDefault();');
-    expect(authoringUi).toContain('type="button" disabled');
+    expect(authoringUi).toContain('disabled={!enabled}');
     expect(authoringUi).toContain('プランボード');
     expect(authoringUi).toContain('図面');
+    expect(workbench).toContain('active={activeTab} onChange={setActiveTab}');
+    expect(workbench).toContain('案件専用のplan stateへ接続して表示します');
+    expect(workbench).toContain('図面は案件側でversion管理');
     expect(workbench).not.toContain('プランボード・図面は正式保存後に案件画面から利用できます');
   });
 

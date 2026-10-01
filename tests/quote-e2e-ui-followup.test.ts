@@ -19,12 +19,13 @@ describe('実案件E2E後の見積UI導線', () => {
     expect(actions).toContain('#case-workspace');
   });
 
-  it('新規見積とDraft編集は入口に応じた戻り先を維持する', () => {
+  it('新規見積は入口の戻る導線を保ちつつ、登録後は案件管理へ合流する', () => {
     expect(casePage).toContain('/admin/quotes/new?return_to=%2Fadmin%2Fquotes');
     expect(quoteManagement).toContain('/admin/quotes/new?return_to=%2Fadmin%2Fquote-management');
     expect(quoteManagement).toContain("return_to=${encodeURIComponent('/admin/quote-management')}");
     expect(newQuotePage).toContain("sp.return_to === '/admin/quote-management'");
-    expect(workbench).toContain('name="return_to" value={returnTo}');
+    expect(workbench).not.toContain('name="return_to" value={returnTo}');
+    expect(actions).toContain("redirect('/admin/quotes')");
     expect(draftPage).toContain("sp.return_to === '/admin/quote-management'");
     expect(draftPage).toContain('href={returnTo}');
   });

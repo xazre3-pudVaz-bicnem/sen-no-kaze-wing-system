@@ -1142,7 +1142,7 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
-  let draftId: string | null = null;
+  let draftId: string;
   try {
     const store = await getStore();
     const draft = await store.createManualQuoteDraftWithItems(actor, {
@@ -1197,10 +1197,9 @@ export async function createManualQuoteWorkbenchAction(
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
-  let draftId: string;
   try {
     const store = await getStore();
-    const draft = await store.createManualQuoteDraftWithItems(actor, {
+    await store.createManualQuoteDraftWithItems(actor, {
       case_name: parsed.data.case_name || null,
       customer_name: parsed.data.customer_name,
       customer_company: parsed.data.customer_company || null,
@@ -1214,16 +1213,14 @@ export async function createManualQuoteWorkbenchAction(
       adjustment: parsed.data.adjustment,
       adjustment_reason: parsed.data.adjustment_reason ?? null,
     });
-    draftId = draft.id;
     revalidatePath('/admin/quotes');
   } catch (e) {
     return errState(e);
   }
 
-  const returnTo = safeAdminReturnTo(formData.get('return_to'));
-  const params = new URLSearchParams({ created: '1' });
-  if (returnTo) params.set('return_to', returnTo);
-  redirect(`/admin/quotes/drafts/${draftId}?${params.toString()}`);
+  // 非Web案件の新規登録後は案件管理へ合流する。
+  // 現地確認後の見積編集・正式発行は案件管理から保存済みDraftを再開して行う。
+  redirect('/admin/quotes');
 }
 
 export async function createQuoteRevisionDraftAction(

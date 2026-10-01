@@ -195,7 +195,7 @@ export function QuoteEditorTopbar({
                 </h2>
                 <p className="mt-0.5 text-xs text-muted">
                   {isClonePicker
-                    ? '案件名・顧客名・見積番号・商品モデルから正式Quote Revisionの複製元候補を確認できます。保存済みDraftを含む正式な複製処理はDB基盤接続後に利用できます。'
+                    ? '案件名・顧客名・見積番号・商品モデルから、複製元にする過去の見積を確認できます。見積の複製機能は現在準備中です。'
                     : '案件名・顧客名・見積番号・商品モデルから開けます。'}
                 </p>
               </div>
@@ -233,7 +233,7 @@ export function QuoteEditorTopbar({
                         {estimate.customer_name}
                         {estimate.customer_company ? ` ／ ${estimate.customer_company}` : ''}
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ Revision {estimate.revision}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ 第{estimate.revision}版</p>
                     </div>
                     <div className="min-w-0 text-xs">
                       <p className="truncate font-semibold">{estimate.base_model_name}</p>
@@ -246,7 +246,7 @@ export function QuoteEditorTopbar({
                         variant="secondary"
                         size="sm"
                         disabled
-                        title="正式な複製処理はDB基盤接続後に利用できます"
+                        title="見積の複製機能は現在準備中です"
                       >
                         この見積を複製
                       </Button>
@@ -268,7 +268,7 @@ export function QuoteEditorTopbar({
                         {estimate.customer_name}
                         {estimate.customer_company ? ` ／ ${estimate.customer_company}` : ''}
                       </p>
-                      <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ Revision {estimate.revision}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted">{estimate.quote_no} ／ 第{estimate.revision}版</p>
                     </div>
                     <div className="min-w-0 text-xs">
                       <p className="truncate font-semibold">{estimate.base_model_name}</p>
@@ -349,7 +349,7 @@ export function QuoteInternalRateStrip({
         valueNote="予定初期値"
         grossProfitLabel="未算定"
         grossProfitRateLabel="未算定"
-        note="Quote Draftの正式保存項目に未接続のため、現在は編集・保存・見積金額計算に使用しません"
+        note="販売費・経費・掛率の編集機能は現在準備中です。"
       />
     );
   }
@@ -987,7 +987,7 @@ export function QuoteFinancialSummary({
     <section className="ml-auto w-full max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs shadow-sm">
       <div className="flex justify-between gap-4 py-0.5"><span>原価合計</span><strong className="text-slate-500">未算定</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>売価明細合計</span><strong>{formatYen(subtotalRaw)}</strong></div>
-      <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-500" title="現行Quote Draftでは正式保存していません">未算定</strong></div>
+      <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-500" title="経費の計算機能は現在準備中です">未算定</strong></div>
       {showAdjustmentControls ? (
         <>
           <label className="flex items-center justify-between gap-4 py-0.5">
@@ -1005,7 +1005,7 @@ export function QuoteFinancialSummary({
       <div className="mt-1.5 flex justify-between gap-4 rounded bg-emerald-50 px-2 py-1.5"><span>粗利</span><strong className="text-slate-600">未算定</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>粗利率</span><strong className="text-slate-600">未算定</strong></div>
       <p className="mt-1.5 text-[10px] leading-4 text-slate-500">
-        原価が現行Quote Draftの正式保存項目に未接続のため、粗利・粗利率は0として扱わず未算定と表示します。
+        原価が未確定のため、粗利・粗利率は「未算定」と表示しています。
       </p>
     </section>
   );

@@ -905,6 +905,36 @@ export function QuoteFinancialSummary({
   );
 }
 
+const CUSTOMER_PREVIEW_SECTIONS: Array<{
+  key: QuoteAuthoringSection | 'free';
+  label: string;
+  kinds: QuoteItemKind[];
+  subtotalLabel: string | null;
+}> = [
+  { key: 'base', label: '本体', kinds: ['base', 'base_expense'], subtotalLabel: '【本体価格計】' },
+  {
+    key: 'interior_exterior',
+    label: '内外装工事',
+    kinds: ['interior_exterior', 'interior_exterior_expense'],
+    subtotalLabel: '【内外装価格計】',
+  },
+  { key: 'option', label: 'オプション', kinds: ['option', 'option_expense'], subtotalLabel: '【オプション価格計】' },
+  { key: 'free', label: '自由明細', kinds: ['free'], subtotalLabel: null },
+  // installation の正式業務区分は未確定のため、既存の中立表記を維持し、小計ラベルは付けない。
+  { key: 'installation', label: '別途', kinds: ['installation'], subtotalLabel: null },
+];
+
+function customerPreviewLineName(row: QuoteAuthoringRow): string {
+  if (row.kind === 'interior_exterior_expense') {
+    return '内外装諸費用（交通費、労災、安全管理費等）';
+  }
+  return row.name;
+}
+
+function customerPreviewRowAmount(row: QuoteAuthoringRow): number {
+  return row.unitPrice === 0 && row.remark?.trim() === '別途見積' ? 0 : row.amount;
+}
+
 export function CustomerQuotePreview({
   caseName,
   customerName,
@@ -987,33 +1017,71 @@ export function CustomerQuotePreview({
         </section>
       </div>
 
-      <div className="overflow-x-auto p-4">
-        <table className="w-full min-w-[48rem] border-collapse text-xs">
+      <div className="overflow-x-auto p-3 sm:p-4">
+        <table className="w-full min-w-[44rem] border-collapse text-xs sm:min-w-[48rem]">
           <thead>
             <tr className="border-y border-slate-300 bg-slate-50 text-slate-600">
-              <th className="px-2 py-1.5 text-left">区分</th>
+              <th className="w-24 px-2 py-1.5 text-left">区分</th>
               <th className="px-2 py-1.5 text-left">品名</th>
-              <th className="px-2 py-1.5 text-right">数量</th>
-              <th className="px-2 py-1.5 text-left">単位</th>
-              <th className="px-2 py-1.5 text-right">単価</th>
-              <th className="px-2 py-1.5 text-right">金額</th>
-              <th className="px-2 py-1.5 text-left">備考</th>
+              <th className="w-16 px-2 py-1.5 text-right">数量</th>
+              <th className="w-14 px-2 py-1.5 text-left">単位</th>
+              <th className="w-24 px-2 py-1.5 text-right">単価</th>
+              <th className="w-24 px-2 py-1.5 text-right">金額</th>
+              <th className="min-w-36 px-2 py-1.5 text-left">備考</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const section = SECTION_META.find((entry) => entry.key === sectionForKind(row.kind))?.label ?? 'オプション';
-              const separate = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
+            {CUSTOMER_PREVIEW_SECTIONS.map((section) => {
+              const sectionRows = rows.filter((row) => section.kinds.includes(row.kind));
+              if (sectionRows.length === 0) return null;
+
+              const sectionTotal = sectionRows.reduce((sum, row) => sum + customerPreviewRowAmount(row), 0);
+              const isOptionSection = section.key === 'option';
+              const bodyAndOptionTotal =
+                isOptionSection
+                  ? rows
+                      .filter((row) =>
+                        ['base', 'base_expense', 'interior_exterior', 'interior_exterior_expense', 'option', 'option_expense'].includes(row.kind)
+                      )
+                      .reduce((sum, row) => sum + customerPreviewRowAmount(row), 0)
+                  : 0;
+
               return (
-                <tr key={row.key} className="border-b border-slate-200">
-                  <td className="px-2 py-1.5 font-semibold">{section}</td>
-                  <td className="px-2 py-1.5">{row.name}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{row.quantity}</td>
-                  <td className="px-2 py-1.5">{row.unit || '—'}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '別途見積' : formatYen(row.unitPrice)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '—' : formatYen(row.amount)}</td>
-                  <td className="px-2 py-1.5 text-slate-600">{row.remark || ''}</td>
-                </tr>
+                <Fragment key={section.key}>
+                  <tr className="border-y border-slate-300 bg-slate-100/80">
+                    <th colSpan={7} className="px-2 py-1.5 text-left text-xs font-semibold tracking-wide text-slate-700">
+                      {section.label}
+                    </th>
+                  </tr>
+                  {sectionRows.map((row) => {
+                    const separate = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
+                    return (
+                      <tr key={row.key} className="border-b border-slate-200">
+                        <td className="px-2 py-1.5 font-semibold text-slate-600">{section.label}</td>
+                        <td className="px-2 py-1.5">{customerPreviewLineName(row)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{row.quantity}</td>
+                        <td className="px-2 py-1.5">{row.unit || '—'}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '別途見積' : formatYen(row.unitPrice)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '—' : formatYen(row.amount)}</td>
+                        <td className="px-2 py-1.5 text-slate-600">{row.remark || ''}</td>
+                      </tr>
+                    );
+                  })}
+                  {section.subtotalLabel && (
+                    <tr className="border-b border-slate-300 bg-slate-50 font-semibold">
+                      <td colSpan={5} className="px-2 py-1.5 text-right">{section.subtotalLabel}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatYen(sectionTotal)}</td>
+                      <td></td>
+                    </tr>
+                  )}
+                  {isOptionSection && (
+                    <tr className="border-b-2 border-slate-400 bg-slate-100 font-semibold">
+                      <td colSpan={5} className="px-2 py-1.5 text-right">【本体＋内外装＋オプション価格計】</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{formatYen(bodyAndOptionTotal)}</td>
+                      <td></td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
             {rows.length === 0 && (
@@ -1023,11 +1091,14 @@ export function CustomerQuotePreview({
         </table>
       </div>
 
-      <div className="ml-auto max-w-md space-y-1 border-t border-slate-200 px-5 py-4 text-sm">
-        <div className="flex justify-between gap-4"><span>税抜小計</span><strong>{formatYen(subtotal)}</strong></div>
-        <div className="flex justify-between gap-4"><span>値引き・調整額</span><strong>{formatYen(adjustment)}</strong></div>
+      <div className="ml-auto w-full max-w-md space-y-1 border-t border-slate-200 px-4 py-4 text-sm sm:px-5">
+        <div className="flex justify-between gap-4"><span>小計</span><strong>{formatYen(subtotal)}</strong></div>
+        <div className="flex justify-between gap-4"><span>値引き等調整額</span><strong>{formatYen(adjustment)}</strong></div>
+        <div className="flex justify-between gap-4"><span>税抜請負額</span><strong>{formatYen(Math.max(0, subtotal + adjustment))}</strong></div>
         <div className="flex justify-between gap-4"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
-        <div className="flex justify-between gap-4 border-t border-slate-400 pt-2 text-lg"><span>税込合計</span><strong>{formatYen(total)}</strong></div>
+        <div className="mt-1 flex justify-between gap-4 border-t-2 border-slate-600 pt-2 text-lg">
+          <span>合計（税込）</span><strong>{formatYen(total)}</strong>
+        </div>
       </div>
     </section>
   );

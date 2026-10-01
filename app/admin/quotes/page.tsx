@@ -153,7 +153,7 @@ function caseSelectionHref(quoteId: string, sp: Record<string, string | undefine
     if (value) query.set(key, value);
   }
   query.set('case', quoteId);
-  return `/admin/quotes?${query.toString()}`;
+  return `/admin/quotes?${query.toString()}#case-workspace`;
 }
 
 function requestSelectionHref(requestId: string, sp: Record<string, string | undefined>) {

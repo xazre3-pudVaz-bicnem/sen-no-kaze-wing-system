@@ -17,6 +17,8 @@ import {
   QuoteEditorTopbar,
   QuoteFinancialSummary,
   QuoteInternalRateStrip,
+  isValidQuoteQuantity,
+  quoteQuantityRule,
   type QuoteAuthoringRow,
   type QuoteAuthoringSection,
   type QuoteCatalogProduct,
@@ -183,11 +185,25 @@ export function QuoteDraftEditor({
     setRows((current) =>
       current.map((row) => {
         if (row.key !== key) return row;
+
+        let nextUnit = row.unit ?? '';
+        let nextQuantity = row.quantity;
+
+        if (patch.unit !== undefined) {
+          nextUnit = patch.unit ?? '';
+          if (quoteQuantityRule(nextUnit) === 'fixed-one') nextQuantity = 1;
+          else if (!isValidQuoteQuantity(nextQuantity, nextUnit)) return row;
+        }
+        if (patch.quantity !== undefined) {
+          if (!isValidQuoteQuantity(patch.quantity, nextUnit)) return row;
+          nextQuantity = patch.quantity;
+        }
+
         return {
           ...row,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
-          ...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
-          ...(patch.unit !== undefined ? { unit: patch.unit } : {}),
+          ...(patch.quantity !== undefined || patch.unit !== undefined ? { quantity: nextQuantity } : {}),
+          ...(patch.unit !== undefined ? { unit: nextUnit } : {}),
           ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
           ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
         };

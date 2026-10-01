@@ -255,7 +255,7 @@ describe('シミュレーター標準管理UI', () => {
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
     expect(workbench).toContain('見積書編集');
-    expect(workbench).toContain('bg-amber-50/35 px-3 py-1.5');
+    expect(sharedWorkbenchUi).toContain('bg-amber-50/35 px-3 py-1.5');
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋行追加');
     expect(workbench).toContain('＋自由明細');

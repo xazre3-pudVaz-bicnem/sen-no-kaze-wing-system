@@ -22,6 +22,23 @@ export type QuoteAuthoringRow = {
   locked?: boolean;
 };
 
+const DECIMAL_QUANTITY_UNITS = new Set(['m', 'ｍ', '㎡', 'm²', 'm2']);
+
+export function quoteQuantityRule(unit: string | null | undefined): 'fixed-one' | 'decimal' | 'integer' {
+  const normalized = (unit ?? '').trim().toLowerCase();
+  if (normalized === '式') return 'fixed-one';
+  if (DECIMAL_QUANTITY_UNITS.has(normalized)) return 'decimal';
+  return 'integer';
+}
+
+export function isValidQuoteQuantity(quantity: number, unit: string | null | undefined): boolean {
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 99_999) return false;
+  const rule = quoteQuantityRule(unit);
+  if (rule === 'fixed-one') return quantity === 1;
+  if (rule === 'integer') return Number.isInteger(quantity);
+  return Math.abs(quantity * 10_000 - Math.round(quantity * 10_000)) < 1e-7;
+}
+
 export type QuoteCatalogProduct = {
   id: string;
   baseModelId: string | null;
@@ -376,6 +393,13 @@ export function QuoteAuthoringGrid({
     target.select();
   };
 
+  const handleQuantityKeyDown = (event: KeyboardEvent<HTMLInputElement>, unit: string | null) => {
+    handleGridKeyDown(event);
+    if (event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (quoteQuantityRule(unit) !== 'integer') return;
+    if (['.', ',', 'e', 'E', '+', '-'].includes(event.key)) event.preventDefault();
+  };
+
   return (
     <section className="overflow-hidden bg-white" data-testid="unified-quote-excel-grid">
       <div
@@ -566,14 +590,27 @@ export function QuoteAuthoringGrid({
                         <td className={`w-10 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={row.quantity}
+                            min={quoteQuantityRule(row.unit) === 'integer' ? '1' : '0.01'}
+                            max="99999"
+                            step={quoteQuantityRule(row.unit) === 'decimal' ? '0.01' : '1'}
+                            value={quoteQuantityRule(row.unit) === 'fixed-one' ? 1 : row.quantity}
                             disabled={row.locked}
+                            readOnly={!row.locked && quoteQuantityRule(row.unit) === 'fixed-one'}
+                            inputMode={quoteQuantityRule(row.unit) === 'decimal' ? 'decimal' : 'numeric'}
+                            title={
+                              quoteQuantityRule(row.unit) === 'fixed-one'
+                                ? '単位「式」は数量1固定です'
+                                : quoteQuantityRule(row.unit) === 'decimal'
+                                  ? 'この単位は小数入力できます'
+                                  : 'この単位は整数のみです'
+                            }
                             data-quote-grid-col="quantity"
-                            onKeyDown={handleGridKeyDown}
-                            onChange={(event) => onUpdate(row.key, { quantity: Number(event.target.value) || 0 })}
-                            className="h-5 min-h-5 w-full border-0 bg-transparent px-1 text-right text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
+                            onKeyDown={(event) => handleQuantityKeyDown(event, row.unit)}
+                            onChange={(event) => {
+                              const quantity = Number(event.target.value);
+                              if (isValidQuoteQuantity(quantity, row.unit)) onUpdate(row.key, { quantity });
+                            }}
+                            className={`h-5 min-h-5 w-full border-0 bg-transparent px-1 text-right text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30 ${quoteQuantityRule(row.unit) === 'fixed-one' ? 'cursor-default text-slate-500' : ''}`}
                             aria-label={`数量 ${number}`}
                           />
                         </td>
@@ -583,7 +620,21 @@ export function QuoteAuthoringGrid({
                             disabled={row.locked}
                             data-quote-grid-col="unit"
                             onKeyDown={handleGridKeyDown}
-                            onChange={(event) => onUpdate(row.key, { unit: event.target.value })}
+                            onChange={(event) => {
+                              const nextUnit = event.target.value;
+                              if (quoteQuantityRule(nextUnit) === 'fixed-one') {
+                                event.currentTarget.setCustomValidity('');
+                                onUpdate(row.key, { unit: nextUnit, quantity: 1 });
+                                return;
+                              }
+                              if (!isValidQuoteQuantity(row.quantity, nextUnit)) {
+                                event.currentTarget.setCustomValidity('この単位では数量は整数で入力してください。先に数量を整数に変更してください。');
+                                event.currentTarget.reportValidity();
+                                return;
+                              }
+                              event.currentTarget.setCustomValidity('');
+                              onUpdate(row.key, { unit: nextUnit });
+                            }}
                             className="h-5 min-h-5 w-full border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                             aria-label={`単位 ${number}`}
                           />

@@ -9,6 +9,7 @@ import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 import { CatalogPickerDialog, type CatalogPickerItem } from './catalog-picker';
+import { QuoteInternalRateStrip } from './quote-authoring-ui';
 
 const initial = { ok: false } as const;
 
@@ -300,11 +301,11 @@ export function DealerRevisionForm({
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 border-b border-line bg-[#fafbf9] px-3 py-2' : ''}>
         <div>
           <p className={sheetMode ? 'text-xs font-semibold text-[#315745]' : 'font-semibold'}>
-            {sheetMode ? `見積内容を編集中（第${quote.revision + 1}版）` : '案件見積の編集'}
+            {sheetMode ? `第${quote.revision + 1}版 見積編集` : '案件見積の編集'}
           </p>
           <p className={sheetMode ? 'mt-0.5 text-[0.65rem] text-muted' : 'mt-1 text-xs text-muted'}>
             {sheetMode
-              ? '現地確認後に決まる運送・基礎・電気・給排水・設置などの金額を入力します。シミュレーターで確定した内容は通常は確認表示です。'
+              ? '発行済みの見積は変更せず、次の版として編集します。現地確認後に決まる施工金額もここで反映します。'
               : '入力内容を反映して改訂見積を発行すると次の版が作られ、現在の版は履歴として残ります。'}
           </p>
         </div>
@@ -323,6 +324,8 @@ export function DealerRevisionForm({
       <div className={sheetMode ? 'px-3 pt-2' : ''}>
         <Status state={state} />
       </div>
+
+      {sheetMode && <QuoteInternalRateStrip showPlannedDefaults />}
 
       {sheetMode ? (
         <>

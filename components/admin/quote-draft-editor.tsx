@@ -416,7 +416,7 @@ export function QuoteDraftEditor({
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
           <div>
-            <p className="text-sm font-semibold">{dirty ? '未保存の変更があります' : 'Draftは保存済みです'}</p>
+            <p className="text-sm font-semibold">{dirty ? '未保存の変更があります' : '下書きは保存済みです'}</p>
             <p className="mt-0.5 text-[10px] text-muted">下書き保存時に数量×単価・税額・合計を確認します。</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -433,7 +433,7 @@ export function QuoteDraftEditor({
         onSubmit={(event) => {
           if (dirty) {
             event.preventDefault();
-            window.alert('未保存の変更があります。先にDraftを保存してください。');
+            window.alert('未保存の変更があります。先に下書きを保存してください。');
             return;
           }
           if (!window.confirm(`この内容を正式な${formalRevisionLabel}として発行しますか？発行後、この下書きは編集できません。`)) {

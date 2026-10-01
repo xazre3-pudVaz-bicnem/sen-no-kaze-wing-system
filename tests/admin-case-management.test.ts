@@ -93,7 +93,7 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('href="/admin/notifications"');
     expect(list).not.toContain('＋対面・電話・紹介の案件受付');
     expect(list).toContain('＋見積書を作成');
-    expect(list).toContain('href="/admin/quotes/new"');
+    expect(list).toContain('href="/admin/quotes/new?return_to=%2Fadmin%2Fquotes"');
     expect(list).toContain('canCreateQuote={false}');
     expect(list).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote />');
     expect(shell).toContain('href="/admin/notifications"');
@@ -244,7 +244,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-workflow-arrow"');
     expect(workspace).toContain("aria-current={step.state === 'current' ? 'step' : undefined}");
     expect(workspace).toContain('min-w-[58rem]');
-    expect(workspace).toContain('<CaseAdminControls>');
+    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
     expect(caseAdminControls).toContain('案件設定');
     expect(caseAdminControls).toContain('案件設定を閉じる');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
@@ -276,6 +276,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('次にやること：担当代理店を決める');
     expect(workspace).toContain('担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。');
     expect(workspace).toContain('案件設定で担当を選ぶ');
+    expect(workspace).toContain("buildInlineTabHref(quote.id, 'estimate', listSearchParams, false, 'dealer')");
+    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
+    expect(caseAdminControls).toContain('detailsRef.current.open = true');
     expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
     expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。');
     expect(workspace).toContain('現地確認の完了状態そのものはまだ保存されません。');
@@ -483,8 +486,8 @@ describe('Admin case management UI', () => {
     for (const route of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
       expect(nav).toContain(route);
     }
-    expect(manualQuoteWorkbench).toContain('href="/admin/quotes"');
-    expect(manualQuoteWorkbench).toContain('← 案件管理へ戻る');
+    expect(manualQuoteWorkbench).toContain('href={returnTo}');
+    expect(manualQuoteWorkbench).toContain("← {returnTo === '/admin/quote-management' ? '見積書管理' : '案件管理'}へ戻る");
     expect(newQuote).toContain('title="見積書管理"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');

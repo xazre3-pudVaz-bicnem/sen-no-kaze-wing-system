@@ -9,8 +9,14 @@ import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
  * 案件管理・見積書管理のどちらからでも開く、正式な見積編集ワークスペース。
  * Quote Draft lifecycleは変更せず、案件情報とExcel型明細を同じ画面で扱う。
  */
-export default async function AdminNewQuotePage() {
+export default async function AdminNewQuotePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   await requireAdmin('/admin/quotes/new');
+  const sp = await searchParams;
+  const returnTo = sp.return_to === '/admin/quote-management' ? '/admin/quote-management' : '/admin/quotes';
   const store = await getStore();
   const [models, quotes, requests, options, categories] = await Promise.all([
     store.listModels(),
@@ -73,6 +79,7 @@ export default async function AdminNewQuotePage() {
         }))}
         estimates={estimates}
         products={products}
+        returnTo={returnTo}
         canEditBase
       />
     </AdminPage>

@@ -135,7 +135,7 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
       </div>
       {canCreateQuote && (
         <Link
-          href="/admin/quotes/new"
+          href="/admin/quotes/new?return_to=%2Fadmin%2Fquotes"
           className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
           data-testid="new-quote-link"
         >
@@ -303,6 +303,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             tab={sp.tab}
             revised={sp.revised}
             edit={sp.edit}
+            settings={sp.settings}
             embedded
             listSearchParams={sp}
           />
@@ -707,7 +708,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   </p>
                 </div>
                 <Link
-                  href={`/admin/quotes/drafts/${selectedPendingDraft.draft_id}`}
+                  href={`/admin/quotes/drafts/${selectedPendingDraft.draft_id}?return_to=${encodeURIComponent('/admin/quotes')}`}
                   className="inline-flex rounded-lg bg-[#2f6b4f] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
                   data-testid="resume-initial-quote-draft"
                 >

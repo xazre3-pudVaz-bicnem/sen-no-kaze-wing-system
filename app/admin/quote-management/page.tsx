@@ -78,7 +78,7 @@ export default async function AdminQuoteManagementPage({
     const request = requestById.get(draft.quote_request_id);
     return {
       key: `draft-${draft.draft_id}`,
-      href: `/admin/quotes/drafts/${draft.draft_id}`,
+      href: `/admin/quotes/drafts/${draft.draft_id}?return_to=${encodeURIComponent('/admin/quote-management')}`,
       caseName: request?.case_name || request?.contact.full_name || '案件名未設定',
       customerName: request?.contact.full_name || '未登録',
       customerCompany: request?.contact.company_name ?? null,
@@ -102,7 +102,7 @@ export default async function AdminQuoteManagementPage({
       title="見積書管理"
       lead="案件見積"
       actions={
-        <Link href="/admin/quotes/new" className="btn-primary btn-sm">
+        <Link href="/admin/quotes/new?return_to=%2Fadmin%2Fquote-management" className="btn-primary btn-sm">
           ＋ 新しい案件見積
         </Link>
       }

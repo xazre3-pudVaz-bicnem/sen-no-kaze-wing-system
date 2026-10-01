@@ -243,10 +243,10 @@ export function QuoteInternalRateStrip() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[10px]">
       <span className="font-semibold text-slate-700">社内計算条件</span>
-      <span>販売費 <strong className="text-slate-400">未接続</strong></span>
-      <span>経費 <strong className="text-slate-400">未接続</strong></span>
-      <span>掛率 <strong className="text-slate-400">未接続</strong></span>
-      <span className="ml-auto text-[10px] text-slate-500">Quote Draftの正式金額ロジックは変更していません</span>
+      <span>販売費 <strong className="text-slate-400">—</strong></span>
+      <span>経費 <strong className="text-slate-400">—</strong></span>
+      <span>掛率 <strong className="text-slate-400">—</strong></span>
+      <span className="ml-auto text-[10px] text-slate-500">販売費・経費・掛率は現在の見積では使用していません</span>
     </div>
   );
 }
@@ -358,7 +358,7 @@ export function QuoteAuthoringGrid({
         className="border-b border-slate-200 bg-slate-50 px-2 py-1 text-[9px] text-slate-500"
         data-testid="quote-grid-help"
       >
-        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照
+        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ｜ 0円＝0円として計上 ／ 別途見積＝合計に含めない ／ —＝この画面では表示なし
       </div>
       <div className="overflow-x-auto md:overflow-x-visible">
         <table className="w-full min-w-[46rem] table-fixed border-collapse text-[10px] md:min-w-0">
@@ -564,8 +564,8 @@ export function QuoteAuthoringGrid({
                             aria-label={`単位 ${number}`}
                           />
                         </td>
-                        <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
-                        <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
+                        <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
                         <td className={`w-14 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           {separatePrice ? (
                             <div className="flex h-5 items-center justify-end px-1 text-[9px] font-semibold text-amber-900">別途見積</div>
@@ -584,7 +584,7 @@ export function QuoteAuthoringGrid({
                           )}
                         </td>
                         <td className="w-16 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-2 text-right tabular-nums">{separatePrice ? '—' : formatYen(row.amount)}</td>
-                        <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価正本はQuote Draftへ未接続">—</td>
+                        <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
                         <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.remark ?? ''}
@@ -758,7 +758,7 @@ export function QuoteFinancialSummary({
     <section className="ml-auto w-full max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs shadow-sm">
       <div className="flex justify-between gap-4 py-0.5"><span>原価合計</span><strong className="text-slate-400">—</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>売価明細合計</span><strong>{formatYen(subtotalRaw)}</strong></div>
-      <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-400">未接続</strong></div>
+      <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-400" title="現在の見積では使用していません">—</strong></div>
       <label className="flex items-center justify-between gap-4 py-0.5">
         <span>調整額</span>
         <Input type="number" step="1" value={adjustment} onChange={(event) => onAdjustment(Number(event.target.value) || 0)} className="h-6 w-28 text-right text-xs" />

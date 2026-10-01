@@ -184,7 +184,7 @@ describe('見積書管理の正式編集UI統合', () => {
     for (const label of ['会社名', 'お客様名', '住所', 'TEL', '顧客番号', '件名', '見積提出日', '受注契約日', '発行者情報', '発行会社名／代理店名', '担当者', '適格請求書発行事業者登録番号', '支払情報', '支払条件', '振込先', '銀行名', '支店名', '口座種別', '口座番号', '口座名義']) {
       expect(preview).toContain(label);
     }
-    for (const label of ['区分', '品名', '数量', '単位', '単価', '金額', '備考', '税抜小計', '値引き・調整額', '消費税', '税込合計']) {
+    for (const label of ['区分', '品名', '数量', '単位', '単価', '金額', '備考', '小計', '値引き等調整額', '税抜請負額', '消費税', '合計（税込）']) {
       expect(preview).toContain(label);
     }
     expect(preview).not.toContain('原価</th>');
@@ -193,6 +193,37 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(preview).not.toContain('粗利</th>');
     expect(preview).not.toContain('粗利率</th>');
     expect(preview).toContain('正式PDF発行処理は今回の対象外です');
+  });
+
+  it('お客様プレビューは実見積に合わせて区分・小計・正式表記を整理する', () => {
+    const start = authoringUi.indexOf('export function CustomerQuotePreview');
+    const preview = authoringUi.slice(start);
+    for (const label of [
+      '本体',
+      '内外装工事',
+      'オプション',
+      '自由明細',
+      '現場工事',
+      '【本体価格計】',
+      '【内外装価格計】',
+      '【オプション価格計】',
+      '【本体＋内外装＋オプション価格計】',
+      '【現場工事計】',
+      '内外装諸費用（交通費、労災、安全管理費等）',
+    ]) {
+      expect(preview).toContain(label);
+    }
+    expect(preview).toContain("kinds: ['option', 'option_expense']");
+    expect(preview).toContain("{ key: 'free', label: '自由明細', kinds: ['free']");
+    expect(preview).toContain("{ key: 'installation', label: '現場工事', kinds: ['installation']");
+    expect(preview).toContain("row.unitPrice === 0 && row.remark?.trim() === '別途見積'");
+    expect(preview).toContain("separate ? '別途見積' : formatYen(row.unitPrice)");
+    expect(preview).toContain("separate ? '—' : formatYen(row.amount)");
+    expect(preview).not.toContain('【本体＋オプション価格計】');
+    expect(preview).not.toContain('【本体＋オプション計】');
+    expect(preview).not.toContain('値引き・調整額');
+    expect(preview).not.toContain('税抜小計');
+    expect(preview).not.toContain('税込合計');
   });
 
   it('発行者・振込先は固定値をハードコードせず未設定として分離する', () => {

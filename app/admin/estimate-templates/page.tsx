@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { formatYen } from '@/lib/domain/pricing';
-import { Alert, Badge } from '@/components/ui';
+import { Alert } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import {
   EstimateTemplateWorkbench,
@@ -18,15 +17,6 @@ import {
 import { ESTIMATE_DEMO_SAMPLES, estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 import { SavedEstimateMenu } from '@/components/admin/saved-estimate-menu';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
-
-const SPEC_LABELS: Record<string, string> = {
-  base: '本体のみ',
-  hotel: 'ホテル',
-  'hotel-single': 'ホテル・単身者',
-  residence: '住宅・単身者',
-  'water-kit': '水回りキット',
-  office: '事務所・店舗',
-};
 
 const SECTION_LABELS = {
   interior_exterior: '内外装工事',
@@ -104,36 +94,6 @@ export default async function EstimateTemplatesPage({
           samples={savedEstimateSamples}
           selectedSampleId={selectedSample?.id}
         />
-        <section className="card overflow-hidden">
-          <div className="border-b border-line px-4 py-3">
-            <p className="text-[11px] font-semibold text-muted">選択中のシミュレーター標準</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-semibold">
-                {selectedSample?.name ?? '画面確認用の標準見積'}
-              </h2>
-              <Badge tone="neutral">画面確認用サンプル</Badge>
-            </div>
-          </div>
-          <div className="flex flex-wrap divide-x divide-line text-xs">
-            <span className="px-4 py-2">
-              商品 <strong className="ml-1">{selectedSample?.model ?? '—'}</strong>
-            </span>
-            <span className="px-4 py-2">
-              仕様 <strong className="ml-1">{selectedSample?.spec ?? '—'}</strong>
-            </span>
-            <span className="px-4 py-2">
-              防火仕様 <strong className="ml-1">{selectedSample?.fireSpec ?? '—'}</strong>
-            </span>
-            <span className="px-4 py-2">
-              標準金額 <strong className="ml-1">{selectedSample ? formatYen(selectedSample.sourceTotal) : '—'}</strong>
-            </span>
-          </div>
-        </section>
-        <Alert tone="info">
-          {selectedSample
-            ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
-            : '現在はシミュレーター標準の正式データが未登録です。下の画面は確認用で、変更はDBへ保存されません。'}
-        </Alert>
         <EstimateTemplateExcelDemo
           key={selectedSample?.id ?? 'new-estimate-demo'}
           sampleId={selectedSample?.id}
@@ -147,8 +107,6 @@ export default async function EstimateTemplatesPage({
     store.getEstimateTemplateBundle(selectedTemplate.base_model_id, selectedTemplate.spec_code),
     store.getCatalogBundle(selectedTemplate.base_model_id),
   ]);
-
-  const model = models.find((row) => row.id === selectedTemplate.base_model_id) ?? null;
 
   if (!bundle) {
     return (
@@ -263,30 +221,6 @@ export default async function EstimateTemplatesPage({
         samples={savedEstimateSamples}
         selectedId={selectedTemplate.id}
       />
-      <section className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted">選択中のシミュレーター標準</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-semibold">{selectedTemplate.name}</h2>
-              <Badge tone="neutral">編集画面</Badge>
-            </div>
-          </div>
-
-        </div>
-
-        <div className="flex flex-wrap divide-x divide-line text-xs">
-          <span className="px-4 py-2">商品 <strong className="ml-1">{model?.name ?? '—'}</strong></span>
-          <span className="px-4 py-2">仕様 <strong className="ml-1">{SPEC_LABELS[selectedTemplate.spec_code] ?? selectedTemplate.spec_code}</strong></span>
-          <span className="px-4 py-2">防火仕様 <strong className="ml-1 text-muted">正式接続待ち</strong></span>
-          <span className="px-4 py-2">標準金額 <strong className="ml-1">{formatYen(selectedTemplate.total)}</strong></span>
-        </div>
-      </section>
-
-      <Alert tone="info">
-        一覧から標準見積を切り替えながら、下のExcel型編集画面を確認できます。画面内の明細変更はまだDBへ保存されません。
-      </Alert>
-
       <EstimateTemplateDetailTabs
         editContent={
           <EstimateTemplateWorkbench

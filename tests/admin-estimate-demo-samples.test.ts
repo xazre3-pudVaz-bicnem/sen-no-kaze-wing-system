@@ -62,8 +62,8 @@ describe('見積書作成画面のExcelサンプル', () => {
     expect(joined).toContain('床フローリング');
     expect(joined).toContain('１．運送費');
     expect(joined).not.toContain('その他明細（Excel原本');
-    expect(demo).toContain('0円の未選択候補は除外し、DBには保存されません');
-    expect(demo).toContain('DBには保存されません');
+    expect(demo).toContain('画面確認用・保存されません');
+    expect(demo).not.toContain('0円の未選択候補は除外し、DBには保存されません');
     expect(demo).toContain('Excel原本 税込合計');
     expect(demo).toContain("sample ? 0 : 15");
     expect(demo).toContain('if (sample && !dirty)');

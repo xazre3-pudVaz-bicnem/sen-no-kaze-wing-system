@@ -1159,7 +1159,6 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
       adjustment: 0,
       adjustment_reason: null,
     });
-    draftId = draft.id;
     revalidatePath('/admin/quotes');
   } catch (e) {
     return errState(e);
@@ -1197,10 +1196,9 @@ export async function createManualQuoteWorkbenchAction(
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
-  let draftId: string;
   try {
     const store = await getStore();
-    const draft = await store.createManualQuoteDraftWithItems(actor, {
+    await store.createManualQuoteDraftWithItems(actor, {
       case_name: parsed.data.case_name || null,
       customer_name: parsed.data.customer_name,
       customer_company: parsed.data.customer_company || null,
@@ -1222,7 +1220,6 @@ export async function createManualQuoteWorkbenchAction(
 
   // 非Web案件の新規登録後は案件管理へ合流する。
   // 現地確認後の見積編集・正式発行は案件管理から保存済みDraftを再開して行う。
-  void draftId;
   redirect('/admin/quotes');
 }
 

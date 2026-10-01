@@ -668,7 +668,8 @@ export function QuoteAuthoringGrid({
                     const number = rowNumberByKey.get(row.key) ?? 0;
                     const detailLabel = KIND_DETAIL_LABELS[row.kind];
                     const separatePrice = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
-                    const editCellClass = row.locked ? 'bg-slate-100' : 'bg-amber-50';
+                    const rowLocked = Boolean(row.locked || !sectionEditable);
+                    const editCellClass = rowLocked ? 'bg-slate-100' : 'bg-amber-50';
 
                     return (
                       <tr key={row.key} className="border-b border-slate-200 bg-white">
@@ -678,14 +679,14 @@ export function QuoteAuthoringGrid({
                           <div className="flex items-center gap-0.5">
                             <Input
                               value={row.name}
-                              disabled={row.locked}
+                              disabled={rowLocked}
                               data-quote-grid-col="name"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { name: event.target.value })}
                               className="h-5 min-h-5 min-w-0 flex-1 border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                               aria-label={`品名 ${number}`}
                             />
-                            {!row.locked && sectionEditable && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
+                            {!rowLocked && sectionEditable && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
                               <button
                                 type="button"
                                 disabled={!canPickProduct}
@@ -707,8 +708,8 @@ export function QuoteAuthoringGrid({
                             max="99999"
                             step={quoteQuantityRule(row.unit) === 'decimal' ? '0.01' : '1'}
                             value={quoteQuantityRule(row.unit) === 'fixed-one' ? 1 : row.quantity}
-                            disabled={row.locked}
-                            readOnly={!row.locked && quoteQuantityRule(row.unit) === 'fixed-one'}
+                            disabled={rowLocked}
+                            readOnly={!rowLocked && quoteQuantityRule(row.unit) === 'fixed-one'}
                             inputMode={quoteQuantityRule(row.unit) === 'decimal' ? 'decimal' : 'numeric'}
                             title={
                               quoteQuantityRule(row.unit) === 'fixed-one'
@@ -730,7 +731,7 @@ export function QuoteAuthoringGrid({
                         <td className={`w-9 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.unit ?? ''}
-                            disabled={row.locked}
+                            disabled={rowLocked}
                             data-quote-grid-col="unit"
                             onKeyDown={handleGridKeyDown}
                             onChange={(event) => {
@@ -762,7 +763,7 @@ export function QuoteAuthoringGrid({
                               type="number"
                               step="1"
                               value={row.unitPrice}
-                              disabled={row.locked}
+                              disabled={rowLocked}
                               data-quote-grid-col="sale"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { unitPrice: Number(event.target.value) || 0 })}
@@ -776,7 +777,7 @@ export function QuoteAuthoringGrid({
                         <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.remark ?? ''}
-                            disabled={row.locked}
+                            disabled={rowLocked}
                             data-quote-grid-col="remark"
                             onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { remark: event.target.value })}
@@ -787,7 +788,7 @@ export function QuoteAuthoringGrid({
                         <td className="w-10 px-0.5 text-center">
                           <button
                             type="button"
-                            disabled={row.locked}
+                            disabled={rowLocked}
                             onClick={() => onRemove(row.key)}
                             className="rounded px-1 py-0.5 text-[10px] text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
                           >

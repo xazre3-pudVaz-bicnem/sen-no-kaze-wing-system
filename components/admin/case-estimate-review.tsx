@@ -126,8 +126,8 @@ function EmptyPlanNotice({
         <section className="rounded-lg border border-line bg-white p-3" data-testid="case-estimate-plan-selections">
           <p className="text-xs font-semibold text-muted">保存済み見積の選択内容</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {selectionNames.slice(0, 12).map((name) => (
-              <span key={name} className="rounded-full border border-line bg-[#f7f9f8] px-2 py-1 text-xs">
+            {selectionNames.slice(0, 12).map((name, index) => (
+              <span key={`${name}-${index}`} className="rounded-full border border-line bg-[#f7f9f8] px-2 py-1 text-xs">
                 {name}
               </span>
             ))}
@@ -203,11 +203,13 @@ export async function CaseEstimateReview({
   actor,
   query,
   requestedTab,
+  listModelName,
 }: {
   selection: CaseEstimateReviewSelection;
   actor: SessionUser;
   query: string;
   requestedTab?: string;
+  listModelName: string;
 }) {
   const store = await getStore();
   const activeTab: ReviewTab = isReviewTab(requestedTab) ? requestedTab : 'estimate';
@@ -287,7 +289,7 @@ export async function CaseEstimateReview({
 
         {activeTab === 'plan' && (
           <EmptyPlanNotice
-            modelName={draft.base_model_id}
+            modelName={listModelName || draft.base_model_id}
             specCode={draft.spec_code}
             selectionNames={items
               .filter((item) => !item.kind.includes('expense') && item.kind !== 'discount')

@@ -382,7 +382,7 @@ export function QuoteAuthoringGrid({
         className="border-b border-slate-200 bg-slate-50 px-2 py-1 text-[9px] text-slate-500"
         data-testid="quote-grid-help"
       >
-        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ｜ 0円＝0円として計上 ／ 別途見積＝合計に含めない ／ —＝この画面では表示なし
+        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ｜ 別途見積＝合計に含めない ／ —＝この画面では表示なし
       </div>
       <div className="overflow-x-auto md:overflow-x-visible">
         <table className="w-full min-w-[46rem] table-fixed border-collapse text-[10px] md:min-w-0">
@@ -773,7 +773,7 @@ export function QuoteAuthoringGrid({
                               <strong className="text-sm">{product.priceOnRequest ? '別途見積' : formatYen(product.price)}</strong>
                               {!product.priceOnRequest && product.price === 0 && (
                                 <span className="ml-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                                  0円として計上
+                                  登録価格：0円
                                 </span>
                               )}
                             </div>

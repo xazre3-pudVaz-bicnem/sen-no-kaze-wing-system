@@ -46,7 +46,11 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('label="電話番号"');
     expect(workbench).toContain('label="メールアドレス"');
     expect(workbench).toContain('label="お客様住所"');
-    expect(workbench).toContain('電話・メール・お客様住所は現在この画面では入力できません');
+    expect(workbench).toContain('電話・メール・お客様住所は保存先未接続のため、現在は入力できません');
+    expect(workbench).toContain('placeholder="保存先未接続"');
+    expect(workbench).toContain('data-testid="new-quote-base-master-pending"');
+    expect(workbench).toContain('対応するPublished Base Master Revisionを一意に解決できる基盤接続後に有効化します');
+    expect(workbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(workbench).not.toContain('name="customer_phone"');
     expect(workbench).not.toContain('name="customer_email"');
     expect(workbench).not.toContain('name="customer_address"');

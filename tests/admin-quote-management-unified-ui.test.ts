@@ -36,8 +36,8 @@ describe('見積書管理の正式編集UI統合', () => {
     }
     expect(manualWorkbench).toContain('name="customer_name" value={customerName}');
     expect(manualWorkbench).toContain('customerLastName.trim() && customerFirstName.trim()');
-    expect(manualWorkbench).toContain('電話・メール・お客様住所は現在この画面では入力できません');
-    expect(manualWorkbench).toContain('placeholder="未設定"');
+    expect(manualWorkbench).toContain('電話・メール・お客様住所は保存先未接続のため、現在は入力できません');
+    expect(manualWorkbench).toContain('placeholder="保存先未接続"');
     expect(manualWorkbench).not.toContain('（任意）');
     expect(manualWorkbench).not.toContain('label="注文範囲"');
     expect(draftEditor).not.toContain('<span className="text-muted">注文範囲</span>');
@@ -159,13 +159,25 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftEditor).toContain('row.option_id === product.id && row.key !== targetKey');
   });
 
-  it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {
-    expect(authoringUi).toContain('販売費・経費・掛率は現在の見積では使用していません');
-    expect(authoringUi).toContain('販売費 <strong className="text-slate-400">—</strong>');
-    expect(authoringUi).toContain('経費 <strong className="text-slate-400">—</strong>');
-    expect(authoringUi).toContain('掛率 <strong className="text-slate-400">—</strong>');
+  it('3率は新規画面で予定初期値だけを明示し、正式保存・金額計算へ偽接続しない', () => {
+    expect(authoringUi).toContain('showPlannedDefaults');
+    expect(authoringUi).toContain('販売費率 <strong>100%</strong>');
+    expect(authoringUi).toContain('経費率 <strong>15%</strong>');
+    expect(authoringUi).toContain('掛率 <strong>150%</strong>');
+    expect(authoringUi).toContain('現行Quote Draftの保存契約には未接続のため、入力・保存・見積金額計算には使用しません');
+    expect(manualWorkbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
+    expect(manualWorkbench).not.toContain('name="sales_expense_rate"');
+    expect(manualWorkbench).not.toContain('name="expense_rate"');
+    expect(manualWorkbench).not.toContain('name="markup_rate"');
     expect(manualWorkbench).toContain('roundLikePostgres');
     expect(draftEditor).toContain('detail.draft.tax_rate');
+  });
+
+  it('原価未接続時の粗利・粗利率を0扱いせず未算定と表示する', () => {
+    expect(authoringUi).toContain('<span>原価合計</span><strong className="text-slate-500">未算定</strong>');
+    expect(authoringUi).toContain('<span>粗利</span><strong className="text-slate-600">未算定</strong>');
+    expect(authoringUi).toContain('<span>粗利率</span><strong className="text-slate-600">未算定</strong>');
+    expect(authoringUi).toContain('粗利・粗利率は0として扱わず未算定と表示します');
   });
 
   it('新規見積では過去見積の複製元候補を検索し、編集画面では案件見積一覧を維持する', () => {

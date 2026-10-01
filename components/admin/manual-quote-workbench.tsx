@@ -305,7 +305,7 @@ export function ManualQuoteWorkbench({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
               <h2 className="text-sm font-semibold">案件情報</h2>
               <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-muted">
-                <span>電話・メール・お客様住所は現在この画面では入力できません</span>
+                <span>電話・メール・お客様住所は保存先未接続のため、現在は入力できません</span>
                 <span>* 必須</span>
               </div>
             </div>
@@ -366,8 +366,8 @@ export function ManualQuoteWorkbench({
                     value=""
                     readOnly
                     disabled
-                    placeholder="未設定"
-                    title="電話番号は現在この画面では入力できません"
+                    placeholder="保存先未接続"
+                    title="電話番号は保存先接続後に入力できるようにします"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -379,8 +379,8 @@ export function ManualQuoteWorkbench({
                     value=""
                     readOnly
                     disabled
-                    placeholder="未設定"
-                    title="メールアドレスは現在この画面では入力できません"
+                    placeholder="保存先未接続"
+                    title="メールアドレスは保存先接続後に入力できるようにします"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -392,8 +392,8 @@ export function ManualQuoteWorkbench({
                     value=""
                     readOnly
                     disabled
-                    placeholder="未設定"
-                    title="お客様住所は現在この画面では入力できません"
+                    placeholder="保存先未接続"
+                    title="お客様住所は保存先接続後に入力できるようにします"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -454,10 +454,10 @@ export function ManualQuoteWorkbench({
                 <CompactField label="防火仕様" htmlFor="quote-fire-spec">
                   <Input
                     id="quote-fire-spec"
-                    value="未設定"
+                    value="本体基準との接続待ち"
                     readOnly
                     disabled
-                    title="正式なBase Master Revision選択との接続は今回変更しません"
+                    title="防火仕様は商品モデル・仕様と対応するPublished Base Master Revisionを一意に解決できる基盤接続後に選択可能にします"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -473,6 +473,10 @@ export function ManualQuoteWorkbench({
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-12 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[10px] leading-4 text-slate-600" data-testid="new-quote-base-master-pending">
+                商品モデル・仕様は案件登録に保存されます。防火仕様の選択と本体明細の自動展開は、対応するPublished Base Master Revisionを一意に解決できる基盤接続後に有効化します。
               </div>
 
               <div className="sm:col-span-2 lg:col-span-12">
@@ -492,7 +496,7 @@ export function ManualQuoteWorkbench({
           <QuoteAuthoringTabs active={activeTab} onChange={setActiveTab} />
           {activeTab === 'estimate' ? (
             <>
-              <QuoteInternalRateStrip />
+              <QuoteInternalRateStrip showPlannedDefaults />
               <QuoteAuthoringGrid
                 rows={authoringRows}
                 products={products}

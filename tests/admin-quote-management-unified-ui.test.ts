@@ -208,14 +208,14 @@ describe('見積書管理の正式編集UI統合', () => {
       '【内外装価格計】',
       '【オプション価格計】',
       '【本体＋内外装＋オプション価格計】',
-      '【別途計】',
       '内外装諸費用（交通費、労災、安全管理費等）',
     ]) {
       expect(preview).toContain(label);
     }
     expect(preview).toContain("kinds: ['option', 'option_expense']");
     expect(preview).toContain("{ key: 'free', label: '自由明細', kinds: ['free']");
-    expect(preview).toContain("{ key: 'installation', label: '別途', kinds: ['installation']");
+    expect(preview).toContain("{ key: 'installation', label: '別途', kinds: ['installation'], subtotalLabel: null }");
+    expect(preview).not.toContain('【別途計】');
     expect(preview).not.toContain("label: '現場工事', kinds: ['installation']");
     expect(preview).toContain("row.unitPrice === 0 && row.remark?.trim() === '別途見積'");
     expect(preview).toContain("separate ? '別途見積' : formatYen(row.unitPrice)");

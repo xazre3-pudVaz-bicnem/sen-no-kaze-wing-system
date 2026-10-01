@@ -83,11 +83,14 @@ describe('unified manual quote authoring', () => {
     expect(store).toContain('option_id?: string | null');
   });
 
-  it('opens a case-estimate list popup from the top of the estimate frame', () => {
+  it('opens the past-estimate clone source picker on a new estimate while keeping the edit list popup', () => {
     expect(workbench).toContain('<QuoteEditorTopbar');
     expect(authoringUi).toContain('data-testid="estimate-picker-dialog"');
+    expect(authoringUi).toContain('過去見積から複製');
+    expect(authoringUi).toContain('複製する過去見積を選択');
     expect(authoringUi).toContain('案件見積一覧');
     expect(authoringUi).toContain('案件名・顧客名・見積番号・商品モデルで検索');
+    expect(authoringUi).toContain('data-testid="estimate-clone-source-row"');
     expect(authoringUi).toContain('data-testid="estimate-picker-row"');
   });
 
@@ -164,13 +167,16 @@ describe('unified manual quote authoring', () => {
     expect(supabaseStore).not.toContain("db.rpc('create_manual_quote_case'");
   });
 
-  it('warns before leaving an unsaved new estimate while keeping unavailable tabs disabled', () => {
+  it('warns before leaving an unsaved new estimate and exposes non-fake plan/drawing states', () => {
     expect(workbench).toContain("window.confirm('保存していない内容があります。保存せずに別の画面へ移動しますか？')");
     expect(workbench).toContain("window.addEventListener('beforeunload'");
     expect(workbench).toContain('if (!confirmLeave()) event.preventDefault();');
-    expect(authoringUi).toContain('type="button" disabled');
+    expect(authoringUi).toContain('disabled={!enabled}');
     expect(authoringUi).toContain('プランボード');
     expect(authoringUi).toContain('図面');
+    expect(workbench).toContain('active={activeTab} onChange={setActiveTab}');
+    expect(workbench).toContain('案件専用のplan stateへ接続して表示します');
+    expect(workbench).toContain('図面は案件側でversion管理');
     expect(workbench).not.toContain('プランボード・図面は正式保存後に案件画面から利用できます');
   });
 

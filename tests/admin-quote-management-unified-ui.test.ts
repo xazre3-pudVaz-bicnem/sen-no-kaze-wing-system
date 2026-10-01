@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const authoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
+const sharedWorkbenchUi = fs.readFileSync(path.join(root, 'components/admin/estimate-workbench-shared.tsx'), 'utf8');
 const manualWorkbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote-workbench.tsx'), 'utf8');
 const draftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
 const newQuotePage = fs.readFileSync(path.join(root, 'app/admin/quotes/new/page.tsx'), 'utf8');
@@ -159,12 +160,16 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftEditor).toContain('row.option_id === product.id && row.key !== targetKey');
   });
 
-  it('3率は新規画面で予定初期値だけを明示し、正式保存・金額計算へ偽接続しない', () => {
+  it('3率はStandard Estimate共通UIを再利用し、Quote Draft未接続のまま偽保存しない', () => {
     expect(authoringUi).toContain('showPlannedDefaults');
-    expect(authoringUi).toContain('販売費率 <strong>100%</strong>');
-    expect(authoringUi).toContain('経費率 <strong>15%</strong>');
-    expect(authoringUi).toContain('掛率 <strong>150%</strong>');
-    expect(authoringUi).toContain('現行Quote Draftの保存契約には未接続のため、入力・保存・見積金額計算には使用しません');
+    expect(authoringUi).toContain('<EstimateRateControls');
+    expect(authoringUi).toContain('salesExpenseRate: 100');
+    expect(authoringUi).toContain('expenseRate: 15');
+    expect(authoringUi).toContain('markupRate: 150');
+    expect(authoringUi).toContain('editable={false}');
+    expect(authoringUi).toContain('Quote Draftの正式保存項目に未接続');
+    expect(sharedWorkbenchUi).toContain('aria-label={ariaLabel}');
+    expect(sharedWorkbenchUi).toContain('disabled={!editable}');
     expect(manualWorkbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(manualWorkbench).not.toContain('name="sales_expense_rate"');
     expect(manualWorkbench).not.toContain('name="expense_rate"');
@@ -178,6 +183,10 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('<span>粗利</span><strong className="text-slate-600">未算定</strong>');
     expect(authoringUi).toContain('<span>粗利率</span><strong className="text-slate-600">未算定</strong>');
     expect(authoringUi).toContain('粗利・粗利率は0として扱わず未算定と表示します');
+    expect(manualWorkbench).toContain('<EstimateMoneyStrip');
+    expect(manualWorkbench).toContain('subtotalLabel="税別明細合計"');
+    expect(manualWorkbench).toContain('totalLabel="見積金額（税込）"');
+    expect(sharedWorkbenchUi).toContain('data-testid="shared-estimate-money-strip"');
   });
 
   it('新規見積では過去見積の複製元候補を検索し、編集画面では案件見積一覧を維持する', () => {

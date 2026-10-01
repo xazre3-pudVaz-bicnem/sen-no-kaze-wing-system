@@ -6,6 +6,7 @@ import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
+import { EstimateMoneyStrip } from '@/components/admin/estimate-workbench-shared';
 import {
   CustomerQuotePreview,
   QuoteAuthoringGrid,
@@ -497,6 +498,23 @@ export function ManualQuoteWorkbench({
           {activeTab === 'estimate' ? (
             <>
               <QuoteInternalRateStrip showPlannedDefaults />
+              <EstimateMoneyStrip
+                subtotalRaw={subtotalRaw}
+                adjustment={adjustment}
+                tax={tax}
+                total={total}
+                onAdjustment={(value) => {
+                  setAdjustment(value);
+                  markDirty();
+                }}
+                adjustmentReason={adjustmentReason}
+                onAdjustmentReason={(value) => {
+                  setAdjustmentReason(value);
+                  markDirty();
+                }}
+                subtotalLabel="税別明細合計"
+                totalLabel="見積金額（税込）"
+              />
               <QuoteAuthoringGrid
                 rows={authoringRows}
                 products={products}
@@ -551,6 +569,7 @@ export function ManualQuoteWorkbench({
             setAdjustmentReason(value);
             markDirty();
           }}
+          showAdjustmentControls={false}
         />
 
         {showPreview && (

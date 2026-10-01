@@ -43,6 +43,10 @@ const workbench = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/estimate-template-workbench.tsx'),
   'utf8'
 );
+const sharedWorkbenchUi = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/estimate-workbench-shared.tsx'),
+  'utf8'
+);
 const adminForms = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/forms.tsx'),
   'utf8'
@@ -251,7 +255,7 @@ describe('シミュレーター標準管理UI', () => {
   it('Excel風の連続表から商品追加・商品変更・自由明細を操作できる', () => {
     expect(workbench).toContain('data-testid="estimate-excel-grid"');
     expect(workbench).toContain('見積書編集');
-    expect(workbench).toContain('bg-amber-50/35 px-3 py-1.5');
+    expect(sharedWorkbenchUi).toContain('bg-amber-50/35 px-3 py-1.5');
     expect(workbench).not.toContain('シミュレーター見積書のレイアウトは使用しません');
     expect(workbench).toContain('＋行追加');
     expect(workbench).toContain('＋自由明細');
@@ -397,11 +401,13 @@ describe('シミュレーター標準管理UI', () => {
     expect(workbench).toContain('w-[16rem] min-w-[16rem] max-w-[16rem]');
     expect(workbench).not.toContain('min-w-[20rem]');
     expect(workbench).toContain('colSpan={visibleColumnCount - 3}');
-    expect(workbench).toContain('販売費');
-    expect(workbench).toContain('経費');
-    expect(workbench).toContain('掛率');
-    expect(workbench).toContain('粗利率');
-    expect(workbench).toContain('aria-label="値引き等調整額"');
+    expect(workbench).toContain('<EstimateRateControls');
+    expect(workbench).toContain('<EstimateMoneyStrip');
+    expect(sharedWorkbenchUi).toContain('販売費');
+    expect(sharedWorkbenchUi).toContain('経費');
+    expect(sharedWorkbenchUi).toContain('掛率');
+    expect(sharedWorkbenchUi).toContain('粗利率');
+    expect(sharedWorkbenchUi).toContain('aria-label="値引き等調整額"');
     expect(workbench).toContain('salesExpenseRate');
     expect(workbench).toContain('expenseRate');
     expect(workbench).toContain('markupRate');
@@ -410,9 +416,9 @@ describe('シミュレーター標準管理UI', () => {
     expect(workbench).toContain('販売費・経費・掛率は画面内で調整できます。正式計算・保存・公開は準備中です');
     expect(workbench).toContain('min-w-[62rem] w-full border-collapse text-xs');
     expect(workbench).toContain('min-w-[82rem] w-full border-collapse text-xs');
-    expect(workbench).toContain('className="h-6 min-h-6');
-    expect(workbench).toContain('w-14 px-1 text-right text-xs');
-    expect(workbench).toContain('w-20 px-1 text-right text-xs');
+    expect(sharedWorkbenchUi).toContain('className="h-6 min-h-6');
+    expect(sharedWorkbenchUi).toContain('w-14 px-1 text-right text-xs');
+    expect(sharedWorkbenchUi).toContain('w-20 px-1 text-right text-xs');
     expect(workbench).toContain('className="flex size-5');
     expect(workbench).not.toContain("row.groupLabel || '商品'");
   });

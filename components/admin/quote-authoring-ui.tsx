@@ -335,14 +335,31 @@ export function QuoteAuthoringTabs({
   );
 }
 
-export function QuoteInternalRateStrip() {
+export function QuoteInternalRateStrip({
+  showPlannedDefaults = false,
+}: {
+  showPlannedDefaults?: boolean;
+} = {}) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[10px]">
       <span className="font-semibold text-slate-700">社内計算条件</span>
-      <span>販売費 <strong className="text-slate-400">—</strong></span>
-      <span>経費 <strong className="text-slate-400">—</strong></span>
-      <span>掛率 <strong className="text-slate-400">—</strong></span>
-      <span className="ml-auto text-[10px] text-slate-500">販売費・経費・掛率は現在の見積では使用していません</span>
+      {showPlannedDefaults ? (
+        <>
+          <span>販売費率 <strong>100%</strong> <em className="not-italic text-slate-400">予定初期値</em></span>
+          <span>経費率 <strong>15%</strong> <em className="not-italic text-slate-400">予定初期値</em></span>
+          <span>掛率 <strong>150%</strong> <em className="not-italic text-slate-400">予定初期値</em></span>
+          <span className="ml-auto text-[10px] text-slate-500">
+            現行Quote Draftの保存契約には未接続のため、入力・保存・見積金額計算には使用しません
+          </span>
+        </>
+      ) : (
+        <>
+          <span>販売費 <strong className="text-slate-400">—</strong></span>
+          <span>経費 <strong className="text-slate-400">—</strong></span>
+          <span>掛率 <strong className="text-slate-400">—</strong></span>
+          <span className="ml-auto text-[10px] text-slate-500">販売費・経費・掛率は現在の見積では使用していません</span>
+        </>
+      )}
     </div>
   );
 }
@@ -965,9 +982,9 @@ export function QuoteFinancialSummary({
 }) {
   return (
     <section className="ml-auto w-full max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs shadow-sm">
-      <div className="flex justify-between gap-4 py-0.5"><span>原価合計</span><strong className="text-slate-400">—</strong></div>
+      <div className="flex justify-between gap-4 py-0.5"><span>原価合計</span><strong className="text-slate-500">未算定</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>売価明細合計</span><strong>{formatYen(subtotalRaw)}</strong></div>
-      <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-400" title="現在の見積では使用していません">—</strong></div>
+      <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-500" title="現行Quote Draftでは正式保存していません">未算定</strong></div>
       <label className="flex items-center justify-between gap-4 py-0.5">
         <span>調整額</span>
         <Input type="number" step="1" value={adjustment} onChange={(event) => onAdjustment(Number(event.target.value) || 0)} className="h-6 w-28 text-right text-xs" />
@@ -978,8 +995,11 @@ export function QuoteFinancialSummary({
       </label>
       <div className="flex justify-between gap-4 py-0.5"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
       <div className="mt-1.5 flex justify-between gap-4 border-t-2 border-slate-700 pt-2 text-base"><span>見積金額</span><strong>{formatYen(total)}</strong></div>
-      <div className="mt-1.5 flex justify-between gap-4 rounded bg-emerald-50 px-2 py-1.5"><span>粗利</span><strong className="text-slate-400">—</strong></div>
-      <div className="flex justify-between gap-4 py-0.5"><span>粗利率</span><strong className="text-slate-400">—</strong></div>
+      <div className="mt-1.5 flex justify-between gap-4 rounded bg-emerald-50 px-2 py-1.5"><span>粗利</span><strong className="text-slate-600">未算定</strong></div>
+      <div className="flex justify-between gap-4 py-0.5"><span>粗利率</span><strong className="text-slate-600">未算定</strong></div>
+      <p className="mt-1.5 text-[10px] leading-4 text-slate-500">
+        原価が現行Quote Draftの正式保存項目に未接続のため、粗利・粗利率は0として扱わず未算定と表示します。
+      </p>
     </section>
   );
 }

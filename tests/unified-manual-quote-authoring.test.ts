@@ -13,6 +13,7 @@ const workbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote
 const draftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
 const authoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
 const actions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
+const validation = fs.readFileSync(path.join(root, 'lib/validation.ts'), 'utf8');
 const workbenchAction = actions.slice(
   actions.indexOf('export async function createManualQuoteWorkbenchAction'),
   actions.indexOf('export async function createQuoteRevisionDraftAction')
@@ -37,7 +38,7 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('data-testid="case-info-panel"');
     expect(workbench).toContain('<QuoteAuthoringGrid');
     expect(workbench).toContain('<QuoteFinancialSummary');
-    expect(workbench).toContain('<CustomerQuotePreview');
+    expect(workbench).not.toContain('<CustomerQuotePreview');
     expect(workbench).toContain('rounded-lg border border-slate-300 bg-white shadow-sm');
     expect(workbench).toContain('function CompactField');
     expect(workbench).toContain('label="案件名"');
@@ -120,7 +121,6 @@ describe('unified manual quote authoring', () => {
       'memo',
       'items_json',
       'adjustment',
-      'adjustment_reason',
     ]) {
       expect(workbench).toContain(`name="${name}"`);
     }
@@ -129,6 +129,59 @@ describe('unified manual quote authoring', () => {
     expect(workbenchAction).toContain('store.createManualQuoteDraftWithItems(actor');
     expect(workbenchAction).toContain("redirect('/admin/quotes')");
     expect(workbenchAction).not.toContain('redirect(`/admin/quotes/drafts/${draftId}?');
+  });
+
+  it('keeps the new-case adjustment editor only in the lower financial summary', () => {
+    expect(workbench).not.toContain('<EstimateMoneyStrip');
+    expect(workbench).toContain('adjustmentLabel="値引き等調整額"');
+    expect(workbench).toContain('showAdjustmentReason={false}');
+    expect(workbench).toContain('showTaxExclContractAmount');
+    expect(workbench).toContain('totalLabel="見積金額（税込）"');
+    expect(workbench).not.toContain('name="adjustment_reason"');
+    expect(workbench).not.toContain('adjustmentReason');
+    expect(workbench).not.toContain('調整理由');
+  });
+
+  it('recalculates tax-excluded contract amount, tax, and total immediately for a discount', () => {
+    const subtotalRaw = 10_000;
+    const adjustment = -750;
+    const taxExclContractAmount = Math.max(0, subtotalRaw + adjustment);
+    const tax = Math.floor(taxExclContractAmount * 0.1);
+    const total = taxExclContractAmount + tax;
+
+    expect(taxExclContractAmount).toBe(9_250);
+    expect(tax).toBe(925);
+    expect(total).toBe(10_175);
+    expect(workbench).toContain('const taxExclContractAmount = Math.max(0, subtotalRaw + adjustment);');
+    expect(workbench).toContain('const tax = Math.floor(taxExclContractAmount * 0.1);');
+    expect(workbench).toContain('const total = taxExclContractAmount + tax;');
+  });
+
+  it('keeps zero adjustment identical to the previous subtotal/tax/total flow', () => {
+    const subtotalRaw = 10_000;
+    const adjustment = 0;
+    const taxExclContractAmount = Math.max(0, subtotalRaw + adjustment);
+    const tax = Math.floor(taxExclContractAmount * 0.1);
+    expect(taxExclContractAmount).toBe(10_000);
+    expect(tax).toBe(1_000);
+    expect(taxExclContractAmount + tax).toBe(11_000);
+  });
+
+  it('does not fake an adjustment reason while the existing save validation still requires one', () => {
+    expect(workbench).not.toContain('name="adjustment_reason"');
+    expect(workbenchAction).toContain("adjustment_reason: formData.get('adjustment_reason')");
+    expect(validation).toContain("if (data.adjustment !== 0 && !data.adjustment_reason?.trim())");
+    expect(validation).toContain("message: '調整額を設定する場合は理由を入力してください'");
+  });
+
+  it('does not show a customer preview on the new-case entry screen', () => {
+    expect(workbench).not.toContain('showPreview');
+    expect(workbench).not.toContain('CustomerQuotePreview');
+    expect(workbench).not.toContain("プレビューを閉じる");
+    expect(workbench).not.toContain(">プレビュー<");
+    expect(workbench).toContain('登録すると案件一覧に追加されます。');
+    expect(workbench).toContain('label="案件として登録"');
+    expect(draftEditor).toContain('<CustomerQuotePreview');
   });
 
   it('creates case + Draft + initial lines atomically without issuing formal Revision 1', () => {

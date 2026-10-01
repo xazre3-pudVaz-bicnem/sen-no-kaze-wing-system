@@ -37,8 +37,9 @@ describe('実案件E2E後の見積UI導線', () => {
     expect(controls).toContain('id="case-admin-controls"');
   });
 
-  it('0円・別途見積・未表示の意味を利用者向けに区別する', () => {
-    expect(authoringUi).toContain('0円＝0円として計上');
+  it('商品台帳の0円登録価格と別途見積・未表示を区別する', () => {
+    expect(authoringUi).toContain('登録価格：0円');
+    expect(authoringUi).not.toContain('0円＝0円として計上');
     expect(authoringUi).toContain('別途見積＝合計に含めない');
     expect(authoringUi).toContain('—＝この画面では表示なし');
     expect(authoringUi).toContain("product.priceOnRequest ? '別途見積' : formatYen(product.price)");

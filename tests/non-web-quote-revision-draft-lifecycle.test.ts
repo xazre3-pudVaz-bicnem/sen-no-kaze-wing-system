@@ -133,7 +133,8 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
     expect(editor).toContain('const rowBaseLocked = baseLocked');
     expect(editor).toContain("kind !== 'base' && kind !== 'base_expense'");
     expect(editor).toContain('locked: rowBaseLocked');
-    expect(authoringUi).toContain('disabled={row.locked}');
+    expect(authoringUi).toContain('const rowLocked = Boolean(row.locked || !sectionEditable);');
+    expect(authoringUi).toContain('disabled={rowLocked}');
   });
 
   it('revalidates new or changed options again at formalization time', () => {

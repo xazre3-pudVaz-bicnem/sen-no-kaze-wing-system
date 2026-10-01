@@ -406,7 +406,7 @@ export function QuoteAuthoringGrid({
         className="border-b border-slate-200 bg-slate-50 px-2 py-1 text-[9px] text-slate-500"
         data-testid="quote-grid-help"
       >
-        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 黄色＝入力 ／ グレー＝参照 ｜ 別途見積＝合計に含めない ／ —＝この画面では表示なし
+        Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 数量：式＝1固定 ／ 個・台・枚＝整数 ／ m・㎡＝小数可 ｜ 黄色＝入力 ／ グレー＝参照 ｜ 別途見積＝合計に含めない ／ —＝この画面では表示なし
       </div>
       <div className="overflow-x-auto md:overflow-x-visible">
         <table className="w-full min-w-[46rem] table-fixed border-collapse text-[10px] md:min-w-0">

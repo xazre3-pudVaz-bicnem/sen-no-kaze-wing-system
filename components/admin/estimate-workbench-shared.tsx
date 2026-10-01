@@ -89,6 +89,8 @@ export function EstimateMoneyStrip({
   subtotalLabel = '税別',
   adjustmentLabel = '調整',
   totalLabel = '税込',
+  adjustmentReason,
+  onAdjustmentReason,
 }: {
   subtotalRaw: number;
   adjustment: number;
@@ -98,6 +100,8 @@ export function EstimateMoneyStrip({
   subtotalLabel?: string;
   adjustmentLabel?: string;
   totalLabel?: string;
+  adjustmentReason?: string;
+  onAdjustmentReason?: (value: string) => void;
 }) {
   return (
     <div
@@ -119,6 +123,19 @@ export function EstimateMoneyStrip({
           aria-label="値引き等調整額"
         />
       </label>
+      {adjustmentReason !== undefined ? (
+        <label className="flex min-w-52 flex-1 items-center gap-1 px-3 py-0.5">
+          <span className="whitespace-nowrap text-slate-600">調整理由</span>
+          <Input
+            value={adjustmentReason}
+            readOnly={!onAdjustmentReason}
+            onChange={(event) => onAdjustmentReason?.(event.target.value)}
+            placeholder={adjustment === 0 ? '調整なし' : '必須'}
+            className="h-6 min-h-6 min-w-32 flex-1 px-2 text-xs read-only:bg-slate-100 read-only:text-slate-600"
+            aria-label="調整理由"
+          />
+        </label>
+      ) : null}
       <span className="px-3 py-1">
         消費税 <strong className="ml-1 text-sm text-slate-900">{formatYen(tax)}</strong>
       </span>

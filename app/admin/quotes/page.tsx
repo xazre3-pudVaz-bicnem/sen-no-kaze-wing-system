@@ -642,9 +642,11 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">見積依頼</h2>
+                <h2 className="text-lg font-semibold">
+                  {selectedPendingRequest.case_name?.trim() || selectedPendingRequest.contact.full_name}
+                </h2>
                 <Badge tone={selectedPendingRequest.status === 'new' ? 'danger' : 'neutral'}>
-                  {QUOTE_REQUEST_STATUS_LABELS[selectedPendingRequest.status]}
+                  見積依頼：{QUOTE_REQUEST_STATUS_LABELS[selectedPendingRequest.status]}
                 </Badge>
                 <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
                   見積未発行
@@ -698,36 +700,47 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             </p>
           </section>
 
-          {selectedPendingDraft ? (
-            <section className="rounded-lg border border-[#bfd6c9] bg-[#f4faf6] p-3" data-testid="pending-draft-resume">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#315745]">保存済みの下書き見積があります</h3>
-                  <p className="mt-1 text-xs leading-5 text-ink-soft">
-                    前回保存した内容から、そのまま見積書作成を再開できます。
-                  </p>
-                </div>
-                <Link
-                  href={`/admin/quotes/drafts/${selectedPendingDraft.draft_id}?return_to=${encodeURIComponent('/admin/quotes')}`}
-                  className="inline-flex rounded-lg bg-[#2f6b4f] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
-                  data-testid="resume-initial-quote-draft"
-                >
-                  下書き見積を続ける
-                </Link>
-              </div>
-            </section>
-          ) : (
-            <section className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3" data-testid="pending-request-next-step">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-[#765d1f]">この依頼から見積を作成</h3>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">正式処理は未実装</span>
-              </div>
-              <p className="mt-1 text-xs leading-5 text-ink-soft">
-                この受付・お客様・保存済み仕様を保持したまま正式見積を発行する処理には、Quote lifecycle用のDB/RPC対応が必要です。
-                右上の「＋見積書を作成」は別の新規見積を作成する入口のため、このWeb受付の引継ぎには使用しません。
+          <section className="space-y-2 border-t border-line pt-3" data-testid="pending-case-estimate">
+            <div>
+              <h3 className="text-sm font-semibold text-[#315745]">見積</h3>
+              <p className="mt-0.5 text-xs text-muted">
+                案件登録後の見積作業は、この案件の見積下書きから進めます。
               </p>
-            </section>
-          )}
+            </div>
+
+            {selectedPendingDraft ? (
+              <section className="rounded-lg border border-[#bfd6c9] bg-[#f4faf6] p-3" data-testid="pending-draft-resume">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-semibold text-[#315745]">見積下書き</h4>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#315745]">作成中</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-ink-soft">
+                      現地確認結果や施工金額を反映して、正式見積を仕上げてください。
+                    </p>
+                  </div>
+                  <Link
+                    href={`/admin/quotes/drafts/${selectedPendingDraft.draft_id}?return_to=${encodeURIComponent('/admin/quotes')}&return_request=${encodeURIComponent(selectedPendingRequest.id)}`}
+                    className="inline-flex rounded-lg bg-[#2f6b4f] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+                    data-testid="resume-initial-quote-draft"
+                  >
+                    見積を編集
+                  </Link>
+                </div>
+              </section>
+            ) : (
+              <section className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-3" data-testid="pending-request-next-step">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-semibold text-[#765d1f]">見積作成は現在準備中です</h4>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-ink-soft">
+                  このWeb受付の案件情報と保存済み仕様を、そのまま共通の見積編集画面へ引き継ぐ機能は現在準備中です。
+                  右上の「＋見積書を作成」は別の新規案件を登録する入口のため、この案件の編集には使用しません。
+                </p>
+              </section>
+            )}
+          </section>
         </section>
       ) : (
         shown.length > 0 && (

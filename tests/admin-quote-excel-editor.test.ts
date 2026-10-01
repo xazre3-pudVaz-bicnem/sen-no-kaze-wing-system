@@ -97,14 +97,14 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('product.categoryName');
   });
 
-  it('uses the shared rate, financial summary, and customer preview components', () => {
+  it('uses shared rate/financial UI while keeping customer preview only on registered-case editors', () => {
     expect(manualQuoteWorkbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(quoteDraftEditor).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(form).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(manualQuoteWorkbench).toContain('<QuoteFinancialSummary');
     expect(quoteDraftEditor).toContain('<QuoteFinancialSummary');
     expect(form).toContain('<QuoteFinancialSummary');
-    expect(manualQuoteWorkbench).toContain('<CustomerQuotePreview');
+    expect(manualQuoteWorkbench).not.toContain('<CustomerQuotePreview');
     expect(quoteDraftEditor).toContain('<CustomerQuotePreview');
     expect(form).toContain('<CustomerQuotePreview');
   });

@@ -5,6 +5,7 @@ import { getStore, StoreError } from '@/lib/data/store';
 import { canEditCatalog, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
 import { QuoteDraftEditor } from '@/components/admin/quote-draft-editor';
 import { Alert } from '@/components/ui';
+import { formatYen } from '@/lib/domain/pricing';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 export default async function AdminQuoteDraftPage({
@@ -39,6 +40,11 @@ export default async function AdminQuoteDraftPage({
     throw error;
   }
   if (!detail) notFound();
+
+  const parentQuoteDetail = detail.draft.parent_quote_id
+    ? await store.getQuote(detail.draft.parent_quote_id, actor)
+    : null;
+  const targetRevision = parentQuoteDetail ? parentQuoteDetail.quote.revision + 1 : 1;
 
   const [model, catalog] = await Promise.all([
     store.getModelById(detail.draft.base_model_id, { includeDraft: true }),
@@ -107,9 +113,16 @@ export default async function AdminQuoteDraftPage({
         <Link href={returnHref} className="text-sm text-ink-soft underline-offset-4 hover:underline">
           ← {returnLabel}へ戻る
         </Link>
-        <span className="rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">
-          見積下書き編集中
-        </span>
+        <div className="text-right">
+          <span className="inline-flex rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">
+            第{targetRevision}版 見積下書き
+          </span>
+          {parentQuoteDetail && (
+            <p className="mt-1 text-[10px] text-muted">
+              現在の発行済み見積：第{parentQuoteDetail.quote.revision}版 {formatYen(parentQuoteDetail.quote.total)}
+            </p>
+          )}
+        </div>
       </div>
 
       {sp.created && (
@@ -129,6 +142,7 @@ export default async function AdminQuoteDraftPage({
         canEditBase={canEditCatalog(actor.role)}
         estimates={estimates}
         products={products}
+        targetRevision={targetRevision}
       />
     </div>
   );

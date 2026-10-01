@@ -6,9 +6,7 @@ import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
-import { EstimateMoneyStrip } from '@/components/admin/estimate-workbench-shared';
 import {
-  CustomerQuotePreview,
   QuoteAuthoringGrid,
   QuoteAuthoringTabs,
   QuoteEditorTopbar,
@@ -123,7 +121,6 @@ export function ManualQuoteWorkbench({
   const model = models.find((row) => row.id === modelId);
   const [rows, setRows] = useState<WorkbenchRow[]>([]);
   const [adjustment, setAdjustment] = useState(0);
-  const [adjustmentReason, setAdjustmentReason] = useState('');
   const [caseName, setCaseName] = useState('');
   const [customerLastName, setCustomerLastName] = useState('');
   const [customerFirstName, setCustomerFirstName] = useState('');
@@ -132,7 +129,6 @@ export function ManualQuoteWorkbench({
     : '';
   const [companyName, setCompanyName] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
   const [activeTab, setActiveTab] = useState<'estimate' | 'planboard' | 'drawings'>('estimate');
   const [dirty, setDirty] = useState(false);
   const allowLeaveRef = useRef(false);
@@ -168,9 +164,9 @@ export function ManualQuoteWorkbench({
     (sum, row) => sum + roundLikePostgres(row.unit_price * row.quantity),
     0
   );
-  const subtotal = Math.max(0, subtotalRaw + adjustment);
-  const tax = Math.floor(subtotal * 0.1);
-  const total = subtotal + tax;
+  const taxExclContractAmount = Math.max(0, subtotalRaw + adjustment);
+  const tax = Math.floor(taxExclContractAmount * 0.1);
+  const total = taxExclContractAmount + tax;
 
   const authoringRows: QuoteAuthoringRow[] = rows.map((row) => ({
     key: row.key,
@@ -295,7 +291,6 @@ export function ManualQuoteWorkbench({
         <input type="hidden" name="items_json" value={itemsJson} />
         <input type="hidden" name="base_master_revision_id" value="" />
         <input type="hidden" name="adjustment" value={adjustment} />
-        <input type="hidden" name="adjustment_reason" value={adjustmentReason} />
         <input type="hidden" name="finish_level" value="full" />
         <input type="hidden" name="customer_name" value={customerName} />
 
@@ -498,23 +493,6 @@ export function ManualQuoteWorkbench({
           {activeTab === 'estimate' ? (
             <>
               <QuoteInternalRateStrip showPlannedDefaults />
-              <EstimateMoneyStrip
-                subtotalRaw={subtotalRaw}
-                adjustment={adjustment}
-                tax={tax}
-                total={total}
-                onAdjustment={(value) => {
-                  setAdjustment(value);
-                  markDirty();
-                }}
-                adjustmentReason={adjustmentReason}
-                onAdjustmentReason={(value) => {
-                  setAdjustmentReason(value);
-                  markDirty();
-                }}
-                subtotalLabel="税別明細合計"
-                totalLabel="見積金額（税込）"
-              />
               <QuoteAuthoringGrid
                 rows={authoringRows}
                 products={products}
@@ -558,43 +536,23 @@ export function ManualQuoteWorkbench({
         <QuoteFinancialSummary
           subtotalRaw={subtotalRaw}
           adjustment={adjustment}
-          adjustmentReason={adjustmentReason}
           tax={tax}
           total={total}
           onAdjustment={(value) => {
             setAdjustment(value);
             markDirty();
           }}
-          onAdjustmentReason={(value) => {
-            setAdjustmentReason(value);
-            markDirty();
-          }}
-          showAdjustmentControls={false}
+          adjustmentLabel="値引き等調整額"
+          showAdjustmentReason={false}
+          showTaxExclContractAmount
+          totalLabel="見積金額（税込）"
         />
-
-        {showPreview && (
-          <CustomerQuotePreview
-            caseName={caseName}
-            customerName={customerName}
-            companyName={companyName}
-            address=""
-            phone=""
-            rows={authoringRows}
-            subtotal={subtotalRaw}
-            adjustment={adjustment}
-            tax={tax}
-            total={total}
-          />
-        )}
 
         <div className="rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
           <p className="mb-2 text-right text-[10px] leading-4 text-muted">
             登録すると案件一覧に追加されます。
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>
-              {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
-            </Button>
             <SubmitButton pending={pending} label="案件として登録" />
           </div>
         </div>

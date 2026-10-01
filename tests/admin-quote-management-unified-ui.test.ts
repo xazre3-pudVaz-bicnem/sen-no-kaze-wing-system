@@ -191,8 +191,9 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('<span>粗利</span><strong className="text-slate-600">未算定</strong>');
     expect(authoringUi).toContain('<span>粗利率</span><strong className="text-slate-600">未算定</strong>');
     expect(authoringUi).toContain('原価が未確定のため、粗利・粗利率は「未算定」と表示しています。');
-    expect(manualWorkbench).toContain('<EstimateMoneyStrip');
-    expect(manualWorkbench).toContain('subtotalLabel="税別明細合計"');
+    expect(manualWorkbench).not.toContain('<EstimateMoneyStrip');
+    expect(manualWorkbench).toContain('adjustmentLabel="値引き等調整額"');
+    expect(manualWorkbench).toContain('showTaxExclContractAmount');
     expect(manualWorkbench).toContain('totalLabel="見積金額（税込）"');
     expect(sharedWorkbenchUi).toContain('data-testid="shared-estimate-money-strip"');
   });
@@ -276,6 +277,19 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(preview).not.toContain('株式会社技術の杜');
     expect(preview).not.toContain('北日本銀行');
     expect(preview).not.toContain('7084800');
+  });
+
+  it('新規案件見積だけプレビューを外し、共有プレビュー自体は案件編集用に残す', () => {
+    expect(manualWorkbench).not.toContain('CustomerQuotePreview');
+    expect(manualWorkbench).not.toContain('showPreview');
+    expect(authoringUi).toContain('export function CustomerQuotePreview');
+    expect(draftEditor).toContain('<CustomerQuotePreview');
+  });
+
+  it('既存のStandard Estimate向け金額帯コンポーネントは変更しない', () => {
+    expect(sharedWorkbenchUi).toContain('data-testid="shared-estimate-money-strip"');
+    expect(sharedWorkbenchUi).toContain('調整理由');
+    expect(sharedWorkbenchUi).toContain('aria-label="値引き等調整額"');
   });
 
   it('新規見積ではプランボード・図面タブを開け、正式接続前の状態を明示する', () => {

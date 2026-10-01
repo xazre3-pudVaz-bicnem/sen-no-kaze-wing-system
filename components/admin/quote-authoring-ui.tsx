@@ -984,21 +984,29 @@ export function QuoteAuthoringGrid({
 export function QuoteFinancialSummary({
   subtotalRaw,
   adjustment,
-  adjustmentReason,
+  adjustmentReason = '',
   tax,
   total,
   onAdjustment,
   onAdjustmentReason,
   showAdjustmentControls = true,
+  adjustmentLabel = '調整額',
+  showAdjustmentReason = true,
+  showTaxExclContractAmount = false,
+  totalLabel = '見積金額',
 }: {
   subtotalRaw: number;
   adjustment: number;
-  adjustmentReason: string;
+  adjustmentReason?: string;
   tax: number;
   total: number;
   onAdjustment: (value: number) => void;
-  onAdjustmentReason: (value: string) => void;
+  onAdjustmentReason?: (value: string) => void;
   showAdjustmentControls?: boolean;
+  adjustmentLabel?: string;
+  showAdjustmentReason?: boolean;
+  showTaxExclContractAmount?: boolean;
+  totalLabel?: string;
 }) {
   return (
     <section className="ml-auto w-full max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs shadow-sm">
@@ -1008,30 +1016,45 @@ export function QuoteFinancialSummary({
       {showAdjustmentControls ? (
         <>
           <label className="flex items-center justify-between gap-4 py-0.5">
-            <span>調整額</span>
-            <Input type="number" step="1" value={adjustment} onChange={(event) => onAdjustment(Number(event.target.value) || 0)} className="h-6 w-28 text-right text-xs" />
+            <span>{adjustmentLabel}</span>
+            <Input
+              type="number"
+              step="1"
+              value={adjustment}
+              onChange={(event) => onAdjustment(Number(event.target.value) || 0)}
+              className="h-6 w-28 text-right text-xs"
+              aria-label={adjustmentLabel}
+            />
           </label>
-          <label className="block py-1">
-            <span className="text-[10px] text-muted">調整理由</span>
-            <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
-          </label>
+          {showAdjustmentReason ? (
+            <label className="block py-1">
+              <span className="text-[10px] text-muted">調整理由</span>
+              <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason?.(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
+            </label>
+          ) : null}
         </>
       ) : (
         <>
           <div className="flex justify-between gap-4 py-0.5">
-            <span>調整額</span>
+            <span>{adjustmentLabel}</span>
             <strong>{formatYen(adjustment)}</strong>
           </div>
-          {adjustmentReason && (
+          {showAdjustmentReason && adjustmentReason && (
             <div className="flex justify-between gap-4 py-0.5 text-[10px] text-muted">
-              <span>調整理由</span>
+              <span className="text-muted">調整理由</span>
               <span className="text-right">{adjustmentReason}</span>
             </div>
           )}
         </>
       )}
+      {showTaxExclContractAmount ? (
+        <div className="flex justify-between gap-4 py-0.5">
+          <span>税抜請負額</span>
+          <strong>{formatYen(Math.max(0, subtotalRaw + adjustment))}</strong>
+        </div>
+      ) : null}
       <div className="flex justify-between gap-4 py-0.5"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
-      <div className="mt-1.5 flex justify-between gap-4 border-t-2 border-slate-700 pt-2 text-base"><span>見積金額</span><strong>{formatYen(total)}</strong></div>
+      <div className="mt-1.5 flex justify-between gap-4 border-t-2 border-slate-700 pt-2 text-base"><span>{totalLabel}</span><strong>{formatYen(total)}</strong></div>
       <div className="mt-1.5 flex justify-between gap-4 rounded bg-emerald-50 px-2 py-1.5"><span>粗利</span><strong className="text-slate-600">未算定</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>粗利率</span><strong className="text-slate-600">未算定</strong></div>
       <p className="mt-1.5 text-[10px] leading-4 text-slate-500">

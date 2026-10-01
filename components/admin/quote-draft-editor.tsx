@@ -223,6 +223,8 @@ export function QuoteDraftEditor({
     };
 
     setRows((current) => {
+      const duplicate = current.some((row) => row.option_id === product.id && row.key !== targetKey);
+      if (duplicate) return current;
       if (targetKey) {
         return current.map((row) => (row.key === targetKey ? { ...row, ...productPatch } : row));
       }

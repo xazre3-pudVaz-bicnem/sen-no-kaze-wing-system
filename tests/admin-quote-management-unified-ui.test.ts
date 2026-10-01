@@ -125,7 +125,9 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('overflow-x-auto border-b border-line');
     expect(authoringUi).toContain('grid gap-3 sm:grid-cols-2');
     expect(authoringUi).not.toContain('lg:grid-cols-3');
-    expect(authoringUi).toContain('0円として計上');
+    expect(authoringUi).toContain('登録価格：0円');
+    expect(authoringUi).toContain("product.priceOnRequest ? '別途見積' : formatYen(product.price)");
+    expect(authoringUi).not.toContain('0円として計上');
     expect(authoringUi).not.toContain('メーカー未登録');
     expect(authoringUi).not.toContain('型番・サイズ未登録');
     expect(authoringUi).toContain("isCurrent ? '選択中' : '追加済み'");

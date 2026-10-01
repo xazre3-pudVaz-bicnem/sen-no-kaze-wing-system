@@ -291,7 +291,6 @@ export function ManualQuoteWorkbench({
           allowLeaveRef.current = true;
         }}
       >
-        <input type="hidden" name="return_to" value={returnTo} />
         <input type="hidden" name="items_json" value={itemsJson} />
         <input type="hidden" name="base_master_revision_id" value="" />
         <input type="hidden" name="adjustment" value={adjustment} />
@@ -570,10 +569,10 @@ export function ManualQuoteWorkbench({
             登録すると案件一覧に追加されます。現地確認後の見積編集・正式発行は案件管理から行います。
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>
-            {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
-          </Button>
-          <SubmitButton pending={pending} label="案件として登録" />
+            <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>
+              {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
+            </Button>
+            <SubmitButton pending={pending} label="案件として登録" />
           </div>
         </div>
       </form>

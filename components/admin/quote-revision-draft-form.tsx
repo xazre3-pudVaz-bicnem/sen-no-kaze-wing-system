@@ -23,13 +23,16 @@ export function QuoteRevisionDraftForm({
     >
       <input type="hidden" name="quote_id" value={quoteId} />
       <div>
-        <p className="text-sm font-semibold">第{revision + 1}版のDraftを作成</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold">第{revision + 1}版の見積下書き</p>
+          <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#315745]">作成中</span>
+        </div>
         <p className="mt-0.5 text-xs text-muted">
-          現在の第{revision}版をコピーして編集します。Draft保存だけでは正式Revisionは増えません。
+          現在の第{revision}版をもとに、次の見積を編集します。発行するまでは現在の見積内容は変わりません。
         </p>
         <Status state={state} />
       </div>
-      <SubmitButton pending={pending} label="見積内容を更新" />
+      <SubmitButton pending={pending} label="見積を編集" />
     </form>
   );
 }

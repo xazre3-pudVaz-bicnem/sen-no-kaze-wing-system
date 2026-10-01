@@ -9,7 +9,7 @@ import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 import { CatalogPickerDialog, type CatalogPickerItem } from './catalog-picker';
-import { QuoteInternalRateStrip } from './quote-authoring-ui';
+import { CustomerQuotePreview, QuoteInternalRateStrip, type QuoteAuthoringRow } from './quote-authoring-ui';
 
 const initial = { ok: false } as const;
 
@@ -132,6 +132,7 @@ export function DealerRevisionForm({
   const defaultCollapsedSections = () => new Set<string>(['base', 'interior', 'option', 'free']);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(defaultCollapsedSections);
   const [scopeChangeMode, setScopeChangeMode] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
@@ -147,6 +148,32 @@ export function DealerRevisionForm({
   const tax = Math.floor(subtotal * quote.tax_rate);
   const editingTotal = subtotal + tax;
   const revisionDifference = editingTotal - quote.total;
+  const previewRows: QuoteAuthoringRow[] = [
+    ...lockedItems.map((item) => ({
+      key: item.id,
+      kind: item.kind,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit ?? '',
+      unitPrice: item.unit_price,
+      amount: item.amount,
+      remark: item.remark ?? '',
+      optionId: null,
+      locked: true,
+    })),
+    ...rows.map((row) => ({
+      key: row.key,
+      kind: row.kind,
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit,
+      unitPrice: row.unit_price,
+      amount: amountOf(row),
+      remark: row.remark,
+      optionId: null,
+      locked: false,
+    })),
+  ];
 
   const markDirty = () => setIsDirty(true);
   const update = (key: string, patch: Partial<Row>) => {
@@ -902,13 +929,42 @@ export function DealerRevisionForm({
           </dl>
         )}
       </div>
+      {sheetMode && showPreview && (
+        <div className="border-t border-line bg-white px-3 py-3">
+          <CustomerQuotePreview
+            caseName={quote.customer_company || quote.customer_name}
+            customerName={quote.customer_name}
+            companyName={quote.customer_company || ''}
+            address=""
+            phone=""
+            rows={previewRows}
+            subtotal={subRaw}
+            adjustment={subtotal - subRaw}
+            tax={tax}
+            total={editingTotal}
+          />
+        </div>
+      )}
+
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 bg-[#f7f9f8] px-3 py-2' : ''}>
         {sheetMode && (
-          <p className="text-[0.67rem] text-muted">
-            この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。
-          </p>
+          <div>
+            <p className="text-[0.67rem] text-muted">
+              発行すると第{quote.revision + 1}版になり、現在の第{quote.revision}版は履歴として残ります。
+            </p>
+            <p className="mt-0.5 text-[0.62rem] text-muted">
+              この既存Web案件の改訂は、途中の下書き保存にはまだ対応していません。
+            </p>
+          </div>
         )}
-        <SubmitButton pending={pending} label="この内容で改訂見積を発行" />
+        <div className="flex flex-wrap items-center gap-2">
+          {sheetMode && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => setShowPreview((current) => !current)}>
+              {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
+            </Button>
+          )}
+          <SubmitButton pending={pending} label={`この内容で第${quote.revision + 1}版を発行`} />
+        </div>
       </div>
 
       {pickerOpen && (

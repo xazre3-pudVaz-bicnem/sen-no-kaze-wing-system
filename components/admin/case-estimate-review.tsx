@@ -269,7 +269,7 @@ export async function CaseEstimateReview({
             </div>
 
             <dl className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">商品モデルID</dt><dd className="mt-1 break-all font-semibold">{draft.base_model_id}</dd></div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">商品モデル</dt><dd className="mt-1 font-semibold">{listModelName || draft.base_model_id}</dd></div>
               <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">仕様</dt><dd className="mt-1 font-semibold">{SPEC_LABELS[draft.spec_code] ?? draft.spec_code}</dd></div>
               <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">状態</dt><dd className="mt-1 font-semibold">下書き</dd></div>
               <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">PDF</dt><dd className="mt-1 font-semibold text-muted">未発行のためなし</dd></div>

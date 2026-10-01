@@ -71,7 +71,7 @@ export default async function AdminQuoteManagementPage({
       const request = requestById.get(quote.quote_request_id);
       return {
         key: `quote-${quote.id}`,
-        selection: { kind: 'quote', id: quote.id },
+        selection: { kind: 'quote' as const, id: quote.id },
         caseName: request?.case_name || quote.customer_name || '案件名未設定',
         customerName: quote.customer_name || request?.contact.full_name || '未登録',
         customerCompany: quote.customer_company ?? request?.contact.company_name ?? null,
@@ -89,7 +89,7 @@ export default async function AdminQuoteManagementPage({
     const request = requestById.get(draft.quote_request_id);
     return {
       key: `draft-${draft.draft_id}`,
-      selection: { kind: 'draft', id: draft.draft_id },
+      selection: { kind: 'draft' as const, id: draft.draft_id },
       caseName: request?.case_name || request?.contact.full_name || '案件名未設定',
       customerName: request?.contact.full_name || '未登録',
       customerCompany: request?.contact.company_name ?? null,
@@ -264,6 +264,7 @@ export default async function AdminQuoteManagementPage({
           actor={actor}
           query={query}
           requestedTab={sp.detail_tab}
+          listModelName={selectedRow.modelName}
         />
       ) : (
         <div className="rounded-lg border border-line bg-white px-4 py-3 text-xs text-muted">

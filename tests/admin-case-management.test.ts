@@ -120,9 +120,9 @@ describe('Admin case management UI', () => {
     expect(quoteEstimateSheet).toContain('見積内容を更新');
     expect(quoteEstimateSheet).not.toContain('＋新しい見積書');
     expect(dealerForms).toContain('現地確認後の施工金額やオプション・別途工事等を見積に反映し、改訂見積を発行できます。');
-    expect(dealerForms).toContain('見積内容を編集中');
-    expect(dealerForms).toContain('改訂後の見積合計（税込）');
-    expect(dealerForms).toContain('この内容で改訂見積を発行');
+    expect(dealerForms).toContain('第${quote.revision + 1}版 見積編集');
+    expect(dealerForms).toContain('見積金額（税込）');
+    expect(dealerForms).toContain('label={`この内容で第${quote.revision + 1}版を発行`}');
   });
 
   it('uses case management itself as the admin landing page', () => {
@@ -284,7 +284,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
     expect(caseAdminControls).toContain('detailsRef.current.open = true');
     expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
-    expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。');
+    expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積を編集」から必要な施工金額を入力します。');
     expect(workspace).toContain('現地確認の完了状態そのものはまだ保存されません。');
     expect(workspace).toContain('施工金額を入力する');
     expect(workspace).toContain('次にやること：確定見積の内容を確認');

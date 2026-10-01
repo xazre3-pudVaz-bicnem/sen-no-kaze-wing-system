@@ -7,10 +7,12 @@ const sheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-s
 const form = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const editPage = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/edit/page.tsx'), 'utf8');
+const manualQuoteWorkbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote-workbench.tsx'), 'utf8');
 const quoteDraftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
 const quoteDraftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
+const quoteAuthoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
 const quoteTable = fs.readFileSync(path.join(root, 'components/mypage/quote-table.tsx'), 'utf8');
-const catalogPicker = fs.readFileSync(path.join(root, 'components/admin/catalog-picker.tsx'), 'utf8');
+const adminActions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
 
 describe('Admin quote Excel-like editor', () => {
   it('opens legacy Web revisions in a dedicated case-estimate editor instead of inside the issued quote', () => {
@@ -36,106 +38,111 @@ describe('Admin quote Excel-like editor', () => {
     expect(sheet).toContain('<QuoteTable');
   });
 
-  it('uses a compact Excel-style comparison grid for case revisions', () => {
-    expect(form).toContain("data-sheet-mode={sheetMode ? 'true' : undefined}");
-    expect(form).toContain('第${quote.revision + 1}版 見積編集');
-    expect(form).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
-    expect(form).toContain('min-w-[68rem] border-collapse text-[10px]');
+  it('actually reuses the same QuoteAuthoringGrid for new, Draft, and Web revision editing', () => {
+    expect(manualQuoteWorkbench).toContain('<QuoteAuthoringGrid');
+    expect(quoteDraftEditor).toContain('<QuoteAuthoringGrid');
+    expect(form).toContain('<QuoteAuthoringGrid');
+    expect(form).toContain('rows={authoringRows}');
+    expect(form).toContain('products={products}');
+    expect(form).toContain('editableSections={editableSections}');
+    expect(form).not.toContain('revision-sheet-scroll');
+    expect(form).not.toContain('data-testid="revision-preview"');
+  });
+
+  it('uses the shared compact Excel grid columns and collapsible section controls', () => {
+    expect(quoteAuthoringUi).toContain('data-testid="unified-quote-excel-grid"');
     for (const label of ['品名', '数量', '単位', '原価', '原価金額', '売価', '売価金額', '粗利', '備考']) {
-      expect(form).toContain(label);
+      expect(quoteAuthoringUi).toContain(label);
     }
-    expect(form).toContain('原価合計');
-    expect(form).toContain('売価明細合計');
-    expect(form).toContain('経費');
-    expect(form).toContain('調整額（千円未満切捨て）');
-    expect(form).toContain('消費税');
-    expect(form).toContain('見積金額（税込）');
-    expect(form).toContain('粗利率');
-    expect(form).toContain('未算定');
-    expect(form).toContain('【本体価格計】');
-    expect(form).toContain('【内外装価格計】');
-    expect(form).toContain('【オプション価格計】');
-    expect(form).toContain('【別途工事計】');
+    expect(quoteAuthoringUi).toContain('quote-section-summary-');
+    expect(quoteAuthoringUi).toContain("section.label + 'の明細を閉じる'");
+    expect(quoteAuthoringUi).toContain("section.label + 'の明細を開く'");
+    expect(quoteAuthoringUi).toContain('＋商品');
+    expect(quoteAuthoringUi).toContain('＋自由明細');
+  });
+
+  it('lets Web revisions keep their role-specific edit boundary without changing the common grid contract', () => {
+    expect(form).toContain("const editableSections: QuoteAuthoringSection[] = scopeChangeMode");
+    expect(form).toContain("['base', 'interior_exterior', 'option', 'installation']");
+    expect(form).toContain("['interior_exterior', 'option', 'installation']");
+    expect(form).toContain("['installation']");
+    expect(form).toContain("const rowCanEdit = (row: Row) => row.kind === 'installation' || scopeChangeMode;");
+    expect(quoteAuthoringUi).toContain('editableSections?: readonly QuoteAuthoringSection[];');
+    expect(quoteAuthoringUi).toContain('const sectionEditable = editableSectionSet.has(section.key);');
+  });
+
+  it('adapts Web revision rows only for display/input while keeping the legacy issue action', () => {
+    expect(form).toContain('option_id: item.option_id ?? null');
+    expect(form).toContain('const authoringRows: QuoteAuthoringRow[] = [');
+    expect(form).toContain('unitPrice: row.unit_price');
+    expect(form).toContain('amount: amountOf(row)');
+    expect(form).toContain('name={`items.${index}.kind`}');
+    expect(form).toContain('name={`items.${index}.unit_price`}');
+    expect(form).toContain('useActionState(createDealerRevisionAction, initial)');
+    expect(adminActions).toContain('export async function createDealerRevisionAction');
+    expect(form).not.toContain('saveQuoteDraftAction');
+    expect(form).not.toContain('finalizeQuoteDraftAction');
+  });
+
+  it('feeds the shared product picker with the same QuoteCatalogProduct shape used by new and Draft editors', () => {
+    expect(editPage).toContain('const categoryMap = new Map(categories.map((category) => [category.id, category] as const));');
+    expect(editPage).toContain('baseModelId: option.base_model_id');
+    expect(editPage).toContain('categoryCode: categoryMap.get(option.category_id)?.code ??');
+    expect(editPage).toContain('priceOnRequest: option.price_on_request');
+    expect(editPage).toContain('specCodes: option.spec_codes ?? []');
+    expect(editPage).toContain('products={products}');
+    expect(editPage).toContain("baseModelId={quote.base_model_id ?? ''}");
+    expect(editPage).toContain("specCode={quote.spec_code ?? ''}");
+    expect(form).toContain('product: QuoteCatalogProduct');
+    expect(form).toContain('product.categoryName');
+  });
+
+  it('uses the shared rate, financial summary, and customer preview components', () => {
+    expect(manualQuoteWorkbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
+    expect(quoteDraftEditor).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
+    expect(form).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
+    expect(manualQuoteWorkbench).toContain('<QuoteFinancialSummary');
+    expect(quoteDraftEditor).toContain('<QuoteFinancialSummary');
+    expect(form).toContain('<QuoteFinancialSummary');
+    expect(manualQuoteWorkbench).toContain('<CustomerQuotePreview');
+    expect(quoteDraftEditor).toContain('<CustomerQuotePreview');
+    expect(form).toContain('<CustomerQuotePreview');
   });
 
   it('keeps unavailable cost and gross-profit values explicitly uncalculated', () => {
-    expect(form).toContain('bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>');
-    expect(form).toContain('bg-slate-50 px-1 py-1 text-right text-slate-400">未算定</td>');
+    expect(quoteAuthoringUi).toContain('title="原価は現在この画面では表示していません">—');
+    expect(quoteAuthoringUi).toContain('<span>原価合計</span><strong className="text-slate-500">未算定</strong>');
+    expect(quoteAuthoringUi).toContain('<span>粗利</span><strong className="text-slate-600">未算定</strong>');
+    expect(quoteAuthoringUi).toContain('<span>粗利率</span><strong className="text-slate-600">未算定</strong>');
     expect(form).not.toContain('粗利 0');
     expect(form).not.toContain('粗利率 0%');
   });
 
-  it('keeps the same base grouping and fire-item placement between read and edit modes', () => {
+  it('keeps the planned rates read-only until Quote persistence supports them', () => {
+    expect(quoteAuthoringUi).toContain('values={{ salesExpenseRate: 100, expenseRate: 15, markupRate: 150 }}');
+    expect(quoteAuthoringUi).toContain('editable={false}');
+    expect(quoteAuthoringUi).toContain('販売費・経費・掛率の編集機能は現在準備中です。');
+  });
+
+  it('does not invent Web Draft persistence while sharing the editor UI', () => {
+    expect(form).toContain('この既存Web案件の改訂は、途中の下書き保存には現在対応していません。');
+    expect(form).not.toContain('下書き保存');
+    expect(form).toContain('label={`この内容で第${quote.revision + 1}版を発行`}');
+    expect(quoteDraftEditor).toContain('label="下書き保存"');
+  });
+
+  it('keeps the current installation domain wording instead of splitting storage semantics in the UI', () => {
+    expect(quoteAuthoringUi).toContain("{ key: 'installation', label: '別途', kinds: ['installation'] }");
+    expect(form).toContain("['installation']");
+    expect(form).not.toContain("'sitework'");
+  });
+
+  it('keeps the same base grouping in the issued-quote reference view', () => {
     expect(quoteTable).toContain("const fireItems = allOptionItems.filter((i) => i.name.includes('防火'));");
     expect(quoteTable).toContain('const baseSections: { section: string; items: QuoteItem[] }[] = [];');
-    expect(form).toContain("item.kind === 'option' && item.name.includes('防火')");
-    expect(form).toContain("section.key === 'base'");
-    expect(form).toContain('防火仕様を含む');
-    expect(form).toContain('showBaseGroupHeading');
-    expect(form).toContain('showBaseGroupSubtotal');
   });
 
-  it('keeps non-editable base items visible while dealer revisions are edited', () => {
-    expect(form).toContain('const lockedItems = sheetMode ? items.filter((i) => !editable(i.kind)) : [];');
-    expect(form).toContain('data-testid={`revision-locked-row-${index}`}');
-    expect(form).toContain('aria-label="変更不可"');
-    expect(form).toContain('<LockKeyhole');
-  });
-
-  it('focuses normal editing on installation rows while preserving confirmed rows', () => {
-    expect(form).toContain('data-testid="revision-sticky-summary"');
-    expect(form).toContain('未保存の変更あり');
-    expect(form).toContain('編集前と同じ');
-    expect(form).toContain('前版');
-    expect(form).toContain('編集中');
-    expect(form).toContain('差額');
-    expect(form).toContain("new Set<string>(['base', 'interior', 'option', 'free'])");
-    expect(form).toContain("const rowEditable = section.key === 'sitework' || scopeChangeMode");
-    expect(form).toContain('readOnly={!rowEditable}');
-    expect(form).toContain('disabled={!rowEditable}');
-    expect(form).toContain('現地確認後に入力');
-    expect(form).toContain('確定済み・確認のみ');
-    expect(form).toContain('isCollapsed && editableRows.map');
-    expect(form).toContain('data-revision-col="quantity"');
-    expect(form).toContain('handleSheetKeyDown');
-    expect(form).toContain('明細を編集前に戻す');
-  });
-
-  it('keeps advanced product changes explicit and separate from normal site-work entry', () => {
-    expect(form).toContain('data-testid="add-installation"');
-    expect(form).toContain('現地工事を追加');
-    expect(form).toContain('data-testid="toggle-scope-change"');
-    expect(form).toContain("scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'");
-    expect(form).toContain('data-testid="scope-change-actions"');
-    expect(form).toContain('商品・仕様変更');
-    expect(form).toContain('data-testid="open-catalog-picker"');
-    expect(form).toContain('data-testid="add-interior-exterior"');
-    expect(form).toContain('data-testid="add-option"');
-    expect(form).toContain('data-testid="add-free"');
-    expect(form).toContain('insertByKind');
-    expect(form).toContain('changeKind');
-  });
-
-  it('reuses the case Quote preview and keeps issuance controls together', () => {
-    expect(form).toContain('<CustomerQuotePreview');
-    expect(form).toContain("showPreview ? 'プレビューを閉じる' : 'プレビュー'");
-    expect(form).toContain('この既存Web案件の改訂は、途中の下書き保存にはまだ対応していません。');
-    expect(form).toContain('label={`この内容で第${quote.revision + 1}版を発行`}');
-    expect(form).toContain('現在の第{quote.revision}版は履歴として残ります。');
-  });
-
-  it('lets an editable estimate row choose an existing catalog product', () => {
-    expect(form).toContain('const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);');
-    expect(form).toContain('data-testid={`select-catalog-row-${i}`}');
-    expect(form).toContain('商品から選ぶ');
-    expect(form).toContain('applyCatalogItemToRow');
-    expect(form).toContain("mode={pickerTargetRow ? 'replace' : 'add'}");
-    expect(form).toContain('unit_price: item.price_on_request ? 0 : item.price');
-    expect(catalogPicker).toContain("mode?: 'add' | 'replace'");
-  });
-
-  it('uses the same planned rate strip and version-aware issue wording for persisted Quote Drafts', () => {
-    expect(quoteDraftEditor).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
+  it('uses version-aware issue wording for persisted Quote Drafts as well', () => {
     expect(quoteDraftEditor).toContain('targetRevision = 1');
     expect(quoteDraftEditor).toContain('const formalRevisionLabel = `第${targetRevision}版`;');
     expect(quoteDraftEditor).toContain('この内容で第${targetRevision}版を発行');

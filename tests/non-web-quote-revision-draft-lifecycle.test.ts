@@ -197,6 +197,7 @@ describe('non-Web Quote Revision 2+ Draft lifecycle', () => {
     expect(workspace).toContain('const canUseLegacyRevision =');
     expect(workspace).toContain('quote.configuration_id !== null');
     expect(editor).toContain('const isRevisionDraft = detail.draft.parent_quote_id !== null;');
-    expect(editor).toContain("isRevisionDraft ? '次のRevision' : 'Revision 1'");
+    expect(editor).toContain('targetRevision = 1');
+    expect(editor).toContain('const formalRevisionLabel = `第${targetRevision}版`;');
   });
 });

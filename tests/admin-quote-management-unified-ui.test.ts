@@ -131,6 +131,14 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftPage).toContain('products={products}');
   });
 
+  it('商品台帳モーダルの商品画像はトリミングせず全体表示する', () => {
+    expect(authoringUi).toContain('bg-contain');
+    expect(authoringUi).toContain('bg-no-repeat');
+    expect(authoringUi).toContain('h-36');
+    expect(authoringUi).toContain('sm:h-40');
+    expect(authoringUi).not.toContain('bg-cover bg-center text-xs text-muted');
+  });
+
   it('商品台帳モーダルは検索・0円表示・追加済み判定をUIだけで扱う', () => {
     expect(authoringUi).toContain('data-testid="quote-product-picker-search"');
     expect(authoringUi).toContain('商品名・メーカー・型番・サイズで検索');

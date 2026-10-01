@@ -374,6 +374,7 @@ export function QuoteAuthoringGrid({
   onRemove,
   onAddFree,
   onSelectProduct,
+  editableSections,
 }: {
   rows: QuoteAuthoringRow[];
   products: QuoteCatalogProduct[];
@@ -383,12 +384,18 @@ export function QuoteAuthoringGrid({
   onRemove: (key: string) => void;
   onAddFree: (section: QuoteAuthoringSection) => void;
   onSelectProduct: (section: QuoteAuthoringSection, targetKey: string | null, product: QuoteCatalogProduct) => void;
+  /** 画面用途・権限により追加可能な区分だけを制限する。未指定は全区分。 */
+  editableSections?: readonly QuoteAuthoringSection[];
 }) {
   const [collapsed, setCollapsed] = useState<Set<QuoteAuthoringSection>>(() => new Set());
   const [pickerSection, setPickerSection] = useState<QuoteAuthoringSection | null>(null);
   const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);
   const [pickerCategoryId, setPickerCategoryId] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const editableSectionSet = useMemo(
+    () => new Set<QuoteAuthoringSection>(editableSections ?? SECTION_META.map((section) => section.key)),
+    [editableSections]
+  );
 
   const sectionRows = (section: QuoteAuthoringSection) =>
     rows.filter((row) => sectionForKind(row.kind) === section);
@@ -541,6 +548,7 @@ export function QuoteAuthoringGrid({
             {SECTION_META.map((section) => {
               const currentRows = sectionRows(section.key);
               const isCollapsed = collapsed.has(section.key);
+              const sectionEditable = editableSectionSet.has(section.key);
               const sectionSale = currentRows.reduce((sum, row) => sum + row.amount, 0);
               const separate = currentRows.some((row) => row.unitPrice === 0 && row.remark?.trim() === '別途見積');
               const hasSeparatePrice = section.key === 'installation' && separate;
@@ -610,16 +618,23 @@ export function QuoteAuthoringGrid({
                           <>
                             <button
                               type="button"
-                              disabled={!canPickProduct}
+                              disabled={!sectionEditable || !canPickProduct}
                               className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
                               onClick={() => openProductPicker(section.key)}
-                              title={canPickProduct ? '商品台帳から追加' : '商品モデルと仕様を先に選択してください'}
+                              title={
+                                !sectionEditable
+                                  ? 'この区分は現在の編集モードでは変更できません'
+                                  : canPickProduct
+                                    ? '商品台帳から追加'
+                                    : '商品モデルと仕様を先に選択してください'
+                              }
                             >
                               ＋商品
                             </button>
                             <button
                               type="button"
-                              className="text-[9px] font-semibold underline underline-offset-2"
+                              disabled={!sectionEditable}
+                              className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
                               onClick={() => onAddFree(section.key)}
                             >
                               ＋自由明細
@@ -628,7 +643,8 @@ export function QuoteAuthoringGrid({
                         ) : (
                           <button
                             type="button"
-                            className="text-[9px] font-semibold underline underline-offset-2"
+                            disabled={!sectionEditable}
+                            className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
                             onClick={() => onAddFree(section.key)}
                           >
                             ＋自由明細
@@ -669,7 +685,7 @@ export function QuoteAuthoringGrid({
                               className="h-5 min-h-5 min-w-0 flex-1 border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                               aria-label={`品名 ${number}`}
                             />
-                            {!row.locked && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
+                            {!row.locked && sectionEditable && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
                               <button
                                 type="button"
                                 disabled={!canPickProduct}

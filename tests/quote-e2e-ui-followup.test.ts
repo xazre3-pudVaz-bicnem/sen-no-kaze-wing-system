@@ -27,7 +27,9 @@ describe('実案件E2E後の見積UI導線', () => {
     expect(workbench).not.toContain('name="return_to" value={returnTo}');
     expect(actions).toContain("redirect('/admin/quotes')");
     expect(draftPage).toContain("sp.return_to === '/admin/quote-management'");
-    expect(draftPage).toContain('href={returnTo}');
+    expect(draftPage).toContain('href={returnHref}');
+    expect(draftPage).toContain('const returnCase = sp.return_case?.trim()');
+    expect(draftPage).toContain('const returnRequest = sp.return_request?.trim()');
   });
 
   it('担当選択CTAは案件設定の担当者UIを直接開く', () => {

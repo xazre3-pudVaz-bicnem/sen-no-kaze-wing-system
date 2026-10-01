@@ -126,7 +126,9 @@ export function ManualQuoteWorkbench({
   const [caseName, setCaseName] = useState('');
   const [customerLastName, setCustomerLastName] = useState('');
   const [customerFirstName, setCustomerFirstName] = useState('');
-  const customerName = [customerLastName.trim(), customerFirstName.trim()].filter(Boolean).join(' ');
+  const customerName = customerLastName.trim() && customerFirstName.trim()
+    ? `${customerLastName.trim()} ${customerFirstName.trim()}`
+    : '';
   const [companyName, setCompanyName] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
   const [showPreview, setShowPreview] = useState(false);

@@ -102,6 +102,7 @@ describe('シミュレーター標準管理UI', () => {
     expect(listPage).not.toContain('正式データが未登録です');
     expect(excelDemo).toContain('画面確認用・保存されません');
     expect(excelDemo).not.toContain('Excel「{sample.sourceSheet}」の金額入り明細');
+    expect(excelDemo).not.toContain('Excel「{sample.sourceSheet}」');
     expect(excelDemo).toContain('商品モデル');
     expect(excelDemo).toContain('仕様');
     expect(excelDemo).toContain('防火仕様');

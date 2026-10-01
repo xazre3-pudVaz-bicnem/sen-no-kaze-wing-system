@@ -795,7 +795,7 @@ export function QuoteAuthoringGrid({
                         className={`overflow-hidden rounded-xl border bg-white ${isCurrent || alreadyAdded ? 'border-emerald-200 bg-emerald-50/20' : 'border-line'}`}
                       >
                         <div
-                          className="flex h-28 items-center justify-center bg-slate-100 bg-cover bg-center text-xs text-muted"
+                          className="flex h-36 items-center justify-center bg-slate-100 bg-contain bg-center bg-no-repeat text-xs text-muted sm:h-40"
                           style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
                           role={product.imageUrl ? 'img' : undefined}
                           aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}

@@ -194,7 +194,7 @@ export function QuoteEditorTopbar({
                 </h2>
                 <p className="mt-0.5 text-xs text-muted">
                   {isClonePicker
-                    ? '案件名・顧客名・見積番号・商品モデルから複製元候補を確認できます。正式な複製処理はDB基盤接続後に利用できます。'
+                    ? '案件名・顧客名・見積番号・商品モデルから正式Quote Revisionの複製元候補を確認できます。保存済みDraftを含む正式な複製処理はDB基盤接続後に利用できます。'
                     : '案件名・顧客名・見積番号・商品モデルから開けます。'}
                 </p>
               </div>

@@ -6,10 +6,14 @@ import { formatYen } from '@/lib/domain/pricing';
 import { formatDate } from '@/lib/utils';
 import { AdminPage } from '@/components/admin/ui';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
+import {
+  CaseEstimateReview,
+  type CaseEstimateReviewSelection,
+} from '@/components/admin/case-estimate-review';
 
 type CaseEstimateRow = {
   key: string;
-  href: string;
+  selection: CaseEstimateReviewSelection;
   caseName: string;
   customerName: string;
   customerCompany: string | null;
@@ -37,6 +41,13 @@ function matchesQuery(row: CaseEstimateRow, query: string) {
   return haystack.includes(query.toLocaleLowerCase('ja-JP'));
 }
 
+function selectionHref(row: CaseEstimateRow, query: string) {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  params.set(row.selection.kind, row.selection.id);
+  return `/admin/quote-management?${params.toString()}#case-estimate-review`;
+}
+
 export default async function AdminQuoteManagementPage({
   searchParams,
 }: {
@@ -60,7 +71,7 @@ export default async function AdminQuoteManagementPage({
       const request = requestById.get(quote.quote_request_id);
       return {
         key: `quote-${quote.id}`,
-        href: `/admin/quotes?case=${quote.id}&tab=estimate#case-workspace`,
+        selection: { kind: 'quote' as const, id: quote.id },
         caseName: request?.case_name || quote.customer_name || '案件名未設定',
         customerName: quote.customer_name || request?.contact.full_name || '未登録',
         customerCompany: quote.customer_company ?? request?.contact.company_name ?? null,
@@ -78,7 +89,7 @@ export default async function AdminQuoteManagementPage({
     const request = requestById.get(draft.quote_request_id);
     return {
       key: `draft-${draft.draft_id}`,
-      href: `/admin/quotes/drafts/${draft.draft_id}?return_to=${encodeURIComponent('/admin/quote-management')}`,
+      selection: { kind: 'draft' as const, id: draft.draft_id },
       caseName: request?.case_name || request?.contact.full_name || '案件名未設定',
       customerName: request?.contact.full_name || '未登録',
       customerCompany: request?.contact.company_name ?? null,
@@ -97,13 +108,23 @@ export default async function AdminQuoteManagementPage({
     .filter((row) => matchesQuery(row, query))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
+  const requestedKey = sp.quote
+    ? `quote-${sp.quote}`
+    : sp.draft
+      ? `draft-${sp.draft}`
+      : null;
+  const selectedRow =
+    (requestedKey ? rows.find((row) => row.key === requestedKey) : null) ??
+    rows[0] ??
+    null;
+
   return (
     <AdminPage
       title="見積書管理"
       lead="案件見積"
       actions={
-        <Link href="/admin/quotes/new?return_to=%2Fadmin%2Fquote-management" className="btn-primary btn-sm">
-          ＋ 新しい案件見積
+        <Link href="/admin/quotes" className="btn-secondary btn-sm">
+          案件管理を開く
         </Link>
       }
     >
@@ -114,7 +135,7 @@ export default async function AdminQuoteManagementPage({
           <div>
             <h2 className="font-semibold">案件見積一覧</h2>
             <p className="mt-0.5 text-xs text-muted">
-              作成途中のDraftと、発行済みの現在Revisionを同じ一覧から開けます。
+              案件見積を横断して探し、選択した内容を同じページ下部で確認します。編集は案件管理から行います。
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
@@ -152,60 +173,79 @@ export default async function AdminQuoteManagementPage({
           <table className="w-full min-w-[62rem] table-fixed text-sm lg:min-w-0">
             <thead className="bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[31%] px-3 py-2 text-left font-semibold">案件・顧客</th>
+                <th className="w-[32%] px-3 py-2 text-left font-semibold">案件・顧客</th>
                 <th className="w-[14%] px-2 py-2 text-left font-semibold">見積番号</th>
                 <th className="w-[12%] px-2 py-2 text-left font-semibold">商品モデル</th>
                 <th className="w-[10%] px-2 py-2 text-left font-semibold">状態</th>
                 <th className="w-[14%] px-2 py-2 text-right font-semibold">金額</th>
                 <th className="w-[12%] px-2 py-2 text-left font-semibold">更新</th>
-                <th className="w-[7%] px-2 py-2 text-center font-semibold">操作</th>
+                <th className="w-[6%] px-2 py-2 text-center font-semibold">選択</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} className="border-t border-line hover:bg-[#f8faf9]">
-                  <td className="px-3 py-2 align-middle">
-                    <p className="truncate font-semibold">{row.caseName}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted">
-                      {row.customerName}
-                      {row.customerCompany ? ` ／ ${row.customerCompany}` : ''}
-                    </p>
-                  </td>
-                  <td className="px-2 py-2 align-middle font-mono text-xs">
-                    {row.draft ? (
-                      <span className="text-muted">未発行</span>
-                    ) : (
-                      <>
-                        {row.quoteNo}
-                        <span className="ml-1 text-muted">Rev{row.revision}</span>
-                      </>
-                    )}
-                  </td>
-                  <td className="truncate px-2 py-2 align-middle">{row.modelName}</td>
-                  <td className="px-2 py-2 align-middle">
-                    <span
-                      className={
-                        row.draft
-                          ? 'rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900'
-                          : 'rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-900'
-                      }
-                    >
-                      {row.statusLabel}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-right align-middle font-semibold tabular-nums">
-                    {row.total == null ? '—' : formatYen(row.total)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-2 align-middle text-xs text-muted">
-                    {formatDate(row.updatedAt, true)}
-                  </td>
-                  <td className="px-2 py-2 text-center align-middle">
-                    <Link href={row.href} className="text-sm font-semibold text-forest underline underline-offset-4">
-                      開く
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const selected = selectedRow?.key === row.key;
+                const href = selectionHref(row, query);
+                return (
+                  <tr
+                    key={row.key}
+                    className={
+                      selected
+                        ? 'border-t border-line bg-[#fff7df] shadow-[inset_4px_0_0_#2f6b4f]'
+                        : 'border-t border-line hover:bg-[#f8faf9]'
+                    }
+                    aria-selected={selected}
+                    data-testid="case-estimate-row"
+                  >
+                    <td className="px-3 py-2 align-middle">
+                      <Link href={href} className="block min-w-0">
+                        <p className="truncate font-semibold hover:underline">{row.caseName}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted">
+                          {row.customerName}
+                          {row.customerCompany ? ` ／ ${row.customerCompany}` : ''}
+                        </p>
+                      </Link>
+                    </td>
+                    <td className="px-2 py-2 align-middle font-mono text-xs">
+                      {row.draft ? (
+                        <span className="text-muted">未発行</span>
+                      ) : (
+                        <>
+                          {row.quoteNo}
+                          <span className="ml-1 text-muted">第{row.revision}版</span>
+                        </>
+                      )}
+                    </td>
+                    <td className="truncate px-2 py-2 align-middle">{row.modelName}</td>
+                    <td className="px-2 py-2 align-middle">
+                      <span
+                        className={
+                          row.draft
+                            ? 'rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900'
+                            : 'rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-900'
+                        }
+                      >
+                        {row.statusLabel}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-right align-middle font-semibold tabular-nums">
+                      {row.total == null ? '—' : formatYen(row.total)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2 align-middle text-xs text-muted">
+                      {formatDate(row.updatedAt, true)}
+                    </td>
+                    <td className="px-2 py-2 text-center align-middle">
+                      <Link
+                        href={href}
+                        aria-current={selected ? 'page' : undefined}
+                        className="text-sm font-semibold text-forest underline underline-offset-4"
+                      >
+                        {selected ? '表示中' : '確認'}
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted">
@@ -217,6 +257,20 @@ export default async function AdminQuoteManagementPage({
           </table>
         </div>
       </section>
+
+      {selectedRow ? (
+        <CaseEstimateReview
+          selection={selectedRow.selection}
+          actor={actor}
+          query={query}
+          requestedTab={sp.detail_tab}
+          listModelName={selectedRow.modelName}
+        />
+      ) : (
+        <div className="rounded-lg border border-line bg-white px-4 py-3 text-xs text-muted">
+          案件見積を選択すると、ここに見積書・プランボード・図面の確認内容を表示します。
+        </div>
+      )}
     </AdminPage>
   );
 }

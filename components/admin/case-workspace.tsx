@@ -727,8 +727,8 @@ export async function CaseWorkspace({
               freeProducts={freeProducts}
               catalog={catalog}
               canEditBase={canEditBase}
-              canRevise={canUseLegacyRevision}
-              startInEditMode={Boolean(created) || edit === '1'}
+              canRevise={canUseLegacyRevision && edit === '1'}
+              startInEditMode={edit === '1'}
             />
 
             <p className="text-xs leading-5 text-muted">

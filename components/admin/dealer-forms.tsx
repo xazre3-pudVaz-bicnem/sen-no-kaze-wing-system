@@ -1,14 +1,14 @@
 'use client';
 
-import { Fragment, useActionState, useState, type KeyboardEvent } from 'react';
-import { LockKeyhole, Plus, Trash2, X } from 'lucide-react';
+import { Fragment, useActionState, useState } from 'react';
+import { X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
-import { formatQty, formatYen } from '@/lib/domain/pricing';
+import { formatYen } from '@/lib/domain/pricing';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
-import { Button, Field, Input, Select, Textarea } from '@/components/ui';
+import { Button, Field, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
-import { CatalogPickerDialog, type CatalogPickerItem } from './catalog-picker';
+import type { CatalogPickerItem } from './catalog-picker';
 import {
   CustomerQuotePreview,
   QuoteAuthoringGrid,
@@ -62,16 +62,6 @@ interface Row {
   image_url: string | null;
 }
 
-const KIND_LABELS: Record<RevisionItemKind, string> = {
-  base: '本体',
-  base_expense: '本体諸費用',
-  interior_exterior: '内外装工事',
-  interior_exterior_expense: '内外装工事経費',
-  option: 'オプション',
-  option_expense: 'オプション諸費用',
-  installation: '別途工事',
-  free: 'フリー商品',
-};
 /** 案件見積で編集できる区分 */
 const FULL_KINDS: RevisionItemKind[] = [
   'base',

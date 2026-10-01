@@ -920,7 +920,8 @@ const CUSTOMER_PREVIEW_SECTIONS: Array<{
   },
   { key: 'option', label: 'オプション', kinds: ['option', 'option_expense'], subtotalLabel: '【オプション価格計】' },
   { key: 'free', label: '自由明細', kinds: ['free'], subtotalLabel: null },
-  { key: 'installation', label: '現場工事', kinds: ['installation'], subtotalLabel: '【現場工事計】' },
+  // installation の正式業務区分は未確定のため、既存の中立表記を維持する。
+  { key: 'installation', label: '別途', kinds: ['installation'], subtotalLabel: '【別途計】' },
 ];
 
 function customerPreviewLineName(row: QuoteAuthoringRow): string {

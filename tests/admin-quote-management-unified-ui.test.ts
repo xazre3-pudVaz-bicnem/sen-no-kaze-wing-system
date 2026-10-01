@@ -196,7 +196,7 @@ describe('見積書管理の正式編集UI統合', () => {
   });
 
   it('お客様プレビューは実見積に合わせて区分・小計・正式表記を整理する', () => {
-    const start = authoringUi.indexOf('export function CustomerQuotePreview');
+    const start = authoringUi.indexOf('const CUSTOMER_PREVIEW_SECTIONS');
     const preview = authoringUi.slice(start);
     for (const label of [
       '本体',
@@ -224,6 +224,10 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(preview).not.toContain('値引き・調整額');
     expect(preview).not.toContain('税抜小計');
     expect(preview).not.toContain('税込合計');
+    expect(preview).toContain('min-w-[44rem]');
+    expect(preview).toContain('sm:min-w-[48rem]');
+    expect(preview).toContain('p-3 sm:p-4');
+    expect(preview).toContain('w-full max-w-md');
   });
 
   it('発行者・振込先は固定値をハードコードせず未設定として分離する', () => {

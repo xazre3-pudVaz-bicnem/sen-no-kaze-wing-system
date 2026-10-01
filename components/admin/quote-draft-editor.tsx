@@ -72,12 +72,14 @@ export function QuoteDraftEditor({
   canEditBase,
   estimates = [],
   products = [],
+  targetRevision = 1,
 }: {
   detail: QuoteDraftDetail;
   modelName: string;
   canEditBase: boolean;
   estimates?: QuotePickerRow[];
   products?: QuoteCatalogProduct[];
+  targetRevision?: number;
 }) {
   const [saveState, saveAction, savePending] = useActionState(saveQuoteDraftAction, initialState);
   const [finalizeState, finalizeAction, finalizePending] = useActionState(finalizeQuoteDraftAction, initialState);
@@ -105,7 +107,7 @@ export function QuoteDraftEditor({
 
   const isRevisionDraft = detail.draft.parent_quote_id !== null;
   const baseLocked = isRevisionDraft && !canEditBase;
-  const formalRevisionLabel = isRevisionDraft ? '次のRevision' : 'Revision 1';
+  const formalRevisionLabel = `第${targetRevision}版`;
   const lockVersion = saveState.savedVersion ?? detail.draft.lock_version;
   const [editGeneration, setEditGeneration] = useState(0);
   const [savedGeneration, setSavedGeneration] = useState(0);
@@ -319,7 +321,7 @@ export function QuoteDraftEditor({
           </section>
 
           <QuoteAuthoringTabs />
-          <QuoteInternalRateStrip />
+          <QuoteInternalRateStrip showPlannedDefaults />
 
           <section className="flex flex-wrap items-end gap-3 border-b border-slate-200 bg-white px-3 py-1.5">
             <div className="min-w-[18rem] max-w-xl flex-1">
@@ -434,7 +436,7 @@ export function QuoteDraftEditor({
             window.alert('未保存の変更があります。先にDraftを保存してください。');
             return;
           }
-          if (!window.confirm(`この内容を正式な${formalRevisionLabel}として保存しますか？保存後、このDraftは編集できません。`)) {
+          if (!window.confirm(`この内容を正式な${formalRevisionLabel}として発行しますか？発行後、この下書きは編集できません。`)) {
             event.preventDefault();
           }
         }}
@@ -444,18 +446,14 @@ export function QuoteDraftEditor({
         <input type="hidden" name="expected_lock_version" value={lockVersion} />
         <Status state={finalizeState} />
         <div>
-          <p className="text-sm font-semibold">正式保存</p>
-          <p className="mt-0.5 text-[10px] text-muted">正式保存すると、この下書きは編集できなくなります。</p>
+          <p className="text-sm font-semibold">正式見積を発行</p>
+          <p className="mt-0.5 text-[10px] text-muted">発行すると、この下書きは編集できなくなり、発行済み見積として履歴に残ります。</p>
         </div>
         <Button
           type="submit"
           disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
         >
-          {finalizePending
-            ? '正式保存中…'
-            : isRevisionDraft
-              ? '正式保存（次のRevision）'
-              : '正式保存（Revision 1）'}
+          {finalizePending ? '発行中…' : `この内容で第${targetRevision}版を発行`}
         </Button>
       </form>
     </div>

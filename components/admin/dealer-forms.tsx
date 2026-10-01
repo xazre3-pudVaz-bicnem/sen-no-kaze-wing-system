@@ -365,15 +365,18 @@ export function DealerRevisionForm({
           </div>
 
           <div className="max-h-[40rem] overflow-auto [scrollbar-width:thin]" data-testid="revision-sheet-scroll">
-            <table className="w-full min-w-[52rem] text-sm" data-testid="revision-preview">
-              <thead className="sticky top-0 z-10 bg-[#eef3f2] text-left text-xs text-[#536771]">
+            <table className="w-full min-w-[68rem] border-collapse text-[10px]" data-testid="revision-preview">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-left text-[9px] text-slate-600">
                 <tr>
-                  <th className="min-w-[20rem] px-3 py-1.5 font-semibold">品名</th>
-                  <th className="w-16 px-2 py-1.5 text-right font-semibold">数量</th>
-                  <th className="w-16 px-2 py-1.5 font-semibold whitespace-nowrap">単位</th>
-                  <th className="w-24 px-2 py-1.5 text-right font-semibold">売価</th>
-                  <th className="w-28 px-3 py-1.5 text-right font-semibold">売価金額</th>
-                  <th className="w-40 px-3 py-1.5 font-semibold">備考</th>
+                  <th className="min-w-[16rem] border-b border-r border-slate-300 px-2 py-1 font-semibold">品名</th>
+                  <th className="w-14 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">数量</th>
+                  <th className="w-12 border-b border-r border-slate-300 px-1 py-1 font-semibold whitespace-nowrap">単位</th>
+                  <th className="w-16 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">原価</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">原価金額</th>
+                  <th className="w-16 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">売価</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">売価金額</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">粗利</th>
+                  <th className="w-32 border-b border-slate-300 px-2 py-1 font-semibold">備考</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -407,7 +410,7 @@ export function DealerRevisionForm({
                       ))}
                       {!isCollapsed && (
                         <tr className="bg-ivory">
-                          <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
+                          <td colSpan={9} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
                             <span className="inline-flex items-center gap-2">
                               <button
                                 type="button"
@@ -456,7 +459,7 @@ export function DealerRevisionForm({
                           <Fragment key={item.id}>
                             {showBaseGroupHeading && (
                               <tr className="bg-sand/40">
-                                <td colSpan={6} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{item.description}</td>
+                                <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{item.description}</td>
                               </tr>
                             )}
                             <tr className="bg-white text-xs" data-testid={`revision-locked-row-${index}`}>
@@ -466,17 +469,20 @@ export function DealerRevisionForm({
                                   <span>{item.name}</span>
                                 </span>
                               </td>
-                              <td className="w-16 px-2 py-1 text-right tabular-nums">{formatQty(item.quantity)}</td>
-                              <td className="w-16 px-2 py-1 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
-                              <td className="w-24 px-2 py-1 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
-                              <td className="w-28 px-3 py-1 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
-                              <td className="w-40 px-3 py-1 text-[0.68rem] text-muted">{item.remark ?? ''}</td>
+                              <td className="w-14 px-1 py-1 text-right tabular-nums">{formatQty(item.quantity)}</td>
+                              <td className="w-12 px-1 py-1 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
+                              <td className="w-16 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-16 px-1 py-1 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
+                              <td className="w-20 px-1 py-1 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">未算定</td>
+                              <td className="w-32 px-2 py-1 text-[0.65rem] text-muted">{item.remark ?? ''}</td>
                             </tr>
                             {showBaseGroupSubtotal && (
                               <tr className="bg-white text-[0.68rem] text-ink-soft">
-                                <td colSpan={4} className="px-3 py-1 text-right font-semibold">{item.description}　計</td>
-                                <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
-                                <td></td>
+                                <td colSpan={6} className="px-2 py-1 text-right font-semibold">{item.description}　計</td>
+                                <td className="px-2 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
+                                <td colSpan={2}></td>
                               </tr>
                             )}
                           </Fragment>
@@ -512,7 +518,7 @@ export function DealerRevisionForm({
                           <Fragment key={r.key}>
                             {showBaseGroupHeading && (
                               <tr className="bg-sand/40">
-                                <td colSpan={6} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
+                                <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
                               </tr>
                             )}
                             <tr
@@ -605,7 +611,7 @@ export function DealerRevisionForm({
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-16 p-0 align-top">
+                              <td className="w-12 p-0 align-top">
                                 <Input
                                   name={`items.${i}.unit`}
                                   value={r.unit}
@@ -619,7 +625,9 @@ export function DealerRevisionForm({
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-24 p-0 align-top">
+                              <td className="w-16 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-16 p-0 align-top">
                                 <Input
                                   name={`items.${i}.unit_price`}
                                   type="number"
@@ -635,8 +643,9 @@ export function DealerRevisionForm({
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-28 bg-[#fafbf9] px-3 py-1 text-right tabular-nums">{formatYen(amountOf(r))}</td>
-                              <td className="w-36 p-0 align-top">
+                              <td className="w-20 bg-[#fafbf9] px-1 py-1 text-right tabular-nums">{formatYen(amountOf(r))}</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">未算定</td>
+                              <td className="w-32 p-0 align-top">
                                 <Input
                                   name={`items.${i}.remark`}
                                   value={r.remark}
@@ -652,9 +661,9 @@ export function DealerRevisionForm({
                             </tr>
                             {showBaseGroupSubtotal && (
                               <tr className="bg-white text-[0.68rem] text-ink-soft">
-                                <td colSpan={4} className="px-3 py-1 text-right font-semibold">{r.description}　計</td>
-                                <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
-                                <td></td>
+                                <td colSpan={6} className="px-2 py-1 text-right font-semibold">{r.description}　計</td>
+                                <td className="px-2 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
+                                <td colSpan={2}></td>
                               </tr>
                             )}
                           </Fragment>
@@ -666,7 +675,7 @@ export function DealerRevisionForm({
                         data-testid={`revision-section-subtotal-${section.key}`}
                         onClick={isCollapsed ? () => toggleSection(section.key) : undefined}
                       >
-                        <td colSpan={4} className="px-3 py-1.5 text-xs">
+                        <td colSpan={6} className="px-2 py-1 text-[10px]">
                           <span className="inline-flex items-center gap-2">
                             {isCollapsed && (
                               <button
@@ -685,44 +694,56 @@ export function DealerRevisionForm({
                             <span>{section.subtotalLabel}</span>
                           </span>
                         </td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums">
+                        <td className="px-2 py-1 text-right text-[10px] tabular-nums">
                           {section.label.startsWith('別途工事') && section.amount === 0 ? '別途見積' : formatYen(section.amount)}
                         </td>
-                        <td></td>
+                        <td colSpan={2}></td>
                       </tr>
                     </Fragment>
                   );
                 })}
               </tbody>
-              <tfoot>
-                <tr className="text-sm">
-                  <td colSpan={4} className="px-3 pt-3 pb-1">小　計</td>
-                  <td className="px-3 pt-3 pb-1 text-right tabular-nums">{formatYen(subRaw)}</td>
+              <tfoot className="text-[10px]">
+                <tr className="border-t border-slate-300 bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">原価合計</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
                   <td></td>
                 </tr>
-                <tr className="text-sm text-ink-soft">
-                  <td colSpan={4} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal - subRaw)}</td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">売価明細合計</td>
+                  <td className="px-2 py-1 text-right font-semibold tabular-nums">{formatYen(subRaw)}</td>
+                  <td colSpan={2}></td>
                 </tr>
-                <tr className="text-sm">
-                  <td colSpan={4} className="px-3 py-1">税抜請負額</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal)}</td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">経費</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td colSpan={2}></td>
                 </tr>
-                <tr className="text-sm text-ink-soft">
-                  <td colSpan={4} className="px-3 py-1">消費税（{Math.round(quote.tax_rate * 100)}%）</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(tax)}</td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">調整額（千円未満切捨て）</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{formatYen(subtotal - subRaw)}</td>
+                  <td colSpan={2}></td>
                 </tr>
-                <tr className="border-t-2 border-ink bg-ivory">
-                  <td colSpan={4} className="px-3 py-3 font-serif text-lg">合　計（税込）</td>
-                  <td className="px-3 py-3 text-right">
-                    <span className="font-serif text-2xl tabular-nums" data-testid="revision-total">
-                      {formatYen(editingTotal)}
-                    </span>
-                  </td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">消費税（{Math.round(quote.tax_rate * 100)}%）</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{formatYen(tax)}</td>
+                  <td colSpan={2}></td>
+                </tr>
+                <tr className="border-t-2 border-slate-500 bg-ivory">
+                  <td colSpan={6} className="px-2 py-2 text-right text-sm font-semibold">見積金額（税込）</td>
+                  <td className="px-2 py-2 text-right text-base font-semibold tabular-nums" data-testid="revision-total">{formatYen(editingTotal)}</td>
+                  <td colSpan={2}></td>
+                </tr>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">粗利</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td colSpan={2}></td>
+                </tr>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">粗利率</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>

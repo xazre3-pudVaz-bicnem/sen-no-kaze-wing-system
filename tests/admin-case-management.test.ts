@@ -93,7 +93,7 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('href="/admin/notifications"');
     expect(list).not.toContain('＋対面・電話・紹介の案件受付');
     expect(list).toContain('＋見積書を作成');
-    expect(list).toContain('href="/admin/quotes/new"');
+    expect(list).toContain('href="/admin/quotes/new?return_to=%2Fadmin%2Fquotes"');
     expect(list).toContain('canCreateQuote={false}');
     expect(list).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote />');
     expect(shell).toContain('href="/admin/notifications"');
@@ -244,7 +244,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-workflow-arrow"');
     expect(workspace).toContain("aria-current={step.state === 'current' ? 'step' : undefined}");
     expect(workspace).toContain('min-w-[58rem]');
-    expect(workspace).toContain('<CaseAdminControls>');
+    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
     expect(caseAdminControls).toContain('案件設定');
     expect(caseAdminControls).toContain('案件設定を閉じる');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
@@ -486,7 +486,7 @@ describe('Admin case management UI', () => {
     for (const route of ['/admin/quotes', '/admin/configurations', '/admin/contacts', '/admin/notifications', '/admin/customer-management']) {
       expect(nav).toContain(route);
     }
-    expect(manualQuoteWorkbench).toContain('href="/admin/quotes"');
+    expect(manualQuoteWorkbench).toContain('href={returnTo}');
     expect(manualQuoteWorkbench).toContain('← 案件管理へ戻る');
     expect(newQuote).toContain('title="見積書管理"');
     expect(configurations).toContain('title="保存済み仕様"');

@@ -28,7 +28,6 @@ export default async function AdminNewQuotePage({
   const requestById = new Map(requests.map((request) => [request.id, request] as const));
 
   const estimates = quotes
-    .filter((quote) => quote.status !== 'superseded')
     .map((quote) => ({
       id: quote.id,
       quote_no: quote.quote_no,

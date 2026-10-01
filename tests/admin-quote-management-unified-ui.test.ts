@@ -260,6 +260,8 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(manualWorkbench).toContain('案件専用のplan stateへ接続して表示します');
     expect(manualWorkbench).toContain('data-testid="new-quote-drawings-state"');
     expect(manualWorkbench).toContain('案件側でversion管理');
-    expect(manualWorkbench).toContain('正式発行');
+    expect(manualWorkbench).toContain('案件として登録');
+    expect(manualWorkbench).toContain('登録すると案件一覧に追加されます。現地確認後の見積編集・正式発行は案件管理から行います。');
+    expect(manualWorkbench).not.toContain('初回Draft保存後に正式発行できます');
   });
 });

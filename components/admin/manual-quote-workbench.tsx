@@ -589,7 +589,7 @@ export function ManualQuoteWorkbench({
 
         <div className="rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
           <p className="mb-2 text-right text-[10px] leading-4 text-muted">
-            登録すると案件一覧に追加されます。現地確認後の見積編集・正式発行は案件管理から行います。
+            登録すると案件一覧に追加されます。
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>

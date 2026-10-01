@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { FREE_PRODUCT_CATEGORY_CODE, canEditCatalog } from '@/lib/domain/types';
+import { canEditCatalog } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
@@ -33,27 +33,23 @@ export default async function AdminQuoteRevisionEditPage({
     store.listOptions(),
   ]);
 
-  const freeCategory = categories.find((category) => category.code === FREE_PRODUCT_CATEGORY_CODE);
-  const freeProducts = options
-    .filter(
-      (option) =>
-        option.category_id === freeCategory?.id &&
-        option.status === 'published' &&
-        (actor.role === 'admin' || option.owner_id === actor.id)
-    )
-    .map((option) => ({ code: option.code, name: option.name, price: option.price }));
-
-  const catalogByCategory = new Map(categories.map((category) => [category.id, category.name]));
-  const catalog = options
+  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+  const products = options
     .filter((option) => option.status === 'published')
     .map((option) => ({
-      code: option.code,
+      id: option.id,
+      baseModelId: option.base_model_id,
+      categoryId: option.category_id,
+      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+      categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
       name: option.name,
-      category: catalogByCategory.get(option.category_id) ?? 'その他',
+      manufacturer: option.manufacturer ?? '',
+      modelNo: option.model_no ?? '',
+      sizeNote: option.size_note ?? '',
       price: option.price,
-      price_on_request: option.price_on_request,
-      image_url: option.image_url,
-      manufacturer: option.manufacturer,
+      priceOnRequest: option.price_on_request,
+      imageUrl: option.image_url,
+      specCodes: option.spec_codes ?? [],
     }));
 
   const caseName =
@@ -106,9 +102,10 @@ export default async function AdminQuoteRevisionEditPage({
         <DealerRevisionForm
           quote={quote}
           items={detail.items}
-          freeProducts={freeProducts}
-          catalog={catalog}
           canEditBase={canEditCatalog(actor.role)}
+          products={products}
+          baseModelId={quote.base_model_id ?? ''}
+          specCode={quote.spec_code ?? ''}
           sheetMode
         />
       </section>

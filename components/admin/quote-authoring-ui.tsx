@@ -984,7 +984,7 @@ export function QuoteAuthoringGrid({
 export function QuoteFinancialSummary({
   subtotalRaw,
   adjustment,
-  adjustmentReason,
+  adjustmentReason = '',
   tax,
   total,
   onAdjustment,
@@ -997,11 +997,11 @@ export function QuoteFinancialSummary({
 }: {
   subtotalRaw: number;
   adjustment: number;
-  adjustmentReason: string;
+  adjustmentReason?: string;
   tax: number;
   total: number;
   onAdjustment: (value: number) => void;
-  onAdjustmentReason: (value: string) => void;
+  onAdjustmentReason?: (value: string) => void;
   showAdjustmentControls?: boolean;
   adjustmentLabel?: string;
   showAdjustmentReason?: boolean;
@@ -1029,7 +1029,7 @@ export function QuoteFinancialSummary({
           {showAdjustmentReason ? (
             <label className="block py-1">
               <span className="text-[10px] text-muted">調整理由</span>
-              <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
+              <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason?.(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
             </label>
           ) : null}
         </>

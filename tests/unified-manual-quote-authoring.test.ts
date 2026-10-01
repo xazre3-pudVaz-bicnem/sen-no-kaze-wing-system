@@ -24,8 +24,8 @@ describe('unified manual quote authoring', () => {
   });
 
   it('opens the Excel-style workbench immediately instead of a separate case registration form', () => {
-    expect(newQuotePage).toContain('title="見積書管理"');
-    expect(newQuotePage).toContain('lead="案件見積を作成"');
+    expect(newQuotePage).toContain('title="新規案件見積"');
+    expect(newQuotePage).toContain('lead="対面・電話・紹介などの案件を登録し、最初の見積下書きを作成"');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(newQuotePage).not.toContain('<ManualQuoteForm');
     expect(workbench).toContain('data-testid="manual-quote-workbench"');
@@ -57,7 +57,10 @@ describe('unified manual quote authoring', () => {
     expect(authoringUi).toContain('売価');
     expect(authoringUi).toContain('売価金額');
     expect(authoringUi).toContain('粗利');
-    expect(workbench).toContain('label="下書き保存"');
+    expect(workbench).toContain('label="案件として登録"');
+    expect(workbench).toContain('data-testid="manual-quote-role-note"');
+    expect(workbench).toContain('案件として登録した後は、案件管理で現地確認・現場工事の入力・正式見積の発行を進めます。');
+    expect(workbench).not.toContain('初回Draft保存後に正式発行できます');
     expect(workbench).not.toContain('見積書を作りながら、この案件の基本情報も登録できます。');
     expect(workbench).not.toContain('Excelのように明細を追加・修正してから下書き保存します。');
     expect(workbench).not.toContain('まず下書き保存');
@@ -113,6 +116,8 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('createManualQuoteWorkbenchAction');
     expect(actions).toContain('manualQuoteWorkbenchSchema.safeParse');
     expect(actions).toContain('store.createManualQuoteDraftWithItems(actor');
+    expect(actions).toContain("redirect('/admin/quotes')");
+    expect(actions).not.toContain('redirect(`/admin/quotes/drafts/${draftId}?');
   });
 
   it('creates case + Draft + initial lines atomically without issuing formal Revision 1', () => {

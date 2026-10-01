@@ -439,8 +439,8 @@ export async function CaseWorkspace({
                 title: '次にやること：現地を確認して施工金額を入力',
                 description: isPreliminaryAccepted
                   ? '概算見積の承諾履歴があります。正式な契約へ進む前に、搬入経路、基礎、電気、給排水、設置工事などを確認し、必要な施工金額を見積へ反映してください。現地確認の完了状態そのものはまだ保存されません。'
-                  : '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
-                href: tabHref('estimate', true),
+                  : '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積を編集」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
+                href: canUseLegacyRevision ? `/admin/quotes/${quote.id}/edit` : tabHref('estimate'),
                 action: '施工金額を入力する',
               }
             : quote.status === 'issued' && isFormal

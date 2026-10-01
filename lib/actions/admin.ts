@@ -1212,7 +1212,6 @@ export async function createManualQuoteWorkbenchAction(
       adjustment: parsed.data.adjustment,
       adjustment_reason: parsed.data.adjustment_reason ?? null,
     });
-    draftId = draft.id;
     revalidatePath('/admin/quotes');
   } catch (e) {
     return errState(e);

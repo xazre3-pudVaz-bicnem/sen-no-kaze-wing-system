@@ -18,6 +18,7 @@ export function EstimateRateControls({
   valueNote,
   grossProfitLabel = '—',
   grossProfitRateLabel = '—',
+  leadingContent,
   trailingActions,
 }: {
   values: EstimateRateValues;
@@ -27,6 +28,7 @@ export function EstimateRateControls({
   valueNote?: string;
   grossProfitLabel?: string;
   grossProfitRateLabel?: string;
+  leadingContent?: ReactNode;
   trailingActions?: ReactNode;
 }) {
   const update = (key: keyof EstimateRateValues, value: number) => {
@@ -61,6 +63,7 @@ export function EstimateRateControls({
       className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[11px]"
       data-testid="shared-estimate-rate-controls"
     >
+      {leadingContent}
       <span className="font-semibold text-slate-700">計算条件</span>
       {rateField('販売費', '販売費率', 'salesExpenseRate')}
       {rateField('経費', '経費率', 'expenseRate')}

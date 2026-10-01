@@ -124,10 +124,13 @@ export function ManualQuoteWorkbench({
   const [adjustment, setAdjustment] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [caseName, setCaseName] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [customerLastName, setCustomerLastName] = useState('');
+  const [customerFirstName, setCustomerFirstName] = useState('');
+  const customerName = [customerLastName.trim(), customerFirstName.trim()].filter(Boolean).join(' ');
   const [companyName, setCompanyName] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState<'estimate' | 'planboard' | 'drawings'>('estimate');
   const [dirty, setDirty] = useState(false);
   const allowLeaveRef = useRef(false);
   const errors = state.fieldErrors ?? {};
@@ -287,6 +290,7 @@ export function ManualQuoteWorkbench({
         <input type="hidden" name="adjustment" value={adjustment} />
         <input type="hidden" name="adjustment_reason" value={adjustmentReason} />
         <input type="hidden" name="finish_level" value="full" />
+        <input type="hidden" name="customer_name" value={customerName} />
 
         <Status state={state} />
 
@@ -313,15 +317,26 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-4">
-                <CompactField label="お客様名" htmlFor="quote-customer-name" required errors={errors.customer_name}>
+              <div className="lg:col-span-2">
+                <CompactField label="お客様名（姓）" htmlFor="quote-customer-last-name" required errors={errors.customer_name}>
                   <Input
-                    id="quote-customer-name"
-                    name="customer_name"
+                    id="quote-customer-last-name"
                     required
-                    value={customerName}
-                    onChange={(event) => setCustomerName(event.target.value)}
-                    placeholder="例：山田 太郎"
+                    value={customerLastName}
+                    onChange={(event) => setCustomerLastName(event.target.value)}
+                    placeholder="例：山田"
+                    className="h-7 min-h-7 px-2 text-sm"
+                  />
+                </CompactField>
+              </div>
+              <div className="lg:col-span-2">
+                <CompactField label="お客様名（名）" htmlFor="quote-customer-first-name" required>
+                  <Input
+                    id="quote-customer-first-name"
+                    required
+                    value={customerFirstName}
+                    onChange={(event) => setCustomerFirstName(event.target.value)}
+                    placeholder="例：太郎"
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
@@ -468,18 +483,48 @@ export function ManualQuoteWorkbench({
             </div>
           </section>
 
-          <QuoteAuthoringTabs />
-          <QuoteInternalRateStrip />
-          <QuoteAuthoringGrid
-            rows={authoringRows}
-            products={products}
-            baseModelId={modelId}
-            specCode={specCode}
-            onUpdate={updateAuthoringRow}
-            onRemove={removeAuthoringRow}
-            onAddFree={addAuthoringRow}
-            onSelectProduct={selectCatalogProduct}
-          />
+          <QuoteAuthoringTabs active={activeTab} onChange={setActiveTab} />
+          {activeTab === 'estimate' ? (
+            <>
+              <QuoteInternalRateStrip />
+              <QuoteAuthoringGrid
+                rows={authoringRows}
+                products={products}
+                baseModelId={modelId}
+                specCode={specCode}
+                onUpdate={updateAuthoringRow}
+                onRemove={removeAuthoringRow}
+                onAddFree={addAuthoringRow}
+                onSelectProduct={selectCatalogProduct}
+              />
+            </>
+          ) : activeTab === 'planboard' ? (
+            <section className="p-4" data-testid="new-quote-planboard-state">
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                <h3 className="text-sm font-semibold text-slate-700">プランボード</h3>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {modelId && specCode
+                    ? '商品モデル・仕様は選択済みです。新規見積のプランは、下書き保存後に案件専用のplan stateへ接続して表示します。'
+                    : '商品モデル・仕様を選択すると、プランボード表示の準備ができます。'}
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                  元案件や商品マスターの可変状態をそのまま表示して、正式な案件プランに見せることはしません。
+                </p>
+              </div>
+            </section>
+          ) : (
+            <section className="p-4" data-testid="new-quote-drawings-state">
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                <h3 className="text-sm font-semibold text-slate-700">図面</h3>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  この新規見積には、まだ案件図面の正式versionがありません。
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                  図面は案件側でversion管理し、正式Quote Revision発行時に使用versionを固定する基盤へ接続後に表示します。
+                </p>
+              </div>
+            </section>
+          )}
         </div>
 
         <QuoteFinancialSummary
@@ -518,8 +563,8 @@ export function ManualQuoteWorkbench({
             {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
           </Button>
           <SubmitButton pending={pending} label="下書き保存" />
-          <Button type="button" disabled title="初回Draft保存後に正式保存できます">
-            正式保存
+          <Button type="button" disabled title="初回Draft保存後に正式発行できます">
+            正式発行
           </Button>
         </div>
       </form>

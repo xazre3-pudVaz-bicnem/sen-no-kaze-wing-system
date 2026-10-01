@@ -317,7 +317,8 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('未判定');
     expect(workspace).toContain('<QuoteEstimateSheet');
     expect(workspace).toContain("key={edit === '1' ? 'edit' : 'view'}");
-    expect(workspace).toContain("startInEditMode={Boolean(created) || edit === '1'}");
+    expect(workspace).toContain("canRevise={canUseLegacyRevision && edit === '1'}");
+    expect(workspace).toContain("startInEditMode={edit === '1'}");
     expect(list).toContain('edit={sp.edit}');
     expect(detail).toContain('edit={sp.edit}');
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');

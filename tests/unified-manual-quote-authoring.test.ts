@@ -46,10 +46,10 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('label="電話番号"');
     expect(workbench).toContain('label="メールアドレス"');
     expect(workbench).toContain('label="お客様住所"');
-    expect(workbench).toContain('電話・メール・お客様住所は保存先未接続のため、現在は入力できません');
-    expect(workbench).toContain('placeholder="保存先未接続"');
+    expect(workbench).toContain('電話・メール・お客様住所の入力機能は現在準備中です');
+    expect(workbench).toContain('placeholder="現在準備中"');
     expect(workbench).toContain('data-testid="new-quote-base-master-pending"');
-    expect(workbench).toContain('対応するPublished Base Master Revisionを一意に解決できる基盤接続後に有効化します');
+    expect(workbench).toContain('商品モデル・仕様・防火仕様を選ぶと、登録済みの本体内容が自動で反映されます。この機能は現在準備中です。');
     expect(workbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(workbench).not.toContain('name="customer_phone"');
     expect(workbench).not.toContain('name="customer_email"');
@@ -67,11 +67,14 @@ describe('unified manual quote authoring', () => {
     expect(authoringUi).toContain('粗利');
     expect(workbench).toContain('label="案件として登録"');
     expect(workbench).toContain('data-testid="manual-quote-role-note"');
-    expect(workbench).toContain('案件として登録した後は、案件管理で現地確認・現場工事の入力・正式見積の発行を進めます。');
+    expect(workbench).toContain('現場工事金額は、案件登録後に現地確認を行い、案件管理から入力します。');
     expect(workbench).not.toContain('初回Draft保存後に正式発行できます');
     expect(workbench).not.toContain('見積書を作りながら、この案件の基本情報も登録できます。');
     expect(workbench).not.toContain('Excelのように明細を追加・修正してから下書き保存します。');
     expect(workbench).not.toContain('まず下書き保存');
+    for (const internalTerm of ['Published Base Master Revision', 'Quote Draft', 'DB基盤', 'plan state', 'version管理', '正式Quote Revision']) {
+      expect(workbench).not.toContain(internalTerm);
+    }
   });
 
   it('requires explicit model and spec selection for a brand-new case', () => {
@@ -188,8 +191,8 @@ describe('unified manual quote authoring', () => {
     expect(authoringUi).toContain('プランボード');
     expect(authoringUi).toContain('図面');
     expect(workbench).toContain('active={activeTab} onChange={setActiveTab}');
-    expect(workbench).toContain('案件専用のplan stateへ接続して表示します');
-    expect(workbench).toContain('図面は案件側でversion管理');
+    expect(workbench).toContain('案件登録後、案件管理のプランボードで確認できるようにします');
+    expect(workbench).toContain('案件図面の管理機能は現在準備中です');
     expect(workbench).not.toContain('プランボード・図面は正式保存後に案件画面から利用できます');
   });
 

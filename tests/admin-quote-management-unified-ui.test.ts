@@ -97,6 +97,19 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('className="h-6 w-28 text-right text-xs"');
   });
 
+  it('案件見積の数量入力を単位別ルールで制御する', () => {
+    expect(authoringUi).toContain("const DECIMAL_QUANTITY_UNITS = new Set(['m', 'ｍ', '㎡', 'm²', 'm2'])");
+    expect(authoringUi).toContain("if (normalized === '式') return 'fixed-one'");
+    expect(authoringUi).toContain("if (rule === 'integer') return Number.isInteger(quantity)");
+    expect(authoringUi).toContain("readOnly={!row.locked && quoteQuantityRule(row.unit) === 'fixed-one'}");
+    expect(authoringUi).toContain("onUpdate(row.key, { unit: nextUnit, quantity: 1 })");
+    expect(authoringUi).toContain("if (isValidQuoteQuantity(quantity, row.unit)) onUpdate(row.key, { quantity })");
+    expect(authoringUi).toContain('Tab→ ／ Enter↓ ／ Shift+Enter↑');
+    expect(authoringUi).toContain('数量：式＝1固定 ／ 個・台・枚＝整数 ／ m・㎡＝小数可');
+    expect(manualWorkbench).toContain('isValidQuoteQuantity(patch.quantity, nextUnit)');
+    expect(draftEditor).toContain('isValidQuoteQuantity(patch.quantity, nextUnit)');
+  });
+
   it('案件見積でも商品台帳から商品を追加・差し替えできる', () => {
     expect(authoringUi).toContain('data-testid="quote-product-picker-dialog"');
     expect(authoringUi).toContain('商品台帳から選ぶ');

@@ -274,6 +274,7 @@ export function QuoteAuthoringGrid({
   const [pickerSection, setPickerSection] = useState<QuoteAuthoringSection | null>(null);
   const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);
   const [pickerCategoryId, setPickerCategoryId] = useState('');
+  const [pickerQuery, setPickerQuery] = useState('');
 
   const sectionRows = (section: QuoteAuthoringSection) =>
     rows.filter((row) => sectionForKind(row.kind) === section);
@@ -295,21 +296,44 @@ export function QuoteAuthoringGrid({
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ja'));
   }, [pickerProducts]);
 
-  const visiblePickerProducts = useMemo(
-    () => (pickerCategoryId ? pickerProducts.filter((product) => product.categoryId === pickerCategoryId) : pickerProducts),
-    [pickerCategoryId, pickerProducts]
+  const visiblePickerProducts = useMemo(() => {
+    const normalizedQuery = pickerQuery.trim().toLocaleLowerCase('ja');
+    return pickerProducts.filter((product) => {
+      if (pickerCategoryId && product.categoryId !== pickerCategoryId) return false;
+      if (!normalizedQuery) return true;
+      const haystack = [
+        product.name,
+        product.manufacturer,
+        product.modelNo,
+        product.sizeNote,
+        product.categoryName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase('ja');
+      return haystack.includes(normalizedQuery);
+    });
+  }, [pickerCategoryId, pickerProducts, pickerQuery]);
+
+  const selectedProductIds = useMemo(
+    () => new Set(rows.map((row) => row.optionId).filter((id): id is string => Boolean(id))),
+    [rows]
   );
+  const pickerTargetOptionId =
+    pickerTargetKey ? rows.find((row) => row.key === pickerTargetKey)?.optionId ?? null : null;
 
   const openProductPicker = (section: QuoteAuthoringSection, targetKey: string | null = null) => {
     setPickerSection(section);
     setPickerTargetKey(targetKey);
     setPickerCategoryId('');
+    setPickerQuery('');
   };
 
   const closeProductPicker = () => {
     setPickerSection(null);
     setPickerTargetKey(null);
     setPickerCategoryId('');
+    setPickerQuery('');
   };
 
   const canPickProduct = Boolean(baseModelId && specCode);
@@ -663,71 +687,126 @@ export function QuoteAuthoringGrid({
               </button>
             </div>
 
+            <div className="border-b border-line bg-sand/10 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+                  <Input
+                    type="search"
+                    value={pickerQuery}
+                    onChange={(event) => setPickerQuery(event.target.value)}
+                    placeholder="商品名・メーカー・型番・サイズで検索"
+                    className="h-9 pl-9 text-sm"
+                    aria-label="商品台帳を検索"
+                    data-testid="quote-product-picker-search"
+                  />
+                </div>
+                <span className="shrink-0 text-xs text-muted">{visiblePickerProducts.length}件</span>
+              </div>
+            </div>
+
             {pickerCategories.length > 1 && (
-              <div className="flex flex-wrap gap-1 border-b border-line px-4 py-2">
-                <button
-                  type="button"
-                  aria-pressed={pickerCategoryId === ''}
-                  onClick={() => setPickerCategoryId('')}
-                  className={pickerCategoryId === '' ? 'rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white' : 'rounded-full border border-line px-3 py-1 text-xs'}
-                >
-                  すべて
-                </button>
-                {pickerCategories.map(([id, name]) => (
+              <div className="overflow-x-auto border-b border-line px-4 py-2" data-testid="quote-product-picker-categories">
+                <div className="flex min-w-max gap-1">
                   <button
-                    key={id}
                     type="button"
-                    aria-pressed={pickerCategoryId === id}
-                    onClick={() => setPickerCategoryId(id)}
-                    className={pickerCategoryId === id ? 'rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white' : 'rounded-full border border-line px-3 py-1 text-xs'}
+                    aria-pressed={pickerCategoryId === ''}
+                    onClick={() => setPickerCategoryId('')}
+                    className={pickerCategoryId === '' ? 'rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white' : 'rounded-full border border-line bg-white px-3 py-1 text-xs'}
                   >
-                    {name}
+                    すべて
                   </button>
-                ))}
+                  {pickerCategories.map(([id, name]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={pickerCategoryId === id}
+                      onClick={() => setPickerCategoryId(id)}
+                      className={pickerCategoryId === id ? 'rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white' : 'rounded-full border border-line bg-white px-3 py-1 text-xs'}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            <div className="max-h-[64vh] overflow-y-auto p-4">
+            <div className="max-h-[60vh] overflow-y-auto p-4">
               {visiblePickerProducts.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {visiblePickerProducts.map((product) => (
-                    <article key={product.id} className="overflow-hidden rounded-xl border border-line bg-white">
-                      <div
-                        className="flex h-28 items-center justify-center bg-slate-100 bg-cover bg-center text-xs text-muted"
-                        style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
-                        role={product.imageUrl ? 'img' : undefined}
-                        aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {visiblePickerProducts.map((product) => {
+                    const isCurrent = pickerTargetOptionId === product.id;
+                    const alreadyAdded = selectedProductIds.has(product.id) && !isCurrent;
+                    const hasMakerOrModel = Boolean(product.manufacturer || product.modelNo || product.sizeNote);
+                    return (
+                      <article
+                        key={product.id}
+                        className={`overflow-hidden rounded-xl border bg-white ${isCurrent || alreadyAdded ? 'border-emerald-200 bg-emerald-50/20' : 'border-line'}`}
                       >
-                        {!product.imageUrl && <span>画像なし</span>}
-                      </div>
-                      <div className="space-y-1.5 p-3">
-                        <p className="text-[10px] font-semibold text-muted">{product.categoryName}</p>
-                        <h3 className="truncate text-sm font-semibold">{product.name}</h3>
-                        <p className="truncate text-xs text-muted">{product.manufacturer || 'メーカー未登録'}</p>
-                        <p className="truncate text-xs text-muted">
-                          {[product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ') || '型番・サイズ未登録'}
-                        </p>
-                        <div className="flex items-center justify-between gap-2 pt-1">
-                          <strong className="text-sm">{product.priceOnRequest ? '別途見積' : formatYen(product.price)}</strong>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => {
-                              onSelectProduct(pickerSection, pickerTargetKey, product);
-                              closeProductPicker();
-                            }}
-                          >
-                            {pickerTargetKey ? 'この商品を選ぶ' : '追加'}
-                          </Button>
+                        <div
+                          className="flex h-28 items-center justify-center bg-slate-100 bg-cover bg-center text-xs text-muted"
+                          style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
+                          role={product.imageUrl ? 'img' : undefined}
+                          aria-label={product.imageUrl ? product.name + 'の商品画像' : undefined}
+                        >
+                          {!product.imageUrl && <span>画像なし</span>}
                         </div>
-                      </div>
-                    </article>
-                  ))}
+                        <div className="space-y-1.5 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-semibold text-muted">{product.categoryName}</p>
+                              <h3 className="truncate text-sm font-semibold">{product.name}</h3>
+                            </div>
+                            {(isCurrent || alreadyAdded) && (
+                              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                                {isCurrent ? '選択中' : '追加済み'}
+                              </span>
+                            )}
+                          </div>
+                          {hasMakerOrModel && (
+                            <p className="truncate text-xs text-muted">
+                              {[product.manufacturer, product.modelNo, product.sizeNote].filter(Boolean).join(' ／ ')}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <div className="min-w-0">
+                              <strong className="text-sm">{product.priceOnRequest ? '別途見積' : formatYen(product.price)}</strong>
+                              {!product.priceOnRequest && product.price === 0 && (
+                                <span className="ml-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                  0円として計上
+                                </span>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isCurrent || alreadyAdded}
+                              onClick={() => {
+                                onSelectProduct(pickerSection, pickerTargetKey, product);
+                                closeProductPicker();
+                              }}
+                            >
+                              {isCurrent ? '選択中' : alreadyAdded ? '追加済み' : pickerTargetKey ? 'この商品を選ぶ' : '追加'}
+                            </Button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
-                <p className="py-10 text-center text-sm text-muted">
-                  この商品モデル・仕様で選択できる公開商品はありません。
-                </p>
+                <div className="py-10 text-center text-sm text-muted">
+                  <p>{pickerQuery.trim() ? '検索条件に一致する商品がありません。' : 'この商品モデル・仕様で選択できる公開商品はありません。'}</p>
+                  {pickerQuery.trim() && (
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-semibold underline underline-offset-2"
+                      onClick={() => setPickerQuery('')}
+                    >
+                      検索をクリア
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </section>

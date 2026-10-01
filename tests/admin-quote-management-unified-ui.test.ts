@@ -118,6 +118,22 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftPage).toContain('products={products}');
   });
 
+  it('商品台帳モーダルは検索・0円表示・追加済み判定をUIだけで扱う', () => {
+    expect(authoringUi).toContain('data-testid="quote-product-picker-search"');
+    expect(authoringUi).toContain('商品名・メーカー・型番・サイズで検索');
+    expect(authoringUi).toContain('data-testid="quote-product-picker-categories"');
+    expect(authoringUi).toContain('overflow-x-auto border-b border-line');
+    expect(authoringUi).toContain('grid gap-3 sm:grid-cols-2');
+    expect(authoringUi).not.toContain('lg:grid-cols-3');
+    expect(authoringUi).toContain('0円として計上');
+    expect(authoringUi).not.toContain('メーカー未登録');
+    expect(authoringUi).not.toContain('型番・サイズ未登録');
+    expect(authoringUi).toContain("isCurrent ? '選択中' : '追加済み'");
+    expect(authoringUi).toContain('disabled={isCurrent || alreadyAdded}');
+    expect(manualWorkbench).toContain('row.option_id === product.id && row.key !== targetKey');
+    expect(draftEditor).toContain('row.option_id === product.id && row.key !== targetKey');
+  });
+
   it('正式金額ロジックをUI側の新しい原価・掛率計算へ置き換えない', () => {
     expect(authoringUi).toContain('販売費・経費・掛率は現在の見積では使用していません');
     expect(authoringUi).toContain('販売費 <strong className="text-slate-400">—</strong>');

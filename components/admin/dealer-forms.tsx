@@ -370,10 +370,7 @@ export function DealerRevisionForm({
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => {
-            setScopeChangeMode((current) => !current);
-            markDirty();
-          }}
+          onClick={() => setScopeChangeMode((current) => !current)}
           data-testid="toggle-scope-change"
         >
           {scopeChangeMode ? '通常入力に戻す' : '見積内容を変更'}
@@ -429,8 +426,8 @@ export function DealerRevisionForm({
           adjustmentReason="千円未満切捨て"
           tax={tax}
           total={editingTotal}
-          onAdjustment={() => {}}
-          onAdjustmentReason={() => {}}
+          onAdjustment={() => undefined}
+          onAdjustmentReason={() => undefined}
           showAdjustmentControls={false}
         />
       </div>

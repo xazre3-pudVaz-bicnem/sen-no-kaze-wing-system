@@ -126,7 +126,7 @@ describe('Admin quote Excel-like editor', () => {
 
   it('does not invent Web Draft persistence while sharing the editor UI', () => {
     expect(form).toContain('この既存Web案件の改訂は、途中の下書き保存には現在対応していません。');
-    expect(form).not.toContain('下書き保存');
+    expect(form).not.toContain('label="下書き保存"');
     expect(form).toContain('label={`この内容で第${quote.revision + 1}版を発行`}');
     expect(quoteDraftEditor).toContain('label="下書き保存"');
   });

@@ -6,8 +6,8 @@ import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench'
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 /**
- * 案件管理・見積書管理のどちらからでも開く、正式な見積編集ワークスペース。
- * Quote Draft lifecycleは変更せず、案件情報とExcel型明細を同じ画面で扱う。
+ * 対面・電話・紹介など、Web見積依頼を経由しない案件を新規登録する入口。
+ * 案件情報と最初のQuote Draftを作り、登録後の業務は案件管理へ引き継ぐ。
  */
 export default async function AdminNewQuotePage({
   searchParams,
@@ -62,8 +62,8 @@ export default async function AdminNewQuotePage({
 
   return (
     <AdminPage
-      title="見積書管理"
-      lead="案件見積を作成"
+      title="新規案件見積"
+      lead="対面・電話・紹介などの案件を登録し、最初の見積下書きを作成"
     >
       <QuoteManagementTabs active="case" />
       <ManualQuoteWorkbench

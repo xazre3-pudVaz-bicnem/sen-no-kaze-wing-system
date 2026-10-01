@@ -972,6 +972,7 @@ export function QuoteFinancialSummary({
   total,
   onAdjustment,
   onAdjustmentReason,
+  showAdjustmentControls = true,
 }: {
   subtotalRaw: number;
   adjustment: number;
@@ -980,20 +981,25 @@ export function QuoteFinancialSummary({
   total: number;
   onAdjustment: (value: number) => void;
   onAdjustmentReason: (value: string) => void;
+  showAdjustmentControls?: boolean;
 }) {
   return (
     <section className="ml-auto w-full max-w-lg rounded-lg border border-slate-300 bg-white p-3 text-xs shadow-sm">
       <div className="flex justify-between gap-4 py-0.5"><span>原価合計</span><strong className="text-slate-500">未算定</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>売価明細合計</span><strong>{formatYen(subtotalRaw)}</strong></div>
       <div className="flex justify-between gap-4 py-0.5"><span>経費</span><strong className="text-slate-500" title="現行Quote Draftでは正式保存していません">未算定</strong></div>
-      <label className="flex items-center justify-between gap-4 py-0.5">
-        <span>調整額</span>
-        <Input type="number" step="1" value={adjustment} onChange={(event) => onAdjustment(Number(event.target.value) || 0)} className="h-6 w-28 text-right text-xs" />
-      </label>
-      <label className="block py-1">
-        <span className="text-[10px] text-muted">調整理由</span>
-        <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
-      </label>
+      {showAdjustmentControls ? (
+        <>
+          <label className="flex items-center justify-between gap-4 py-0.5">
+            <span>調整額</span>
+            <Input type="number" step="1" value={adjustment} onChange={(event) => onAdjustment(Number(event.target.value) || 0)} className="h-6 w-28 text-right text-xs" />
+          </label>
+          <label className="block py-1">
+            <span className="text-[10px] text-muted">調整理由</span>
+            <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
+          </label>
+        </>
+      ) : null}
       <div className="flex justify-between gap-4 py-0.5"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
       <div className="mt-1.5 flex justify-between gap-4 border-t-2 border-slate-700 pt-2 text-base"><span>見積金額</span><strong>{formatYen(total)}</strong></div>
       <div className="mt-1.5 flex justify-between gap-4 rounded bg-emerald-50 px-2 py-1.5"><span>粗利</span><strong className="text-slate-600">未算定</strong></div>

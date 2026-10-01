@@ -507,6 +507,11 @@ export function ManualQuoteWorkbench({
                   setAdjustment(value);
                   markDirty();
                 }}
+                adjustmentReason={adjustmentReason}
+                onAdjustmentReason={(value) => {
+                  setAdjustmentReason(value);
+                  markDirty();
+                }}
                 subtotalLabel="税別明細合計"
                 totalLabel="見積金額（税込）"
               />
@@ -564,6 +569,7 @@ export function ManualQuoteWorkbench({
             setAdjustmentReason(value);
             markDirty();
           }}
+          showAdjustmentControls={false}
         />
 
         {showPreview && (

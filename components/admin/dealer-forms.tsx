@@ -9,6 +9,7 @@ import type { RevisionItemKind } from '@/lib/data/store';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 import { CatalogPickerDialog, type CatalogPickerItem } from './catalog-picker';
+import { CustomerQuotePreview, QuoteInternalRateStrip, type QuoteAuthoringRow } from './quote-authoring-ui';
 
 const initial = { ok: false } as const;
 
@@ -131,6 +132,7 @@ export function DealerRevisionForm({
   const defaultCollapsedSections = () => new Set<string>(['base', 'interior', 'option', 'free']);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(defaultCollapsedSections);
   const [scopeChangeMode, setScopeChangeMode] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const amountOf = (r: Row) => Math.round(r.unit_price * Math.max(0.01, r.quantity || 0));
   const sumOf = (...kinds: RevisionItemKind[]) => rows.filter((r) => kinds.includes(r.kind)).reduce((s, r) => s + amountOf(r), 0);
@@ -146,6 +148,32 @@ export function DealerRevisionForm({
   const tax = Math.floor(subtotal * quote.tax_rate);
   const editingTotal = subtotal + tax;
   const revisionDifference = editingTotal - quote.total;
+  const previewRows: QuoteAuthoringRow[] = [
+    ...lockedItems.map((item) => ({
+      key: item.id,
+      kind: item.kind,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit ?? '',
+      unitPrice: item.unit_price,
+      amount: item.amount,
+      remark: item.remark ?? '',
+      optionId: null,
+      locked: true,
+    })),
+    ...rows.map((row) => ({
+      key: row.key,
+      kind: row.kind,
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit,
+      unitPrice: row.unit_price,
+      amount: amountOf(row),
+      remark: row.remark,
+      optionId: null,
+      locked: false,
+    })),
+  ];
 
   const markDirty = () => setIsDirty(true);
   const update = (key: string, patch: Partial<Row>) => {
@@ -300,11 +328,11 @@ export function DealerRevisionForm({
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 border-b border-line bg-[#fafbf9] px-3 py-2' : ''}>
         <div>
           <p className={sheetMode ? 'text-xs font-semibold text-[#315745]' : 'font-semibold'}>
-            {sheetMode ? `見積内容を編集中（第${quote.revision + 1}版）` : '案件見積の編集'}
+            {sheetMode ? `第${quote.revision + 1}版 見積編集` : '案件見積の編集'}
           </p>
           <p className={sheetMode ? 'mt-0.5 text-[0.65rem] text-muted' : 'mt-1 text-xs text-muted'}>
             {sheetMode
-              ? '現地確認後に決まる運送・基礎・電気・給排水・設置などの金額を入力します。シミュレーターで確定した内容は通常は確認表示です。'
+              ? '発行済みの見積は変更せず、次の版として編集します。現地確認後に決まる施工金額もここで反映します。'
               : '入力内容を反映して改訂見積を発行すると次の版が作られ、現在の版は履歴として残ります。'}
           </p>
         </div>
@@ -323,6 +351,8 @@ export function DealerRevisionForm({
       <div className={sheetMode ? 'px-3 pt-2' : ''}>
         <Status state={state} />
       </div>
+
+      {sheetMode && <QuoteInternalRateStrip showPlannedDefaults />}
 
       {sheetMode ? (
         <>
@@ -362,15 +392,18 @@ export function DealerRevisionForm({
           </div>
 
           <div className="max-h-[40rem] overflow-auto [scrollbar-width:thin]" data-testid="revision-sheet-scroll">
-            <table className="w-full min-w-[52rem] text-sm" data-testid="revision-preview">
-              <thead className="sticky top-0 z-10 bg-[#eef3f2] text-left text-xs text-[#536771]">
+            <table className="w-full min-w-[68rem] border-collapse text-[10px]" data-testid="revision-preview">
+              <thead className="sticky top-0 z-10 bg-slate-100 text-left text-[9px] text-slate-600">
                 <tr>
-                  <th className="min-w-[20rem] px-3 py-1.5 font-semibold">品名</th>
-                  <th className="w-16 px-2 py-1.5 text-right font-semibold">数量</th>
-                  <th className="w-16 px-2 py-1.5 font-semibold whitespace-nowrap">単位</th>
-                  <th className="w-24 px-2 py-1.5 text-right font-semibold">売価</th>
-                  <th className="w-28 px-3 py-1.5 text-right font-semibold">売価金額</th>
-                  <th className="w-40 px-3 py-1.5 font-semibold">備考</th>
+                  <th className="min-w-[16rem] border-b border-r border-slate-300 px-2 py-1 font-semibold">品名</th>
+                  <th className="w-14 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">数量</th>
+                  <th className="w-12 border-b border-r border-slate-300 px-1 py-1 font-semibold whitespace-nowrap">単位</th>
+                  <th className="w-16 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">原価</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">原価金額</th>
+                  <th className="w-16 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">売価</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">売価金額</th>
+                  <th className="w-20 border-b border-r border-slate-300 px-1 py-1 text-right font-semibold">粗利</th>
+                  <th className="w-32 border-b border-slate-300 px-2 py-1 font-semibold">備考</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -404,7 +437,7 @@ export function DealerRevisionForm({
                       ))}
                       {!isCollapsed && (
                         <tr className="bg-ivory">
-                          <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
+                          <td colSpan={9} className="px-3 py-1.5 text-xs font-semibold text-ink-soft">
                             <span className="inline-flex items-center gap-2">
                               <button
                                 type="button"
@@ -453,7 +486,7 @@ export function DealerRevisionForm({
                           <Fragment key={item.id}>
                             {showBaseGroupHeading && (
                               <tr className="bg-sand/40">
-                                <td colSpan={6} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{item.description}</td>
+                                <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{item.description}</td>
                               </tr>
                             )}
                             <tr className="bg-white text-xs" data-testid={`revision-locked-row-${index}`}>
@@ -463,17 +496,20 @@ export function DealerRevisionForm({
                                   <span>{item.name}</span>
                                 </span>
                               </td>
-                              <td className="w-16 px-2 py-1 text-right tabular-nums">{formatQty(item.quantity)}</td>
-                              <td className="w-16 px-2 py-1 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
-                              <td className="w-24 px-2 py-1 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
-                              <td className="w-28 px-3 py-1 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
-                              <td className="w-40 px-3 py-1 text-[0.68rem] text-muted">{item.remark ?? ''}</td>
+                              <td className="w-14 px-1 py-1 text-right tabular-nums">{formatQty(item.quantity)}</td>
+                              <td className="w-12 px-1 py-1 whitespace-nowrap text-muted">{item.unit ?? '式'}</td>
+                              <td className="w-16 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-16 px-1 py-1 text-right tabular-nums">{item.unit_price !== 0 ? formatYen(item.unit_price) : ''}</td>
+                              <td className="w-20 px-1 py-1 text-right tabular-nums">{item.amount !== 0 ? formatYen(item.amount) : '−'}</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">未算定</td>
+                              <td className="w-32 px-2 py-1 text-[0.65rem] text-muted">{item.remark ?? ''}</td>
                             </tr>
                             {showBaseGroupSubtotal && (
                               <tr className="bg-white text-[0.68rem] text-ink-soft">
-                                <td colSpan={4} className="px-3 py-1 text-right font-semibold">{item.description}　計</td>
-                                <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
-                                <td></td>
+                                <td colSpan={6} className="px-2 py-1 text-right font-semibold">{item.description}　計</td>
+                                <td className="px-2 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
+                                <td colSpan={2}></td>
                               </tr>
                             )}
                           </Fragment>
@@ -509,7 +545,7 @@ export function DealerRevisionForm({
                           <Fragment key={r.key}>
                             {showBaseGroupHeading && (
                               <tr className="bg-sand/40">
-                                <td colSpan={6} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
+                                <td colSpan={9} className="px-3 py-1 text-[0.68rem] font-semibold text-ink-soft">{r.description}</td>
                               </tr>
                             )}
                             <tr
@@ -602,7 +638,7 @@ export function DealerRevisionForm({
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-16 p-0 align-top">
+                              <td className="w-12 p-0 align-top">
                                 <Input
                                   name={`items.${i}.unit`}
                                   value={r.unit}
@@ -616,7 +652,9 @@ export function DealerRevisionForm({
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-24 p-0 align-top">
+                              <td className="w-16 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">—</td>
+                              <td className="w-16 p-0 align-top">
                                 <Input
                                   name={`items.${i}.unit_price`}
                                   type="number"
@@ -632,8 +670,9 @@ export function DealerRevisionForm({
                                   onFocus={(event) => event.currentTarget.select()}
                                 />
                               </td>
-                              <td className="w-28 bg-[#fafbf9] px-3 py-1 text-right tabular-nums">{formatYen(amountOf(r))}</td>
-                              <td className="w-36 p-0 align-top">
+                              <td className="w-20 bg-[#fafbf9] px-1 py-1 text-right tabular-nums">{formatYen(amountOf(r))}</td>
+                              <td className="w-20 bg-slate-50 px-1 py-1 text-right text-slate-400">未算定</td>
+                              <td className="w-32 p-0 align-top">
                                 <Input
                                   name={`items.${i}.remark`}
                                   value={r.remark}
@@ -649,9 +688,9 @@ export function DealerRevisionForm({
                             </tr>
                             {showBaseGroupSubtotal && (
                               <tr className="bg-white text-[0.68rem] text-ink-soft">
-                                <td colSpan={4} className="px-3 py-1 text-right font-semibold">{r.description}　計</td>
-                                <td className="px-3 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
-                                <td></td>
+                                <td colSpan={6} className="px-2 py-1 text-right font-semibold">{r.description}　計</td>
+                                <td className="px-2 py-1 text-right font-semibold tabular-nums">{formatYen(baseGroupAmount)}</td>
+                                <td colSpan={2}></td>
                               </tr>
                             )}
                           </Fragment>
@@ -663,7 +702,7 @@ export function DealerRevisionForm({
                         data-testid={`revision-section-subtotal-${section.key}`}
                         onClick={isCollapsed ? () => toggleSection(section.key) : undefined}
                       >
-                        <td colSpan={4} className="px-3 py-1.5 text-xs">
+                        <td colSpan={6} className="px-2 py-1 text-[10px]">
                           <span className="inline-flex items-center gap-2">
                             {isCollapsed && (
                               <button
@@ -682,44 +721,56 @@ export function DealerRevisionForm({
                             <span>{section.subtotalLabel}</span>
                           </span>
                         </td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums">
+                        <td className="px-2 py-1 text-right text-[10px] tabular-nums">
                           {section.label.startsWith('別途工事') && section.amount === 0 ? '別途見積' : formatYen(section.amount)}
                         </td>
-                        <td></td>
+                        <td colSpan={2}></td>
                       </tr>
                     </Fragment>
                   );
                 })}
               </tbody>
-              <tfoot>
-                <tr className="text-sm">
-                  <td colSpan={4} className="px-3 pt-3 pb-1">小　計</td>
-                  <td className="px-3 pt-3 pb-1 text-right tabular-nums">{formatYen(subRaw)}</td>
+              <tfoot className="text-[10px]">
+                <tr className="border-t border-slate-300 bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">原価合計</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
                   <td></td>
                 </tr>
-                <tr className="text-sm text-ink-soft">
-                  <td colSpan={4} className="px-3 py-1">値引き等調整額（千円未満切捨て）</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal - subRaw)}</td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">売価明細合計</td>
+                  <td className="px-2 py-1 text-right font-semibold tabular-nums">{formatYen(subRaw)}</td>
+                  <td colSpan={2}></td>
                 </tr>
-                <tr className="text-sm">
-                  <td colSpan={4} className="px-3 py-1">税抜請負額</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(subtotal)}</td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">経費</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td colSpan={2}></td>
                 </tr>
-                <tr className="text-sm text-ink-soft">
-                  <td colSpan={4} className="px-3 py-1">消費税（{Math.round(quote.tax_rate * 100)}%）</td>
-                  <td className="px-3 py-1 text-right tabular-nums">{formatYen(tax)}</td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">調整額（千円未満切捨て）</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{formatYen(subtotal - subRaw)}</td>
+                  <td colSpan={2}></td>
                 </tr>
-                <tr className="border-t-2 border-ink bg-ivory">
-                  <td colSpan={4} className="px-3 py-3 font-serif text-lg">合　計（税込）</td>
-                  <td className="px-3 py-3 text-right">
-                    <span className="font-serif text-2xl tabular-nums" data-testid="revision-total">
-                      {formatYen(editingTotal)}
-                    </span>
-                  </td>
-                  <td></td>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">消費税（{Math.round(quote.tax_rate * 100)}%）</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{formatYen(tax)}</td>
+                  <td colSpan={2}></td>
+                </tr>
+                <tr className="border-t-2 border-slate-500 bg-ivory">
+                  <td colSpan={6} className="px-2 py-2 text-right text-sm font-semibold">見積金額（税込）</td>
+                  <td className="px-2 py-2 text-right text-base font-semibold tabular-nums" data-testid="revision-total">{formatYen(editingTotal)}</td>
+                  <td colSpan={2}></td>
+                </tr>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">粗利</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td colSpan={2}></td>
+                </tr>
+                <tr className="bg-white">
+                  <td colSpan={6} className="px-2 py-1 text-right text-slate-600">粗利率</td>
+                  <td className="px-2 py-1 text-right text-slate-400">未算定</td>
+                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
@@ -878,13 +929,42 @@ export function DealerRevisionForm({
           </dl>
         )}
       </div>
+      {sheetMode && showPreview && (
+        <div className="border-t border-line bg-white px-3 py-3">
+          <CustomerQuotePreview
+            caseName={quote.customer_company || quote.customer_name}
+            customerName={quote.customer_name}
+            companyName={quote.customer_company || ''}
+            address=""
+            phone=""
+            rows={previewRows}
+            subtotal={subRaw}
+            adjustment={subtotal - subRaw}
+            tax={tax}
+            total={editingTotal}
+          />
+        </div>
+      )}
+
       <div className={sheetMode ? 'flex flex-wrap items-center justify-between gap-2 bg-[#f7f9f8] px-3 py-2' : ''}>
         {sheetMode && (
-          <p className="text-[0.67rem] text-muted">
-            この内容を第{quote.revision + 1}版として発行します。現在の版は履歴として残ります。
-          </p>
+          <div>
+            <p className="text-[0.67rem] text-muted">
+              発行すると第{quote.revision + 1}版になり、現在の第{quote.revision}版は履歴として残ります。
+            </p>
+            <p className="mt-0.5 text-[0.62rem] text-muted">
+              この既存Web案件の改訂は、途中の下書き保存にはまだ対応していません。
+            </p>
+          </div>
         )}
-        <SubmitButton pending={pending} label="この内容で改訂見積を発行" />
+        <div className="flex flex-wrap items-center gap-2">
+          {sheetMode && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => setShowPreview((current) => !current)}>
+              {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
+            </Button>
+          )}
+          <SubmitButton pending={pending} label={`この内容で第${quote.revision + 1}版を発行`} />
+        </div>
       </div>
 
       {pickerOpen && (

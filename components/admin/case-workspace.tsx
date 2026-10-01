@@ -439,8 +439,8 @@ export async function CaseWorkspace({
                 title: '次にやること：現地を確認して施工金額を入力',
                 description: isPreliminaryAccepted
                   ? '概算見積の承諾履歴があります。正式な契約へ進む前に、搬入経路、基礎、電気、給排水、設置工事などを確認し、必要な施工金額を見積へ反映してください。現地確認の完了状態そのものはまだ保存されません。'
-                  : '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積内容を更新」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
-                href: tabHref('estimate', true),
+                  : '搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積を編集」から必要な施工金額を入力します。現地確認の完了状態そのものはまだ保存されません。',
+                href: canUseLegacyRevision ? `/admin/quotes/${quote.id}/edit` : tabHref('estimate'),
                 action: '施工金額を入力する',
               }
             : quote.status === 'issued' && isFormal
@@ -448,8 +448,8 @@ export async function CaseWorkspace({
                   title: '次にやること：確定見積の内容を確認',
                   description:
                     '現地で決めた施工金額や変更内容を確認してください。修正があれば見積タブから次の見積を編集し、内容がよければお客様へ確定見積をご案内します。',
-                  href: tabHref('estimate', canUseLegacyRevision),
-                  action: canCreateRevisionDraft ? '見積を編集' : '確定見積を確認・更新',
+                  href: canCreateRevisionDraft ? tabHref('estimate') : `/admin/quotes/${quote.id}/edit`,
+                  action: '見積を編集',
                 }
               : {
                   title: '次にやること：案件の状態を確認',
@@ -648,7 +648,7 @@ export async function CaseWorkspace({
                       現在の発行済み見積をもとに変更内容を入力します。発行するまでは現在の見積内容は変わりません。
                     </p>
                   </div>
-                  <Link href={tabHref('estimate', true)} className="btn-primary btn-sm" data-testid="legacy-quote-edit-entry">
+                  <Link href={`/admin/quotes/${quote.id}/edit`} className="btn-primary btn-sm" data-testid="legacy-quote-edit-entry">
                     見積を編集
                   </Link>
                 </div>
@@ -727,8 +727,8 @@ export async function CaseWorkspace({
               freeProducts={freeProducts}
               catalog={catalog}
               canEditBase={canEditBase}
-              canRevise={canUseLegacyRevision && edit === '1'}
-              startInEditMode={edit === '1'}
+              canRevise={false}
+              startInEditMode={false}
             />
 
             <p className="text-xs leading-5 text-muted">
@@ -811,7 +811,10 @@ export async function CaseWorkspace({
               <Link href={tabHref('documents')} className="btn-secondary btn-sm">
                 現地資料を確認
               </Link>
-              <Link href={tabHref('estimate', canUseLegacyRevision)} className="btn-primary btn-sm">
+              <Link
+                href={canUseLegacyRevision ? `/admin/quotes/${quote.id}/edit` : tabHref('estimate')}
+                className="btn-primary btn-sm"
+              >
                 見積編集へ戻る
               </Link>
             </div>

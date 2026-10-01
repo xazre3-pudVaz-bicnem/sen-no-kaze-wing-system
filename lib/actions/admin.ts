@@ -1142,7 +1142,7 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
 
-  let draftId: string | null = null;
+  let draftId: string;
   try {
     const store = await getStore();
     const draft = await store.createManualQuoteDraftWithItems(actor, {
@@ -1159,6 +1159,7 @@ export async function createManualQuoteAction(_prev: AdminFormState, formData: F
       adjustment: 0,
       adjustment_reason: null,
     });
+    draftId = draft.id;
     revalidatePath('/admin/quotes');
   } catch (e) {
     return errState(e);

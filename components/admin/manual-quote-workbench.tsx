@@ -536,14 +536,12 @@ export function ManualQuoteWorkbench({
         <QuoteFinancialSummary
           subtotalRaw={subtotalRaw}
           adjustment={adjustment}
-          adjustmentReason=""
           tax={tax}
           total={total}
           onAdjustment={(value) => {
             setAdjustment(value);
             markDirty();
           }}
-          onAdjustmentReason={() => undefined}
           adjustmentLabel="値引き等調整額"
           showAdjustmentReason={false}
           showTaxExclContractAmount

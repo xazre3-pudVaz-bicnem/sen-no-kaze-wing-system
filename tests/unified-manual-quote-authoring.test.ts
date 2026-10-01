@@ -13,6 +13,10 @@ const workbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote
 const draftEditor = fs.readFileSync(path.join(root, 'components/admin/quote-draft-editor.tsx'), 'utf8');
 const authoringUi = fs.readFileSync(path.join(root, 'components/admin/quote-authoring-ui.tsx'), 'utf8');
 const actions = fs.readFileSync(path.join(root, 'lib/actions/admin.ts'), 'utf8');
+const workbenchAction = actions.slice(
+  actions.indexOf('export async function createManualQuoteWorkbenchAction'),
+  actions.indexOf('export async function createQuoteRevisionDraftAction')
+);
 const store = fs.readFileSync(path.join(root, 'lib/data/store.ts'), 'utf8');
 const supabaseStore = fs.readFileSync(path.join(root, 'lib/data/supabase-store.ts'), 'utf8');
 
@@ -114,10 +118,10 @@ describe('unified manual quote authoring', () => {
       expect(workbench).toContain(`name="${name}"`);
     }
     expect(workbench).toContain('createManualQuoteWorkbenchAction');
-    expect(actions).toContain('manualQuoteWorkbenchSchema.safeParse');
-    expect(actions).toContain('store.createManualQuoteDraftWithItems(actor');
-    expect(actions).toContain("redirect('/admin/quotes')");
-    expect(actions).not.toContain('redirect(`/admin/quotes/drafts/${draftId}?');
+    expect(workbenchAction).toContain('manualQuoteWorkbenchSchema.safeParse');
+    expect(workbenchAction).toContain('store.createManualQuoteDraftWithItems(actor');
+    expect(workbenchAction).toContain("redirect('/admin/quotes')");
+    expect(workbenchAction).not.toContain('redirect(`/admin/quotes/drafts/${draftId}?');
   });
 
   it('creates case + Draft + initial lines atomically without issuing formal Revision 1', () => {

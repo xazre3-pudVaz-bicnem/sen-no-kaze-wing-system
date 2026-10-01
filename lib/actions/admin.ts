@@ -1240,7 +1240,9 @@ export async function createQuoteRevisionDraftAction(
     return errState(e);
   }
 
-  redirect(`/admin/quotes/drafts/${draftId}?revisionDraft=1`);
+  redirect(
+    `/admin/quotes/drafts/${draftId}?revisionDraft=1&return_case=${encodeURIComponent(parsed.data.quote_id)}`
+  );
 }
 
 export interface QuoteDraftFormState extends AdminFormState {

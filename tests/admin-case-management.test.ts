@@ -11,6 +11,8 @@ const list = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8
 const detail = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/page.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
 const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
+const quoteRevisionDraftForm = fs.readFileSync(path.join(root, 'components/admin/quote-revision-draft-form.tsx'), 'utf8');
+const quoteDraftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
 const dealerForms = fs.readFileSync(path.join(root, 'components/admin/dealer-forms.tsx'), 'utf8');
 const manualQuoteForm = fs.readFileSync(path.join(root, 'components/admin/manual-quote-form.tsx'), 'utf8');
 const manualQuoteWorkbench = fs.readFileSync(path.join(root, 'components/admin/manual-quote-workbench.tsx'), 'utf8');
@@ -214,10 +216,11 @@ describe('Admin case management UI', () => {
     expect(list).toContain('data-testid="pending-request-customer"');
     expect(list).toContain('data-testid="pending-request-configuration"');
     expect(list).toContain('data-testid="pending-request-message"');
+    expect(list).toContain('data-testid="pending-case-estimate"');
     expect(list).toContain('data-testid="pending-request-next-step"');
-    expect(list).toContain('正式処理は未実装');
-    expect(list).toContain('Quote lifecycle用のDB/RPC対応が必要です。');
-    expect(list).toContain('このWeb受付の引継ぎには使用しません。');
+    expect(list).toContain('見積作成は現在準備中です');
+    expect(list).toContain('このWeb受付の案件情報と保存済み仕様を、そのまま共通の見積編集画面へ引き継ぐ機能は現在準備中です。');
+    expect(list).toContain('この案件の編集には使用しません。');
     expect(list).not.toContain('href={`/admin/quotes/new?request=');
   });
 
@@ -298,6 +301,8 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("if (edit) query.set('edit', '1')");
     expect(workspace).toContain("key === 'edit'");
     expect(workspace).toContain('施工金額を見積へ反映');
+    expect(workspace).toContain('見積編集へ戻る');
+    expect(workspace).toContain("href={tabHref('estimate', canUseLegacyRevision)}");
     expect(workspace).toContain('お客様へ確定見積を案内');
   });
 
@@ -312,7 +317,8 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('未判定');
     expect(workspace).toContain('<QuoteEstimateSheet');
     expect(workspace).toContain("key={edit === '1' ? 'edit' : 'view'}");
-    expect(workspace).toContain("startInEditMode={Boolean(created) || edit === '1'}");
+    expect(workspace).toContain("canRevise={canUseLegacyRevision && edit === '1'}");
+    expect(workspace).toContain("startInEditMode={edit === '1'}");
     expect(list).toContain('edit={sp.edit}');
     expect(detail).toContain('edit={sp.edit}');
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
@@ -330,15 +336,35 @@ describe('Admin case management UI', () => {
     expect(workspace).not.toContain("quote.revision === 1 ? '概算見積'");
     expect(workspace).not.toContain("quote.revision > 1 ? '確定見積'");
     expect(caseAdminControls).toContain('data-testid="case-admin-controls"');
-    expect(workspace).toContain('<h2 className="text-lg font-semibold">見積</h2>');
+    expect(workspace).toContain('<h2 className="text-lg font-semibold">発行済み見積</h2>');
     expect(workspace).toContain("{isFormal ? '確定見積' : '概算見積'}");
     expect(workspace).toContain('見積書');
     expect(workspace).toContain('見積番号 {quote.quote_no}／発行');
+    expect(workspace).toContain('data-testid="case-estimate-edit-entry"');
+    expect(workspace).toContain('作成中の見積');
+    expect(workspace).toContain('<QuoteRevisionDraftForm quoteId={quote.id} revision={quote.revision} />');
+    expect(workspace).toContain('data-testid="legacy-quote-revision-entry"');
+    expect(workspace).toContain('data-testid="legacy-quote-edit-entry"');
+    expect(workspace).toContain('data-testid="case-issued-estimate-history"');
+    expect(workspace).toContain('発行済み見積');
+    expect(workspace).toContain('現地確認へ');
+    expect(quoteRevisionDraftForm).toContain('第{revision + 1}版の見積下書き');
+    expect(quoteRevisionDraftForm).toContain('label="見積を編集"');
     expect(workspace).toContain('data-testid="admin-pdf-link"');
     expect(workspace).toContain('PDF再生成');
     expect(workspace).not.toContain('この見積のPDF・画像');
     expect(workspace).toContain('金額はこの見積版の発行時点で保存された内容です。');
     expect(workspace).not.toContain('金額は発行時点のスナップショットです。');
+  });
+
+  it('keeps draft editing anchored to the case workspace', () => {
+    expect(adminActions).toContain('return_case=');
+    expect(adminActions).toContain('encodeURIComponent(parsed.data.quote_id)');
+    expect(quoteDraftPage).toContain('const returnCase = sp.return_case?.trim()');
+    expect(quoteDraftPage).toContain('const returnRequest = sp.return_request?.trim()');
+    expect(quoteDraftPage).toContain('tab=estimate#case-workspace');
+    expect(quoteDraftPage).toContain('#pending-quote-request');
+    expect(quoteDraftPage).toContain('見積下書き編集中');
   });
 
   it('returns to the inline case workspace after issuing a new quote revision', () => {
@@ -493,13 +519,18 @@ describe('Admin case management UI', () => {
     expect(contacts).toContain('title="問い合わせ受付"');
   });
 
-  it('shows a normal resume path for a saved initial Quote Draft', () => {
+  it('shows the saved initial draft as the editable estimate inside the selected case', () => {
     expect(list).toContain('store.listInitialQuoteDraftResumes(actor)');
     expect(list).toContain('initialDraftByRequestId');
     expect(list).toContain('見積作成中（下書き）');
     expect(list).toContain('下書き保存済み');
+    expect(list).toContain('data-testid="pending-case-estimate"');
+    expect(list).toContain('見積下書き');
+    expect(list).toContain('作成中');
+    expect(list).toContain('現地確認結果や施工金額を反映して、正式見積を仕上げてください。');
     expect(list).toContain('data-testid="resume-initial-quote-draft"');
-    expect(list).toContain('下書き見積を続ける');
+    expect(list).toContain('見積を編集');
+    expect(list).toContain('return_request=');
   });
 
   it('includes the saved case name in case-list search', () => {

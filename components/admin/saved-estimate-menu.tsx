@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -24,11 +24,13 @@ type SavedEstimateSample = {
   name: string;
   model: string;
   spec: string;
+  fireSpec: string;
   sourceSheet: string;
   sourceTotal: number;
 };
 
 const SIMULATOR_STANDARD_DEMO_SAMPLE_IDS = new Set(['wing-hotel', 'box-hotel-single', 'flat-office']);
+const COLLAPSED_ROW_LIMIT = 6;
 
 const SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
@@ -80,8 +82,8 @@ export function SavedEstimateMenu({
   selectedId?: string | null;
   selectedSampleId?: string | null;
 }) {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
   const [selectedModelId, setSelectedModelId] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const totalCount = templates.length + samples.length;
 
   const selectedModel = useMemo(
@@ -90,9 +92,10 @@ export function SavedEstimateMenu({
   );
 
   const filteredTemplates = useMemo(
-    () => selectedModelId
-      ? templates.filter((template) => template.base_model_id === selectedModelId)
-      : templates,
+    () =>
+      selectedModelId
+        ? templates.filter((template) => template.base_model_id === selectedModelId)
+        : templates,
     [selectedModelId, templates]
   );
 
@@ -103,91 +106,94 @@ export function SavedEstimateMenu({
   }, [samples, selectedModel]);
 
   const visibleCount = filteredTemplates.length + filteredSamples.length;
-
-  useEffect(() => {
-    const close = () => {
-      if (detailsRef.current) detailsRef.current.open = false;
-    };
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const details = detailsRef.current;
-      if (!details?.open) return;
-      if (event.target instanceof Node && details.contains(event.target)) return;
-      close();
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      close();
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
+  const visibleTemplates = expanded
+    ? filteredTemplates
+    : filteredTemplates.slice(0, COLLAPSED_ROW_LIMIT);
+  const remainingSampleSlots = expanded
+    ? filteredSamples.length
+    : Math.max(0, COLLAPSED_ROW_LIMIT - visibleTemplates.length);
+  const visibleSamples = expanded
+    ? filteredSamples
+    : filteredSamples.slice(0, remainingSampleSlots);
+  const shownCount = visibleTemplates.length + visibleSamples.length;
+  const hiddenCount = Math.max(0, visibleCount - shownCount);
 
   return (
-    <details ref={detailsRef} className="relative">
-      <summary className="btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        シミュレーター標準一覧（{totalCount}件）
-      </summary>
-      <div className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(92vw,42rem)] overflow-y-auto rounded-xl border border-line bg-white p-2 shadow-xl">
-        <div className="flex items-center justify-between gap-3 px-2 pb-2 pt-1">
-          <div>
-            <p className="text-sm font-semibold">シミュレーター標準一覧</p>
-            <p className="mt-0.5 text-[11px] text-muted">商品モデルで絞り込み、登録済みの基準見積と画面確認用サンプルを確認します。</p>
-          </div>
-          <span className="shrink-0 text-[11px] text-muted">
-            {selectedModel ? `${visibleCount} / ${totalCount}件` : `${totalCount}件`}
-          </span>
+    <section className="card overflow-hidden" data-testid="simulator-standard-list">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3">
+        <div>
+          <h2 className="text-sm font-semibold">シミュレーター標準一覧</h2>
+          <p className="mt-0.5 text-[11px] text-muted">
+            登録済みの標準見積と画面確認用サンプルを分けて表示します。選ぶと下の編集画面が切り替わります。
+          </p>
         </div>
+        <span className="shrink-0 text-[11px] text-muted">
+          {selectedModel ? `${visibleCount} / ${totalCount}件` : `${totalCount}件`}
+        </span>
+      </div>
 
-        <div className="border-y border-line px-2 py-2" aria-label="商品モデルで絞り込み">
-          <p className="mb-1 text-[10px] font-semibold tracking-wide text-muted">商品モデル</p>
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-x-visible">
+      <div className="border-b border-line px-4 py-2" aria-label="商品モデルで絞り込み">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-x-visible">
+          <button
+            type="button"
+            aria-pressed={selectedModelId === ''}
+            className={
+              selectedModelId === ''
+                ? 'shrink-0 rounded-full bg-forest px-3 py-1 text-[11px] font-semibold text-white'
+                : 'shrink-0 rounded-full border border-line bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-sand/40'
+            }
+            onClick={() => {
+              setSelectedModelId('');
+              setExpanded(false);
+            }}
+          >
+            すべて
+          </button>
+          {models.map((model) => (
             <button
+              key={model.id}
               type="button"
-              aria-pressed={selectedModelId === ''}
+              aria-pressed={selectedModelId === model.id}
               className={
-                selectedModelId === ''
+                selectedModelId === model.id
                   ? 'shrink-0 rounded-full bg-forest px-3 py-1 text-[11px] font-semibold text-white'
                   : 'shrink-0 rounded-full border border-line bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-sand/40'
               }
-              onClick={() => setSelectedModelId('')}
+              onClick={() => {
+                setSelectedModelId(model.id);
+                setExpanded(false);
+              }}
             >
-              すべて
+              {model.name}
             </button>
-            {models.map((model) => (
-              <button
-                key={model.id}
-                type="button"
-                aria-pressed={selectedModelId === model.id}
-                className={
-                  selectedModelId === model.id
-                    ? 'shrink-0 rounded-full bg-forest px-3 py-1 text-[11px] font-semibold text-white'
-                    : 'shrink-0 rounded-full border border-line bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-sand/40'
-                }
-                onClick={() => setSelectedModelId(model.id)}
-              >
-                {model.name}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
+      </div>
 
-        <div className="border-t border-line pt-2">
-          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">登録済み基準見積</p>
-          {filteredTemplates.length === 0 && (
-            <p className="px-3 py-2 text-[11px] text-muted">
-              {selectedModel ? `${selectedModel.name}の保存済み基準見積はまだありません。` : '保存済みの基準見積はまだありません。'}
+      <div className="overflow-x-auto">
+        <div className="min-w-[58rem]">
+          <div className="grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 border-b border-line bg-sand/35 px-4 py-1.5 text-[10px] font-semibold text-muted">
+            <span>商品モデル</span>
+            <span>仕様</span>
+            <span>防火仕様</span>
+            <span className="text-right">標準金額</span>
+            <span>状態</span>
+            <span>シミュレーター</span>
+            <span className="text-right">選択</span>
+          </div>
+
+          <div className="border-b border-line bg-slate-50 px-4 py-1 text-[10px] font-semibold tracking-wide text-muted">
+            登録済み標準見積
+          </div>
+          {filteredTemplates.length === 0 ? (
+            <p className="px-4 py-2 text-[11px] text-muted">
+              {selectedModel
+                ? `${selectedModel.name}の登録済み標準見積はまだありません。`
+                : '登録済み標準見積はまだありません。'}
             </p>
-          )}
-          {filteredTemplates.length > 0 && (
+          ) : (
             <div className="divide-y divide-line">
-              {filteredTemplates.map((template) => {
+              {visibleTemplates.map((template) => {
                 const active = template.id === selectedId;
                 const templateModel = models.find((item) => item.id === template.base_model_id);
                 return (
@@ -197,41 +203,47 @@ export function SavedEstimateMenu({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'grid gap-1 rounded-lg bg-forest/5 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
-                        : 'grid gap-1 rounded-lg px-3 py-2.5 text-sm hover:bg-sand/40 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
+                        ? 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 bg-forest/5 px-4 py-2 text-xs'
+                        : 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 px-4 py-2 text-xs hover:bg-sand/30'
                     }
                   >
+                    <strong>{templateModel?.name ?? '—'}</strong>
                     <span className="min-w-0">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="truncate font-semibold">{template.name}</span>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate font-semibold">
+                          {SPEC_LABELS[template.spec_code] ?? template.spec_code}
+                        </span>
                         {active && <Badge tone="neutral">表示中</Badge>}
                       </span>
-                      <span className="mt-0.5 block text-[11px] text-muted">
-                        {templateModel?.name ?? '—'} ／ {SPEC_LABELS[template.spec_code] ?? template.spec_code}
-                        <span className="ml-2">更新 {formatUpdatedAt(template.updated_at)}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-muted">
+                        {template.name} ／ 更新 {formatUpdatedAt(template.updated_at)}
                       </span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-3 sm:justify-end">
-                      <strong className="tabular-nums">{formatYen(template.total)}</strong>
-                      <span className="text-xs font-semibold text-forest">{active ? '表示中' : '開く'}</span>
+                    <span className="text-[11px] text-muted" title="正式な本体マスター接続後に表示します">
+                      正式接続待ち
                     </span>
+                    <strong className="text-right tabular-nums">{formatYen(template.total)}</strong>
+                    <span><Badge tone="neutral">登録済み</Badge></span>
+                    <span className="text-[11px] text-muted">接続準備中</span>
+                    <span className="text-right font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </Link>
                 );
               })}
             </div>
           )}
-        </div>
 
-        <div className="mt-2 border-t border-line pt-2">
-          <p className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-muted">画面確認用サンプル</p>
-          {filteredSamples.length === 0 && (
-            <p className="px-3 py-2 text-[11px] text-muted">
-              {selectedModel ? `${selectedModel.name}の画面確認用サンプルはありません。` : '画面確認用サンプルはありません。'}
+          <div className="border-y border-line bg-sky-50/70 px-4 py-1 text-[10px] font-semibold tracking-wide text-sky-800">
+            画面確認用サンプル
+          </div>
+          {filteredSamples.length === 0 ? (
+            <p className="px-4 py-2 text-[11px] text-muted">
+              {selectedModel
+                ? `${selectedModel.name}の画面確認用サンプルはありません。`
+                : '画面確認用サンプルはありません。'}
             </p>
-          )}
-          {filteredSamples.length > 0 && (
+          ) : (
             <div className="divide-y divide-line">
-              {filteredSamples.map((sample) => {
+              {visibleSamples.map((sample) => {
                 const active = sample.id === selectedSampleId;
                 const simulatorStandard = SIMULATOR_STANDARD_DEMO_SAMPLE_IDS.has(sample.id);
                 return (
@@ -241,26 +253,28 @@ export function SavedEstimateMenu({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'grid gap-1 rounded-lg bg-sky-50 px-3 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
-                        : 'grid gap-1 rounded-lg px-3 py-2.5 text-sm hover:bg-sand/40 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'
+                        ? 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 bg-sky-100/70 px-4 py-2 text-xs'
+                        : 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 px-4 py-2 text-xs hover:bg-sky-50/70'
                     }
                   >
+                    <strong>{sample.model}</strong>
                     <span className="min-w-0">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="truncate font-semibold">{sample.name}</span>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate font-semibold">{sample.spec}</span>
                         <Badge tone="neutral">サンプル</Badge>
-                        {simulatorStandard && <Badge tone="neutral">シミュレーター標準</Badge>}
                         {active && <Badge tone="neutral">表示中</Badge>}
                       </span>
-                      <span className="mt-0.5 block text-[11px] text-muted">
-                        {sample.model} ／ {sample.spec}
-                        <span className="ml-2">Excel: {sample.sourceSheet}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-muted">
+                        {sample.name} ／ Excel: {sample.sourceSheet}
                       </span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-3 sm:justify-end">
-                      <strong className="tabular-nums">{formatWholeYen(sample.sourceTotal)}</strong>
-                      <span className="text-xs font-semibold text-forest">{active ? '表示中' : '開く'}</span>
+                    <span>{sample.fireSpec || '—'}</span>
+                    <strong className="text-right tabular-nums">{formatWholeYen(sample.sourceTotal)}</strong>
+                    <span className="text-[11px] text-sky-800">画面確認用</span>
+                    <span className="text-[11px] text-muted">
+                      {simulatorStandard ? '標準サンプル' : 'サンプル'}
                     </span>
+                    <span className="text-right font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </Link>
                 );
               })}
@@ -268,6 +282,18 @@ export function SavedEstimateMenu({
           )}
         </div>
       </div>
-    </details>
+
+      {visibleCount > COLLAPSED_ROW_LIMIT && (
+        <div className="flex justify-center border-t border-line px-4 py-2">
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? '閉じる' : `一覧を広げる（残り${hiddenCount}件）`}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

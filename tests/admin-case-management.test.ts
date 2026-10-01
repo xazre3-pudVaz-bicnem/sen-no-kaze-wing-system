@@ -157,6 +157,7 @@ describe('Admin case management UI', () => {
     expect(clickableCaseRow).toContain("event.key !== 'Enter' && event.key !== ' '");
     expect(list).toContain("selected ? 'bg-[#fff7df]");
     expect(list).toContain('caseSelectionHref');
+    expect(list).toContain("return `/admin/quotes?${query.toString()}#case-workspace`;");
     expect(list).toContain('requestSelectionHref');
     expect(list).toContain('data-testid="pending-request-link"');
     expect(list).toContain('<CaseWorkspace');
@@ -238,6 +239,7 @@ describe('Admin case management UI', () => {
     expect(detail).toContain('<CaseWorkspace');
     expect(workspace).toContain('data-testid="case-workspace"');
     expect(workspace).toContain('data-testid="case-workspace-header"');
+    expect(workspace).toContain('<h2 className="min-w-0 text-base font-semibold text-white sm:text-lg">{caseTitle}</h2>');
     expect(workspace).toContain('data-testid="case-structure-summary"');
     expect(workspace).toContain('防火仕様');
     expect(workspace).toContain('caseSelectedOptionIds');

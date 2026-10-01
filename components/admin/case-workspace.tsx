@@ -465,7 +465,7 @@ export async function CaseWorkspace({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[0.62rem] font-semibold text-white/70">案件</span>
-              <h2 className="min-w-0 text-base font-semibold sm:text-lg">{caseTitle}</h2>
+              <h2 className="min-w-0 text-base font-semibold text-white sm:text-lg">{caseTitle}</h2>
               <span className="rounded-full border border-[#d8c07b] bg-[#fff4cf] px-2 py-0.5 text-[0.62rem] font-semibold text-[#765b11]">
                 現在フェーズ：{currentPhaseLabel}
               </span>

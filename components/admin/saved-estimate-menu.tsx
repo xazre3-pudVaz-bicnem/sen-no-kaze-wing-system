@@ -178,7 +178,7 @@ export function SavedEstimateMenu({
             <span>防火仕様</span>
             <span className="text-right">標準金額</span>
             <span>状態</span>
-            <span>シミュレーター</span>
+            <span>シミュレーター使用状態</span>
             <span className="text-right">選択</span>
           </div>
 

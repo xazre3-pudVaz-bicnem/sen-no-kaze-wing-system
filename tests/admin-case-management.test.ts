@@ -487,7 +487,7 @@ describe('Admin case management UI', () => {
       expect(nav).toContain(route);
     }
     expect(manualQuoteWorkbench).toContain('href={returnTo}');
-    expect(manualQuoteWorkbench).toContain('← 案件管理へ戻る');
+    expect(manualQuoteWorkbench).toContain("← {returnTo === '/admin/quote-management' ? '見積書管理' : '案件管理'}へ戻る");
     expect(newQuote).toContain('title="見積書管理"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');

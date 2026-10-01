@@ -207,9 +207,12 @@ describe('unified manual quote authoring', () => {
     expect(store).toContain('listInitialQuoteDraftResumes(actor: SessionUser)');
     expect(supabaseStore).toContain("db.rpc('list_initial_quote_draft_resumes')");
     expect(casePage).toContain('store.listInitialQuoteDraftResumes(actor)');
+    expect(casePage).toContain('data-testid="pending-case-estimate"');
     expect(casePage).toContain('data-testid="resume-initial-quote-draft"');
     expect(casePage).toContain('/admin/quotes/drafts/${selectedPendingDraft.draft_id}');
-    expect(casePage).toContain('下書き見積を続ける');
+    expect(casePage).toContain('見積下書き');
+    expect(casePage).toContain('見積を編集');
+    expect(casePage).toContain('return_request=');
   });
 
   it('keeps case management available before the Draft-resume migration is applied', () => {

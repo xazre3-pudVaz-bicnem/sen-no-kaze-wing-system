@@ -419,7 +419,7 @@ export function EstimateTemplateExcelDemo({
                 ? 'rounded-full border border-sky-300 bg-sky-50 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800'
                 : 'rounded-full border border-slate-300 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700'}
             >
-              {dirty ? (sample ? 'サンプル編集中' : '編集中') : (sample ? 'サンプル' : '下書き')}
+              {sample ? '画面確認用・保存されません' : (dirty ? '編集中' : '下書き')}
             </span>
           </div>
 
@@ -454,12 +454,6 @@ export function EstimateTemplateExcelDemo({
             </Button>
           </div>
         </div>
-
-        {sample && (
-          <div className="border-b border-slate-200 bg-slate-50/70 px-4 py-1.5 text-[11px] leading-relaxed text-slate-500">
-            Excel「{sample.sourceSheet}」の金額入り明細と別途見積項目を画面確認用に反映しています。0円の未選択候補は除外し、DBには保存されません。
-          </div>
-        )}
 
         <div className="divide-y divide-slate-200">
           <section className="px-4 py-1.5">

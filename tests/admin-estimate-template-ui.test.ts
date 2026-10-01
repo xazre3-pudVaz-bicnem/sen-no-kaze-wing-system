@@ -102,7 +102,7 @@ describe('シミュレーター標準管理UI', () => {
     expect(savedEstimateMenu).toContain('防火仕様');
     expect(savedEstimateMenu).toContain('標準金額');
     expect(savedEstimateMenu).toContain('状態');
-    expect(savedEstimateMenu).toContain('シミュレーター');
+    expect(savedEstimateMenu).toContain('シミュレーター使用状態');
     expect(savedEstimateMenu).toContain('選択');
     expect(savedEstimateMenu).toContain('正式接続待ち');
     expect(savedEstimateMenu).toContain('接続準備中');

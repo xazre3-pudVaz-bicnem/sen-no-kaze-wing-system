@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
-import { formatYen } from '@/lib/domain/pricing';
-import { Alert, Badge } from '@/components/ui';
+import { Alert } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import {
   EstimateTemplateWorkbench,
@@ -18,15 +17,6 @@ import {
 import { ESTIMATE_DEMO_SAMPLES, estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
 import { SavedEstimateMenu } from '@/components/admin/saved-estimate-menu';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
-
-const SPEC_LABELS: Record<string, string> = {
-  base: '本体のみ',
-  hotel: 'ホテル',
-  'hotel-single': 'ホテル・単身者',
-  residence: '住宅・単身者',
-  'water-kit': '水回りキット',
-  office: '事務所・店舗',
-};
 
 const SECTION_LABELS = {
   interior_exterior: '内外装工事',
@@ -71,11 +61,15 @@ export default async function EstimateTemplatesPage({
     name: sample.name,
     model: sample.model,
     spec: sample.spec,
+    fireSpec: sample.fireSpec,
     sourceSheet: sample.sourceSheet,
     sourceTotal: sample.sourceTotal,
   }));
 
-  const selectedSample = estimateDemoSampleById(sp.sample);
+  const requestedSample = estimateDemoSampleById(sp.sample);
+  const selectedSample =
+    requestedSample ??
+    (!sp.estimate && templates.length === 0 ? ESTIMATE_DEMO_SAMPLES[0] ?? null : null);
   const selectedTemplate = selectedSample
     ? null
     : templates.find((template) => template.id === sp.estimate) ??
@@ -88,20 +82,18 @@ export default async function EstimateTemplatesPage({
         title="見積書管理"
         lead="シミュレーター標準"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
-            <Link href="/admin/quotes/new" className="btn-primary btn-sm">
-              ＋ 案件見積を作成
-            </Link>
-          </div>
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            ＋ 標準見積を作成
+          </Link>
         }
       >
         <QuoteManagementTabs active="standard" />
-        <Alert tone="info">
-          {selectedSample
-            ? `「${selectedSample.sourceSheet}」を元にした画面確認用サンプルです。Excelの金額明細と別途見積項目を表示し、0円の未選択候補は除外しています。DBには保存されません。`
-            : '現在はシミュレーター標準の正式データが未登録のため、作成画面を直接表示しています。画面内の変更はまだDBへ保存されません。'}
-        </Alert>
+        <SavedEstimateMenu
+          templates={templates}
+          models={models}
+          samples={savedEstimateSamples}
+          selectedSampleId={selectedSample?.id}
+        />
         <EstimateTemplateExcelDemo
           key={selectedSample?.id ?? 'new-estimate-demo'}
           sampleId={selectedSample?.id}
@@ -116,27 +108,25 @@ export default async function EstimateTemplatesPage({
     store.getCatalogBundle(selectedTemplate.base_model_id),
   ]);
 
-  const model = models.find((row) => row.id === selectedTemplate.base_model_id) ?? null;
-
   if (!bundle) {
     return (
       <AdminPage
         title="見積書管理"
         lead="シミュレーター標準"
         actions={
-          <div className="flex flex-wrap gap-2">
-            <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-            <Link href="/admin/quotes/new" className="btn-primary btn-sm">
-              ＋ 案件見積を作成
-            </Link>
-          </div>
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            ＋ 標準見積を作成
+          </Link>
         }
       >
         <QuoteManagementTabs active="standard" />
-        <Alert tone="warn">選択したシミュレーター標準の明細を読み込めませんでした。別の基準見積を選択してください。</Alert>
-        <section className="card p-4 text-sm text-muted">
-          右上の「シミュレーター標準一覧」から別の基準見積を開けます。
-        </section>
+        <SavedEstimateMenu
+          templates={templates}
+          models={models}
+          samples={savedEstimateSamples}
+          selectedId={selectedTemplate.id}
+        />
+        <Alert tone="warn">選択したシミュレーター標準の明細を読み込めませんでした。一覧から別の標準見積を選択してください。</Alert>
       </AdminPage>
     );
   }
@@ -207,9 +197,8 @@ export default async function EstimateTemplatesPage({
       lead="シミュレーター標準"
       actions={
         <div className="flex flex-wrap gap-2">
-          <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-          <Link href="/admin/quotes/new" className="btn-primary btn-sm">
-            ＋ 案件見積を作成
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
+            ＋ 標準見積を作成
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
             複製
@@ -226,30 +215,12 @@ export default async function EstimateTemplatesPage({
       }
     >
       <QuoteManagementTabs active="standard" />
-      <section className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted">編集中のシミュレーター標準</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-lg font-semibold">{selectedTemplate.name}</h2>
-              <Badge tone="neutral">編集画面</Badge>
-            </div>
-          </div>
-
-          <span className="text-xs text-muted">別の基準見積は右上の「シミュレーター標準一覧」から開けます。</span>
-        </div>
-
-        <div className="flex flex-wrap divide-x divide-line text-xs">
-          <span className="px-4 py-2">商品 <strong className="ml-1">{model?.name ?? '—'}</strong></span>
-          <span className="px-4 py-2">仕様 <strong className="ml-1">{SPEC_LABELS[selectedTemplate.spec_code] ?? selectedTemplate.spec_code}</strong></span>
-          <span className="px-4 py-2">現在額 <strong className="ml-1">{formatYen(selectedTemplate.total)}</strong></span>
-        </div>
-      </section>
-
-      <Alert tone="info">
-        現在はExcel型編集画面をメイン画面として確認する段階です。画面内の明細変更はまだDBへ保存されません。
-      </Alert>
-
+      <SavedEstimateMenu
+        templates={templates}
+        models={models}
+        samples={savedEstimateSamples}
+        selectedId={selectedTemplate.id}
+      />
       <EstimateTemplateDetailTabs
         editContent={
           <EstimateTemplateWorkbench

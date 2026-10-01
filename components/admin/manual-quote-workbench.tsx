@@ -277,6 +277,11 @@ export function ManualQuoteWorkbench({
 
       <QuoteEditorTopbar mode="new" estimates={estimates} confirmLeave={confirmLeave} />
 
+      <div className="rounded-lg border border-[#d8e4de] bg-[#f5faf7] px-3 py-2 text-xs leading-5 text-ink-soft" data-testid="manual-quote-role-note">
+        この画面は、対面・電話・紹介などWeb見積依頼を経由しない案件を新しく登録するための画面です。
+        案件として登録した後は、案件管理で現地確認・現場工事の入力・正式見積の発行を進めます。
+      </div>
+
       <form
         action={action}
         className="space-y-2"
@@ -506,7 +511,7 @@ export function ManualQuoteWorkbench({
                 <h3 className="text-sm font-semibold text-slate-700">プランボード</h3>
                 <p className="mt-2 text-xs leading-5 text-muted">
                   {modelId && specCode
-                    ? '商品モデル・仕様は選択済みです。新規見積のプランは、下書き保存後に案件専用のplan stateへ接続して表示します。'
+                    ? '商品モデル・仕様は選択済みです。案件登録後、案件管理のプランボードで案件専用のplan stateへ接続して表示します。'
                     : '商品モデル・仕様を選択すると、プランボード表示の準備ができます。'}
                 </p>
                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
@@ -519,7 +524,7 @@ export function ManualQuoteWorkbench({
               <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
                 <h3 className="text-sm font-semibold text-slate-700">図面</h3>
                 <p className="mt-2 text-xs leading-5 text-muted">
-                  この新規見積には、まだ案件図面の正式versionがありません。
+                  案件登録前のため、まだ案件図面の正式versionはありません。
                 </p>
                 <p className="mt-1 text-[10px] leading-4 text-slate-500">
                   図面は案件側でversion管理し、正式Quote Revision発行時に使用versionを固定する基盤へ接続後に表示します。
@@ -560,14 +565,16 @@ export function ManualQuoteWorkbench({
           />
         )}
 
-        <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
+        <div className="rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
+          <p className="mb-2 text-right text-[10px] leading-4 text-muted">
+            登録すると案件一覧に追加されます。現地確認後の見積編集・正式発行は案件管理から行います。
+          </p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => setShowPreview((current) => !current)}>
             {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
           </Button>
-          <SubmitButton pending={pending} label="下書き保存" />
-          <Button type="button" disabled title="初回Draft保存後に正式発行できます">
-            正式発行
-          </Button>
+          <SubmitButton pending={pending} label="案件として登録" />
+          </div>
         </div>
       </form>
     </div>

@@ -288,7 +288,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('現地確認の完了状態そのものはまだ保存されません。');
     expect(workspace).toContain('施工金額を入力する');
     expect(workspace).toContain('次にやること：確定見積の内容を確認');
-    expect(workspace).toContain('確定見積を確認・更新');
+    expect(workspace).toContain("action: '見積を編集'");
     expect(workspace).toContain('次にやること：契約内容を確認');
     expect(workspace).toContain('契約・資料を確認');
     expect(workspace).not.toContain("const isDealer = actor.role === 'dealer'");

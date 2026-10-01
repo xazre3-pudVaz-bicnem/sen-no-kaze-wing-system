@@ -447,9 +447,9 @@ export async function CaseWorkspace({
               ? {
                   title: '次にやること：確定見積の内容を確認',
                   description:
-                    '現地で決めた施工金額や変更内容を確認してください。修正があれば「見積内容を更新」から反映し、内容がよければお客様へ確定見積をご案内します。',
-                  href: tabHref('estimate', true),
-                  action: '確定見積を確認・更新',
+                    '現地で決めた施工金額や変更内容を確認してください。修正があれば見積タブから次の見積を編集し、内容がよければお客様へ確定見積をご案内します。',
+                  href: tabHref('estimate', canUseLegacyRevision),
+                  action: canCreateRevisionDraft ? '見積を編集' : '確定見積を確認・更新',
                 }
               : {
                   title: '次にやること：案件の状態を確認',
@@ -618,93 +618,128 @@ export async function CaseWorkspace({
 
       {activeTab === 'estimate' && (
         <section className="space-y-3" data-testid="case-tab-estimate">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold">見積</h2>
-                <Badge tone={isFormal ? 'success' : 'neutral'}>
-                  {isFormal ? '確定見積' : '概算見積'}
-                </Badge>
-                <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>
-                  {QUOTE_STATUS_LABELS[quote.status]}
-                </Badge>
+          {(canCreateRevisionDraft || canUseLegacyRevision) && (
+            <section className="space-y-2" data-testid="case-estimate-edit-entry">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-[#315745]">作成中の見積</h2>
+                  <p className="mt-0.5 text-xs text-muted">
+                    現地確認結果や施工金額を反映して、次の正式見積を仕上げます。
+                  </p>
+                </div>
+                <Link href={tabHref('site')} className="btn-secondary btn-sm">
+                  現地確認へ
+                </Link>
               </div>
-              <p className="mt-0.5 text-[0.68rem] text-muted">
-                見積番号 {quote.quote_no}／発行 {formatDate(quote.issued_at)}／有効期限 {formatDate(quote.valid_until)}／第{quote.revision}版
-              </p>
+
+              {canCreateRevisionDraft ? (
+                <QuoteRevisionDraftForm quoteId={quote.id} revision={quote.revision} />
+              ) : (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d3e0d8] bg-[#f5faf7] p-3"
+                  data-testid="legacy-quote-revision-entry"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold">第{quote.revision + 1}版の見積を作成</p>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-[0.62rem] font-semibold text-[#315745]">編集中へ</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted">
+                      現在の発行済み見積をもとに変更内容を入力します。発行するまでは現在の見積内容は変わりません。
+                    </p>
+                  </div>
+                  <Link href={tabHref('estimate', true)} className="btn-primary btn-sm" data-testid="legacy-quote-edit-entry">
+                    見積を編集
+                  </Link>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="space-y-3 border-t border-line pt-3" data-testid="case-issued-estimate-history">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold">発行済み見積</h2>
+                  <Badge tone={isFormal ? 'success' : 'neutral'}>
+                    {isFormal ? '確定見積' : '概算見積'}
+                  </Badge>
+                  <Badge tone={quote.status === 'accepted' ? 'success' : quote.status === 'issued' ? 'navy' : 'neutral'}>
+                    {QUOTE_STATUS_LABELS[quote.status]}
+                  </Badge>
+                </div>
+                <p className="mt-0.5 text-[0.68rem] text-muted">
+                  見積番号 {quote.quote_no}／発行 {formatDate(quote.issued_at)}／有効期限 {formatDate(quote.valid_until)}／第{quote.revision}版
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <a
+                  href={`/api/quotes/${quote.id}/pdf`}
+                  target="_blank"
+                  rel="noopener"
+                  className="btn-secondary btn-sm"
+                  data-testid="admin-pdf-link"
+                >
+                  見積書PDF
+                </a>
+                <a
+                  href={`/api/quotes/${quote.id}/pdf?regenerate=1`}
+                  target="_blank"
+                  rel="noopener"
+                  className="btn-secondary btn-sm"
+                  title="レイアウト変更後に PDF を作り直す（金額は変わりません）"
+                >
+                  PDF再生成
+                </a>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <a
-                href={`/api/quotes/${quote.id}/pdf`}
-                target="_blank"
-                rel="noopener"
-                className="btn-secondary btn-sm"
-                data-testid="admin-pdf-link"
-              >
-                見積書PDF
-              </a>
-              <a
-                href={`/api/quotes/${quote.id}/pdf?regenerate=1`}
-                target="_blank"
-                rel="noopener"
-                className="btn-secondary btn-sm"
-                title="レイアウト変更後に PDF を作り直す（金額は変わりません）"
-              >
-                PDF再生成
-              </a>
-            </div>
-          </div>
 
-          {created && (
-            <Alert tone="success" title="見積を作成しました">
-              下の入力表で本体・オプション・別途工事の行を確認し、必要に応じて内容を更新して改訂見積を発行してください。
-            </Alert>
-          )}
-          {revised && (
-            <Alert tone="success" title={`第${quote.revision}版を発行しました`}>
-              新しい版を案件ワークスペースへ反映しました。以前の版は履歴として残っています。
-            </Alert>
-          )}
-          {isPreliminaryAccepted && (
-            <Alert tone="warn" title="概算見積の承諾履歴">
-              この承諾は正式な契約進行の対象外です。現地確認と施工金額を反映した確定見積を発行してください。
-            </Alert>
-          )}
-          {isFormalAcceptedUnconfirmed && (
-            <Alert tone="warn" title="確定見積の承諾履歴（最新状態要確認）">
-              この確定見積が現在の見積であることを確認できません。契約へは進めず、最新の見積Revisionと回答状態を確認してください。
-            </Alert>
-          )}
-          {from === 'mail' && canUseLegacyRevision && (
-            <Alert tone="info" title="メールからお越しの方へ">
-              この案件の見積内容を更新し、改訂見積を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。
-            </Alert>
-          )}
+            {created && (
+              <Alert tone="success" title="見積を作成しました">
+                下の発行済み内容を確認し、修正が必要な場合は上の「見積を編集」から次の見積を作成してください。
+              </Alert>
+            )}
+            {revised && (
+              <Alert tone="success" title={`第${quote.revision}版を発行しました`}>
+                新しい版を案件ワークスペースへ反映しました。以前の版は履歴として残っています。
+              </Alert>
+            )}
+            {isPreliminaryAccepted && (
+              <Alert tone="warn" title="概算見積の承諾履歴">
+                この承諾は正式な契約進行の対象外です。現地確認と施工金額を反映した確定見積を発行してください。
+              </Alert>
+            )}
+            {isFormalAcceptedUnconfirmed && (
+              <Alert tone="warn" title="確定見積の承諾履歴（最新状態要確認）">
+                この確定見積が現在の見積であることを確認できません。契約へは進めず、最新の見積版と回答状態を確認してください。
+              </Alert>
+            )}
+            {from === 'mail' && canUseLegacyRevision && (
+              <Alert tone="info" title="メールからお越しの方へ">
+                この案件の見積内容を更新し、改訂見積を発行できます。代理店は本体を閲覧のみ、オプション・別途工事等を編集できます。
+              </Alert>
+            )}
 
-          {canCreateRevisionDraft && (
-            <QuoteRevisionDraftForm quoteId={quote.id} revision={quote.revision} />
-          )}
+            <QuoteEstimateSheet
+              key={edit === '1' ? 'edit' : 'view'}
+              quote={quote}
+              items={items}
+              freeProducts={freeProducts}
+              catalog={catalog}
+              canEditBase={canEditBase}
+              canRevise={canUseLegacyRevision}
+              startInEditMode={Boolean(created) || edit === '1'}
+            />
 
-          <QuoteEstimateSheet
-            key={edit === '1' ? 'edit' : 'view'}
-            quote={quote}
-            items={items}
-            freeProducts={freeProducts}
-            catalog={catalog}
-            canEditBase={canEditBase}
-            canRevise={canUseLegacyRevision}
-            startInEditMode={Boolean(created) || edit === '1'}
-          />
+            <p className="text-xs leading-5 text-muted">
+              この欄は発行済み見積の確認用です。金額はこの見積版の発行時点で保存された内容です。
+              修正する場合は発行済み内容を書き換えず、次の見積として作成します。
+            </p>
 
-          <p className="text-xs leading-5 text-muted">
-            金額はこの見積版の発行時点で保存された内容です。マスター価格を変更しても変わりません。
-            別途工事・フリー商品を入れる場合は、書き換えではなく改訂見積として発行します。
-          </p>
-
-          {quote.status === 'superseded' && <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>}
+            {quote.status === 'superseded' && <Alert tone="info">この版は改訂済みです。最新の版から編集してください。</Alert>}
+          </section>
         </section>
       )}
-
       {activeTab === 'plan' && (
         <section className="space-y-3" data-testid="case-tab-plan">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -776,8 +811,8 @@ export async function CaseWorkspace({
               <Link href={tabHref('documents')} className="btn-secondary btn-sm">
                 現地資料を確認
               </Link>
-              <Link href={tabHref('estimate', true)} className="btn-primary btn-sm">
-                施工金額を見積へ反映
+              <Link href={tabHref('estimate', canUseLegacyRevision)} className="btn-primary btn-sm">
+                見積編集へ戻る
               </Link>
             </div>
           </div>

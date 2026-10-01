@@ -90,7 +90,8 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain(">式</td>");
     expect(authoringUi).toContain('＋商品');
     expect(authoringUi).toContain('＋自由明細');
-    expect(authoringUi).toContain("row.locked ? 'bg-slate-100' : 'bg-amber-50'");
+    expect(authoringUi).toContain("const rowLocked = Boolean(row.locked || !sectionEditable);");
+    expect(authoringUi).toContain("rowLocked ? 'bg-slate-100' : 'bg-amber-50'");
     expect(authoringUi).not.toContain('標準・変更可');
     expect(authoringUi).not.toContain('標準・固定');
     expect(authoringUi).not.toContain('任意オプション');
@@ -111,7 +112,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain("const DECIMAL_QUANTITY_UNITS = new Set(['m', 'ｍ', '㎡', 'm²', 'm2'])");
     expect(authoringUi).toContain("if (normalized === '式') return 'fixed-one'");
     expect(authoringUi).toContain("if (rule === 'integer') return Number.isInteger(quantity)");
-    expect(authoringUi).toContain("readOnly={!row.locked && quoteQuantityRule(row.unit) === 'fixed-one'}");
+    expect(authoringUi).toContain("readOnly={!rowLocked && quoteQuantityRule(row.unit) === 'fixed-one'}");
     expect(authoringUi).toContain("onUpdate(row.key, { unit: nextUnit, quantity: 1 })");
     expect(authoringUi).toContain("if (isValidQuoteQuantity(quantity, row.unit)) onUpdate(row.key, { quantity })");
     expect(authoringUi).toContain('Tab→ ／ Enter↓ ／ Shift+Enter↑');

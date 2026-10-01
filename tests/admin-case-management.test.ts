@@ -121,7 +121,8 @@ describe('Admin case management UI', () => {
     expect(quoteEstimateSheet).not.toContain('＋新しい見積書');
     expect(dealerForms).toContain('現地確認後の施工金額やオプション・別途工事等を見積に反映し、改訂見積を発行できます。');
     expect(dealerForms).toContain('第${quote.revision + 1}版 見積編集');
-    expect(dealerForms).toContain('見積金額（税込）');
+    expect(dealerForms).toContain('<QuoteAuthoringGrid');
+    expect(dealerForms).toContain('<QuoteFinancialSummary');
     expect(dealerForms).toContain('label={`この内容で第${quote.revision + 1}版を発行`}');
   });
 

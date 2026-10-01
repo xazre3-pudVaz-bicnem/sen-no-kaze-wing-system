@@ -374,6 +374,7 @@ export function QuoteAuthoringGrid({
   onRemove,
   onAddFree,
   onSelectProduct,
+  editableSections,
 }: {
   rows: QuoteAuthoringRow[];
   products: QuoteCatalogProduct[];
@@ -383,12 +384,18 @@ export function QuoteAuthoringGrid({
   onRemove: (key: string) => void;
   onAddFree: (section: QuoteAuthoringSection) => void;
   onSelectProduct: (section: QuoteAuthoringSection, targetKey: string | null, product: QuoteCatalogProduct) => void;
+  /** 画面用途・権限により追加可能な区分だけを制限する。未指定は全区分。 */
+  editableSections?: readonly QuoteAuthoringSection[];
 }) {
   const [collapsed, setCollapsed] = useState<Set<QuoteAuthoringSection>>(() => new Set());
   const [pickerSection, setPickerSection] = useState<QuoteAuthoringSection | null>(null);
   const [pickerTargetKey, setPickerTargetKey] = useState<string | null>(null);
   const [pickerCategoryId, setPickerCategoryId] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
+  const editableSectionSet = useMemo(
+    () => new Set<QuoteAuthoringSection>(editableSections ?? SECTION_META.map((section) => section.key)),
+    [editableSections]
+  );
 
   const sectionRows = (section: QuoteAuthoringSection) =>
     rows.filter((row) => sectionForKind(row.kind) === section);
@@ -541,6 +548,7 @@ export function QuoteAuthoringGrid({
             {SECTION_META.map((section) => {
               const currentRows = sectionRows(section.key);
               const isCollapsed = collapsed.has(section.key);
+              const sectionEditable = editableSectionSet.has(section.key);
               const sectionSale = currentRows.reduce((sum, row) => sum + row.amount, 0);
               const separate = currentRows.some((row) => row.unitPrice === 0 && row.remark?.trim() === '別途見積');
               const hasSeparatePrice = section.key === 'installation' && separate;
@@ -610,16 +618,23 @@ export function QuoteAuthoringGrid({
                           <>
                             <button
                               type="button"
-                              disabled={!canPickProduct}
+                              disabled={!sectionEditable || !canPickProduct}
                               className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
                               onClick={() => openProductPicker(section.key)}
-                              title={canPickProduct ? '商品台帳から追加' : '商品モデルと仕様を先に選択してください'}
+                              title={
+                                !sectionEditable
+                                  ? 'この区分は現在の編集モードでは変更できません'
+                                  : canPickProduct
+                                    ? '商品台帳から追加'
+                                    : '商品モデルと仕様を先に選択してください'
+                              }
                             >
                               ＋商品
                             </button>
                             <button
                               type="button"
-                              className="text-[9px] font-semibold underline underline-offset-2"
+                              disabled={!sectionEditable}
+                              className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
                               onClick={() => onAddFree(section.key)}
                             >
                               ＋自由明細
@@ -628,7 +643,8 @@ export function QuoteAuthoringGrid({
                         ) : (
                           <button
                             type="button"
-                            className="text-[9px] font-semibold underline underline-offset-2"
+                            disabled={!sectionEditable}
+                            className="text-[9px] font-semibold underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-45"
                             onClick={() => onAddFree(section.key)}
                           >
                             ＋自由明細
@@ -652,7 +668,8 @@ export function QuoteAuthoringGrid({
                     const number = rowNumberByKey.get(row.key) ?? 0;
                     const detailLabel = KIND_DETAIL_LABELS[row.kind];
                     const separatePrice = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
-                    const editCellClass = row.locked ? 'bg-slate-100' : 'bg-amber-50';
+                    const rowLocked = Boolean(row.locked || !sectionEditable);
+                    const editCellClass = rowLocked ? 'bg-slate-100' : 'bg-amber-50';
 
                     return (
                       <tr key={row.key} className="border-b border-slate-200 bg-white">
@@ -662,14 +679,14 @@ export function QuoteAuthoringGrid({
                           <div className="flex items-center gap-0.5">
                             <Input
                               value={row.name}
-                              disabled={row.locked}
+                              disabled={rowLocked}
                               data-quote-grid-col="name"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { name: event.target.value })}
                               className="h-5 min-h-5 min-w-0 flex-1 border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                               aria-label={`品名 ${number}`}
                             />
-                            {!row.locked && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
+                            {!rowLocked && sectionEditable && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
                               <button
                                 type="button"
                                 disabled={!canPickProduct}
@@ -691,8 +708,8 @@ export function QuoteAuthoringGrid({
                             max="99999"
                             step={quoteQuantityRule(row.unit) === 'decimal' ? '0.01' : '1'}
                             value={quoteQuantityRule(row.unit) === 'fixed-one' ? 1 : row.quantity}
-                            disabled={row.locked}
-                            readOnly={!row.locked && quoteQuantityRule(row.unit) === 'fixed-one'}
+                            disabled={rowLocked}
+                            readOnly={!rowLocked && quoteQuantityRule(row.unit) === 'fixed-one'}
                             inputMode={quoteQuantityRule(row.unit) === 'decimal' ? 'decimal' : 'numeric'}
                             title={
                               quoteQuantityRule(row.unit) === 'fixed-one'
@@ -714,7 +731,7 @@ export function QuoteAuthoringGrid({
                         <td className={`w-9 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.unit ?? ''}
-                            disabled={row.locked}
+                            disabled={rowLocked}
                             data-quote-grid-col="unit"
                             onKeyDown={handleGridKeyDown}
                             onChange={(event) => {
@@ -746,7 +763,7 @@ export function QuoteAuthoringGrid({
                               type="number"
                               step="1"
                               value={row.unitPrice}
-                              disabled={row.locked}
+                              disabled={rowLocked}
                               data-quote-grid-col="sale"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { unitPrice: Number(event.target.value) || 0 })}
@@ -760,7 +777,7 @@ export function QuoteAuthoringGrid({
                         <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass}`}>
                           <Input
                             value={row.remark ?? ''}
-                            disabled={row.locked}
+                            disabled={rowLocked}
                             data-quote-grid-col="remark"
                             onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { remark: event.target.value })}
@@ -771,7 +788,7 @@ export function QuoteAuthoringGrid({
                         <td className="w-10 px-0.5 text-center">
                           <button
                             type="button"
-                            disabled={row.locked}
+                            disabled={rowLocked}
                             onClick={() => onRemove(row.key)}
                             className="rounded px-1 py-0.5 text-[10px] text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
                           >
@@ -999,7 +1016,20 @@ export function QuoteFinancialSummary({
             <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
           </label>
         </>
-      ) : null}
+      ) : (
+        <>
+          <div className="flex justify-between gap-4 py-0.5">
+            <span>調整額</span>
+            <strong>{formatYen(adjustment)}</strong>
+          </div>
+          {adjustmentReason && (
+            <div className="flex justify-between gap-4 py-0.5 text-[10px] text-muted">
+              <span>調整理由</span>
+              <span className="text-right">{adjustmentReason}</span>
+            </div>
+          )}
+        </>
+      )}
       <div className="flex justify-between gap-4 py-0.5"><span>消費税</span><strong>{formatYen(tax)}</strong></div>
       <div className="mt-1.5 flex justify-between gap-4 border-t-2 border-slate-700 pt-2 text-base"><span>見積金額</span><strong>{formatYen(total)}</strong></div>
       <div className="mt-1.5 flex justify-between gap-4 rounded bg-emerald-50 px-2 py-1.5"><span>粗利</span><strong className="text-slate-600">未算定</strong></div>

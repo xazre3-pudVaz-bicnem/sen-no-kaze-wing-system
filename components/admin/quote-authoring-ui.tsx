@@ -6,6 +6,7 @@ import { Package, Search, X } from 'lucide-react';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import { Button, Input } from '@/components/ui';
+import { EstimateRateControls } from '@/components/admin/estimate-workbench-shared';
 
 export type QuoteAuthoringSection = 'base' | 'interior_exterior' | 'option' | 'installation';
 export type QuoteAuthoringTab = 'estimate' | 'planboard' | 'drawings';
@@ -340,26 +341,26 @@ export function QuoteInternalRateStrip({
 }: {
   showPlannedDefaults?: boolean;
 } = {}) {
+  if (showPlannedDefaults) {
+    return (
+      <EstimateRateControls
+        values={{ salesExpenseRate: 100, expenseRate: 15, markupRate: 150 }}
+        editable={false}
+        valueNote="予定初期値"
+        grossProfitLabel="未算定"
+        grossProfitRateLabel="未算定"
+        note="Quote Draftの正式保存項目に未接続のため、現在は編集・保存・見積金額計算に使用しません"
+      />
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 bg-amber-50/35 px-3 py-1.5 text-[10px]">
       <span className="font-semibold text-slate-700">社内計算条件</span>
-      {showPlannedDefaults ? (
-        <>
-          <span>販売費率 <strong>100%</strong> <em className="not-italic text-slate-400">予定初期値</em></span>
-          <span>経費率 <strong>15%</strong> <em className="not-italic text-slate-400">予定初期値</em></span>
-          <span>掛率 <strong>150%</strong> <em className="not-italic text-slate-400">予定初期値</em></span>
-          <span className="ml-auto text-[10px] text-slate-500">
-            現行Quote Draftの保存契約には未接続のため、入力・保存・見積金額計算には使用しません
-          </span>
-        </>
-      ) : (
-        <>
-          <span>販売費 <strong className="text-slate-400">—</strong></span>
-          <span>経費 <strong className="text-slate-400">—</strong></span>
-          <span>掛率 <strong className="text-slate-400">—</strong></span>
-          <span className="ml-auto text-[10px] text-slate-500">販売費・経費・掛率は現在の見積では使用していません</span>
-        </>
-      )}
+      <span>販売費 <strong className="text-slate-400">—</strong></span>
+      <span>経費 <strong className="text-slate-400">—</strong></span>
+      <span>掛率 <strong className="text-slate-400">—</strong></span>
+      <span className="ml-auto text-[10px] text-slate-500">販売費・経費・掛率は現在の見積では使用していません</span>
     </div>
   );
 }

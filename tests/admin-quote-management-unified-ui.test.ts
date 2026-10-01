@@ -35,7 +35,7 @@ describe('見積書管理の正式編集UI統合', () => {
       expect(manualWorkbench).toContain(label);
     }
     expect(manualWorkbench).toContain('name="customer_name" value={customerName}');
-    expect(manualWorkbench).toContain("customerLastName.trim(), customerFirstName.trim()");
+    expect(manualWorkbench).toContain('customerLastName.trim() && customerFirstName.trim()');
     expect(manualWorkbench).toContain('電話・メール・お客様住所は現在この画面では入力できません');
     expect(manualWorkbench).toContain('placeholder="未設定"');
     expect(manualWorkbench).not.toContain('（任意）');

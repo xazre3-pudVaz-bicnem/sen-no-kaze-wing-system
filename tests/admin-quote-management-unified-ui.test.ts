@@ -37,13 +37,19 @@ describe('見積書管理の正式編集UI統合', () => {
     }
     expect(manualWorkbench).toContain('name="customer_name" value={customerName}');
     expect(manualWorkbench).toContain('customerLastName.trim() && customerFirstName.trim()');
-    expect(manualWorkbench).toContain('電話・メール・お客様住所は保存先未接続のため、現在は入力できません');
-    expect(manualWorkbench).toContain('placeholder="保存先未接続"');
+    expect(manualWorkbench).toContain('電話・メール・お客様住所の入力機能は現在準備中です');
+    expect(manualWorkbench).toContain('placeholder="現在準備中"');
     expect(manualWorkbench).not.toContain('（任意）');
     expect(manualWorkbench).not.toContain('label="注文範囲"');
     expect(draftEditor).not.toContain('<span className="text-muted">注文範囲</span>');
     expect(manualWorkbench).toContain('name="finish_level" value="full"');
     expect(manualWorkbench).toContain('data-testid="case-info-panel"');
+    expect(manualWorkbench).toContain('商品モデル・仕様・防火仕様を選ぶと、登録済みの本体内容が自動で反映されます。この機能は現在準備中です。');
+    expect(manualWorkbench).toContain('現場工事金額は、案件登録後に現地確認を行い、案件管理から入力します。');
+    expect(manualWorkbench).not.toContain('Published Base Master Revision');
+    expect(manualWorkbench).not.toContain('plan state');
+    expect(manualWorkbench).not.toContain('正式version');
+    expect(manualWorkbench).not.toContain('version管理');
   });
 
   it('本体・内外装工事・オプション・別途と社内列を同じExcel型表に維持する', () => {
@@ -160,14 +166,14 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftEditor).toContain('row.option_id === product.id && row.key !== targetKey');
   });
 
-  it('3率はStandard Estimate共通UIを再利用し、Quote Draft未接続のまま偽保存しない', () => {
+  it('3率はStandard Estimate共通UIを再利用し、準備中の間は編集不可にする', () => {
     expect(authoringUi).toContain('showPlannedDefaults');
     expect(authoringUi).toContain('<EstimateRateControls');
     expect(authoringUi).toContain('salesExpenseRate: 100');
     expect(authoringUi).toContain('expenseRate: 15');
     expect(authoringUi).toContain('markupRate: 150');
     expect(authoringUi).toContain('editable={false}');
-    expect(authoringUi).toContain('Quote Draftの正式保存項目に未接続');
+    expect(authoringUi).toContain('販売費・経費・掛率の編集機能は現在準備中です。');
     expect(sharedWorkbenchUi).toContain('aria-label={ariaLabel}');
     expect(sharedWorkbenchUi).toContain('disabled={!editable}');
     expect(manualWorkbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
@@ -182,7 +188,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('<span>原価合計</span><strong className="text-slate-500">未算定</strong>');
     expect(authoringUi).toContain('<span>粗利</span><strong className="text-slate-600">未算定</strong>');
     expect(authoringUi).toContain('<span>粗利率</span><strong className="text-slate-600">未算定</strong>');
-    expect(authoringUi).toContain('粗利・粗利率は0として扱わず未算定と表示します');
+    expect(authoringUi).toContain('原価が未確定のため、粗利・粗利率は「未算定」と表示しています。');
     expect(manualWorkbench).toContain('<EstimateMoneyStrip');
     expect(manualWorkbench).toContain('subtotalLabel="税別明細合計"');
     expect(manualWorkbench).toContain('totalLabel="見積金額（税込）"');
@@ -193,7 +199,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('過去見積から複製');
     expect(authoringUi).toContain('複製する過去見積を選択');
     expect(authoringUi).toContain('この見積を複製');
-    expect(authoringUi).toContain('正式な複製処理はDB基盤接続後に利用できます');
+    expect(authoringUi).toContain('見積の複製機能は現在準備中です');
     expect(authoringUi).toContain('案件見積一覧');
     expect(authoringUi).toContain('estimate.case_name');
     expect(authoringUi).toContain('estimate.customer_name');
@@ -278,9 +284,9 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain("onChange?: (tab: QuoteAuthoringTab) => void");
     expect(manualWorkbench).toContain('active={activeTab} onChange={setActiveTab}');
     expect(manualWorkbench).toContain('data-testid="new-quote-planboard-state"');
-    expect(manualWorkbench).toContain('案件専用のplan stateへ接続して表示します');
+    expect(manualWorkbench).toContain('案件登録後、案件管理のプランボードで確認できるようにします');
     expect(manualWorkbench).toContain('data-testid="new-quote-drawings-state"');
-    expect(manualWorkbench).toContain('案件側でversion管理');
+    expect(manualWorkbench).toContain('案件図面の管理機能は現在準備中です');
     expect(manualWorkbench).toContain('案件として登録');
     expect(manualWorkbench).toContain('登録すると案件一覧に追加されます。現地確認後の見積編集・正式発行は案件管理から行います。');
     expect(manualWorkbench).not.toContain('初回Draft保存後に正式発行できます');

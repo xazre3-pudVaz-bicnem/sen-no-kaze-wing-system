@@ -195,10 +195,12 @@ describe('non-Web manual case application wiring', () => {
   });
 
   it('keeps Draft save and immutable Revision 1 finalization as separate UI actions', () => {
-    expect(draftEditor).toContain('Draftを保存');
-    expect(draftEditor).toContain('正式保存（Revision 1）');
-    expect(draftEditor).toContain('未保存の変更があります。先にDraftを保存してください。');
+    expect(draftEditor).toContain('label="下書き保存"');
+    expect(draftEditor).toContain('正式見積を発行');
+    expect(draftEditor).toContain('この内容で第${targetRevision}版を発行');
+    expect(draftEditor).toContain('未保存の変更があります。先に下書きを保存してください。');
     expect(draftEditor).toContain('下書き保存時に数量×単価・税額・合計を確認します。');
+    expect(draftEditor).toContain('targetRevision = 1');
     expect(draftEditor).toContain('base_master_revision_id');
   });
 

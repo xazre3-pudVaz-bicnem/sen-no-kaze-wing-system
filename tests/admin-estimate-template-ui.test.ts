@@ -67,7 +67,7 @@ const adminActions = fs.readFileSync(
 describe('シミュレーター標準管理UI', () => {
   it('常設一覧からタブとExcel編集へ重複カードなしで直接つなぐ', () => {
     expect(listPage).toContain('title="見積書管理"');
-    expect(listPage).toContain('lead="シミュレーター標準"');
+    expect(listPage).not.toContain('lead="シミュレーター標準"');
     expect(listPage).toContain('＋ 標準見積を作成');
     expect(listPage).not.toContain('＋ 案件見積を作成');
     expect(listPage).toContain('<SavedEstimateMenu');

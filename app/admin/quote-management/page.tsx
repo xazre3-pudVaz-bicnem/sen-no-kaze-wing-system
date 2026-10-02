@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import { formatDate } from '@/lib/utils';
 import { AdminPage } from '@/components/admin/ui';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
+import { CaseEstimateSelectableRow } from '@/components/admin/case-estimate-selectable-row';
 import {
   CASE_ESTIMATE_SPEC_LABELS,
   CaseEstimateReview,
@@ -188,28 +189,15 @@ export default async function AdminQuoteManagementPage({
     null;
 
   return (
-    <AdminPage title="見積書管理" lead="案件見積">
+    <AdminPage title="見積書管理">
       <QuoteManagementTabs active="case" />
 
       <section className="rounded-lg border border-line bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <div>
-            <h2 className="font-semibold">案件見積一覧</h2>
-            <p className="mt-0.5 text-xs text-muted">
-              担当代理店・顧客・案件から見積を探し、選択した内容を同じページ下部で確認します。編集などの業務操作は案件管理から行います。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full border border-line bg-sand px-2.5 py-1">
-              全体 <strong>{allRows.length}</strong>
-            </span>
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-900">
-              下書き <strong>{draftRows.length}</strong>
-            </span>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-900">
-              正式見積 <strong>{formalRows.length}</strong>
-            </span>
-          </div>
+        <div className="border-b border-line px-4 py-3">
+          <h2 className="font-semibold">案件見積一覧</h2>
+          <p className="mt-0.5 text-xs text-muted">
+            見積を選択すると下部で確認できます。編集は案件管理から行います。
+          </p>
         </div>
 
         <form method="get" className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
@@ -252,17 +240,17 @@ export default async function AdminQuoteManagementPage({
           </span>
         </form>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[68rem] table-fixed text-sm xl:min-w-0">
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-sm">
             <thead className="bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[17%] px-3 py-2 text-left font-semibold">担当代理店</th>
-                <th className="w-[29%] px-3 py-2 text-left font-semibold">顧客／案件名</th>
-                <th className="w-[11%] px-2 py-2 text-left font-semibold">モデル</th>
-                <th className="w-[12%] px-2 py-2 text-left font-semibold">仕様</th>
-                <th className="w-[8%] px-2 py-2 text-center font-semibold">版</th>
-                <th className="w-[13%] px-2 py-2 text-left font-semibold">状態</th>
-                <th className="w-[10%] px-3 py-2 text-right font-semibold">見積金額（税込）</th>
+                <th className="w-[18%] px-2 py-2 text-left font-semibold">担当代理店</th>
+                <th className="w-[31%] px-2 py-2 text-left font-semibold">顧客・案件</th>
+                <th className="w-[9%] px-2 py-2 text-left font-semibold">モデル</th>
+                <th className="w-[10%] px-2 py-2 text-left font-semibold">仕様</th>
+                <th className="w-[7%] px-2 py-2 text-center font-semibold">版</th>
+                <th className="w-[14%] px-2 py-2 text-left font-semibold">状態</th>
+                <th className="w-[11%] px-2 py-2 text-right font-semibold">金額（税込）</th>
               </tr>
             </thead>
             <tbody>
@@ -271,17 +259,12 @@ export default async function AdminQuoteManagementPage({
                 const href = selectionHref(row, query, dealerFilter);
                 const secondaryDealer = dealerSecondary(row);
                 return (
-                  <tr
+                  <CaseEstimateSelectableRow
                     key={row.key}
-                    className={
-                      selected
-                        ? 'border-t border-line bg-[#fff7df] shadow-[inset_4px_0_0_#2f6b4f]'
-                        : 'border-t border-line hover:bg-[#f8faf9]'
-                    }
-                    aria-selected={selected}
-                    data-testid="case-estimate-row"
+                    href={href}
+                    selected={selected}
                   >
-                    <td className="px-3 py-2 align-middle">
+                    <td className="px-2 py-2 align-middle">
                       <p className={row.dealerId ? 'truncate font-semibold' : 'truncate font-semibold text-muted'}>
                         {dealerPrimary(row)}
                       </p>
@@ -289,14 +272,14 @@ export default async function AdminQuoteManagementPage({
                         <p className="mt-0.5 truncate text-[11px] text-muted">{secondaryDealer}</p>
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 align-middle">
-                      <Link href={href} className="block min-w-0">
-                        <p className="truncate font-semibold hover:underline">
+                    <td className="px-2 py-2 align-middle">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">
                           {row.customerName}
                           {row.customerCompany ? ` ／ ${row.customerCompany}` : ''}
                         </p>
                         <p className="mt-0.5 truncate text-xs text-muted">{row.caseName}</p>
-                      </Link>
+                      </div>
                     </td>
                     <td className="truncate px-2 py-2 align-middle">{row.modelName}</td>
                     <td className="truncate px-2 py-2 align-middle">{specLabel(row.specCode)}</td>
@@ -316,11 +299,11 @@ export default async function AdminQuoteManagementPage({
                         {row.statusLabel}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right align-middle">
+                    <td className="px-2 py-2 text-right align-middle">
                       <p className="font-semibold tabular-nums">{row.total == null ? '—' : formatYen(row.total)}</p>
                       <p className="mt-0.5 whitespace-nowrap text-[10px] text-muted">更新 {formatDate(row.updatedAt, true)}</p>
                     </td>
-                  </tr>
+                  </CaseEstimateSelectableRow>
                 );
               })}
               {rows.length === 0 && (

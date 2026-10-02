@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/quote-management/page.tsx'), 'utf8');
 const review = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/case-estimate-review.tsx'), 'utf8');
+const selectableRow = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/case-estimate-selectable-row.tsx'), 'utf8');
+const standardPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'), 'utf8');
 const tabs = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/quote-management-tabs.tsx'), 'utf8');
 const nav = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/admin-nav.tsx'), 'utf8');
 
@@ -17,6 +19,17 @@ describe('見積書管理の案件見積入口', () => {
     expect(page).not.toContain('＋ 新しい案件見積');
   });
 
+
+  it('見積書管理の重複説明と集計バッジを省き、一覧説明を短くする', () => {
+    expect(page).toContain('<AdminPage title="見積書管理">');
+    expect(page).not.toContain('lead="案件見積"');
+    expect(standardPage).not.toContain('lead="シミュレーター標準"');
+    expect(page).toContain('見積を選択すると下部で確認できます。編集は案件管理から行います。');
+    expect(page).not.toContain('全体 <strong>{allRows.length}</strong>');
+    expect(page).not.toContain('下書き <strong>{draftRows.length}</strong>');
+    expect(page).not.toContain('正式見積 <strong>{formalRows.length}</strong>');
+  });
+
   it('Draftと正式見積を一覧選択し同じページ下部で確認する', () => {
     expect(page).toContain('store.listInitialQuoteDraftResumes(actor)');
     expect(page).toContain('store.listAllQuotes()');
@@ -24,8 +37,14 @@ describe('見積書管理の案件見積入口', () => {
     expect(page).toContain("selection: { kind: 'quote' as const, id: quote.id }");
     expect(page).toContain("params.set(row.selection.kind, row.selection.id)");
     expect(page).toContain('#case-estimate-review');
-    expect(page).toContain('aria-selected={selected}');
-    expect(page).toContain("bg-[#fff7df]");
+    expect(page).toContain('<CaseEstimateSelectableRow');
+    expect(page).toContain('href={href}');
+    expect(page).toContain('selected={selected}');
+    expect(selectableRow).toContain('aria-selected={selected}');
+    expect(selectableRow).toContain('router.push(href)');
+    expect(selectableRow).toContain("event.key !== 'Enter' && event.key !== ' '");
+    expect(selectableRow).toContain('cursor-pointer');
+    expect(selectableRow).toContain("bg-[#fff7df]");
     expect(page).not.toContain('>選択</th>');
     expect(page).not.toContain("{selected ? '表示中' : '確認'}");
     expect(page).not.toContain('/admin/quotes/drafts/');
@@ -41,14 +60,16 @@ describe('見積書管理の案件見積入口', () => {
     expect(page).toContain("row.quoteNo ?? ''");
     expect(page).not.toContain('>見積番号</th>');
     expect(page).not.toContain('見積番号・商品モデルで検索');
-    for (const label of ['担当代理店', '顧客／案件名', 'モデル', '仕様', '版', '状態', '見積金額（税込）']) {
+    for (const label of ['担当代理店', '顧客・案件', 'モデル', '仕様', '版', '状態', '金額（税込）']) {
       expect(page).toContain(label);
     }
     expect(page).not.toContain('>棟数</th>');
     expect(page).not.toContain('>防火</th>');
     expect(page).toContain('更新 {formatDate(row.updatedAt, true)}');
-    expect(page).toContain('min-w-[68rem]');
-    expect(page).toContain('xl:min-w-0');
+    expect(page).toContain('<table className="w-full table-fixed text-sm">');
+    expect(page).toContain('<div className="overflow-hidden">');
+    expect(page).not.toContain('min-w-[68rem]');
+    expect(page).not.toContain('xl:min-w-0');
   });
 
   it('担当代理店は会社名を主表示し担当者名を補助表示する', () => {

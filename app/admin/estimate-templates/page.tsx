@@ -80,7 +80,6 @@ export default async function EstimateTemplatesPage({
     return (
       <AdminPage
         title="見積書管理"
-        lead="シミュレーター標準"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
             ＋ 標準見積を作成
@@ -112,7 +111,6 @@ export default async function EstimateTemplatesPage({
     return (
       <AdminPage
         title="見積書管理"
-        lead="シミュレーター標準"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
             ＋ 標準見積を作成
@@ -194,7 +192,6 @@ export default async function EstimateTemplatesPage({
   return (
     <AdminPage
       title="見積書管理"
-      lead="シミュレーター標準"
       actions={
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">

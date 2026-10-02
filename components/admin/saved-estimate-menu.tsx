@@ -173,13 +173,13 @@ export function SavedEstimateMenu({
       <div className="w-full">
         <div className="w-full">
           <div className="grid w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)] items-center gap-1.5 border-b border-line bg-sand/35 px-3 py-1.5 text-[10px] font-semibold leading-tight text-muted">
-            <span>商品モデル</span>
-            <span>仕様</span>
-            <span>防火仕様</span>
-            <span className="text-right">標準金額</span>
-            <span>状態</span>
-            <span>シミュレーター使用状態</span>
-            <span className="text-right">選択</span>
+            <span className="min-w-0">商品モデル</span>
+            <span className="min-w-0">仕様</span>
+            <span className="min-w-0">防火仕様</span>
+            <span className="min-w-0 text-right">標準金額</span>
+            <span className="min-w-0">状態</span>
+            <span className="min-w-0">シミュレーター使用状態</span>
+            <span className="min-w-0 text-right">選択</span>
           </div>
 
           <div className="border-b border-line bg-slate-50 px-4 py-1 text-[10px] font-semibold tracking-wide text-muted">
@@ -274,7 +274,7 @@ export function SavedEstimateMenu({
                     <span className="min-w-0 text-[10px] leading-tight text-muted">
                       {simulatorStandard ? '標準サンプル' : 'サンプル'}
                     </span>
-                    <span className="text-right font-semibold text-forest">{active ? '表示中' : '開く'}</span>
+                    <span className="min-w-0 text-right text-[11px] font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </Link>
                 );
               })}

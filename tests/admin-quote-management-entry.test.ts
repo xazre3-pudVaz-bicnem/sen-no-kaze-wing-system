@@ -20,7 +20,7 @@ describe('見積書管理の案件見積入口', () => {
   it('Draftと正式見積を一覧選択し同じページ下部で確認する', () => {
     expect(page).toContain('store.listInitialQuoteDraftResumes(actor)');
     expect(page).toContain('store.listAllQuotes()');
-    expect(page).toContain("selection: { kind: 'draft' as const, id: draft.draft_id }");
+    expect(page).toContain("selection: { kind: 'draft' as const, id: resume.draft_id }");
     expect(page).toContain("selection: { kind: 'quote' as const, id: quote.id }");
     expect(page).toContain("params.set(row.selection.kind, row.selection.id)");
     expect(page).toContain('#case-estimate-review');

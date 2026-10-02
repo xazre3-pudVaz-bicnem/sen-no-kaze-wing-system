@@ -21,7 +21,7 @@ describe('実案件E2E後の見積UI導線', () => {
 
   it('案件見積の作成・編集入口は案件管理へ寄せ、登録後も案件管理へ合流する', () => {
     expect(casePage).toContain('/admin/quotes/new?return_to=%2Fadmin%2Fquotes');
-    expect(quoteManagement).toContain('案件管理を開く');
+    expect(quoteManagement).not.toContain('案件管理を開く');
     expect(quoteManagement).not.toContain('/admin/quotes/new?return_to=%2Fadmin%2Fquote-management');
     expect(newQuotePage).toContain("sp.return_to === '/admin/quote-management'");
     expect(workbench).not.toContain('name="return_to" value={returnTo}');

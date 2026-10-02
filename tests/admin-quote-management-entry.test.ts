@@ -13,7 +13,7 @@ describe('見積書管理の案件見積入口', () => {
     expect(tabs).toContain('href="/admin/quote-management"');
     expect(page).toContain('案件見積一覧');
     expect(page).toContain('<CaseEstimateReview');
-    expect(page).toContain('案件管理を開く');
+    expect(page).not.toContain('案件管理を開く');
     expect(page).not.toContain('＋ 新しい案件見積');
   });
 
@@ -25,17 +25,67 @@ describe('見積書管理の案件見積入口', () => {
     expect(page).toContain("params.set(row.selection.kind, row.selection.id)");
     expect(page).toContain('#case-estimate-review');
     expect(page).toContain('aria-selected={selected}');
-    expect(page).toContain("{selected ? '表示中' : '確認'}");
+    expect(page).toContain("bg-[#fff7df]");
+    expect(page).not.toContain('>選択</th>');
+    expect(page).not.toContain("{selected ? '表示中' : '確認'}");
     expect(page).not.toContain('/admin/quotes/drafts/');
   });
 
-  it('検索機能と一覧の主要列を維持する', () => {
-    expect(page).toContain('案件名・顧客名・会社名・見積番号・商品モデルで検索');
-    for (const label of ['案件・顧客', '見積番号', '商品モデル', '状態', '金額', '更新', '選択']) {
+  it('担当代理店・顧客・案件を中心に一覧で探せる', () => {
+    expect(page).toContain('担当代理店・案件名・顧客名・会社名・商品モデルで検索');
+    expect(page).toContain('store.listCaseDealers()');
+    expect(page).toContain('name="dealer"');
+    expect(page).toContain('担当代理店：すべて');
+    expect(page).toContain('<option value="unassigned">未担当</option>');
+    expect(page).toContain("if (dealerFilter === 'unassigned') return row.dealerId === null");
+    expect(page).toContain("row.quoteNo ?? ''");
+    expect(page).not.toContain('>見積番号</th>');
+    expect(page).not.toContain('見積番号・商品モデルで検索');
+    for (const label of ['担当代理店', '顧客／案件名', 'モデル', '仕様', '版', '状態', '見積金額（税込）']) {
       expect(page).toContain(label);
     }
-    expect(page).toContain('min-w-[62rem]');
-    expect(page).toContain('lg:min-w-0');
+    expect(page).not.toContain('>棟数</th>');
+    expect(page).not.toContain('>防火</th>');
+    expect(page).toContain('更新 {formatDate(row.updatedAt, true)}');
+    expect(page).toContain('min-w-[68rem]');
+    expect(page).toContain('xl:min-w-0');
+  });
+
+  it('担当代理店は会社名を主表示し担当者名を補助表示する', () => {
+    expect(page).toContain("return row.dealerCompany?.trim() || row.dealerName?.trim() || '担当者情報未取得'");
+    expect(page).toContain("if (!row.dealerId) return '未担当'");
+    expect(page).toContain('dealerCompany: dealer?.company_name ?? null');
+    expect(page).toContain('dealerName: dealer?.full_name ?? null');
+    expect(page).toContain("const secondaryDealer = dealerSecondary(row)");
+  });
+
+  it('案件見積一覧専用の分かりやすい状態ラベルを使う', () => {
+    for (const label of [
+      "issued: 'お客様確認待ち'",
+      "accepted: 'お客様承諾済み'",
+      "expired: '期限切れ'",
+      "superseded: '旧版（新しい版あり）'",
+      "cancelled: '取消済み'",
+      "declined: 'お客様辞退'",
+    ]) {
+      expect(page).toContain(label);
+    }
+    expect(page).not.toContain('QUOTE_STATUS_LABELS');
+    expect(page).not.toContain(".filter((quote) => quote.status !== 'superseded')");
+  });
+
+  it('Formal Quoteのspec_codeを使い、Draftは保存済みDraftから仕様を読む', () => {
+    expect(page).toContain('specCode: quote.spec_code ?? null');
+    expect(page).toContain('store.getQuoteDraft(resume.draft_id, actor)');
+    expect(page).toContain('specCode: detail?.draft.spec_code ?? null');
+    expect(page).toContain('CASE_ESTIMATE_SPEC_LABELS[specCode] ?? specCode');
+    expect(page).toContain("if (!specCode) return '—'");
+  });
+
+  it('一覧の検索・担当代理店絞り込みを下部確認タブへ引き継ぐ', () => {
+    expect(page).toContain('dealerFilter={dealerFilter}');
+    expect(review).toContain("if (dealerFilter) params.set('dealer', dealerFilter)");
+    expect(review).toContain('dealerFilter={dealerFilter}');
   });
 
   it('確認詳細は見積書・プランボード・図面の3タブに限定する', () => {

@@ -83,9 +83,9 @@ const DEALER_KINDS: RevisionItemKind[] = [
 ];
 
 /**
- * 案件見積の編集。標準見積そのものは変更せず、発行済み案件をコピーした次版を作る。
- * 代理店は本体を閲覧のみ、オプション・別途等を編集可能。
- * 総代理店・本部は本体を含めて編集可能。
+ * Web経由案件の次版編集。標準見積そのものは変更せず、発行済み案件をコピーして次版を作る。
+ * 通常は現地確認後の施工金額だけを編集し、「見積内容を変更」時だけ内外装・オプションを変更する。
+ * 本体明細は権限に関係なくこのExcel表では参照のみとし、正式な本体選択契約は別工程で扱う。
  */
 export function DealerRevisionForm({
   quote,
@@ -103,6 +103,7 @@ export function DealerRevisionForm({
   freeProducts?: { code: string; name: string; price: number }[];
   /** 旧caller互換。専用改訂画面ではproductsを利用する。 */
   catalog?: CatalogPickerItem[];
+  /** 保存契約互換。trueでも本体明細はこの画面では直接編集させない。 */
   canEditBase: boolean;
   sheetMode?: boolean;
   onCancel?: () => void;
@@ -153,7 +154,18 @@ export function DealerRevisionForm({
   const editingTotal = subtotal + tax;
   const revisionDifference = editingTotal - quote.total;
 
-  const rowCanEdit = (row: Row) => row.kind === 'installation' || scopeChangeMode;
+  const rowCanEdit = (row: Row) => {
+    if (row.kind === 'base' || row.kind === 'base_expense') return false;
+    if (row.kind === 'installation') return true;
+    if (!scopeChangeMode) return false;
+    return [
+      'interior_exterior',
+      'interior_exterior_expense',
+      'option',
+      'option_expense',
+      'free',
+    ].includes(row.kind);
+  };
   const authoringRows: QuoteAuthoringRow[] = [
     ...lockedItems.map((item) => ({
       key: item.id,
@@ -167,24 +179,43 @@ export function DealerRevisionForm({
       optionId: item.option_id ?? null,
       locked: true,
     })),
-    ...rows.map((row) => ({
-      key: row.key,
-      kind: row.kind,
-      name: row.name,
-      quantity: row.quantity,
-      unit: row.unit,
-      unitPrice: row.unit_price,
-      amount: amountOf(row),
-      remark: row.remark,
-      optionId: row.option_id,
-      locked: !rowCanEdit(row),
-    })),
+    ...rows.map((row) => {
+      const editable = rowCanEdit(row);
+      const catalogLinked = Boolean(row.option_id);
+      const catalogProductChangeAllowed =
+        scopeChangeMode &&
+        (row.kind === 'interior_exterior' ||
+          row.kind === 'option' ||
+          row.kind === 'free');
+
+      return {
+        key: row.key,
+        kind: row.kind,
+        name: row.name,
+        quantity: row.quantity,
+        unit: row.unit,
+        unitPrice: row.unit_price,
+        amount: amountOf(row),
+        remark: row.remark,
+        optionId: row.option_id,
+        locked: !editable,
+        editableFields: editable
+          ? {
+              name: !catalogLinked,
+              quantity: true,
+              unit: !catalogLinked,
+              unitPrice: true,
+              remark: true,
+              remove: row.kind === 'installation' || scopeChangeMode,
+              selectProduct: catalogProductChangeAllowed,
+            }
+          : undefined,
+      };
+    }),
   ];
 
   const editableSections: QuoteAuthoringSection[] = scopeChangeMode
-    ? canEditBase
-      ? ['base', 'interior_exterior', 'option', 'installation']
-      : ['interior_exterior', 'option', 'installation']
+    ? ['interior_exterior', 'option', 'installation']
     : ['installation'];
 
   const markDirty = () => setIsDirty(true);
@@ -196,11 +227,12 @@ export function DealerRevisionForm({
     setRows((current) =>
       current.map((row) => {
         if (row.key !== key || !rowCanEdit(row)) return row;
+        const catalogLinked = Boolean(row.option_id);
         return {
           ...row,
-          ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(!catalogLinked && patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
-          ...(patch.unit !== undefined ? { unit: patch.unit ?? '' } : {}),
+          ...(!catalogLinked && patch.unit !== undefined ? { unit: patch.unit ?? '' } : {}),
           ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
           ...(patch.remark !== undefined ? { remark: patch.remark ?? '' } : {}),
         };
@@ -242,7 +274,7 @@ export function DealerRevisionForm({
     targetKey: string | null,
     product: QuoteCatalogProduct
   ) => {
-    if (!editableSections.includes(section)) return;
+    if (!scopeChangeMode || (section !== 'interior_exterior' && section !== 'option')) return;
     const productRemark = product.priceOnRequest
       ? '別途見積'
       : [product.manufacturer, product.modelNo].filter(Boolean).join(' ／ ');
@@ -385,9 +417,13 @@ export function DealerRevisionForm({
         </button>
       </div>
 
-      {!scopeChangeMode && (
+      {!scopeChangeMode ? (
         <div className="border-b border-line bg-[#f7faf8] px-3 py-1.5 text-[10px] text-muted">
-          通常は現地工事の明細だけ編集できます。本体・内外装・オプションを変更する場合は「見積内容を変更」を選択してください。
+          通常は現地確認後に決まる施工金額を編集します。本体は参照のみです。内外装・オプションを変更する場合は「見積内容を変更」を選択してください。
+        </div>
+      ) : (
+        <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] text-amber-900">
+          Webでお客様が選択した内容を変更します。変更内容は次の見積版として発行されます。本体は参照のみです。商品台帳の商品は品名を直接書き換えず、商品選択から変更してください。
         </div>
       )}
 

@@ -32,10 +32,13 @@ describe('実案件E2E後の見積UI導線', () => {
     expect(draftPage).toContain('const returnRequest = sp.return_request?.trim()');
   });
 
-  it('担当選択CTAは案件設定の担当者UIを直接開く', () => {
-    expect(workspace).toContain("buildInlineTabHref(quote.id, 'estimate', listSearchParams, false, 'dealer')");
-    expect(workspace).toContain("href: isAdmin ? dealerSettingsHref : '#case-workspace'");
-    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
+  it('担当未割当CTAと割当後の変更導線は同じ担当者UIを直接開く', () => {
+    expect(workspace).toContain('isAdmin && needsDealerAssignment ?');
+    expect(workspace).toContain('label="担当代理店を選ぶ"');
+    expect(workspace).toContain('summaryTestId="case-next-action-link"');
+    expect(workspace).toContain('isAdmin && quote.dealer_id &&');
+    expect(workspace).toContain('label="変更"');
+    expect(workspace).toContain('summaryTestId="case-dealer-change"');
     expect(controls).toContain('detailsRef.current.open = true');
     expect(controls).toContain('id="case-admin-controls"');
   });

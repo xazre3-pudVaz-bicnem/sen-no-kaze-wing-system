@@ -49,6 +49,13 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).not.toContain('data-testid="revision-preview"');
   });
 
+  it('keeps new-case and non-Web Draft editors on the shared grid default edit behavior', () => {
+    expect(quoteAuthoringUi).toContain('(row.editableFields?.[field] ?? true)');
+    expect(manualQuoteWorkbench).not.toContain('editableFields:');
+    expect(quoteDraftEditor).not.toContain('editableFields:');
+    expect(form).toContain('editableFields: editable');
+  });
+
   it('uses the shared compact Excel grid columns and collapsible section controls', () => {
     expect(quoteAuthoringUi).toContain('data-testid="unified-quote-excel-grid"');
     for (const label of ['品名', '数量', '単位', '原価', '原価金額', '売価', '売価金額', '粗利', '備考']) {
@@ -61,12 +68,13 @@ describe('Admin quote Excel-like editor', () => {
     expect(quoteAuthoringUi).toContain('＋自由明細');
   });
 
-  it('lets Web revisions keep their role-specific edit boundary without changing the common grid contract', () => {
-    expect(form).toContain("const editableSections: QuoteAuthoringSection[] = scopeChangeMode");
-    expect(form).toContain("['base', 'interior_exterior', 'option', 'installation']");
+  it('keeps Web revision base rows locked and edits installation by default', () => {
+    expect(form).toContain("if (row.kind === 'base' || row.kind === 'base_expense') return false;");
+    expect(form).toContain("if (row.kind === 'installation') return true;");
+    expect(form).toContain("if (!scopeChangeMode) return false;");
     expect(form).toContain("['interior_exterior', 'option', 'installation']");
     expect(form).toContain("['installation']");
-    expect(form).toContain("const rowCanEdit = (row: Row) => row.kind === 'installation' || scopeChangeMode;");
+    expect(form).not.toContain("['base', 'interior_exterior', 'option', 'installation']");
     expect(quoteAuthoringUi).toContain('editableSections?: readonly QuoteAuthoringSection[];');
     expect(quoteAuthoringUi).toContain('const sectionEditable = editableSectionSet.has(section.key);');
   });
@@ -97,6 +105,36 @@ describe('Admin quote Excel-like editor', () => {
     expect(form).toContain('product.categoryName');
   });
 
+  it('locks direct catalog-product names while allowing picker replacement, quantity, sale price, remark, and edit-mode removal', () => {
+    expect(form).toContain('const catalogLinked = Boolean(row.option_id);');
+    expect(form).toContain('name: !catalogLinked');
+    expect(form).toContain('unit: !catalogLinked');
+    expect(form).toContain('quantity: true');
+    expect(form).toContain('unitPrice: true');
+    expect(form).toContain('remark: true');
+    expect(form).toContain("remove: row.kind === 'installation' || scopeChangeMode");
+    expect(form).toContain('selectProduct: catalogProductChangeAllowed');
+    expect(form).toContain("if (!scopeChangeMode || (section !== 'interior_exterior' && section !== 'option')) return;");
+    expect(form).toContain('...(!catalogLinked && patch.name !== undefined ? { name: patch.name } : {})');
+    expect(quoteAuthoringUi).toContain('editableFields?: QuoteAuthoringRowEditableFields;');
+    expect(quoteAuthoringUi).toContain("const nameEditable = fieldEditable('name');");
+    expect(quoteAuthoringUi).toContain('disabled={!nameEditable}');
+    expect(quoteAuthoringUi).toContain('selectProductEditable && SECTION_PRODUCT_CATEGORY_CODES');
+  });
+
+  it('keeps free/site-work inputs editable when their section is editable', () => {
+    expect(form).toContain('name: !catalogLinked');
+    expect(form).toContain('unit: !catalogLinked');
+    expect(form).toContain('const catalogLinked = Boolean(row.option_id);');
+    expect(form).toContain("if (row.kind === 'installation') return true;");
+    expect(quoteAuthoringUi).toContain("(row.editableFields?.[field] ?? true)");
+  });
+
+  it('shows Web-revision guidance for normal and scope-change modes', () => {
+    expect(form).toContain('通常は現地確認後に決まる施工金額を編集します。本体は参照のみです。内外装・オプションを変更する場合は「見積内容を変更」を選択してください。');
+    expect(form).toContain('Webでお客様が選択した内容を変更します。変更内容は次の見積版として発行されます。本体は参照のみです。商品台帳の商品は品名を直接書き換えず、商品選択から変更してください。');
+  });
+
   it('uses shared rate/financial UI while keeping customer preview only on registered-case editors', () => {
     expect(manualQuoteWorkbench).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
     expect(quoteDraftEditor).toContain('<QuoteInternalRateStrip showPlannedDefaults />');
@@ -107,6 +145,17 @@ describe('Admin quote Excel-like editor', () => {
     expect(manualQuoteWorkbench).not.toContain('<CustomerQuotePreview');
     expect(quoteDraftEditor).toContain('<CustomerQuotePreview');
     expect(form).toContain('<CustomerQuotePreview');
+  });
+
+  it('keeps Web revision preview and the current automatic rounding contract unchanged', () => {
+    expect(form).toContain('const subtotal = Math.floor(subRaw / 1000) * 1000;');
+    expect(form).toContain('const adjustment = subtotal - subRaw;');
+    expect(form).toContain('adjustmentReason="千円未満切捨て"');
+    expect(form).toContain('showAdjustmentControls={false}');
+    expect(form).toContain("showPreview ? 'プレビューを閉じる' : 'プレビュー'");
+    expect(form).toContain('<CustomerQuotePreview');
+    expect(form).not.toContain('name="adjustment"');
+    expect(form).not.toContain('name="adjustment_reason"');
   });
 
   it('keeps unavailable cost and gross-profit values explicitly uncalculated', () => {

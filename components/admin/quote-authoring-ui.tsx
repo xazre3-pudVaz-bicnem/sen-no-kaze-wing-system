@@ -11,6 +11,16 @@ import { EstimateRateControls } from '@/components/admin/estimate-workbench-shar
 export type QuoteAuthoringSection = 'base' | 'interior_exterior' | 'option' | 'installation';
 export type QuoteAuthoringTab = 'estimate' | 'planboard' | 'drawings';
 
+export type QuoteAuthoringRowEditableFields = {
+  name?: boolean;
+  quantity?: boolean;
+  unit?: boolean;
+  unitPrice?: boolean;
+  remark?: boolean;
+  remove?: boolean;
+  selectProduct?: boolean;
+};
+
 export type QuoteAuthoringRow = {
   key: string;
   kind: QuoteItemKind;
@@ -22,6 +32,8 @@ export type QuoteAuthoringRow = {
   remark: string | null;
   optionId?: string | null;
   locked?: boolean;
+  /** 未指定なら従来どおり全項目を編集可。用途別画面だけ項目単位で制限する。 */
+  editableFields?: QuoteAuthoringRowEditableFields;
 };
 
 const DECIMAL_QUANTITY_UNITS = new Set(['m', 'ｍ', '㎡', 'm²', 'm2']);
@@ -669,24 +681,33 @@ export function QuoteAuthoringGrid({
                     const detailLabel = KIND_DETAIL_LABELS[row.kind];
                     const separatePrice = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
                     const rowLocked = Boolean(row.locked || !sectionEditable);
-                    const editCellClass = rowLocked ? 'bg-slate-100' : 'bg-amber-50';
+                    const fieldEditable = (field: keyof QuoteAuthoringRowEditableFields) =>
+                      !rowLocked && (row.editableFields?.[field] ?? true);
+                    const nameEditable = fieldEditable('name');
+                    const quantityEditable = fieldEditable('quantity');
+                    const unitEditable = fieldEditable('unit');
+                    const unitPriceEditable = fieldEditable('unitPrice');
+                    const remarkEditable = fieldEditable('remark');
+                    const removeEditable = fieldEditable('remove');
+                    const selectProductEditable = fieldEditable('selectProduct');
+                    const editCellClass = (editable: boolean) => editable ? 'bg-amber-50' : 'bg-slate-100';
 
                     return (
                       <tr key={row.key} className="border-b border-slate-200 bg-white">
                         <th className="sticky left-0 z-10 w-7 border-r border-slate-200 bg-slate-100 px-1 text-center text-[10px] font-normal text-slate-500">{number}</th>
                         <td className="sticky left-[1.75rem] z-10 w-7 border-r border-slate-200 bg-white"></td>
-                        <td className={`sticky left-[3.5rem] z-10 w-[10.5rem] border-r border-slate-200 px-0.5 ${editCellClass}`}>
+                        <td className={`sticky left-[3.5rem] z-10 w-[10.5rem] border-r border-slate-200 px-0.5 ${editCellClass(nameEditable || selectProductEditable)}`}>
                           <div className="flex items-center gap-0.5">
                             <Input
                               value={row.name}
-                              disabled={rowLocked}
+                              disabled={!nameEditable}
                               data-quote-grid-col="name"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { name: event.target.value })}
                               className="h-5 min-h-5 min-w-0 flex-1 border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
                               aria-label={`品名 ${number}`}
                             />
-                            {!rowLocked && sectionEditable && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
+                            {selectProductEditable && SECTION_PRODUCT_CATEGORY_CODES[section.key]?.length ? (
                               <button
                                 type="button"
                                 disabled={!canPickProduct}
@@ -701,15 +722,15 @@ export function QuoteAuthoringGrid({
                           </div>
                           {detailLabel && <span className="block truncate px-1 text-[9px] text-slate-500">{detailLabel}</span>}
                         </td>
-                        <td className={`w-10 border-r border-slate-200 px-0.5 ${editCellClass}`}>
+                        <td className={`w-10 border-r border-slate-200 px-0.5 ${editCellClass(quantityEditable)}`}>
                           <Input
                             type="number"
                             min={quoteQuantityRule(row.unit) === 'integer' ? '1' : '0.01'}
                             max="99999"
                             step={quoteQuantityRule(row.unit) === 'decimal' ? '0.01' : '1'}
                             value={quoteQuantityRule(row.unit) === 'fixed-one' ? 1 : row.quantity}
-                            disabled={rowLocked}
-                            readOnly={!rowLocked && quoteQuantityRule(row.unit) === 'fixed-one'}
+                            disabled={!quantityEditable}
+                            readOnly={quantityEditable && quoteQuantityRule(row.unit) === 'fixed-one'}
                             inputMode={quoteQuantityRule(row.unit) === 'decimal' ? 'decimal' : 'numeric'}
                             title={
                               quoteQuantityRule(row.unit) === 'fixed-one'
@@ -728,10 +749,10 @@ export function QuoteAuthoringGrid({
                             aria-label={`数量 ${number}`}
                           />
                         </td>
-                        <td className={`w-9 border-r border-slate-200 px-0.5 ${editCellClass}`}>
+                        <td className={`w-9 border-r border-slate-200 px-0.5 ${editCellClass(unitEditable)}`}>
                           <Input
                             value={row.unit ?? ''}
-                            disabled={rowLocked}
+                            disabled={!unitEditable}
                             data-quote-grid-col="unit"
                             onKeyDown={handleGridKeyDown}
                             onChange={(event) => {
@@ -755,7 +776,7 @@ export function QuoteAuthoringGrid({
                         </td>
                         <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
                         <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
-                        <td className={`w-14 border-r border-slate-200 px-0.5 ${editCellClass}`}>
+                        <td className={`w-14 border-r border-slate-200 px-0.5 ${editCellClass(unitPriceEditable)}`}>
                           {separatePrice ? (
                             <div className="flex h-5 items-center justify-end px-1 text-[9px] font-semibold text-amber-900">別途見積</div>
                           ) : (
@@ -763,7 +784,7 @@ export function QuoteAuthoringGrid({
                               type="number"
                               step="1"
                               value={row.unitPrice}
-                              disabled={rowLocked}
+                              disabled={!unitPriceEditable}
                               data-quote-grid-col="sale"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { unitPrice: Number(event.target.value) || 0 })}
@@ -774,10 +795,10 @@ export function QuoteAuthoringGrid({
                         </td>
                         <td className="w-16 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-2 text-right tabular-nums">{separatePrice ? '—' : formatYen(row.amount)}</td>
                         <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
-                        <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass}`}>
+                        <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass(remarkEditable)}`}>
                           <Input
                             value={row.remark ?? ''}
-                            disabled={rowLocked}
+                            disabled={!remarkEditable}
                             data-quote-grid-col="remark"
                             onKeyDown={handleGridKeyDown}
                             onChange={(event) => onUpdate(row.key, { remark: event.target.value })}
@@ -788,7 +809,7 @@ export function QuoteAuthoringGrid({
                         <td className="w-10 px-0.5 text-center">
                           <button
                             type="button"
-                            disabled={rowLocked}
+                            disabled={!removeEditable}
                             onClick={() => onRemove(row.key)}
                             className="rounded px-1 py-0.5 text-[10px] text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
                           >

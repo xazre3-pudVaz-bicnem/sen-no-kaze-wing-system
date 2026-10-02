@@ -251,9 +251,13 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-workflow-arrow"');
     expect(workspace).toContain("aria-current={step.state === 'current' ? 'step' : undefined}");
     expect(workspace).toContain('min-w-[58rem]');
-    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
-    expect(caseAdminControls).toContain('案件設定');
-    expect(caseAdminControls).toContain('案件設定を閉じる');
+    expect(workspace).toContain('label="変更"');
+    expect(workspace).toContain('variant="compact"');
+    expect(workspace).toContain('label="担当代理店を選ぶ"');
+    expect(workspace).toContain('variant="primary"');
+    expect(workspace).not.toContain('>案件設定</');
+    expect(caseAdminControls).toContain("label = '案件設定'");
+    expect(caseAdminControls).toContain('担当代理店の選択を閉じる');
     expect(workspace).toContain('現在フェーズ：{currentPhaseLabel}');
     expect(workspace).toContain("const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';");
     expect(workspace).toContain('確定見積の承諾履歴（最新状態要確認）');
@@ -282,9 +286,13 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-next-action-link"');
     expect(workspace).toContain('次にやること：担当代理店を決める');
     expect(workspace).toContain('担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。');
-    expect(workspace).toContain('案件設定で担当を選ぶ');
-    expect(workspace).toContain("buildInlineTabHref(quote.id, 'estimate', listSearchParams, false, 'dealer')");
-    expect(workspace).toContain("<CaseAdminControls defaultOpen={settings === 'dealer'}>");
+    expect(workspace).toContain("action: isAdmin ? '担当代理店を選ぶ' : '案件内容を確認'");
+    expect(workspace).toContain('isAdmin && needsDealerAssignment ?');
+    expect(workspace).toContain('label="担当代理店を選ぶ"');
+    expect(workspace).toContain('variant="primary"');
+    expect(workspace).toContain('isAdmin && quote.dealer_id &&');
+    expect(workspace).toContain('label="変更"');
+    expect(workspace).toContain('variant="compact"');
     expect(caseAdminControls).toContain('detailsRef.current.open = true');
     expect(workspace).toContain('次にやること：現地を確認して施工金額を入力');
     expect(workspace).toContain('搬入経路、基礎、電気、給排水、設置工事などを確認し、「見積を編集」から必要な施工金額を入力します。');
@@ -300,7 +308,11 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('const referenceLabel =');
     expect(workspace).toContain("tabItem.key === 'documents'");
     expect(workspace).toContain('const needsDealerAssignment =');
+    expect(workspace).toContain('!quote.dealer_id');
     expect(workspace).toContain('const needsSiteConfirmation =');
+    expect(workspace).toContain('Boolean(quote.dealer_id)');
+    expect(workspace).toContain("needsDealerAssignment\n        ? '担当決定'");
+    expect(workspace).toContain("needsSiteConfirmation\n          ? '現地確認'");
     expect(workspace).toContain("href: canUseLegacyRevision ? `/admin/quotes/${quote.id}/edit` : tabHref('estimate')");
     expect(workspace).toContain("if (edit) query.set('edit', '1')");
     expect(workspace).toContain("key === 'edit'");
@@ -328,13 +340,16 @@ describe('Admin case management UI', () => {
     expect(workspace).not.toContain('<DealerRevisionForm quote={quote}');
     expect(quoteEstimateSheet).toContain('showSelectedImages={false}');
     expect(quoteEstimateSheet).toContain('<DealerRevisionForm');
-    expect(workspace).toContain("<AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />");
+    expect(workspace).toContain('<AssignDealerForm key={quote.dealer_id} quote={quote} dealers={dealers} />');
+    expect(workspace).toContain('<AssignDealerForm key="unassigned" quote={quote} dealers={dealers} />');
     expect(workspace).not.toContain('<QuoteStatusForm');
     expect(workspace).toContain("const isFormal = isFormalQuote(quote);");
     expect(workspace).toContain("const isFormalAccepted = acceptedQuoteCaseState === 'formal_current';");
     expect(workspace).toContain("const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';");
     expect(workspace).toContain("const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';");
     expect(workspace).toContain("isPreliminaryAccepted ? '承諾履歴あり' : '発行済み'");
+    expect(workspace).not.toContain('<Alert tone="warn" title="概算見積の承諾履歴">');
+    expect(workspace).toContain('description: isPreliminaryAccepted');
     expect(workspace).toContain('第${quote.revision}版');
     expect(workspace).toContain(": '未発行'");
     expect(workspace).not.toContain("quote.revision === 1 ? '概算見積'");
@@ -385,11 +400,9 @@ describe('Admin case management UI', () => {
   });
 
   it('does not present unsupported downstream workflow data as implemented', () => {
-    expect(workspace).toContain('data-testid="case-data-status"');
-    expect(workspace).toContain('既存データで確認できる項目');
-    expect(workspace).toContain('顧客、担当代理店、設置予定地、保存済みプラン、発行済み見積、登録済み案件資料');
-    expect(workspace).toContain('正式状態が未実装の項目');
-    expect(workspace).toContain('現地確認完了、契約Revision固定・契約成立、製造指示・個体ID・工程進捗、引渡し、保証・点検・修理履歴');
+    expect(workspace).not.toContain('data-testid="case-data-status"');
+    expect(workspace).not.toContain('既存データで確認できる項目');
+    expect(workspace).not.toContain('正式状態が未実装の項目');
     expect(workspace).toContain('案件受付・現地メモ');
     expect(workspace).toContain('data-testid="case-tab-site"');
     expect(workspace).toContain('現地確認の正式完了状態はまだ保存されません');

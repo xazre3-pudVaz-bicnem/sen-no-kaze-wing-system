@@ -7,7 +7,7 @@ import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { QuoteEstimateSheet } from '@/components/admin/quote-estimate-sheet';
 
-const SPEC_LABELS: Record<string, string> = {
+export const CASE_ESTIMATE_SPEC_LABELS: Record<string, string> = {
   base: '本体のみ',
   hotel: 'ホテル仕様',
   'hotel-single': 'ホテル・単身者',
@@ -47,14 +47,17 @@ function isReviewTab(value: string | undefined): value is ReviewTab {
 function buildReviewHref({
   selection,
   query,
+  dealerFilter,
   tab,
 }: {
   selection: CaseEstimateReviewSelection;
   query: string;
+  dealerFilter: string;
   tab: ReviewTab;
 }) {
   const params = new URLSearchParams();
   if (query) params.set('q', query);
+  if (dealerFilter) params.set('dealer', dealerFilter);
   params.set(selection.kind, selection.id);
   params.set('detail_tab', tab);
   return `/admin/quote-management?${params.toString()}#case-estimate-review`;
@@ -63,10 +66,12 @@ function buildReviewHref({
 function ReviewTabs({
   selection,
   query,
+  dealerFilter,
   activeTab,
 }: {
   selection: CaseEstimateReviewSelection;
   query: string;
+  dealerFilter: string;
   activeTab: ReviewTab;
 }) {
   const tabs: Array<{ key: ReviewTab; label: string }> = [
@@ -84,7 +89,7 @@ function ReviewTabs({
       {tabs.map((tab) => (
         <Link
           key={tab.key}
-          href={buildReviewHref({ selection, query, tab: tab.key })}
+          href={buildReviewHref({ selection, query, dealerFilter, tab: tab.key })}
           aria-current={activeTab === tab.key ? 'page' : undefined}
           className={
             activeTab === tab.key
@@ -119,7 +124,7 @@ function EmptyPlanNotice({
         </div>
         <div className="rounded-lg bg-[#f7f9f8] p-3">
           <p className="text-xs text-muted">仕様</p>
-          <p className="mt-1 font-semibold">{specCode ? (SPEC_LABELS[specCode] ?? specCode) : '未登録'}</p>
+          <p className="mt-1 font-semibold">{specCode ? (CASE_ESTIMATE_SPEC_LABELS[specCode] ?? specCode) : '未登録'}</p>
         </div>
       </div>
       {selectionNames.length > 0 && (
@@ -202,12 +207,14 @@ export async function CaseEstimateReview({
   selection,
   actor,
   query,
+  dealerFilter = '',
   requestedTab,
   listModelName,
 }: {
   selection: CaseEstimateReviewSelection;
   actor: SessionUser;
   query: string;
+  dealerFilter?: string;
   requestedTab?: string;
   listModelName: string;
 }) {
@@ -256,7 +263,7 @@ export async function CaseEstimateReview({
           </Link>
         </header>
 
-        <ReviewTabs selection={selection} query={query} activeTab={activeTab} />
+        <ReviewTabs selection={selection} query={query} dealerFilter={dealerFilter} activeTab={activeTab} />
 
         {activeTab === 'estimate' && (
           <div className="space-y-3 p-4" data-testid="case-estimate-tab-estimate">
@@ -270,7 +277,7 @@ export async function CaseEstimateReview({
 
             <dl className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">商品モデル</dt><dd className="mt-1 font-semibold">{listModelName || draft.base_model_id}</dd></div>
-              <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">仕様</dt><dd className="mt-1 font-semibold">{SPEC_LABELS[draft.spec_code] ?? draft.spec_code}</dd></div>
+              <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">仕様</dt><dd className="mt-1 font-semibold">{CASE_ESTIMATE_SPEC_LABELS[draft.spec_code] ?? draft.spec_code}</dd></div>
               <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">状態</dt><dd className="mt-1 font-semibold">下書き</dd></div>
               <div className="rounded-lg bg-[#f7f9f8] p-3"><dt className="text-xs text-muted">PDF</dt><dd className="mt-1 font-semibold text-muted">未発行のためなし</dd></div>
             </dl>
@@ -358,7 +365,7 @@ export async function CaseEstimateReview({
         </Link>
       </header>
 
-      <ReviewTabs selection={selection} query={query} activeTab={activeTab} />
+      <ReviewTabs selection={selection} query={query} dealerFilter={dealerFilter} activeTab={activeTab} />
 
       {activeTab === 'estimate' && (
         <div className="space-y-3 p-4" data-testid="case-estimate-tab-estimate">
@@ -367,7 +374,7 @@ export async function CaseEstimateReview({
               <div><dt className="inline text-muted">発行日 </dt><dd className="inline font-semibold">{formatDate(quote.issued_at)}</dd></div>
               <div><dt className="inline text-muted">有効期限 </dt><dd className="inline font-semibold">{formatDate(quote.valid_until)}</dd></div>
               <div><dt className="inline text-muted">商品モデル </dt><dd className="inline font-semibold">{quote.base_model_name}</dd></div>
-              <div><dt className="inline text-muted">仕様 </dt><dd className="inline font-semibold">{specCode ? (SPEC_LABELS[specCode] ?? specCode) : '未登録'}</dd></div>
+              <div><dt className="inline text-muted">仕様 </dt><dd className="inline font-semibold">{specCode ? (CASE_ESTIMATE_SPEC_LABELS[specCode] ?? specCode) : '未登録'}</dd></div>
             </dl>
             <a
               href={`/api/quotes/${quote.id}/pdf`}

@@ -404,10 +404,6 @@ export async function CaseWorkspace({
     embedded
       ? buildInlineTabHref(quote.id, nextTab, listSearchParams, openEditor)
       : `/admin/quotes/${quote.id}?tab=${nextTab}${openEditor ? '&edit=1' : ''}`;
-  const dealerSettingsHref = embedded
-    ? buildInlineTabHref(quote.id, 'estimate', listSearchParams, false, 'dealer')
-    : `/admin/quotes/${quote.id}?tab=estimate&settings=dealer#case-admin-controls`;
-
   const nextAction =
     isFormalAccepted
       ? {
@@ -431,8 +427,8 @@ export async function CaseWorkspace({
               description: isPreliminaryAccepted
                 ? '概算見積の承諾履歴がありますが、担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。'
                 : '担当代理店が未設定です。担当を決めてから、現地確認と施工金額の確定へ進めてください。',
-              href: isAdmin ? dealerSettingsHref : '#case-workspace',
-              action: isAdmin ? '案件設定で担当を選ぶ' : '案件内容を確認',
+              href: '#case-workspace',
+              action: isAdmin ? '担当代理店を選ぶ' : '案件内容を確認',
             }
           : needsSiteConfirmation
             ? {
@@ -476,14 +472,6 @@ export async function CaseWorkspace({
             )}
           </div>
 
-          {isAdmin && (
-            <CaseAdminControls defaultOpen={settings === 'dealer'}>
-              <div>
-                <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
-                <AssignDealerForm key={quote.dealer_id ?? 'unassigned'} quote={quote} dealers={dealers} />
-              </div>
-            </CaseAdminControls>
-          )}
         </div>
 
         <div
@@ -492,7 +480,22 @@ export async function CaseWorkspace({
           aria-label="案件概要"
         >
           <span><b className="text-white">顧客</b> {customerCompany || customerName}</span>
-          <span><b className="text-white">担当</b> {assignedDealerName}</span>
+          <span className="flex items-center gap-1.5">
+            <span><b className="text-white">担当</b> {assignedDealerName}</span>
+            {isAdmin && quote.dealer_id && (
+              <CaseAdminControls
+                defaultOpen={settings === 'dealer'}
+                label="変更"
+                variant="compact"
+                summaryTestId="case-dealer-change"
+              >
+                <div>
+                  <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を変更</p>
+                  <AssignDealerForm key={quote.dealer_id} quote={quote} dealers={dealers} />
+                </div>
+              </CaseAdminControls>
+            )}
+          </span>
           <span><b className="text-white">設置</b> {siteAddress}</span>
           <span><b className="text-white">モデル</b> {quote.base_model_name}</span>
           <span><b className="text-white">棟数</b> {caseUnitCount ?? '未登録'}</span>
@@ -510,13 +513,27 @@ export async function CaseWorkspace({
             <p className="text-base font-semibold text-[#6f5518]">{nextAction.title}</p>
             <p className="mt-1 max-w-4xl text-sm leading-6 text-ink-soft">{nextAction.description}</p>
           </div>
-          <Link
-            href={nextAction.href}
-            className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
-            data-testid="case-next-action-link"
-          >
-            {nextAction.action}
-          </Link>
+          {isAdmin && needsDealerAssignment ? (
+            <CaseAdminControls
+              defaultOpen={settings === 'dealer'}
+              label="担当代理店を選ぶ"
+              variant="primary"
+              summaryTestId="case-next-action-link"
+            >
+              <div>
+                <p className="mb-1 text-[0.66rem] font-semibold text-muted">担当代理店を選択</p>
+                <AssignDealerForm key="unassigned" quote={quote} dealers={dealers} />
+              </div>
+            </CaseAdminControls>
+          ) : (
+            <Link
+              href={nextAction.href}
+              className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+              data-testid="case-next-action-link"
+            >
+              {nextAction.action}
+            </Link>
+          )}
         </div>
       </section>
 
@@ -568,17 +585,6 @@ export async function CaseWorkspace({
           <span><span className="text-muted">現在</span> <strong className="text-ink">{currentWorkflowLabel}</strong></span>
           <span><span className="text-muted">次</span> <strong className="text-[#2f6b4f]">{nextWorkflowLabel}</strong></span>
           <span><span className="text-muted">要対応</span> <strong className="text-muted">未集計</strong></span>
-        </div>
-      </section>
-
-      <section className="grid gap-2 rounded-lg border border-line bg-[#fbfcfb] p-3 text-xs sm:grid-cols-2" data-testid="case-data-status">
-        <div>
-          <p className="font-semibold text-ink">既存データで確認できる項目</p>
-          <p className="mt-1 leading-5 text-ink-soft">顧客、担当代理店、設置予定地、保存済みプラン、発行済み見積、登録済み案件資料</p>
-        </div>
-        <div>
-          <p className="font-semibold text-ink">正式状態が未実装の項目</p>
-          <p className="mt-1 leading-5 text-ink-soft">現地確認完了、契約Revision固定・契約成立、製造指示・個体ID・工程進捗、引渡し、保証・点検・修理履歴</p>
         </div>
       </section>
 
@@ -702,11 +708,6 @@ export async function CaseWorkspace({
             {revised && (
               <Alert tone="success" title={`第${quote.revision}版を発行しました`}>
                 新しい版を案件ワークスペースへ反映しました。以前の版は履歴として残っています。
-              </Alert>
-            )}
-            {isPreliminaryAccepted && (
-              <Alert tone="warn" title="概算見積の承諾履歴">
-                この承諾は正式な契約進行の対象外です。現地確認と施工金額を反映した確定見積を発行してください。
               </Alert>
             )}
             {isFormalAcceptedUnconfirmed && (

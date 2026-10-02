@@ -82,7 +82,7 @@ export default async function EstimateTemplatesPage({
         title="見積書管理"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 標準見積を作成
+            ＋ 新しい標準を作る
           </Link>
         }
       >
@@ -113,7 +113,7 @@ export default async function EstimateTemplatesPage({
         title="見積書管理"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 標準見積を作成
+            ＋ 新しい標準を作る
           </Link>
         }
       >
@@ -195,7 +195,7 @@ export default async function EstimateTemplatesPage({
       actions={
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 標準見積を作成
+            ＋ 新しい標準を作る
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
             複製

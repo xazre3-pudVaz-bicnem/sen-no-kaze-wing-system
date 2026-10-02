@@ -68,7 +68,9 @@ describe('シミュレーター標準管理UI', () => {
   it('常設一覧からタブとExcel編集へ重複カードなしで直接つなぐ', () => {
     expect(listPage).toContain('title="見積書管理"');
     expect(listPage).not.toContain('lead="シミュレーター標準"');
-    expect(listPage).toContain('＋ 標準見積を作成');
+    expect(listPage).toContain('＋ 新しい標準を作る');
+    expect(listPage).toContain('href="/admin/estimate-templates/new"');
+    expect(listPage).not.toContain('＋ 標準見積を作成');
     expect(listPage).not.toContain('＋ 案件見積を作成');
     expect(listPage).toContain('<SavedEstimateMenu');
     expect(savedEstimateMenu).toContain('data-testid="simulator-standard-list"');
@@ -128,6 +130,16 @@ describe('シミュレーター標準管理UI', () => {
     expect(savedEstimateMenu).toContain('sampleEstimateHref');
     expect(listPage).toContain('selectedSampleId={selectedSample?.id}');
     expect(savedEstimateMenu).toContain("aria-current={active ? 'page' : undefined}");
+  });
+
+  it('PC一覧は7項目をカード幅内に収め、横スクロール前提にしない', () => {
+    expect(savedEstimateMenu).toContain('grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)]');
+    expect(savedEstimateMenu).not.toContain('<div className="min-w-[58rem]">');
+    expect(savedEstimateMenu).not.toContain('<div className="overflow-x-auto">');
+    for (const label of ['商品モデル', '仕様', '防火仕様', '標準金額', '状態', 'シミュレーター使用状態', '選択']) {
+      expect(savedEstimateMenu).toContain(label);
+    }
+    expect(savedEstimateMenu).toContain('min-w-0 truncate');
   });
 
   it('DB待ちの複製・シミュレーター標準設定はdisabledのまま維持する', () => {

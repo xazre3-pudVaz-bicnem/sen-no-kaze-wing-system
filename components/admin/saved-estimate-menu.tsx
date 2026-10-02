@@ -170,16 +170,16 @@ export function SavedEstimateMenu({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[58rem]">
-          <div className="grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 border-b border-line bg-sand/35 px-4 py-1.5 text-[10px] font-semibold text-muted">
-            <span>商品モデル</span>
-            <span>仕様</span>
-            <span>防火仕様</span>
-            <span className="text-right">標準金額</span>
-            <span>状態</span>
-            <span>シミュレーター使用状態</span>
-            <span className="text-right">選択</span>
+      <div className="w-full">
+        <div className="w-full">
+          <div className="grid w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)] items-center gap-1.5 border-b border-line bg-sand/35 px-3 py-1.5 text-[10px] font-semibold leading-tight text-muted">
+            <span className="min-w-0">商品モデル</span>
+            <span className="min-w-0">仕様</span>
+            <span className="min-w-0">防火仕様</span>
+            <span className="min-w-0 text-right">標準金額</span>
+            <span className="min-w-0">状態</span>
+            <span className="min-w-0">シミュレーター使用状態</span>
+            <span className="min-w-0 text-right">選択</span>
           </div>
 
           <div className="border-b border-line bg-slate-50 px-4 py-1 text-[10px] font-semibold tracking-wide text-muted">
@@ -203,11 +203,11 @@ export function SavedEstimateMenu({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 bg-forest/5 px-4 py-2 text-xs'
-                        : 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 px-4 py-2 text-xs hover:bg-sand/30'
+                        ? 'grid w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)] items-center gap-1.5 bg-forest/5 px-4 py-2 text-xs'
+                        : 'grid w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)] items-center gap-1.5 px-4 py-2 text-xs hover:bg-sand/30'
                     }
                   >
-                    <strong>{templateModel?.name ?? '—'}</strong>
+                    <strong className="min-w-0 truncate">{templateModel?.name ?? '—'}</strong>
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="truncate font-semibold">
@@ -219,13 +219,13 @@ export function SavedEstimateMenu({
                         {template.name} ／ 更新 {formatUpdatedAt(template.updated_at)}
                       </span>
                     </span>
-                    <span className="text-[11px] text-muted" title="正式な本体マスター接続後に表示します">
+                    <span className="min-w-0 text-[10px] leading-tight text-muted" title="正式な本体マスター接続後に表示します">
                       正式接続待ち
                     </span>
-                    <strong className="text-right tabular-nums">{formatYen(template.total)}</strong>
-                    <span><Badge tone="neutral">登録済み</Badge></span>
-                    <span className="text-[11px] text-muted">接続準備中</span>
-                    <span className="text-right font-semibold text-forest">{active ? '表示中' : '開く'}</span>
+                    <strong className="min-w-0 truncate text-right text-[11px] tabular-nums">{formatYen(template.total)}</strong>
+                    <span className="min-w-0"><Badge tone="neutral">登録済み</Badge></span>
+                    <span className="min-w-0 text-[10px] leading-tight text-muted">接続準備中</span>
+                    <span className="min-w-0 text-right text-[11px] font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </Link>
                 );
               })}
@@ -253,11 +253,11 @@ export function SavedEstimateMenu({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 bg-sky-100/70 px-4 py-2 text-xs'
-                        : 'grid grid-cols-[minmax(7rem,0.9fr)_minmax(12rem,1.6fr)_7rem_8rem_7rem_9rem_5rem] items-center gap-2 px-4 py-2 text-xs hover:bg-sky-50/70'
+                        ? 'grid w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)] items-center gap-1.5 bg-sky-100/70 px-4 py-2 text-xs'
+                        : 'grid w-full grid-cols-[minmax(0,0.82fr)_minmax(0,1.55fr)_minmax(0,0.82fr)_minmax(0,0.95fr)_minmax(0,0.8fr)_minmax(0,1.05fr)_minmax(0,0.55fr)] items-center gap-1.5 px-4 py-2 text-xs hover:bg-sky-50/70'
                     }
                   >
-                    <strong>{sample.model}</strong>
+                    <strong className="min-w-0 truncate">{sample.model}</strong>
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="truncate font-semibold">{sample.spec}</span>
@@ -268,13 +268,13 @@ export function SavedEstimateMenu({
                         {sample.name} ／ Excel: {sample.sourceSheet}
                       </span>
                     </span>
-                    <span>{sample.fireSpec || '—'}</span>
-                    <strong className="text-right tabular-nums">{formatWholeYen(sample.sourceTotal)}</strong>
-                    <span className="text-[11px] text-sky-800">画面確認用</span>
-                    <span className="text-[11px] text-muted">
+                    <span className="min-w-0 truncate">{sample.fireSpec || '—'}</span>
+                    <strong className="min-w-0 truncate text-right text-[11px] tabular-nums">{formatWholeYen(sample.sourceTotal)}</strong>
+                    <span className="min-w-0 text-[10px] leading-tight text-sky-800">画面確認用</span>
+                    <span className="min-w-0 text-[10px] leading-tight text-muted">
                       {simulatorStandard ? '標準サンプル' : 'サンプル'}
                     </span>
-                    <span className="text-right font-semibold text-forest">{active ? '表示中' : '開く'}</span>
+                    <span className="min-w-0 text-right text-[11px] font-semibold text-forest">{active ? '表示中' : '開く'}</span>
                   </Link>
                 );
               })}

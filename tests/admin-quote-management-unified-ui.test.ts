@@ -23,7 +23,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(newQuotePage).toContain('<QuoteManagementTabs active="case" />');
     expect(draftPage).toContain('<QuoteManagementTabs active="case" />');
     expect(estimateTemplatesPage).toContain('<QuoteManagementTabs active="standard" />');
-    expect(estimateTemplatesPage).toContain('＋ 標準見積を作成');
+    expect(estimateTemplatesPage).toContain('＋ 新しい標準を作る');
     expect(estimateTemplatesPage).not.toContain('＋ 案件見積を作成');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(manualWorkbench).toContain('<QuoteEditorTopbar mode="new"');

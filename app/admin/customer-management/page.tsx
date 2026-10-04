@@ -27,6 +27,7 @@ export default async function AdminCustomerManagementPage({
   const sp = await searchParams;
   const store = await getStore();
   const view = await store.listAccessibleCustomers(actor);
+  const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';
 
   if (view.availability === 'migration_pending') {
     return (
@@ -81,13 +82,13 @@ export default async function AdminCustomerManagementPage({
   return (
     <AdminPage
       title="顧客管理"
-      lead="参照できる顧客を探し、案件・見積・設置予定地を確認するための画面です。"
+      lead="顧客を探し、現在の案件を確認して、必要に応じて案件管理や顧客詳細へ進むための画面です。"
       notice={
         <div className="space-y-1">
           <p className="font-semibold text-ink">現在は参照専用です。</p>
           <p>
-            本部は全顧客を参照し、総代理店・代理店は自分が担当する案件に関係する顧客だけを参照します。
-            ここでは情報の編集・統合は行いません。同姓同名やメールアドレスの一致だけで自動的に同じ顧客としてまとめることもありません。
+            本部は現在の権限範囲で全顧客を参照し、総代理店・代理店は現在アクセス可能な担当案件の顧客だけを参照します。
+            今回は閲覧範囲を変更せず、ここでは情報の編集・統合も行いません。同姓同名や会社名・メールアドレスの一致だけで自動的に同じ顧客としてまとめることもありません。
           </p>
         </div>
       }
@@ -96,7 +97,7 @@ export default async function AdminCustomerManagementPage({
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ink-soft">
-              顧客名・法人名・連絡先・住所・案件情報で検索
+              顧客名・法人名・電話番号・案件情報で検索
             </span>
             <Input
               name="q"
@@ -123,23 +124,25 @@ export default async function AdminCustomerManagementPage({
       <section className="space-y-2" aria-labelledby="customer-list-heading">
         <div>
           <h2 id="customer-list-heading" className="text-lg font-semibold">顧客一覧</h2>
-          <p className="mt-1 text-xs text-muted">顧客ごとに、連絡先と参照可能な案件状況を確認できます。</p>
+          <p className="mt-1 text-xs text-muted">誰のお客様で、どの案件が進んでいるかを短時間で確認できます。</p>
         </div>
 
-        <Table minWidth="46rem">
+        <Table minWidth={showDealerColumn ? '60rem' : '52rem'}>
           <thead className="bg-sand/60">
             <tr>
-              <Th>顧客名 / 法人名</Th>
-              <Th>連絡先・住所</Th>
+              <Th>顧客</Th>
               <Th>進行中案件</Th>
               <Th>最近の案件</Th>
+              <Th>商品モデル / 設置予定地</Th>
+              {showDealerColumn && <Th>担当代理店</Th>}
+              <Th>最終更新日</Th>
               <Th>詳細</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {shown.length === 0 ? (
               <tr>
-                <Td colSpan={5} className="py-10 text-center text-sm text-muted">
+                <Td colSpan={showDealerColumn ? 7 : 6} className="py-10 text-center text-sm text-muted">
                   条件に一致する顧客はいません。
                 </Td>
               </tr>
@@ -148,17 +151,13 @@ export default async function AdminCustomerManagementPage({
                 const recent = customer.recent_case;
                 return (
                   <tr key={customer.id} data-testid="customer-management-row">
-                    <Td>
+                    <Td className="min-w-44">
                       <p className="font-semibold">{customer.full_name || '氏名未登録'}</p>
                       <p className="mt-1 text-xs text-muted">{customer.company_name ?? '法人名なし'}</p>
-                      {customer.customer_no && (
-                        <p className="mt-1 text-[0.68rem] text-muted">顧客番号 {customer.customer_no}</p>
-                      )}
-                    </Td>
-                    <Td className="max-w-64 text-xs">
-                      <span className="block">{customer.email || 'メール未登録'}</span>
-                      <span className="mt-1 block text-muted">{customer.phone ?? '電話未登録'}</span>
-                      <span className="mt-1 block text-muted">{customer.address ?? '住所未登録'}</span>
+                      <p className="mt-1 text-[0.68rem] text-muted">
+                        顧客番号 {customer.customer_no ?? '未登録'}
+                      </p>
+                      <p className="mt-1 text-xs text-muted">電話：{customer.phone ?? '未登録'}</p>
                     </Td>
                     <Td>
                       <span className="text-lg font-semibold tabular-nums">{customer.ongoing_case_count}</span>
@@ -166,22 +165,31 @@ export default async function AdminCustomerManagementPage({
                     </Td>
                     <Td className="text-xs">
                       {recent ? (
-                        <div className="space-y-1">
-                          <Link
-                            href={caseHref(recent.id, recent.open_quote_id)}
-                            className="font-semibold text-ink underline-offset-4 hover:underline"
-                          >
-                            {recent.quote_no ?? '見積未発行'}
-                          </Link>
-                          <p>{recent.model_name ?? '商品モデル未登録'}</p>
-                          <p className="text-muted">
-                            {recent.site_address ?? '設置予定地未登録'}／{formatDate(recent.activity_at)}
-                          </p>
-                          <p className="text-muted">担当：{recent.dealer_name ?? '未割り当て'}</p>
-                        </div>
+                        <Link
+                          href={caseHref(recent.id, recent.open_quote_id)}
+                          className="font-semibold text-ink underline-offset-4 hover:underline"
+                        >
+                          {recent.quote_no ?? '見積未発行'}
+                        </Link>
                       ) : (
                         <span className="text-muted">案件なし</span>
                       )}
+                    </Td>
+                    <Td className="max-w-72 text-xs">
+                      {recent ? (
+                        <div className="space-y-1">
+                          <p className="font-medium text-ink">{recent.model_name ?? '商品モデル未登録'}</p>
+                          <p className="text-muted">{recent.site_address ?? '設置予定地未登録'}</p>
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </Td>
+                    {showDealerColumn && (
+                      <Td className="text-xs">{recent?.dealer_name ?? '未割り当て'}</Td>
+                    )}
+                    <Td className="whitespace-nowrap text-xs text-muted">
+                      {recent ? formatDate(recent.activity_at) : '—'}
                     </Td>
                     <Td>
                       <Link

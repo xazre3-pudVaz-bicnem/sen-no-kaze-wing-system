@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const list = fs.readFileSync(path.join(root, 'app/admin/customer-management/demo/page.tsx'), 'utf8');
+const listUi = fs.readFileSync(path.join(root, 'components/admin/customer-management-list.tsx'), 'utf8');
 const detail = fs.readFileSync(path.join(root, 'app/admin/customer-management/demo/[id]/page.tsx'), 'utf8');
 const data = fs.readFileSync(path.join(root, 'lib/demo/customer-management.ts'), 'utf8');
 
@@ -30,33 +31,28 @@ describe('顧客管理サンプル画面', () => {
     expect(list).toContain('顧客未紐付け案件');
   });
 
-  it('matches the actual customer-list structure without exposing email or customer address in the list', () => {
-    for (const label of [
-      '顧客',
-      '進行中案件',
-      '最近の案件',
-      '商品モデル / 設置予定地',
-      '最終更新日',
-      '顧客を見る',
-    ]) {
-      expect(list).toContain(label);
+  it('reuses the same compact filtered customer-list UI as the actual screen', () => {
+    expect(list).toContain('<CustomerManagementList');
+    expect(list).toContain('customers={DEMO_CUSTOMERS}');
+    expect(list).toContain('basePath="/admin/customer-management/demo"');
+    expect(list).toContain('demo');
+    for (const label of ['顧客', '案件', '最近の設置予定地', '担当', '最終更新', '顧客を見る']) {
+      expect(listUi).toContain(label);
     }
-    expect(list).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
-    expect(list).toContain("電話：{customer.phone ?? '未登録'}");
-    expect(list).not.toContain('<span className="block">{customer.email}</span>');
-    expect(list).not.toContain("{customer.address ?? '住所未登録'}");
+    expect(listUi).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
+    expect(listUi).toContain("電話：{customer.phone ?? '未登録'}");
+    expect(listUi).not.toContain("{customer.email || 'メール未登録'}");
+    expect(listUi).not.toContain("{customer.address ?? '住所未登録'}");
   });
 
-  it('shows the dealer column for admin and master dealer only', () => {
+  it('keeps the dealer column role-scoped in the demo too', () => {
     expect(list).toContain("const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';");
-    expect(list).toContain('{showDealerColumn && <Th>担当代理店</Th>}');
-    expect(list).toContain("{recent?.dealer_name ?? '未割り当て'}");
-    expect(list).toContain('<Td colSpan={showDealerColumn ? 7 : 6}');
+    expect(list).toContain('showDealerColumn={showDealerColumn}');
+    expect(listUi).toContain('colSpan={showDealerColumn ? 6 : 5}');
   });
 
-  it('links the recent sample case only inside the demo customer area', () => {
-    expect(list).toContain('function demoCaseHref(customerId: string): string');
-    expect(list).toContain('href={demoCaseHref(customer.id)}');
+  it('links recent sample cases only inside the demo customer area', () => {
+    expect(listUi).toContain("demo ? `${basePath}/${encodeURIComponent(customer.id)}` : liveCaseHref(recent)");
     expect(list).not.toContain('href={`/admin/quotes/');
     expect(list).not.toContain('href="/admin/quotes"');
   });
@@ -82,11 +78,10 @@ describe('顧客管理サンプル画面', () => {
     expect(detail).toContain('サンプル顧客一覧へ戻る');
   });
 
-  it('keeps the demo tables compact while preserving the same information', () => {
-    expect(list).toContain("<Table minWidth={showDealerColumn ? '60rem' : '52rem'}>");
+  it('keeps the unlinked-case and detail tables unchanged while the main list loses desktop scrolling', () => {
+    expect(listUi).toContain('min-w-[40rem] table-fixed text-sm md:min-w-0');
+    expect(listUi).toContain('overflow-x-auto md:overflow-visible');
     expect(list).toContain('<Table minWidth="44rem">');
     expect(detail).toContain('<Table minWidth="46rem">');
-    expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
-    expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');
   });
 });

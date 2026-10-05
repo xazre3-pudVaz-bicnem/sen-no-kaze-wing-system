@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/utils';
 import { Badge } from '@/components/ui';
 import { CaseWorkspace } from '@/components/admin/case-workspace';
 import { ClickableCaseRow } from '@/components/admin/clickable-case-row';
+import { CaseListColumnMenu } from '@/components/admin/case-list-column-menu';
 import { matchesRegion, parseAddress, PREFECTURES, readRegionFilter } from '@/lib/domain/address';
 import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
 
@@ -22,6 +23,18 @@ const SPEC_LABELS: Record<string, string> = {
   'water-kit': '水回りキット',
   office: '事務所・店舗',
 };
+
+const CASE_PHASE_OPTIONS = [
+  'F5/15 見積依頼',
+  '見積作成中（下書き）',
+  'F6/15 担当者決定',
+  'F7/15 現地確認',
+  'F8/15 正式見積',
+  'F9/15 見積後の判断',
+  'F9/15 見積承諾',
+];
+
+const LIST_PARAM_KEYS = ['q', 'status', 'dealer', 'pref', 'city', 'phase', 'model', 'sort'] as const;
 
 function casePhaseLabel(quote: {
   status: keyof typeof QUOTE_STATUS_LABELS;
@@ -37,6 +50,12 @@ function casePhaseLabel(quote: {
     return quote.dealer_id ? 'F7/15 現地確認' : 'F6/15 担当者決定';
   }
   return 'F5/15 見積依頼';
+}
+
+function phaseSortRank(label: string) {
+  if (label === '見積作成中（下書き）') return 5.5;
+  const match = /^F(\d+)\/15/.exec(label);
+  return match ? Number(match[1]) : 99;
 }
 
 function googleMapsHref(address: string) {
@@ -148,7 +167,7 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
 
 function caseSelectionHref(quoteId: string, sp: Record<string, string | undefined>) {
   const query = new URLSearchParams();
-  for (const key of ['q', 'status', 'dealer', 'pref', 'city']) {
+  for (const key of LIST_PARAM_KEYS) {
     const value = sp[key];
     if (value) query.set(key, value);
   }
@@ -158,7 +177,7 @@ function caseSelectionHref(quoteId: string, sp: Record<string, string | undefine
 
 function requestSelectionHref(requestId: string, sp: Record<string, string | undefined>) {
   const query = new URLSearchParams();
-  for (const key of ['q', 'status', 'dealer', 'pref', 'city']) {
+  for (const key of LIST_PARAM_KEYS) {
     const value = sp[key];
     if (value) query.set(key, value);
   }
@@ -338,6 +357,17 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const textQuery = (sp.q ?? '').trim().toLocaleLowerCase('ja');
   const statusFilter = sp.status ?? '';
   const dealerFilter = sp.dealer ?? '';
+  const phaseFilter = sp.phase ?? '';
+  const modelFilter = sp.model ?? '';
+  const sortMode = sp.sort ?? '';
+  const modelPool = [...new Set(
+    requests
+      .map((request) => {
+        const quote = request.quote_id ? quoteById.get(request.quote_id) : undefined;
+        return quote?.base_model_name ?? request.configuration?.model_name ?? '';
+      })
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'ja-JP'));
 
   const shown = requests.filter((request) => {
     if (!matchesRegion(addrOf(request), filter)) return false;
@@ -346,6 +376,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     const modelName = quote?.base_model_name ?? request.configuration?.model_name ?? '';
     const dealer = quote?.dealer_id ? dealerById.get(quote.dealer_id) : undefined;
     const dealerName = dealer?.company_name ?? dealer?.full_name ?? '';
+    const initialDraft = quote ? undefined : initialDraftByRequestId.get(request.id);
+    const phaseLabel = quote ? casePhaseLabel(quote) : initialDraft ? '見積作成中（下書き）' : 'F5/15 見積依頼';
 
     if (textQuery) {
       const haystack = [
@@ -370,9 +402,52 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
     if (dealerFilter === 'unassigned' && quote?.dealer_id) return false;
     if (dealerFilter && dealerFilter !== 'unassigned' && quote?.dealer_id !== dealerFilter) return false;
+    if (phaseFilter && phaseLabel !== phaseFilter) return false;
+    if (modelFilter && modelName !== modelFilter) return false;
 
     return true;
   });
+
+  if (sortMode) {
+    shown.sort((a, b) => {
+      const quoteA = a.quote_id ? quoteById.get(a.quote_id) : undefined;
+      const quoteB = b.quote_id ? quoteById.get(b.quote_id) : undefined;
+      const draftA = quoteA ? undefined : initialDraftByRequestId.get(a.id);
+      const draftB = quoteB ? undefined : initialDraftByRequestId.get(b.id);
+      const phaseA = quoteA ? casePhaseLabel(quoteA) : draftA ? '見積作成中（下書き）' : 'F5/15 見積依頼';
+      const phaseB = quoteB ? casePhaseLabel(quoteB) : draftB ? '見積作成中（下書き）' : 'F5/15 見積依頼';
+      const modelA = quoteA?.base_model_name ?? a.configuration?.model_name ?? '';
+      const modelB = quoteB?.base_model_name ?? b.configuration?.model_name ?? '';
+      const dealerA = quoteA?.dealer_id ? dealerById.get(quoteA.dealer_id) : undefined;
+      const dealerB = quoteB?.dealer_id ? dealerById.get(quoteB.dealer_id) : undefined;
+      const dealerNameA = dealerA?.company_name ?? dealerA?.full_name ?? '';
+      const dealerNameB = dealerB?.company_name ?? dealerB?.full_name ?? '';
+
+      if (sortMode === 'phase-asc' || sortMode === 'phase-desc') {
+        const direction = sortMode === 'phase-asc' ? 1 : -1;
+        return direction * (phaseSortRank(phaseA) - phaseSortRank(phaseB) || phaseA.localeCompare(phaseB, 'ja-JP'));
+      }
+      if (sortMode === 'model-asc' || sortMode === 'model-desc') {
+        const direction = sortMode === 'model-asc' ? 1 : -1;
+        if (!modelA && modelB) return 1;
+        if (modelA && !modelB) return -1;
+        return direction * modelA.localeCompare(modelB, 'ja-JP');
+      }
+      if (sortMode === 'dealer-asc' || sortMode === 'dealer-desc') {
+        const direction = sortMode === 'dealer-asc' ? 1 : -1;
+        if (!dealerNameA && dealerNameB) return 1;
+        if (dealerNameA && !dealerNameB) return -1;
+        return direction * dealerNameA.localeCompare(dealerNameB, 'ja-JP');
+      }
+      if (sortMode === 'amount-asc' || sortMode === 'amount-desc') {
+        if (!quoteA && quoteB) return 1;
+        if (quoteA && !quoteB) return -1;
+        if (!quoteA || !quoteB) return 0;
+        return sortMode === 'amount-asc' ? quoteA.total - quoteB.total : quoteB.total - quoteA.total;
+      }
+      return 0;
+    });
+  }
 
   const shownQuotes = shown.flatMap((request) => {
     const quote = request.quote_id ? quoteById.get(request.quote_id) : undefined;
@@ -381,7 +456,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   const shownQuoteTotal = shownQuotes.reduce((sum, quote) => sum + quote.total, 0);
   const newCount = shown.filter((request) => request.status === 'new').length;
   const acceptedCount = shownQuotes.filter((quote) => quote.status === 'accepted').length;
-  const filtersActive = Boolean(textQuery || statusFilter || dealerFilter || filter.block || filter.pref || filter.city);
+  const filtersActive = Boolean(textQuery || statusFilter || dealerFilter || phaseFilter || modelFilter || filter.block || filter.pref || filter.city);
 
   const selectableQuoteIds = new Set(shownQuotes.map((quote) => quote.id));
   const selectablePendingRequestIds = new Set(shown.filter((request) => !request.quote_id).map((request) => request.id));
@@ -425,13 +500,16 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 表示 {shown.length}件 / 全{requests.length}件
               </span>
             </div>
-            {filtersActive && <Link href="/admin/quotes" className="text-[0.68rem] text-[#315745] underline underline-offset-4">条件を解除</Link>}
+            {(filtersActive || sortMode) && <Link href="/admin/quotes" className="text-[0.68rem] text-[#315745] underline underline-offset-4">条件を解除</Link>}
           </div>
 
           <form
             method="get"
             className="grid gap-1.5 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8.5rem,.7fr)_minmax(8.5rem,.7fr)_auto_auto]"
           >
+            {phaseFilter && <input type="hidden" name="phase" value={phaseFilter} />}
+            {modelFilter && <input type="hidden" name="model" value={modelFilter} />}
+            {sortMode && <input type="hidden" name="sort" value={sortMode} />}
             <input
               name="q"
               type="search"
@@ -488,11 +566,59 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
                 <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
-                <th className="w-[16%] px-2 py-1 text-left font-semibold">現在フェーズ</th>
+                <th className="w-[16%] px-2 py-1 text-left font-semibold">
+                  <CaseListColumnMenu
+                    label="現在フェーズ"
+                    searchParams={sp}
+                    sortAsc="phase-asc"
+                    sortDesc="phase-desc"
+                    activeSort={sortMode}
+                    filterKey="phase"
+                    activeFilter={phaseFilter}
+                    filterLabel="フェーズで絞り込み"
+                    filterOptions={CASE_PHASE_OPTIONS.map((value) => ({ value, label: value }))}
+                  />
+                </th>
                 <th className="w-[20%] px-2 py-1 text-left font-semibold">設置予定地</th>
-                <th className="w-[12%] px-2 py-1 text-left font-semibold">商品モデル</th>
-                <th className="w-[14%] px-2 py-1 text-right font-semibold">見積額</th>
-                <th className="w-[16%] px-2 py-1 text-left font-semibold">担当組織／担当者</th>
+                <th className="w-[12%] px-2 py-1 text-left font-semibold">
+                  <CaseListColumnMenu
+                    label="商品モデル"
+                    searchParams={sp}
+                    sortAsc="model-asc"
+                    sortDesc="model-desc"
+                    activeSort={sortMode}
+                    filterKey="model"
+                    activeFilter={modelFilter}
+                    filterLabel="商品モデルで絞り込み"
+                    filterOptions={modelPool.map((value) => ({ value, label: value }))}
+                  />
+                </th>
+                <th className="w-[14%] px-2 py-1 text-right font-semibold">
+                  <CaseListColumnMenu
+                    label="見積額"
+                    searchParams={sp}
+                    sortAsc="amount-asc"
+                    sortDesc="amount-desc"
+                    activeSort={sortMode}
+                    align="right"
+                  />
+                </th>
+                <th className="w-[16%] px-2 py-1 text-left font-semibold">
+                  <CaseListColumnMenu
+                    label="担当組織／担当者"
+                    searchParams={sp}
+                    sortAsc="dealer-asc"
+                    sortDesc="dealer-desc"
+                    activeSort={sortMode}
+                    filterKey="dealer"
+                    activeFilter={dealerFilter}
+                    filterLabel="担当で絞り込み"
+                    filterOptions={[
+                      { value: 'unassigned', label: '未割当' },
+                      ...dealers.map((dealer) => ({ value: dealer.id, label: dealer.company_name ?? dealer.full_name })),
+                    ]}
+                  />
+                </th>
               </tr>
             </thead>
             <tbody>

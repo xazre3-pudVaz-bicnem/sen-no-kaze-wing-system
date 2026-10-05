@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const shell = fs.readFileSync(path.join(root, 'components/admin/admin-shell.tsx'), 'utf8');
+const dismissibleDetails = fs.readFileSync(
+  path.join(root, 'components/admin/dismissible-details.tsx'),
+  'utf8',
+);
 const layout = fs.readFileSync(path.join(root, 'app/admin/layout.tsx'), 'utf8');
 const session = fs.readFileSync(path.join(root, 'lib/auth/session.ts'), 'utf8');
 const localAuth = fs.readFileSync(path.join(root, 'lib/auth/local-auth.ts'), 'utf8');
@@ -41,10 +45,18 @@ describe('管理画面共通ヘッダー', () => {
     expect(shell).toContain('ログアウト');
   });
 
-  it('狭い画面では氏名行を畳めても役割とアカウント導線を常時残す', () => {
-    expect(shell).toContain('hidden min-w-0 max-w-64 text-right lg:block');
+  it('中幅PCでは氏名を残し、会社名は広い画面で表示する', () => {
+    expect(shell).toContain('hidden min-w-0 max-w-64 text-right md:block');
+    expect(shell).toContain('hidden truncate text-[0.68rem] leading-4 text-muted lg:block');
     expect(shell).toContain('w-[min(18rem,calc(100vw-2rem))]');
     expect(shell).toContain('{roleLabel}');
     expect(shell).toContain('<span>アカウント</span>');
+  });
+
+  it('アカウントメニューは枠外クリックで閉じる', () => {
+    expect(shell).toContain('<DismissibleDetails className="group relative shrink-0">');
+    expect(dismissibleDetails).toContain("document.addEventListener('pointerdown', handlePointerDown)");
+    expect(dismissibleDetails).toContain('!details.contains(event.target)');
+    expect(dismissibleDetails).toContain('details.open = false');
   });
 });

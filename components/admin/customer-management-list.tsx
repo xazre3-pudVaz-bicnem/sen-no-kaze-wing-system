@@ -115,6 +115,7 @@ export function CustomerManagementList({
   searchParams,
   showDealerColumn,
   basePath,
+  dealerCompanyByCustomerId,
   demo = false,
   headingId,
 }: {
@@ -122,6 +123,7 @@ export function CustomerManagementList({
   searchParams: SearchParams;
   showDealerColumn: boolean;
   basePath: string;
+  dealerCompanyByCustomerId?: Record<string, string | null | undefined>;
   demo?: boolean;
   headingId: string;
 }) {
@@ -195,10 +197,10 @@ export function CustomerManagementList({
             <colgroup>
               <col style={{ width: showDealerColumn ? '23%' : '27%' }} />
               <col style={{ width: showDealerColumn ? '18%' : '20%' }} />
-              <col style={{ width: showDealerColumn ? '23%' : '29%' }} />
-              {showDealerColumn && <col style={{ width: '13%' }} />}
+              <col style={{ width: showDealerColumn ? '23%' : '33%' }} />
+              {showDealerColumn && <col style={{ width: '17%' }} />}
               <col style={{ width: showDealerColumn ? '11%' : '12%' }} />
-              <col style={{ width: showDealerColumn ? '12%' : '12%' }} />
+              <col style={{ width: '8%' }} />
             </colgroup>
             <thead className="bg-sand/60">
               <tr>
@@ -244,14 +246,14 @@ export function CustomerManagementList({
                 </th>
                 {showDealerColumn && (
                   <th className="px-2.5 py-2.5 text-left text-xs font-semibold text-muted">
-                    <div className="flex items-center">担当
-                      <ColumnMenu label="担当" active={Boolean(filters.dealer || dealerSortActive)} align="right">
+                    <div className="flex items-center">代理店 / 担当者
+                      <ColumnMenu label="担当者" active={Boolean(filters.dealer || dealerSortActive)} align="right">
                         <form method="get" action={basePath} className="space-y-2">
                           <PreservedInputs sp={searchParams} omit={['dealer']} />
-                          <label className="block"><span className="mb-1 block font-semibold text-muted">絞り込み</span><select name="dealer" defaultValue={filters.dealer} className="input w-full text-xs"><option value="">すべて</option>{dealerNames.map((name) => <option key={name} value={name}>{name}</option>)}<option value="__unassigned__">未割り当て</option></select></label>
+                          <label className="block"><span className="mb-1 block font-semibold text-muted">担当者で絞り込み</span><select name="dealer" defaultValue={filters.dealer} className="input w-full text-xs"><option value="">すべて</option>{dealerNames.map((name) => <option key={name} value={name}>{name}</option>)}<option value="__unassigned__">未割り当て</option></select></label>
                           <button type="submit" className="btn-secondary btn-sm w-full">適用</button>
                         </form>
-                        <div className="mt-2"><SortLinks basePath={basePath} sp={searchParams} current={filters.sort} options={[[ 'dealer_asc', '担当 昇順' ], [ 'dealer_desc', '担当 降順' ]]} /></div>
+                        <div className="mt-2"><SortLinks basePath={basePath} sp={searchParams} current={filters.sort} options={[[ 'dealer_asc', '担当者 昇順' ], [ 'dealer_desc', '担当者 降順' ]]} /></div>
                       </ColumnMenu>
                     </div>
                   </th>
@@ -277,7 +279,8 @@ export function CustomerManagementList({
                 <tr><td colSpan={showDealerColumn ? 6 : 5} className="px-2.5 py-10 text-center text-sm text-muted">条件に一致する{demo ? 'サンプル' : ''}顧客はいません。</td></tr>
               ) : shown.map((customer) => {
                 const recent = customer.recent_case;
-                const caseHref = recent ? (demo ? `${basePath}/${encodeURIComponent(customer.id)}` : liveCaseHref(recent)) : null;
+                const caseHref = recent && !demo ? liveCaseHref(recent) : null;
+                const dealerCompany = dealerCompanyByCustomerId?.[customer.id] ?? null;
                 return (
                   <tr key={customer.id} data-testid={demo ? 'customer-management-demo-row' : 'customer-management-row'}>
                     <td className="break-words px-2.5 py-2.5 align-top">
@@ -287,14 +290,37 @@ export function CustomerManagementList({
                       <p className="mt-1 text-xs text-muted">電話：{customer.phone ?? '未登録'}</p>
                     </td>
                     <td className="break-words px-2.5 py-2.5 align-top text-xs">
-                      {recent && caseHref ? <Link href={caseHref} className="font-semibold text-ink underline underline-offset-4">{recent.quote_no ?? '見積未発行'}</Link> : <span className="text-muted">案件なし</span>}
+                      {recent ? (
+                        caseHref ? (
+                          <Link href={caseHref} className="font-semibold text-ink underline underline-offset-4">
+                            {recent.quote_no ?? '見積未発行'}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-ink" title={demo ? 'サンプル画面では案件詳細へ遷移しません' : undefined}>
+                            {recent.quote_no ?? '見積未発行'}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-muted">案件なし</span>
+                      )}
                       <p className="mt-1 text-muted">{recent?.model_name ?? '商品モデル未登録'}</p>
                       <p className="mt-1 font-medium text-ink">進行中 {customer.ongoing_case_count}件</p>
                     </td>
                     <td className="break-words px-2.5 py-2.5 align-top text-xs text-muted">{recent?.site_address ?? '設置予定地未登録'}</td>
-                    {showDealerColumn && <td className="break-words px-2.5 py-2.5 align-top text-xs">{recent?.dealer_name ?? '未割り当て'}</td>}
+                    {showDealerColumn && (
+                      <td className="break-words px-2.5 py-2.5 align-top text-xs">
+                        {recent?.dealer_name || dealerCompany ? (
+                          <div>
+                            {dealerCompany && <p className="font-semibold text-ink">{dealerCompany}</p>}
+                            <p className={dealerCompany ? 'mt-1 text-muted' : ''}>{recent?.dealer_name ?? '担当者未割り当て'}</p>
+                          </div>
+                        ) : (
+                          <span className="text-muted">未割り当て</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-2.5 py-2.5 align-top text-xs text-muted">{recent ? formatDate(recent.activity_at) : '—'}</td>
-                    <td className="px-2.5 py-2.5 align-top"><Link href={`${basePath}/${encodeURIComponent(customer.id)}`} className="btn-secondary btn-sm whitespace-nowrap">顧客を見る</Link></td>
+                    <td className="px-2.5 py-2.5 align-top"><Link href={`${basePath}/${encodeURIComponent(customer.id)}`} className="btn-secondary btn-sm whitespace-nowrap">詳細</Link></td>
                   </tr>
                 );
               })}

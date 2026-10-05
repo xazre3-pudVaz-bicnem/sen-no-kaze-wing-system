@@ -14,8 +14,8 @@ function unlinkedReason(issue: 'inconsistent_user_id' | 'missing_profile' | 'non
   return '顧客アカウント未確認';
 }
 
-function demoCaseHref(customerId: string, caseId: string): string {
-  return `/admin/customer-management/demo/${encodeURIComponent(customerId)}#case-${encodeURIComponent(caseId)}`;
+function demoCaseHref(customerId: string): string {
+  return `/admin/customer-management/demo/${encodeURIComponent(customerId)}`;
 }
 
 export default async function AdminCustomerManagementDemoPage({
@@ -141,7 +141,7 @@ export default async function AdminCustomerManagementDemoPage({
                     <Td className="text-xs">
                       {recent ? (
                         <Link
-                          href={demoCaseHref(customer.id, recent.id)}
+                          href={demoCaseHref(customer.id)}
                           className="font-semibold text-ink underline underline-offset-4"
                         >
                           {recent.quote_no ?? '見積未発行'}

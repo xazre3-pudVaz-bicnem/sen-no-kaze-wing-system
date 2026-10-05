@@ -319,7 +319,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <CompactField label="お客様名（姓）" htmlFor="quote-customer-last-name" required errors={errors.customer_name}>
                   <Input
                     id="quote-customer-last-name"
@@ -331,7 +331,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <CompactField label="お客様名（名）" htmlFor="quote-customer-first-name" required>
                   <Input
                     id="quote-customer-first-name"
@@ -355,7 +355,7 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-3">
                 <CompactField label="電話番号" htmlFor="quote-phone">
                   <Input
                     id="quote-phone"
@@ -368,7 +368,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-5">
                 <CompactField label="メールアドレス" htmlFor="quote-email">
                   <Input
                     id="quote-email"
@@ -381,7 +381,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="sm:col-span-2 lg:col-span-12">
+              <div className="sm:col-span-2 lg:col-span-8">
                 <CompactField label="お客様住所" htmlFor="quote-customer-address">
                   <Input
                     id="quote-customer-address"
@@ -395,7 +395,7 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-12">
+              <div className="sm:col-span-2 lg:col-span-8">
                 <CompactField label="設置予定地" htmlFor="quote-site" errors={errors.site_address}>
                   <Input
                     id="quote-site"
@@ -407,7 +407,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-3 lg:col-start-1">
                 <CompactField label="商品モデル" htmlFor="quote-model" required errors={errors.base_model_id}>
                   <Select
                     id="quote-model"

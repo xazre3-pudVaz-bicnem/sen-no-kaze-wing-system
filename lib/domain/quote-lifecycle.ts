@@ -41,6 +41,23 @@ export function isFormallyAcceptedQuote(quote: QuoteLifecycleFields, request: Pi
 }
 
 /**
+ * Compatibility bridge candidate used only for the legacy Web dead-end:
+ * an accepted preliminary snapshot that is still the QuoteRequest's current
+ * revision. DB/RPC performs the stronger customer/Configuration/permission
+ * checks before it can create a formal Quote.
+ */
+export function isCurrentAcceptedPreliminaryForFormalization(
+  quote: QuoteLifecycleFields,
+  request: Pick<QuoteRequest, 'quote_id'> | null
+) {
+  const semanticPreliminary = quote.quote_kind === 'preliminary';
+  const legacyInitial = quote.quote_kind == null && quote.parent_quote_id === null;
+  return quote.status === 'accepted'
+    && request?.quote_id === quote.id
+    && (semanticPreliminary || legacyInitial);
+}
+
+/**
  * Accepted snapshots remain distinguishable when a caller cannot read the
  * current-request pointer. Contract progression still requires
  * `formal_current`.

@@ -259,8 +259,8 @@ export function CustomerManagementList({
                   </th>
                 )}
                 <th className="px-2.5 py-2.5 text-left text-xs font-semibold text-muted">
-                  <div className="flex items-center">最終更新
-                    <ColumnMenu label="最終更新" active={Boolean(filters.from || filters.to || updatedSortActive)} align="right">
+                  <div className="flex items-center">更新日
+                    <ColumnMenu label="更新日" active={Boolean(filters.from || filters.to || updatedSortActive)} align="right">
                       <form method="get" action={basePath} className="space-y-2">
                         <PreservedInputs sp={searchParams} omit={['from', 'to']} />
                         <label className="block"><span className="mb-1 block font-semibold text-muted">開始日</span><input type="date" name="from" defaultValue={filters.from} className="input w-full text-xs" /></label>

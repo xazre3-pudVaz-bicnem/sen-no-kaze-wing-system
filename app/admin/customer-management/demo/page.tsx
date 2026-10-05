@@ -24,6 +24,10 @@ const dealerCompanyByCustomerId = Object.fromEntries(
   })
 );
 
+const dealerCompanyByUnlinkedCaseId: Record<string, string> = {
+  'demo-unlinked-case-1': 'サンプル建築販売',
+};
+
 export default async function AdminCustomerManagementDemoPage({
   searchParams,
 }: {
@@ -74,30 +78,38 @@ export default async function AdminCustomerManagementDemoPage({
         <Table minWidth="44rem">
           <thead className="bg-[#fff8e8]">
             <tr>
-              <Th>案件上のお客様</Th>
+              <Th>お客様情報</Th>
               <Th>確認が必要な理由</Th>
               <Th>案件・設置予定地</Th>
-              <Th>担当代理店</Th>
+              <Th>代理店 / 担当者</Th>
               <Th>確認</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {DEMO_UNLINKED_CASES.map((customerCase) => (
-              <tr key={customerCase.id} data-testid="unlinked-customer-demo-row">
-                <Td>
-                  <p className="font-semibold">{customerCase.full_name}</p>
-                  <p className="mt-1 text-xs text-muted">{customerCase.company_name ?? '法人名なし'}</p>
-                </Td>
-                <Td className="text-xs"><Badge tone="warn">{unlinkedReason(customerCase.identity_issue)}</Badge></Td>
-                <Td className="text-xs">
-                  <span className="block font-semibold">{customerCase.quote_no ?? '見積未発行'}</span>
-                  <span className="mt-1 block text-muted">{customerCase.model_name ?? '商品モデル未登録'}／{formatDate(customerCase.activity_at)}</span>
-                  <span className="mt-1 block text-muted">設置予定地：{customerCase.site_address ?? '未登録'}</span>
-                </Td>
-                <Td className="text-xs">{customerCase.dealer_name ?? '未割り当て'}</Td>
-                <Td><span className="btn-secondary btn-sm cursor-default opacity-60">案件を見る（デモ）</span></Td>
-              </tr>
-            ))}
+            {DEMO_UNLINKED_CASES.map((customerCase) => {
+              const dealerCompany = dealerCompanyByUnlinkedCaseId[customerCase.id] ?? null;
+              return (
+                <tr key={customerCase.id} data-testid="unlinked-customer-demo-row">
+                  <Td>
+                    <p className="font-semibold">{customerCase.full_name}</p>
+                    <p className="mt-1 text-xs text-muted">{customerCase.company_name ?? '法人名なし'}</p>
+                  </Td>
+                  <Td className="text-xs"><Badge tone="warn">{unlinkedReason(customerCase.identity_issue)}</Badge></Td>
+                  <Td className="text-xs">
+                    <span className="block font-semibold">{customerCase.quote_no ?? '見積未発行'}</span>
+                    <span className="mt-1 block text-muted">{customerCase.model_name ?? '商品モデル未登録'}／{formatDate(customerCase.activity_at)}</span>
+                    <span className="mt-1 block text-muted">設置予定地：{customerCase.site_address ?? '未登録'}</span>
+                  </Td>
+                  <Td className="text-xs">
+                    {dealerCompany && <span className="block font-semibold text-ink">{dealerCompany}</span>}
+                    <span className={dealerCompany ? 'mt-1 block text-muted' : 'text-muted'}>
+                      {customerCase.dealer_name ? `担当：${customerCase.dealer_name}` : '未割り当て'}
+                    </span>
+                  </Td>
+                  <Td><span className="btn-secondary btn-sm cursor-default opacity-60">案件を見る（デモ）</span></Td>
+                </tr>
+              );
+            })}
           </tbody>
         </Table>
       </section>

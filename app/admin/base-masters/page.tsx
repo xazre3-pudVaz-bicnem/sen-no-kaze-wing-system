@@ -9,6 +9,37 @@ import { BaseMasterCreateForm } from '@/components/admin/base-master-form';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 const memberRank: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
+const baseMasterSchemaTables = [
+  'organization_memberships',
+  'organizations',
+  'base_masters',
+  'base_master_revisions',
+] as const;
+
+type PostgrestLikeError = {
+  code?: string | null;
+  message?: string | null;
+};
+
+function isBaseMasterSchemaPending(error: PostgrestLikeError | null) {
+  if (!error) return false;
+  const message = error.message ?? '';
+  const mentionsKnownTable = baseMasterSchemaTables.some(
+    (table) =>
+      message.includes(`public.${table}`) ||
+      message.includes(`'${table}'`) ||
+      message.includes(`"${table}"`)
+  );
+  return mentionsKnownTable && (error.code === 'PGRST205' || /schema cache/i.test(message));
+}
+
+function BaseMasterPreparingAlert() {
+  return (
+    <Alert tone="info">
+      本体マスターは現在準備中です。本番データベースへの必要な設定反映後に利用できます。現在は参照・登録・編集できません。
+    </Alert>
+  );
+}
 
 export default async function BaseMastersPage({
   searchParams,
@@ -61,7 +92,7 @@ export default async function BaseMastersPage({
     return (
       <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
         {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
-        <Alert tone="danger">{loadError.message}</Alert>
+        {isBaseMasterSchemaPending(loadError) ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{loadError.message}</Alert>}
       </AdminPage>
     );
   }
@@ -80,7 +111,7 @@ export default async function BaseMastersPage({
     return (
       <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
         {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
-        <Alert tone="danger">{revisionResult.error.message}</Alert>
+        {isBaseMasterSchemaPending(revisionResult.error) ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{revisionResult.error.message}</Alert>}
       </AdminPage>
     );
   }

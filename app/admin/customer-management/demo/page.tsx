@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
-import { DEMO_CUSTOMERS, DEMO_UNLINKED_CASES } from '@/lib/demo/customer-management';
+import {
+  DEMO_CUSTOMER_DETAILS,
+  DEMO_CUSTOMERS,
+  DEMO_UNLINKED_CASES,
+} from '@/lib/demo/customer-management';
 import { formatDate } from '@/lib/utils';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { CustomerManagementList } from '@/components/admin/customer-management-list';
@@ -11,6 +15,14 @@ function unlinkedReason(issue: 'inconsistent_user_id' | 'missing_profile' | 'non
   if (issue === 'non_customer_profile') return '顧客アカウント未確定';
   return '顧客アカウント未確認';
 }
+
+const dealerCompanyByCustomerId = Object.fromEntries(
+  DEMO_CUSTOMERS.map((customer) => {
+    const detail = DEMO_CUSTOMER_DETAILS.find((item) => item.customer.id === customer.id);
+    const recentCase = detail?.cases.find((customerCase) => customerCase.id === customer.recent_case?.id);
+    return [customer.id, recentCase?.dealer_company ?? null];
+  })
+);
 
 export default async function AdminCustomerManagementDemoPage({
   searchParams,
@@ -43,6 +55,7 @@ export default async function AdminCustomerManagementDemoPage({
         searchParams={sp}
         showDealerColumn={showDealerColumn}
         basePath="/admin/customer-management/demo"
+        dealerCompanyByCustomerId={dealerCompanyByCustomerId}
         headingId="demo-customer-list-heading"
         demo
       />

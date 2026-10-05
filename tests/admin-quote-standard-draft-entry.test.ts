@@ -7,9 +7,13 @@ const page = fs.readFileSync(path.join(root, 'app/admin/quote-management/page.ts
 const review = fs.readFileSync(path.join(root, 'components/admin/case-estimate-review.tsx'), 'utf8');
 
 function standardDraftButtonBlock() {
-  const match = page.match(/<button[\s\S]*?data-testid="case-estimate-standard-draft-button"[\s\S]*?<\/button>/);
-  if (!match) throw new Error('standard draft preparation button not found');
-  return match[0];
+  const marker = 'data-testid="case-estimate-standard-draft-button"';
+  const markerIndex = page.indexOf(marker);
+  if (markerIndex < 0) throw new Error('standard draft preparation button not found');
+  const start = page.lastIndexOf('<button', markerIndex);
+  const end = page.indexOf('</button>', markerIndex);
+  if (start < 0 || end < 0) throw new Error('standard draft preparation button markup is incomplete');
+  return page.slice(start, end + '</button>'.length);
 }
 
 describe('案件見積から標準案を作る準備中入口', () => {

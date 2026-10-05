@@ -319,7 +319,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-3 md:col-start-1">
                 <CompactField label="お客様名（姓）" htmlFor="quote-customer-last-name" required errors={errors.customer_name}>
                   <Input
                     id="quote-customer-last-name"

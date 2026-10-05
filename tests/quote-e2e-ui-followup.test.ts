@@ -51,6 +51,10 @@ describe('実案件E2E後の見積UI導線', () => {
     expect(authoringUi).toContain("product.priceOnRequest ? '別途見積' : formatYen(product.price)");
     expect(authoringUi).not.toContain('原価正本はQuote Draftへ未接続');
     expect(authoringUi).not.toContain('Quote Draftの正式金額ロジックは変更していません');
-    expect(workbench).not.toContain('保存連携準備中');
+    expect(workbench).toContain('電話・メール・お客様住所の入力機能は現在準備中です');
+    expect(workbench).toContain('保存されない項目を入力済みとして扱わないため、現在は入力できません。');
+    expect(workbench).not.toContain('name="customer_phone"');
+    expect(workbench).not.toContain('name="customer_email"');
+    expect(workbench).not.toContain('name="customer_address"');
   });
 });

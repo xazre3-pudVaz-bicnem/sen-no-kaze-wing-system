@@ -39,7 +39,7 @@ describe('顧客管理UI', () => {
 
   it('uses the shared compact customer list for identity, case context, and detail navigation', () => {
     expect(list).toContain('<CustomerManagementList');
-    for (const label of ['顧客', '案件', '最近の設置予定地', '最終更新', '詳細']) {
+    for (const label of ['顧客', '案件', '最近の設置予定地', '更新日', '詳細']) {
       expect(listUi).toContain(label);
     }
     expect(listUi).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
@@ -62,6 +62,13 @@ describe('顧客管理UI', () => {
     expect(listUi).toContain('const dealerCompany = dealerCompanyByCustomerId?.[customer.id] ?? null;');
     expect(listUi).toContain("{recent?.dealer_name ?? '担当者未割り当て'}");
     expect(listUi).toContain('colSpan={showDealerColumn ? 6 : 5}');
+  });
+
+  it('uses plain-language labels for unlinked cases without pretending dealer-company data exists', () => {
+    expect(list).toContain('<Th>お客様情報</Th>');
+    expect(list).not.toContain('<Th>案件上のお客様</Th>');
+    expect(list).toContain('<Th>代理店 / 担当者</Th>');
+    expect(list).toContain('担当：{customerCase.dealer_name}');
   });
 
   it('provides Excel-like per-column filtering and sorting while retaining global search', () => {

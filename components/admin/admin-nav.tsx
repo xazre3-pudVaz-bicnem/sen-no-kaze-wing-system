@@ -57,6 +57,7 @@ const sections: NavSection[] = [
     href: '/admin/settings',
     label: '管理設定',
     match: ['/admin/settings', '/admin/customers', '/admin/audit', '/admin/manual'],
+    need: 'admin',
   },
 ];
 

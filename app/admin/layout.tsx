@@ -15,5 +15,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ? await requireUser('/admin/base-migration')
     : await requireStaff();
   const migrationOnly = migrationRoute && user.role === 'customer';
-  return <AdminShell email={user.email} role={user.role} migrationOnly={migrationOnly}>{children}</AdminShell>;
+  return (
+    <AdminShell
+      email={user.email}
+      role={user.role}
+      fullName={user.full_name}
+      companyName={user.company_name}
+      migrationOnly={migrationOnly}
+    >
+      {children}
+    </AdminShell>
+  );
 }

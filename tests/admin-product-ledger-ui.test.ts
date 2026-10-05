@@ -95,6 +95,13 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain("document.body.style.overflow = 'hidden'");
   });
 
+  it('一覧の行全体から詳細を開き、2ペイン未満では詳細位置へ移動する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain("return <tr key={o.id} onClick={() => openDetail(o.id)}");
+    expect(client).toContain("window.matchMedia('(min-width: 1280px)').matches");
+    expect(client).toContain("document.getElementById('ledger-product-detail-pane')?.scrollIntoView({ behavior: 'smooth', block: 'start' })");
+  });
+
   it('お客様表示はシミュレーター共通ProductDetailをそのまま使う', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");

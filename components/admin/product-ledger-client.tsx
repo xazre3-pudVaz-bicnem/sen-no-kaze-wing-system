@@ -68,6 +68,13 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     setDetailTab('customer');
     setSelectedId(id);
   }, []);
+  useEffect(() => {
+    if (!selectedId || window.matchMedia('(min-width: 1280px)').matches) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('ledger-product-detail-pane')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedId]);
   const onPreviewVariantChange = (choiceId: string, groupId: string) => {
     setPreviewVariantIds((current) => pruneHiddenVariantChoices(preview.groups, preview.choices, [...current.filter((id) => preview.choices.find((choice) => choice.id === id)?.group_id !== groupId), choiceId]));
   };
@@ -201,7 +208,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 <tbody className="divide-y divide-line">
                   {pageOptions.map((o) => {
                     const attention = productAttentionReasons(o).length > 0;
-                    return <tr key={o.id} className={selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
+                    return <tr key={o.id} onClick={() => openDetail(o.id)} className={selectedId === o.id ? 'cursor-pointer bg-ivory/55' : 'cursor-pointer bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
                       <td className="px-3 py-2">
                         <button type="button" aria-controls="ledger-product-detail-pane" className="flex w-full min-w-0 items-center gap-2.5 text-left" onClick={() => openDetail(o.id)}>
                           <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">

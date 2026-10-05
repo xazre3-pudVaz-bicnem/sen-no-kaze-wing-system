@@ -23,7 +23,7 @@ function hash(password: string, salt: string) {
   return scryptSync(password, salt, 64).toString('hex');
 }
 
-export async function localGetSessionUser(): Promise<SessionUser | null> {
+export async function localGetSessionUser(): Promise<(SessionUser & { company_name: string | null }) | null> {
   const store = await cookies();
   const raw = store.get(LOCAL_SESSION_COOKIE)?.value;
   if (!raw) return null;
@@ -34,7 +34,13 @@ export async function localGetSessionUser(): Promise<SessionUser | null> {
   const db = loadDb();
   const profile = db.profiles.find((p) => p.id === userId);
   if (!profile) return null;
-  return { id: profile.id, email: profile.email, role: profile.role_code, full_name: profile.full_name };
+  return {
+    id: profile.id,
+    email: profile.email,
+    role: profile.role_code,
+    full_name: profile.full_name,
+    company_name: profile.company_name,
+  };
 }
 
 async function setSessionCookie(userId: string) {
@@ -79,7 +85,7 @@ export async function localSignUp(input: LocalSignUpInput): Promise<{ ok: true }
   const dealerEmails = emailsFrom(process.env.WING_LOCAL_DEALER_EMAILS);
   const roleFor = (): Profile['role_code'] =>
     adminEmails.includes(email) ? 'admin' : masterDealerEmails.includes(email) ? 'master_dealer' : dealerEmails.includes(email) ? 'dealer' : 'customer';
-  db.users.push({ id, email, password_hash: hash(input.password, salt), salt, created_at: now });
+  db.users.push({ id, email, password_hash: hash(password, salt), salt, created_at: now });
   const customerNo = `C${String(db.profiles.length + 1).padStart(6, '0')}`;
   const profile: Profile = {
     id,

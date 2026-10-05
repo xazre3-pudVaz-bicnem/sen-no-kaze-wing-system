@@ -33,7 +33,7 @@ describe('見積書管理の正式編集UI統合', () => {
   });
 
   it('案件情報をExcel型編集の上部へまとめる', () => {
-    for (const label of ['案件名', 'お客様名（姓）', 'お客様名（名）', '会社名', '電話番号', 'メールアドレス', 'お客様住所', '設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', 'メモ']) {
+    for (const label of ['案件名', 'お客様名（姓）', 'お客様名（名）', '法人名', '電話番号', 'メールアドレス', 'お客様住所', 'Wingの設置予定地', '商品モデル', '仕様', '防火仕様', '適用地域', '案件メモ']) {
       expect(manualWorkbench).toContain(label);
     }
     expect(manualWorkbench).toContain('name="customer_name" value={customerName}');
@@ -84,7 +84,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('overflow-x-auto md:overflow-x-visible');
     expect(authoringUi).toContain('w-full min-w-[46rem] table-fixed border-collapse');
     expect(authoringUi).toContain('md:min-w-0');
-    expect(authoringUi).toContain('data-testid={\`quote-section-summary-\${section.key}\`}');
+    expect(authoringUi).toContain('data-testid={`quote-section-summary-${section.key}`}');
     expect(authoringUi).toContain('const rowNumberByKey = useMemo');
     expect(authoringUi).toContain(">1</td>");
     expect(authoringUi).toContain(">式</td>");

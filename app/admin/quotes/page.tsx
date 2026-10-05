@@ -29,7 +29,7 @@ function casePhaseLabel(quote: {
   dealer_id: string | null;
 }) {
   if (isFormalQuote(quote)) {
-    if (quote.status === 'accepted') return 'F10/15 契約';
+    if (quote.status === 'accepted') return 'F9/15 見積承諾';
     if (quote.status === 'issued') return 'F8/15 正式見積';
     return 'F9/15 見積後の判断';
   }
@@ -204,8 +204,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               {latest.length}件
             </span>
           </div>
-          <div data-testid="case-list-scroll">
-            <table className="w-full table-fixed text-[0.69rem]">
+          <div className="overflow-x-auto" data-testid="case-list-scroll">
+            <table className="w-full min-w-[58rem] table-fixed text-[0.69rem]">
               <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
                 <tr>
                   <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
@@ -325,7 +325,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
   );
 
   const filter = readRegionFilter(sp);
-  const addrOf = (r: (typeof requests)[number]) => r.contact.site_address || r.contact.address || '';
+  const addrOf = (r: (typeof requests)[number]) => r.contact.site_address || '';
   const cityPool = filter.pref
     ? [...new Set(
         requests
@@ -473,7 +473,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   <option value="">市区町村：すべて</option>
                   {cityPool.map((city) => <option key={city} value={city}>{city}</option>)}
                 </select>
-                <span className="w-full text-[0.65rem] text-muted">地域は設置予定地を優先し、未登録時は顧客住所で判定します。</span>
+                <span className="w-full text-[0.65rem] text-muted">地域は設置予定地で判定します。未登録案件は地域絞り込みの対象外です。</span>
               </div>
             </details>
 
@@ -483,8 +483,8 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           </form>
         </div>
 
-        <div data-testid="case-list-scroll">
-          <table className="w-full table-fixed text-[0.69rem]">
+        <div className="overflow-x-auto" data-testid="case-list-scroll">
+          <table className="w-full min-w-[58rem] table-fixed text-[0.69rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
                 <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>

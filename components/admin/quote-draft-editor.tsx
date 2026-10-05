@@ -386,6 +386,7 @@ export function QuoteDraftEditor({
             subtotalRaw={totals.subtotalRaw}
             adjustment={adjustment}
             adjustmentReason={adjustmentReason}
+            adjustmentLabel="値引き等調整額"
             tax={totals.tax}
             total={totals.total}
             onAdjustment={(value) => {

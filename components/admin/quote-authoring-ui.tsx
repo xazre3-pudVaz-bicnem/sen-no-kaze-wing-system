@@ -1050,7 +1050,7 @@ export function QuoteFinancialSummary({
           {showAdjustmentReason ? (
             <label className="block py-1">
               <span className="text-[10px] text-muted">調整理由</span>
-              <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason?.(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '必須'} className="mt-0.5 h-6 text-xs" />
+              <Input value={adjustmentReason} onChange={(event) => onAdjustmentReason?.(event.target.value)} placeholder={adjustment === 0 ? '調整なし' : '任意'} className="mt-0.5 h-6 text-xs" />
             </label>
           ) : null}
         </>

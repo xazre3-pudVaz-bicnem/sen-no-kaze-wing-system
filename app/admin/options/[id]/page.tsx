@@ -39,6 +39,8 @@ export default async function EditOptionPage({
     typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') && !sp.return_to.startsWith('//')
       ? sp.return_to
       : undefined;
+  const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
+  const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
 
   const [categories, models, options, variants] = await Promise.all([
     store.listCategories(),
@@ -93,7 +95,7 @@ export default async function EditOptionPage({
   return (
     <AdminPage title={option.name} lead={option.product_no ?? '商品管理番号はDB反映後に表示'}>
       <OptionRegistrationSaveBoundary>
-      <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
+      <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
       <FlashMessages sp={sp} />
       {sp.created && (
         <Alert tone="success">

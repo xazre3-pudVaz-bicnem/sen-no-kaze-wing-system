@@ -4,6 +4,7 @@ import { Bell } from 'lucide-react';
 import { signOutAction } from '@/lib/actions/auth';
 import { ROLE_LABELS, type RoleCode } from '@/lib/domain/types';
 import { AdminNav } from '@/components/admin/admin-nav';
+import { DismissibleDetails } from '@/components/admin/dismissible-details';
 import { DemoBanner } from '@/components/layout/demo-banner';
 
 const ADMIN_HEADER_ROLE_LABELS: Partial<Record<RoleCode, string>> = {
@@ -45,9 +46,9 @@ export function AdminShell({
             <span className="text-xs text-muted">管理画面</span>
           </Link>
           <div className="ml-auto flex min-w-0 items-center gap-2 text-xs text-muted sm:gap-3">
-            <div className="hidden min-w-0 max-w-64 text-right lg:block">
+            <div className="hidden min-w-0 max-w-64 text-right md:block">
               {displayCompany && (
-                <p className="truncate text-[0.68rem] leading-4 text-muted">{displayCompany}</p>
+                <p className="hidden truncate text-[0.68rem] leading-4 text-muted lg:block">{displayCompany}</p>
               )}
               <p className="truncate text-sm font-medium leading-5 text-ink">{displayName}</p>
             </div>
@@ -64,7 +65,7 @@ export function AdminShell({
                 <Bell className="size-4" aria-hidden="true" />
               </Link>
             )}
-            <details className="group relative shrink-0">
+            <DismissibleDetails className="group relative shrink-0">
               <summary
                 className="inline-flex cursor-pointer list-none items-center gap-1 rounded-lg border border-line px-2.5 py-2 font-medium text-ink-soft hover:bg-sand hover:text-ink [&::-webkit-details-marker]:hidden"
                 aria-label="アカウントメニュー"
@@ -95,7 +96,7 @@ export function AdminShell({
                   </form>
                 </div>
               </div>
-            </details>
+            </DismissibleDetails>
           </div>
         </div>
         <AdminNav role={role} migrationOnly={migrationOnly} />

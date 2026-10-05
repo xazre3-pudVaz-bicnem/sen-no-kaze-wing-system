@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import type { QuoteItemKind } from '@/lib/domain/types';
-import { Button, Input, Select, Textarea } from '@/components/ui';
+import { Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
 import {
   QuoteAuthoringGrid,
@@ -121,6 +121,7 @@ export function ManualQuoteWorkbench({
   const model = models.find((row) => row.id === modelId);
   const [rows, setRows] = useState<WorkbenchRow[]>([]);
   const [adjustment, setAdjustment] = useState(0);
+  const [adjustmentReason, setAdjustmentReason] = useState('');
   const [caseName, setCaseName] = useState('');
   const [customerLastName, setCustomerLastName] = useState('');
   const [customerFirstName, setCustomerFirstName] = useState('');
@@ -189,7 +190,7 @@ export function ManualQuoteWorkbench({
       current.map((row) => {
         if (row.key !== key) return row;
 
-        let nextUnit = row.unit ;
+        let nextUnit = row.unit;
         let nextQuantity = row.quantity;
 
         if (patch.unit !== undefined) {
@@ -275,8 +276,37 @@ export function ManualQuoteWorkbench({
       <QuoteEditorTopbar mode="new" estimates={estimates} confirmLeave={confirmLeave} />
 
       <div className="rounded-lg border border-[#d8e4de] bg-[#f5faf7] px-3 py-2 text-xs leading-5 text-ink-soft" data-testid="manual-quote-role-note">
-        この画面では、対面・電話・紹介などの新規案件と最初の見積下書きを登録します。
-        現場工事金額は、案件登録後に現地確認を行い、案件管理から入力します。正式見積の発行も案件管理から行います。
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="font-semibold text-ink">非Web案件の初期登録</p>
+            <p>対面・電話・紹介などの案件について、お客様・案件情報と最初の見積下書きを登録します。</p>
+          </div>
+          <span className="rounded-full border border-[#c6d9cf] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#315745]">
+            この画面では正式見積を発行しません
+          </span>
+        </div>
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4" aria-label="新規案件登録の流れ">
+          {[
+            ['1', 'お客様情報', '氏名・法人名など'],
+            ['2', '案件内容', '設置予定地・モデル・仕様'],
+            ['3', '初回見積', '明細・数量・売価を入力'],
+            ['4', '案件として登録', '案件管理へ引き継ぐ'],
+          ].map(([step, title, description]) => (
+            <div key={step} className="rounded-md border border-[#d8e4de] bg-white px-2 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-[#315745] text-[9px] font-bold text-white">{step}</span>
+                <strong className="text-[11px] text-ink">{title}</strong>
+              </div>
+              <p className="mt-0.5 pl-[1.4rem] text-[10px] leading-4 text-muted">{description}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[10px] leading-4 text-muted">
+          Webから届いた見積依頼は、この画面で新規登録し直しません。
+        </p>
+        <p className="mt-0.5 text-[10px] leading-4 text-muted">
+          現場工事金額は、案件登録後に現地確認を行い、案件管理から入力します。正式見積の発行も案件管理から行います。
+        </p>
       </div>
 
       <form
@@ -291,6 +321,7 @@ export function ManualQuoteWorkbench({
         <input type="hidden" name="items_json" value={itemsJson} />
         <input type="hidden" name="base_master_revision_id" value="" />
         <input type="hidden" name="adjustment" value={adjustment} />
+        <input type="hidden" name="adjustment_reason" value={adjustmentReason} />
         <input type="hidden" name="finish_level" value="full" />
         <input type="hidden" name="customer_name" value={customerName} />
 
@@ -299,11 +330,8 @@ export function ManualQuoteWorkbench({
         <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="manual-quote-editor-shell">
           <section className="border-b border-slate-200 bg-white" data-testid="case-info-panel">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
-              <h2 className="text-sm font-semibold">案件情報</h2>
-              <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-muted">
-                <span>電話・メール・お客様住所の入力機能は現在準備中です</span>
-                <span>* 必須</span>
-              </div>
+              <h2 className="text-sm font-semibold">1. お客様・案件情報</h2>
+              <span className="text-[0.65rem] text-muted">* 必須</span>
             </div>
 
             <div className="grid gap-x-2 gap-y-1 p-2.5 sm:grid-cols-2 lg:grid-cols-12">
@@ -344,7 +372,7 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
               <div className="lg:col-span-4">
-                <CompactField label="会社名" htmlFor="quote-company" errors={errors.customer_company}>
+                <CompactField label="法人名" htmlFor="quote-company" errors={errors.customer_company}>
                   <Input
                     id="quote-company"
                     name="customer_company"
@@ -353,6 +381,11 @@ export function ManualQuoteWorkbench({
                     className="h-7 min-h-7 px-2 text-sm"
                   />
                 </CompactField>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-12 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[10px] leading-4 text-slate-600" data-testid="new-case-contact-pending">
+                <strong className="mr-1 text-slate-700">連絡先は保存連携準備中です。</strong>
+                電話・メール・お客様住所の入力機能は現在準備中です。保存されない項目を入力済みとして扱わないため、現在は入力できません。
               </div>
 
               <div className="lg:col-span-3">
@@ -395,8 +428,13 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
+              <div className="sm:col-span-2 lg:col-span-12 mt-1 flex flex-wrap items-baseline gap-x-2 border-t border-slate-200 pt-2">
+                <h3 className="text-xs font-semibold text-slate-700">2. 案件内容</h3>
+                <span className="text-[10px] text-muted">設置予定地と商品モデル・仕様を確認します。</span>
+              </div>
+
               <div className="sm:col-span-2 lg:col-span-4">
-                <CompactField label="設置予定地" htmlFor="quote-site" errors={errors.site_address}>
+                <CompactField label="Wingの設置予定地" htmlFor="quote-site" errors={errors.site_address}>
                   <Input
                     id="quote-site"
                     name="site_address"
@@ -476,7 +514,7 @@ export function ManualQuoteWorkbench({
               </div>
 
               <div className="sm:col-span-2 lg:col-span-12">
-                <CompactField label="メモ" htmlFor="quote-memo" errors={errors.memo}>
+                <CompactField label="案件メモ" htmlFor="quote-memo" errors={errors.memo}>
                   <Textarea
                     id="quote-memo"
                     name="memo"
@@ -492,6 +530,10 @@ export function ManualQuoteWorkbench({
           <QuoteAuthoringTabs active={activeTab} onChange={setActiveTab} />
           {activeTab === 'estimate' ? (
             <>
+              <div className="flex flex-wrap items-baseline gap-x-2 border-b border-slate-200 bg-white px-3 py-1.5">
+                <h2 className="text-xs font-semibold text-slate-700">3. 最初の見積内容</h2>
+                <p className="text-[10px] text-muted">現地確認前に分かる範囲の明細・数量・売価を入力します。</p>
+              </div>
               <QuoteInternalRateStrip showPlannedDefaults />
               <QuoteAuthoringGrid
                 rows={authoringRows}
@@ -536,21 +578,32 @@ export function ManualQuoteWorkbench({
         <QuoteFinancialSummary
           subtotalRaw={subtotalRaw}
           adjustment={adjustment}
+          adjustmentReason={adjustmentReason}
           tax={tax}
           total={total}
           onAdjustment={(value) => {
             setAdjustment(value);
             markDirty();
           }}
+          onAdjustmentReason={(value) => {
+            setAdjustmentReason(value);
+            markDirty();
+          }}
           adjustmentLabel="値引き等調整額"
-          showAdjustmentReason={false}
+          showAdjustmentReason
           showTaxExclContractAmount
           totalLabel="見積金額（税込）"
         />
+        {errors.adjustment_reason?.length ? (
+          <p className="-mt-1 text-right text-xs text-danger" role="alert">
+            {errors.adjustment_reason[0]}
+          </p>
+        ) : null}
 
         <div className="rounded-lg border border-line bg-white px-3 py-2 shadow-sm">
           <p className="mb-2 text-right text-[10px] leading-4 text-muted">
-            登録すると案件一覧に追加されます。
+            案件情報と最初の見積下書きを登録します。この操作では正式見積を発行しません。<br />
+            登録すると案件一覧に追加されます。現地確認以降は案件管理で進めます。
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <SubmitButton pending={pending} label="案件として登録" />

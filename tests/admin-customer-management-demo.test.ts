@@ -9,7 +9,7 @@ const data = fs.readFileSync(path.join(root, 'lib/demo/customer-management.ts'),
 
 describe('顧客管理サンプル画面', () => {
   it('uses static fake data only and never reads or writes the production store', () => {
-    expect(list).toContain("await requireStaff('/admin/customer-management/demo')");
+    expect(list).toContain("const actor = await requireStaff('/admin/customer-management/demo')");
     expect(detail).toContain("await requireStaff('/admin/customer-management/demo')");
     expect(list).not.toContain('getStore(');
     expect(detail).not.toContain('getStore(');
@@ -30,13 +30,35 @@ describe('顧客管理サンプル画面', () => {
     expect(list).toContain('顧客未紐付け案件');
   });
 
-  it('keeps the list close to the actual customer-management information layout', () => {
-    for (const label of ['顧客名 / 法人名', '連絡先・住所', '進行中案件', '最近の案件', '顧客を見る']) {
+  it('matches the actual customer-list structure without exposing email or customer address in the list', () => {
+    for (const label of [
+      '顧客',
+      '進行中案件',
+      '最近の案件',
+      '商品モデル / 設置予定地',
+      '最終更新日',
+      '顧客を見る',
+    ]) {
       expect(list).toContain(label);
     }
-    expect(list).toContain('DEMO_CUSTOMERS');
-    expect(list).toContain('/admin/customer-management/demo/');
-    expect(list).toContain('サンプル顧客');
+    expect(list).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
+    expect(list).toContain("電話：{customer.phone ?? '未登録'}");
+    expect(list).not.toContain('<span className="block">{customer.email}</span>');
+    expect(list).not.toContain("{customer.address ?? '住所未登録'}");
+  });
+
+  it('shows the dealer column for admin and master dealer only', () => {
+    expect(list).toContain("const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';");
+    expect(list).toContain('{showDealerColumn && <Th>担当代理店</Th>}');
+    expect(list).toContain("{recent?.dealer_name ?? '未割り当て'}");
+    expect(list).toContain('<Td colSpan={showDealerColumn ? 7 : 6}');
+  });
+
+  it('links the recent sample case only inside the demo customer area', () => {
+    expect(list).toContain('function demoCaseHref(customerId: string): string');
+    expect(list).toContain('href={demoCaseHref(customer.id)}');
+    expect(list).not.toContain('href={`/admin/quotes/');
+    expect(list).not.toContain('href="/admin/quotes"');
   });
 
   it('shows the main customer detail sections without linking fake IDs into real case pages', () => {
@@ -61,7 +83,7 @@ describe('顧客管理サンプル画面', () => {
   });
 
   it('keeps the demo tables compact while preserving the same information', () => {
-    expect(list).toContain('<Table minWidth="46rem">');
+    expect(list).toContain("<Table minWidth={showDealerColumn ? '60rem' : '52rem'}>");
     expect(list).toContain('<Table minWidth="44rem">');
     expect(detail).toContain('<Table minWidth="46rem">');
     expect(detail).toContain('<Th>案件 / 商品モデル</Th>');

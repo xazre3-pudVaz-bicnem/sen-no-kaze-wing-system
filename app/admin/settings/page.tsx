@@ -85,7 +85,7 @@ export default async function AdminSettingsPage() {
               <PendingCard
                 compact
                 title="権限・役割"
-                body="本部・総代理店・代理店ごとの閲覧・編集・承認／公開範囲を管理します。正式な権限基盤とRLS／ACL接続後に有効化します。"
+                body="本部・総代理店・代理店などの役割に応じた閲覧・編集などの利用範囲を管理します。正式な権限基盤とRLS／ACL接続後に有効化します。"
               />
               <AvailableCard
                 compact

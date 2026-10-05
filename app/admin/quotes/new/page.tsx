@@ -62,8 +62,8 @@ export default async function AdminNewQuotePage({
 
   return (
     <AdminPage
-      title="新規案件見積"
-      lead="対面・電話・紹介などの案件を登録し、最初の見積下書きを作成"
+      title="新規案件登録・初回見積"
+      lead="対面・電話・紹介などの非Web案件を登録し、案件管理へ引き継ぐための最初の見積下書きを作成"
     >
       <QuoteManagementTabs active="case" />
       <ManualQuoteWorkbench

@@ -173,7 +173,7 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('caseQuoteStatusLabel');
     expect(list).not.toContain('quoteStatusTone');
     expect(list).toContain('casePhaseLabel');
-    for (const phase of ['F5/15 見積依頼', 'F6/15 担当者決定', 'F7/15 現地確認', 'F8/15 正式見積', 'F9/15 見積後の判断', 'F10/15 契約']) {
+    for (const phase of ['F5/15 見積依頼', 'F6/15 担当者決定', 'F7/15 現地確認', 'F8/15 正式見積', 'F9/15 見積後の判断', 'F9/15 見積承諾']) {
       expect(list).toContain(phase);
     }
     expect(list).toContain('全体フローのF5〜F15に対応');
@@ -300,7 +300,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('施工金額を入力する');
     expect(workspace).toContain('次にやること：確定見積の内容を確認');
     expect(workspace).toContain("action: '見積を編集'");
-    expect(workspace).toContain('次にやること：契約内容を確認');
+    expect(workspace).toContain('次にやること：契約条件を確認');
     expect(workspace).toContain('契約・資料を確認');
     expect(workspace).not.toContain("const isDealer = actor.role === 'dealer'");
     expect(workspace).not.toContain('DEALER_TAB_LABELS');

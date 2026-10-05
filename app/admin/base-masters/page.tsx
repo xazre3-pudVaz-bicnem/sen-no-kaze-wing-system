@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { BaseMasterCreateForm } from '@/components/admin/base-master-form';
+import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 const memberRank: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
 
@@ -18,6 +19,7 @@ export default async function BaseMastersPage({
   const sp = await searchParams;
   const store = await getStore();
   const models = await store.listModels({ includeDraft: true });
+  const showQuoteManagementTabs = user.role === 'admin';
 
   if (isLocalMode()) {
     return (
@@ -26,6 +28,7 @@ export default async function BaseMastersPage({
         lead="本体の製造明細・価格・公開履歴を管理します。"
         actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
       >
+        {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
         <Alert tone="info">この画面はSupabase接続環境で利用できます。ローカルJSONモードでは参照・編集しません。</Alert>
       </AdminPage>
     );
@@ -57,6 +60,7 @@ export default async function BaseMastersPage({
   if (loadError) {
     return (
       <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
+        {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
         <Alert tone="danger">{loadError.message}</Alert>
       </AdminPage>
     );
@@ -75,6 +79,7 @@ export default async function BaseMastersPage({
   if (revisionResult.error) {
     return (
       <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
+        {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
         <Alert tone="danger">{revisionResult.error.message}</Alert>
       </AdminPage>
     );
@@ -106,6 +111,7 @@ export default async function BaseMastersPage({
       lead="Wing・BOXなどの商品モデルごとに、本体基準明細・価格・公開履歴を管理します。"
       actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
     >
+      {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
       {sp.discarded && <Alert tone="success">下書きを破棄しました。</Alert>}
       <Alert tone="info">
         既存の標準見積・旧本体内訳はまだこの新本体マスターへ自動移行していません。現在は新しく登録した本体だけを管理します。

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const list = fs.readFileSync(path.join(root, 'app/admin/customer-management/page.tsx'), 'utf8');
+const listUi = fs.readFileSync(path.join(root, 'components/admin/customer-management-list.tsx'), 'utf8');
 const detail = fs.readFileSync(path.join(root, 'app/admin/customer-management/[id]/page.tsx'), 'utf8');
 const existingUsers = fs.readFileSync(path.join(root, 'app/admin/customers/page.tsx'), 'utf8');
 const nav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx'), 'utf8');
@@ -36,21 +37,15 @@ describe('顧客管理UI', () => {
     }
   });
 
-  it('keeps the customer list focused on identity, current case context, and detail navigation', () => {
-    for (const label of [
-      '顧客',
-      '進行中案件',
-      '最近の案件',
-      '商品モデル / 設置予定地',
-      '最終更新日',
-      '顧客を見る',
-    ]) {
-      expect(list).toContain(label);
+  it('uses the shared compact customer list for identity, case context, and detail navigation', () => {
+    expect(list).toContain('<CustomerManagementList');
+    for (const label of ['顧客', '案件', '最近の設置予定地', '最終更新', '顧客を見る']) {
+      expect(listUi).toContain(label);
     }
-    expect(list).toContain('顧客番号 {customer.customer_no ?? \'未登録\'}');
-    expect(list).toContain('電話：{customer.phone ?? \'未登録\'}');
-    expect(list).not.toContain("{customer.email || 'メール未登録'}");
-    expect(list).not.toContain("{customer.address ?? '住所未登録'}");
+    expect(listUi).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
+    expect(listUi).toContain("電話：{customer.phone ?? '未登録'}");
+    expect(listUi).not.toContain("{customer.email || 'メール未登録'}");
+    expect(listUi).not.toContain("{customer.address ?? '住所未登録'}");
     expect(list).toContain('現在は参照専用です。');
     expect(list).toContain('今回は閲覧範囲を変更せず');
     expect(list).toContain('ここでは情報の編集・統合も行いません。');
@@ -58,11 +53,34 @@ describe('顧客管理UI', () => {
     expect(list).toContain('data-testid="unlinked-customer-case-row"');
   });
 
-  it('shows the dealer column for admin and master dealer only', () => {
+  it('keeps the dealer column role-scoped without widening customer access', () => {
     expect(list).toContain("const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';");
-    expect(list).toContain('{showDealerColumn && <Th>担当代理店</Th>}');
-    expect(list).toContain("<Td className=\"text-xs\">{recent?.dealer_name ?? '未割り当て'}</Td>");
-    expect(list).toContain('<Td colSpan={showDealerColumn ? 7 : 6}');
+    expect(list).toContain('showDealerColumn={showDealerColumn}');
+    expect(listUi).toContain('{showDealerColumn && (');
+    expect(listUi).toContain('>担当');
+    expect(listUi).toContain("{recent?.dealer_name ?? '未割り当て'}");
+    expect(listUi).toContain('colSpan={showDealerColumn ? 6 : 5}');
+  });
+
+  it('provides Excel-like per-column filtering and sorting while retaining global search', () => {
+    expect(listUi).toContain('列見出しの▼から、Excelのように絞り込み・並び替えができます。');
+    expect(listUi).toContain('顧客名・法人名・電話番号・案件情報で検索');
+    for (const field of ['name="customer"', 'name="case_q"', 'name="case"', 'name="site"', 'name="dealer"', 'name="from"', 'name="to"']) {
+      expect(listUi).toContain(field);
+    }
+    for (const sort of ['customer_asc', 'cases_desc', 'case_asc', 'site_asc', 'dealer_asc', 'updated_desc']) {
+      expect(listUi).toContain(sort);
+    }
+    expect(listUi).toContain('絞り込み・並び替えを解除');
+    expect(listUi).toContain('filterAndSortCustomers(customers, filters)');
+  });
+
+  it('fits the main list to ordinary desktop widths and only keeps mobile horizontal fallback', () => {
+    expect(listUi).toContain('min-w-[40rem] table-fixed text-sm md:min-w-0');
+    expect(listUi).toContain('overflow-x-auto md:overflow-visible');
+    expect(listUi).not.toContain("'60rem'");
+    expect(listUi).not.toContain("'52rem'");
+    expect(list).toContain('<Table minWidth="44rem">');
   });
 
   it('shows an explicit DB-update waiting state instead of a false empty list or 500 error', () => {
@@ -105,9 +123,7 @@ describe('顧客管理UI', () => {
     expect(detail).toContain('履歴のみ');
   });
 
-  it('keeps dense customer tables compact enough for ordinary desktop widths', () => {
-    expect(list).toContain("<Table minWidth={showDealerColumn ? '60rem' : '52rem'}>");
-    expect(list).toContain('<Table minWidth="44rem">');
+  it('keeps detail tables unchanged for the separate detail-screen follow-up', () => {
     expect(detail).toContain('<Table minWidth="46rem">');
     expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
     expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');

@@ -96,10 +96,10 @@ export default async function AdminCustomerManagementPage({
           <Table minWidth="44rem">
             <thead className="bg-[#fff8e8]">
               <tr>
-                <Th>案件上のお客様</Th>
+                <Th>お客様情報</Th>
                 <Th>確認が必要な理由</Th>
                 <Th>案件・設置予定地</Th>
-                <Th>担当代理店</Th>
+                <Th>代理店 / 担当者</Th>
                 <Th>確認</Th>
               </tr>
             </thead>
@@ -116,7 +116,13 @@ export default async function AdminCustomerManagementPage({
                     <span className="mt-1 block text-muted">{customerCase.model_name ?? '商品モデル未登録'}／{formatDate(customerCase.activity_at)}</span>
                     <span className="mt-1 block text-muted">設置予定地：{customerCase.site_address ?? '未登録'}</span>
                   </Td>
-                  <Td className="text-xs">{customerCase.dealer_name ?? '未割り当て'}</Td>
+                  <Td className="text-xs">
+                    {customerCase.dealer_name ? (
+                      <span className="text-muted">担当：{customerCase.dealer_name}</span>
+                    ) : (
+                      <span className="text-muted">未割り当て</span>
+                    )}
+                  </Td>
                   <Td>
                     <Link href={caseHref(customerCase.id, customerCase.open_quote_id)} className="btn-secondary btn-sm">案件を見る</Link>
                   </Td>

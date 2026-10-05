@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, LayoutGrid, List, Search, X } from 'lucide-react';
 import { ProductDetail } from '@/components/simulator/product-detail';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -19,7 +19,6 @@ function date(value: string) { const d = new Date(value); return Number.isNaN(d.
 
 export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, initiallySelectedId }: Props) {
   const [query, setQuery] = useState(''); const [searchOpen, setSearchOpen] = useState(false); const [groupCode, setGroupCode] = useState(''); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(50); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer'); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
-  const dialogRef = useRef<HTMLElement | null>(null); const openerRef = useRef<HTMLElement | null>(null);
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
   const categoryGroups = useMemo(() => {
@@ -64,45 +63,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   }, [selected, variants]);
   useEffect(() => setPreviewVariantIds(preview.defaults), [preview.defaults]); // 選択中商品のみのローカル表示状態。保存はしない。
   /* eslint-enable react-hooks/set-state-in-effect */
-  const closeDetail = useCallback(() => {
-    setSelectedId(null);
-    requestAnimationFrame(() => openerRef.current?.focus());
-  }, []);
-  const openDetail = useCallback((id: string, opener: HTMLElement) => {
-    openerRef.current = opener;
+  const closeDetail = useCallback(() => setSelectedId(null), []);
+  const openDetail = useCallback((id: string) => {
     setDetailTab('customer');
     setSelectedId(id);
   }, []);
-  useEffect(() => {
-    if (!selectedId) return;
-    const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeDetail();
-        return;
-      }
-      if (event.key !== 'Tab' || !dialogRef.current) return;
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.body.style.overflow = 'hidden';
-    requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>('[data-dialog-close]')?.focus());
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [closeDetail, selectedId]);
   const onPreviewVariantChange = (choiceId: string, groupId: string) => {
     setPreviewVariantIds((current) => pruneHiddenVariantChoices(preview.groups, preview.choices, [...current.filter((id) => preview.choices.find((choice) => choice.id === id)?.group_id !== groupId), choiceId]));
   };
@@ -136,7 +101,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     setPage(Math.floor(index / pageSize) + 1);
     setSelectedId(option.id);
   };
-  return <div className="space-y-5">
+  return <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(26rem,0.65fr)] xl:items-start">
       <section className="card min-w-0 overflow-visible">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div>
@@ -238,7 +203,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                     const attention = productAttentionReasons(o).length > 0;
                     return <tr key={o.id} className={selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
                       <td className="px-3 py-2">
-                        <button type="button" aria-haspopup="dialog" className="flex w-full min-w-0 items-center gap-2.5 text-left" onClick={(event) => openDetail(o.id, event.currentTarget)}>
+                        <button type="button" aria-controls="ledger-product-detail-pane" className="flex w-full min-w-0 items-center gap-2.5 text-left" onClick={() => openDetail(o.id)}>
                           <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">
                             {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}
                           </span>
@@ -261,7 +226,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">{date(o.updated_at)}</td>
                       <td className="px-2 py-2 text-right">
-                        <button type="button" aria-haspopup="dialog" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={(event) => openDetail(o.id, event.currentTarget)}>
+                        <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => openDetail(o.id)}>
                           <Ellipsis className="size-4" aria-hidden="true" />
                         </button>
                       </td>
@@ -275,7 +240,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               {pageOptions.map((o) => {
                 const attention = productAttentionReasons(o).length > 0;
                 return <article key={o.id} className="relative overflow-hidden rounded-xl border border-line bg-white" data-testid={'ledger-mobile-option-' + o.code}>
-                  <button type="button" aria-haspopup="dialog" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10" onClick={(event) => openDetail(o.id, event.currentTarget)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
+                  <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-none relative z-20 flex gap-3 p-3">
                     <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">
                       {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="48px" className="object-contain" /> : '画像なし'}
@@ -305,7 +270,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 const targetModel = o.base_model_id ? modelMap.get(o.base_model_id)?.name ?? '特定モデル' : '全モデル';
                 return (
                   <article key={o.id} className={'group relative overflow-hidden rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line')} data-testid={'ledger-option-' + o.code}>
-                    <button type="button" aria-haspopup="dialog" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={(event) => openDetail(o.id, event.currentTarget)}>
+                    <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}>
                       <span className="sr-only">{o.name}の商品詳細を表示</span>
                     </button>
                     <div className="pointer-events-none relative z-20 flex min-h-[6.75rem] gap-3 p-3">
@@ -323,7 +288,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                         <p className="mt-1 text-[0.68rem] text-muted">{targetModel}</p>
                         {attention && <p className="mt-1 text-[0.68rem] font-medium text-warn" data-testid={'ledger-attention-reasons-' + o.code}>要確認：{attentionReasons.join('・')}</p>}
                       </div>
-                      <button type="button" aria-haspopup="dialog" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="pointer-events-auto absolute top-3 right-3 z-30 inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={(event) => openDetail(o.id, event.currentTarget)}>
+                      <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="pointer-events-auto absolute top-3 right-3 z-30 inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => openDetail(o.id)}>
                         <Ellipsis className="size-4" aria-hidden="true" />
                       </button>
                     </div>
@@ -352,8 +317,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
           </div>
         </div>}
       </section>
-    {selected && category && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/55 p-0 sm:p-4" data-testid="ledger-product-detail-modal" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetail(); }}>
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="ledger-product-detail-title" className="relative flex h-full w-full flex-col overflow-hidden bg-sand/40 shadow-2xl sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-line">
+
+      {selected && category ? <section id="ledger-product-detail-pane" aria-labelledby="ledger-product-detail-title" className="card min-w-0 overflow-hidden bg-sand/40 xl:sticky xl:top-4 xl:flex xl:max-h-[calc(100dvh-2rem)] xl:flex-col" data-testid="ledger-product-detail-pane">
         <header className="border-b border-line bg-white/95 px-4 py-3 backdrop-blur sm:px-5">
           <div className="flex items-start gap-3">
             <span className="relative hidden size-14 shrink-0 overflow-hidden rounded-lg border border-line bg-sand sm:block">
@@ -370,7 +335,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm hidden sm:inline-flex">商品情報を編集</Link>}
-              <button type="button" data-dialog-close aria-label="商品詳細を閉じる" title="閉じる" className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={closeDetail}>
+              <button type="button" aria-label="商品詳細を閉じる" title="閉じる" className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={closeDetail}>
                 <X className="size-5" aria-hidden="true" />
               </button>
             </div>
@@ -392,7 +357,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
           <button type="button" role="tab" id="ledger-admin-tab" aria-controls="ledger-admin-panel" aria-selected={detailTab === 'admin'} onClick={() => setDetailTab('admin')} className={`border-b-2 px-3 py-2.5 text-sm font-semibold transition ${detailTab === 'admin' ? 'border-brown text-ink' : 'border-transparent text-muted hover:text-ink'}`}>管理情報</button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+        <div className="p-4 sm:p-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
           {detailTab === 'customer' ? (
             <section id="ledger-customer-panel" role="tabpanel" aria-labelledby="ledger-customer-tab">
               <div className="mb-3 rounded-xl border border-brown/20 bg-ivory/70 px-3 py-2 text-xs text-ink-soft">
@@ -444,7 +409,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
             </section>
           )}
         </div>
-      </section>
-    </div>}
+      </section> : <aside id="ledger-product-detail-pane" aria-label="商品詳細" className="card hidden min-h-[18rem] items-center justify-center border-dashed p-6 text-center xl:flex" data-testid="ledger-product-detail-empty">
+        <div className="max-w-xs">
+          <p className="font-semibold text-ink">商品を選択してください</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted">一覧から商品を選択すると、ここに詳細を表示します。</p>
+        </div>
+      </aside>}
   </div>;
 }

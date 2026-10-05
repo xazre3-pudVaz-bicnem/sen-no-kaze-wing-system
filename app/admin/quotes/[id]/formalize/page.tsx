@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
-import { getStore } from '@/lib/data/store';
+import { getStore, isLocalMode } from '@/lib/data/store';
 import { isCurrentAcceptedPreliminaryForFormalization } from '@/lib/domain/quote-lifecycle';
 import { formatYen } from '@/lib/domain/pricing';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { createClient } from '@/lib/supabase/server';
 import { LegacyAcceptedFormalizationForm } from '@/components/admin/legacy-accepted-formalization-form';
 import { QuoteTable } from '@/components/mypage/quote-table';
 import { Badge } from '@/components/ui';
@@ -29,8 +30,20 @@ export default async function LegacyAcceptedFormalizationPage({
     request?.configuration_id === quote.configuration_id &&
     request?.user_id === quote.user_id;
 
-  // UI is fail-closed. The RPC repeats and strengthens all checks under lock.
+  // UI is fail-closed. The write RPC repeats and strengthens all checks under lock.
   if (!canAccess || !webIdentityConsistent || !isCurrentAcceptedPreliminaryForFormalization(quote, request)) {
+    notFound();
+  }
+
+  // Do not expose the operation by direct URL when the compatibility migration
+  // is not deployed or DB-side current/identity/permission checks disagree.
+  if (isLocalMode()) notFound();
+  const db = await createClient();
+  const { data: stateRows, error: stateError } = await db.rpc('get_legacy_accepted_formalization_state', {
+    p_quote_id: quote.id,
+  });
+  const stateRow = Array.isArray(stateRows) ? stateRows[0] : null;
+  if (stateError || stateRow?.state !== 'eligible' || stateRow.current_quote_id !== quote.id) {
     notFound();
   }
 

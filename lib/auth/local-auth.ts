@@ -85,7 +85,7 @@ export async function localSignUp(input: LocalSignUpInput): Promise<{ ok: true }
   const dealerEmails = emailsFrom(process.env.WING_LOCAL_DEALER_EMAILS);
   const roleFor = (): Profile['role_code'] =>
     adminEmails.includes(email) ? 'admin' : masterDealerEmails.includes(email) ? 'master_dealer' : dealerEmails.includes(email) ? 'dealer' : 'customer';
-  db.users.push({ id, email, password_hash: hash(password, salt), salt, created_at: now });
+  db.users.push({ id, email, password_hash: hash(input.password, salt), salt, created_at: now });
   const customerNo = `C${String(db.profiles.length + 1).padStart(6, '0')}`;
   const profile: Profile = {
     id,

@@ -277,7 +277,7 @@ export async function CaseWorkspace({
     Boolean(quote.dealer_id) &&
     (quote.status === 'issued' || quote.status === 'accepted');
   const currentPhaseLabel = isFormalAccepted
-    ? '契約'
+    ? '見積承諾'
     : isFormalAcceptedUnconfirmed
       ? '確定見積'
       : needsDealerAssignment
@@ -375,7 +375,7 @@ export async function CaseWorkspace({
 
   const currentWorkflowLabel =
     isFormalAccepted
-      ? '契約確認'
+      ? '見積承諾後の確認'
       : isFormalAcceptedUnconfirmed
         ? '確定見積の承諾履歴（最新状態要確認）'
         : needsDealerAssignment
@@ -407,7 +407,7 @@ export async function CaseWorkspace({
   const nextAction =
     isFormalAccepted
       ? {
-          title: '次にやること：契約内容を確認',
+          title: '次にやること：契約条件を確認',
           description:
             'お客様は確定見積を承諾済みです。契約条件と資料を確認し、次の手続きを進めてください。正式な契約状態はまだこの画面では確定しません。',
           href: tabHref('documents'),

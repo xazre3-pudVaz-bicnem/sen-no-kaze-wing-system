@@ -73,11 +73,14 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('models={models}');
   });
 
-  it('商品詳細を2タブのレスポンシブモーダルで表示する', () => {
+  it('商品詳細を2タブのレスポンシブ2ペインで表示する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('ledger-product-detail-modal');
-    expect(client).toContain('role="dialog"');
-    expect(client).toContain('aria-modal="true"');
+    expect(client).toContain('xl:grid-cols-[minmax(0,1.35fr)_minmax(26rem,0.65fr)]');
+    expect(client).toContain('id="ledger-product-detail-pane"');
+    expect(client).toContain('data-testid="ledger-product-detail-pane"');
+    expect(client).toContain('xl:sticky xl:top-4');
+    expect(client).toContain('data-testid="ledger-product-detail-empty"');
+    expect(client).toContain('商品を選択してください');
     expect(client).toContain('お客様表示');
     expect(client).toContain('管理情報');
     expect(client).toContain('role="tablist"');
@@ -87,11 +90,9 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('商品詳細を閉じる');
     expect(client).toContain('前の商品');
     expect(client).toContain('次の商品');
-    expect(client).toContain("event.key === 'Escape'");
-    expect(client).toContain("event.key !== 'Tab'");
-    expect(client).toContain("document.body.style.overflow = 'hidden'");
-    expect(client).toContain('openerRef.current?.focus()');
-    expect(client).not.toContain('data-testid="ledger-product-detail"');
+    expect(client).not.toContain('ledger-product-detail-modal');
+    expect(client).not.toContain('aria-modal="true"');
+    expect(client).not.toContain("document.body.style.overflow = 'hidden'");
   });
 
   it('お客様表示はシミュレーター共通ProductDetailをそのまま使う', () => {

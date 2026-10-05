@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth/session';
-import { getStore, isLocalMode } from '@/lib/data/store';
+import { isLocalMode } from '@/lib/data/store';
 import { isMissingNamedFunction } from '@/lib/data/schema-compat';
-import { isCurrentAcceptedPreliminaryForFormalization, isFormalQuote } from '@/lib/domain/quote-lifecycle';
 import { createClient } from '@/lib/supabase/server';
 
 type FormalizationState = 'eligible' | 'historical' | 'ineligible' | 'unavailable';
@@ -11,32 +10,13 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const actor = await requireStaff();
+  await requireStaff();
   const { id } = await params;
 
+  // There is intentionally no LocalStore write equivalent for this privileged
+  // transaction. Do not advertise an operation that cannot preserve DB locks.
   if (isLocalMode()) {
-    const store = await getStore();
-    const detail = await store.getQuote(id, actor);
-    if (!detail) return NextResponse.json({ state: 'ineligible' satisfies FormalizationState });
-
-    const { quote, request } = detail;
-    if (isCurrentAcceptedPreliminaryForFormalization(quote, request)) {
-      return NextResponse.json({ state: 'eligible' satisfies FormalizationState, currentQuoteId: quote.id });
-    }
-
-    const preliminaryAccepted =
-      quote.status === 'accepted' &&
-      (quote.quote_kind === 'preliminary' || (quote.quote_kind == null && quote.parent_quote_id === null));
-    const currentQuoteId = request?.quote_id ?? null;
-    if (preliminaryAccepted && currentQuoteId && currentQuoteId !== quote.id) {
-      const current = await store.getQuote(currentQuoteId, actor);
-      return NextResponse.json({
-        state: 'historical' satisfies FormalizationState,
-        currentQuoteId: current && isFormalQuote(current.quote) ? current.quote.id : null,
-      });
-    }
-
-    return NextResponse.json({ state: 'ineligible' satisfies FormalizationState });
+    return NextResponse.json({ state: 'unavailable' satisfies FormalizationState });
   }
 
   const db = await createClient();

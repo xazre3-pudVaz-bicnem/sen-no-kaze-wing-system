@@ -29,8 +29,8 @@ describe('unified manual quote authoring', () => {
   });
 
   it('opens the Excel-style workbench immediately instead of a separate case registration form', () => {
-    expect(newQuotePage).toContain('title="新規案件見積"');
-    expect(newQuotePage).toContain('lead="対面・電話・紹介などの案件を登録し、最初の見積下書きを作成"');
+    expect(newQuotePage).toContain('title="新規案件登録・初回見積"');
+    expect(newQuotePage).toContain('lead="対面・電話・紹介などの非Web案件を登録し、案件管理へ引き継ぐための最初の見積下書きを作成"');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(newQuotePage).not.toContain('<ManualQuoteForm');
     expect(workbench).toContain('data-testid="manual-quote-workbench"');
@@ -42,12 +42,17 @@ describe('unified manual quote authoring', () => {
     expect(workbench).toContain('rounded-lg border border-slate-300 bg-white shadow-sm');
     expect(workbench).toContain('function CompactField');
     expect(workbench).toContain('label="案件名"');
+    expect(workbench).toContain('label="法人名"');
+    expect(workbench).toContain('label="Wingの設置予定地"');
+    expect(workbench).toContain('label="案件メモ"');
     expect(workbench).toContain('label="防火仕様"');
     expect(workbench).toContain('label="適用地域"');
     expect(workbench).toContain('label="電話番号"');
     expect(workbench).toContain('label="メールアドレス"');
     expect(workbench).toContain('label="お客様住所"');
+    expect(workbench).toContain('data-testid="new-case-contact-pending"');
     expect(workbench).toContain('電話・メール・お客様住所の入力機能は現在準備中です');
+    expect(workbench).toContain('保存されない項目を入力済みとして扱わないため、現在は入力できません。');
     expect(workbench).toContain('placeholder="現在準備中"');
     expect(workbench).toContain('data-testid="new-quote-base-master-pending"');
     expect(workbench).toContain('商品モデル・仕様・防火仕様を選ぶと、登録済みの本体内容が自動で反映されます。この機能は現在準備中です。');
@@ -68,6 +73,9 @@ describe('unified manual quote authoring', () => {
     expect(authoringUi).toContain('粗利');
     expect(workbench).toContain('label="案件として登録"');
     expect(workbench).toContain('data-testid="manual-quote-role-note"');
+    expect(workbench).toContain('非Web案件の初期登録');
+    expect(workbench).toContain('Webから届いた見積依頼は、この画面で新規登録し直しません。');
+    expect(workbench).toContain('この画面では正式見積を発行しません');
     expect(workbench).toContain('現場工事金額は、案件登録後に現地確認を行い、案件管理から入力します。');
     expect(workbench).not.toContain('初回Draft保存後に正式発行できます');
     expect(workbench).not.toContain('見積書を作りながら、この案件の基本情報も登録できます。');
@@ -121,6 +129,7 @@ describe('unified manual quote authoring', () => {
       'memo',
       'items_json',
       'adjustment',
+      'adjustment_reason',
     ]) {
       expect(workbench).toContain(`name="${name}"`);
     }
@@ -134,12 +143,11 @@ describe('unified manual quote authoring', () => {
   it('keeps the new-case adjustment editor only in the lower financial summary', () => {
     expect(workbench).not.toContain('<EstimateMoneyStrip');
     expect(workbench).toContain('adjustmentLabel="値引き等調整額"');
-    expect(workbench).toContain('showAdjustmentReason={false}');
+    expect(workbench).toContain('adjustmentReason={adjustmentReason}');
+    expect(workbench).toContain('onAdjustmentReason={(value) => {');
+    expect(workbench).toContain('showAdjustmentReason');
     expect(workbench).toContain('showTaxExclContractAmount');
     expect(workbench).toContain('totalLabel="見積金額（税込）"');
-    expect(workbench).not.toContain('name="adjustment_reason"');
-    expect(workbench).not.toContain('adjustmentReason');
-    expect(workbench).not.toContain('調整理由');
   });
 
   it('recalculates tax-excluded contract amount, tax, and total immediately for a discount', () => {
@@ -167,8 +175,12 @@ describe('unified manual quote authoring', () => {
     expect(taxExclContractAmount + tax).toBe(11_000);
   });
 
-  it('does not fake an adjustment reason while the existing save validation still requires one', () => {
-    expect(workbench).not.toContain('name="adjustment_reason"');
+  it('connects the existing required adjustment reason to the new-case UI', () => {
+    expect(workbench).toContain("const [adjustmentReason, setAdjustmentReason] = useState('');");
+    expect(workbench).toContain('name="adjustment_reason"');
+    expect(workbench).toContain('adjustmentReason={adjustmentReason}');
+    expect(workbench).toContain('onAdjustmentReason={(value) => {');
+    expect(authoringUi).toContain('調整理由');
     expect(workbenchAction).toContain("adjustment_reason: formData.get('adjustment_reason')");
     expect(validation).toContain("if (data.adjustment !== 0 && !data.adjustment_reason?.trim())");
     expect(validation).toContain("message: '調整額を設定する場合は理由を入力してください'");

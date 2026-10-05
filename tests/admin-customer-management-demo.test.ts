@@ -89,10 +89,16 @@ describe('顧客管理サンプル画面', () => {
     expect(detail).toContain('サンプル顧客一覧へ戻る');
   });
 
-  it('keeps the unlinked-case and detail tables unchanged while the main list loses desktop scrolling', () => {
-    expect(listUi).toContain('min-w-[40rem] table-fixed text-sm md:min-w-0');
-    expect(listUi).toContain('overflow-x-auto md:overflow-visible');
-    expect(list).toContain('<Table minWidth="44rem">');
-    expect(detail).toContain('<Table minWidth="46rem">');
+  it('matches the compact real detail layout and keeps future sections visible for design review', () => {
+    expect(detail).toContain('<Table minWidth="40rem">');
+    expect(detail).toContain('<Th>案件</Th>');
+    expect(detail).not.toContain('<Th>状態</Th>');
+    expect(detail).toContain("{customerCase.dealer_company ?? '代理店名未登録'}");
+    expect(detail).toContain('担当：{customerCase.dealer_name}');
+    expect(detail).toContain('<Table minWidth="34rem">');
+    expect(detail).toContain('<Th>見積</Th>');
+    expect(detail).not.toContain('<Th>版</Th>');
+    expect(detail).toContain('第{quote.revision}版');
+    expect(detail).toContain('customer-demo-future-sections');
   });
 });

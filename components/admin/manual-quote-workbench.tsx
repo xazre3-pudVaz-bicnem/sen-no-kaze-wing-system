@@ -306,8 +306,8 @@ export function ManualQuoteWorkbench({
               </div>
             </div>
 
-            <div className="grid gap-x-2 gap-y-1 p-2.5 sm:grid-cols-2 lg:grid-cols-12">
-              <div className="sm:col-span-2 lg:col-span-12">
+            <div className="grid gap-x-2 gap-y-1 p-2.5 sm:grid-cols-2 md:grid-cols-12">
+              <div className="sm:col-span-2 md:col-span-8">
                 <CompactField label="案件名" htmlFor="quote-case-name" errors={errors.case_name}>
                   <Input
                     id="quote-case-name"
@@ -315,11 +315,11 @@ export function ManualQuoteWorkbench({
                     value={caseName}
                     onChange={(event) => setCaseName(event.target.value)}
                     placeholder="例：山田様 穴水宿泊棟"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[42rem]"
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-3">
+              <div className="md:col-span-3">
                 <CompactField label="お客様名（姓）" htmlFor="quote-customer-last-name" required errors={errors.customer_name}>
                   <Input
                     id="quote-customer-last-name"
@@ -331,7 +331,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-3">
+              <div className="md:col-span-3">
                 <CompactField label="お客様名（名）" htmlFor="quote-customer-first-name" required>
                   <Input
                     id="quote-customer-first-name"
@@ -343,7 +343,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="sm:col-span-2 lg:col-span-4">
+              <div className="sm:col-span-2 md:col-span-4">
                 <CompactField label="会社名" htmlFor="quote-company" errors={errors.customer_company}>
                   <Input
                     id="quote-company"
@@ -355,7 +355,7 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
-              <div className="lg:col-span-3">
+              <div className="md:col-span-3 md:col-start-1">
                 <CompactField label="電話番号" htmlFor="quote-phone">
                   <Input
                     id="quote-phone"
@@ -368,7 +368,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-5">
+              <div className="md:col-span-5">
                 <CompactField label="メールアドレス" htmlFor="quote-email">
                   <Input
                     id="quote-email"
@@ -381,7 +381,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="sm:col-span-2 lg:col-span-8">
+              <div className="sm:col-span-2 md:col-span-8 md:col-start-1">
                 <CompactField label="お客様住所" htmlFor="quote-customer-address">
                   <Input
                     id="quote-customer-address"
@@ -395,7 +395,7 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-8">
+              <div className="sm:col-span-2 md:col-span-8 md:col-start-1">
                 <CompactField label="設置予定地" htmlFor="quote-site" errors={errors.site_address}>
                   <Input
                     id="quote-site"
@@ -407,7 +407,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-3 lg:col-start-1">
+              <div className="md:col-span-3 md:col-start-1">
                 <CompactField label="商品モデル" htmlFor="quote-model" required errors={errors.base_model_id}>
                   <Select
                     id="quote-model"
@@ -427,7 +427,7 @@ export function ManualQuoteWorkbench({
                   </Select>
                 </CompactField>
               </div>
-              <div className="lg:col-span-3">
+              <div className="md:col-span-3">
                 <CompactField label="仕様" htmlFor="quote-spec" required errors={errors.spec_code}>
                   <Select
                     id="quote-spec"
@@ -446,7 +446,7 @@ export function ManualQuoteWorkbench({
                   </Select>
                 </CompactField>
               </div>
-              <div className="lg:col-span-3">
+              <div className="md:col-span-3">
                 <CompactField label="防火仕様" htmlFor="quote-fire-spec">
                   <Input
                     id="quote-fire-spec"
@@ -458,7 +458,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="lg:col-span-3">
+              <div className="md:col-span-3">
                 <CompactField label="適用地域" htmlFor="quote-region">
                   <Input
                     id="quote-region"
@@ -471,11 +471,11 @@ export function ManualQuoteWorkbench({
                 </CompactField>
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-12 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[10px] leading-4 text-slate-600" data-testid="new-quote-base-master-pending">
+              <div className="sm:col-span-2 md:col-span-12 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5 text-[10px] leading-4 text-slate-600" data-testid="new-quote-base-master-pending">
                 商品モデル・仕様・防火仕様を選ぶと、登録済みの本体内容が自動で反映されます。この機能は現在準備中です。
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-12">
+              <div className="sm:col-span-2 md:col-span-12">
                 <CompactField label="メモ" htmlFor="quote-memo" errors={errors.memo}>
                   <Textarea
                     id="quote-memo"

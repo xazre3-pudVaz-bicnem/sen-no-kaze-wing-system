@@ -144,7 +144,7 @@ export function LegacyAcceptedFormalizationForm({
                         type="number"
                         min="0.01"
                         max="99999"
-                        step="0.01"
+                        step="0.0001"
                         value={row.quantity}
                         onChange={(event) => updateRow(row.key, { quantity: Number(event.target.value) })}
                         className="w-full rounded border border-line px-2 py-1.5 text-right tabular-nums"

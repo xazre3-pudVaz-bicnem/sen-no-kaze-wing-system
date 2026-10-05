@@ -12,8 +12,8 @@ describe('管理画面の業務領域ナビゲーション', () => {
     expect(labelsFor('admin')).toEqual(['案件管理', '顧客管理', '商品台帳', '見積書管理', '管理設定']);
   });
 
-  it.each(['master_dealer', 'dealer'] as const)('%sには見積書管理を表示しない', (role) => {
-    expect(labelsFor(role)).toEqual(['案件管理', '顧客管理', '商品台帳', '管理設定']);
+  it.each(['master_dealer', 'dealer'] as const)('%sには見積書管理と管理設定を表示しない', (role) => {
+    expect(labelsFor(role)).toEqual(['案件管理', '顧客管理', '商品台帳']);
   });
 
   it('問い合わせは上部補助導線に出さない', () => {

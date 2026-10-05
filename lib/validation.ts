@@ -356,14 +356,6 @@ export const quoteDraftSaveSchema = z.object({
   adjustment_reason: optional(500).nullable(),
   dealer_note: optional(1000).nullable(),
   notes: optional(1000).nullable(),
-}).superRefine((data, ctx) => {
-  if (data.adjustment !== 0 && !data.adjustment_reason?.trim()) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['adjustment_reason'],
-      message: '調整額を設定する場合は理由を入力してください',
-    });
-  }
 });
 
 export const manualQuoteWorkbenchSchema = manualQuoteSchema.extend({
@@ -372,14 +364,6 @@ export const manualQuoteWorkbenchSchema = manualQuoteSchema.extend({
   items: z.array(quoteDraftSaveItemSchema).max(300),
   adjustment: z.coerce.number().int().min(-2_000_000_000).max(2_000_000_000),
   adjustment_reason: optional(500).nullable(),
-}).superRefine((data, ctx) => {
-  if (data.adjustment !== 0 && !data.adjustment_reason?.trim()) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['adjustment_reason'],
-      message: '調整額を設定する場合は理由を入力してください',
-    });
-  }
 });
 
 export const quoteDraftFinalizeSchema = z.object({

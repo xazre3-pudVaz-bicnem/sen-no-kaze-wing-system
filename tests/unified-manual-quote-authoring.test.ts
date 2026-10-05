@@ -167,11 +167,11 @@ describe('unified manual quote authoring', () => {
     expect(taxExclContractAmount + tax).toBe(11_000);
   });
 
-  it('does not fake an adjustment reason while the existing save validation still requires one', () => {
+  it('does not fake or require an adjustment reason in the new-case editor', () => {
     expect(workbench).not.toContain('name="adjustment_reason"');
     expect(workbenchAction).toContain("adjustment_reason: formData.get('adjustment_reason')");
-    expect(validation).toContain("if (data.adjustment !== 0 && !data.adjustment_reason?.trim())");
-    expect(validation).toContain("message: '調整額を設定する場合は理由を入力してください'");
+    expect(validation).not.toContain("if (data.adjustment !== 0 && !data.adjustment_reason?.trim())");
+    expect(validation).not.toContain("message: '調整額を設定する場合は理由を入力してください'");
   });
 
   it('does not show a customer preview on the new-case entry screen', () => {

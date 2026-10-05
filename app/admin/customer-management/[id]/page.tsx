@@ -45,11 +45,10 @@ function CaseTable({
   emptyLabel: string;
 }) {
   return (
-    <Table minWidth="46rem">
+    <Table minWidth="40rem">
       <thead className="bg-sand/60">
         <tr>
-          <Th>案件 / 商品モデル</Th>
-          <Th>状態</Th>
+          <Th>案件</Th>
           <Th>設置予定地</Th>
           <Th>担当代理店</Th>
           <Th>最終更新</Th>
@@ -59,7 +58,7 @@ function CaseTable({
       <tbody className="divide-y divide-line">
         {cases.length === 0 ? (
           <tr>
-            <Td colSpan={6} className="py-8 text-center text-sm text-muted">{emptyLabel}</Td>
+            <Td colSpan={5} className="py-8 text-center text-sm text-muted">{emptyLabel}</Td>
           </tr>
         ) : (
           cases.map((customerCase) => (
@@ -67,22 +66,24 @@ function CaseTable({
               <Td>
                 <p className="font-semibold">{customerCase.latest_quote?.quote_no ?? '見積未発行'}</p>
                 <p className="mt-1 text-xs text-muted">{customerCase.model_name ?? '商品モデル未登録'}</p>
+                <div className="mt-2">
+                  <Badge tone={caseStatusTone(customerCase)}>{caseStatus(customerCase)}</Badge>
+                </div>
                 {customerCase.message && (
                   <p className="mt-1 max-w-64 truncate text-xs text-muted">{customerCase.message}</p>
                 )}
-              </Td>
-              <Td>
-                <Badge tone={caseStatusTone(customerCase)}>{caseStatus(customerCase)}</Badge>
               </Td>
               <Td className="text-xs">
                 <span className="block">{customerCase.site_address ?? '未登録'}</span>
                 <span className="mt-1 block text-muted">{siteSourceLabel(customerCase)}</span>
               </Td>
               <Td className="text-xs">
-                {customerCase.dealer_name ? (
+                {customerCase.dealer_company || customerCase.dealer_name ? (
                   <>
-                    <span className="block font-semibold">{customerCase.dealer_name}</span>
-                    <span className="mt-1 block text-muted">{customerCase.dealer_company ?? '会社名未登録'}</span>
+                    <span className="block font-semibold">{customerCase.dealer_company ?? '代理店名未登録'}</span>
+                    <span className="mt-1 block text-muted">
+                      {customerCase.dealer_name ? <>担当：{customerCase.dealer_name}</> : '担当者未割り当て'}
+                    </span>
                   </>
                 ) : (
                   <span className="text-muted">未割り当て</span>
@@ -90,7 +91,7 @@ function CaseTable({
               </Td>
               <Td className="whitespace-nowrap text-xs">{formatDate(customerCase.activity_at, true)}</Td>
               <Td>
-                <Link href={caseHref(customerCase)} className="btn-secondary btn-sm">案件を見る</Link>
+                <Link href={caseHref(customerCase)} className="btn-secondary btn-sm whitespace-nowrap">案件を見る</Link>
               </Td>
             </tr>
           ))
@@ -279,21 +280,19 @@ export default async function AdminCustomerDetailPage({
             正式見積の改訂履歴を確認する領域です。発行済みの見積は発行時点の記録として扱い、現在の顧客情報には自動追従させません。
           </p>
         </div>
-        <Table minWidth="46rem">
+        <Table minWidth="34rem">
           <thead className="bg-sand/60">
             <tr>
-              <Th>見積番号 / 商品モデル</Th>
-              <Th>版</Th>
-              <Th>状態</Th>
+              <Th>見積</Th>
               <Th>発行日</Th>
               <Th>金額（税込）</Th>
-              <Th>見積書</Th>
+              <Th>確認</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {detail.quote_history.length === 0 ? (
               <tr>
-                <Td colSpan={6} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
+                <Td colSpan={4} className="py-8 text-center text-sm text-muted">見積履歴はありません。</Td>
               </tr>
             ) : (
               detail.quote_history.map((quote) => (
@@ -301,9 +300,11 @@ export default async function AdminCustomerDetailPage({
                   <Td>
                     <p className="font-semibold">{quote.quote_no}</p>
                     <p className="mt-1 text-xs text-muted">{quote.base_model_name}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted">第{quote.revision}版</span>
+                      <Badge tone={quote.status === 'accepted' ? 'success' : 'neutral'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
+                    </div>
                   </Td>
-                  <Td className="whitespace-nowrap">第{quote.revision}版</Td>
-                  <Td><Badge tone={quote.status === 'accepted' ? 'success' : 'neutral'}>{QUOTE_STATUS_LABELS[quote.status]}</Badge></Td>
                   <Td className="whitespace-nowrap text-xs">{formatDate(quote.issued_at)}</Td>
                   <Td right className="whitespace-nowrap">{formatYen(quote.total)}</Td>
                   <Td>

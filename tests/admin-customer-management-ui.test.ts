@@ -126,10 +126,19 @@ describe('顧客管理UI', () => {
     expect(detail).toContain('履歴のみ');
   });
 
-  it('keeps detail tables unchanged for the separate detail-screen follow-up', () => {
-    expect(detail).toContain('<Table minWidth="46rem">');
-    expect(detail).toContain('<Th>案件 / 商品モデル</Th>');
-    expect(detail).toContain('<Th>見積番号 / 商品モデル</Th>');
+  it('compacts customer detail tables while preserving status, revision, dealer, and quote meaning', () => {
+    expect(detail).toContain('<Table minWidth="40rem">');
+    expect(detail).toContain('<Th>案件</Th>');
+    expect(detail).not.toContain('<Th>状態</Th>');
+    expect(detail).toContain('<Badge tone={caseStatusTone(customerCase)}>{caseStatus(customerCase)}</Badge>');
+    expect(detail).toContain("{customerCase.dealer_company ?? '代理店名未登録'}");
+    expect(detail).toContain('担当：{customerCase.dealer_name}');
+    expect(detail).toContain('<Table minWidth="34rem">');
+    expect(detail).toContain('<Th>見積</Th>');
+    expect(detail).not.toContain('<Th>版</Th>');
+    expect(detail).toContain('第{quote.revision}版');
+    expect(detail).toContain('{QUOTE_STATUS_LABELS[quote.status]}');
+    expect(detail).toContain('<Td colSpan={4}');
   });
 
   it('shows the latest quote status before the request status', () => {

@@ -25,14 +25,16 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const defaultCategoryId = sp.category ?? (catalogEditor ? undefined : freeCategory?.id);
   const isFree = defaultCategoryId && defaultCategoryId === freeCategory?.id;
   const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;
+  const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
+  const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
 
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
       lead="商品情報を登録し、登録済みの内容を確認します。"
     >
-      <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る'} />
-      {returnTo && (
+      <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
+      {returnTo && !returnToLedger && (
         <Alert tone="info">
           見積テンプレートの商品追加から移動しています。まず基本情報を入力して「次へ：画像・資料」へ進み、STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。
         </Alert>

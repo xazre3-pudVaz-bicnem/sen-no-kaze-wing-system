@@ -21,7 +21,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     title="商品台帳"
     lead="UB・キッチン・サッシ・外壁・床・構造用面材など、見積で使う商品を登録・管理します。見積書のどの区分へ入れるかは、見積作成時に決めます。"
     notice={<><span className="font-semibold text-ink">商品台帳：</span> 商品そのものを登録する場所です。商品を「本体用」「オプション用」などに固定せず、見積書の各区分で「手入力」または「商品台帳から選択」して使います。</>}
-    actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
+    actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new?return_to=%2Fadmin%2Fledger" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
   >
     <FlashMessages sp={sp} />
     <ProductLedgerClient canEdit={editor} categories={catalogCategories} options={catalogOptions} models={models} variantsByOptionId={Object.fromEntries(rows)} initiallySelectedId={selected} />

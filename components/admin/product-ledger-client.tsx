@@ -334,7 +334,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               <p className="mt-0.5 truncate text-xs text-muted">{[selected.product_no, selected.manufacturer, selected.model_no].filter(Boolean).join(' ／ ') || dash}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm hidden sm:inline-flex">商品情報を編集</Link>}
+              {canEdit && <Link href={`/admin/options/${selected.id}?return_to=%2Fadmin%2Fledger`} className="btn-primary btn-sm hidden sm:inline-flex">商品情報を編集</Link>}
               <button type="button" aria-label="商品詳細を閉じる" title="閉じる" className="inline-flex size-10 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={closeDetail}>
                 <X className="size-5" aria-hidden="true" />
               </button>
@@ -349,7 +349,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               次の商品 <ChevronRight className="size-4" aria-hidden="true" />
             </button>
           </div>
-          {canEdit && <Link href={`/admin/options/${selected.id}`} className="btn-primary btn-sm mt-3 w-full sm:hidden">商品情報を編集</Link>}
+          {canEdit && <Link href={`/admin/options/${selected.id}?return_to=%2Fadmin%2Fledger`} className="btn-primary btn-sm mt-3 w-full sm:hidden">商品情報を編集</Link>}
         </header>
 
         <div className="grid shrink-0 grid-cols-2 border-b border-line bg-white px-4 pt-2 sm:px-5" role="tablist" aria-label="商品詳細の表示切替">

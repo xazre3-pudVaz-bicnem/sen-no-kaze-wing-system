@@ -42,7 +42,7 @@ export default async function AdminAuditPage() {
           ))}
           {logs.length === 0 && (
             <tr>
-              <Td className="text-center text-muted">変更履歴はまだありません</Td>
+              <Td colSpan={5} className="text-center text-muted">変更履歴はまだありません</Td>
             </tr>
           )}
         </tbody>

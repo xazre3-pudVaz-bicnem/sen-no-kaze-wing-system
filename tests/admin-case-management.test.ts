@@ -107,8 +107,8 @@ describe('Admin case management UI', () => {
 
   it('uses one case flow for Web and staff-received orders without calling revisions new quotes', () => {
     expect(list).toContain('Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。');
-    expect(newQuote).toContain('title="新規案件見積"');
-    expect(newQuote).toContain('lead="対面・電話・紹介などの案件を登録し、最初の見積下書きを作成"');
+    expect(newQuote).toContain('title="新規案件登録・初回見積"');
+    expect(newQuote).toContain('lead="対面・電話・紹介などの非Web案件を登録し、案件管理へ引き継ぐための最初の見積下書きを作成"');
     expect(newQuote).toContain('<ManualQuoteWorkbench');
     expect(manualQuoteForm).toContain('案件を登録して見積Draftを開く');
     expect(manualQuoteForm).toContain('登録時点では見積Revisionを発行しません。');
@@ -538,7 +538,7 @@ describe('Admin case management UI', () => {
     }
     expect(manualQuoteWorkbench).toContain('href={returnTo}');
     expect(manualQuoteWorkbench).toContain("← {returnTo === '/admin/quote-management' ? '見積書管理' : '案件管理'}へ戻る");
-    expect(newQuote).toContain('title="新規案件見積"');
+    expect(newQuote).toContain('title="新規案件登録・初回見積"');
     expect(configurations).toContain('title="保存済み仕様"');
     expect(contacts).toContain('title="問い合わせ受付"');
   });

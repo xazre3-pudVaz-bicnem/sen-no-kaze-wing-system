@@ -327,7 +327,7 @@ export function ManualQuoteWorkbench({
                     value={customerLastName}
                     onChange={(event) => setCustomerLastName(event.target.value)}
                     placeholder="例：山田"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[18rem]"
                   />
                 </CompactField>
               </div>
@@ -339,7 +339,7 @@ export function ManualQuoteWorkbench({
                     value={customerFirstName}
                     onChange={(event) => setCustomerFirstName(event.target.value)}
                     placeholder="例：太郎"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[18rem]"
                   />
                 </CompactField>
               </div>
@@ -350,7 +350,7 @@ export function ManualQuoteWorkbench({
                     name="customer_company"
                     value={companyName}
                     onChange={(event) => setCompanyName(event.target.value)}
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[28rem]"
                   />
                 </CompactField>
               </div>
@@ -364,7 +364,7 @@ export function ManualQuoteWorkbench({
                     disabled
                     placeholder="現在準備中"
                     title="電話番号の入力機能は現在準備中です"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[18rem]"
                   />
                 </CompactField>
               </div>
@@ -377,7 +377,7 @@ export function ManualQuoteWorkbench({
                     disabled
                     placeholder="現在準備中"
                     title="メールアドレスの入力機能は現在準備中です"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[26rem]"
                   />
                 </CompactField>
               </div>
@@ -390,7 +390,7 @@ export function ManualQuoteWorkbench({
                     disabled
                     placeholder="現在準備中"
                     title="お客様住所の入力機能は現在準備中です"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[42rem]"
                   />
                 </CompactField>
               </div>
@@ -403,7 +403,7 @@ export function ManualQuoteWorkbench({
                     value={siteAddress}
                     onChange={(event) => setSiteAddress(event.target.value)}
                     placeholder="例：石川県鳳珠郡穴水町○○"
-                    className="h-7 min-h-7 px-2 text-sm"
+                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[42rem]"
                   />
                 </CompactField>
               </div>

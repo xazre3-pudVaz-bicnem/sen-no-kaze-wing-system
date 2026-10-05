@@ -36,7 +36,7 @@ describe('顧客管理サンプル画面', () => {
     expect(list).toContain('customers={DEMO_CUSTOMERS}');
     expect(list).toContain('basePath="/admin/customer-management/demo"');
     expect(list).toContain('demo');
-    for (const label of ['顧客', '案件', '最近の設置予定地', '代理店 / 担当者', '最終更新', '詳細']) {
+    for (const label of ['顧客', '案件', '最近の設置予定地', '代理店 / 担当者', '更新日', '詳細']) {
       expect(listUi).toContain(label);
     }
     expect(listUi).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
@@ -59,6 +59,15 @@ describe('顧客管理サンプル画面', () => {
     expect(list).toContain("const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';");
     expect(list).toContain('showDealerColumn={showDealerColumn}');
     expect(listUi).toContain('colSpan={showDealerColumn ? 6 : 5}');
+  });
+
+  it('uses plain-language unlinked-case labels and previews dealer company plus staff', () => {
+    expect(list).toContain('<Th>お客様情報</Th>');
+    expect(list).not.toContain('<Th>案件上のお客様</Th>');
+    expect(list).toContain('<Th>代理店 / 担当者</Th>');
+    expect(list).toContain('dealerCompanyByUnlinkedCaseId');
+    expect(list).toContain("'demo-unlinked-case-1': 'サンプル建築販売'");
+    expect(list).toContain('`担当：${customerCase.dealer_name}`');
   });
 
   it('does not send sample case numbers to customer detail or real case pages', () => {

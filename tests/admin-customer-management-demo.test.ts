@@ -36,7 +36,7 @@ describe('顧客管理サンプル画面', () => {
     expect(list).toContain('customers={DEMO_CUSTOMERS}');
     expect(list).toContain('basePath="/admin/customer-management/demo"');
     expect(list).toContain('demo');
-    for (const label of ['顧客', '案件', '最近の設置予定地', '担当', '最終更新', '顧客を見る']) {
+    for (const label of ['顧客', '案件', '最近の設置予定地', '代理店 / 担当者', '最終更新', '詳細']) {
       expect(listUi).toContain(label);
     }
     expect(listUi).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
@@ -45,14 +45,25 @@ describe('顧客管理サンプル画面', () => {
     expect(listUi).not.toContain("{customer.address ?? '住所未登録'}");
   });
 
+  it('uses sample dealer-company data to preview the intended final dealer display', () => {
+    expect(data).toContain("dealer_company: 'サンプル代理店株式会社'");
+    expect(data).toContain("dealer_company: 'サンプル建築販売'");
+    expect(list).toContain('DEMO_CUSTOMER_DETAILS');
+    expect(list).toContain('const dealerCompanyByCustomerId = Object.fromEntries(');
+    expect(list).toContain('dealerCompanyByCustomerId={dealerCompanyByCustomerId}');
+    expect(listUi).toContain('const dealerCompany = dealerCompanyByCustomerId?.[customer.id] ?? null;');
+    expect(listUi).toContain('{dealerCompany && <p className="font-semibold text-ink">{dealerCompany}</p>}');
+  });
+
   it('keeps the dealer column role-scoped in the demo too', () => {
     expect(list).toContain("const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';");
     expect(list).toContain('showDealerColumn={showDealerColumn}');
     expect(listUi).toContain('colSpan={showDealerColumn ? 6 : 5}');
   });
 
-  it('links recent sample cases only inside the demo customer area', () => {
-    expect(listUi).toContain("demo ? `${basePath}/${encodeURIComponent(customer.id)}` : liveCaseHref(recent)");
+  it('does not send sample case numbers to customer detail or real case pages', () => {
+    expect(listUi).toContain('const caseHref = recent && !demo ? liveCaseHref(recent) : null;');
+    expect(listUi).toContain("title={demo ? 'サンプル画面では案件詳細へ遷移しません' : undefined}");
     expect(list).not.toContain('href={`/admin/quotes/');
     expect(list).not.toContain('href="/admin/quotes"');
   });

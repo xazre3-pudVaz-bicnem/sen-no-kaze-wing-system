@@ -39,7 +39,7 @@ describe('顧客管理UI', () => {
 
   it('uses the shared compact customer list for identity, case context, and detail navigation', () => {
     expect(list).toContain('<CustomerManagementList');
-    for (const label of ['顧客', '案件', '最近の設置予定地', '最終更新', '顧客を見る']) {
+    for (const label of ['顧客', '案件', '最近の設置予定地', '最終更新', '詳細']) {
       expect(listUi).toContain(label);
     }
     expect(listUi).toContain("顧客番号 {customer.customer_no ?? '未登録'}");
@@ -53,12 +53,14 @@ describe('顧客管理UI', () => {
     expect(list).toContain('data-testid="unlinked-customer-case-row"');
   });
 
-  it('keeps the dealer column role-scoped without widening customer access', () => {
+  it('keeps the dealer column role-scoped and ready for dealer-company display without widening customer access', () => {
     expect(list).toContain("const showDealerColumn = actor.role === 'admin' || actor.role === 'master_dealer';");
     expect(list).toContain('showDealerColumn={showDealerColumn}');
     expect(listUi).toContain('{showDealerColumn && (');
-    expect(listUi).toContain('>担当');
-    expect(listUi).toContain("{recent?.dealer_name ?? '未割り当て'}");
+    expect(listUi).toContain('代理店 / 担当者');
+    expect(listUi).toContain('dealerCompanyByCustomerId?: Record<string, string | null | undefined>');
+    expect(listUi).toContain('const dealerCompany = dealerCompanyByCustomerId?.[customer.id] ?? null;');
+    expect(listUi).toContain("{recent?.dealer_name ?? '担当者未割り当て'}");
     expect(listUi).toContain('colSpan={showDealerColumn ? 6 : 5}');
   });
 
@@ -80,6 +82,7 @@ describe('顧客管理UI', () => {
     expect(listUi).toContain('overflow-x-auto md:overflow-visible');
     expect(listUi).not.toContain("'60rem'");
     expect(listUi).not.toContain("'52rem'");
+    expect(listUi).toContain("<col style={{ width: '8%' }} />");
     expect(list).toContain('<Table minWidth="44rem">');
   });
 

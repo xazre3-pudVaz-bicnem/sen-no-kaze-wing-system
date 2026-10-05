@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-export function QuoteManagementTabs({ active }: { active: 'case' | 'standard' }) {
+export function QuoteManagementTabs({ active }: { active: 'case' | 'standard' | 'base' }) {
   const baseClass =
     'rounded-lg px-3 py-2 text-sm font-semibold transition-colors';
 
@@ -30,6 +30,17 @@ export function QuoteManagementTabs({ active }: { active: 'case' | 'standard' })
         }
       >
         シミュレーター標準
+      </Link>
+      <Link
+        href="/admin/base-masters"
+        aria-current={active === 'base' ? 'page' : undefined}
+        className={
+          active === 'base'
+            ? baseClass + ' bg-ink text-white'
+            : baseClass + ' text-ink-soft hover:bg-sand'
+        }
+      >
+        本体マスター
       </Link>
     </nav>
   );

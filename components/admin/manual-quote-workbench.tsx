@@ -81,7 +81,7 @@ function CompactField({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-0.5 block text-[10px] font-semibold leading-none text-slate-600">
+      <label htmlFor={htmlFor} className="mb-0.5 block text-[11px] font-semibold leading-none text-slate-600">
         {label}
         {required && <span className="ml-1 text-danger">*</span>}
       </label>
@@ -297,7 +297,7 @@ export function ManualQuoteWorkbench({
         <Status state={state} />
 
         <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm" data-testid="manual-quote-editor-shell">
-          <section className="border-b border-slate-200 bg-white" data-testid="case-info-panel">
+          <section className="border-b border-slate-200 bg-white pb-1" data-testid="case-info-panel">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-1.5">
               <h2 className="text-sm font-semibold">案件情報</h2>
               <div className="flex flex-wrap items-center gap-2 text-[0.65rem] text-muted">
@@ -307,7 +307,7 @@ export function ManualQuoteWorkbench({
             </div>
 
             <div className="grid gap-x-2 gap-y-1 p-2.5 sm:grid-cols-2 md:grid-cols-12">
-              <div className="sm:col-span-2 md:col-span-8">
+              <div className="sm:col-span-2 md:col-span-10">
                 <CompactField label="案件名" htmlFor="quote-case-name" errors={errors.case_name}>
                   <Input
                     id="quote-case-name"
@@ -315,7 +315,7 @@ export function ManualQuoteWorkbench({
                     value={caseName}
                     onChange={(event) => setCaseName(event.target.value)}
                     placeholder="例：山田様 穴水宿泊棟"
-                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[42rem]"
+                    className="h-7 min-h-7 w-full px-2 text-sm"
                   />
                 </CompactField>
               </div>
@@ -368,7 +368,7 @@ export function ManualQuoteWorkbench({
                   />
                 </CompactField>
               </div>
-              <div className="md:col-span-5">
+              <div className="md:col-span-7">
                 <CompactField label="メールアドレス" htmlFor="quote-email">
                   <Input
                     id="quote-email"
@@ -377,11 +377,11 @@ export function ManualQuoteWorkbench({
                     disabled
                     placeholder="現在準備中"
                     title="メールアドレスの入力機能は現在準備中です"
-                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[26rem]"
+                    className="h-7 min-h-7 w-full px-2 text-sm"
                   />
                 </CompactField>
               </div>
-              <div className="sm:col-span-2 md:col-span-8 md:col-start-1">
+              <div className="sm:col-span-2 md:col-span-10 md:col-start-1">
                 <CompactField label="お客様住所" htmlFor="quote-customer-address">
                   <Input
                     id="quote-customer-address"
@@ -390,12 +390,12 @@ export function ManualQuoteWorkbench({
                     disabled
                     placeholder="現在準備中"
                     title="お客様住所の入力機能は現在準備中です"
-                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[42rem]"
+                    className="h-7 min-h-7 w-full px-2 text-sm"
                   />
                 </CompactField>
               </div>
 
-              <div className="sm:col-span-2 md:col-span-8 md:col-start-1">
+              <div className="sm:col-span-2 md:col-span-10 md:col-start-1">
                 <CompactField label="設置予定地" htmlFor="quote-site" errors={errors.site_address}>
                   <Input
                     id="quote-site"
@@ -403,7 +403,7 @@ export function ManualQuoteWorkbench({
                     value={siteAddress}
                     onChange={(event) => setSiteAddress(event.target.value)}
                     placeholder="例：石川県鳳珠郡穴水町○○"
-                    className="h-7 min-h-7 px-2 text-sm sm:max-w-[42rem]"
+                    className="h-7 min-h-7 w-full px-2 text-sm"
                   />
                 </CompactField>
               </div>

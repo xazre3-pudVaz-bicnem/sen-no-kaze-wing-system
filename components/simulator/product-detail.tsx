@@ -123,8 +123,8 @@ export function ProductDetail({
 
   return (
     <div className="h-full min-h-0" data-testid="product-detail">
-      <div className="grid h-full min-h-0 gap-5 min-[900px]:grid-cols-[minmax(0,1.85fr)_minmax(19rem,1fr)]">
-        <section className="min-w-0 min-[900px]:self-start">
+      <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[minmax(0,1.85fr)_minmax(19rem,1fr)]">
+        <section className="min-w-0 lg:self-start">
           <div
             className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-line bg-sand/45 p-1"
             role="tablist"
@@ -198,7 +198,7 @@ export function ProductDetail({
                   src={activeImage.url}
                   alt={`${option.name} ${activeImage.label}`}
                   fill
-                  sizes="(min-width: 900px) 62vw, 90vw"
+                  sizes="(min-width: 1024px) 62vw, 90vw"
                   className="object-contain"
                 />
                 {galleryImages.length > 1 && (
@@ -270,7 +270,7 @@ export function ProductDetail({
           )}
         </section>
 
-        <section className="min-h-0 min-w-0 min-[900px]:overflow-y-auto min-[900px]:pr-2">
+        <section className="min-h-0 min-w-0 lg:overflow-y-auto lg:pr-2">
           <div className="border-b border-line pb-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

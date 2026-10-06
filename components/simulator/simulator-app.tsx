@@ -17,6 +17,10 @@ import {
   simulatorEstimateChoices,
 } from '@/lib/domain/estimate-template';
 import {
+  customerBusinessItemForCategory,
+  customerCategorySelectable,
+} from '@/lib/domain/customer-category-applicability';
+import {
   computeStandardEstimatePricing,
   type StandardEstimatePricingResult,
 } from '@/lib/domain/standard-estimate-pricing';
@@ -171,7 +175,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     'base';
   const initialLevel: FinishLevel =
     initial?.finish_level ?? finishLevelForEstimateSpec(defaultSpecCode);
-  const initialSpecCtx = useMemo(() => ruleContextForSpec(ctx, defaultSpecCode), [ctx, defaultSpecCode]);
+  const initialSpecCtx = useMemo(
+    () => ruleContextForSpec(ctx, defaultSpecCode, model.slug),
+    [ctx, defaultSpecCode, model.slug]
+  );
   const initialBaselineIds =
     specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaultSelection(initialSpecCtx, initialLevel);
   const preserveLegacyInitialSelection =
@@ -259,7 +266,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
-  const activeSpecCtx = useMemo(() => ruleContextForSpec(ctx, specCode), [ctx, specCode]);
+  const activeSpecCtx = useMemo(
+    () => ruleContextForSpec(ctx, specCode, model.slug),
+    [ctx, model.slug, specCode]
+  );
   const eligibleExteriorWallOptions = useMemo(
     () =>
       activeSpecCtx.options
@@ -319,7 +329,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
         if (!hasInvalidSpec) {
           const restoredLevel = finishLevelForEstimateSpec(restoredSpec);
-          const restoredCtx = ruleContextForSpec(ctx, restoredSpec);
+          const restoredCtx = ruleContextForSpec(ctx, restoredSpec, model.slug);
           const allowedOptionIds = new Set(restoredCtx.options.map((option) => option.id));
           const standardIds =
             specSelections.find((row) => row.code === restoredSpec)?.ids ?? [];
@@ -470,10 +480,18 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   );
   const scopedCategoryIds = useMemo(() => new Set(scopedCategories.map((c) => c.id)), [scopedCategories]);
   // 防火仕様は注文範囲の下の別枠で選ぶため、設備一覧には出さない。
-  // モデル・仕様ごとのカテゴリー表示は、選択可能な商品候補が1件以上ある場合だけ行う。
+  // 本体分類表の対象カテゴリーは商品候補が0件でも「選択」なら項目自体を表示する。
+  // 個別商品の候補可否はspecOptions側で別に判定し、分類表から適合商品を捏造しない。
   const specCategories = useMemo(
-    () => scopedCategories.filter((c) => c.code !== 'fireproof' && specOptions.some((o) => o.category_id === c.id)),
-    [scopedCategories, specOptions]
+    () =>
+      scopedCategories.filter((c) => {
+        if (c.code === 'fireproof') return false;
+        if (customerBusinessItemForCategory(c.code)) {
+          return customerCategorySelectable(model.slug, specCode, c.code);
+        }
+        return specOptions.some((o) => o.category_id === c.id);
+      }),
+    [model.slug, scopedCategories, specCode, specOptions]
   );
   /** 注文範囲を外れたカテゴリーの商品はポップアップにも出さない */
   const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);
@@ -624,7 +642,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     const choice = simulatorSpecChoices.find((row) => row.code === code);
     if (!selection || !choice) return;
     const nextLevel = finishLevelForEstimateSpec(code);
-    const nextCtx = ruleContextForSpec(ctx, code);
+    const nextCtx = ruleContextForSpec(ctx, code, model.slug);
     const nextSel = pruneToScope(nextCtx, selection.ids, nextLevel);
     const nextVariants = defaultVariantIds(bundle, nextSel);
     const nextExteriorOptions = nextCtx.options

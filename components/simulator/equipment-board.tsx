@@ -99,7 +99,9 @@ export function EquipmentBoard({
   onPickCategory,
 }: Props) {
   const selectedSet = new Set(selected);
-  const shown = categories.filter((c) => c.code !== 'sitework' && options.some((o) => o.category_id === c.id));
+  // categories は上位で本体分類表の「選択 / ×」を解決済み。
+  // 候補商品が未登録でも「選択」の業務項目自体は表示し、商品一覧側で空状態を明示する。
+  const shown = categories.filter((c) => c.code !== 'sitework');
   const interiorExteriorCats = sortCategoriesForDisplay(shown.filter(isInteriorExteriorCategory), INTERIOR_EXTERIOR_CATEGORY_ORDER);
   const optionCats = sortCategoriesForDisplay(
     shown.filter((c) => OPTION_CATEGORY_CODES.has(c.code)),

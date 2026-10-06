@@ -4,120 +4,213 @@ import type { CatalogBundle, ProductOption } from './types';
 export const CUSTOMER_SPEC_DENY_ALL = '__customer_category_not_selectable__';
 
 /**
- * 本体分類表 1シート目の「モデル × 仕様 × 項目 = 選択 / ×」を
- * お客様向けカテゴリー表示へ写すための実装表。
- *
- * ここで制御するのはカテゴリーの選択可否だけ。
- * 個々の商品がそのモデル・仕様・平面図に適合するかは、商品台帳の
- * base_model_id / spec_codes 等を別途尊重し、この表から推測しない。
+ * 本体分類表 1シート目の業務項目。
+ * DBカテゴリーはこの業務項目へ明示的に対応付け、本体分類表の選択 / ×は業務項目単位で判定する。
  */
-export const CUSTOMER_MATRIX_CATEGORY_CODES = [
-  'roof',
-  'exterior-wall',
-  'floor',
-  'wall-ceiling',
-  'carpentry',
+export type CustomerBusinessItemCode =
+  | 'roof-exterior'
+  | 'interior'
+  | 'entrance-door'
+  | 'sash'
+  | 'bath'
+  | 'kitchen'
+  | 'washbasin'
+  | 'toilet'
+  | 'entrance-storage'
+  | 'interior-door'
+  | 'closet'
+  | 'bed'
+  | 'furnishings'
+  | 'other';
+
+/**
+ * 本体分類表と商品台帳カテゴリーの正式対応。
+ *
+ * - 屋根・外壁 → roof / exterior-wall
+ * - 内装 → floor / wall-ceiling / carpentry
+ * - サッシ色 → sash
+ * - 勝手口ドア → service-door。分類表に専用列がないため、確定仕様としてサッシ列に従わせる。
+ * - 備品 → furniture / appliances / office-supplies
+ * - その他 → smartlock / exterior-parts
+ *
+ * lighting / aircon / boiler 等、分類表の列との対応が確定していないカテゴリーはここへ含めない。
+ * 「その他」だからという理由だけで group_code 全体を自動採用しない。
+ */
+export const CUSTOMER_CATEGORY_BUSINESS_ITEM: Readonly<Record<string, CustomerBusinessItemCode>> = {
+  roof: 'roof-exterior',
+  'exterior-wall': 'roof-exterior',
+  floor: 'interior',
+  'wall-ceiling': 'interior',
+  carpentry: 'interior',
+  'entrance-door': 'entrance-door',
+  sash: 'sash',
+  'service-door': 'sash',
+  ub: 'bath',
+  kitchen: 'kitchen',
+  washbasin: 'washbasin',
+  toilet: 'toilet',
+  'entrance-storage': 'entrance-storage',
+  'interior-door': 'interior-door',
+  closet: 'closet',
+  bed: 'bed',
+  furniture: 'furnishings',
+  appliances: 'furnishings',
+  'office-supplies': 'furnishings',
+  smartlock: 'other',
+  'exterior-parts': 'other',
+};
+
+export const CUSTOMER_MATRIX_CATEGORY_CODES = Object.freeze(
+  Object.keys(CUSTOMER_CATEGORY_BUSINESS_ITEM)
+);
+
+const BASE_COMPAT = ['roof-exterior', 'entrance-door', 'sash'] as const;
+const HOTEL = [
+  'roof-exterior',
+  'interior',
   'entrance-door',
-  'service-door',
   'sash',
+  'bath',
+  'washbasin',
+  'toilet',
+  'entrance-storage',
   'interior-door',
-  'ub',
+  'bed',
+  'furnishings',
+  'other',
+] as const;
+const RESIDENCE = [...HOTEL, 'kitchen'] as const;
+const ROOM = [
+  'roof-exterior',
+  'interior',
+  'interior-door',
+  'closet',
+  'bed',
+  'furnishings',
+  'other',
+] as const;
+const OFFICE = [
+  'roof-exterior',
+  'interior',
+  'entrance-door',
+  'sash',
+  'bath',
+  'kitchen',
+  'toilet',
+  'furnishings',
+  'other',
+] as const;
+const BOX_WATER = [
+  'roof-exterior',
+  'interior',
+  'entrance-door',
+  'sash',
+  'bath',
   'kitchen',
   'washbasin',
   'toilet',
 ] as const;
-
-const STRUCTURE = ['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry'] as const;
-const OPENINGS = ['entrance-door', 'service-door', 'sash'] as const;
-
-const wingHotel = [...STRUCTURE, ...OPENINGS, 'interior-door', 'ub', 'washbasin', 'toilet'] as const;
-const wingResidence = [...wingHotel, 'kitchen'] as const;
-const wingRoom = [...STRUCTURE, 'interior-door'] as const;
-const wingOffice = [...STRUCTURE, ...OPENINGS, 'ub', 'kitchen', 'toilet'] as const;
-const boxWater = [...STRUCTURE, ...OPENINGS, 'ub', 'kitchen', 'washbasin', 'toilet'] as const;
-const boxStorage = [...STRUCTURE, ...OPENINGS] as const;
-const flatOffice = [...STRUCTURE, ...OPENINGS] as const;
+const STORAGE_OR_FLAT_OFFICE = ['roof-exterior', 'interior', 'entrance-door', 'sash'] as const;
 
 /**
- * spec_code は現行コードへ正規化して保持する。
- * `base` は本体分類表に対応行がないため行列の正本対象外とし、既存finish_level挙動を維持する。
- * BOX hotel-single は旧「ホテル・単身者用」標準見積コードで、分類表には同名行がない。
- * 現行互換を壊さないため、確定済み hotel / residence の和集合（= residence と同じ）を
- * 互換表示範囲として扱う。これは新しい業務仕様行を作るものではない。
+ * 本体分類表の「モデル × 仕様 × 項目 = 選択 / ×」。
+ * `base` と BOX `hotel-single` は分類表そのものの行ではなく既存システム互換行。
+ * - base: 本体のみUIの従来互換
+ * - hotel-single: 既存BOX標準見積のlegacy identity。住居用相当として扱う
  */
 export const CUSTOMER_CATEGORY_MATRIX: Readonly<
-  Record<string, Readonly<Record<string, readonly string[]>>>
+  Record<string, Readonly<Record<string, readonly CustomerBusinessItemCode[]>>>
 > = {
   'wing-01': {
-    hotel: wingHotel,
-    residence: wingResidence,
-    room: wingRoom,
-    office: wingOffice,
+    base: BASE_COMPAT,
+    hotel: HOTEL,
+    residence: RESIDENCE,
+    room: ROOM,
+    office: OFFICE,
   },
   box: {
-    hotel: wingHotel,
-    residence: wingResidence,
-    room: wingRoom,
-    office: wingOffice,
-    'hotel-single': wingResidence,
-    'water-kit': boxWater,
-    storage: boxStorage,
+    base: BASE_COMPAT,
+    hotel: HOTEL,
+    residence: RESIDENCE,
+    room: ROOM,
+    office: OFFICE,
+    'hotel-single': RESIDENCE,
+    'water-kit': BOX_WATER,
+    storage: STORAGE_OR_FLAT_OFFICE,
   },
   flat: {
-    office: flatOffice,
+    base: BASE_COMPAT,
+    office: STORAGE_OR_FLAT_OFFICE,
   },
 };
 
-const controlled = new Set<string>(CUSTOMER_MATRIX_CATEGORY_CODES);
+export function customerBusinessItemForCategory(
+  categoryCode: string
+): CustomerBusinessItemCode | null {
+  return CUSTOMER_CATEGORY_BUSINESS_ITEM[categoryCode] ?? null;
+}
 
 /**
- * 本体分類表で制御するカテゴリーなら、model/spec 行に「選択」がある場合だけ true。
+ * 本体分類表で制御するカテゴリーなら、model/spec行に「選択」がある場合だけtrue。
  * 制御対象外カテゴリーは既存挙動を維持する。
- * `base` は分類表の行ではないため既存finish_levelへ委ねる。
- * 未知の業務仕様は、確定表にないカテゴリーを勝手に公開しないため fail closed。
+ * 未知のmodel/specは、確定表にないカテゴリーを勝手に公開しないためfail closed。
  */
 export function customerCategorySelectable(
   modelSlug: string,
   specCode: string,
   categoryCode: string
 ): boolean {
-  if (!controlled.has(categoryCode) || specCode === 'base') return true;
+  const businessItem = customerBusinessItemForCategory(categoryCode);
+  if (!businessItem) return true;
   const row = CUSTOMER_CATEGORY_MATRIX[modelSlug]?.[specCode];
-  return Boolean(row?.includes(categoryCode));
+  return Boolean(row?.includes(businessItem));
 }
 
 /**
- * DBの商品 spec_codes を個別商品適合の正本として残したまま、
+ * legacy BOX `hotel-single` は、商品適合上 `residence` と同一互換範囲として扱う。
+ * `hotel-single` を明示登録した商品も将来互換のため受け入れる。
+ */
+export function compatibleProductSpecCodes(specCode: string): readonly string[] {
+  return specCode === 'hotel-single' ? ['hotel-single', 'residence'] : [specCode];
+}
+
+export function productSpecCodesAllow(
+  productSpecCodes: readonly string[],
+  requestedSpecCode: string
+): boolean {
+  return (
+    productSpecCodes.length === 0 ||
+    compatibleProductSpecCodes(requestedSpecCode).some((code) => productSpecCodes.includes(code))
+  );
+}
+
+/**
+ * DBの商品spec_codesを個別商品適合の正本として残したまま、
  * 公開カタログ上だけ本体分類表のカテゴリー可否を交差させる。
  *
- * - DB spec_codes=[]: 商品側は全仕様共通 → base + カテゴリーが「選択」の仕様へ限定
- * - DB spec_codes!=[]: 商品側ホワイトリスト ∩ (base + カテゴリー「選択」仕様)
- * - 交差結果が0件: []は「全仕様共通」の意味なので、非永続sentinelでdeny-allを表す
+ * - DB spec_codes=[]: 商品側は全仕様共通 → カテゴリーが「選択」の仕様だけへ限定
+ * - DB spec_codes!=[]: 商品側ホワイトリスト ∩ カテゴリー「選択」仕様
+ * - hotel-single: residence互換resolverを通す
+ * - 交差結果0件: []は「全仕様共通」の意味なので、非永続sentinelでdeny-allを表す
  */
 export function effectiveCustomerSpecCodes(
   modelSlug: string,
   categoryCode: string,
   productSpecCodes: readonly string[]
 ): string[] {
-  if (!controlled.has(categoryCode)) return [...productSpecCodes];
+  const businessItem = customerBusinessItemForCategory(categoryCode);
+  if (!businessItem) return [...productSpecCodes];
 
   const modelRows = CUSTOMER_CATEGORY_MATRIX[modelSlug];
-  if (!modelRows) {
-    const effective = productSpecCodes.length === 0 ? ['base'] : productSpecCodes.filter((code) => code === 'base');
-    return effective.length > 0 ? effective : [CUSTOMER_SPEC_DENY_ALL];
-  }
+  if (!modelRows) return [CUSTOMER_SPEC_DENY_ALL];
 
-  const categorySpecs = [
-    'base',
-    ...Object.entries(modelRows)
-      .filter(([, categories]) => categories.includes(categoryCode))
-      .map(([specCode]) => specCode),
-  ];
+  const categorySpecs = Object.entries(modelRows)
+    .filter(([, businessItems]) => businessItems.includes(businessItem))
+    .map(([specCode]) => specCode);
 
-  const effective =
-    productSpecCodes.length === 0
-      ? categorySpecs
-      : productSpecCodes.filter((specCode) => categorySpecs.includes(specCode));
+  const effective = categorySpecs.filter((specCode) =>
+    productSpecCodesAllow(productSpecCodes, specCode)
+  );
 
   return effective.length > 0 ? effective : [CUSTOMER_SPEC_DENY_ALL];
 }

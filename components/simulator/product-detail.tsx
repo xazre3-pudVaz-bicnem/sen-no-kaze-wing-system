@@ -22,8 +22,8 @@ interface Props {
 /**
  * 共通商品詳細の本文。
  *
- * 左側は「見る場所」＝商品画像・説明。
- * 右側は「選ぶ場所」＝基本情報・文字カードの仕様選択・今回の選択内容。
+ * 左側は「見る場所」＝商品画像・メーカー資料。
+ * 右側は「理解して選ぶ場所」＝商品名・特徴・説明・基本情報・仕様選択。
  * 金額と確定ボタンは親ダイアログの固定フッターに置く。
  */
 export function ProductDetail({
@@ -66,10 +66,21 @@ export function ProductDetail({
     });
   };
 
+  const handleVariantChange = (choiceId: string, groupId: string) => {
+    onVariantChange(choiceId, groupId);
+
+    const choice = choices.find((item) => item.id === choiceId);
+    if (!choice?.image_url) return;
+    const imageIndex = galleryImages.findIndex((image) => image.url === choice.image_url);
+    if (imageIndex < 0) return;
+
+    setActiveMedia('image');
+    setActiveImageIndex(imageIndex);
+  };
+
   const basicInfo = [
     { label: 'シリーズ・型番', value: option.model_no },
     { label: sizeLabel(category.code), value: option.size_note },
-    { label: '区分', value: option.highlight },
   ].filter((item): item is { label: string; value: string } => Boolean(item.value?.trim()));
 
   const fixedSpecs = groups
@@ -246,12 +257,6 @@ export function ProductDetail({
               )}
             </div>
           )}
-
-          {option.description && (
-            <div className="mt-3 rounded-lg bg-ivory/55 px-3 py-2.5">
-              <p className="whitespace-pre-line text-xs leading-relaxed text-ink-soft">{option.description}</p>
-            </div>
-          )}
         </section>
 
         <section className="min-h-0 min-w-0 lg:overflow-y-auto lg:pr-2">
@@ -268,6 +273,21 @@ export function ProductDetail({
                 </span>
               )}
             </div>
+
+            {option.highlight && (
+              <p
+                className="mt-2 inline-flex rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown"
+                data-testid="product-detail-highlight"
+              >
+                {option.highlight}
+              </p>
+            )}
+
+            {option.description && (
+              <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-ink-soft">
+                {option.description}
+              </p>
+            )}
 
             {basicInfo.length > 0 && (
               <dl className="mt-3 grid gap-1.5 rounded-lg bg-sand/45 p-3 text-xs">
@@ -311,16 +331,16 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  色・柄は商品画像やメーカー資料でご確認ください
+                  画像が登録されている色・柄はその場で比較できます。選ぶと左の商品画像も切り替わります。
                 </p>
               </div>
               <VariantPicker
                 groups={editableGroups}
                 choices={choices}
                 selected={selectedVariantIds}
-                onChange={onVariantChange}
-                showImages={false}
-                showCurrentValue={false}
+                onChange={handleVariantChange}
+                showImages
+                showCurrentValue
               />
             </div>
           )}

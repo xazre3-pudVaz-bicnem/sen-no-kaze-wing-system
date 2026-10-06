@@ -1,5 +1,5 @@
 import { defaultSelection, pruneToScope, toggleOption, type RuleContext } from './rules';
-import type { BaseModel, EstimateTemplateBundle, ModelPreset } from './types';
+import type { BaseModel, EstimateTemplateBundle, ModelPreset, ProductOption } from './types';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
 export const BASE_ESTIMATE_SPEC_CODE = 'base';
@@ -21,6 +21,36 @@ const BASE_CHOICE: EstimateTemplateChoice = {
   description: '「本体」見積Excelを基準にした標準見積です。',
   preset: null,
 };
+
+/**
+ * spec_codes は商品候補の仕様ホワイトリスト。
+ * 空配列は全仕様共通、値がある場合は選択中 spec_code に含まれる商品のみ候補にする。
+ */
+export function optionAvailableForSpec(
+  option: Pick<ProductOption, 'spec_codes'>,
+  specCode: string
+): boolean {
+  return option.spec_codes.length === 0 || option.spec_codes.includes(specCode);
+}
+
+/**
+ * 仕様に対して選択できる商品だけで RuleContext を作る。
+ * dependency / conflict も候補外の商品を参照しないよう同じ集合へ閉じる。
+ */
+export function ruleContextForSpec(ctx: RuleContext, specCode: string): RuleContext {
+  const options = ctx.options.filter((option) => optionAvailableForSpec(option, specCode));
+  const ids = new Set(options.map((option) => option.id));
+  return {
+    categories: ctx.categories,
+    options,
+    dependencies: ctx.dependencies.filter(
+      (dependency) => ids.has(dependency.option_id) && ids.has(dependency.requires_option_id)
+    ),
+    conflicts: ctx.conflicts.filter(
+      (conflict) => ids.has(conflict.option_id) && ids.has(conflict.conflicts_with_option_id)
+    ),
+  };
+}
 
 /**
  * 標準見積Excelが未登録の管理画面で使う表示候補。
@@ -104,7 +134,6 @@ export function simulatorEstimateChoices(
   });
 }
 
-
 /**
  * 標準見積の「標準選択商品」。
  * 標準価格そのものはExcelが正本で、ここは商品変更時の差額判定だけに使う。
@@ -162,10 +191,11 @@ export function buildEstimateSpecSelection(
   savedBaselineIds: string[] = []
 ): string[] {
   const level = finishLevelForEstimateSpec(specCode);
+  const specCtx = ruleContextForSpec(ctx, specCode);
   const validSavedIds = savedBaselineIds.filter((id) =>
-    ctx.options.some((option) => option.id === id && option.status === 'published')
+    specCtx.options.some((option) => option.id === id && option.status === 'published')
   );
-  const optionByCode = new Map(ctx.options.map((option) => [option.code, option.id]));
+  const optionByCode = new Map(specCtx.options.map((option) => [option.code, option.id]));
   const sourceIds =
     validSavedIds.length > 0
       ? validSavedIds
@@ -175,25 +205,25 @@ export function buildEstimateSpecSelection(
 
   let cur: string[] = [];
   for (const optionId of sourceIds) {
-    const result = toggleOption(ctx, cur, optionId);
+    const result = toggleOption(specCtx, cur, optionId);
     if (!result.rejected) cur = result.next;
   }
 
   // 必須カテゴリー・必須商品だけを補う。任意カテゴリーの is_default は勝手に追加しない。
-  for (const optionId of defaultSelection(ctx, level)) {
+  for (const optionId of defaultSelection(specCtx, level)) {
     if (cur.includes(optionId)) continue;
-    const option = ctx.options.find((row) => row.id === optionId);
-    const category = ctx.categories.find((row) => row.id === option?.category_id);
+    const option = specCtx.options.find((row) => row.id === optionId);
+    const category = specCtx.categories.find((row) => row.id === option?.category_id);
     const hasCategory = cur.some(
-      (id) => ctx.options.find((row) => row.id === id)?.category_id === category?.id
+      (id) => specCtx.options.find((row) => row.id === id)?.category_id === category?.id
     );
     if (option?.is_required || (category?.is_required && !hasCategory)) {
-      const result = toggleOption(ctx, cur, optionId);
+      const result = toggleOption(specCtx, cur, optionId);
       if (!result.rejected) cur = result.next;
     }
   }
 
-  return [...new Set(pruneToScope(ctx, cur, level))];
+  return [...new Set(pruneToScope(specCtx, cur, level))];
 }
 
 export function buildEstimateBaselineSelection(

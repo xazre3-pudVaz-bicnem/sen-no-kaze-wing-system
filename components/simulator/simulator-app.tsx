@@ -209,6 +209,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const currentExteriorCodes = new Set([
     'exterior-nichiha-st-u18',
     'exterior-nichiha-ns-premium18',
+    'exterior-nichiha-m-flat-premium18',
     'exterior-wood-accent-100',
     'exterior-current-gl-bare',
   ]);

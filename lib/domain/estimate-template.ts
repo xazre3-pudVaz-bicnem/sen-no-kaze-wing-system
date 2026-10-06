@@ -25,12 +25,12 @@ const BASE_CHOICE: EstimateTemplateChoice = {
 
 /**
  * spec_codes は個別商品の仕様ホワイトリスト。
- * 空配列は全仕様共通。legacy BOX `hotel-single` だけは residence と同一互換範囲として解決する。
+ * 公開カタログではmodel/spec互換を反映済み。raw contextを扱う場合はmodelSlugを渡す。
  */
 export function optionAvailableForSpec(
   option: Pick<ProductOption, 'spec_codes'>,
   specCode: string,
-  modelSlug: string
+  modelSlug = ''
 ): boolean {
   return productSpecCodesAllow(option.spec_codes, specCode, modelSlug);
 }
@@ -42,7 +42,7 @@ export function optionAvailableForSpec(
 export function ruleContextForSpec(
   ctx: RuleContext,
   specCode: string,
-  modelSlug: string
+  modelSlug = ''
 ): RuleContext {
   const options = ctx.options.filter((option) => optionAvailableForSpec(option, specCode, modelSlug));
   const ids = new Set(options.map((option) => option.id));

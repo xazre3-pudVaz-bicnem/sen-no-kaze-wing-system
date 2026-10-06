@@ -66,9 +66,9 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(productDetail).toContain('今回の選択内容');
   });
 
-  it('PCは900pxから左約65%・右約35%の2カラムとし右側だけをスクロールする', () => {
-    expect(productDetail).toContain('min-[900px]:grid-cols-[minmax(0,1.85fr)_minmax(19rem,1fr)]');
-    expect(productDetail).toContain('min-[900px]:self-start');
-    expect(productDetail).toContain('min-[900px]:overflow-y-auto min-[900px]:pr-2');
+  it('PCは既存のlg境界で左約65%・右約35%の2カラムとし右側だけをスクロールする', () => {
+    expect(productDetail).toContain('lg:grid-cols-[minmax(0,1.85fr)_minmax(19rem,1fr)]');
+    expect(productDetail).toContain('lg:self-start');
+    expect(productDetail).toContain('lg:overflow-y-auto lg:pr-2');
   });
 });

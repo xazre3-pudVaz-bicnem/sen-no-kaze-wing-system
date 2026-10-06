@@ -209,7 +209,6 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const currentExteriorCodes = new Set([
     'exterior-nichiha-st-u18',
     'exterior-nichiha-ns-premium18',
-    'exterior-nichiha-m-flat-premium18',
     'exterior-wood-accent-100',
     'exterior-current-gl-bare',
   ]);
@@ -473,6 +472,17 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     );
     return [...activeSpecCtx.options, ...historicalSelected];
   }, [activeSpecCtx.options, bundle.options, readOnly, selected]);
+  const historicalSelectedCategoryIds = useMemo(
+    () =>
+      readOnly
+        ? new Set(
+            bundle.options
+              .filter((option) => selected.includes(option.id))
+              .map((option) => option.category_id)
+          )
+        : new Set<string>(),
+    [bundle.options, readOnly, selected]
+  );
   /** 注文範囲に入っているカテゴリー。customer_visible は全モデル共通の公開可否だけを表す。 */
   const scopedCategories = useMemo(
     () => categoriesInScope(bundle.categories, finishLevel).filter((c) => c.customer_visible !== false),
@@ -481,17 +491,21 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const scopedCategoryIds = useMemo(() => new Set(scopedCategories.map((c) => c.id)), [scopedCategories]);
   // 防火仕様は注文範囲の下の別枠で選ぶため、設備一覧には出さない。
   // 本体分類表の対象カテゴリーは商品候補が0件でも「選択」なら項目自体を表示する。
+  // read-only履歴では、現在の分類表が×でも実際に保存済みの商品カテゴリーは表示だけ維持する。
   // 個別商品の候補可否はspecOptions側で別に判定し、分類表から適合商品を捏造しない。
   const specCategories = useMemo(
     () =>
       scopedCategories.filter((c) => {
         if (c.code === 'fireproof') return false;
         if (customerBusinessItemForCategory(c.code)) {
-          return customerCategorySelectable(model.slug, specCode, c.code);
+          return (
+            customerCategorySelectable(model.slug, specCode, c.code) ||
+            (readOnly && historicalSelectedCategoryIds.has(c.id))
+          );
         }
         return specOptions.some((o) => o.category_id === c.id);
       }),
-    [model.slug, scopedCategories, specCode, specOptions]
+    [historicalSelectedCategoryIds, model.slug, readOnly, scopedCategories, specCode, specOptions]
   );
   /** 注文範囲を外れたカテゴリーの商品はポップアップにも出さない */
   const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);

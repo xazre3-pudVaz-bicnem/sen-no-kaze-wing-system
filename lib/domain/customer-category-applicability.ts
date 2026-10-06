@@ -31,10 +31,10 @@ export type CustomerBusinessItemCode =
  * - サッシ色 → sash
  * - 勝手口ドア → service-door。分類表に専用列がないため、確定仕様としてサッシ列に従わせる。
  * - 備品 → furniture / appliances / office-supplies
- * - その他 → smartlock / exterior-parts
+ * - その他 → aircon / boiler / lighting / smartlock / exterior-parts
  *
- * lighting / aircon / boiler 等、分類表の列との対応が確定していないカテゴリーはここへ含めない。
- * 「その他」だからという理由だけで group_code 全体を自動採用しない。
+ * 備品とその他は現行11行で選択 / ×が同一だが、将来別れる可能性があるため別business itemのまま保持する。
+ * fireproof / insulation / sitework / free-product は本体分類表のこの列群とは別責務なので制御対象外。
  */
 export const CUSTOMER_CATEGORY_BUSINESS_ITEM: Readonly<Record<string, CustomerBusinessItemCode>> = {
   roof: 'roof-exterior',
@@ -56,6 +56,9 @@ export const CUSTOMER_CATEGORY_BUSINESS_ITEM: Readonly<Record<string, CustomerBu
   furniture: 'furnishings',
   appliances: 'furnishings',
   'office-supplies': 'furnishings',
+  aircon: 'other',
+  boiler: 'other',
+  lighting: 'other',
   smartlock: 'other',
   'exterior-parts': 'other',
 };

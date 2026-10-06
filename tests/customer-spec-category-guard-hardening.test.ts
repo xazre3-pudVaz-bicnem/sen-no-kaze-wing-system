@@ -26,6 +26,12 @@ describe('customer spec category guard hardening', () => {
     expect(hardening).toContain('v_parent_count <> cardinality(v_parent_ids)');
   });
 
+  it('keeps normal Draft Configuration deletion compatible with FK ON DELETE CASCADE', () => {
+    expect(hardening).toContain("if tg_op = 'DELETE' and v_parent_count = 0 then");
+    expect(hardening).toContain('FK ON DELETE CASCADE');
+    expect(hardening).toContain('return old;');
+  });
+
   it('keeps non-draft Configuration history read-only at ACL and RLS layers', () => {
     expect(hardening).toMatch(/revoke insert, update, truncate on public\.configurations from authenticated;/);
     expect(hardening).toMatch(/revoke insert, update, delete, truncate on public\.configuration_items from anon, authenticated;/);

@@ -171,19 +171,27 @@ export function customerCategorySelectable(
 
 /**
  * legacy BOX `hotel-single` は、商品適合上 `residence` と同一互換範囲として扱う。
- * `hotel-single` を明示登録した商品も将来互換のため受け入れる。
+ * それ以外のモデルでは文字列一致だけを使い、aliasを横展開しない。
  */
-export function compatibleProductSpecCodes(specCode: string): readonly string[] {
-  return specCode === 'hotel-single' ? ['hotel-single', 'residence'] : [specCode];
+export function compatibleProductSpecCodes(
+  modelSlug: string,
+  specCode: string
+): readonly string[] {
+  return modelSlug === 'box' && specCode === 'hotel-single'
+    ? ['hotel-single', 'residence']
+    : [specCode];
 }
 
 export function productSpecCodesAllow(
   productSpecCodes: readonly string[],
-  requestedSpecCode: string
+  requestedSpecCode: string,
+  modelSlug: string
 ): boolean {
   return (
     productSpecCodes.length === 0 ||
-    compatibleProductSpecCodes(requestedSpecCode).some((code) => productSpecCodes.includes(code))
+    compatibleProductSpecCodes(modelSlug, requestedSpecCode).some((code) =>
+      productSpecCodes.includes(code)
+    )
   );
 }
 
@@ -193,7 +201,7 @@ export function productSpecCodesAllow(
  *
  * - DB spec_codes=[]: 商品側は全仕様共通 → カテゴリーが「選択」の仕様だけへ限定
  * - DB spec_codes!=[]: 商品側ホワイトリスト ∩ カテゴリー「選択」仕様
- * - hotel-single: residence互換resolverを通す
+ * - BOX hotel-single: residence互換resolverを通す
  * - 交差結果0件: []は「全仕様共通」の意味なので、非永続sentinelでdeny-allを表す
  */
 export function effectiveCustomerSpecCodes(
@@ -212,7 +220,7 @@ export function effectiveCustomerSpecCodes(
     .map(([specCode]) => specCode);
 
   const effective = categorySpecs.filter((specCode) =>
-    productSpecCodesAllow(productSpecCodes, specCode)
+    productSpecCodesAllow(productSpecCodes, specCode, modelSlug)
   );
 
   return effective.length > 0 ? effective : [CUSTOMER_SPEC_DENY_ALL];

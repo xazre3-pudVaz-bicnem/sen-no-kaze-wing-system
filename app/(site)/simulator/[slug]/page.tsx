@@ -36,9 +36,9 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   const model = bundle.model;
   const allModels = catalog.models;
 
-  // サッシは内外装工事の選択商品。旧データで customer_visible=false が残っていても、
-  // シミュレーターではモデル／仕様ごとの spec option 有無に従って選択対象へ戻す。
-  // DB値そのものの是正はこのUI変更では行わない。
+  // サッシは内外装工事の選択商品。旧データの customer_visible=false による
+  // グローバルな非表示だけをシミュレーター境界で解除し、最終表示は既存の
+  // specOptions / specCategories 判定へ委ねる。DB値そのものはこのUI変更では是正しない。
   const simulatorBundle = {
     ...bundle,
     categories: bundle.categories.map((category) =>

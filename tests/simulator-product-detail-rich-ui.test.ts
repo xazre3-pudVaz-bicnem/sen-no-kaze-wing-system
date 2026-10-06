@@ -6,6 +6,10 @@ const productDetail = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/product-detail.tsx'),
   'utf8'
 );
+const optionPickerDialog = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/simulator/option-picker-dialog.tsx'),
+  'utf8'
+);
 const variantPicker = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/variant-picker.tsx'),
   'utf8'
@@ -66,9 +70,12 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(productDetail).toContain('今回の選択内容');
   });
 
-  it('PCは既存のlg境界で左約65%・右約35%の2カラムとし右側だけをスクロールする', () => {
-    expect(productDetail).toContain('lg:grid-cols-[minmax(0,1.85fr)_minmax(19rem,1fr)]');
-    expect(productDetail).toContain('lg:self-start');
-    expect(productDetail).toContain('lg:overflow-y-auto lg:pr-2');
+  it('768px以上で左右2カラムとし右側だけをスクロールする', () => {
+    expect(productDetail).toContain('md:grid-cols-[minmax(0,1.85fr)_minmax(18rem,1fr)]');
+    expect(productDetail).toContain('md:self-start');
+    expect(productDetail).toContain('md:overflow-y-auto md:pr-2');
+    expect(productDetail).toContain('sizes="(min-width: 768px) 62vw, 90vw"');
+    expect(optionPickerDialog).toContain('md:h-[64vh] md:max-h-[42rem] md:overflow-hidden');
+    expect(optionPickerDialog).not.toContain('lg:h-[64vh] lg:max-h-[42rem] lg:overflow-hidden');
   });
 });

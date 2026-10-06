@@ -324,7 +324,7 @@ export function OptionPickerDialog({
         className={cn(
           'px-4 py-3 sm:px-5',
           detailOption
-            ? 'max-h-[68vh] overflow-y-auto lg:h-[64vh] lg:max-h-[42rem] lg:overflow-hidden'
+            ? 'max-h-[68vh] overflow-y-auto md:h-[64vh] md:max-h-[42rem] md:overflow-hidden'
             : 'max-h-[74vh] overflow-y-auto'
         )}
       >

@@ -118,6 +118,8 @@ update public.options
 -- Draft以外の履歴を変更させない。UPDATEでconfiguration_idを付け替える場合は
 -- old/new両方を検査するため、non-draft履歴からitemを抜き取る迂回も拒否する。
 -- save_configuration_atomic()は最初に同じ親行をFOR UPDATEしており、同一transaction内の再lockは安全。
+-- 親ConfigurationのDELETE CASCADEで子DELETEが発火した時だけ、親は同一transactionですでに
+-- 不可視になるため「親0件」を許容する。通常の直接item DELETEではFKにより親行が必ず存在する。
 
 create or replace function public.enforce_configuration_item_draft_parent()
 returns trigger
@@ -162,6 +164,12 @@ begin
         using errcode = 'P0001';
     end if;
   end loop;
+
+  -- FK ON DELETE CASCADEでは親DELETE後に子DELETE triggerが走るため、同一transactionから親が見えない。
+  -- direct item DELETEに孤児は存在できないので、DELETEかつ親0件だけをcascade互換として許容する。
+  if tg_op = 'DELETE' and v_parent_count = 0 then
+    return old;
+  end if;
 
   if v_parent_count <> cardinality(v_parent_ids) then
     raise exception 'VALIDATION: Configurationを確認できません'

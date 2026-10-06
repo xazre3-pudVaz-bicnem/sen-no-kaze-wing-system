@@ -36,6 +36,22 @@ const CASE_PHASE_OPTIONS = [
 
 const LIST_PARAM_KEYS = ['q', 'status', 'dealer', 'pref', 'city', 'phase', 'model', 'sort'] as const;
 
+// 画面確認用サンプルだけに表示するUI例。正式な原価・利益の正本ではなく、DBへ保存もしない。
+const CASE_LIST_SAMPLE_QUOTE_NO = 'Q202609-0003';
+const CASE_LIST_SAMPLE_UNIT_COUNT = 2;
+const CASE_LIST_SAMPLE_COST = 3_000_000;
+
+function caseListSampleDisplay(quote: { quote_no: string; subtotal: number }) {
+  if (quote.quote_no !== CASE_LIST_SAMPLE_QUOTE_NO) return null;
+  const profit = quote.subtotal - CASE_LIST_SAMPLE_COST;
+  return {
+    unitCount: CASE_LIST_SAMPLE_UNIT_COUNT,
+    cost: CASE_LIST_SAMPLE_COST,
+    profit,
+    profitRate: quote.subtotal > 0 ? (profit / quote.subtotal) * 100 : null,
+  };
+}
+
 function casePhaseLabel(quote: {
   status: keyof typeof QUOTE_STATUS_LABELS;
   parent_quote_id: string | null;
@@ -531,7 +547,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               </optgroup>
             </select>
             <select name="dealer" defaultValue={dealerFilter} className="min-w-0 rounded-lg border border-line bg-white px-3 py-1.5 text-xs">
-              <option value="">担当：すべて</option>
+              <option value="">担当代理店：すべて</option>
               <option value="unassigned">未割当</option>
               {dealers.map((dealer) => (
                 <option key={dealer.id} value={dealer.id}>{dealer.company_name ?? dealer.full_name}</option>
@@ -565,8 +581,24 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
           <table className="w-full min-w-[58rem] table-fixed text-[0.69rem]">
             <thead className="sticky top-0 z-10 bg-[#eef3f2] text-[#536771]">
               <tr>
-                <th className="w-[22%] px-2 py-1 text-left font-semibold">案件・顧客</th>
-                <th className="w-[16%] px-2 py-1 text-left font-semibold">
+                <th className="w-[20%] px-2 py-1 text-left font-semibold">案件・顧客</th>
+                <th className="w-[14%] px-2 py-1 text-left font-semibold">
+                  <CaseListColumnMenu
+                    label="担当代理店"
+                    searchParams={sp}
+                    sortAsc="dealer-asc"
+                    sortDesc="dealer-desc"
+                    activeSort={sortMode}
+                    filterKey="dealer"
+                    activeFilter={dealerFilter}
+                    filterLabel="担当代理店で絞り込み"
+                    filterOptions={[
+                      { value: 'unassigned', label: '未割当' },
+                      ...dealers.map((dealer) => ({ value: dealer.id, label: dealer.company_name ?? dealer.full_name })),
+                    ]}
+                  />
+                </th>
+                <th className="w-[14%] px-2 py-1 text-left font-semibold">
                   <CaseListColumnMenu
                     label="現在フェーズ"
                     searchParams={sp}
@@ -579,7 +611,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     filterOptions={CASE_PHASE_OPTIONS.map((value) => ({ value, label: value }))}
                   />
                 </th>
-                <th className="w-[20%] px-2 py-1 text-left font-semibold">設置予定地</th>
+                <th className="w-[18%] px-2 py-1 text-left font-semibold">設置予定地</th>
                 <th className="w-[12%] px-2 py-1 text-left font-semibold">
                   <CaseListColumnMenu
                     label="商品モデル"
@@ -593,7 +625,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     filterOptions={modelPool.map((value) => ({ value, label: value }))}
                   />
                 </th>
-                <th className="w-[14%] px-2 py-1 text-right font-semibold">
+                <th className="w-[12%] px-2 py-1 text-right font-semibold">
                   <CaseListColumnMenu
                     label="見積額"
                     searchParams={sp}
@@ -603,22 +635,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     align="right"
                   />
                 </th>
-                <th className="w-[16%] px-2 py-1 text-left font-semibold">
-                  <CaseListColumnMenu
-                    label="担当組織／担当者"
-                    searchParams={sp}
-                    sortAsc="dealer-asc"
-                    sortDesc="dealer-desc"
-                    activeSort={sortMode}
-                    filterKey="dealer"
-                    activeFilter={dealerFilter}
-                    filterLabel="担当で絞り込み"
-                    filterOptions={[
-                      { value: 'unassigned', label: '未割当' },
-                      ...dealers.map((dealer) => ({ value: dealer.id, label: dealer.company_name ?? dealer.full_name })),
-                    ]}
-                  />
-                </th>
+                <th className="w-[10%] px-2 py-1 text-left font-semibold">担当者</th>
               </tr>
             </thead>
             <tbody>
@@ -631,6 +648,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                   : null;
                 const dealer = quote?.dealer_id ? dealerById.get(quote.dealer_id) : undefined;
                 const dealerName = dealer?.company_name ?? dealer?.full_name;
+                const sampleDisplay = quote ? caseListSampleDisplay(quote) : null;
                 const initialDraft = quote ? undefined : initialDraftByRequestId.get(request.id);
                 const updatedAt = quote?.updated_at ?? initialDraft?.updated_at ?? request.updated_at;
                 const displayCaseName = request.case_name?.trim() || request.contact.full_name;
@@ -675,6 +693,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                         {quote && quote.revision > 1 && <>／第{quote.revision}版</>}
                       </span>
                     </td>
+                    <td className="px-2 py-1 align-middle text-[0.64rem]">
+                      {quote?.dealer_id ? (
+                        dealer?.company_name ? dealer.company_name : <span className="text-muted">代理店名未登録</span>
+                      ) : (
+                        <span className="text-muted">未割当</span>
+                      )}
+                    </td>
                     <td className="px-2 py-1 align-middle">
                       {quote ? (
                         <>
@@ -715,14 +740,20 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                       </div>
                     </td>
                     <td className="px-2 py-1 align-middle">
-                      <strong>{modelName ?? '—'}</strong>
-                      {specName ? <span className="ml-1 text-[0.6rem] text-muted">{specName}</span> : null}
+                      <div>
+                        <strong>{modelName ?? '—'}</strong>
+                        {specName ? <span className="ml-1 text-[0.6rem] text-muted">{specName}</span> : null}
+                      </div>
+                      <span className="mt-0.5 block text-[0.58rem] leading-3 text-muted">
+                        棟数 <strong className={sampleDisplay ? 'font-semibold text-[#315745]' : 'font-semibold text-muted'}>{sampleDisplay ? `${sampleDisplay.unitCount}棟` : '—'}</strong>
+                        {sampleDisplay && <span className="ml-1 rounded bg-[#edf5f0] px-1 py-0.5 text-[0.52rem] font-semibold text-[#315745]">画面確認用</span>}
+                      </span>
                     </td>
                     <td className="whitespace-nowrap px-2 py-1 text-right align-middle font-semibold tabular-nums">
                       {quote ? formatYen(quote.total) : '—'}
                     </td>
                     <td className="px-2 py-1 align-middle text-[0.64rem]">
-                      {quote?.dealer_id ? dealerName ?? '割当済み' : <span className="text-muted">未割当</span>}
+                      {quote?.dealer_id ? dealer?.full_name ?? <span className="text-muted">未登録</span> : <span className="text-muted">未割当</span>}
                     </td>
                   </ClickableCaseRow>,
                   <tr
@@ -730,19 +761,28 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     className={`${selected ? 'bg-[#fffaf0]' : 'bg-[#fbfcfb]'} border-b border-line`}
                     data-testid="case-row-meta"
                   >
-                    <td colSpan={6} className={`border-l-4 px-2 pb-0.5 pt-0 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.59rem] leading-4 text-muted">
-                        <span>棟数 <strong className="font-semibold text-muted">—</strong></span>
-                        <span>原価 <strong className="font-semibold text-muted">—</strong></span>
-                        <span>利益 <strong className="font-semibold text-muted">—</strong></span>
-                        <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
-                      </div>
+                    <td colSpan={7} className={`border-l-4 px-2 pb-0.5 pt-0 ${selected ? 'border-[#2f6b4f]' : 'border-transparent'}`}>
+                      {sampleDisplay ? (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.59rem] leading-4 text-muted" data-testid="case-sample-finance">
+                          <span className="rounded bg-[#edf5f0] px-1 py-0.5 text-[0.52rem] font-semibold text-[#315745]">画面確認用サンプル</span>
+                          <span>原価（例） <strong className="font-semibold text-ink">{formatYen(sampleDisplay.cost)}</strong></span>
+                          <span>利益（例） <strong className="font-semibold text-ink">{formatYen(sampleDisplay.profit)}</strong></span>
+                          <span>利益率（例） <strong className="font-semibold text-ink">{sampleDisplay.profitRate === null ? '—' : `${sampleDisplay.profitRate.toFixed(1)}%`}</strong></span>
+                          <span className="text-[0.54rem]">正式値ではありません</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.59rem] leading-4 text-muted">
+                          <span>原価 <strong className="font-semibold text-muted">—</strong></span>
+                          <span>利益 <strong className="font-semibold text-muted">—</strong></span>
+                          <span>利益率 <strong className="font-semibold text-muted">—</strong></span>
+                        </div>
+                      )}
                     </td>
                   </tr>,
                 ];
               })}
               {shown.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted">条件に合う案件はありません</td></tr>
               )}
             </tbody>
           </table>

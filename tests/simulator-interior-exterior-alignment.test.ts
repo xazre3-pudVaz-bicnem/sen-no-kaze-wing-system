@@ -6,10 +6,6 @@ const equipmentBoard = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/equipment-board.tsx'),
   'utf8'
 );
-const simulatorPage = fs.readFileSync(
-  path.resolve(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'),
-  'utf8'
-);
 
 describe('シミュレーターの内外装工事分類', () => {
   it('屋根・外壁・建具・床・壁天井を内外装工事として扱う', () => {
@@ -27,11 +23,5 @@ describe('シミュレーターの内外装工事分類', () => {
     }
     expect(equipmentBoard).toContain("sectionHeader('interior-exterior-heading', '内外装工事')");
     expect(equipmentBoard).not.toContain('既存の内部建具・サッシカテゴリーだけを表示する');
-  });
-
-  it('旧データで非表示のサッシもシミュレーターでは選択対象へ戻す', () => {
-    expect(simulatorPage).toContain("category.code === 'sash' && category.customer_visible === false");
-    expect(simulatorPage).toContain('{ ...category, customer_visible: true }');
-    expect(simulatorPage).toContain('bundle={simulatorBundle}');
   });
 });

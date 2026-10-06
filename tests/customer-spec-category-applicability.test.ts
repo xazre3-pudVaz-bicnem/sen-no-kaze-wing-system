@@ -3,16 +3,26 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCustomerCategoryApplicability,
   customerCategorySelectable,
+  CUSTOMER_CATEGORY_BUSINESS_ITEM,
   CUSTOMER_SPEC_DENY_ALL,
   effectiveCustomerSpecCodes,
+  productSpecCodesAllow,
+  type CustomerBusinessItemCode,
 } from '@/lib/domain/customer-category-applicability';
 import {
   buildEstimateSpecSelection,
   optionAvailableForSpec,
   ruleContextForSpec,
 } from '@/lib/domain/estimate-template';
+import { computeStandardEstimatePricing } from '@/lib/domain/standard-estimate-pricing';
 import type { RuleContext } from '@/lib/domain/rules';
-import type { BaseModel, CatalogBundle, OptionCategory, ProductOption } from '@/lib/domain/types';
+import type {
+  BaseModel,
+  CatalogBundle,
+  EstimateTemplateBundle,
+  OptionCategory,
+  ProductOption,
+} from '@/lib/domain/types';
 
 const category = (patch: Partial<OptionCategory> & Pick<OptionCategory, 'id' | 'code' | 'name'>): OptionCategory =>
   ({
@@ -57,50 +67,70 @@ const option = (
     ...patch,
   }) as ProductOption;
 
-const businessCategories = [
-  'roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry',
-  'entrance-door', 'sash', 'ub', 'kitchen', 'washbasin', 'toilet', 'interior-door',
-] as const;
+const controlledCategoryCodes = Object.keys(CUSTOMER_CATEGORY_BUSINESS_ITEM);
 
-const rows: Array<[string, string, readonly string[]]> = [
-  ['wing-01', 'hotel', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','washbasin','toilet','interior-door']],
-  ['wing-01', 'residence', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','kitchen','washbasin','toilet','interior-door']],
-  ['wing-01', 'room', ['roof','exterior-wall','floor','wall-ceiling','carpentry','interior-door']],
-  ['wing-01', 'office', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','kitchen','toilet']],
-  ['box', 'hotel', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','washbasin','toilet','interior-door']],
-  ['box', 'residence', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','kitchen','washbasin','toilet','interior-door']],
-  ['box', 'room', ['roof','exterior-wall','floor','wall-ceiling','carpentry','interior-door']],
-  ['box', 'office', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','kitchen','toilet']],
-  ['box', 'water-kit', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','ub','kitchen','washbasin','toilet']],
-  ['box', 'storage', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash']],
-  ['flat', 'office', ['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash']],
+const matrixRows: Array<[string, string, readonly CustomerBusinessItemCode[]]> = [
+  ['wing-01', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'room', ['roof-exterior','interior','interior-door','closet','bed','furnishings','other']],
+  ['wing-01', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','furnishings','other']],
+  ['box', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
+  ['box', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
+  ['box', 'room', ['roof-exterior','interior','interior-door','closet','bed','furnishings','other']],
+  ['box', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','furnishings','other']],
+  ['box', 'water-kit', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet']],
+  ['box', 'storage', ['roof-exterior','interior','entrance-door','sash']],
+  ['flat', 'office', ['roof-exterior','interior','entrance-door','sash']],
 ];
 
-describe('confirmed classification-sheet category matrix', () => {
-  it.each(rows)('%s / %s matches 選択 / ×', (modelSlug, specCode, selected) => {
-    for (const code of businessCategories) {
-      expect(customerCategorySelectable(modelSlug, specCode, code), code).toBe(selected.includes(code));
-    }
-    expect(customerCategorySelectable(modelSlug, specCode, 'service-door')).toBe(selected.includes('sash'));
-  });
-
-  it('keeps legacy BOX hotel-single as the residence-compatible combined row', () => {
-    for (const code of businessCategories) {
-      expect(customerCategorySelectable('box', 'hotel-single', code)).toBe(
-        customerCategorySelectable('box', 'residence', code)
+describe('confirmed classification-sheet business-item matrix', () => {
+  it.each(matrixRows)('%s / %s matches all 14 business columns', (modelSlug, specCode, selectedItems) => {
+    for (const categoryCode of controlledCategoryCodes) {
+      const businessItem = CUSTOMER_CATEGORY_BUSINESS_ITEM[categoryCode];
+      expect(customerCategorySelectable(modelSlug, specCode, categoryCode), categoryCode).toBe(
+        selectedItems.includes(businessItem)
       );
     }
   });
 
-  it('does not invent a classification-sheet row for base', () => {
-    expect(customerCategorySelectable('wing-01', 'base', 'sash')).toBe(true);
-    expect(customerCategorySelectable('flat', 'base', 'ub')).toBe(true);
+  it('maps the combined Excel columns and service door explicitly', () => {
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.roof).toBe('roof-exterior');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM['exterior-wall']).toBe('roof-exterior');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.floor).toBe('interior');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM['wall-ceiling']).toBe('interior');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.carpentry).toBe('interior');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.sash).toBe('sash');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM['service-door']).toBe('sash');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM['entrance-storage']).toBe('entrance-storage');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.closet).toBe('closet');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.bed).toBe('bed');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.furniture).toBe('furnishings');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.appliances).toBe('furnishings');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM['office-supplies']).toBe('furnishings');
+    for (const code of ['aircon','boiler','lighting','smartlock','exterior-parts']) {
+      expect(CUSTOMER_CATEGORY_BUSINESS_ITEM[code]).toBe('other');
+    }
   });
 
-  it('fails closed for an unknown business spec while unrelated categories keep existing behavior', () => {
+  it('keeps legacy BOX hotel-single as the residence-compatible business row', () => {
+    for (const categoryCode of controlledCategoryCodes) {
+      expect(customerCategorySelectable('box', 'hotel-single', categoryCode)).toBe(
+        customerCategorySelectable('box', 'residence', categoryCode)
+      );
+    }
+  });
+
+  it('keeps base as an explicit compatibility row instead of inventing an Excel row', () => {
+    expect(customerCategorySelectable('wing-01', 'base', 'roof')).toBe(true);
+    expect(customerCategorySelectable('wing-01', 'base', 'sash')).toBe(true);
+    expect(customerCategorySelectable('wing-01', 'base', 'ub')).toBe(false);
+    expect(customerCategorySelectable('flat', 'base', 'lighting')).toBe(false);
+  });
+
+  it('fails closed for controlled categories on unknown model/spec but preserves unrelated categories', () => {
     expect(customerCategorySelectable('wing-01', 'future-spec', 'sash')).toBe(false);
     expect(customerCategorySelectable('future-model', 'office', 'toilet')).toBe(false);
-    expect(customerCategorySelectable('future-model', 'future-spec', 'lighting')).toBe(true);
+    expect(customerCategorySelectable('future-model', 'future-spec', 'sitework')).toBe(true);
   });
 });
 
@@ -110,8 +140,8 @@ function fixture(): RuleContext {
   return {
     categories: [interiorDoor, entranceDoor],
     options: [
-      option({ id: 'door-standard', code: 'door-standard', name: '内部建具 標準', category_id: interiorDoor.id, is_default: true, spec_codes: ['hotel','residence','room','hotel-single'] }),
-      option({ id: 'entrance-standard', code: 'entrance-standard', name: '玄関ドア 標準', category_id: entranceDoor.id, spec_codes: ['base','hotel','residence','office','hotel-single','water-kit','storage'] }),
+      option({ id: 'door-standard', code: 'door-standard', name: '内部建具 標準', category_id: interiorDoor.id, is_default: true, spec_codes: ['hotel','residence','room'] }),
+      option({ id: 'entrance-standard', code: 'entrance-standard', name: '玄関ドア 標準', category_id: entranceDoor.id, spec_codes: ['base','hotel','residence','office','water-kit','storage'] }),
     ],
     dependencies: [],
     conflicts: [],
@@ -119,17 +149,27 @@ function fixture(): RuleContext {
 }
 
 describe('customer spec product eligibility', () => {
-  it('keeps raw spec_codes semantics as universal-or-whitelist', () => {
-    expect(optionAvailableForSpec(option({ id:'u', code:'u', name:'u', category_id:'cat', spec_codes:[] }), 'office')).toBe(true);
-    expect(optionAvailableForSpec(option({ id:'h', code:'h', name:'h', category_id:'cat', spec_codes:['hotel'] }), 'office')).toBe(false);
+  it('keeps raw spec_codes as universal-or-whitelist and limits hotel-single alias to BOX', () => {
+    const universal = option({ id:'u', code:'u', name:'u', category_id:'cat', spec_codes:[] });
+    const residenceOnly = option({ id:'r', code:'r', name:'r', category_id:'cat', spec_codes:['residence'] });
+    expect(optionAvailableForSpec(universal, 'office', 'wing-01')).toBe(true);
+    expect(optionAvailableForSpec(residenceOnly, 'hotel-single', 'box')).toBe(true);
+    expect(optionAvailableForSpec(residenceOnly, 'hotel-single', 'wing-01')).toBe(false);
+    expect(productSpecCodesAllow(['hotel'], 'hotel-single', 'box')).toBe(false);
   });
 
-  it('intersects product suitability with category applicability without persisting the derived values', () => {
-    expect(effectiveCustomerSpecCodes('wing-01', 'kitchen', [])).toEqual(['base','residence','office']);
+  it('intersects individual product suitability with category availability without inventing product fit', () => {
+    expect(effectiveCustomerSpecCodes('wing-01', 'kitchen', [])).toEqual(['residence','office']);
     expect(effectiveCustomerSpecCodes('wing-01', 'kitchen', ['hotel','residence'])).toEqual(['residence']);
-    expect(effectiveCustomerSpecCodes('flat', 'ub', [])).toEqual(['base']);
-    expect(effectiveCustomerSpecCodes('flat', 'lighting', [])).toEqual([]);
+    expect(effectiveCustomerSpecCodes('flat', 'ub', [])).toEqual([CUSTOMER_SPEC_DENY_ALL]);
+    expect(effectiveCustomerSpecCodes('flat', 'lighting', [])).toEqual([CUSTOMER_SPEC_DENY_ALL]);
     expect(effectiveCustomerSpecCodes('future-model', 'ub', ['office'])).toEqual([CUSTOMER_SPEC_DENY_ALL]);
+    expect(effectiveCustomerSpecCodes('wing-01', 'sitework', [])).toEqual([]);
+  });
+
+  it('keeps room bed category selectable even when the current folding-bed product is not room-compatible', () => {
+    expect(customerCategorySelectable('wing-01', 'room', 'bed')).toBe(true);
+    expect(effectiveCustomerSpecCodes('wing-01', 'bed', ['hotel','residence'])).toEqual(['hotel','residence']);
   });
 
   it('applies model-specific category applicability before simulator rule evaluation', () => {
@@ -144,8 +184,9 @@ describe('customer spec product eligibility', () => {
       images:[], dependencies:[], conflicts:[], previewRules:[], hotspots:[], variantGroups:[], variantChoices:[], baseBreakdowns:[],
     } as unknown as CatalogBundle;
     const applied = applyCustomerCategoryApplicability(bundle);
-    expect(applied.options.find((row) => row.code === 'ub-1')?.spec_codes).toEqual(['base']);
-    expect(ruleContextForSpec(applied, 'office').options.map((row) => row.code)).toEqual(['light-1']);
+    expect(applied.options.find((row) => row.code === 'ub-1')?.spec_codes).toEqual([CUSTOMER_SPEC_DENY_ALL]);
+    expect(applied.options.find((row) => row.code === 'light-1')?.spec_codes).toEqual([CUSTOMER_SPEC_DENY_ALL]);
+    expect(ruleContextForSpec(applied, 'office', 'flat').options).toEqual([]);
   });
 
   it('does not re-add an ineligible preset product to a standard selection', () => {
@@ -157,56 +198,138 @@ describe('customer spec product eligibility', () => {
   });
 });
 
-describe('corrective migration contract', () => {
+function boxHotelSinglePricingFixture() {
+  const wall = category({ id:'cat-wall', code:'wall-ceiling', name:'壁・天井' });
+  const carpentry = category({ id:'cat-carpentry', code:'carpentry', name:'造作工事' });
+  const ub = category({ id:'cat-ub', code:'ub', name:'浴室', finish_level:'equipment' });
+  const kitchen = category({ id:'cat-kitchen', code:'kitchen', name:'キッチン', finish_level:'equipment' });
+  const bed = category({ id:'cat-bed', code:'bed', name:'ベッド', selection_mode:'multi', finish_level:'equipment' });
+  const options = [
+    option({ id:'interior-standard-box', code:'interior-standard-box', name:'内装工事一式（標準）', category_id:wall.id, price:321654, spec_codes:[] }),
+    option({ id:'carpentry-box', code:'carpentry-box', name:'室内造作工事', category_id:carpentry.id, price:79750, spec_codes:[] }),
+    option({ id:'shower-unit-1116', code:'shower-unit-1116', name:'シャワーユニット 1116', category_id:ub.id, price:810000, spec_codes:['hotel','residence'] }),
+    option({ id:'mini-kitchen', code:'mini-kitchen', name:'ミニキッチン', category_id:kitchen.id, price:187500, spec_codes:['residence','office'] }),
+    option({ id:'folding-bed', code:'folding-bed', name:'折り畳み式ベッド', category_id:bed.id, price:120000, spec_codes:['hotel','residence'] }),
+  ];
+  const model = {
+    id:'box-id', slug:'box', name:'BOX', base_price:0, expense_rate:0, presets:[],
+  } as unknown as BaseModel;
+  const bundle = {
+    model,
+    categories:[wall, carpentry, ub, kitchen, bed],
+    options,
+    images:[], dependencies:[], conflicts:[], previewRules:[], hotspots:[], variantGroups:[], variantChoices:[], baseBreakdowns:[],
+  } as unknown as CatalogBundle;
+  const baselineIds = options.map((row) => row.id);
+  const template = {
+    template: {
+      id:'template-box-hotel-single', base_model_id:model.id, spec_code:'hotel-single', name:'BOX（ホテル単身者）',
+      source_file_name:'classification.xlsx', source_sheet_name:'BOX（ホテル単身者）', source_sha256:'test',
+      baseline_option_ids:baselineIds, tax_rate:0.1, subtotal_raw:3466000, adjustment:0,
+      subtotal:3466000, tax:346600, total:3812600, imported_at:'2026-10-06', updated_at:'2026-10-06',
+    },
+    sections:[
+      { id:'sec-base', template_id:'template-box-hotel-single', code:'base', label:'本体', line_subtotal:1947096, expense_label:null, expense_rate:0, expense_amount:0, total:1947096, sort_order:1 },
+      { id:'sec-interior', template_id:'template-box-hotel-single', code:'interior_exterior', label:'内外装', line_subtotal:401404, expense_label:null, expense_rate:0, expense_amount:0, total:401404, sort_order:2 },
+      { id:'sec-option', template_id:'template-box-hotel-single', code:'option', label:'オプション', line_subtotal:1117500, expense_label:null, expense_rate:0, expense_amount:0, total:1117500, sort_order:3 },
+      { id:'sec-site', template_id:'template-box-hotel-single', code:'sitework', label:'別途工事', line_subtotal:0, expense_label:null, expense_rate:0, expense_amount:0, total:0, sort_order:4 },
+    ],
+    lines:[], base_breakdown_items:[], baseline_option_ids:baselineIds,
+  } as unknown as EstimateTemplateBundle;
+  return { bundle, model, options, baselineIds, template };
+}
+
+describe('BOX hotel-single Standard Estimate compatibility', () => {
+  it('keeps all five curated baseline products and the audited 1,518,904 yen master baseline', () => {
+    const { bundle, model, options, baselineIds } = boxHotelSinglePricingFixture();
+    const selection = buildEstimateSpecSelection(
+      { options, categories:bundle.categories, dependencies:[], conflicts:[] },
+      model,
+      'hotel-single',
+      baselineIds
+    );
+    expect(selection.sort()).toEqual([...baselineIds].sort());
+    expect(selection.reduce((sum, id) => sum + (options.find((row) => row.id === id)?.price ?? 0), 0)).toBe(1518904);
+  });
+
+  it('keeps the Excel standard total 3,812,600 yen unchanged at standard state', () => {
+    const { bundle, baselineIds, template } = boxHotelSinglePricingFixture();
+    const result = computeStandardEstimatePricing(bundle, template, baselineIds, [], [], 'full');
+    expect(result.has_changes).toBe(false);
+    expect(result.pricing.total).toBe(3812600);
+  });
+
+  it('calculates product-change delta from the complete curated baseline', () => {
+    const { bundle, baselineIds, template } = boxHotelSinglePricingFixture();
+    const withoutMiniKitchen = baselineIds.filter((id) => id !== 'mini-kitchen');
+    const result = computeStandardEstimatePricing(bundle, template, withoutMiniKitchen, [], [], 'full');
+    expect(result.has_changes).toBe(true);
+    expect(result.sections.find((section) => section.code === 'option')?.delta_line).toBe(-187500);
+    expect(result.pricing.total).toBe(3605800);
+  });
+});
+
+describe('corrective migration and simulator contract', () => {
   const migration = readFileSync('supabase/migrations/20261006183000_customer_spec_category_applicability_corrective.sql', 'utf8');
   const simulator = readFileSync('components/simulator/simulator-app.tsx', 'utf8');
   const equipment = readFileSync('components/simulator/equipment-board.tsx', 'utf8');
   const publicCatalog = readFileSync('lib/data/public-catalog.ts', 'utf8');
 
-  it('moves only explicitly audited doors and does not depend on a product count or generated category id', () => {
+  it('creates dedicated mixed-furniture business categories and moves only audited products', () => {
+    for (const code of ['service-door','entrance-storage','closet','bed']) {
+      expect(migration).toContain(`'${code}'`);
+    }
     expect(migration).toContain("'door-glass', 'sash-lixil-prose-kamachi'");
-    expect(migration).toContain("'sash-door-katteguchi'");
-    expect(migration).toContain("'sash-door-katteguchi-koshi-panel'");
-    expect(migration).toContain("'sash-door-katteguchi-zen-panel'");
+    expect(migration).toContain("'shoebox-daiken-ieria-low800'");
+    expect(migration).toContain("where code = 'hanger-pipe'");
+    expect(migration).toContain("where code = 'folding-bed'");
     expect(migration).not.toContain('20000000-0000-4000-8000-000000000025');
     expect(migration).not.toMatch(/count\s*\(\s*\*\s*\)/i);
-    expect(equipment).toContain("'service-door'");
+    expect(equipment).toContain("'entrance-storage'");
+    expect(equipment).toContain("'closet'");
+    expect(equipment).toContain("'bed'");
   });
 
-  it('keeps the classification matrix separate from raw product spec_codes', () => {
-    expect(migration).not.toMatch(/update\s+public\.options[\s\S]{0,160}set\s+spec_codes\s*=/i);
-    expect(migration).toContain('create or replace function public.customer_category_selectable');
-    expect(migration).toContain('configuration_items_customer_category_guard');
-    expect(migration).toContain('configurations_customer_category_guard');
-    expect(migration).toContain('cardinality(v_option_spec_codes) > 0');
+  it('uses the same hotel-single compatibility rule in TS/SQL and keeps the existing save RPC literal check compatible', () => {
+    expect(migration).toContain('create or replace function public.customer_product_spec_selectable');
+    expect(migration).toContain("set spec_codes = array_append(spec_codes, 'hotel-single')");
+    expect(migration).toContain("where 'residence' = any(spec_codes)");
+    expect(migration).toContain('1518904');
+    expect(migration).toContain('public.customer_product_spec_selectable(m.slug, t.spec_code');
+  });
+
+  it('rejects NULL spec on editable drafts while preserving historical non-draft read compatibility', () => {
+    expect(migration).toContain("v_status = 'draft' and v_spec_code is null");
+    expect(migration).toContain("new.status = 'draft' and new.spec_code is null");
+    expect(migration).toContain('after insert or update on public.configurations');
     expect(migration).toContain('deferrable initially deferred');
+    expect(migration).toContain('when p_spec_code is null then true');
   });
 
-  it('applies spec eligibility even when a Standard Estimate template is active', () => {
+  it('separates category visibility from product candidate availability in the simulator', () => {
+    expect(simulator).toContain('customerBusinessItemForCategory(c.code)');
+    expect(simulator).toContain('customerCategorySelectable(model.slug, specCode, c.code)');
     expect(simulator).toContain('if (!readOnly) return activeSpecCtx.options;');
     expect(simulator).not.toContain('if (activeEstimateTemplate || !hasPreset) return bundle.options;');
-    expect(simulator).toContain('validateSelection(activeSpecCtx, selected, finishLevel)');
-    expect(simulator).toContain('toggleOption(activeSpecCtx, cur, oid)');
+    expect(equipment).toContain("const shown = categories.filter((c) => c.code !== 'sitework');");
     expect(publicCatalog).toContain('applyCustomerCategoryApplicability');
     expect(publicCatalog).toContain('public-catalog-v4-customer-category-matrix');
   });
 
-  it('filters baseline totals at calculation time without rewriting template baselines', () => {
+  it('filters baseline totals at calculation time without rewriting template or formal historical records', () => {
     expect(migration).toContain('create or replace function public.estimate_baseline_master_section_total');
     expect(migration).toContain('public.customer_category_selectable(m.slug, t.spec_code, cat.code)');
-    expect(migration).toContain('t.spec_code = any(o.spec_codes)');
     expect(migration).not.toMatch(/update\s+public\.estimate_templates\b/i);
-    expect(migration).not.toContain('create or replace function public.replace_estimate_templates_with_baselines');
-  });
-
-  it('hardens internal functions and does not rewrite formal/historical records', () => {
-    expect(migration).toContain("security definer\nset search_path = ''");
-    expect(migration).toContain('from public, anon, authenticated, service_role');
-    expect(migration).not.toMatch(/^\s*begin;\s*$/im);
-    expect(migration).not.toMatch(/^\s*commit;\s*$/im);
     expect(migration).not.toMatch(/update\s+public\.configurations\b/i);
     expect(migration).not.toMatch(/update\s+public\.quotes\b/i);
     expect(migration).not.toMatch(/update\s+public\.quote_items\b/i);
     expect(migration).not.toMatch(/update\s+public\.configuration_items\b/i);
+  });
+
+  it('hardens internal helpers and leaves transaction ownership to the migration runner', () => {
+    expect(migration).toContain("security definer\nset search_path = ''");
+    expect(migration).toContain('from public, anon, authenticated, service_role');
+    expect(migration).not.toMatch(/^\s*begin;\s*$/im);
+    expect(migration).not.toMatch(/^\s*commit;\s*$/im);
   });
 });

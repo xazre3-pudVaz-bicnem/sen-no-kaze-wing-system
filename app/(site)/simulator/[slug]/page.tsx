@@ -36,6 +36,18 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   const model = bundle.model;
   const allModels = catalog.models;
 
+  // サッシは内外装工事の選択商品。旧データで customer_visible=false が残っていても、
+  // シミュレーターではモデル／仕様ごとの spec option 有無に従って選択対象へ戻す。
+  // DB値そのものの是正はこのUI変更では行わない。
+  const simulatorBundle = {
+    ...bundle,
+    categories: bundle.categories.map((category) =>
+      category.code === 'sash' && category.customer_visible === false
+        ? { ...category, customer_visible: true }
+        : category
+    ),
+  };
+
   // Excelから取り込んだ標準見積をシミュレーターへ渡す。
   // 未登録・未マイグレーション環境では空配列になり、従来計算へ安全にフォールバックする。
   const store = await getStore();
@@ -93,7 +105,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: `${model.name} 見積シミュレーター`, path: `/simulator/${model.slug}` }])} />
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
-          bundle={bundle}
+          bundle={simulatorBundle}
           estimateTemplates={estimateTemplates}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}

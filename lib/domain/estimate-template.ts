@@ -29,17 +29,22 @@ const BASE_CHOICE: EstimateTemplateChoice = {
  */
 export function optionAvailableForSpec(
   option: Pick<ProductOption, 'spec_codes'>,
-  specCode: string
+  specCode: string,
+  modelSlug: string
 ): boolean {
-  return productSpecCodesAllow(option.spec_codes, specCode);
+  return productSpecCodesAllow(option.spec_codes, specCode, modelSlug);
 }
 
 /**
  * 仕様に対して選択できる商品だけで RuleContext を作る。
  * dependency / conflict も候補外の商品を参照しないよう同じ集合へ閉じる。
  */
-export function ruleContextForSpec(ctx: RuleContext, specCode: string): RuleContext {
-  const options = ctx.options.filter((option) => optionAvailableForSpec(option, specCode));
+export function ruleContextForSpec(
+  ctx: RuleContext,
+  specCode: string,
+  modelSlug: string
+): RuleContext {
+  const options = ctx.options.filter((option) => optionAvailableForSpec(option, specCode, modelSlug));
   const ids = new Set(options.map((option) => option.id));
   return {
     categories: ctx.categories,
@@ -192,7 +197,7 @@ export function buildEstimateSpecSelection(
   savedBaselineIds: string[] = []
 ): string[] {
   const level = finishLevelForEstimateSpec(specCode);
-  const specCtx = ruleContextForSpec(ctx, specCode);
+  const specCtx = ruleContextForSpec(ctx, specCode, model.slug);
   const validSavedIds = savedBaselineIds.filter((id) =>
     specCtx.options.some((option) => option.id === id && option.status === 'published')
   );

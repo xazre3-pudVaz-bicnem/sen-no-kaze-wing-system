@@ -1,4 +1,5 @@
 import { defaultSelection, pruneToScope, toggleOption, type RuleContext } from './rules';
+import { productSpecCodesAllow } from './customer-category-applicability';
 import type { BaseModel, EstimateTemplateBundle, ModelPreset, ProductOption } from './types';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
@@ -23,14 +24,14 @@ const BASE_CHOICE: EstimateTemplateChoice = {
 };
 
 /**
- * spec_codes は商品候補の仕様ホワイトリスト。
- * 空配列は全仕様共通、値がある場合は選択中 spec_code に含まれる商品のみ候補にする。
+ * spec_codes は個別商品の仕様ホワイトリスト。
+ * 空配列は全仕様共通。legacy BOX `hotel-single` だけは residence と同一互換範囲として解決する。
  */
 export function optionAvailableForSpec(
   option: Pick<ProductOption, 'spec_codes'>,
   specCode: string
 ): boolean {
-  return option.spec_codes.length === 0 || option.spec_codes.includes(specCode);
+  return productSpecCodesAllow(option.spec_codes, specCode);
 }
 
 /**

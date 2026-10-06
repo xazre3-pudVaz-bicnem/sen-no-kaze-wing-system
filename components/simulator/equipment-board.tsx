@@ -49,6 +49,9 @@ const OPTION_CATEGORY_ORDER = [
 ] as const;
 
 const OTHER_PRODUCT_CATEGORY_ORDER = [
+  'entrance-storage',
+  'closet',
+  'bed',
   'furniture',
   'appliances',
   'exterior-parts',

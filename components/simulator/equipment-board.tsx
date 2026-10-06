@@ -29,6 +29,7 @@ const INTERIOR_EXTERIOR_CATEGORY_ORDER = [
   'roof',
   'exterior-wall',
   'entrance-door',
+  'service-door',
   'sash',
   'interior-door',
   'carpentry',

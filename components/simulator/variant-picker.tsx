@@ -12,10 +12,7 @@ interface Props {
   /** 選択中の選択肢 ID */
   selected: string[];
   onChange: (choiceId: string, groupId: string) => void;
-  /**
-   * 画像付きカードを使うか。
-   * 商品詳細の右側では false にし、画像確認は商品画像／メーカー資料へ集約する。
-   */
+  /** 画像付きの選択肢をカードで比較するか */
   showImages?: boolean;
   /** 選択中の値をグループ見出し横へ表示するか */
   showCurrentValue?: boolean;
@@ -24,8 +21,8 @@ interface Props {
 /**
  * 商品の仕様選び（ネットショップの「カラー」「サイズ」に相当）。
  *
- * デフォルトでは画像付き選択肢を画像カードで表示する。
- * 商品詳細では showImages=false として、比較しやすい文字カードに統一する。
+ * デフォルトでは画像付き選択肢を画像カードで表示し、
+ * 画像がないグループは文字カードでコンパクトに表示する。
  */
 export function VariantPicker({
   groups,

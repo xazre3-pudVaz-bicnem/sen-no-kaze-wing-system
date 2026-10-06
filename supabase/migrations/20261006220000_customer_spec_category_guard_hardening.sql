@@ -114,7 +114,9 @@ update public.options
    and not ('hotel-single' = any(coalesce(spec_codes, '{}'::text[]));
 
 -- ---------- Configuration mutation / concurrency guard ----------
--- INSERT/UPDATE/DELETEすべてで親Configurationをrow lockし、Draft以外の履歴を変更させない。
+-- INSERT/UPDATE/DELETEすべてで関係する親ConfigurationをUUID順にrow lockし、
+-- Draft以外の履歴を変更させない。UPDATEでconfiguration_idを付け替える場合は
+-- old/new両方を検査するため、non-draft履歴からitemを抜き取る迂回も拒否する。
 -- save_configuration_atomic()は最初に同じ親行をFOR UPDATEしており、同一transaction内の再lockは安全。
 
 create or replace function public.enforce_configuration_item_draft_parent()
@@ -124,24 +126,45 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_configuration_id uuid;
-  v_status text;
+  v_parent_ids uuid[];
+  v_parent record;
+  v_parent_count integer := 0;
 begin
-  v_configuration_id := case when tg_op = 'DELETE' then old.configuration_id else new.configuration_id end;
+  if tg_op = 'INSERT' then
+    v_parent_ids := array[new.configuration_id];
+  elsif tg_op = 'DELETE' then
+    v_parent_ids := array[old.configuration_id];
+  else
+    select coalesce(array_agg(parent_id order by parent_id), '{}'::uuid[])
+      into v_parent_ids
+      from (
+        select distinct parent_id
+          from unnest(array[old.configuration_id, new.configuration_id]) as p(parent_id)
+         where parent_id is not null
+      ) parents;
+  end if;
 
-  select cfg.status
-    into v_status
-    from public.configurations cfg
-   where cfg.id = v_configuration_id
-   for update of cfg;
-
-  if not found then
+  if cardinality(v_parent_ids) = 0 then
     raise exception 'VALIDATION: Configurationを確認できません'
       using errcode = 'P0001';
   end if;
 
-  if v_status <> 'draft' then
-    raise exception 'LOCKED: Draft以外のConfiguration明細は変更できません'
+  for v_parent in
+    select cfg.id, cfg.status
+      from public.configurations cfg
+     where cfg.id = any(v_parent_ids)
+     order by cfg.id
+     for update of cfg
+  loop
+    v_parent_count := v_parent_count + 1;
+    if v_parent.status <> 'draft' then
+      raise exception 'LOCKED: Draft以外のConfiguration明細は変更できません'
+        using errcode = 'P0001';
+    end if;
+  end loop;
+
+  if v_parent_count <> cardinality(v_parent_ids) then
+    raise exception 'VALIDATION: Configurationを確認できません'
       using errcode = 'P0001';
   end if;
 
@@ -228,7 +251,8 @@ revoke all on function public.enforce_configuration_item_customer_category()
 -- 通常の保存はatomic SECURITY DEFINER RPCへ限定済み。RLSもDraftだけに絞り、
 -- 将来table privilegeが再付与されてもnon-draft履歴を直接変更できないよう防御を重ねる。
 
-revoke insert, update, truncate on public.configurations from anon, authenticated;
+revoke insert, update, delete, truncate on public.configurations from anon;
+revoke insert, update, truncate on public.configurations from authenticated;
 revoke insert, update, delete, truncate on public.configuration_items from anon, authenticated;
 
 drop policy if exists configurations_update on public.configurations;
@@ -301,6 +325,16 @@ begin
     raise exception 'POSTCONDITION: hotel-single alias trigger is missing';
   end if;
 
+  if not exists (
+    select 1
+      from pg_trigger
+     where tgrelid = 'public.configuration_items'::regclass
+       and tgname = 'configuration_items_00_draft_parent_guard'
+       and not tgisinternal
+  ) then
+    raise exception 'POSTCONDITION: Configuration draft-parent trigger is missing';
+  end if;
+
   if has_table_privilege('authenticated', 'public.configurations', 'INSERT')
      or has_table_privilege('authenticated', 'public.configurations', 'UPDATE')
      or has_table_privilege('authenticated', 'public.configurations', 'TRUNCATE')
@@ -308,8 +342,16 @@ begin
      or has_table_privilege('authenticated', 'public.configuration_items', 'UPDATE')
      or has_table_privilege('authenticated', 'public.configuration_items', 'DELETE')
      or has_table_privilege('authenticated', 'public.configuration_items', 'TRUNCATE')
+     or has_table_privilege('anon', 'public.configurations', 'INSERT')
+     or has_table_privilege('anon', 'public.configurations', 'UPDATE')
+     or has_table_privilege('anon', 'public.configurations', 'DELETE')
+     or has_table_privilege('anon', 'public.configurations', 'TRUNCATE')
+     or has_table_privilege('anon', 'public.configuration_items', 'INSERT')
+     or has_table_privilege('anon', 'public.configuration_items', 'UPDATE')
+     or has_table_privilege('anon', 'public.configuration_items', 'DELETE')
+     or has_table_privilege('anon', 'public.configuration_items', 'TRUNCATE')
   then
-    raise exception 'POSTCONDITION: authenticated still has direct Configuration write privileges';
+    raise exception 'POSTCONDITION: direct Configuration write privileges remain';
   end if;
 
   select t.*

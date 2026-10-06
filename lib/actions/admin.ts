@@ -319,6 +319,14 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
   }
   const { store, option } = context;
 
+  if (option.status !== 'published' && !option.image_url?.trim()) {
+    redirect(
+      previewUrl({
+        error: 'メイン画像が未登録です。商品情報に戻ってメイン画像を登録してから公開してください。',
+      })
+    );
+  }
+
   if (
     option.status !== 'published' &&
     requiresZeroPriceConfirmation(option) &&

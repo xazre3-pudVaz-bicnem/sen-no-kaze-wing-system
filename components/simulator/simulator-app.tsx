@@ -8,11 +8,12 @@ import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-conf
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
-import { baseBreakdownTotal, buildPresetSelection, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
+import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
   finishLevelForEstimateSpec,
+  ruleContextForSpec,
   simulatorEstimateChoices,
 } from '@/lib/domain/estimate-template';
 import {
@@ -144,25 +145,13 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
    */
   const specSelections = useMemo(
     () =>
-      simulatorSpecChoices.map((choice) => {
-        if (choice.template) {
-          return {
-            code: choice.code,
-            ids: buildEstimateBaselineSelection(ctx, model, choice.template),
-          };
-        }
-        if (choice.preset) {
-          return {
-            code: choice.code,
-            ids: buildPresetSelection(ctx, choice.preset, defaults),
-          };
-        }
-        return {
-          code: choice.code,
-          ids: buildEstimateSpecSelection(ctx, model, choice.code),
-        };
-      }),
-    [ctx, defaults, model, simulatorSpecChoices]
+      simulatorSpecChoices.map((choice) => ({
+        code: choice.code,
+        ids: choice.template
+          ? buildEstimateBaselineSelection(ctx, model, choice.template)
+          : buildEstimateSpecSelection(ctx, model, choice.code),
+      })),
+    [ctx, model, simulatorSpecChoices]
   );
 
   const preferredPresetCode = model.presets?.[0]?.code;
@@ -182,19 +171,22 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     'base';
   const initialLevel: FinishLevel =
     initial?.finish_level ?? finishLevelForEstimateSpec(defaultSpecCode);
+  const initialSpecCtx = useMemo(() => ruleContextForSpec(ctx, defaultSpecCode), [ctx, defaultSpecCode]);
   const initialBaselineIds =
-    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaults;
+    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaultSelection(initialSpecCtx, initialLevel);
   const preserveLegacyInitialSelection =
     Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);
+  const preserveReadOnlyHistoricalSelection = Boolean(initial && initial.status !== 'draft');
+  const initialSourceIds = preserveLegacyInitialSelection
+    ? (initial?.option_ids ?? initialBaselineIds)
+    : initialBaselineIds;
+  const initialRuleCtx = preserveReadOnlyHistoricalSelection ? ctx : initialSpecCtx;
+  const eligibleInitialIds = preserveReadOnlyHistoricalSelection
+    ? initialSourceIds
+    : initialSourceIds.filter((id) => initialSpecCtx.options.some((option) => option.id === id));
   const initialSelection = normalizeWashbasinSelection(
     bundle.options,
-    pruneToScope(
-      ctx,
-      preserveLegacyInitialSelection
-        ? (initial?.option_ids ?? initialBaselineIds)
-        : initialBaselineIds,
-      initialLevel
-    ),
+    pruneToScope(initialRuleCtx, eligibleInitialIds, initialLevel),
     initialBaselineIds
   );
   const initialVariants = pruneHiddenVariantChoices(
@@ -214,10 +206,13 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     'exterior-wood-accent-100',
     'exterior-current-gl-bare',
   ]);
-  const hasCurrentExteriorCatalog = allExteriorWallOptions.some((option) => currentExteriorCodes.has(option.code));
-  const exteriorWallOptions = hasCurrentExteriorCatalog
-    ? allExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
-    : allExteriorWallOptions;
+  const initialExteriorWallOptions = initialSpecCtx.options
+    .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const initialHasCurrentExteriorCatalog = initialExteriorWallOptions.some((option) => currentExteriorCodes.has(option.code));
+  const initialSelectableExteriorWallOptions = initialHasCurrentExteriorCatalog
+    ? initialExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
+    : initialExteriorWallOptions;
   const [finishLevel, setFinishLevel] = useState<FinishLevel>(initialLevel);
   const [selected, setSelected] = useState<string[]>(initialSelection);
   /** 選ばれた商品バリエーション（壁色・扉色など）の選択肢 ID */
@@ -238,7 +233,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     }
     return normalizeExteriorFaces(
       undefined,
-      exteriorWallOptions,
+      initialSelectableExteriorWallOptions,
       bundle.variantGroups,
       bundle.variantChoices,
       initialSelection,
@@ -264,6 +259,18 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const resumed = useRef(false);
 
   const readOnly = status !== 'draft';
+  const activeSpecCtx = useMemo(() => ruleContextForSpec(ctx, specCode), [ctx, specCode]);
+  const eligibleExteriorWallOptions = useMemo(
+    () =>
+      activeSpecCtx.options
+        .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
+        .sort((a, b) => a.sort_order - b.sort_order),
+    [activeSpecCtx.options, exteriorWallCat?.id]
+  );
+  const hasCurrentExteriorCatalog = eligibleExteriorWallOptions.some((option) => currentExteriorCodes.has(option.code));
+  const exteriorWallOptions = hasCurrentExteriorCatalog
+    ? eligibleExteriorWallOptions.filter((option) => !legacyExteriorCodes.has(option.code))
+    : eligibleExteriorWallOptions;
   const selectedExteriorOption = allExteriorWallOptions.some((option) => selected.includes(option.id));
   // 旧ConfigurationのDB正本は exterior_faces=[] のまま維持する。
   // ただし画面表示では、保存済みの従来1商品外壁を4面同一として復元する。
@@ -312,24 +319,14 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
         if (!hasInvalidSpec) {
           const restoredLevel = finishLevelForEstimateSpec(restoredSpec);
-          const restoredChoice = simulatorSpecChoices.find((row) => row.code === restoredSpec) ?? null;
-          const restoredTemplate = estimateTemplateByCode.get(restoredSpec) ?? null;
-          const allowedOptionIds = new Set(
-            (restoredTemplate || !restoredChoice?.preset
-              ? bundle.options
-              : bundle.options.filter(
-                  (option) =>
-                    option.spec_codes.length === 0 ||
-                    option.spec_codes.includes(restoredSpec)
-                )
-            ).map((option) => option.id)
-          );
+          const restoredCtx = ruleContextForSpec(ctx, restoredSpec);
+          const allowedOptionIds = new Set(restoredCtx.options.map((option) => option.id));
           const standardIds =
             specSelections.find((row) => row.code === restoredSpec)?.ids ?? [];
           let restoredSelection = normalizeWashbasinSelection(
             bundle.options,
             pruneToScope(
-              ctx,
+              restoredCtx,
               draft.selected.filter((id) => allowedOptionIds.has(id)),
               restoredLevel
             ),
@@ -341,7 +338,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
             (row) => row.selection_mode === 'single' || row.code === 'aircon'
           )) {
             const categoryOptionIds = new Set(
-              bundle.options
+              restoredCtx.options
                 .filter((option) => option.category_id === category.id)
                 .map((option) => option.id)
             );
@@ -356,7 +353,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           }
 
           if (restoredSelection.length === 0 && standardIds.length > 0) {
-            restoredSelection = pruneToScope(ctx, standardIds, restoredLevel);
+            restoredSelection = pruneToScope(restoredCtx, standardIds, restoredLevel);
           }
 
           const selectedGroupIds = new Set(
@@ -386,6 +383,13 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
             bundle.variantChoices,
             [...restoredVariantIds, ...fallbackVariantIds]
           );
+          const restoredExteriorOptions = restoredCtx.options
+            .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')
+            .sort((a, b) => a.sort_order - b.sort_order);
+          const restoredHasCurrentExteriorCatalog = restoredExteriorOptions.some((option) => currentExteriorCodes.has(option.code));
+          const selectableRestoredExteriorOptions = restoredHasCurrentExteriorCatalog
+            ? restoredExteriorOptions.filter((option) => !legacyExteriorCodes.has(option.code))
+            : restoredExteriorOptions;
 
           setSpecCode(restoredSpec);
           setFinishLevel(restoredLevel);
@@ -394,7 +398,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
           setExteriorFaces(
             normalizeExteriorFaces(
               draft.exteriorFaces,
-              exteriorWallOptions,
+              selectableRestoredExteriorOptions,
               bundle.variantGroups,
               bundle.variantChoices,
               restoredSelection,
@@ -452,22 +456,21 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {
-    const hasPreset = Boolean(activeChoice?.preset);
-    // 管理画面で追加された仕様や「本体のみ」は preset がないため、
-    // spec_codes の旧固定値で設備が消えないよう商品一覧をそのまま使う。
-    if (activeEstimateTemplate || !hasPreset) return bundle.options;
-    return bundle.options.filter(
-      (option) => option.spec_codes.length === 0 || option.spec_codes.includes(specCode)
+    if (!readOnly) return activeSpecCtx.options;
+    const eligibleIds = new Set(activeSpecCtx.options.map((option) => option.id));
+    const historicalSelected = bundle.options.filter(
+      (option) => selected.includes(option.id) && !eligibleIds.has(option.id)
     );
-  }, [activeChoice, activeEstimateTemplate, bundle.options, specCode]);
-  /** 注文範囲に入っているカテゴリー（本体のみ → サッシ・外壁・断熱・防火・別途工事だけ） */
-  // customer_visible=false のカテゴリー（サッシ等）は本体に含めるためお客様には出さない
+    return [...activeSpecCtx.options, ...historicalSelected];
+  }, [activeSpecCtx.options, bundle.options, readOnly, selected]);
+  /** 注文範囲に入っているカテゴリー。customer_visible は全モデル共通の公開可否だけを表す。 */
   const scopedCategories = useMemo(
     () => categoriesInScope(bundle.categories, finishLevel).filter((c) => c.customer_visible !== false),
     [bundle.categories, finishLevel]
   );
   const scopedCategoryIds = useMemo(() => new Set(scopedCategories.map((c) => c.id)), [scopedCategories]);
-  // 防火仕様は注文範囲の下の別枠で選ぶため、設備一覧には出さない
+  // 防火仕様は注文範囲の下の別枠で選ぶため、設備一覧には出さない。
+  // モデル・仕様ごとのカテゴリー表示は、選択可能な商品候補が1件以上ある場合だけ行う。
   const specCategories = useMemo(
     () => scopedCategories.filter((c) => c.code !== 'fireproof' && specOptions.some((o) => o.category_id === c.id)),
     [scopedCategories, specOptions]
@@ -514,10 +517,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
     const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
-    const base = preset?.ids ?? defaults;
+    const base = preset?.ids ?? defaultSelection(activeSpecCtx);
     const out: Partial<Record<FinishLevel, number>> = {};
     for (const lv of FINISH_LEVELS) {
-      const ids = pruneToScope(ctx, lv === finishLevel ? selected : base, lv);
+      const ids = pruneToScope(activeSpecCtx, lv === finishLevel ? selected : base, lv);
       out[lv] = computePricing(
         model,
         bundle.options,
@@ -530,7 +533,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       ).total;
     }
     return out;
-  }, [ctx, model, bundle, specSelections, specCode, defaults, selected, finishLevel, exteriorFaces]);
+  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces]);
 
   const independentInsulationCategoryIds = useMemo(
     () =>
@@ -551,8 +554,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       return Boolean(option && independentInsulationCategoryIds.has(option.category_id));
     });
   const validationIssues = useMemo(
-    () => validateSelection(ctx, selected, finishLevel),
-    [ctx, selected, finishLevel]
+    () => validateSelection(activeSpecCtx, selected, finishLevel),
+    [activeSpecCtx, selected, finishLevel]
   );
   const displayIssues = useMemo(() => {
     if (!legacyReadOnlyWithoutIndependentInsulation) return validationIssues;
@@ -576,7 +579,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     legacyReadOnlyWithoutIndependentInsulation,
     validationIssues,
   ]);
-  const blocked = useMemo(() => explainBlocked(ctx, selected), [ctx, selected]);
+  const blocked = useMemo(() => explainBlocked(activeSpecCtx, selected), [activeSpecCtx, selected]);
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
   const baselineVariantIds = useMemo(
     () => defaultVariantIds(bundle, activeSpecSelection),
@@ -584,13 +587,12 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   );
   const atStandardSpecSelection = sameSelection(
     selected,
-    pruneToScope(ctx, activeSpecSelection, finishLevel)
+    pruneToScope(activeSpecCtx, activeSpecSelection, finishLevel)
   );
   const preferredFloorplanKeys = useMemo<string[] | undefined>(() => {
     if (!atStandardSpecSelection || !activePreset) return undefined;
-    const presetSelection = buildPresetSelection(ctx, activePreset, defaults);
-    return selectedPreviewKeys(bundle.options, presetSelection, 'floorplan');
-  }, [activePreset, atStandardSpecSelection, bundle.options, ctx, defaults]);
+    return selectedPreviewKeys(bundle.options, activeSpecSelection, 'floorplan');
+  }, [activePreset, activeSpecSelection, atStandardSpecSelection, bundle.options]);
   const previews = useMemo(
     () =>
       Object.fromEntries(
@@ -622,13 +624,29 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     const choice = simulatorSpecChoices.find((row) => row.code === code);
     if (!selection || !choice) return;
     const nextLevel = finishLevelForEstimateSpec(code);
-    const nextSel = pruneToScope(ctx, selection.ids, nextLevel);
+    const nextCtx = ruleContextForSpec(ctx, code);
+    const nextSel = pruneToScope(nextCtx, selection.ids, nextLevel);
     const nextVariants = defaultVariantIds(bundle, nextSel);
+    const nextExteriorOptions = nextCtx.options
+      .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const nextHasCurrentExteriorCatalog = nextExteriorOptions.some((option) => currentExteriorCodes.has(option.code));
+    const selectableNextExteriorOptions = nextHasCurrentExteriorCatalog
+      ? nextExteriorOptions.filter((option) => !legacyExteriorCodes.has(option.code))
+      : nextExteriorOptions;
     setSpecCode(code);
     setFinishLevel(nextLevel);
     setSelected(nextSel);
     setVariantIds(nextVariants);
-    resetExteriorFaces(nextSel, nextVariants);
+    setExteriorFaces(
+      makeDefaultExteriorFaces(
+        selectableNextExteriorOptions,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        nextSel,
+        nextVariants
+      )
+    );
     setDirty(true);
     pushToast(`「${choice.name}」の標準見積を読み込みました`, 'success');
   };
@@ -642,16 +660,16 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
     const widening = finishLevelRank(level) > finishLevelRank(finishLevel);
     if (widening) {
       const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
-      const wanted = pruneToScope(ctx, preset?.ids ?? defaults, level);
+      const wanted = pruneToScope(activeSpecCtx, preset?.ids ?? defaultSelection(activeSpecCtx), level);
       let cur = selected;
       for (const oid of wanted) {
         if (cur.includes(oid)) continue;
-        const r = toggleOption(ctx, cur, oid);
+        const r = toggleOption(activeSpecCtx, cur, oid);
         if (!r.rejected) cur = r.next;
       }
       setSelected(cur);
     } else {
-      const kept = pruneToScope(ctx, selected, level);
+      const kept = pruneToScope(activeSpecCtx, selected, level);
       const dropped = selected.length - kept.length;
       setSelected(kept);
       if (dropped > 0) pushToast(`注文範囲を外れた ${dropped} 点を見積から外しました`, 'info');
@@ -662,7 +680,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   };
 
   const applyPicker = (categoryId: string, nextInCategory: string[], nextVariants: string[] = []) => {
-    const inCategory = bundle.options.filter((o) => o.category_id === categoryId).map((o) => o.id);
+    const inCategory = activeSpecCtx.options.filter((o) => o.category_id === categoryId).map((o) => o.id);
     let cur = selected;
     const notices: string[] = [];
 
@@ -673,7 +691,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       const rest: string[] = [];
       let progressed = false;
       for (const oid of pending) {
-        const r = toggleOption(ctx, cur, oid);
+        const r = toggleOption(activeSpecCtx, cur, oid);
         if (r.rejected) rest.push(oid);
         else {
           cur = r.next;
@@ -683,7 +701,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       }
       if (!progressed) {
         for (const oid of rest) {
-          const r = toggleOption(ctx, cur, oid);
+          const r = toggleOption(activeSpecCtx, cur, oid);
           if (r.notices[0]) notices.push(r.notices[0]);
         }
         break;
@@ -693,7 +711,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
 
     for (const oid of inCategory) {
       if (!nextInCategory.includes(oid) || cur.includes(oid)) continue;
-      const r = toggleOption(ctx, cur, oid);
+      const r = toggleOption(activeSpecCtx, cur, oid);
       if (r.rejected) notices.push(r.notices[0]);
       else {
         cur = r.next;
@@ -836,7 +854,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   };
 
   const fireproofCat = bundle.categories.find((c) => c.code === 'fireproof');
-  const fireproofOptions = bundle.options
+  const fireproofOptions = specOptions
     .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published')
     .sort((a, b) => a.sort_order - b.sort_order);
   const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));

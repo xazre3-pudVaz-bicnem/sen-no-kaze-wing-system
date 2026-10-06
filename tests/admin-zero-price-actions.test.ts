@@ -58,7 +58,7 @@ const option = (patch: Partial<ProductOption> = {}): ProductOption => ({
   name: 'テスト商品',
   description: null,
   price: 100_000,
-  image_url: null,
+  image_url: 'https://example.invalid/main.png',
   selection_type: 'radio',
   is_required: false,
   is_default: false,
@@ -115,6 +115,21 @@ describe('0円商品のServer Actionガード', () => {
     mocks.requireCatalogEditor.mockResolvedValue({ id: 'admin', role: 'admin' });
     mocks.requireAdmin.mockResolvedValue({ id: 'admin', role: 'admin' });
     redirectAsThrow();
+  });
+
+  it('publishOptionActionはメイン画像なしのDraftをPublishedにしない', async () => {
+    const store = {
+      getOption: vi.fn(async () => option({ status: 'draft', image_url: null })),
+      upsertOption: vi.fn(),
+    };
+    mocks.getStore.mockResolvedValue(store);
+    const fd = new FormData();
+    fd.set('id', OPTION_ID);
+
+    await expect(publishOptionAction(fd)).rejects.toThrow('REDIRECT:');
+    expect(store.upsertOption).not.toHaveBeenCalled();
+    const redirectUrl = String(mocks.redirect.mock.calls[0]?.[0] ?? '');
+    expect(decodeURIComponent(redirectUrl)).toContain('メイン画像が未登録です');
   });
 
   it('publishOptionActionは通常価格0円を確認なしでPublishedにしない', async () => {

@@ -96,6 +96,7 @@ export default async function AdminQuoteManagementPage({
   const actor = await requireAdmin('/admin/quote-management');
   const sp = await searchParams;
   const store = await getStore();
+  const showStandardDraftPreparation = actor.role === 'admin';
 
   const [quotes, requests, draftResumes, dealers, models] = await Promise.all([
     store.listAllQuotes(),
@@ -177,7 +178,6 @@ export default async function AdminQuoteManagementPage({
     .filter((row) => matchesQuery(row, query))
     .filter((row) => matchesDealer(row, dealerFilter))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-
   const requestedKey = sp.quote
     ? `quote-${sp.quote}`
     : sp.draft
@@ -319,14 +319,35 @@ export default async function AdminQuoteManagementPage({
       </section>
 
       {selectedRow ? (
-        <CaseEstimateReview
-          selection={selectedRow.selection}
-          actor={actor}
-          query={query}
-          dealerFilter={dealerFilter}
-          requestedTab={sp.detail_tab}
-          listModelName={selectedRow.modelName}
-        />
+        <>
+          {showStandardDraftPreparation &&
+            selectedRow.selection.kind === 'quote' &&
+            (!sp.detail_tab || sp.detail_tab === 'estimate') && (
+              <div
+                className="flex flex-wrap items-center justify-end gap-2"
+                data-testid="case-estimate-standard-draft-entry"
+              >
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="btn-secondary btn-sm cursor-not-allowed opacity-50"
+                  data-testid="case-estimate-standard-draft-button"
+                >
+                  この見積から標準案を作る
+                </button>
+                <span className="text-xs font-semibold text-muted">準備中</span>
+              </div>
+            )}
+          <CaseEstimateReview
+            selection={selectedRow.selection}
+            actor={actor}
+            query={query}
+            dealerFilter={dealerFilter}
+            requestedTab={sp.detail_tab}
+            listModelName={selectedRow.modelName}
+          />
+        </>
       ) : (
         <div className="rounded-lg border border-line bg-white px-4 py-3 text-xs text-muted">
           案件見積を選択すると、ここに見積書・プランボード・図面の確認内容を表示します。

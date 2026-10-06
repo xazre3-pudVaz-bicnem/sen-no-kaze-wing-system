@@ -6,8 +6,40 @@ import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { BaseMasterCreateForm } from '@/components/admin/base-master-form';
+import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 const memberRank: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
+const baseMasterSchemaTables = [
+  'organization_memberships',
+  'organizations',
+  'base_masters',
+  'base_master_revisions',
+] as const;
+
+type PostgrestLikeError = {
+  code?: string | null;
+  message?: string | null;
+};
+
+function isBaseMasterSchemaPending(error: PostgrestLikeError | null) {
+  if (!error) return false;
+  const message = error.message ?? '';
+  const mentionsKnownTable = baseMasterSchemaTables.some(
+    (table) =>
+      message.includes(`public.${table}`) ||
+      message.includes(`'${table}'`) ||
+      message.includes(`"${table}"`)
+  );
+  return mentionsKnownTable && (error.code === 'PGRST205' || /schema cache/i.test(message));
+}
+
+function BaseMasterPreparingAlert() {
+  return (
+    <Alert tone="info">
+      本体マスターは現在準備中です。本番データベースへの必要な設定反映後に利用できます。現在は参照・登録・編集できません。
+    </Alert>
+  );
+}
 
 export default async function BaseMastersPage({
   searchParams,
@@ -18,6 +50,7 @@ export default async function BaseMastersPage({
   const sp = await searchParams;
   const store = await getStore();
   const models = await store.listModels({ includeDraft: true });
+  const showQuoteManagementTabs = user.role === 'admin';
 
   if (isLocalMode()) {
     return (
@@ -26,6 +59,7 @@ export default async function BaseMastersPage({
         lead="本体の製造明細・価格・公開履歴を管理します。"
         actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
       >
+        {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
         <Alert tone="info">この画面はSupabase接続環境で利用できます。ローカルJSONモードでは参照・編集しません。</Alert>
       </AdminPage>
     );
@@ -57,7 +91,8 @@ export default async function BaseMastersPage({
   if (loadError) {
     return (
       <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
-        <Alert tone="danger">{loadError.message}</Alert>
+        {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
+        {isBaseMasterSchemaPending(loadError) ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{loadError.message}</Alert>}
       </AdminPage>
     );
   }
@@ -75,7 +110,8 @@ export default async function BaseMastersPage({
   if (revisionResult.error) {
     return (
       <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
-        <Alert tone="danger">{revisionResult.error.message}</Alert>
+        {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
+        {isBaseMasterSchemaPending(revisionResult.error) ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{revisionResult.error.message}</Alert>}
       </AdminPage>
     );
   }
@@ -106,6 +142,7 @@ export default async function BaseMastersPage({
       lead="Wing・BOXなどの商品モデルごとに、本体基準明細・価格・公開履歴を管理します。"
       actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
     >
+      {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
       {sp.discarded && <Alert tone="success">下書きを破棄しました。</Alert>}
       <Alert tone="info">
         既存の標準見積・旧本体内訳はまだこの新本体マスターへ自動移行していません。現在は新しく登録した本体だけを管理します。

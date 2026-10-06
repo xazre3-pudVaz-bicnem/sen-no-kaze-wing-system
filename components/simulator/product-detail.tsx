@@ -20,6 +20,22 @@ interface Props {
 }
 
 /**
+ * 設備商品は仕様を文字カードで選ぶ。
+ * EquipmentBoard の「オプション」分類と同じ既存カテゴリコードを使い、
+ * 外壁・屋根・床材など視覚比較が必要な商品へ変更を広げない。
+ */
+const EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES = new Set([
+  'ub',
+  'toilet',
+  'washbasin',
+  'kitchen',
+  'boiler',
+  'aircon',
+  'lighting',
+  'smartlock',
+]);
+
+/**
  * 共通商品詳細の本文。
  *
  * 左側は「見る場所」＝商品画像・メーカー資料。
@@ -40,6 +56,7 @@ export function ProductDetail({
   const [activeMedia, setActiveMedia] = useState<'image' | 'document'>('image');
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
+  const useTextVariantCards = EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES.has(category.code);
 
   const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
   const galleryImages = [
@@ -48,12 +65,14 @@ export function ProductDetail({
       url: image.url,
       label: image.caption?.trim() || image.alt?.trim() || '商品画像',
     })),
-    ...choices
-      .filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))
-      .map((choice) => ({
-        url: choice.image_url as string,
-        label: `${groupNameById.get(choice.group_id)}：${choice.name}`,
-      })),
+    ...(useTextVariantCards
+      ? []
+      : choices
+          .filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))
+          .map((choice) => ({
+            url: choice.image_url as string,
+            label: `${groupNameById.get(choice.group_id)}：${choice.name}`,
+          }))),
   ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
   const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
   const activeImage = galleryImages[safeImageIndex] ?? null;
@@ -68,14 +87,6 @@ export function ProductDetail({
 
   const handleVariantChange = (choiceId: string, groupId: string) => {
     onVariantChange(choiceId, groupId);
-
-    const choice = choices.find((item) => item.id === choiceId);
-    if (!choice?.image_url) return;
-    const imageIndex = galleryImages.findIndex((image) => image.url === choice.image_url);
-    if (imageIndex < 0) return;
-
-    setActiveMedia('image');
-    setActiveImageIndex(imageIndex);
   };
 
   const basicInfo = [
@@ -112,7 +123,7 @@ export function ProductDetail({
 
   return (
     <div className="h-full min-h-0" data-testid="product-detail">
-      <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(21rem,0.92fr)]">
+      <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[minmax(0,1.85fr)_minmax(19rem,1fr)]">
         <section className="min-w-0 lg:self-start">
           <div
             className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-line bg-sand/45 p-1"
@@ -187,7 +198,7 @@ export function ProductDetail({
                   src={activeImage.url}
                   alt={`${option.name} ${activeImage.label}`}
                   fill
-                  sizes="(min-width: 1024px) 36rem, 90vw"
+                  sizes="(min-width: 1024px) 62vw, 90vw"
                   className="object-contain"
                 />
                 {galleryImages.length > 1 && (
@@ -331,7 +342,9 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  画像が登録されている色・柄はその場で比較できます。選ぶと左の商品画像も切り替わります。
+                  {useTextVariantCards
+                    ? '名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。'
+                    : '色・柄は画像を見ながら選択できます。左の商品画像はサムネイルや矢印で切り替えます。'}
                 </p>
               </div>
               <VariantPicker
@@ -339,7 +352,7 @@ export function ProductDetail({
                 choices={choices}
                 selected={selectedVariantIds}
                 onChange={handleVariantChange}
-                showImages
+                showImages={!useTextVariantCards}
                 showCurrentValue
               />
             </div>

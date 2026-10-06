@@ -14,24 +14,27 @@ const variantPicker = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/variant-picker.tsx'),
   'utf8'
 );
+const exteriorWallFacesDialog = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/simulator/exterior-wall-faces-dialog.tsx'),
+  'utf8'
+);
 
 describe('シミュレーター商品詳細の情報表示', () => {
-  it('設備商品だけ仕様選択をコンパクトな文字カードにする', () => {
-    for (const code of ['ub', 'toilet', 'washbasin', 'kitchen', 'boiler', 'aircon', 'lighting', 'smartlock']) {
-      expect(productDetail).toContain(`'${code}'`);
-    }
-    expect(productDetail).toContain('const useTextVariantCards = EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES.has(category.code);');
-    expect(productDetail).toContain('showImages={!useTextVariantCards}');
+  it('通常の商品詳細は全カテゴリーで仕様選択をコンパクトな文字カードにする', () => {
+    expect(productDetail).toContain('showImages={false}');
+    expect(productDetail).toContain('名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。');
+    expect(productDetail).not.toContain('EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES');
+    expect(productDetail).not.toContain('useTextVariantCards');
     expect(variantPicker).toContain('const withImage = showImages && list.some((c) => c.image_url);');
     expect(variantPicker).toContain("'grid grid-cols-1 sm:grid-cols-2'");
     expect(variantPicker).toContain("'min-h-10 py-2 pr-2.5 pl-8'");
   });
 
-  it('設備商品では仕様画像を左ギャラリーへ自動追加しない', () => {
-    expect(productDetail).toContain('...(useTextVariantCards');
+  it('通常の商品詳細では仕様画像を左ギャラリーへ自動追加しない', () => {
     expect(productDetail).toContain("...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),");
     expect(productDetail).toContain('...(option.gallery_images ?? []).map((image) => ({');
-    expect(productDetail).toContain('.filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))');
+    expect(productDetail).not.toContain('choice.image_url');
+    expect(productDetail).not.toContain('groupNameById');
   });
 
   it('仕様を選んでも左の商品画像を自動切替しない', () => {
@@ -53,10 +56,11 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(productDetail).toContain('onClick={() => moveImage(1)}');
   });
 
-  it('外壁・屋根・床材など設備カテゴリ以外は画像付き仕様選択を維持する', () => {
-    expect(productDetail).toContain('showImages={!useTextVariantCards}');
-    expect(productDetail).toContain("...(useTextVariantCards\n      ? []\n      : choices");
-    expect(variantPicker).toContain("withImage\n                  ? 'grid grid-cols-3 sm:grid-cols-4'");
+  it('外壁4面の専用UIは画像付き仕様選択を維持する', () => {
+    expect(exteriorWallFacesDialog).toContain('data-testid="exterior-wall-faces-dialog"');
+    expect(exteriorWallFacesDialog).toContain('<VariantPicker');
+    expect(exteriorWallFacesDialog).not.toContain('showImages={false}');
+    expect(variantPicker).toContain('showImages = true');
     expect(variantPicker).toContain('<SmartImage src={c.image_url} alt={c.name} fill sizes="120px" className="object-cover" />');
   });
 

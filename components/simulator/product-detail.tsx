@@ -20,26 +20,11 @@ interface Props {
 }
 
 /**
- * 設備商品は仕様を文字カードで選ぶ。
- * EquipmentBoard の「オプション」分類と同じ既存カテゴリコードを使い、
- * 外壁・屋根・床材など視覚比較が必要な商品へ変更を広げない。
- */
-const EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES = new Set([
-  'ub',
-  'toilet',
-  'washbasin',
-  'kitchen',
-  'boiler',
-  'aircon',
-  'lighting',
-  'smartlock',
-]);
-
-/**
  * 共通商品詳細の本文。
  *
- * 左側は「見る場所」＝商品画像・メーカー資料。
- * 右側は「理解して選ぶ場所」＝商品名・特徴・説明・基本情報・仕様選択。
+ * 左側は「見る場所」＝商品本体画像・サブ画像・メーカー資料。
+ * 右側は「理解して選ぶ場所」＝商品名・特徴・説明・基本情報・文字中心の仕様選択。
+ * 選択肢画像は通常の商品詳細では表示せず、外壁4面など専用UIだけが必要に応じて扱う。
  * 金額と確定ボタンは親ダイアログの固定フッターに置く。
  */
 export function ProductDetail({
@@ -56,23 +41,13 @@ export function ProductDetail({
   const [activeMedia, setActiveMedia] = useState<'image' | 'document'>('image');
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
-  const useTextVariantCards = EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES.has(category.code);
 
-  const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
   const galleryImages = [
     ...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),
     ...(option.gallery_images ?? []).map((image) => ({
       url: image.url,
       label: image.caption?.trim() || image.alt?.trim() || '商品画像',
     })),
-    ...(useTextVariantCards
-      ? []
-      : choices
-          .filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))
-          .map((choice) => ({
-            url: choice.image_url as string,
-            label: `${groupNameById.get(choice.group_id)}：${choice.name}`,
-          }))),
   ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
   const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
   const activeImage = galleryImages[safeImageIndex] ?? null;
@@ -342,9 +317,7 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  {useTextVariantCards
-                    ? '名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。'
-                    : '色・柄は画像を見ながら選択できます。左の商品画像はサムネイルや矢印で切り替えます。'}
+                  名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。
                 </p>
               </div>
               <VariantPicker
@@ -352,7 +325,7 @@ export function ProductDetail({
                 choices={choices}
                 selected={selectedVariantIds}
                 onChange={handleVariantChange}
-                showImages={!useTextVariantCards}
+                showImages={false}
                 showCurrentValue
               />
             </div>

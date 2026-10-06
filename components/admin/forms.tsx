@@ -977,7 +977,7 @@ export function OptionForm({
         <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
           <div>
             <p className="text-lg font-semibold">商品の詳細</p>
-            <p className="mt-1 text-sm text-muted">サイズ、説明、お客様向けの特徴など、商品を理解するための情報を整理します。</p>
+            <p className="mt-1 text-sm text-muted">サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。</p>
           </div>
 
           {(registrationHint || guidance.example || guidance.fixedInfo.length > 0) && (
@@ -1029,7 +1029,7 @@ export function OptionForm({
                 </div>
               )}
             </Field>
-            <Field label="お客様向け特徴" htmlFor={`highlight-${mode}`} hint="例：標準候補／清掃性が高い／節水仕様" errors={e.highlight}>
+            <Field label="メーカー記載の特徴（任意）" htmlFor={`highlight-${mode}`} hint="メーカー資料・カタログに明確な記載がある場合のみ入力。記載がなければ空欄で構いません。" errors={e.highlight}>
               <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
             </Field>
           </div>

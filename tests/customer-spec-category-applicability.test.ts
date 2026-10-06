@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCustomerCategoryApplicability,
   customerCategorySelectable,
+  CUSTOMER_SPEC_DENY_ALL,
   effectiveCustomerSpecCodes,
 } from '@/lib/domain/customer-category-applicability';
 import {
@@ -162,7 +163,7 @@ describe('customer spec product eligibility', () => {
   it('intersects product suitability with the category matrix without rewriting raw product truth', () => {
     expect(effectiveCustomerSpecCodes('wing-01', 'kitchen', [])).toEqual(['residence', 'office']);
     expect(effectiveCustomerSpecCodes('wing-01', 'kitchen', ['hotel', 'residence'])).toEqual(['residence']);
-    expect(effectiveCustomerSpecCodes('flat', 'ub', [])).toEqual([]);
+    expect(effectiveCustomerSpecCodes('flat', 'ub', [])).toEqual([CUSTOMER_SPEC_DENY_ALL]);
     expect(effectiveCustomerSpecCodes('flat', 'lighting', [])).toEqual([]);
   });
 
@@ -187,7 +188,7 @@ describe('customer spec product eligibility', () => {
     } as unknown as CatalogBundle;
 
     const applied = applyCustomerCategoryApplicability(bundle);
-    expect(applied.options.find((row) => row.code === 'ub-1')?.spec_codes).toEqual([]);
+    expect(applied.options.find((row) => row.code === 'ub-1')?.spec_codes).toEqual([CUSTOMER_SPEC_DENY_ALL]);
     expect(ruleContextForSpec({ ...applied, options: applied.options }, 'office').options.map((row) => row.code)).toEqual(['light-1']);
   });
 

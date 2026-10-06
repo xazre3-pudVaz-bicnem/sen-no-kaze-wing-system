@@ -10,8 +10,6 @@
 -- 発行済み Quote / Revision / Snapshot / Configuration の保存値・金額は更新しない。
 -- 既存 migration は編集せず、本 corrective は backlog の末尾で適用する。
 
-begin;
-
 -- ---------- preflight / fail closed ----------
 
 do $$
@@ -20,8 +18,10 @@ declare
 begin
   foreach v_code in array array['roof', 'exterior-wall', 'sash', 'interior-door', 'entrance-door']::text[]
   loop
-    if not exists (select 1 from public.option_categories where code = v_code) then
-      raise exception 'PRECONDITION: required category % is missing', v_code;
+    if not exists (
+      select 1 from public.option_categories where code = v_code and status = 'published'
+    ) then
+      raise exception 'PRECONDITION: required published category % is missing', v_code;
     end if;
   end loop;
 
@@ -81,6 +81,23 @@ begin
   ) then
     raise exception 'PRECONDITION: sash-standard description has changed; review before applying corrective';
   end if;
+
+  -- 他のmigration/手作業ですでにservice-doorが作られている場合、意味が一致しなければ上書きしない。
+  if exists (
+    select 1
+      from public.option_categories
+     where code = 'service-door'
+       and (
+         name is distinct from '勝手口ドア'
+         or selection_mode is distinct from 'single'
+         or is_required is distinct from false
+         or customer_visible is distinct from true
+         or status is distinct from 'published'
+         or finish_level is distinct from 'shell'
+       )
+  ) then
+    raise exception 'PRECONDITION: existing service-door category has unexpected semantics';
+  end if;
 end;
 $$;
 
@@ -114,17 +131,7 @@ values (
   3,
   'shell'
 )
-on conflict (code) do update
-set name = excluded.name,
-    description = excluded.description,
-    selection_mode = excluded.selection_mode,
-    is_required = excluded.is_required,
-    customer_visible = excluded.customer_visible,
-    status = excluded.status,
-    group_code = excluded.group_code,
-    group_name = excluded.group_name,
-    group_sort = excluded.group_sort,
-    finish_level = excluded.finish_level;
+on conflict (code) do nothing;
 
 update public.option_categories
    set customer_visible = true,
@@ -167,7 +174,8 @@ update public.options
 
 -- ---------- DB-side category applicability ----------
 -- UIだけではなく、新しく保存されるConfigurationでも本体分類表の × を拒否する。
--- 未知のmodel/specは、確定表にないカテゴリーを勝手に公開しないため controlled categoryをfail closed。
+-- `base` は本体分類表に対応行がないので既存finish_level挙動へ委ねる。
+-- 未知の業務specは、確定表にないカテゴリーを勝手に公開しないため controlled categoryをfail closed。
 -- spec_code NULLは既存legacy互換のためこのcorrectiveでは制限しない。
 -- BOX hotel-singleは旧「ホテル・単身者用」互換コードで分類表に同名行がないため、
 -- 確定hotel/residenceの和集合（residenceと同じ）を互換範囲として扱う。
@@ -188,40 +196,25 @@ as $$
       'entrance-door', 'service-door', 'sash', 'interior-door',
       'ub', 'kitchen', 'washbasin', 'toilet'
     ) then true
-    when p_spec_code is null then true
-
-    when p_model_slug = 'wing-01' and p_spec_code = 'base' then
-      p_category_code = any(array['roof', 'exterior-wall', 'entrance-door', 'service-door', 'sash']::text[])
-    when p_model_slug = 'wing-01' and p_spec_code = 'hotel' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'interior-door', 'ub', 'washbasin', 'toilet']::text[])
-    when p_model_slug = 'wing-01' and p_spec_code = 'residence' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'interior-door', 'ub', 'kitchen', 'washbasin', 'toilet']::text[])
-    when p_model_slug = 'wing-01' and p_spec_code = 'room' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'interior-door']::text[])
-    when p_model_slug = 'wing-01' and p_spec_code = 'office' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'ub', 'kitchen', 'toilet']::text[])
-
-    when p_model_slug = 'box' and p_spec_code = 'base' then
-      p_category_code = any(array['roof', 'exterior-wall', 'entrance-door', 'service-door', 'sash']::text[])
-    when p_model_slug = 'box' and p_spec_code = 'hotel' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'interior-door', 'ub', 'washbasin', 'toilet']::text[])
-    when p_model_slug = 'box' and p_spec_code in ('residence', 'hotel-single') then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'interior-door', 'ub', 'kitchen', 'washbasin', 'toilet']::text[])
-    when p_model_slug = 'box' and p_spec_code = 'room' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'interior-door']::text[])
-    when p_model_slug = 'box' and p_spec_code = 'office' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'ub', 'kitchen', 'toilet']::text[])
-    when p_model_slug = 'box' and p_spec_code = 'water-kit' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash', 'ub', 'kitchen', 'washbasin', 'toilet']::text[])
-    when p_model_slug = 'box' and p_spec_code = 'storage' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash']::text[])
-
-    when p_model_slug = 'flat' and p_spec_code = 'base' then
-      p_category_code = any(array['roof', 'exterior-wall', 'entrance-door', 'service-door', 'sash']::text[])
-    when p_model_slug = 'flat' and p_spec_code = 'office' then
-      p_category_code = any(array['roof', 'exterior-wall', 'floor', 'wall-ceiling', 'carpentry', 'entrance-door', 'service-door', 'sash']::text[])
-
-    else false
+    when p_spec_code is null or p_spec_code = 'base' then true
+    else coalesce((
+      select p_category_code = any(v.categories)
+      from (values
+        ('wing-01', 'hotel', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','interior-door','ub','washbasin','toilet']::text[]),
+        ('wing-01', 'residence', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','interior-door','ub','kitchen','washbasin','toilet']::text[]),
+        ('wing-01', 'room', array['roof','exterior-wall','floor','wall-ceiling','carpentry','interior-door']::text[]),
+        ('wing-01', 'office', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','ub','kitchen','toilet']::text[]),
+        ('box', 'hotel', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','interior-door','ub','washbasin','toilet']::text[]),
+        ('box', 'residence', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','interior-door','ub','kitchen','washbasin','toilet']::text[]),
+        ('box', 'room', array['roof','exterior-wall','floor','wall-ceiling','carpentry','interior-door']::text[]),
+        ('box', 'office', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','ub','kitchen','toilet']::text[]),
+        ('box', 'hotel-single', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','interior-door','ub','kitchen','washbasin','toilet']::text[]),
+        ('box', 'water-kit', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash','ub','kitchen','washbasin','toilet']::text[]),
+        ('box', 'storage', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash']::text[]),
+        ('flat', 'office', array['roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','service-door','sash']::text[])
+      ) as v(model_slug, spec_code, categories)
+      where v.model_slug = p_model_slug and v.spec_code = p_spec_code
+    ), false)
   end;
 $$;
 
@@ -229,6 +222,7 @@ alter function public.customer_category_selectable(text, text, text) owner to po
 revoke all on function public.customer_category_selectable(text, text, text)
   from public, anon, authenticated, service_role;
 
+-- Configuration item単体の直接DMLでも、商品側適合と分類表の×を迂回させない。
 create or replace function public.enforce_configuration_item_customer_category()
 returns trigger
 language plpgsql
@@ -236,12 +230,15 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_model_id uuid;
   v_model_slug text;
   v_spec_code text;
   v_category_code text;
+  v_option_model_id uuid;
+  v_option_spec_codes text[];
 begin
-  select m.slug, cfg.spec_code, cat.code
-    into v_model_slug, v_spec_code, v_category_code
+  select m.id, m.slug, cfg.spec_code, cat.code, o.base_model_id, coalesce(o.spec_codes, '{}'::text[])
+    into v_model_id, v_model_slug, v_spec_code, v_category_code, v_option_model_id, v_option_spec_codes
     from public.configurations cfg
     join public.base_models m on m.id = cfg.base_model_id
     join public.options o on o.id = new.option_id
@@ -250,6 +247,18 @@ begin
 
   if not found then
     raise exception 'VALIDATION: Configurationまたは商品カテゴリーを確認できません'
+      using errcode = 'P0001';
+  end if;
+
+  if v_option_model_id is not null and v_option_model_id <> v_model_id then
+    raise exception 'VALIDATION: この商品は選択中のモデルでは使用できません'
+      using errcode = 'P0001';
+  end if;
+
+  if v_spec_code is not null
+     and cardinality(v_option_spec_codes) > 0
+     and not (v_spec_code = any(v_option_spec_codes)) then
+    raise exception 'VALIDATION: この商品は選択中の仕様では使用できません'
       using errcode = 'P0001';
   end if;
 
@@ -270,6 +279,61 @@ drop trigger if exists configuration_items_customer_category_guard on public.con
 create trigger configuration_items_customer_category_guard
 before insert or update of configuration_id, option_id on public.configuration_items
 for each row execute function public.enforce_configuration_item_customer_category();
+
+-- Configuration側のspec/modelだけを直接変更して既存itemsを不整合にする経路も、
+-- transaction終端でfinal stateを検証して拒否する。save_configuration_atomicの
+-- 「header更新→items入替」を妨げないようDEFERRABLEにする。
+create or replace function public.enforce_configuration_customer_categories()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_bad record;
+begin
+  if new.base_model_id is not distinct from old.base_model_id
+     and new.spec_code is not distinct from old.spec_code then
+    return new;
+  end if;
+
+  select o.code as option_code, cat.code as category_code
+    into v_bad
+    from public.configuration_items ci
+    join public.options o on o.id = ci.option_id
+    join public.option_categories cat on cat.id = o.category_id
+    join public.base_models m on m.id = new.base_model_id
+   where ci.configuration_id = new.id
+     and (
+       (o.base_model_id is not null and o.base_model_id <> new.base_model_id)
+       or (
+         new.spec_code is not null
+         and cardinality(coalesce(o.spec_codes, '{}'::text[])) > 0
+         and not (new.spec_code = any(o.spec_codes))
+       )
+       or not public.customer_category_selectable(m.slug, new.spec_code, cat.code)
+     )
+   limit 1;
+
+  if found then
+    raise exception 'VALIDATION: 仕様変更後に選択不可の商品 %（カテゴリー %）が残っています',
+      v_bad.option_code, v_bad.category_code
+      using errcode = 'P0001';
+  end if;
+
+  return new;
+end;
+$$;
+
+alter function public.enforce_configuration_customer_categories() owner to postgres;
+revoke all on function public.enforce_configuration_customer_categories()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists configurations_customer_category_guard on public.configurations;
+create constraint trigger configurations_customer_category_guard
+after update on public.configurations
+deferrable initially deferred
+for each row execute function public.enforce_configuration_customer_categories();
 
 -- ---------- standard-estimate baseline ----------
 -- baseline_option_ids自体は履歴・取込結果として書き換えない。
@@ -305,6 +369,8 @@ as $$
 $$;
 
 alter function public.estimate_baseline_master_section_total(uuid, text) owner to postgres;
+revoke all on function public.estimate_baseline_master_section_total(uuid, text)
+  from public, anon, authenticated, service_role;
 
 -- ---------- postconditions ----------
 
@@ -351,10 +417,9 @@ begin
      or not public.customer_category_selectable('box', 'storage', 'sash')
      or public.customer_category_selectable('flat', 'office', 'toilet')
      or not public.customer_category_selectable('flat', 'office', 'sash')
+     or not public.customer_category_selectable('wing-01', 'base', 'sash')
   then
-    raise exception 'POSTCONDITION: customer category matrix does not match the confirmed classification sheet';
+    raise exception 'POSTCONDITION: customer category matrix does not match the confirmed classification sheet / base compatibility';
   end if;
 end;
 $$;
-
-commit;

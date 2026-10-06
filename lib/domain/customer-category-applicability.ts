@@ -1,5 +1,8 @@
 import type { CatalogBundle, ProductOption } from './types';
 
+/** 公開カタログ内だけで使う「このカテゴリーでは選べる仕様なし」の非永続sentinel。 */
+export const CUSTOMER_SPEC_DENY_ALL = '__customer_category_not_selectable__';
+
 /**
  * 本体分類表 1シート目の「モデル × 仕様 × 項目 = 選択 / ×」を
  * お客様向けカテゴリー表示へ写すための実装表。
@@ -91,6 +94,7 @@ export function customerCategorySelectable(
  *
  * - DB spec_codes=[]: 商品側は全仕様共通 → カテゴリーが「選択」の仕様だけへ限定
  * - DB spec_codes!=[]: 商品側ホワイトリスト ∩ カテゴリー「選択」仕様
+ * - 交差結果が0件: []は「全仕様共通」の意味なので、非永続sentinelでdeny-allを表す
  */
 export function effectiveCustomerSpecCodes(
   modelSlug: string,
@@ -100,15 +104,18 @@ export function effectiveCustomerSpecCodes(
   if (!controlled.has(categoryCode)) return [...productSpecCodes];
 
   const modelRows = CUSTOMER_CATEGORY_MATRIX[modelSlug];
-  if (!modelRows) return [];
+  if (!modelRows) return [CUSTOMER_SPEC_DENY_ALL];
 
   const categorySpecs = Object.entries(modelRows)
     .filter(([, categories]) => categories.includes(categoryCode))
     .map(([specCode]) => specCode);
 
-  if (productSpecCodes.length === 0) return categorySpecs;
-  const allowed = new Set(categorySpecs);
-  return productSpecCodes.filter((specCode) => allowed.has(specCode));
+  const effective =
+    productSpecCodes.length === 0
+      ? categorySpecs
+      : productSpecCodes.filter((specCode) => categorySpecs.includes(specCode));
+
+  return effective.length > 0 ? effective : [CUSTOMER_SPEC_DENY_ALL];
 }
 
 /** 公開シミュレーター用CatalogBundleに、カテゴリー行列を非破壊で反映する。 */

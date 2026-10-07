@@ -66,7 +66,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('mode="all"');
     expect(editPage).not.toContain('mode="product"');
     expect(editPage).not.toContain('mode="pricing"');
-    expect(editPage).toContain('商品情報はSTEP 2へ進むときや、画像・資料など別の登録操作の前に自動保存されます。');
+    expect(editPage).toContain('下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。');
     expect(editPage).toContain('STEP 2 登録内容確認へ');
     expect(editPage).toContain('data-testid="option-registration-info"');
     expect(editPage).toContain('data-testid="option-customer-preview"');
@@ -75,10 +75,10 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(newPage).not.toContain('内容確認・登録');
     expect(editPage).not.toContain('商品登録の7ステップ');
   });
-  it('見積テンプレートからの新規登録も基本情報→詳細登録→STEP2公開後に戻る', () => {
+  it('見積テンプレートからの新規登録も基本情報→詳細登録→STEP2登録後に戻る', () => {
     expect(newPage).toContain('商品登録の2ステップ');
     expect(newPage).toContain('まず基本情報を入力して「次へ：画像・資料」へ進み');
-    expect(newPage).toContain('STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。');
+    expect(newPage).toContain('STEP 2で登録内容を確認して「この内容で登録」した後に元の見積テンプレートへ戻って商品を追加します。');
     expect(newPage).toContain('return_to');
     expect(newPage).toContain('mode="create"');
     expect(forms).toContain('次へ：画像・資料');
@@ -113,7 +113,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('未保存の変更はSTEP 2へ進むときに先に自動保存されます。');
   });
 
-  it('既存商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {
+  it('下書き商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {
     expect(editPage).toContain('OptionRegistrationSaveBoundary');
     expect(editPage).toContain('OptionRegistrationPreviewButton');
     expect(forms).toContain('registerSaveHandler');
@@ -144,7 +144,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).not.toContain('aria-label="商品情報の入力順"');
   });
 
-  it('新規商品は下書きで作成し、お客様表示確認後に明示公開する', () => {
+  it('新規商品は下書きで作成し、登録内容確認後に明示登録する', () => {
     expect(forms).toContain('カテゴリーを選択してください');
     expect(forms).toContain('新規商品は下書きで保存し、STEP 2のお客様表示を確認してから公開します。');
     expect(adminActions).toContain("status: existingOption?.status === 'published' ? formData.get('status') : 'draft'");
@@ -153,11 +153,11 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(adminActions).toContain('editableOptionContext(actor, id)');
     expect(adminActions).toContain("status: 'published'");
     expect(editPage).toContain('publishOptionAction');
-    expect(editPage).toContain('現在は下書きです。上のお客様表示に問題がなければ公開してください。');
-    expect(editPage).toContain('この内容で公開');
+    expect(editPage).toContain('現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。');
+    expect(editPage).toContain('この内容で登録');
     expect(newPage).toContain('最初は基本情報だけ入力します。');
     expect(newPage).toContain('そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。');
-    expect(newPage).toContain('最後にSTEP 2でお客様表示を確認して公開します。');
+    expect(newPage).toContain('最後にSTEP 2で登録内容とお客様表示を確認し、「この内容で登録」します。');
     expect(forms).toContain("option?.status === 'published'");
     expect(forms).toContain('下書き商品の公開はSTEP 2のお客様表示を確認してから行います。');
     expect(forms).toContain('下書きへ戻す');

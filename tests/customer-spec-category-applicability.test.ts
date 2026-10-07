@@ -4,6 +4,7 @@ import {
   applyCustomerCategoryApplicability,
   customerCategorySelectable,
   CUSTOMER_CATEGORY_BUSINESS_ITEM,
+  CUSTOMER_CATEGORY_MATRIX,
   CUSTOMER_SPEC_DENY_ALL,
   effectiveCustomerSpecCodes,
   productSpecCodesAllow,
@@ -70,21 +71,21 @@ const option = (
 const controlledCategoryCodes = Object.keys(CUSTOMER_CATEGORY_BUSINESS_ITEM);
 
 const matrixRows: Array<[string, string, readonly CustomerBusinessItemCode[]]> = [
-  ['wing-01', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
-  ['wing-01', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
   ['wing-01', 'room', ['roof-exterior','interior','interior-door','closet','bed','furnishings','other']],
-  ['wing-01', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','furnishings','other']],
-  ['box', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
-  ['box', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']],
+  ['wing-01', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']],
+  ['box', 'hotel', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
+  ['box', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
   ['box', 'room', ['roof-exterior','interior','interior-door','closet','bed','furnishings','other']],
-  ['box', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','furnishings','other']],
-  ['box', 'water-kit', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet']],
+  ['box', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']],
+  ['box', 'water-kit', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler']],
   ['box', 'storage', ['roof-exterior','interior','entrance-door','sash']],
   ['flat', 'office', ['roof-exterior','interior','entrance-door','sash']],
 ];
 
 describe('confirmed classification-sheet business-item matrix', () => {
-  it.each(matrixRows)('%s / %s matches all 14 business columns', (modelSlug, specCode, selectedItems) => {
+  it.each(matrixRows)('%s / %s matches all 15 business columns', (modelSlug, specCode, selectedItems) => {
     for (const categoryCode of controlledCategoryCodes) {
       const businessItem = CUSTOMER_CATEGORY_BUSINESS_ITEM[categoryCode];
       expect(customerCategorySelectable(modelSlug, specCode, categoryCode), categoryCode).toBe(
@@ -107,9 +108,36 @@ describe('confirmed classification-sheet business-item matrix', () => {
     expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.furniture).toBe('furnishings');
     expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.appliances).toBe('furnishings');
     expect(CUSTOMER_CATEGORY_BUSINESS_ITEM['office-supplies']).toBe('furnishings');
-    for (const code of ['aircon','boiler','lighting','smartlock','exterior-parts']) {
+    for (const code of ['aircon','lighting','smartlock','exterior-parts']) {
       expect(CUSTOMER_CATEGORY_BUSINESS_ITEM[code]).toBe('other');
     }
+  });
+
+  it('has exactly the 15 confirmed business items with boiler as its own item', () => {
+    expect([...new Set(Object.values(CUSTOMER_CATEGORY_BUSINESS_ITEM))].sort()).toEqual(
+      [
+        'roof-exterior', 'interior', 'entrance-door', 'sash', 'bath', 'kitchen', 'washbasin', 'toilet',
+        'boiler', 'entrance-storage', 'interior-door', 'closet', 'bed', 'furnishings', 'other',
+      ].sort()
+    );
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.boiler).toBe('boiler');
+    expect(CUSTOMER_CATEGORY_BUSINESS_ITEM.boiler).not.toBe('other');
+  });
+
+  it('gives boiler the same selectability as UB/SWR on every model/spec row, not the other-items column', () => {
+    for (const [modelSlug, rows] of Object.entries(CUSTOMER_CATEGORY_MATRIX)) {
+      for (const specCode of Object.keys(rows)) {
+        expect(customerCategorySelectable(modelSlug, specCode, 'boiler'), `${modelSlug}/${specCode}`).toBe(
+          customerCategorySelectable(modelSlug, specCode, 'ub')
+        );
+      }
+    }
+    // UB/SWR が × の居室では給湯器も ×（「その他」は選択のまま）
+    expect(customerCategorySelectable('wing-01', 'room', 'boiler')).toBe(false);
+    expect(customerCategorySelectable('wing-01', 'room', 'aircon')).toBe(true);
+    // UB/SWR が選択の BOX 水回りキットでは給湯器も選択（「その他」は × のまま）
+    expect(customerCategorySelectable('box', 'water-kit', 'boiler')).toBe(true);
+    expect(customerCategorySelectable('box', 'water-kit', 'aircon')).toBe(false);
   });
 
   it('keeps legacy BOX hotel-single as the residence-compatible business row', () => {
@@ -288,6 +316,23 @@ describe('corrective migration and simulator contract', () => {
     expect(equipment).toContain("'entrance-storage'");
     expect(equipment).toContain("'closet'");
     expect(equipment).toContain("'bed'");
+  });
+
+  it('keeps the SQL matrix and business-item mapping identical to the TS helper', () => {
+    const sqlRows = [...migration.matchAll(/^\s+\('([a-z0-9-]+)', '([a-z-]+)', array\[([^\]]*)\]::text\[\]\),?$/gm)].map(
+      (m) => [m[1], m[2], m[3].split(',').map((item) => item.trim().replace(/'/g, ''))] as const
+    );
+    expect(sqlRows).toHaveLength(15);
+    for (const [modelSlug, specCode, items] of sqlRows) {
+      expect([...items].sort(), `${modelSlug}/${specCode}`).toEqual([...CUSTOMER_CATEGORY_MATRIX[modelSlug][specCode]].sort());
+    }
+    const sqlMapping = Object.fromEntries(
+      [...migration.matchAll(/^\s+when '([a-z-]+)' then '([a-z-]+)'$/gm)].map((m) => [m[1], m[2]])
+    );
+    expect(sqlMapping).toEqual({ ...CUSTOMER_CATEGORY_BUSINESS_ITEM });
+    expect(migration).toContain("when 'boiler' then 'boiler'");
+    expect(migration).not.toContain("when 'boiler' then 'other'");
+    expect(migration).toContain('POSTCONDITION: boiler selectability must equal UB/SWR on every model/spec row');
   });
 
   it('uses the same hotel-single compatibility rule in TS/SQL and keeps the existing save RPC literal check compatible', () => {

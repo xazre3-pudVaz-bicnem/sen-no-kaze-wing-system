@@ -4,7 +4,7 @@ import type { CatalogBundle, ProductOption } from './types';
 export const CUSTOMER_SPEC_DENY_ALL = '__customer_category_not_selectable__';
 
 /**
- * 本体分類表 1シート目の業務項目。
+ * 本体分類表 1シート目の業務項目（15項目）。
  * DBカテゴリーはこの業務項目へ明示的に対応付け、本体分類表の選択 / ×は業務項目単位で判定する。
  */
 export type CustomerBusinessItemCode =
@@ -16,6 +16,7 @@ export type CustomerBusinessItemCode =
   | 'kitchen'
   | 'washbasin'
   | 'toilet'
+  | 'boiler'
   | 'entrance-storage'
   | 'interior-door'
   | 'closet'
@@ -30,8 +31,9 @@ export type CustomerBusinessItemCode =
  * - 内装 → floor / wall-ceiling / carpentry
  * - サッシ色 → sash
  * - 勝手口ドア → service-door。分類表に専用列がないため、確定仕様としてサッシ列に従わせる。
+ * - 給湯器 → boiler。独立した業務項目で、選択 / ×は UB/SWR と同じ可否とする（「その他」には含めない）。
  * - 備品 → furniture / appliances / office-supplies
- * - その他 → aircon / boiler / lighting / smartlock / exterior-parts
+ * - その他 → aircon / lighting / smartlock / exterior-parts
  *
  * 備品とその他は現行11行で選択 / ×が同一だが、将来別れる可能性があるため別business itemのまま保持する。
  * fireproof / insulation / sitework / free-product は本体分類表のこの列群とは別責務なので制御対象外。
@@ -49,6 +51,7 @@ export const CUSTOMER_CATEGORY_BUSINESS_ITEM: Readonly<Record<string, CustomerBu
   kitchen: 'kitchen',
   washbasin: 'washbasin',
   toilet: 'toilet',
+  boiler: 'boiler',
   'entrance-storage': 'entrance-storage',
   'interior-door': 'interior-door',
   closet: 'closet',
@@ -57,7 +60,6 @@ export const CUSTOMER_CATEGORY_BUSINESS_ITEM: Readonly<Record<string, CustomerBu
   appliances: 'furnishings',
   'office-supplies': 'furnishings',
   aircon: 'other',
-  boiler: 'other',
   lighting: 'other',
   smartlock: 'other',
   'exterior-parts': 'other',
@@ -76,6 +78,7 @@ const HOTEL = [
   'bath',
   'washbasin',
   'toilet',
+  'boiler',
   'entrance-storage',
   'interior-door',
   'bed',
@@ -100,6 +103,7 @@ const OFFICE = [
   'bath',
   'kitchen',
   'toilet',
+  'boiler',
   'furnishings',
   'other',
 ] as const;
@@ -112,6 +116,7 @@ const BOX_WATER = [
   'kitchen',
   'washbasin',
   'toilet',
+  'boiler',
 ] as const;
 const STORAGE_OR_FLAT_OFFICE = ['roof-exterior', 'interior', 'entrance-door', 'sash'] as const;
 

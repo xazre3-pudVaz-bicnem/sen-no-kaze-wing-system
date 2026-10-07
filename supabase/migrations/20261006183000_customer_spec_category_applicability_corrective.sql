@@ -337,6 +337,7 @@ as $$
     when 'kitchen' then 'kitchen'
     when 'washbasin' then 'washbasin'
     when 'toilet' then 'toilet'
+    when 'boiler' then 'boiler'
     when 'entrance-storage' then 'entrance-storage'
     when 'interior-door' then 'interior-door'
     when 'closet' then 'closet'
@@ -345,7 +346,6 @@ as $$
     when 'appliances' then 'furnishings'
     when 'office-supplies' then 'furnishings'
     when 'aircon' then 'other'
-    when 'boiler' then 'other'
     when 'lighting' then 'other'
     when 'smartlock' then 'other'
     when 'exterior-parts' then 'other'
@@ -382,6 +382,7 @@ alter function public.customer_product_spec_selectable(text, text, text[]) owner
 revoke all on function public.customer_product_spec_selectable(text, text, text[])
   from public, anon, authenticated, service_role;
 
+-- 業務項目は15項目。給湯器（boiler）は独立した項目で、選択 / ×は UB/SWR（bath）と同じ可否とする。
 -- UIだけではなく、新しく保存されるConfigurationでも本体分類表の × を拒否する。
 -- 未知のmodel/specは、確定表にない業務項目を勝手に公開しないためfail closed。
 -- spec_code NULLは既存non-draft履歴の読取互換だけを残し、draft保存は後段triggerで拒否する。
@@ -402,17 +403,17 @@ as $$
       select public.customer_business_item_for_category(p_category_code) = any(v.business_items)
       from (values
         ('wing-01', 'base', array['roof-exterior','entrance-door','sash']::text[]),
-        ('wing-01', 'hotel', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']::text[]),
-        ('wing-01', 'residence', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']::text[]),
+        ('wing-01', 'hotel', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
+        ('wing-01', 'residence', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
         ('wing-01', 'room', array['roof-exterior','interior','interior-door','closet','bed','furnishings','other']::text[]),
-        ('wing-01', 'office', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','furnishings','other']::text[]),
+        ('wing-01', 'office', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']::text[]),
         ('box', 'base', array['roof-exterior','entrance-door','sash']::text[]),
-        ('box', 'hotel', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']::text[]),
-        ('box', 'residence', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']::text[]),
+        ('box', 'hotel', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
+        ('box', 'residence', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
         ('box', 'room', array['roof-exterior','interior','interior-door','closet','bed','furnishings','other']::text[]),
-        ('box', 'office', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','furnishings','other']::text[]),
-        ('box', 'hotel-single', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','entrance-storage','interior-door','bed','furnishings','other']::text[]),
-        ('box', 'water-kit', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet']::text[]),
+        ('box', 'office', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']::text[]),
+        ('box', 'hotel-single', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
+        ('box', 'water-kit', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler']::text[]),
         ('box', 'storage', array['roof-exterior','interior','entrance-door','sash']::text[]),
         ('flat', 'base', array['roof-exterior','entrance-door','sash']::text[]),
         ('flat', 'office', array['roof-exterior','interior','entrance-door','sash']::text[])
@@ -708,6 +709,46 @@ begin
      or not public.customer_category_selectable('wing-01', 'base', 'sash')
   then
     raise exception 'POSTCONDITION: customer category matrix does not match the confirmed classification sheet / compatibility rows';
+  end if;
+
+  -- 確定仕様（2026-10-07）：業務項目は15項目、給湯器は独立項目
+  if public.customer_business_item_for_category('boiler') is distinct from 'boiler'
+     or (
+       select count(distinct public.customer_business_item_for_category(c.code))
+         from unnest(array[
+           'roof','exterior-wall','floor','wall-ceiling','carpentry','entrance-door','sash','service-door',
+           'ub','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','closet','bed',
+           'furniture','appliances','office-supplies','aircon','lighting','smartlock','exterior-parts'
+         ]::text[]) as c(code)
+     ) <> 15
+  then
+    raise exception 'POSTCONDITION: customer business items must be 15 with boiler as an independent item';
+  end if;
+
+  -- 給湯器の選択 / ×は、全てのモデル・仕様行で UB/SWR と同じ
+  if exists (
+    select 1
+      from (values
+        ('wing-01', 'base'), ('wing-01', 'hotel'), ('wing-01', 'residence'), ('wing-01', 'room'), ('wing-01', 'office'),
+        ('box', 'base'), ('box', 'hotel'), ('box', 'residence'), ('box', 'room'), ('box', 'office'),
+        ('box', 'hotel-single'), ('box', 'water-kit'), ('box', 'storage'),
+        ('flat', 'base'), ('flat', 'office')
+      ) as r(model_slug, spec_code)
+     where public.customer_category_selectable(r.model_slug, r.spec_code, 'boiler')
+           is distinct from public.customer_category_selectable(r.model_slug, r.spec_code, 'ub')
+  ) then
+    raise exception 'POSTCONDITION: boiler selectability must equal UB/SWR on every model/spec row';
+  end if;
+
+  if not public.customer_category_selectable('wing-01', 'hotel', 'boiler')
+     or public.customer_category_selectable('wing-01', 'room', 'boiler')
+     or not public.customer_category_selectable('wing-01', 'room', 'aircon')
+     or not public.customer_category_selectable('box', 'water-kit', 'boiler')
+     or public.customer_category_selectable('box', 'water-kit', 'aircon')
+     or public.customer_category_selectable('box', 'storage', 'boiler')
+     or public.customer_category_selectable('flat', 'office', 'boiler')
+  then
+    raise exception 'POSTCONDITION: boiler must follow UB/SWR and must not follow the other-items column';
   end if;
 end;
 $$;

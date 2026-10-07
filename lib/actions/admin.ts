@@ -518,7 +518,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     }
     if (parsed.data.kind === 'fixed' && groupChoices.some((choice) => choice.id !== id)) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
-      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。先に現在の固定設定を変更してください。'] } };
+      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。'] } };
     }
     if (parsed.data.kind !== 'fixed' && groupChoices.some((choice) => choice.id !== id && choice.kind === 'fixed')) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
@@ -758,7 +758,7 @@ export async function deleteOptionAction(formData: FormData): Promise<void> {
     redirect(`/admin/options/${id}?error=${encodeURIComponent(errState(e).error ?? '')}`);
   }
   revalidatePath('/', 'layout');
-  updateTag(CATALOG_TAG);
+    updateTag(CATALOG_TAG);
   redirect('/admin/options?deleted=1');
 }
 

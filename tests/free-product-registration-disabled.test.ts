@@ -87,7 +87,7 @@ function existingOption(categoryId: string, name = '既存商品'): ProductOptio
     is_installation: categoryId === freeCategory.id,
     price_on_request: false,
     spec_codes: [],
-    owner_id: categoryId === freeCategory.id ? 'dealer-1' : null,
+    owner_id: categoryId === freeCategory.id ? '90000000-0000-4000-8000-000000000002' : null,
     manufacturer: null,
     model_no: null,
     size_note: null,

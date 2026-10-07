@@ -71,23 +71,23 @@ function importPlan(categoryName: string): ImportPlan {
   };
 }
 
-function legacyFreeOption(): ProductOption {
+function existingOption(categoryId: string, name = '既存商品'): ProductOption {
   return {
     id: '90000000-0000-4000-8000-000000000001',
     base_model_id: null,
-    category_id: freeCategory.id,
+    category_id: categoryId,
     code: 'new-import-product',
-    name: '旧フリー商品',
+    name,
     description: null,
     price: 100_000,
     image_url: null,
     selection_type: 'checkbox',
     is_required: false,
     is_default: false,
-    is_installation: true,
+    is_installation: categoryId === freeCategory.id,
     price_on_request: false,
     spec_codes: [],
-    owner_id: 'dealer-1',
+    owner_id: categoryId === freeCategory.id ? 'dealer-1' : null,
     manufacturer: null,
     model_no: null,
     size_note: null,
@@ -100,6 +100,10 @@ function legacyFreeOption(): ProductOption {
     created_at: '',
     updated_at: '',
   };
+}
+
+function legacyFreeOption(): ProductOption {
+  return existingOption(freeCategory.id, '旧フリー商品');
 }
 
 function newOptionForm(categoryId: string) {
@@ -121,6 +125,16 @@ function newOptionForm(categoryId: string) {
   fd.set('size_note', '');
   fd.set('list_price', '');
   fd.set('highlight', '');
+  return fd;
+}
+
+function editOptionForm(option: ProductOption, categoryId: string) {
+  const fd = newOptionForm(categoryId);
+  fd.set('id', option.id);
+  fd.set('name', option.name);
+  fd.set('price', String(option.price));
+  fd.set('status', option.status);
+  fd.set('owner_id', option.owner_id ?? '');
   return fd;
 }
 
@@ -151,6 +165,13 @@ describe('free-product新規登録停止', () => {
     expect(page.indexOf('if (freeRegistrationBlocked)')).toBeLessThan(page.indexOf('<OptionForm'));
   });
 
+  it('編集UIは通常商品と旧free-productのカテゴリー候補を相互に分離する', () => {
+    const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'), 'utf8');
+    expect(page).toContain('category?.code === FREE_PRODUCT_CATEGORY_CODE');
+    expect(page).toContain('categories.filter((row) => row.code === FREE_PRODUCT_CATEGORY_CODE)');
+    expect(page).toContain('row.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE && row.code !== FREE_PRODUCT_CATEGORY_CODE');
+  });
+
   it('saveOptionActionを直接呼んでも新規free-productを作成しない', async () => {
     const store = {
       listCategories: vi.fn(async () => seedCategories),
@@ -165,6 +186,59 @@ describe('free-product新規登録停止', () => {
     expect(store.listCategories).toHaveBeenCalledTimes(1);
     expect(store.upsertOption).not.toHaveBeenCalled();
     expect(store.uploadImage).not.toHaveBeenCalled();
+  });
+
+  it('通常商品からfree-productへのカテゴリー変更をServer Actionで拒否する', async () => {
+    const existing = existingOption(normalCategory.id, '通常商品');
+    const store = {
+      getOption: vi.fn(async () => existing),
+      listCategories: vi.fn(async () => seedCategories),
+      upsertOption: vi.fn(),
+      uploadImage: vi.fn(),
+    };
+    mocks.getStore.mockResolvedValue(store);
+
+    const result = await saveOptionAction({ ok: false }, editOptionForm(existing, freeCategory.id));
+
+    expect(result).toEqual({ ok: false, error: 'フリー商品と通常商品の間でカテゴリーを変更することはできません。' });
+    expect(store.upsertOption).not.toHaveBeenCalled();
+    expect(store.uploadImage).not.toHaveBeenCalled();
+  });
+
+  it('free-productから通常商品へのカテゴリー変更をServer Actionで拒否する', async () => {
+    const existing = legacyFreeOption();
+    const store = {
+      getOption: vi.fn(async () => existing),
+      listCategories: vi.fn(async () => seedCategories),
+      upsertOption: vi.fn(),
+      uploadImage: vi.fn(),
+    };
+    mocks.getStore.mockResolvedValue(store);
+
+    const result = await saveOptionAction({ ok: false }, editOptionForm(existing, normalCategory.id));
+
+    expect(result).toEqual({ ok: false, error: 'フリー商品と通常商品の間でカテゴリーを変更することはできません。' });
+    expect(store.upsertOption).not.toHaveBeenCalled();
+    expect(store.uploadImage).not.toHaveBeenCalled();
+  });
+
+  it('既存free-productはfree-productのまま通常編集できる', async () => {
+    const existing = legacyFreeOption();
+    const store = {
+      getOption: vi.fn(async () => existing),
+      listCategories: vi.fn(async () => seedCategories),
+      upsertOption: vi.fn(async (value: unknown) => ({ ...existing, ...(value as object) })),
+      setOptionRelations: vi.fn(async () => undefined),
+    };
+    mocks.getStore.mockResolvedValue(store);
+
+    const result = await saveOptionAction({ ok: false }, editOptionForm(existing, freeCategory.id));
+
+    expect(result.ok).toBe(true);
+    expect(store.upsertOption).toHaveBeenCalledWith(expect.objectContaining({
+      id: existing.id,
+      category_id: freeCategory.id,
+    }));
   });
 
   it('通常商品の新規登録は従来どおり保存できる', async () => {
@@ -196,6 +270,36 @@ describe('free-product新規登録停止', () => {
 
     await expect(applyImportPlan(importPlan('フリー商品'), new Map())).rejects.toThrow(
       'フリー商品の新規登録は終了しました'
+    );
+    expect(store.applyCatalogImport).not.toHaveBeenCalled();
+  });
+
+  it('Importで通常商品からfree-productへのカテゴリー変更を拒否する', async () => {
+    const existing = existingOption(normalCategory.id, '通常商品');
+    const store = {
+      listCategories: vi.fn(async () => seedCategories),
+      listOptions: vi.fn(async () => [existing]),
+      applyCatalogImport: vi.fn(),
+    };
+    mocks.getStore.mockResolvedValue(store as unknown as DataStore);
+
+    await expect(applyImportPlan(importPlan('フリー商品'), new Map())).rejects.toThrow(
+      'フリー商品と通常商品の間でカテゴリーを変更することはできません'
+    );
+    expect(store.applyCatalogImport).not.toHaveBeenCalled();
+  });
+
+  it('Importでfree-productから通常商品へのカテゴリー変更を拒否する', async () => {
+    const existing = legacyFreeOption();
+    const store = {
+      listCategories: vi.fn(async () => seedCategories),
+      listOptions: vi.fn(async () => [existing]),
+      applyCatalogImport: vi.fn(),
+    };
+    mocks.getStore.mockResolvedValue(store as unknown as DataStore);
+
+    await expect(applyImportPlan(importPlan('トイレ'), new Map())).rejects.toThrow(
+      'フリー商品と通常商品の間でカテゴリーを変更することはできません'
     );
     expect(store.applyCatalogImport).not.toHaveBeenCalled();
   });

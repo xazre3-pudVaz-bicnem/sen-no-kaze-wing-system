@@ -40,11 +40,14 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('商品説明');
   });
 
-  it('変更後のお客様表示プレビューと編集への戻り導線を持つ', () => {
+  it('変更後のお客様表示プレビューと編集への戻り導線を持ち、戻っても入力フォームを破棄しない', () => {
     expect(flow).toContain('変更後のお客様表示プレビュー');
     expect(flow).toContain('<OptionCustomerPreview');
     expect(flow).toContain('option={review.option}');
     expect(flow).toContain('編集に戻る');
+    expect(flow).toContain("hidden={screen !== 'review'}");
+    expect(flow).toContain("hidden={screen !== 'edit'}");
+    expect(flow).not.toContain("if (screen === 'review' && review)");
   });
 
   it('別保存の資料・お客様選択は仮実装せず接続待ちにする', () => {

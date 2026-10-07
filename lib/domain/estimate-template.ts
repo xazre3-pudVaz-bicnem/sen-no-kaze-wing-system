@@ -49,9 +49,9 @@ export function ruleContextForSpec(
   return {
     categories: ctx.categories,
     options,
-    dependencies: ctx.dependencies.filter(
-      (dependency) => ids.has(dependency.option_id) && ids.has(dependency.requires_option_id)
-    ),
+    // 依存ルールは、依存元が候補に残る限り保持する。前提商品が候補から外れたときにルールごと消すと
+    // 「前提なしで選べる」状態になるため、rules.ts 側で選択拒否・明示エラーとして扱う。
+    dependencies: ctx.dependencies.filter((dependency) => ids.has(dependency.option_id)),
     conflicts: ctx.conflicts.filter(
       (conflict) => ids.has(conflict.option_id) && ids.has(conflict.conflicts_with_option_id)
     ),

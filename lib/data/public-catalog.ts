@@ -58,7 +58,8 @@ function assemble(
       images: images.filter((i) => i.base_model_id === model.id).sort((a, b) => a.sort_order - b.sort_order),
       categories,
       options: opts,
-      dependencies: dependencies.filter((d) => ids.has(d.option_id) && ids.has(d.requires_option_id)),
+      // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+      dependencies: dependencies.filter((d) => ids.has(d.option_id)),
       conflicts: conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
       previewRules: previewRules.filter((r) => r.base_model_id === model.id),
       hotspots: hotspots.filter((h) => previewRules.some((r) => r.id === h.rule_id && r.base_model_id === model.id)),

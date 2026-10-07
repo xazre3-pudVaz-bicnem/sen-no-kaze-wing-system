@@ -36,8 +36,10 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('selectedGroup.categories.map');
     expect(client).toContain('categoryCounts.get(item.id)');
     expect(client).toContain('すべて <span');
-    expect(client).toContain('公開中 <span');
+    expect(client).toContain('登録済み <span');
     expect(client).toContain('下書き <span');
+    expect(client).toContain('aria-label="登録状態"');
+    expect(client).not.toContain('aria-label="公開状態"');
     expect(client).not.toContain('要確認のみ');
     expect(client).toContain('aria-expanded={searchOpen}');
     expect(client).toContain('data-testid="ledger-collapsible-search"');
@@ -109,8 +111,9 @@ describe('商品台帳の入口', () => {
     expect(client).toContain("{ value: 'category-desc', label: 'カテゴリー 降順' }");
     expect(client).toContain("{ value: 'price-asc', label: '安い順' }");
     expect(client).toContain("{ value: 'price-desc', label: '高い順' }");
-    expect(client).toContain("{ value: 'status-published-first', label: '公開中を先に表示' }");
+    expect(client).toContain("{ value: 'status-published-first', label: '登録済みを先に表示' }");
     expect(client).toContain("{ value: 'status-draft-first', label: '下書きを先に表示' }");
+    expect(client).not.toContain('公開中を先に表示');
     expect(client).toContain("{ value: 'updated-desc', label: '新しい順' }");
     expect(client).toContain("{ value: 'updated-asc', label: '古い順' }");
     expect(client).toContain("{ label: '標準使用数が多い順（接続待ち）', disabled: true }");
@@ -182,7 +185,7 @@ describe('商品台帳の入口', () => {
     expect(detail).toContain("compactMedia ? 'h-[clamp(14rem,55vw,19rem)]' : 'aspect-[3/2]'");
   });
 
-  it('管理情報は正式に取得できる値と未取得の仕入情報を分離する', () => {
+  it('管理情報は正式値と接続待ち情報を分離し、登録元を既存値から推測しない', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品基本情報');
     expect(client).toContain('商品管理番号');
@@ -190,7 +193,22 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('自社の仕入・発注情報');
     expect(client).toContain('未登録値を推測せず、取得可能になるまでは表示しません。');
     expect(client).toContain('登録・権限情報');
+    expect(client).toContain('data-product-origin-slot="pending-db"');
+    expect(client).toContain('商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。');
+    expect(client).toContain('label="登録状態"');
+    expect(client).toContain('label="商品区分" value={<PendingDbValue />}');
+    expect(client).toContain('label="登録元組織" value={<PendingDbValue />}');
+    expect(client).not.toContain("selected.owner_id ? '登録者の組織' : '共通商品'");
+    expect(client).not.toContain("selected.owner_id ? '登録者所有の商品' : '共通商品'");
     expect(client).not.toContain('自社設定を編集');
     expect(client).toContain('min-[900px]:grid-cols-2');
+  });
+
+  it('利用者向けの商品状態は下書き・登録済みに統一する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain("return status === 'published' ? '登録済み' : '下書き'");
+    expect(client).toContain('registrationStatusLabel(selected.status)');
+    expect(client).not.toContain('公開中');
+    expect(client).not.toContain('label="公開状態"');
   });
 });

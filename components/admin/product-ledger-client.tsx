@@ -41,6 +41,14 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-3 border-b border-line py-2 text-sm last:border-0"><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>;
 }
 
+function PendingDbValue() {
+  return <span className="inline-flex items-center rounded-full border border-line bg-sand px-2 py-0.5 text-xs font-medium text-muted">接続待ち</span>;
+}
+
+function registrationStatusLabel(status: ProductOption['status']) {
+  return status === 'published' ? '登録済み' : '下書き';
+}
+
 function date(value: string) {
   const d = new Date(value);
   return Number.isNaN(d.valueOf()) ? dash : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
@@ -152,7 +160,7 @@ function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: s
 function ProductStatus({ status }: { status: ProductOption['status'] }) {
   return (
     <div className="flex flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db">
-      <Badge tone={status === 'published' ? 'success' : 'neutral'}>{status === 'published' ? '公開中' : '下書き'}</Badge>
+      <Badge tone={status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(status)}</Badge>
       {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
     </div>
   );
@@ -254,8 +262,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     return counts;
   }, [categoryCounts, categoryGroups]);
 
-  const publishedCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
-  const draftCount = options.length - publishedCount;
+  const registeredCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
+  const draftCount = options.length - registeredCount;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
@@ -290,12 +298,12 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
         <div className="sticky top-0 z-30 border-b border-line bg-white/95 shadow-sm backdrop-blur" data-testid="ledger-sticky-category-bar">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 sm:px-4">
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="公開状態">
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="登録状態">
               <button type="button" role="tab" aria-selected={status === ''} onClick={() => { setStatus(''); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 すべて <span className="ml-1 text-xs">{options.length}</span>
               </button>
               <button type="button" role="tab" aria-selected={status === 'published'} onClick={() => { setStatus('published'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
-                公開中 <span className="ml-1 text-xs">{publishedCount}</span>
+                登録済み <span className="ml-1 text-xs">{registeredCount}</span>
               </button>
               <button type="button" role="tab" aria-selected={status === 'draft'} onClick={() => { setStatus('draft'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 下書き <span className="ml-1 text-xs">{draftCount}</span>
@@ -372,7 +380,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       <SortHeader label="商品価格（税別）" sort={sort} onSort={applySort} align="right" choices={[{ value: 'price-asc', label: '安い順' }, { value: 'price-desc', label: '高い順' }]} />
                     </th>
                     <th className="w-[15%] px-2.5 py-1.5">
-                      <SortHeader label="状態" sort={sort} onSort={applySort} choices={[{ value: 'status-published-first', label: '公開中を先に表示' }, { value: 'status-draft-first', label: '下書きを先に表示' }, { label: '標準使用数が多い順（接続待ち）', disabled: true }]} />
+                      <SortHeader label="状態" sort={sort} onSort={applySort} choices={[{ value: 'status-published-first', label: '登録済みを先に表示' }, { value: 'status-draft-first', label: '下書きを先に表示' }, { label: '標準使用数が多い順（接続待ち）', disabled: true }]} />
                     </th>
                     <th className="w-[12%] px-2.5 py-1.5">
                       <SortHeader label="更新日" sort={sort} onSort={applySort} align="right" choices={[{ value: 'updated-desc', label: '新しい順' }, { value: 'updated-asc', label: '古い順' }]} />
@@ -509,7 +517,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               <p className="text-[0.68rem] font-semibold tracking-wide text-brown">選択中の商品</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 <h2 id="ledger-product-detail-title" className="min-w-0 truncate text-lg font-semibold sm:text-xl">{selected.name}</h2>
-                <Badge tone={selected.status === 'published' ? 'success' : 'neutral'}>{selected.status === 'published' ? '公開中' : '下書き'}</Badge>
+                <Badge tone={selected.status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(selected.status)}</Badge>
                 {needsProductAttention(selected) && <Badge tone="warn">要確認</Badge>}
               </div>
               <p className="mt-0.5 truncate text-xs text-muted">{[selected.product_no, selected.manufacturer, selected.model_no].filter(Boolean).join(' ／ ') || dash}</p>
@@ -564,7 +572,6 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 <dl className="card p-4">
                   <h3 className="mb-2 font-semibold">シミュレーター・Web表示設定</h3>
                   <Row label="シミュレーター対象" value={selected.preview_key || selected.affects_views.length ? '対象' : '対象外'}/>
-                  <Row label="公開状態" value={selected.status === 'published' ? '公開' : '下書き・非公開'}/>
                   <Row label="商品価格（税別）" value={productPrice(selected)}/>
                 </dl>
               </div>
@@ -578,14 +585,18 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary>
                 <p className="border-t border-line px-4 py-3 text-sm text-muted">標準見積の使用先は、この画面で取得できる既存データにはありません。</p>
               </details>
-              <details className="card">
+              <details className="card" data-product-origin-slot="pending-db">
                 <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary>
-                <dl className="border-t border-line px-4">
-                  <Row label="登録組織" value={selected.owner_id ? '登録者の組織' : '共通商品'}/>
-                  <Row label="管理区分" value={selected.owner_id ? '登録者所有の商品' : '共通商品'}/>
-                  <Row label="最終更新" value={date(selected.updated_at)}/>
-                  <Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/>
-                </dl>
+                <div className="border-t border-line">
+                  <p className="px-4 pt-3 text-xs leading-relaxed text-muted">商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。</p>
+                  <dl className="px-4">
+                    <Row label="登録状態" value={registrationStatusLabel(selected.status)}/>
+                    <Row label="商品区分" value={<PendingDbValue />}/>
+                    <Row label="登録元組織" value={<PendingDbValue />}/>
+                    <Row label="最終更新" value={date(selected.updated_at)}/>
+                    <Row label="商品情報の編集権限" value={canEdit ? '現在の権限で編集可能' : '閲覧のみ（サーバー側認可に従います）'}/>
+                  </dl>
+                </div>
               </details>
             </section>
           )}

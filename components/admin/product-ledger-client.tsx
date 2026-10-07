@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Search, X } from 'lucide-react';
 import { ProductDetail } from '@/components/simulator/product-detail';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -85,8 +85,40 @@ function compareOptions(a: ProductOption, b: ProductOption, sort: LedgerSort, ca
 }
 
 function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: string; sort: LedgerSort; choices: SortChoice[]; onSort: (value: LedgerSort) => void; align?: 'left' | 'right' }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const details = detailsRef.current;
+    if (!details) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !details.contains(target)) details.removeAttribute('open');
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !details.open) return;
+      details.removeAttribute('open');
+      details.querySelector<HTMLElement>('summary')?.focus();
+    };
+    const handleToggle = () => {
+      if (!details.open) return;
+      document.querySelectorAll<HTMLDetailsElement>('[data-ledger-sort-menu]').forEach((other) => {
+        if (other !== details) other.removeAttribute('open');
+      });
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    details.addEventListener('toggle', handleToggle);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      details.removeEventListener('toggle', handleToggle);
+    };
+  }, []);
+
   return (
-    <details className="group relative inline-block">
+    <details ref={detailsRef} data-ledger-sort-menu className="group relative inline-block">
       <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 py-0.5 font-semibold text-ink-soft hover:bg-white/80 [&::-webkit-details-marker]:hidden" aria-label={label + 'の並び替え'}>
         <span>{label}</span>
         <ChevronDown className="size-3.5 transition group-open:rotate-180" aria-hidden="true" />

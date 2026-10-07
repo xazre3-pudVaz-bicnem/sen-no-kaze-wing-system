@@ -1,7 +1,13 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { getStore, StoreError, type CatalogImportBatch } from '@/lib/data/store';
-import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
+import {
+  FREE_PRODUCT_CATEGORY_CODE,
+  type OptionCategory,
+  type OptionVariantChoice,
+  type OptionVariantGroup,
+  type ProductOption,
+} from '@/lib/domain/types';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { slugify, type ImportPlan } from './catalog-import';
 
@@ -112,6 +118,12 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     if (!category) throw new StoreError('VALIDATION', `商品「${p.code}」のカテゴリーを解決できませんでした`);
     const code = slugify(p.code, p.code);
     const existing = optionByCode.get(code);
+    if (category.code === FREE_PRODUCT_CATEGORY_CODE && !existing) {
+      throw new StoreError(
+        'VALIDATION',
+        `フリー商品の新規登録は終了しました。商品「${p.name}」はExcel一括登録から新規作成できません。`
+      );
+    }
     const importedPriceState = {
       price: p.price ?? 0,
       price_on_request: p.price == null,

@@ -335,6 +335,19 @@ describe('corrective migration and simulator contract', () => {
     expect(migration).toContain('POSTCONDITION: boiler selectability must equal UB/SWR on every model/spec row');
   });
 
+  it('stays replayable on an empty database without relaxing the production preconditions', () => {
+    // 商品マスターが空の新規DB（CI・新規環境）では是正対象が無いので、データ前提の検査だけを飛ばす
+    const preflight = migration.slice(migration.indexOf('-- ---------- preflight / fail closed ----------'), migration.indexOf('-- ---------- category semantics ----------'));
+    const skip = preflight.indexOf('if not exists (select 1 from public.options) then');
+    expect(skip).toBeGreaterThan(0);
+    expect(preflight.indexOf('return;', skip)).toBeLessThan(preflight.indexOf('foreach v_code in array'));
+    // 商品マスターがある環境（本番）の検査は残っている
+    expect(preflight).toContain("raise exception 'PRECONDITION: required published category % is missing', v_code;");
+    expect(preflight).toContain("raise exception 'PRECONDITION: audited product % is missing', v_code;");
+    expect(preflight).toContain('), -1) <> 1518904 then');
+    expect(migration).toContain("if exists (select 1 from public.options)\n     and coalesce((");
+  });
+
   it('uses the same hotel-single compatibility rule in TS/SQL and keeps the existing save RPC literal check compatible', () => {
     expect(migration).toContain('create or replace function public.customer_product_spec_selectable');
     expect(migration).toContain("set spec_codes = array_append(spec_codes, 'hotel-single')");

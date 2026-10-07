@@ -16,6 +16,13 @@ do $$
 declare
   v_code text;
 begin
+  -- 商品マスターが空の新規DB（CI・新規環境での全migration再現）には、是正対象のデータが存在しない。
+  -- データ前提の検査は、商品マスターが投入済みの環境（本番）でだけ行う。本番の検査内容は変えない。
+  if not exists (select 1 from public.options) then
+    raise notice 'customer_spec_category_applicability: product master is empty, data preconditions skipped';
+    return;
+  end if;
+
   foreach v_code in array array['roof', 'exterior-wall', 'sash', 'interior-door', 'entrance-door', 'furniture']::text[]
   loop
     if not exists (
@@ -677,7 +684,9 @@ begin
     raise exception 'POSTCONDITION: hotel-single product compatibility resolver is incorrect';
   end if;
 
-  if coalesce((
+  -- 商品マスターが空の新規DBでは検算対象が存在しない（preflight と同じ扱い）
+  if exists (select 1 from public.options)
+     and coalesce((
     select sum(case when price_on_request then 0 else price end)
       from public.options
      where code in (

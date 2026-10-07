@@ -533,7 +533,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     }
     if (parsed.data.kind === 'fixed' && groupChoices.some((choice) => choice.id !== id)) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
-      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。先に現在の設定を確認してください。'] } };
+      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。'] } };
     }
     if (parsed.data.kind !== 'fixed' && groupChoices.some((choice) => choice.id !== id && choice.kind === 'fixed')) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
@@ -1584,7 +1584,7 @@ export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formDa
     revalidatePath('/admin/base-breakdown');
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
-    return { ok: true, message: `価格を保存しました（${saved.length}行・本体一式 ¥${total.toLocaleString('ja-JP')}）` };
+    return { ok: true, message: `価格を保存しました（${parsed.data.items.length} 件）。新しい見積から反映されます` };
   } catch (e) {
     return errState(e);
   }

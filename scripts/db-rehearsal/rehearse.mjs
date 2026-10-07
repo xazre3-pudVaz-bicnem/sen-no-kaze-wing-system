@@ -2,7 +2,7 @@
  * マイグレーションのローカル実 DB リハーサル（docker 不要）。
  *
  *   npm run db:rehearse -- [--label <name>] [--extra <dir>]... [--seed <json>] [--prod-catalog <json>]
- *                          [--applied-through <version>] [--baseline-only] [--keep]
+ *                          [--applied-through <version>] [--baseline-only] [--runtime] [--keep]
  *
  * 1. PostgreSQL 17 を一時ディレクトリに初期化して起動（embedded-postgres）
  * 2. bootstrap.sql で本番 Supabase と同じロール／既定権限／auth・storage の前提を作る
@@ -10,6 +10,7 @@
  *    --applied-through を指定すると、そこまでを「本番適用済み」、以降を「未適用」として区切り、
  *    区切りの時点で --prod-catalog（本番で catalog.sql を実行した結果）との差分と --seed の投入を行う
  * 4. 適用後の DB を checks.mjs で検査（RLS・EXECUTE 権限・アプリとの突き合わせ）
+ *    --runtime を付けると、権限境界の実行時検査（runtime-security.sql）も行う
  *
  * 結果は .wing-local/db-rehearsal/<label>/ に出力する。失敗があれば終了コード 1。
  *
@@ -19,12 +20,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
-import { REPO, evaluate, inspect, printResult } from './checks.mjs';
+import { REPO, evaluate, inspect, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
 
 const HERE = path.join(REPO, 'scripts', 'db-rehearsal');
 const PORT = Number(process.env.REHEARSAL_PG_PORT ?? 54329);
 
-const opt = { label: 'latest', extra: [], seed: null, prodCatalog: null, appliedThrough: null, baselineOnly: false, keep: false };
+const opt = { label: 'latest', extra: [], seed: null, prodCatalog: null, appliedThrough: null, baselineOnly: false, runtime: false, keep: false };
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -34,6 +35,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--prod-catalog') opt.prodCatalog = path.resolve(argv[++i]);
   else if (a === '--applied-through') opt.appliedThrough = argv[++i];
   else if (a === '--baseline-only') opt.baselineOnly = true;
+  else if (a === '--runtime') opt.runtime = true;
   else if (a === '--keep') opt.keep = true;
   else throw new Error(`不明な引数: ${a}`);
 }
@@ -203,6 +205,13 @@ try {
     printResult(result, log);
     // 途中までの状態（--baseline-only）では、アプリとの不整合があるのが前提なので失敗扱いにしない
     if (!result.ok && !opt.baselineOnly) failed = true;
+
+    if (opt.runtime && !opt.baselineOnly) {
+      const runtime = await runtimeSecurity(admin);
+      report.runtime = runtime;
+      printRuntime(runtime, log);
+      if (!runtime.ok) failed = true;
+    }
   }
 
   if (opt.keep) {

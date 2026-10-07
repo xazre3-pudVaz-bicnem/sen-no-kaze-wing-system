@@ -66,6 +66,11 @@ jobs:
         if: success() || failure()
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --out db-check.json
 
+      # 権限境界の実行時検査（試験データを作って rollback する。ローカル DB 専用）
+      - name: Runtime security checks
+        if: success() || failure()
+        run: npm run db:check -- --db-url postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime.json
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,4 +79,5 @@ jobs:
           path: |
             db-lint.json
             db-check.json
+            db-runtime.json
           if-no-files-found: ignore

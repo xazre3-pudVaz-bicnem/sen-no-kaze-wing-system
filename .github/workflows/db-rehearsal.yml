@@ -1,0 +1,76 @@
+name: DB Rehearsal
+
+# マイグレーションを実際の Supabase（ローカル DB）へ全件適用して検査する。
+# vitest の SQL 文字列検査では見つからない不具合（構文エラー・未解決の関数参照・実効権限の漏れ・
+# アプリと DB の食い違い）を、本番へ適用する前に止めるためのもの。
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'supabase/**'
+      - 'lib/data/**'
+      - 'lib/actions/**'
+      - 'scripts/db-rehearsal/**'
+      - '.github/workflows/db-rehearsal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-rehearsal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+
+      # supabase/migrations を古い順に 1 本ずつ適用する。1 本でも失敗すればここで止まる
+      - name: Apply all migrations to a local Supabase database
+        run: supabase db start
+
+      - name: Show database version and migration history
+        run: |
+          supabase db query --local "select version()"
+          supabase db query --local "select count(*) as applied, max(version) as latest from supabase_migrations.schema_migrations"
+
+      # plpgsql_check：関数本体が参照する列・テーブル・関数・型をスキーマと照合する
+      - name: Lint database functions (plpgsql_check)
+        shell: bash
+        run: supabase db lint --local --schema public --level warning --fail-on error | tee db-lint.json
+
+      # RLS・EXECUTE 権限・アプリ（RPC／テーブル／列）との突き合わせ
+      - name: Check privileges and app contract
+        if: success() || failure()
+        run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --out db-check.json
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-rehearsal
+          path: |
+            db-lint.json
+            db-check.json
+          if-no-files-found: ignore

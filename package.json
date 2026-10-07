@@ -12,6 +12,8 @@
     "test:e2e": "playwright test",
     "seed:local": "node scripts/seed-local.ts",
     "seed:supabase": "node scripts/seed-supabase.ts",
+    "db:rehearse": "node scripts/db-rehearsal/rehearse.mjs",
+    "db:check": "node scripts/db-rehearsal/check.mjs",
     "admin:create": "node scripts/create-admin.ts",
     "images:build": "node scripts/build-images.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
@@ -26,9 +28,9 @@
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "sharp": "^0.35.3",
     "tailwind-merge": "^3.3.1",
-    "zod": "^4.1.11",
-    "sharp": "^0.35.3"
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
@@ -38,6 +40,7 @@
     "@types/react-dom": "^19.2.1",
     "eslint": "^9.37.0",
     "eslint-config-next": "^16.0.0",
+    "pg": "^8.23.1",
     "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

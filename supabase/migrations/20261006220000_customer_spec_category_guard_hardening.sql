@@ -111,7 +111,7 @@ for each row execute function public.ensure_hotel_single_spec_alias();
 update public.options
    set spec_codes = array_append(spec_codes, 'hotel-single')
  where 'residence' = any(coalesce(spec_codes, '{}'::text[]))
-   and not ('hotel-single' = any(coalesce(spec_codes, '{}'::text[]));
+   and not ('hotel-single' = any(coalesce(spec_codes, '{}'::text[])));
 
 -- ---------- Configuration mutation / concurrency guard ----------
 -- INSERT/UPDATE/DELETEすべてで関係する親ConfigurationをUUID順にrow lockし、

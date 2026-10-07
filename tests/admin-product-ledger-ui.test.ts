@@ -119,6 +119,17 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('if (!Number.isFinite(option.price)) return 2');
   });
 
+  it('列メニューは枠外クリック・Esc・別列メニューを開いた時に閉じる', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain('useRef<HTMLDetailsElement>(null)');
+    expect(client).toContain('<details ref={detailsRef} data-ledger-sort-menu');
+    expect(client).toContain("document.addEventListener('pointerdown', handlePointerDown)");
+    expect(client).toContain("event.key !== 'Escape'");
+    expect(client).toContain("document.querySelectorAll<HTMLDetailsElement>('[data-ledger-sort-menu]')");
+    expect(client).toContain("details.querySelector<HTMLElement>('summary')?.focus()");
+    expect(client).toContain("document.removeEventListener('pointerdown', handlePointerDown)");
+  });
+
   it('商品価格は通常・別途見積・未設定を区別する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("if (option.price_on_request) return '別途見積'");

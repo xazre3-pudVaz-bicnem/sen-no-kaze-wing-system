@@ -193,6 +193,13 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   const store = await getStore();
   const existingOption = optionId ? await store.getOption(optionId) : null;
   if (optionId && !existingOption) return { ok: false, error: '商品が見つかりません。' };
+  if (!existingOption) {
+    const categoryId = String(formData.get('category_id') ?? '').trim();
+    const category = (await store.listCategories()).find((row) => row.id === categoryId);
+    if (category?.code === FREE_PRODUCT_CATEGORY_CODE) {
+      return { ok: false, error: 'フリー商品の新規登録は終了しました。' };
+    }
+  }
   // options.code は既存Preset / Import互換の技術キー。登録担当者には入力させず、
   // 既存商品では必ず保持し、新規手入力商品だけ内部で一意な値を作る。
   const internalCode = existingOption?.code ?? `opt-${randomUUID()}`;
@@ -511,7 +518,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     }
     if (parsed.data.kind === 'fixed' && groupChoices.some((choice) => choice.id !== id)) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
-      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。'] } };
+      return { ok: false, fieldErrors: { kind: ['固定にできるのは、その選択項目に選択肢が1つだけの場合です。先に現在の固定設定を変更してください。'] } };
     }
     if (parsed.data.kind !== 'fixed' && groupChoices.some((choice) => choice.id !== id && choice.kind === 'fixed')) {
       if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
@@ -751,7 +758,7 @@ export async function deleteOptionAction(formData: FormData): Promise<void> {
     redirect(`/admin/options/${id}?error=${encodeURIComponent(errState(e).error ?? '')}`);
   }
   revalidatePath('/', 'layout');
-    updateTag(CATALOG_TAG);
+  updateTag(CATALOG_TAG);
   redirect('/admin/options?deleted=1');
 }
 

@@ -2,23 +2,82 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Ellipsis, LayoutGrid, List, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Search, X } from 'lucide-react';
 import { ProductDetail } from '@/components/simulator/product-detail';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Badge, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
-import { needsProductAttention, optionMatchesLedgerFilters, productAttentionReasons, selectedOptionAfterFilter, type LedgerQuickFilter } from '@/lib/domain/product-ledger';
+import { needsProductAttention, optionMatchesLedgerFilters, selectedOptionAfterFilter } from '@/lib/domain/product-ledger';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 
-type Props = { canEdit: boolean; categories: OptionCategory[]; options: ProductOption[]; models: BaseModel[]; variantsByOptionId: Record<string, { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] }>; initiallySelectedId?: string };
+type Props = {
+  canEdit: boolean;
+  categories: OptionCategory[];
+  options: ProductOption[];
+  models: BaseModel[];
+  variantsByOptionId: Record<string, { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] }>;
+  initiallySelectedId?: string;
+};
+
+type LedgerSort = 'updated-desc' | 'name-asc' | 'product-no-asc';
+
 const EMPTY_VARIANTS: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] };
 const dash = '—';
-function Row({ label, value }: { label: string; value: React.ReactNode }) { return <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-3 border-b border-line py-2 text-sm last:border-0"><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>; }
-function date(value: string) { const d = new Date(value); return Number.isNaN(d.valueOf()) ? dash : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`; }
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-3 border-b border-line py-2 text-sm last:border-0"><dt className="text-muted">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>;
+}
+
+function date(value: string) {
+  const d = new Date(value);
+  return Number.isNaN(d.valueOf()) ? dash : `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function productPrice(option: ProductOption) {
+  if (option.price_on_request) return '別途見積';
+  if (!Number.isFinite(option.price)) return dash;
+  return formatYen(option.price);
+}
+
+function compareProductNo(a: ProductOption, b: ProductOption) {
+  const aNo = (a.product_no ?? '').trim();
+  const bNo = (b.product_no ?? '').trim();
+  if (!aNo && !bNo) return a.name.localeCompare(b.name, 'ja-JP');
+  if (!aNo) return 1;
+  if (!bNo) return -1;
+  return aNo.localeCompare(bNo, 'ja-JP', { numeric: true, sensitivity: 'base' }) || a.name.localeCompare(b.name, 'ja-JP');
+}
+
+function compareOptions(a: ProductOption, b: ProductOption, sort: LedgerSort) {
+  if (sort === 'name-asc') return a.name.localeCompare(b.name, 'ja-JP') || compareProductNo(a, b);
+  if (sort === 'product-no-asc') return compareProductNo(a, b);
+  return b.updated_at.localeCompare(a.updated_at) || a.name.localeCompare(b.name, 'ja-JP');
+}
+
+function ProductStatus({ status }: { status: ProductOption['status'] }) {
+  return (
+    <div className="flex flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db">
+      <Badge tone={status === 'published' ? 'success' : 'neutral'}>{status === 'published' ? '公開中' : '下書き'}</Badge>
+      {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
+    </div>
+  );
+}
 
 export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, initiallySelectedId }: Props) {
-  const [query, setQuery] = useState(''); const [searchOpen, setSearchOpen] = useState(false); const [groupCode, setGroupCode] = useState(''); const [categoryId, setCategoryId] = useState(''); const [status, setStatus] = useState(''); const [quick, setQuick] = useState<LedgerQuickFilter>('all'); const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(50); const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null); const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer'); const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [groupCode, setGroupCode] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [status, setStatus] = useState('');
+  const [sort, setSort] = useState<LedgerSort>('updated-desc');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [selectedId, setSelectedId] = useState<string | null>(initiallySelectedId ?? null);
+  const [detailTab, setDetailTab] = useState<'customer' | 'admin'>('customer');
+  const [previewVariantIds, setPreviewVariantIds] = useState<string[]>([]);
+
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
   const categoryGroups = useMemo(() => {
@@ -49,13 +108,16 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const filtered = useMemo(
     () =>
       options
-        .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick }))
-        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-    [categoryId, groupCode, options, query, quick, selectedGroupCategoryIds, status]
+        .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick: 'all' }))
+        .sort((a, b) => compareOptions(a, b, sort)),
+    [categoryId, groupCode, options, query, selectedGroupCategoryIds, sort, status]
   );
+
   /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
   useEffect(() => setSelectedId((id) => selectedOptionAfterFilter(id, filtered.map((o) => o.id))), [filtered]);
-  const selected = filtered.find((o) => o.id === selectedId); const category = selected && categoryMap.get(selected.category_id); const variants = selected ? variantsByOptionId[selected.id] ?? EMPTY_VARIANTS : EMPTY_VARIANTS;
+  const selected = filtered.find((o) => o.id === selectedId);
+  const category = selected && categoryMap.get(selected.category_id);
+  const variants = selected ? variantsByOptionId[selected.id] ?? EMPTY_VARIANTS : EMPTY_VARIANTS;
   const preview = useMemo(() => {
     const groups = variants.groups.filter((group) => group.status === 'published');
     const choices = variants.choices.filter((choice) => choice.status === 'published');
@@ -63,11 +125,13 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   }, [selected, variants]);
   useEffect(() => setPreviewVariantIds(preview.defaults), [preview.defaults]); // 選択中商品のみのローカル表示状態。保存はしない。
   /* eslint-enable react-hooks/set-state-in-effect */
+
   const closeDetail = useCallback(() => setSelectedId(null), []);
   const openDetail = useCallback((id: string) => {
     setDetailTab('customer');
     setSelectedId(id);
   }, []);
+
   useEffect(() => {
     if (!selectedId || window.matchMedia('(min-width: 1280px)').matches) return;
     const frame = window.requestAnimationFrame(() => {
@@ -75,24 +139,27 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     });
     return () => window.cancelAnimationFrame(frame);
   }, [selectedId]);
+
   const onPreviewVariantChange = (choiceId: string, groupId: string) => {
     setPreviewVariantIds((current) => pruneHiddenVariantChoices(preview.groups, preview.choices, [...current.filter((id) => preview.choices.find((choice) => choice.id === id)?.group_id !== groupId), choiceId]));
   };
   const visiblePreviewGroups = visibleVariantGroups(preview.groups, preview.choices, previewVariantIds);
+
   const categoryCounts = useMemo(() => {
-    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick }));
+    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick: 'all' }));
     const counts = new Map<string, number>();
     for (const option of base) counts.set(option.category_id, (counts.get(option.category_id) ?? 0) + 1);
     return counts;
-  }, [options, query, quick, status]);
+  }, [options, query, status]);
   const categoryTotal = Array.from(categoryCounts.values()).reduce((sum, count) => sum + count, 0);
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const group of categoryGroups) {
-      counts.set(group.code, group.categories.reduce((sum, category) => sum + (categoryCounts.get(category.id) ?? 0), 0));
+      counts.set(group.code, group.categories.reduce((sum, item) => sum + (categoryCounts.get(item.id) ?? 0), 0));
     }
     return counts;
   }, [categoryCounts, categoryGroups]);
+
   const publishedCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
   const draftCount = options.length - publishedCount;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -102,12 +169,14 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const firstShown = filtered.length ? pageStart + 1 : 0;
   const lastShown = Math.min(pageStart + pageSize, filtered.length);
   const selectedIndex = selected ? filtered.findIndex((option) => option.id === selected.id) : -1;
+
   const selectAt = (index: number) => {
     const option = filtered[index];
     if (!option) return;
     setPage(Math.floor(index / pageSize) + 1);
     setSelectedId(option.id);
   };
+
   return <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(26rem,0.65fr)] xl:items-start">
       <section className="card min-w-0 overflow-visible">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -123,22 +192,25 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
         <div className="sticky top-0 z-30 border-b border-line bg-white/95 shadow-sm backdrop-blur" data-testid="ledger-sticky-category-bar">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 sm:px-4">
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="公開状態">
-              <button type="button" role="tab" aria-selected={status === ''} onClick={() => { setStatus(''); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+              <button type="button" role="tab" aria-selected={status === ''} onClick={() => { setStatus(''); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 すべて <span className="ml-1 text-xs">{options.length}</span>
               </button>
-              <button type="button" role="tab" aria-selected={status === 'published'} onClick={() => { setStatus('published'); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+              <button type="button" role="tab" aria-selected={status === 'published'} onClick={() => { setStatus('published'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 公開中 <span className="ml-1 text-xs">{publishedCount}</span>
               </button>
-              <button type="button" role="tab" aria-selected={status === 'draft'} onClick={() => { setStatus('draft'); setQuick('all'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+              <button type="button" role="tab" aria-selected={status === 'draft'} onClick={() => { setStatus('draft'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 下書き <span className="ml-1 text-xs">{draftCount}</span>
               </button>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <Select aria-label="並び替え" value={sort} onChange={(e) => { setSort(e.target.value as LedgerSort); setPage(1); }} className="h-8 min-w-[13.5rem] text-xs">
+                <option value="updated-desc">更新が新しい順</option>
+                <option value="name-asc">商品名順</option>
+                <option value="product-no-asc">商品管理番号順</option>
+                <option value="simulator-standard-desc" disabled>シミュレーター標準使用数順（接続待ち）</option>
+              </Select>
               <button type="button" aria-expanded={searchOpen} className={query ? 'btn-secondary btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSearchOpen((open) => !open)}>
                 <Search className="size-4" aria-hidden="true" /> 検索
-              </button>
-              <button type="button" className={quick === 'needs-attention' ? 'btn-secondary btn-sm bg-ivory' : 'btn-ghost btn-sm'} onClick={() => { setQuick(quick === 'needs-attention' ? 'all' : 'needs-attention'); setPage(1); }}>
-                要確認のみ
               </button>
               <div className="flex rounded-lg border border-line bg-white p-0.5" aria-label="表示形式">
                 <button type="button" aria-pressed={viewMode === 'list'} title="一覧表示" onClick={() => setViewMode('list')} className={'inline-flex size-8 items-center justify-center rounded-md ' + (viewMode === 'list' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand')}>
@@ -194,49 +266,49 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
         {viewMode === 'list' ? (
           <div data-testid="ledger-table-view">
             <div className="hidden md:block">
-              <table className="w-full table-fixed text-left text-sm">
-                <thead className="bg-forest/5 text-xs text-muted">
+              <table className="w-full table-fixed text-left text-[0.8125rem]">
+                <thead className="bg-forest/5 text-[0.72rem] text-muted">
                   <tr>
-                    <th className="w-[36%] px-3 py-2.5">商品</th>
-                    <th className="w-[23%] px-3 py-2.5">メーカー・型番</th>
-                    <th className="w-[18%] px-3 py-2.5">カテゴリー</th>
-                    <th className="w-[11%] px-3 py-2.5">状態</th>
-                    <th className="w-[8%] px-3 py-2.5">更新</th>
-                    <th className="w-[4%] px-2 py-2.5 text-right">操作</th>
+                    <th className="w-[56%] px-3 py-2">商品</th>
+                    <th className="w-[17%] px-3 py-2 text-right">商品価格（税別）</th>
+                    <th className="w-[17%] px-3 py-2">状態</th>
+                    <th className="w-[10%] px-3 py-2">更新日</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {pageOptions.map((o) => {
-                    const attention = productAttentionReasons(o).length > 0;
-                    return <tr key={o.id} onClick={() => openDetail(o.id)} className={selectedId === o.id ? 'cursor-pointer bg-ivory/55' : 'cursor-pointer bg-white hover:bg-sand/25'} data-testid={'ledger-option-' + o.code}>
-                      <td className="px-3 py-2">
-                        <button type="button" aria-controls="ledger-product-detail-pane" className="flex w-full min-w-0 items-center gap-2.5 text-left" onClick={() => openDetail(o.id)}>
+                    const itemCategory = categoryMap.get(o.category_id);
+                    const manufacturerModel = [o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash;
+                    return <tr
+                      key={o.id}
+                      tabIndex={0}
+                      aria-selected={selectedId === o.id}
+                      onClick={() => openDetail(o.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openDetail(o.id);
+                        }
+                      }}
+                      className={(selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25') + ' cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brown/50'}
+                      data-testid={'ledger-option-' + o.code}
+                    >
+                      <td className="px-3 py-1.5">
+                        <div className="flex w-full min-w-0 items-center gap-2.5 text-left">
                           <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">
                             {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}
                           </span>
-                          <span className="min-w-0">
-                            <span className="block truncate font-semibold text-ink">{o.name}</span>
-                            <span className="mt-0.5 block truncate text-[0.68rem] text-muted">{o.product_no || dash}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="inline-flex max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium leading-none text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
+                            <span className="mt-0.5 block truncate text-[0.92rem] font-semibold leading-tight text-ink">{o.name}</span>
+                            <span className="mt-0.5 block truncate text-xs leading-tight text-muted">{manufacturerModel}</span>
+                            <span className="mt-0.5 block truncate text-xs leading-tight text-muted">商品管理番号 {o.product_no || dash}</span>
                           </span>
-                        </button>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="block truncate">{o.manufacturer || dash}</span>
-                        <span className="mt-0.5 block truncate text-xs text-muted">{o.model_no || dash}</span>
-                      </td>
-                      <td className="truncate px-3 py-2">{categoryMap.get(o.category_id)?.name ?? dash}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          <Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge>
-                          {attention && <Badge tone="warn">要確認</Badge>}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted">{date(o.updated_at)}</td>
-                      <td className="px-2 py-2 text-right">
-                        <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => openDetail(o.id)}>
-                          <Ellipsis className="size-4" aria-hidden="true" />
-                        </button>
-                      </td>
+                      <td className="px-3 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>
+                      <td className="px-3 py-1.5"><ProductStatus status={o.status} /></td>
+                      <td className="px-3 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
                     </tr>;
                   })}
                 </tbody>
@@ -245,23 +317,27 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
             <div className="space-y-2 p-3 md:hidden">
               {pageOptions.map((o) => {
-                const attention = productAttentionReasons(o).length > 0;
+                const itemCategory = categoryMap.get(o.category_id);
                 return <article key={o.id} className="relative overflow-hidden rounded-xl border border-line bg-white" data-testid={'ledger-mobile-option-' + o.code}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
-                  <div className="pointer-events-none relative z-20 flex gap-3 p-3">
-                    <span className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">
-                      {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="48px" className="object-contain" /> : '画像なし'}
+                  <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
+                    <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">
+                      {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}
                     </span>
-                    <div className="min-w-0 flex-1 pr-7">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-[0.68rem] text-muted">{o.manufacturer || 'メーカー未設定'}</span>
-                        <Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge>
-                        {attention && <Badge tone="warn">要確認</Badge>}
+                    <div className="min-w-0 flex-1 pr-6">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
+                        <ProductStatus status={o.status} />
                       </div>
-                      <h3 className="mt-1 truncate text-sm font-semibold">{o.name}</h3>
-                      <p className="mt-0.5 truncate text-xs text-muted">{[o.product_no, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
+                      <h3 className="mt-1 truncate text-[0.92rem] font-semibold leading-tight">{o.name}</h3>
+                      <p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
+                      <p className="mt-0.5 truncate text-xs leading-tight text-muted">商品管理番号 {o.product_no || dash}</p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-ink">{productPrice(o)}</span>
+                        <span className="text-muted">更新 {date(o.updated_at)}</span>
+                      </div>
                     </div>
-                    <ChevronRight className="absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+                    <ChevronRight className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
                   </div>
                 </article>;
               })}
@@ -271,8 +347,6 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
           <div className="p-3 sm:p-4" data-testid="ledger-grid-view">
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 min-[1450px]:grid-cols-3">
               {pageOptions.map((o) => {
-                const attentionReasons = productAttentionReasons(o);
-                const attention = attentionReasons.length > 0;
                 const itemCategory = categoryMap.get(o.category_id);
                 const targetModel = o.base_model_id ? modelMap.get(o.base_model_id)?.name ?? '特定モデル' : '全モデル';
                 return (
@@ -280,24 +354,23 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                     <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}>
                       <span className="sr-only">{o.name}の商品詳細を表示</span>
                     </button>
-                    <div className="pointer-events-none relative z-20 flex min-h-[6.75rem] gap-3 p-3">
+                    <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5">
                       <span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">
                         {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 pr-10">
-                          <span className="max-w-full truncate rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
-                          <Badge tone={o.status === 'published' ? 'success' : 'neutral'}>{o.status === 'published' ? '公開中' : '下書き'}</Badge>
-                          {attention && <Badge tone="warn">要確認</Badge>}
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                          <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
+                          <ProductStatus status={o.status} />
                         </div>
-                        <h3 className="mt-1.5 line-clamp-2 pr-8 text-sm font-semibold leading-snug text-ink">{o.name}</h3>
-                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">{[o.product_no, o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
-                        <p className="mt-1 text-[0.68rem] text-muted">{targetModel}</p>
-                        {attention && <p className="mt-1 text-[0.68rem] font-medium text-warn" data-testid={'ledger-attention-reasons-' + o.code}>要確認：{attentionReasons.join('・')}</p>}
+                        <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3>
+                        <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
+                        <p className="mt-0.5 truncate text-xs leading-tight text-muted">商品管理番号 {o.product_no || dash}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-ink">{productPrice(o)}</p>
+                          <p className="text-[0.68rem] text-muted">{targetModel}</p>
+                        </div>
                       </div>
-                      <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の詳細を表示'} title="詳細を表示" className="pointer-events-auto absolute top-3 right-3 z-30 inline-flex size-8 items-center justify-center rounded-full border border-line bg-white text-ink-soft hover:bg-sand" onClick={() => openDetail(o.id)}>
-                        <Ellipsis className="size-4" aria-hidden="true" />
-                      </button>
                     </div>
                   </article>
                 );
@@ -391,7 +464,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                   <h3 className="mb-2 font-semibold">シミュレーター・Web表示設定</h3>
                   <Row label="シミュレーター対象" value={selected.preview_key || selected.affects_views.length ? '対象' : '対象外'}/>
                   <Row label="公開状態" value={selected.status === 'published' ? '公開' : '下書き・非公開'}/>
-                  <Row label="商品価格（税別）" value={selected.price_on_request ? '別途見積' : formatYen(selected.price)}/>
+                  <Row label="商品価格（税別）" value={productPrice(selected)}/>
                 </dl>
               </div>
 

@@ -22,8 +22,9 @@ interface Props {
 /**
  * 共通商品詳細の本文。
  *
- * 左側は「見る場所」＝商品画像・説明。
- * 右側は「選ぶ場所」＝基本情報・文字カードの仕様選択・今回の選択内容。
+ * 左側は「見る場所」＝商品本体画像・サブ画像・メーカー資料。
+ * 右側は「理解して選ぶ場所」＝商品名・特徴・説明・基本情報・文字中心の仕様選択。
+ * 選択肢画像は通常の商品詳細では表示せず、外壁4面など専用UIだけが必要に応じて扱う。
  * 金額と確定ボタンは親ダイアログの固定フッターに置く。
  */
 export function ProductDetail({
@@ -41,19 +42,12 @@ export function ProductDetail({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
 
-  const groupNameById = new Map(groups.map((group) => [group.id, group.name]));
   const galleryImages = [
     ...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),
     ...(option.gallery_images ?? []).map((image) => ({
       url: image.url,
       label: image.caption?.trim() || image.alt?.trim() || '商品画像',
     })),
-    ...choices
-      .filter((choice) => Boolean(choice.image_url) && groupNameById.has(choice.group_id))
-      .map((choice) => ({
-        url: choice.image_url as string,
-        label: `${groupNameById.get(choice.group_id)}：${choice.name}`,
-      })),
   ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
   const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
   const activeImage = galleryImages[safeImageIndex] ?? null;
@@ -66,10 +60,13 @@ export function ProductDetail({
     });
   };
 
+  const handleVariantChange = (choiceId: string, groupId: string) => {
+    onVariantChange(choiceId, groupId);
+  };
+
   const basicInfo = [
     { label: 'シリーズ・型番', value: option.model_no },
     { label: sizeLabel(category.code), value: option.size_note },
-    { label: '区分', value: option.highlight },
   ].filter((item): item is { label: string; value: string } => Boolean(item.value?.trim()));
 
   const fixedSpecs = groups
@@ -101,8 +98,8 @@ export function ProductDetail({
 
   return (
     <div className="h-full min-h-0" data-testid="product-detail">
-      <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(21rem,0.92fr)]">
-        <section className="min-w-0 lg:self-start">
+      <div className="grid h-full min-h-0 gap-5 md:grid-cols-[minmax(0,1.85fr)_minmax(18rem,1fr)]">
+        <section className="min-w-0 md:self-start">
           <div
             className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-line bg-sand/45 p-1"
             role="tablist"
@@ -176,7 +173,7 @@ export function ProductDetail({
                   src={activeImage.url}
                   alt={`${option.name} ${activeImage.label}`}
                   fill
-                  sizes="(min-width: 1024px) 36rem, 90vw"
+                  sizes="(min-width: 768px) 62vw, 90vw"
                   className="object-contain"
                 />
                 {galleryImages.length > 1 && (
@@ -246,15 +243,9 @@ export function ProductDetail({
               )}
             </div>
           )}
-
-          {option.description && (
-            <div className="mt-3 rounded-lg bg-ivory/55 px-3 py-2.5">
-              <p className="whitespace-pre-line text-xs leading-relaxed text-ink-soft">{option.description}</p>
-            </div>
-          )}
         </section>
 
-        <section className="min-h-0 min-w-0 lg:overflow-y-auto lg:pr-2">
+        <section className="min-h-0 min-w-0 md:overflow-y-auto md:pr-2">
           <div className="border-b border-line pb-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -268,6 +259,21 @@ export function ProductDetail({
                 </span>
               )}
             </div>
+
+            {option.highlight && (
+              <p
+                className="mt-2 inline-flex rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown"
+                data-testid="product-detail-highlight"
+              >
+                {option.highlight}
+              </p>
+            )}
+
+            {option.description && (
+              <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-ink-soft">
+                {option.description}
+              </p>
+            )}
 
             {basicInfo.length > 0 && (
               <dl className="mt-3 grid gap-1.5 rounded-lg bg-sand/45 p-3 text-xs">
@@ -311,16 +317,16 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  色・柄は商品画像やメーカー資料でご確認ください
+                  名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。
                 </p>
               </div>
               <VariantPicker
                 groups={editableGroups}
                 choices={choices}
                 selected={selectedVariantIds}
-                onChange={onVariantChange}
+                onChange={handleVariantChange}
                 showImages={false}
-                showCurrentValue={false}
+                showCurrentValue
               />
             </div>
           )}

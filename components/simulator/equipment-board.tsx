@@ -26,8 +26,14 @@ interface Props {
 }
 
 const INTERIOR_EXTERIOR_CATEGORY_ORDER = [
-  'interior-door',
+  'roof',
+  'exterior-wall',
+  'entrance-door',
   'sash',
+  'interior-door',
+  'carpentry',
+  'floor',
+  'wall-ceiling',
 ] as const;
 
 const OPTION_CATEGORY_ORDER = [
@@ -73,7 +79,7 @@ function isOtherProductCategory(category: OptionCategory): boolean {
 
 /**
  * プランボード後半の仕様表。
- * 内外装工事は、既存の内部建具・サッシカテゴリーだけを表示する。
+ * 内外装工事は、モデル／仕様ごとに選択可能な屋根・外壁・建具・内装仕上げをまとめて表示する。
  * オプションとその他の商品は別のレスポンシブ単位として分ける。
  */
 export function EquipmentBoard({

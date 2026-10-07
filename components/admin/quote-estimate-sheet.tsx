@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Quote, QuoteItem } from '@/lib/domain/types';
 import { QuoteReferenceDetails, QuoteTable } from '@/components/mypage/quote-table';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
+import { LegacyAcceptedFormalizationEntry } from '@/components/admin/legacy-accepted-formalization-entry';
 import type { CatalogPickerItem } from '@/components/admin/catalog-picker';
 
 export function QuoteEstimateSheet({
@@ -46,6 +47,7 @@ export function QuoteEstimateSheet({
 
   return (
     <div className="rounded-lg border border-line bg-white shadow-sm" data-testid="quote-estimate-sheet">
+      <LegacyAcceptedFormalizationEntry quote={quote} />
       {canRevise && (
         <div className="flex items-center justify-end border-b border-line bg-[#fafbf9] px-3 py-2">
           <button

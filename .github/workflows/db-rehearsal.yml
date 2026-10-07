@@ -55,10 +55,13 @@ jobs:
           supabase db query --local "select version()"
           supabase db query --local "select count(*) as applied, max(version) as latest from supabase_migrations.schema_migrations"
 
-      # plpgsql_check：関数本体が参照する列・テーブル・関数・型をスキーマと照合する
+      # plpgsql_check：関数本体が参照する列・テーブル・関数・型をスキーマと照合する。
+      # 合否は lint-gate.mjs が判定する（既知の事象は理由つきでそこに列挙）
       - name: Lint database functions (plpgsql_check)
         shell: bash
-        run: supabase db lint --local --schema public --level warning --fail-on error | tee db-lint.json
+        run: |
+          supabase db lint --local --schema public --level warning --fail-on none > db-lint.json
+          node scripts/db-rehearsal/lint-gate.mjs db-lint.json
 
       # RLS・EXECUTE 権限・アプリ（RPC／テーブル／列）との突き合わせ
       - name: Check privileges and app contract

@@ -63,3 +63,8 @@ grant execute on function public.some_rpc(uuid) to authenticated;
 
 - ローカルの `bootstrap.sql` は Supabase の再現であり、本物ではありません（CI は本物のイメージを使います）
 - 本番データは使いません。データ依存の分岐は、シードまたは本番の事前確認で別途確かめます
+
+## plpgsql_check の判定（`lint-gate.mjs`）
+
+CI は `supabase db lint` の結果を `lint-gate.mjs` で判定します。`level=error` が 1 件でもあれば不合格です。
+到達しない旧関数など、直さない理由を説明できるものだけを `KNOWN` に理由つきで載せています。

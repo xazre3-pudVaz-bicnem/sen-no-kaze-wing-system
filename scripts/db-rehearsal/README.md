@@ -69,3 +69,14 @@ grant execute on function public.some_rpc(uuid) to authenticated;
 
 CI は `supabase db lint` の結果を `lint-gate.mjs` で判定します。`level=error` が 1 件でもあれば不合格です。
 到達しない旧関数など、直さない理由を説明できるものだけを `KNOWN` に理由つきで載せています。
+
+## 本番適用前の read-only data preflight（`preflight-readonly.sql`）
+
+未適用 migration がデータ前提で停止する条件と、分類表まわりの確認項目を、**件数・真偽・商品コードだけ**で返します。
+個人情報・明細は返しません。本番に適用済みのスキーマだけを参照し、SELECT 以外は実行しません。
+
+```bash
+npx supabase db query --linked --output-format json -f scripts/db-rehearsal/preflight-readonly.sql
+```
+
+`stop_*` に該当があった場合は、その場で直さずに報告します。

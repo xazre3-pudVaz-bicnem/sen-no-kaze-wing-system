@@ -91,6 +91,7 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   const categories = await store.listCategories();
   const byCode = new Map(categories.map((c) => [c.code, c]));
   const byName = new Map(categories.map((c) => [c.name, c]));
+  const byId = new Map(categories.map((c) => [c.id, c]));
   const existingOptions = await store.listOptions();
   const optionByCode = new Map(existingOptions.map((o) => [o.code, o]));
 
@@ -118,7 +119,20 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     if (!category) throw new StoreError('VALIDATION', `商品「${p.code}」のカテゴリーを解決できませんでした`);
     const code = slugify(p.code, p.code);
     const existing = optionByCode.get(code);
-    if (category.code === FREE_PRODUCT_CATEGORY_CODE && !existing) {
+    if (existing) {
+      const currentCategory = byId.get(existing.category_id);
+      if (!currentCategory) {
+        throw new StoreError('VALIDATION', `商品「${existing.name}」の現在カテゴリーを確認できません。`);
+      }
+      const currentIsFree = currentCategory.code === FREE_PRODUCT_CATEGORY_CODE;
+      const targetIsFree = category.code === FREE_PRODUCT_CATEGORY_CODE;
+      if (currentIsFree !== targetIsFree) {
+        throw new StoreError(
+          'VALIDATION',
+          `フリー商品と通常商品の間でカテゴリーを変更することはできません。商品「${existing.name}」のカテゴリーを確認してください。`
+        );
+      }
+    } else if (category.code === FREE_PRODUCT_CATEGORY_CODE) {
       throw new StoreError(
         'VALIDATION',
         `フリー商品の新規登録は終了しました。商品「${p.name}」はExcel一括登録から新規作成できません。`

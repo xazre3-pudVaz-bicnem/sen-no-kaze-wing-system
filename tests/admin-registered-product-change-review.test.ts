@@ -38,12 +38,16 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain("kind: 'image'");
     expect(flow).toContain('メイン画像');
     expect(flow).toContain('商品説明');
+    expect(flow).toContain('h-32 items-center');
+    expect(flow).toContain('sm:h-36');
   });
 
   it('変更後のお客様表示プレビューと編集への戻り導線を持ち、戻っても入力フォームを破棄しない', () => {
     expect(flow).toContain('変更後のお客様表示プレビュー');
     expect(flow).toContain('<OptionCustomerPreview');
     expect(flow).toContain('option={review.option}');
+    expect(flow).toContain('実際のお客様画面と同じ内容で表示しています。');
+    expect(flow).toContain('[&>div>p:last-child]:hidden');
     expect(flow).toContain('編集に戻る');
     expect(flow).toContain("hidden={screen !== 'review'}");
     expect(flow).toContain("hidden={screen !== 'edit'}");

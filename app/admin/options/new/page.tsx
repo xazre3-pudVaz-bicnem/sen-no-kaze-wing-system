@@ -31,24 +31,24 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   return (
     <AdminPage
       title={isFree ? 'フリー商品を追加' : '商品を追加'}
-      lead="商品情報を登録し、登録済みの内容を確認します。"
+      lead="商品情報を入力し、登録内容を確認してから登録します。"
     >
       <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
       {returnTo && !returnToLedger && (
         <Alert tone="info">
-          見積テンプレートの商品追加から移動しています。まず基本情報を入力して「次へ：画像・資料」へ進み、STEP 2で公開した後に元の見積テンプレートへ戻って商品を追加します。
+          見積テンプレートの商品追加から移動しています。まず基本情報を入力して「次へ：画像・資料」へ進み、STEP 2で登録内容を確認して「この内容で登録」した後に元の見積テンプレートへ戻って商品を追加します。
         </Alert>
       )}
 
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          最初は基本情報だけ入力します。「次へ：画像・資料」で商品を作成し、そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。最後にSTEP 2でお客様表示を確認して公開します。
+          最初は基本情報だけ入力します。「次へ：画像・資料」で商品を作成し、そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。最後にSTEP 2で登録内容とお客様表示を確認し、「この内容で登録」します。
         </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
             ['1', '商品情報', '商品・資料・選択項目・価格を入力'],
-            ['2', '登録内容確認', '実際のお客様表示を確認して公開'],
+            ['2', '登録内容確認', '登録内容と実際のお客様表示を確認'],
           ].map(([no, label, note], index) => (
             <li key={no} className={`rounded-xl border px-3 py-3 ${index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
               <span className="text-xs font-semibold text-brown">STEP {no}</span>

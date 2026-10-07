@@ -221,7 +221,7 @@ security definer
 set search_path = public
 as $hashfn$
   select encode(
-    digest(
+    extensions.digest(
       jsonb_build_object(
         'base_breakdown_items',
         coalesce((
@@ -454,7 +454,7 @@ security definer
 set search_path = public
 as $sig$
   select encode(
-    digest(
+    extensions.digest(
       coalesce(
         jsonb_agg(
           jsonb_build_object(

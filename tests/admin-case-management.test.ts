@@ -479,7 +479,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-tab-handover"');
     expect(workspace).toContain('data-testid="case-handover-reference"');
     expect(workspace).toContain('引渡し対象の前提');
-    expect(workspace).toContain('既存データからの参考表示');
+    expect(workspace).toContain('既存情報からの参考表示');
     expect(workspace).toContain('引渡し確定情報ではありません。');
     expect(workspace).toContain('第{quote.revision}版／引渡し用には未固定');
     expect(workspace).toContain('data-testid="case-handover-readiness"');
@@ -501,7 +501,7 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('data-testid="case-tab-production"');
     expect(workspace).toContain('data-testid="case-production-reference"');
     expect(workspace).toContain('製造前提');
-    expect(workspace).toContain('既存データからの参考表示');
+    expect(workspace).toContain('既存情報からの参考表示');
     expect(workspace).toContain('製造指示書や製造確定仕様ではありません。');
     expect(workspace).toContain('第{quote.revision}版／製造用には未固定');
     expect(workspace).toContain('data-testid="case-installation-scope"');

@@ -1,0 +1,2 @@
+# テストとマイグレーション検査は LF 前提。Windows でも作業ツリーを LF にそろえる
+* text=auto eol=lf

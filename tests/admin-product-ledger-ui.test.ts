@@ -38,28 +38,35 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('すべて <span');
     expect(client).toContain('公開中 <span');
     expect(client).toContain('下書き <span');
-    expect(client).toContain('要確認のみ');
+    expect(client).not.toContain('要確認のみ');
     expect(client).toContain('aria-expanded={searchOpen}');
     expect(client).toContain('data-testid="ledger-collapsible-search"');
     expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号で検索');
     expect(client).not.toContain('メーカー：すべて');
     expect(client).not.toContain('対象モデル：すべて');
-    expect(client).not.toContain('並び替え：更新が新しい順');
     expect(client).not.toContain('hidden md:sticky md:top-4 md:block');
     expect(client).toContain('一覧表示');
     expect(client).toContain('画像表示');
     expect(client).toContain("useState<'list' | 'grid'>('list')");
     expect(client).toContain('data-testid="ledger-table-view"');
-    expect(client).toContain('<table className="w-full table-fixed text-left text-sm">');
+    expect(client).toContain('<table className="w-full table-fixed text-left text-[0.8125rem]">');
     expect(client).toContain('<div className="hidden md:block">');
     expect(client).not.toContain('hidden overflow-x-auto md:block');
     expect(client).not.toContain('min-w-[680px]');
     expect(client).not.toContain('商品番号未採番');
     expect(client).not.toContain('型番未設定');
-    expect(client).toContain('メーカー・型番');
     expect(client).not.toContain('<th className="w-[12%] px-3 py-2.5">対象モデル</th>');
     expect(client).toContain('data-testid="ledger-grid-view"');
     expect(client).toContain('space-y-2 p-3 md:hidden');
+    expect(client).toContain('useState<LedgerSort>(\'updated-desc\')');
+    expect(client).toContain('更新が新しい順');
+    expect(client).toContain('商品名順');
+    expect(client).toContain('商品管理番号順');
+    expect(client).toContain('シミュレーター標準使用数順（接続待ち）');
+    expect(client).toContain('value="simulator-standard-desc" disabled');
+    expect(client).toContain('data-simulator-standard-usage-slot="pending-db"');
+    expect(client).toContain('DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。');
+    expect(client).not.toContain('Ellipsis');
     expect(client).toContain("useState(50)");
     expect(client).toContain('表示件数');
     expect(client).toContain('25件');
@@ -71,6 +78,31 @@ describe('商品台帳の入口', () => {
 
     expect(ledger).toContain("store.listModels({ includeDraft: true })");
     expect(ledger).toContain('models={models}');
+  });
+
+  it('一覧は商品情報をまとめた4列構成にし、行全体から詳細を開く', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain('<th className="w-[56%] px-3 py-2">商品</th>');
+    expect(client).toContain('<th className="w-[17%] px-3 py-2 text-right">商品価格（税別）</th>');
+    expect(client).toContain('<th className="w-[17%] px-3 py-2">状態</th>');
+    expect(client).toContain('<th className="w-[10%] px-3 py-2">更新日</th>');
+    expect(client).not.toContain('>メーカー・型番</th>');
+    expect(client).not.toContain('>カテゴリー</th>');
+    expect(client).not.toContain('>操作</th>');
+    expect(client).toContain('itemCategory?.name');
+    expect(client).toContain('[o.manufacturer, o.model_no].filter(Boolean)');
+    expect(client).toContain('商品管理番号 {o.product_no || dash}');
+    expect(client).toContain('text-[0.92rem] font-semibold');
+    expect(client).toContain('text-xs leading-tight text-muted');
+    expect(client).toContain('onClick={() => openDetail(o.id)}');
+    expect(client).toContain("if (event.key === 'Enter' || event.key === ' ')");
+  });
+
+  it('商品価格は通常・別途見積・未設定を区別する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain("if (option.price_on_request) return '別途見積'");
+    expect(client).toContain('if (!Number.isFinite(option.price)) return dash');
+    expect(client).toContain('return formatYen(option.price)');
   });
 
   it('商品詳細を2タブのレスポンシブ2ペインで表示する', () => {
@@ -90,6 +122,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('商品詳細を閉じる');
     expect(client).toContain('前の商品');
     expect(client).toContain('次の商品');
+    expect(client).toContain('商品情報を編集');
     expect(client).not.toContain('ledger-product-detail-modal');
     expect(client).not.toContain('aria-modal="true"');
     expect(client).not.toContain("document.body.style.overflow = 'hidden'");
@@ -97,7 +130,8 @@ describe('商品台帳の入口', () => {
 
   it('一覧の行全体から詳細を開き、2ペイン未満では詳細位置へ移動する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain("return <tr key={o.id} onClick={() => openDetail(o.id)}");
+    expect(client).toContain('tabIndex={0}');
+    expect(client).toContain('onClick={() => openDetail(o.id)}');
     expect(client).toContain("window.matchMedia('(min-width: 1280px)').matches");
     expect(client).toContain("document.getElementById('ledger-product-detail-pane')?.scrollIntoView({ behavior: 'smooth', block: 'start' })");
   });

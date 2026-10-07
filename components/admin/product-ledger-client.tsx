@@ -20,7 +20,19 @@ type Props = {
   initiallySelectedId?: string;
 };
 
-type LedgerSort = 'updated-desc' | 'name-asc' | 'product-no-asc';
+type LedgerSort =
+  | 'updated-desc'
+  | 'updated-asc'
+  | 'name-asc'
+  | 'name-desc'
+  | 'category-asc'
+  | 'category-desc'
+  | 'price-asc'
+  | 'price-desc'
+  | 'status-published-first'
+  | 'status-draft-first';
+
+type SortChoice = { value?: LedgerSort; label: string; disabled?: boolean };
 
 const EMPTY_VARIANTS: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] };
 const dash = '—';
@@ -40,19 +52,69 @@ function productPrice(option: ProductOption) {
   return formatYen(option.price);
 }
 
-function compareProductNo(a: ProductOption, b: ProductOption) {
-  const aNo = (a.product_no ?? '').trim();
-  const bNo = (b.product_no ?? '').trim();
-  if (!aNo && !bNo) return a.name.localeCompare(b.name, 'ja-JP');
-  if (!aNo) return 1;
-  if (!bNo) return -1;
-  return aNo.localeCompare(bNo, 'ja-JP', { numeric: true, sensitivity: 'base' }) || a.name.localeCompare(b.name, 'ja-JP');
+function priceSortKind(option: ProductOption) {
+  if (option.price_on_request) return 1;
+  if (!Number.isFinite(option.price)) return 2;
+  return 0;
 }
 
-function compareOptions(a: ProductOption, b: ProductOption, sort: LedgerSort) {
-  if (sort === 'name-asc') return a.name.localeCompare(b.name, 'ja-JP') || compareProductNo(a, b);
-  if (sort === 'product-no-asc') return compareProductNo(a, b);
-  return b.updated_at.localeCompare(a.updated_at) || a.name.localeCompare(b.name, 'ja-JP');
+function compareOptions(a: ProductOption, b: ProductOption, sort: LedgerSort, categoryMap: Map<string, OptionCategory>) {
+  const nameCompare = a.name.localeCompare(b.name, 'ja-JP', { numeric: true, sensitivity: 'base' });
+  if (sort === 'name-asc') return nameCompare;
+  if (sort === 'name-desc') return -nameCompare;
+  if (sort === 'category-asc' || sort === 'category-desc') {
+    const categoryCompare = (categoryMap.get(a.category_id)?.name ?? '').localeCompare(categoryMap.get(b.category_id)?.name ?? '', 'ja-JP', { numeric: true, sensitivity: 'base' });
+    return (sort === 'category-asc' ? categoryCompare : -categoryCompare) || nameCompare;
+  }
+  if (sort === 'price-asc' || sort === 'price-desc') {
+    const aKind = priceSortKind(a);
+    const bKind = priceSortKind(b);
+    if (aKind !== bKind) return aKind - bKind;
+    if (aKind === 0) return (sort === 'price-asc' ? a.price - b.price : b.price - a.price) || nameCompare;
+    return nameCompare;
+  }
+  if (sort === 'status-published-first' || sort === 'status-draft-first') {
+    if (a.status !== b.status) {
+      const publishedFirst = sort === 'status-published-first';
+      return a.status === 'published' ? (publishedFirst ? -1 : 1) : (publishedFirst ? 1 : -1);
+    }
+    return nameCompare;
+  }
+  const updatedCompare = a.updated_at.localeCompare(b.updated_at);
+  return (sort === 'updated-asc' ? updatedCompare : -updatedCompare) || nameCompare;
+}
+
+function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: string; sort: LedgerSort; choices: SortChoice[]; onSort: (value: LedgerSort) => void; align?: 'left' | 'right' }) {
+  return (
+    <details className="group relative inline-block">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded px-1 py-0.5 font-semibold text-ink-soft hover:bg-white/80 [&::-webkit-details-marker]:hidden" aria-label={label + 'の並び替え'}>
+        <span>{label}</span>
+        <ChevronDown className="size-3.5 transition group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className={'absolute top-full z-40 mt-1 min-w-48 rounded-lg border border-line bg-white p-1.5 text-left text-xs font-normal shadow-lg ' + (align === 'right' ? 'right-0' : 'left-0')}>
+        {choices.map((choice) => {
+          const active = !!choice.value && choice.value === sort;
+          return (
+            <button
+              key={choice.label}
+              type="button"
+              disabled={choice.disabled || !choice.value}
+              aria-current={active ? 'true' : undefined}
+              className={'flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left ' + (choice.disabled || !choice.value ? 'cursor-not-allowed text-muted/60' : active ? 'bg-ivory font-semibold text-ink' : 'text-ink-soft hover:bg-sand')}
+              onClick={(event) => {
+                if (!choice.value) return;
+                onSort(choice.value);
+                event.currentTarget.closest('details')?.removeAttribute('open');
+              }}
+            >
+              <span>{choice.label}</span>
+              {active && <span aria-hidden="true">✓</span>}
+            </button>
+          );
+        })}
+      </div>
+    </details>
+  );
 }
 
 function ProductStatus({ status }: { status: ProductOption['status'] }) {
@@ -109,8 +171,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     () =>
       options
         .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick: 'all' }))
-        .sort((a, b) => compareOptions(a, b, sort)),
-    [categoryId, groupCode, options, query, selectedGroupCategoryIds, sort, status]
+        .sort((a, b) => compareOptions(a, b, sort, categoryMap)),
+    [categoryId, categoryMap, groupCode, options, query, selectedGroupCategoryIds, sort, status]
   );
 
   /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
@@ -177,6 +239,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     setSelectedId(option.id);
   };
 
+  const applySort = (value: LedgerSort) => {
+    setSort(value);
+    setPage(1);
+  };
+
   return <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(26rem,0.65fr)] xl:items-start">
       <section className="card min-w-0 overflow-visible">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -203,12 +270,6 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               </button>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-1.5">
-              <Select aria-label="並び替え" value={sort} onChange={(e) => { setSort(e.target.value as LedgerSort); setPage(1); }} className="h-8 min-w-[13.5rem] text-xs">
-                <option value="updated-desc">更新が新しい順</option>
-                <option value="name-asc">商品名順</option>
-                <option value="product-no-asc">商品管理番号順</option>
-                <option value="simulator-standard-desc" disabled>シミュレーター標準使用数順（接続待ち）</option>
-              </Select>
               <button type="button" aria-expanded={searchOpen} className={query ? 'btn-secondary btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSearchOpen((open) => !open)}>
                 <Search className="size-4" aria-hidden="true" /> 検索
               </button>
@@ -256,7 +317,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
             <div className="flex items-center gap-2">
               <label className="min-w-0 flex-1">
                 <span className="sr-only">商品を検索</span>
-                <Input autoFocus type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・シリーズ・型番・商品番号で検索" className="w-full" />
+                <Input autoFocus type="search" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="商品名・メーカー・シリーズ・型番で検索" className="w-full" />
               </label>
               {query && <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => { setQuery(''); setPage(1); }}>クリア</button>}
             </div>
@@ -269,10 +330,21 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               <table className="w-full table-fixed text-left text-[0.8125rem]">
                 <thead className="bg-forest/5 text-[0.72rem] text-muted">
                   <tr>
-                    <th className="w-[56%] px-3 py-2">商品</th>
-                    <th className="w-[17%] px-3 py-2 text-right">商品価格（税別）</th>
-                    <th className="w-[17%] px-3 py-2">状態</th>
-                    <th className="w-[10%] px-3 py-2">更新日</th>
+                    <th className="w-[40%] px-2.5 py-1.5">
+                      <SortHeader label="商品" sort={sort} onSort={applySort} choices={[{ value: 'name-asc', label: '商品名 昇順' }, { value: 'name-desc', label: '商品名 降順' }]} />
+                    </th>
+                    <th className="w-[16%] px-2.5 py-1.5">
+                      <SortHeader label="カテゴリー" sort={sort} onSort={applySort} choices={[{ value: 'category-asc', label: 'カテゴリー 昇順' }, { value: 'category-desc', label: 'カテゴリー 降順' }]} />
+                    </th>
+                    <th className="w-[17%] px-2.5 py-1.5 text-right">
+                      <SortHeader label="商品価格（税別）" sort={sort} onSort={applySort} align="right" choices={[{ value: 'price-asc', label: '安い順' }, { value: 'price-desc', label: '高い順' }]} />
+                    </th>
+                    <th className="w-[15%] px-2.5 py-1.5">
+                      <SortHeader label="状態" sort={sort} onSort={applySort} choices={[{ value: 'status-published-first', label: '公開中を先に表示' }, { value: 'status-draft-first', label: '下書きを先に表示' }, { label: '標準使用数が多い順（接続待ち）', disabled: true }]} />
+                    </th>
+                    <th className="w-[12%] px-2.5 py-1.5">
+                      <SortHeader label="更新日" sort={sort} onSort={applySort} align="right" choices={[{ value: 'updated-desc', label: '新しい順' }, { value: 'updated-asc', label: '古い順' }]} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -293,22 +365,21 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       className={(selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25') + ' cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brown/50'}
                       data-testid={'ledger-option-' + o.code}
                     >
-                      <td className="px-3 py-1.5">
+                      <td className="px-2.5 py-1.5">
                         <div className="flex w-full min-w-0 items-center gap-2.5 text-left">
                           <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">
                             {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="inline-flex max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium leading-none text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
-                            <span className="mt-0.5 block truncate text-[0.92rem] font-semibold leading-tight text-ink">{o.name}</span>
+                            <span className="block line-clamp-2 text-[0.92rem] font-semibold leading-tight text-ink">{o.name}</span>
                             <span className="mt-0.5 block truncate text-xs leading-tight text-muted">{manufacturerModel}</span>
-                            <span className="mt-0.5 block truncate text-xs leading-tight text-muted">商品管理番号 {o.product_no || dash}</span>
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>
-                      <td className="px-3 py-1.5"><ProductStatus status={o.status} /></td>
-                      <td className="px-3 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
+                      <td className="px-2.5 py-1.5 text-xs font-medium text-ink-soft">{itemCategory?.name ?? dash}</td>
+                      <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>
+                      <td className="px-2.5 py-1.5"><ProductStatus status={o.status} /></td>
+                      <td className="px-2.5 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
                     </tr>;
                   })}
                 </tbody>
@@ -329,9 +400,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                         <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
                         <ProductStatus status={o.status} />
                       </div>
-                      <h3 className="mt-1 truncate text-[0.92rem] font-semibold leading-tight">{o.name}</h3>
+                      <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3>
                       <p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
-                      <p className="mt-0.5 truncate text-xs leading-tight text-muted">商品管理番号 {o.product_no || dash}</p>
                       <div className="mt-1.5 flex items-center justify-between gap-2 text-xs">
                         <span className="font-semibold text-ink">{productPrice(o)}</span>
                         <span className="text-muted">更新 {date(o.updated_at)}</span>
@@ -365,7 +435,6 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                         </div>
                         <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3>
                         <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
-                        <p className="mt-0.5 truncate text-xs leading-tight text-muted">商品管理番号 {o.product_no || dash}</p>
                         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-ink">{productPrice(o)}</p>
                           <p className="text-[0.68rem] text-muted">{targetModel}</p>

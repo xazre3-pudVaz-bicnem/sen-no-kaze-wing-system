@@ -9,7 +9,7 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('ProductLedgerClient');
     expect(ledger).not.toContain('/admin/base-breakdown');
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号');
+    expect(client).toContain('商品名・メーカー・シリーズ・型番で検索');
     expect(client).toContain('商品価格（税別）');
   });
 
@@ -41,7 +41,7 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain('要確認のみ');
     expect(client).toContain('aria-expanded={searchOpen}');
     expect(client).toContain('data-testid="ledger-collapsible-search"');
-    expect(client).toContain('商品名・メーカー・シリーズ・型番・商品番号で検索');
+    expect(client).toContain('商品名・メーカー・シリーズ・型番で検索');
     expect(client).not.toContain('メーカー：すべて');
     expect(client).not.toContain('対象モデル：すべて');
     expect(client).not.toContain('hidden md:sticky md:top-4 md:block');
@@ -58,12 +58,10 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain('<th className="w-[12%] px-3 py-2.5">対象モデル</th>');
     expect(client).toContain('data-testid="ledger-grid-view"');
     expect(client).toContain('space-y-2 p-3 md:hidden');
-    expect(client).toContain('useState<LedgerSort>(\'updated-desc\')');
-    expect(client).toContain('更新が新しい順');
-    expect(client).toContain('商品名順');
-    expect(client).toContain('商品管理番号順');
-    expect(client).toContain('シミュレーター標準使用数順（接続待ち）');
-    expect(client).toContain('value="simulator-standard-desc" disabled');
+    expect(client).toContain("useState<LedgerSort>('updated-desc')");
+    expect(client).not.toContain('aria-label="並び替え"');
+    expect(client).not.toContain('商品管理番号順');
+    expect(client).toContain('標準使用数が多い順（接続待ち）');
     expect(client).toContain('data-simulator-standard-usage-slot="pending-db"');
     expect(client).toContain('DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。');
     expect(client).not.toContain('Ellipsis');
@@ -80,22 +78,45 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('models={models}');
   });
 
-  it('一覧は商品情報をまとめた4列構成にし、行全体から詳細を開く', () => {
+  it('一覧は商品・カテゴリー・価格・状態・更新日の5列構成にし、行全体から詳細を開く', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('<th className="w-[56%] px-3 py-2">商品</th>');
-    expect(client).toContain('<th className="w-[17%] px-3 py-2 text-right">商品価格（税別）</th>');
-    expect(client).toContain('<th className="w-[17%] px-3 py-2">状態</th>');
-    expect(client).toContain('<th className="w-[10%] px-3 py-2">更新日</th>');
+    expect(client).toContain('<th className="w-[40%] px-2.5 py-1.5">');
+    expect(client).toContain('<SortHeader label="商品"');
+    expect(client).toContain('<th className="w-[16%] px-2.5 py-1.5">');
+    expect(client).toContain('<SortHeader label="カテゴリー"');
+    expect(client).toContain('<th className="w-[17%] px-2.5 py-1.5 text-right">');
+    expect(client).toContain('<SortHeader label="商品価格（税別）"');
+    expect(client).toContain('<th className="w-[15%] px-2.5 py-1.5">');
+    expect(client).toContain('<SortHeader label="状態"');
+    expect(client).toContain('<th className="w-[12%] px-2.5 py-1.5">');
+    expect(client).toContain('<SortHeader label="更新日"');
     expect(client).not.toContain('>メーカー・型番</th>');
-    expect(client).not.toContain('>カテゴリー</th>');
     expect(client).not.toContain('>操作</th>');
-    expect(client).toContain('itemCategory?.name');
+    expect(client).toContain('{itemCategory?.name ?? dash}');
     expect(client).toContain('[o.manufacturer, o.model_no].filter(Boolean)');
-    expect(client).toContain('商品管理番号 {o.product_no || dash}');
-    expect(client).toContain('text-[0.92rem] font-semibold');
+    expect(client).not.toContain('商品管理番号 {o.product_no || dash}');
+    expect(client).toContain('line-clamp-2 text-[0.92rem] font-semibold');
     expect(client).toContain('text-xs leading-tight text-muted');
     expect(client).toContain('onClick={() => openDetail(o.id)}');
     expect(client).toContain("if (event.key === 'Enter' || event.key === ' ')");
+  });
+
+  it('各列見出しからExcel風に並び替え、正式データ未接続の標準使用数順は無効表示する', () => {
+    const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+    expect(client).toContain("{ value: 'name-asc', label: '商品名 昇順' }");
+    expect(client).toContain("{ value: 'name-desc', label: '商品名 降順' }");
+    expect(client).toContain("{ value: 'category-asc', label: 'カテゴリー 昇順' }");
+    expect(client).toContain("{ value: 'category-desc', label: 'カテゴリー 降順' }");
+    expect(client).toContain("{ value: 'price-asc', label: '安い順' }");
+    expect(client).toContain("{ value: 'price-desc', label: '高い順' }");
+    expect(client).toContain("{ value: 'status-published-first', label: '公開中を先に表示' }");
+    expect(client).toContain("{ value: 'status-draft-first', label: '下書きを先に表示' }");
+    expect(client).toContain("{ value: 'updated-desc', label: '新しい順' }");
+    expect(client).toContain("{ value: 'updated-asc', label: '古い順' }");
+    expect(client).toContain("{ label: '標準使用数が多い順（接続待ち）', disabled: true }");
+    expect(client).toContain('event.currentTarget.closest(\'details\')?.removeAttribute(\'open\')');
+    expect(client).toContain("if (option.price_on_request) return 1");
+    expect(client).toContain('if (!Number.isFinite(option.price)) return 2');
   });
 
   it('商品価格は通常・別途見積・未設定を区別する', () => {

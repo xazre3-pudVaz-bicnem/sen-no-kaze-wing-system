@@ -516,9 +516,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('extractContractReference');
     expect(workspace).toContain('data-testid="case-contract-reference"');
     expect(workspace).toContain('契約情報');
-    expect(workspace).toContain('正式保存前');
-    expect(workspace).toContain('既存データからの参考表示');
-    expect(workspace).toContain('ここに表示する内容は正式な契約レコードではありません。');
+    expect(workspace).toContain('記録機能は準備中');
+    expect(workspace).toContain('既存情報からの参考表示');
+    expect(workspace).toContain('ここに表示する内容は正式な契約情報ではありません。');
     expect(workspace).toContain('正式な契約状態は未登録');
     expect(workspace).toContain('受注契約日（メモ）');
     expect(workspace).toContain('現在の見積額（参考）');

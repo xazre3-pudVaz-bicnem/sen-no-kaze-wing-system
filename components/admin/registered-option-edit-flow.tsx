@@ -104,7 +104,7 @@ function ImagePreview({ src, label }: { src: string | null; label: string }) {
   return (
     <div className="rounded-xl border border-line bg-white p-3">
       <p className="mb-2 text-xs font-semibold text-muted">{label}</p>
-      <div className="relative flex h-44 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/40 text-xs text-muted">
+      <div className="relative flex h-32 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/40 text-xs text-muted sm:h-36">
         {src ? <SmartImage src={src} alt="" fill sizes="360px" className="object-contain" /> : '画像なし'}
       </div>
     </div>
@@ -300,12 +300,19 @@ export function RegisteredOptionEditFlow({
               <p className="mt-1 text-sm text-muted">変更後の内容で、お客様に見える商品詳細を確認します。このプレビュー操作では登録内容は変わりません。</p>
             </div>
             {nextCategory ? (
-              <OptionCustomerPreview
-                category={nextCategory}
-                option={review.option}
-                groups={variantGroups}
-                choices={variantChoices}
-              />
+              <>
+                <div className="[&>div>p:last-child]:hidden">
+                  <OptionCustomerPreview
+                    category={nextCategory}
+                    option={review.option}
+                    groups={variantGroups}
+                    choices={variantChoices}
+                  />
+                </div>
+                <p className="text-xs leading-5 text-muted">
+                  実際のお客様画面と同じ内容で表示しています。追加金額や「この内容に変更する」操作は、実際の選択内容によって変わるため、この確認画面では表示していません。
+                </p>
+              </>
             ) : (
               <Alert tone="danger">変更後のカテゴリーが見つからないため、お客様表示を確認できません。</Alert>
             )}

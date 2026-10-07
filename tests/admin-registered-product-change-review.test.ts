@@ -14,7 +14,8 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('商品を編集');
     expect(flow).toContain('変更内容確認');
     expect(flow).not.toContain('商品登録の流れ');
-    expect(flow).not.toContain('下書きへ戻す');
+    expect(flow).toContain('name="status" value="published"');
+    expect(flow).not.toContain('<option value="draft">');
     expect(flow).not.toContain('変更内容を自動保存しました。');
   });
 

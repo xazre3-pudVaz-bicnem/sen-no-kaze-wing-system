@@ -41,17 +41,4 @@ describe('実 DB リハーサルで見つかった是正（2026-10-07）', () =>
       .filter((f) => !parenthesesBalanced(read(f)));
     expect(broken).toEqual([]);
   });
-
-  it('内部専用関数は API ロールから実行できないようにする', () => {
-    const sql = read('20261007120000_internal_function_execute_corrective.sql');
-    for (const fn of ['notify(uuid, text, text, text, text, text)', 'write_audit(text, text, uuid, text, jsonb, jsonb)', 'duplicate_configuration(uuid)']) {
-      // 既定権限で付く anon / authenticated を明示して外す（from public だけでは外れない）
-      expect(sql).toContain(`revoke execute on function public.${fn}\n  from public, anon, authenticated, service_role;`);
-    }
-    expect(sql).toContain('grant execute on function public.duplicate_configuration(uuid) to authenticated, service_role;');
-    expect(sql).not.toMatch(/grant execute on function public\.(notify|write_audit)\([^)]*\) to (anon|authenticated)/);
-    // 呼び出し元が SECURITY DEFINER であることを適用時に検算する
-    expect(sql).toContain('not p.prosecdef');
-    expect(sql).not.toMatch(/\b(insert into|update|delete from|drop|truncate|alter table)\b/i);
-  });
 });

@@ -6,8 +6,6 @@ name: DB Rehearsal
 
 on:
   pull_request:
-    branches:
-      - main
     paths:
       - 'supabase/**'
       - 'lib/data/**'

@@ -159,9 +159,10 @@ function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: s
 
 function ProductStatus({ status }: { status: ProductOption['status'] }) {
   return (
-    <div className="flex flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db">
+    <div className="flex flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db" data-product-handling-status-slot="pending-db">
       <Badge tone={status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(status)}</Badge>
       {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
+      {/* お客様選択可 / 取扱停止 / 本部判断で停止 / 廃番は、正式な判定データ接続後に必要なものだけ追加表示する。 */}
     </div>
   );
 }
@@ -571,10 +572,56 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 </dl>
                 <dl className="card p-4">
                   <h3 className="mb-2 font-semibold">シミュレーター・Web表示設定</h3>
-                  <Row label="シミュレーター対象" value={selected.preview_key || selected.affects_views.length ? '対象' : '対象外'}/>
+                  <p className="mb-2 text-xs leading-relaxed text-muted">お客様が選べるかどうかは、登録元・登録状態・取扱状況・本体分類表・モデル／仕様適合などを正式ロジックで判定するため、現在の画面値から推測しません。</p>
                   <Row label="商品価格（税別）" value={productPrice(selected)}/>
                 </dl>
               </div>
+
+              <section className="card p-4" data-product-handling-status-shell="pending-db" aria-labelledby="ledger-handling-status-title">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="ledger-handling-status-title" className="font-semibold">取扱状況</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-muted">登録状態とは別に、自組織・本部判断・メーカー状況を独立して確認します。現在は正式な保存項目への接続待ちです。</p>
+                  </div>
+                  <PendingDbValue />
+                </div>
+                <dl className="mt-2">
+                  <Row label="自組織の取扱" value={<PendingDbValue />}/>
+                  <Row label="本部判断" value={<PendingDbValue />}/>
+                  <Row label="メーカー状況" value={<PendingDbValue />}/>
+                </dl>
+                <div className="mt-3 border-t border-line pt-3">
+                  <p className="text-xs font-semibold text-ink-soft">将来の操作位置</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted">保存契約・権限判定を接続するまでは操作できません。client側だけで状態を保存しません。</p>
+                  <div className="mt-2 flex flex-wrap gap-2" aria-label="取扱状況の操作（接続待ち）">
+                    <button type="button" className="btn-secondary btn-sm" disabled>取扱停止にする</button>
+                    <button type="button" className="btn-secondary btn-sm" disabled>取扱再開</button>
+                    <button type="button" className="btn-secondary btn-sm" disabled>本部判断で停止</button>
+                    <button type="button" className="btn-secondary btn-sm" disabled>本部判断による停止を解除</button>
+                    <button type="button" className="btn-secondary btn-sm" disabled>廃番にする</button>
+                    <button type="button" className="btn-secondary btn-sm" disabled>廃番訂正</button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="card p-4" data-customer-simulator-status-shell="pending-db" aria-labelledby="ledger-customer-simulator-title">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="ledger-customer-simulator-title" className="font-semibold">お客様のシミュレーター</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-muted">「お客様選択」と「シミュレーター標準での使用状況」は別の情報です。選択可否は正式ロジック接続後に判定します。</p>
+                  </div>
+                  <PendingDbValue />
+                </div>
+                <dl className="mt-2">
+                  <Row label="お客様選択" value={<PendingDbValue />}/>
+                  <Row
+                    label="対象モデル・仕様"
+                    value={`${selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'} ／ ${selected.spec_codes.length ? selected.spec_codes.join(' / ') : '全仕様共通'}`}
+                  />
+                  <Row label="シミュレーター標準での使用状況" value={<PendingDbValue />}/>
+                </dl>
+                <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">対象モデル・仕様は商品に保存済みの設定値を表示しています。実際にお客様が選択できるかどうかは、本体分類表などを含む正式判定とは別です。</p>
+              </section>
 
               <div className="card p-4">
                 <h3 className="font-semibold">自社の仕入・発注情報</h3>

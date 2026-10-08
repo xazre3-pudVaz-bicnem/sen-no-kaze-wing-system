@@ -14,16 +14,16 @@ const adminNav = fs.readFileSync(path.join(root, 'components/admin/admin-nav.tsx
 const managementTabs = fs.readFileSync(path.join(root, 'components/admin/quote-management-tabs.tsx'), 'utf8');
 
 describe('見積書管理の正式編集UI統合', () => {
-  it('見積書管理で案件見積とシミュレーター標準を明確に分ける', () => {
+  it('見積書管理で案件見積と標準見積を明確に分ける', () => {
     expect(adminNav).toContain("label: '見積書管理'");
     expect(managementTabs).toContain('案件見積');
-    expect(managementTabs).toContain('シミュレーター標準');
+    expect(managementTabs).toContain('標準見積');
     expect(managementTabs).toContain('href="/admin/quote-management"');
     expect(managementTabs).toContain('href="/admin/estimate-templates"');
     expect(newQuotePage).toContain('<QuoteManagementTabs active="case" />');
     expect(draftPage).toContain('<QuoteManagementTabs active="case" />');
     expect(estimateTemplatesPage).toContain('<QuoteManagementTabs active="standard" />');
-    expect(estimateTemplatesPage).toContain('＋ 新しい標準を作る');
+    expect(estimateTemplatesPage).toContain('＋ 新しい標準見積を作る');
     expect(estimateTemplatesPage).not.toContain('＋ 案件見積を作成');
     expect(newQuotePage).toContain('<ManualQuoteWorkbench');
     expect(manualWorkbench).toContain('<QuoteEditorTopbar mode="new"');

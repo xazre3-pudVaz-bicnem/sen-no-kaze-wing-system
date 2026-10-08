@@ -122,7 +122,7 @@ export function SavedEstimateMenu({
     <section className="card overflow-hidden" data-testid="simulator-standard-list">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold">シミュレーター標準一覧</h2>
+          <h2 className="text-sm font-semibold">標準見積一覧</h2>
           <p className="mt-0.5 text-[11px] text-muted">
             登録済みの標準見積と画面確認用サンプルを分けて表示します。選ぶと下の編集画面が切り替わります。
           </p>

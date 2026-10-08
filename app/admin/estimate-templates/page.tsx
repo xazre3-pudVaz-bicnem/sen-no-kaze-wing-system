@@ -82,7 +82,7 @@ export default async function EstimateTemplatesPage({
         title="見積書管理"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい標準を作る
+            ＋ 新しい標準見積を作る
           </Link>
         }
       >
@@ -113,7 +113,7 @@ export default async function EstimateTemplatesPage({
         title="見積書管理"
         actions={
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい標準を作る
+            ＋ 新しい標準見積を作る
           </Link>
         }
       >
@@ -124,7 +124,7 @@ export default async function EstimateTemplatesPage({
           samples={savedEstimateSamples}
           selectedId={selectedTemplate.id}
         />
-        <Alert tone="warn">選択したシミュレーター標準の明細を読み込めませんでした。一覧から別の標準見積を選択してください。</Alert>
+        <Alert tone="warn">選択した標準見積の明細を読み込めませんでした。一覧から別の標準見積を選択してください。</Alert>
       </AdminPage>
     );
   }
@@ -184,7 +184,7 @@ export default async function EstimateTemplatesPage({
 
   const unavailablePreview = (
     <section className="card px-5 py-8 text-center">
-      <p className="font-semibold">このシミュレーター標準の表示データを準備中です</p>
+      <p className="font-semibold">この標準見積の表示データを準備中です</p>
       <p className="mt-1 text-sm text-muted">編集画面は利用できます。見積書・プランボード表示は正式接続後に確認できます。</p>
     </section>
   );
@@ -195,18 +195,10 @@ export default async function EstimateTemplatesPage({
       actions={
         <div className="flex flex-wrap gap-2">
           <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい標準を作る
+            ＋ 新しい標準見積を作る
           </Link>
           <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
             複製
-          </button>
-          <button
-            type="button"
-            className="btn-secondary btn-sm"
-            disabled
-            title="シミュレーターの選択対象となる標準指定の接続後に利用できます"
-          >
-            シミュレーター標準に設定
           </button>
         </div>
       }

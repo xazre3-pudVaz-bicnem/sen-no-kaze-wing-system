@@ -74,7 +74,7 @@ describe('実 DB リハーサルで見つかった是正（2026-10-07）', () =>
     }
   });
 
-  it('lint gate は JSON 配列でない出力を成功扱いしない', () => {
+  it('lint gate は JSON 配列でない出力や想定外の配列構造を成功扱いしない', () => {
     for (const content of [
       'unexpected lint output\n',
       'unexpected output []\n',
@@ -82,6 +82,10 @@ describe('実 DB リハーサルで見つかった是正（2026-10-07）', () =>
       '[]\nnotice after\n',
       '{"issues":[]}\n',
       '[invalid json]\n',
+      '[{}]\n',
+      '["unexpected"]\n',
+      '[{"function":"public.example","issues":{}}]\n',
+      '[{"function":"public.example","issues":[{"level":"warning"}]}]\n',
     ]) {
       const result = runLintGate(content);
       expect(result.status).toBe(1);

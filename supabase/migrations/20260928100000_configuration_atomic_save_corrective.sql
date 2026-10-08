@@ -93,7 +93,7 @@ begin
         or o.status <> 'published'
         or (o.base_model_id is not null and o.base_model_id <> p_base_model_id)
         or public.finish_level_rank(c.finish_level) > public.finish_level_rank(v_level)
-        or (p_spec_code is not null and cardinality(o.spec_codes) > 0 and not (p_spec_code = any(o.spec_codes))
+        or (p_spec_code is not null and cardinality(o.spec_codes) > 0 and not (p_spec_code = any(o.spec_codes)))
   ) then
     raise exception 'VALIDATION: 選択できないオプションが含まれています' using errcode = 'P0001';
   end if;

@@ -8,9 +8,12 @@ on:
   pull_request:
     paths:
       - 'supabase/**'
-      - 'lib/data/**'
-      - 'lib/actions/**'
-      - 'scripts/db-rehearsal/**'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/db-rehearsal.yml'
   workflow_dispatch:
 

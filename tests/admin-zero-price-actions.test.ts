@@ -184,6 +184,7 @@ describe('0円商品のServer Actionガード', () => {
 
   it('基本情報だけの初回入力からDraftを作成し画像登録位置へ進める', async () => {
     const store = {
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet' }]),
       upsertOption: vi.fn(async (value: unknown) => ({
         ...option({ status: 'draft', price: 0 }),
         ...(value as object),
@@ -231,6 +232,7 @@ describe('0円商品のServer Actionガード', () => {
 
   it('見積からの新規商品は下書き作成後も商品登録STEP1を継続する', async () => {
     const store = {
+      listCategories: vi.fn(async () => [{ id: CATEGORY_ID, code: 'toilet' }]),
       upsertOption: vi.fn(async (value: unknown) => ({
         ...option({ status: 'draft', price: 100_000 }),
         ...(value as object),

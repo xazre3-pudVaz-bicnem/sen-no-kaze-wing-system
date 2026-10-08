@@ -30,7 +30,7 @@ describe('防火仕様を商品カテゴリーから分離する互換境界', (
     const edit = source('app/admin/options/[id]/page.tsx');
 
     expect(create).toContain("allCategories.filter((c) => c.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE)");
-    expect(edit).toContain("categories.filter((row) => row.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE)");
+    expect(edit).toContain("row.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE && row.code !== FREE_PRODUCT_CATEGORY_CODE");
     expect(edit).toContain("category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE");
   });
 

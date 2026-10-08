@@ -8,7 +8,7 @@
  * KNOWN は「直さない理由が説明できるもの」だけにする。新しいエラーを黙らせるために足さないこと。
  *
  * Supabase CLI は workflow で 2.120.0 に固定しており、現在の db lint 出力は JSON 配列そのもの。
- * 前後に別テキストが混ざった場合は、配列らしい部分だけを拾わず異常出力として fail closed にする。
+ * 前後に別テキストが混ざった場合や配列要素の構造が想定外の場合は、異常出力として fail closed にする。
  */
 import fs from 'node:fs';
 
@@ -48,12 +48,31 @@ if (!Array.isArray(results)) {
   process.exit(1);
 }
 
+const validResult = (result) =>
+  result !== null &&
+  typeof result === 'object' &&
+  typeof result.function === 'string' &&
+  Array.isArray(result.issues) &&
+  result.issues.every(
+    (issue) =>
+      issue !== null &&
+      typeof issue === 'object' &&
+      typeof issue.level === 'string' &&
+      typeof issue.message === 'string' &&
+      typeof issue.sqlState === 'string',
+  );
+
+if (!results.every(validResult)) {
+  console.error('plpgsql_check の lint 結果に想定外の要素構造があります');
+  process.exit(1);
+}
+
 const isKnown = (fn, issue) => KNOWN.some((k) => k.function === fn && k.sqlState === issue.sqlState && issue.message === k.message);
 const errors = [];
 const known = [];
 let warnings = 0;
 for (const r of results) {
-  for (const issue of r.issues ?? []) {
+  for (const issue of r.issues) {
     if (issue.level !== 'error') {
       warnings++;
       continue;

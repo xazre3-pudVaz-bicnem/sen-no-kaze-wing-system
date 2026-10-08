@@ -69,14 +69,9 @@ jobs:
         if: success() || failure()
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --out db-check.json
 
+      # runtime-security.sql の各 ok 値を check.mjs が集約し、1 件でも NG なら終了コード 1 にする。
       - name: Runtime security tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          PGOPTIONS="-c statement_timeout=5000 -c lock_timeout=2000" \
-            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-              -X -v ON_ERROR_STOP=1 \
-              -f scripts/db-rehearsal/runtime-security.sql
+        run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime-check.json
 
       - name: Upload reports
         if: always()
@@ -86,4 +81,5 @@ jobs:
           path: |
             db-lint.json
             db-check.json
+            db-runtime-check.json
           if-no-files-found: ignore

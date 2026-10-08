@@ -220,8 +220,8 @@ describe('標準見積管理UI', () => {
     expect(newForm).toContain('baseTotal={selectedBaseMaster?.total ?? 0}');
     expect(newForm).toContain("window.confirm('本体を変更すると、現在表示中の本体明細は選択した本体の内容に置き換わります。変更しますか？')");
     expect(newForm).toContain('この本体を使う');
-    expect(newPage).toContain('title="見積書を新規作成"');
-    expect(newPage).toContain('label="見積書作成・管理へ戻る"');
+    expect(newPage).toContain('title="標準見積を新規作成"');
+    expect(newPage).toContain('label="標準見積一覧へ戻る"');
     expect(newPage).toContain('本体・仕様・適用地域を画面上部で設定し、そのまま明細を編集できます。');
     expect(newPage).toContain('estimateTemplatesFor(model).map');
     expect(newPage).toContain('loadPublishedBaseMasters()');

@@ -52,8 +52,11 @@ begin
     raise exception 'LOCKED: この見積は最新の版ではありません' using errcode = 'P0001';
   end if;
 
+  -- quote_kind が NULL の旧形式（legacy）では `q.quote_kind = 'formal'` が NULL になる。
+  -- NULL のまま判定すると条件全体が NULL になり承諾を拒否できないため、false に倒す（fail closed）。
+  -- 旧形式の第1版・概算見積（親なし）は承諾不可、旧形式でも正しい親を持つ改訂版は従来どおり承諾可。
   if p_status = 'accepted' and not (
-    q.quote_kind = 'formal'
+    coalesce(q.quote_kind = 'formal', false)
     or (
       q.quote_kind is null
       and q.parent_quote_id is not null

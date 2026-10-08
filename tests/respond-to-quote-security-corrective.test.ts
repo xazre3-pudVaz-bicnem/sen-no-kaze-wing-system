@@ -29,7 +29,7 @@ const previousDefinition = respondToQuoteDefinition(previous);
 const correctiveDefinition = respondToQuoteDefinition(corrective);
 
 describe('respond_to_quote security corrective', () => {
-  it('changes only the authentication guard inside the final lifecycle definition', () => {
+  it('changes only the authentication guard and the NULL-safe acceptance condition inside the final lifecycle definition', () => {
     const expected = previousDefinition
       .replace(
         '  v_current_quote_id uuid;\nbegin\n',
@@ -45,7 +45,19 @@ describe('respond_to_quote security corrective', () => {
           '',
         ].join('\n')
       )
-      .replace('  if q.user_id <> auth.uid() then', '  if q.user_id is distinct from v_uid then');
+      .replace('  if q.user_id <> auth.uid() then', '  if q.user_id is distinct from v_uid then')
+      // 承諾条件：quote_kind が NULL の旧形式で条件全体が NULL になり、拒否できない穴を塞ぐ（fail closed）
+      .replace(
+        "  if p_status = 'accepted' and not (\n    q.quote_kind = 'formal'\n",
+        [
+          "  -- quote_kind が NULL の旧形式（legacy）では `q.quote_kind = 'formal'` が NULL になる。",
+          '  -- NULL のまま判定すると条件全体が NULL になり承諾を拒否できないため、false に倒す（fail closed）。',
+          '  -- 旧形式の第1版・概算見積（親なし）は承諾不可、旧形式でも正しい親を持つ改訂版は従来どおり承諾可。',
+          "  if p_status = 'accepted' and not (",
+          "    coalesce(q.quote_kind = 'formal', false)",
+          '',
+        ].join('\n')
+      );
 
     expect(correctiveDefinition).toBe(expected);
   });
@@ -92,6 +104,20 @@ describe('respond_to_quote security corrective', () => {
     expect(correctiveDefinition).toContain('from public.quotes parent');
     expect(correctiveDefinition).toContain("if p_status = 'accepted' and not (");
     expect(correctiveDefinition).not.toContain("if p_status = 'declined'");
+  });
+
+  it('rejects acceptance of a legacy first-version preliminary quote (quote_kind NULL, no parent)', () => {
+    // quote_kind が NULL だと `q.quote_kind = 'formal'` は NULL。NULL のままだと `not (NULL or false)` が NULL になり、
+    // 承諾を拒否できない（実 DB の実行時検査で、旧形式の第1版を承諾できてしまうことを確認した）。
+    expect(correctiveDefinition).toContain("coalesce(q.quote_kind = 'formal', false)");
+    expect(correctiveDefinition).not.toMatch(/and not \(\s*q\.quote_kind = 'formal'/);
+    // 2 つ目の条件は is null / is not null / exists だけで構成され、NULL にならない
+    const legacyBranch = correctiveDefinition.slice(
+      correctiveDefinition.indexOf('q.quote_kind is null'),
+      correctiveDefinition.indexOf("raise exception 'LOCKED: 現地条件と施工金額を反映した確定見積の発行後に承諾できます'")
+    );
+    expect(legacyBranch).toContain('and q.parent_quote_id is not null');
+    expect(legacyBranch).toContain('and exists (');
   });
 
   it('pins SECURITY DEFINER, empty search_path, schema-qualified relations, owner and ACL', () => {

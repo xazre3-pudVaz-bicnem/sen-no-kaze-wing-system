@@ -6,6 +6,7 @@ import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { BaseMasterCreateForm } from '@/components/admin/base-master-form';
+import { BaseMasterExcelDemo } from '@/components/admin/base-master-excel-demo';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 
 const memberRank: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
@@ -28,7 +29,7 @@ function isBaseMasterSchemaPending(error: PostgrestLikeError | null) {
     (table) =>
       message.includes(`public.${table}`) ||
       message.includes(`'${table}'`) ||
-      message.includes(`"${table}"`)
+      message.includes(`\"${table}\"`)
   );
   return mentionsKnownTable && (error.code === 'PGRST205' || /schema cache/i.test(message));
 }
@@ -36,7 +37,7 @@ function isBaseMasterSchemaPending(error: PostgrestLikeError | null) {
 function BaseMasterPreparingAlert() {
   return (
     <Alert tone="info">
-      本体マスターは現在準備中です。本番データベースへの必要な設定反映後に利用できます。現在は参照・登録・編集できません。
+      本体マスターは現在準備中です。本番データベースへの必要な設定反映までは、下の画面確認用サンプルで完成イメージを確認できます。サンプルはDBへ保存されません。
     </Alert>
   );
 }
@@ -56,11 +57,12 @@ export default async function BaseMastersPage({
     return (
       <AdminPage
         title="本体マスター"
-        lead="本体の製造明細・価格・公開履歴を管理します。"
-        actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
+        lead="本体の製造明細・基準原価・公開履歴を管理します。"
+        actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">サンプル単独表示</Link>}
       >
         {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
-        <Alert tone="info">この画面はSupabase接続環境で利用できます。ローカルJSONモードでは参照・編集しません。</Alert>
+        <Alert tone="info">ローカルJSONモードでは本体マスターDBを参照・編集せず、画面確認用サンプルだけを表示します。</Alert>
+        <BaseMasterExcelDemo />
       </AdminPage>
     );
   }
@@ -89,10 +91,12 @@ export default async function BaseMastersPage({
 
   const loadError = membershipError || organizationError || masterError;
   if (loadError) {
+    const schemaPending = isBaseMasterSchemaPending(loadError);
     return (
-      <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
+      <AdminPage title="本体マスター" lead="本体の製造明細・基準原価・公開履歴を管理します。">
         {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
-        {isBaseMasterSchemaPending(loadError) ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{loadError.message}</Alert>}
+        {schemaPending ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{loadError.message}</Alert>}
+        {schemaPending && <BaseMasterExcelDemo />}
       </AdminPage>
     );
   }
@@ -108,10 +112,12 @@ export default async function BaseMastersPage({
     : { data: [], error: null };
 
   if (revisionResult.error) {
+    const schemaPending = isBaseMasterSchemaPending(revisionResult.error);
     return (
-      <AdminPage title="本体マスター" lead="本体の製造明細・価格・公開履歴を管理します。">
+      <AdminPage title="本体マスター" lead="本体の製造明細・基準原価・公開履歴を管理します。">
         {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
-        {isBaseMasterSchemaPending(revisionResult.error) ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{revisionResult.error.message}</Alert>}
+        {schemaPending ? <BaseMasterPreparingAlert /> : <Alert tone="danger">{revisionResult.error.message}</Alert>}
+        {schemaPending && <BaseMasterExcelDemo />}
       </AdminPage>
     );
   }
@@ -147,6 +153,8 @@ export default async function BaseMastersPage({
       <Alert tone="info">
         既存の標準見積・旧本体内訳はまだこの新本体マスターへ自動移行していません。現在は新しく登録した本体だけを管理します。
       </Alert>
+
+      {masterRows.length === 0 && <BaseMasterExcelDemo />}
 
       <Table minWidth="64rem">
         <thead className="bg-sand/60">

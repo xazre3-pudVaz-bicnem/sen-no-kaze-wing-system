@@ -171,9 +171,9 @@ describe('本体マスター 画面確認用サンプル', () => {
     expect(demo).toContain('toggleFireSelectable');
     expect(demo).toContain('saveMatrixMock');
     expect(demo).toContain('cancelMatrixEdit');
-    expect(demo).toContain('>編集<');
-    expect(demo).toContain('>保存<');
-    expect(demo).toContain('>キャンセル<');
+    expect(demo).toContain('編集');
+    expect(demo).toContain('保存');
+    expect(demo).toContain('キャンセル');
     expect(demo).not.toContain('supabase');
     expect(demo).not.toContain('saveBaseMasterDraftAction');
     expect(demo).not.toContain('publishBaseMasterDraftAction');

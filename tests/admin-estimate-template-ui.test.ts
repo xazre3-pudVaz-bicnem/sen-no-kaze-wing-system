@@ -64,17 +64,17 @@ const adminActions = fs.readFileSync(
   'utf8'
 );
 
-describe('シミュレーター標準管理UI', () => {
+describe('標準見積管理UI', () => {
   it('常設一覧からタブとExcel編集へ重複カードなしで直接つなぐ', () => {
     expect(listPage).toContain('title="見積書管理"');
     expect(listPage).not.toContain('lead="シミュレーター標準"');
-    expect(listPage).toContain('＋ 新しい標準を作る');
+    expect(listPage).toContain('＋ 新しい標準見積を作る');
     expect(listPage).toContain('href="/admin/estimate-templates/new"');
     expect(listPage).not.toContain('＋ 標準見積を作成');
     expect(listPage).not.toContain('＋ 案件見積を作成');
     expect(listPage).toContain('<SavedEstimateMenu');
     expect(savedEstimateMenu).toContain('data-testid="simulator-standard-list"');
-    expect(savedEstimateMenu).toContain('シミュレーター標準一覧');
+    expect(savedEstimateMenu).toContain('標準見積一覧');
     expect(savedEstimateMenu).toContain('選ぶと下の編集画面が切り替わります。');
     expect(listPage).not.toContain('選択中のシミュレーター標準');
     expect(listPage).not.toContain('一覧から標準見積を切り替えながら');
@@ -142,11 +142,11 @@ describe('シミュレーター標準管理UI', () => {
     expect(savedEstimateMenu).toContain('min-w-0 truncate');
   });
 
-  it('DB待ちの複製・シミュレーター標準設定はdisabledのまま維持する', () => {
+  it('DB待ちの複製はdisabledのまま維持し、旧標準設定ボタンは表示しない', () => {
     expect(listPage).toContain('複製');
-    expect(listPage).toContain('シミュレーター標準に設定');
     expect(listPage).toContain('正式な複製保存の接続後に利用できます');
-    expect(listPage).toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
+    expect(listPage).not.toContain('シミュレーター標準に設定');
+    expect(listPage).not.toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
   });
 
   it('画面確認用サンプルは正式データと区別してシミュレーター標準候補を示す', () => {
@@ -156,7 +156,7 @@ describe('シミュレーター標準管理UI', () => {
     expect(savedEstimateMenu).toContain('画面確認用');
   });
 
-  it('シミュレーター標準一覧は登録済み商品モデルで絞り込める', () => {
+  it('標準見積一覧は登録済み商品モデルで絞り込める', () => {
     expect(savedEstimateMenu).toContain("const [selectedModelId, setSelectedModelId] = useState('')");
     expect(savedEstimateMenu).toContain('models.map((model) =>');
     expect(savedEstimateMenu).toContain('aria-label="商品モデルで絞り込み"');
@@ -166,7 +166,7 @@ describe('シミュレーター標準管理UI', () => {
     expect(savedEstimateMenu).toContain('sm:flex-wrap sm:overflow-x-visible');
   });
 
-  it('シミュレーター標準一覧は初期6件まで表示し、必要時だけ展開できる', () => {
+  it('標準見積一覧は初期6件まで表示し、必要時だけ展開できる', () => {
     expect(savedEstimateMenu).toContain('const COLLAPSED_ROW_LIMIT = 6');
     expect(savedEstimateMenu).toContain('const [expanded, setExpanded] = useState(false)');
     expect(savedEstimateMenu).toContain('filteredTemplates.slice(0, COLLAPSED_ROW_LIMIT)');
@@ -175,9 +175,9 @@ describe('シミュレーター標準管理UI', () => {
     expect(savedEstimateMenu).not.toContain('<details');
   });
 
-  it('編集・見積書・プランボードを同じ見積書ワークスペースで切り替える', () => {
+  it('編集・見積書・プランボードを同じ標準見積ワークスペースで切り替える', () => {
     expect(detailTabs).toContain("type DetailTab = 'edit' | 'estimate' | 'plan'");
-    expect(detailTabs).toContain('aria-label="見積書の表示切替"');
+    expect(detailTabs).toContain('aria-label="標準見積の表示切替"');
     expect(detailTabs).toContain('編集');
     expect(detailTabs).toContain('見積書');
     expect(detailTabs).toContain('プランボード');
@@ -201,7 +201,7 @@ describe('シミュレーター標準管理UI', () => {
     expect(newForm).toContain('仕様');
     expect(newForm).toContain('防火仕様');
     expect(newForm).toContain('適用地域');
-    expect(newForm).toContain('見積書名');
+    expect(newForm).toContain('標準見積名');
     expect(newForm).toContain('本体を変更・明細確認');
     expect(newForm).toContain('<EstimateTemplateWorkbench');
     expect(newForm).toContain('new-standard-estimate-preview');
@@ -220,8 +220,8 @@ describe('シミュレーター標準管理UI', () => {
     expect(newForm).toContain('baseTotal={selectedBaseMaster?.total ?? 0}');
     expect(newForm).toContain("window.confirm('本体を変更すると、現在表示中の本体明細は選択した本体の内容に置き換わります。変更しますか？')");
     expect(newForm).toContain('この本体を使う');
-    expect(newPage).toContain('title="見積書を新規作成"');
-    expect(newPage).toContain('label="見積書作成・管理へ戻る"');
+    expect(newPage).toContain('title="標準見積を新規作成"');
+    expect(newPage).toContain('label="標準見積一覧へ戻る"');
     expect(newPage).toContain('本体・仕様・適用地域を画面上部で設定し、そのまま明細を編集できます。');
     expect(newPage).toContain('estimateTemplatesFor(model).map');
     expect(newPage).toContain('loadPublishedBaseMasters()');
@@ -267,7 +267,7 @@ describe('シミュレーター標準管理UI', () => {
     expect(detailPage).toContain('showEditLink={false}');
     expect(detailPage).toContain('previewOnly');
     expect(detailTabs).toContain("type DetailTab = 'edit' | 'estimate' | 'plan'");
-    expect(detailTabs).toContain('見積書の表示切替');
+    expect(detailTabs).toContain('標準見積の表示切替');
     expect(detailTabs).toContain('編集');
     expect(detailTabs).toContain('見積書');
     expect(detailTabs).toContain('プランボード');

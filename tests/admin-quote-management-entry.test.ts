@@ -159,8 +159,8 @@ describe('見積書管理の案件見積入口', () => {
     expect(page).not.toContain('/admin/quotes/drafts/');
   });
 
-  it('シミュレーター標準は別タブのまま維持する', () => {
+  it('標準見積は別タブのまま維持する', () => {
     expect(tabs).toContain('href="/admin/estimate-templates"');
-    expect(tabs).toContain('シミュレーター標準');
+    expect(tabs).toContain('標準見積');
   });
 });

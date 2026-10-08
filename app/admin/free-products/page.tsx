@@ -8,8 +8,8 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, FlashMessages, Table, Td, Th } from '@/components/admin/ui';
 
 /**
- * フリー商品：代理店・工務店が自分で登録する商品（家具など）。
- * 見積書では「別途工事」の下に別枠で表示され、諸費用（15%）はかからない。
+ * 旧フリー商品：既存レコードの確認・編集互換のため一覧は残す。
+ * 新規free-product登録は終了しており、この画面から追加導線は出さない。
  */
 export default async function AdminFreeProductsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
@@ -29,16 +29,15 @@ export default async function AdminFreeProductsPage({ searchParams }: { searchPa
   return (
     <AdminPage
       title="フリー商品"
-      lead="代理店・工務店が自社で扱う商品（ベッド・イスなど）を登録します。お客様の見積書では「別途工事」の下に【フリー商品】として表示され、諸費用はかかりません。"
-      actions={
-        category ? (
-          <Link href={`/admin/options/new?category=${category.id}`} className="btn-primary btn-sm">
-            フリー商品を追加
-          </Link>
-        ) : null
-      }
+      lead="既存のフリー商品を確認・編集します。新しいフリー商品は登録できません。"
     >
       <FlashMessages sp={sp} />
+
+      {category && (
+        <Alert tone="info">
+          フリー商品の新規登録は終了しました。既存の商品は履歴互換のため引き続き確認・編集できます。
+        </Alert>
+      )}
 
       {!category && (
         <Alert tone="warn">
@@ -48,8 +47,7 @@ export default async function AdminFreeProductsPage({ searchParams }: { searchPa
 
       {category && mine.length === 0 && (
         <Alert tone="info">
-          まだ登録がありません。「フリー商品を追加」から、商品名・価格・画像を登録してください。
-          {!canEditCatalog(actor.role) && ' 登録した商品は自分だけが編集できます。'}
+          登録済みのフリー商品はありません。
         </Alert>
       )}
 

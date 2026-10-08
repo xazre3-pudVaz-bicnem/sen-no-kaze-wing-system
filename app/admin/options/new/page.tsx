@@ -14,26 +14,37 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
     store.listModels({ includeDraft: true }),
     store.listOptions(),
   ]);
-  // 代理店が登録できるのはフリー商品だけ（サーバーアクション側でも拒否している）
   const catalogEditor = canEditCatalog(actor.role);
   const registrationCategories = allCategories.filter((c) => c.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const freeCategory = registrationCategories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const requestedFreeCategory = Boolean(sp.category && sp.category === freeCategory?.id);
-  const categories = catalogEditor
-    ? (requestedFreeCategory ? registrationCategories : registrationCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE))
-    : registrationCategories.filter((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
-  const defaultCategoryId = sp.category ?? (catalogEditor ? undefined : freeCategory?.id);
-  const isFree = defaultCategoryId && defaultCategoryId === freeCategory?.id;
+  const freeRegistrationBlocked = requestedFreeCategory || !catalogEditor;
+  const categories = registrationCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE);
+  const defaultCategoryId = requestedFreeCategory ? undefined : sp.category;
   const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;
   const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
   const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
 
+  if (freeRegistrationBlocked) {
+    return (
+      <AdminPage
+        title="フリー商品の新規登録は終了しました"
+        lead="既存のフリー商品は履歴互換のため残しますが、新しいfree-productは作成できません。"
+      >
+        <BackLink href="/admin/free-products" label="フリー商品一覧へ戻る" />
+        <Alert tone="info">
+          フリー商品を通常商品へ自動変換して登録することはありません。現在の権限で新しい通常商品を登録できない場合も、この画面から権限を広げることはありません。
+        </Alert>
+      </AdminPage>
+    );
+  }
+
   return (
     <AdminPage
-      title={isFree ? 'フリー商品を追加' : '商品を追加'}
+      title="商品を追加"
       lead="商品情報を入力し、登録内容を確認してから登録します。"
     >
-      <BackLink href={returnTo ?? (isFree ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
+      <BackLink href={returnTo ?? '/admin/options'} label={returnLabel} />
       {returnTo && !returnToLedger && (
         <Alert tone="info">
           見積テンプレートの商品追加から移動しています。まず基本情報を入力して「次へ：画像・資料」へ進み、STEP 2で登録内容を確認して「この内容で登録」した後に元の見積テンプレートへ戻って商品を追加します。

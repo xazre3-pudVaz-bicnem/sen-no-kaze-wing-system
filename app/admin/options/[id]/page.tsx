@@ -52,7 +52,11 @@ export default async function EditOptionPage({
   const category = categories.find((row) => row.id === option.category_id);
   const registrationCategories = category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE
     ? categories.filter((row) => row.code === LEGACY_FIRE_SPEC_CATEGORY_CODE)
-    : categories.filter((row) => row.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
+    : category?.code === FREE_PRODUCT_CATEGORY_CODE
+      ? categories.filter((row) => row.code === FREE_PRODUCT_CATEGORY_CODE)
+      : categories.filter(
+          (row) => row.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE && row.code !== FREE_PRODUCT_CATEGORY_CODE
+        );
   const canEditThisOption = canEditCatalog(actor.role) || (category?.code === FREE_PRODUCT_CATEGORY_CODE && option.owner_id === actor.id);
   const catalogEditor = canEditCatalog(actor.role);
   const needsZeroPriceConfirmation = requiresZeroPriceConfirmation(option);

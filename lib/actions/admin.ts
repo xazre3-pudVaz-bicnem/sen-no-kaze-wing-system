@@ -193,6 +193,28 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   const store = await getStore();
   const existingOption = optionId ? await store.getOption(optionId) : null;
   if (optionId && !existingOption) return { ok: false, error: '商品が見つかりません。' };
+
+  const requestedCategoryId = String(formData.get('category_id') ?? '').trim();
+  if (!existingOption || existingOption.category_id !== requestedCategoryId) {
+    const categories = await store.listCategories();
+    const targetCategory = categories.find((row) => row.id === requestedCategoryId);
+    if (!targetCategory) return { ok: false, error: '商品カテゴリーが見つかりません。' };
+
+    if (!existingOption) {
+      if (targetCategory.code === FREE_PRODUCT_CATEGORY_CODE) {
+        return { ok: false, error: 'フリー商品の新規登録は終了しました。' };
+      }
+    } else {
+      const currentCategory = categories.find((row) => row.id === existingOption.category_id);
+      if (!currentCategory) return { ok: false, error: '現在の商品カテゴリーが見つかりません。' };
+      const currentIsFree = currentCategory.code === FREE_PRODUCT_CATEGORY_CODE;
+      const targetIsFree = targetCategory.code === FREE_PRODUCT_CATEGORY_CODE;
+      if (currentIsFree !== targetIsFree) {
+        return { ok: false, error: 'フリー商品と通常商品の間でカテゴリーを変更することはできません。' };
+      }
+    }
+  }
+
   // options.code は既存Preset / Import互換の技術キー。登録担当者には入力させず、
   // 既存商品では必ず保持し、新規手入力商品だけ内部で一意な値を作る。
   const internalCode = existingOption?.code ?? `opt-${randomUUID()}`;

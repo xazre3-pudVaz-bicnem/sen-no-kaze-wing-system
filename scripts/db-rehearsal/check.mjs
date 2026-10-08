@@ -11,7 +11,7 @@
  */
 import fs from 'node:fs';
 import pg from 'pg';
-import { evaluate, inspect, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
+import { checkExitCode, evaluate, inspect, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -31,12 +31,14 @@ try {
   let runtime = null;
   if (argv.includes('--runtime')) {
     await client.query('set default_transaction_read_only = off');
+    await client.query("set statement_timeout = '5s'");
+    await client.query("set lock_timeout = '2s'");
     runtime = await runtimeSecurity(client);
     printRuntime(runtime);
   }
   const out = arg('--out');
   if (out) fs.writeFileSync(out, JSON.stringify({ schema, result, runtime }, null, 1));
-  process.exitCode = result.ok && (runtime?.ok ?? true) ? 0 : 1;
+  process.exitCode = checkExitCode(result, runtime);
 } finally {
   await client.end();
 }

@@ -62,6 +62,16 @@ function googleMapsHref(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
+function caseListHref(sp: Record<string, string | undefined>) {
+  const query = new URLSearchParams();
+  for (const key of LIST_PARAM_KEYS) {
+    const value = sp[key];
+    if (value) query.set(key, value);
+  }
+  const search = query.toString();
+  return search ? `/admin/quotes?${search}` : '/admin/quotes';
+}
+
 function CaseSummary({
   caseCount,
   newCount,
@@ -698,7 +708,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                     </td>
                     <td className="px-2 py-1 align-middle text-[0.64rem]">
                       <div className="flex min-w-0 items-center gap-1">
-                        <span className="min-w-0 truncate">{request.contact.site_address || '—'}</span>
+                        <span className="min-w-0 truncate">{request.contact.site_address || '未登録'}</span>
                         {request.contact.site_address && (
                           <a
                             href={googleMapsHref(request.contact.site_address)}
@@ -787,9 +797,18 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
                 受付 {formatDate(selectedPendingRequest.created_at, true)}／更新 {formatDate(selectedPendingRequest.updated_at, true)}
               </p>
             </div>
-            <span className="rounded-full bg-sand px-2 py-1 text-[0.65rem] font-semibold text-muted">
-              次工程：見積作成
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={caseListHref(sp)}
+                className="text-xs font-semibold text-[#315745] underline underline-offset-4"
+                data-testid="pending-request-back-to-list"
+              >
+                ← 案件一覧へ戻る
+              </Link>
+              <span className="rounded-full bg-sand px-2 py-1 text-[0.65rem] font-semibold text-muted">
+                次工程：見積作成
+              </span>
+            </div>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
@@ -813,7 +832,7 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
               </dl>
               {!selectedPendingConfiguration && (
                 <p className="mt-2 text-xs leading-5 text-muted">
-                  この権限では保存済み仕様の詳細を一覧から取得していません。見積依頼との紐付け自体は保持されています。
+                  この権限では保存済み仕様の詳細を表示していません。見積依頼との紐付けは保持されています。
                 </p>
               )}
             </section>

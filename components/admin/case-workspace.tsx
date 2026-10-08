@@ -42,6 +42,8 @@ const TABS = [
   { key: 'disaster', label: '災害時提供' },
 ] as const;
 
+const CASE_LIST_PARAM_KEYS = ['q', 'status', 'dealer', 'pref', 'city', 'phase', 'model', 'sort'] as const;
+
 type TabKey = (typeof TABS)[number]['key'];
 
 function isTabKey(value: string | undefined): value is TabKey {
@@ -65,6 +67,16 @@ function buildInlineTabHref(
   if (edit) query.set('edit', '1');
   if (settings) query.set('settings', settings);
   return `/admin/quotes?${query.toString()}#case-workspace`;
+}
+
+function buildCaseListHref(searchParams: Record<string, string | undefined> | undefined) {
+  const query = new URLSearchParams();
+  for (const key of CASE_LIST_PARAM_KEYS) {
+    const value = searchParams?.[key];
+    if (value) query.set(key, value);
+  }
+  const search = query.toString();
+  return search ? `/admin/quotes?${search}` : '/admin/quotes';
 }
 
 function matchSiteValue(text: string, pattern: RegExp, suffix = '') {
@@ -241,7 +253,7 @@ export async function CaseWorkspace({
       : [casePlanConfiguration?.configuration.site_prefecture, casePlanConfiguration?.configuration.site_municipality]
           .filter(Boolean)
           .join('')) ||
-    '—';
+    '未登録';
   const caseSelectedOptionIds = new Set(casePlanConfiguration?.items.map((item) => item.option_id) ?? []);
   const fireSelection =
     options.find(
@@ -349,7 +361,7 @@ export async function CaseWorkspace({
     },
     {
       label: '現地確認',
-      value: isFormal ? '正式完了状態は未保存' : '要確認',
+      value: isFormal ? '完了記録は準備中' : '要確認',
       state: needsSiteConfirmation ? 'current' : 'pending',
     },
     {
@@ -365,12 +377,12 @@ export async function CaseWorkspace({
     },
     {
       label: '契約',
-      value: isFormalAccepted ? '正式状態未登録' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '未対応',
+      value: isFormalAccepted ? '記録機能は準備中' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '準備中',
       state: isFormalAccepted ? 'current' : 'pending',
     },
-    { label: '製造・施工', value: '未対応', state: 'pending' },
-    { label: '引渡し', value: '未対応', state: 'pending' },
-    { label: 'アフター', value: '未対応', state: 'pending' },
+    { label: '製造・施工', value: '準備中', state: 'pending' },
+    { label: '引渡し', value: '準備中', state: 'pending' },
+    { label: 'アフター', value: '準備中', state: 'pending' },
   ] as const;
 
   const currentWorkflowLabel =
@@ -404,6 +416,7 @@ export async function CaseWorkspace({
     embedded
       ? buildInlineTabHref(quote.id, nextTab, listSearchParams, openEditor)
       : `/admin/quotes/${quote.id}?tab=${nextTab}${openEditor ? '&edit=1' : ''}`;
+  const caseListHref = buildCaseListHref(listSearchParams);
   const nextAction =
     isFormalAccepted
       ? {
@@ -417,7 +430,7 @@ export async function CaseWorkspace({
         ? {
             title: '次にやること：最新の見積状態を確認',
             description:
-              'この確定見積は承諾履歴ですが、現在の見積であることを確認できません。契約へは進めず、最新の見積Revisionと回答状態を確認してください。',
+              'この確定見積は承諾履歴ですが、現在の見積であることを確認できません。契約へは進めず、最新の見積版と回答状態を確認してください。',
             href: tabHref('estimate'),
             action: '最新の見積状態を確認',
           }
@@ -471,7 +484,15 @@ export async function CaseWorkspace({
               <p className="mt-0.5 text-[0.64rem] text-white/75">顧客 {customerName}</p>
             )}
           </div>
-
+          {embedded && (
+            <Link
+              href={caseListHref}
+              className="shrink-0 text-xs font-semibold text-white underline underline-offset-4 hover:text-white/80"
+              data-testid="case-back-to-list"
+            >
+              ← 案件一覧へ戻る
+            </Link>
+          )}
         </div>
 
         <div
@@ -769,7 +790,7 @@ export async function CaseWorkspace({
               <dd className="mt-1 font-semibold">
                 {casePlanConfiguration
                   ? CONFIGURATION_STATUS_LABELS[casePlanConfiguration.configuration.status]
-                  : '読み込み不可'}
+                  : '詳細を表示できません'}
               </dd>
             </div>
           </dl>
@@ -790,7 +811,7 @@ export async function CaseWorkspace({
             />
           ) : (
             <Alert tone="warn">
-              この案件の保存済みプランボードを読み込めませんでした。Configurationとの紐付けと閲覧権限を確認してください。
+              保存済みプランボードを表示できません。仕様が未保存の場合、またはこの権限では詳細を表示できない場合があります。
             </Alert>
           )}
         </section>
@@ -802,7 +823,7 @@ export async function CaseWorkspace({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold">現地確認</h2>
-                <Badge tone="neutral">正式完了状態は未登録</Badge>
+                <Badge tone="neutral">完了記録は準備中</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
                 保存済み住所・案件受付メモ・案件資料から、正式確認前の候補情報を表示します。
@@ -821,8 +842,8 @@ export async function CaseWorkspace({
             </div>
           </div>
 
-          <Alert tone="info" title="現地確認の正式完了状態はまだ保存されません">
-            下の情報は確認作業の材料です。候補情報が埋まっていても「現地確認完了」にはなりません。正式な確認日・担当者・完了状態・写真等は別途バックエンド実装が必要です。
+          <Alert tone="info" title="現地確認の完了記録は現在準備中です">
+            下の情報は確認作業の材料です。候補情報が埋まっていても「現地確認完了」にはなりません。確認日・担当者・完了状態・写真等を記録する機能は現在準備中です。
           </Alert>
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-site-condition-candidates">
@@ -830,7 +851,7 @@ export async function CaseWorkspace({
               <div>
                 <p className="font-semibold text-ink">正式登録候補</p>
                 <p className="mt-0.5 text-xs text-muted">
-                  現在は保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式項目化は次工程です。
+                  現在は保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式に記録する機能は現在準備中です。
                 </p>
               </div>
             </div>
@@ -887,7 +908,7 @@ export async function CaseWorkspace({
                 <Badge tone="neutral">参照のみ</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
-                契約情報は既存の見積状態・見積金額・受注契約メモから参考表示します。正式な契約保存・アップロード・版管理は次工程です。
+                契約情報は既存の見積状態・見積金額・受注契約メモから参考表示します。契約情報の保存・アップロード・版管理は現在準備中です。
               </p>
             </div>
             <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" rel="noopener" className="btn-secondary btn-sm">
@@ -900,13 +921,13 @@ export async function CaseWorkspace({
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-semibold">契約情報</h3>
                 <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[0.62rem] font-semibold text-[#8a6416]">
-                  正式保存前
+                  記録機能は準備中
                 </span>
               </div>
-              <span className="text-[0.65rem] text-muted">既存データからの参考表示</span>
+              <span className="text-[0.65rem] text-muted">既存情報からの参考表示</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted">
-              ここに表示する内容は正式な契約レコードではありません。契約済み判定・契約金額・対象Revisionの固定はまだ行っていません。
+              ここに表示する内容は正式な契約情報ではありません。契約済み判定・契約金額・対象見積版の確定はまだ行っていません。
             </p>
 
             <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -921,12 +942,12 @@ export async function CaseWorkspace({
                         ? '概算見積の承諾履歴'
                         : QUOTE_STATUS_LABELS[quote.status]}
                 </dd>
-                <p className="mt-1 text-[0.65rem] text-muted">正式な契約状態は未登録</p>
+                <p className="mt-1 text-[0.65rem] text-muted">契約状態の記録機能は準備中</p>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">受注契約日（メモ）</dt>
                 <dd className="mt-1 font-semibold">{contractReference.contractDate ?? '未登録'}</dd>
-                <p className="mt-1 text-[0.65rem] text-muted">Quoteメモから抽出</p>
+                <p className="mt-1 text-[0.65rem] text-muted">受注・契約メモから表示</p>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">現在の見積額（参考）</dt>
@@ -934,8 +955,8 @@ export async function CaseWorkspace({
                 <p className="mt-1 text-[0.65rem] text-muted">現在表示中の第{quote.revision}版</p>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3">
-                <dt className="text-xs text-muted">契約対象Revision</dt>
-                <dd className="mt-1 font-semibold">正式未固定</dd>
+                <dt className="text-xs text-muted">契約対象の見積版</dt>
+                <dd className="mt-1 font-semibold">準備中</dd>
                 <p className="mt-1 text-[0.65rem] text-muted">現在表示：{quote.quote_no} 第{quote.revision}版</p>
               </div>
             </dl>
@@ -969,7 +990,7 @@ export async function CaseWorkspace({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold">契約書</h3>
-                <p className="mt-0.5 text-xs text-muted">正式な契約書保管・差替え・版管理はまだ未実装です。</p>
+                <p className="mt-0.5 text-xs text-muted">契約書の保管・差替え・版管理は現在準備中です。</p>
               </div>
               <span className="text-xs text-muted">{contractDocuments.length}件</span>
             </div>
@@ -992,14 +1013,14 @@ export async function CaseWorkspace({
                     {row.url ? (
                       <a href={row.url} target="_blank" rel="noopener" className="btn-secondary btn-sm">開く</a>
                     ) : (
-                      <span className="rounded-md bg-[#f7f8f8] px-2 py-1 text-[0.65rem] text-muted">原本保管は未実装</span>
+                      <span className="rounded-md bg-[#f7f8f8] px-2 py-1 text-[0.65rem] text-muted">原本保管は準備中</span>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-line bg-[#fbfcfb] px-3 py-4 text-sm text-muted">
-                契約書はまだ正式保管されていません。アップロード・版管理は次工程で実装します。
+                契約書はまだ正式保管されていません。アップロード・版管理は現在準備中です。
               </div>
             )}
           </section>
@@ -1092,13 +1113,13 @@ export async function CaseWorkspace({
                     {row.url ? (
                       <a href={row.url} target="_blank" rel="noopener" className="btn-secondary btn-sm">開く</a>
                     ) : (
-                      <span className="rounded-md bg-[#f7f8f8] px-2 py-1 text-[0.65rem] text-muted">原本保管は未実装</span>
+                      <span className="rounded-md bg-[#f7f8f8] px-2 py-1 text-[0.65rem] text-muted">原本保管は準備中</span>
                     )}
                   </div>
                 ))}
                 {nonContractDocuments.length === 0 && (
                   <div className="px-3 py-5 text-sm text-muted">
-                    案件資料はまだ登録されていません。正式な案件資料アップロード機能は次工程で実装します。
+                    案件資料はまだ登録されていません。案件資料のアップロード機能は現在準備中です。
                   </div>
                 )}
               </div>
@@ -1116,7 +1137,7 @@ export async function CaseWorkspace({
                 <Badge tone="neutral">参考表示</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
-                現在の見積・保存済み仕様から製造前提と施工範囲を確認します。製造開始・完了、搬入日、施工進捗などの正式な工程管理はまだ行いません。
+                現在の見積・保存済み仕様から製造前提と施工範囲を確認します。製造開始・完了、搬入日、施工進捗などの工程管理機能は現在準備中です。
               </p>
             </div>
             <Link href={tabHref('plan')} className="btn-secondary btn-sm">
@@ -1132,10 +1153,10 @@ export async function CaseWorkspace({
                   未確定
                 </span>
               </div>
-              <span className="text-[0.65rem] text-muted">既存データからの参考表示</span>
+              <span className="text-[0.65rem] text-muted">既存情報からの参考表示</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted">
-              以下は製造指示書や製造確定仕様ではありません。正式な契約・製造指示と対象Revisionの固定は次工程です。
+              以下は製造指示書や製造確定仕様ではありません。契約・製造指示と対象見積版の確定機能は現在準備中です。
             </p>
 
             <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -1158,7 +1179,7 @@ export async function CaseWorkspace({
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">参照見積</dt>
                 <dd className="mt-1 font-semibold">{quote.quote_no}</dd>
-                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／製造用には未固定</p>
+                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／製造用の確定は準備中</p>
               </div>
               <div className="rounded-lg bg-[#f7f9f8] p-3 sm:col-span-2">
                 <dt className="text-xs text-muted">案件構成・申し送り</dt>
@@ -1216,19 +1237,19 @@ export async function CaseWorkspace({
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-production-future">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">正式な工程管理</h3>
-              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">準備中</span>
             </div>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
-              製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を保存する正式機能はまだありません。
+              製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を記録する機能は現在準備中です。
               見積に項目があることを、製造済み・搬入済み・施工済みとは扱いません。
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               {[
-                ['製造指示', '正式保存先なし'],
-                ['対象Revision', '正式未固定'],
+                ['製造指示', '準備中'],
+                ['対象見積版', '準備中'],
                 ['個体ID', '未発行'],
-                ['製造進捗', '正式保存先なし'],
-                ['施工進捗', '正式保存先なし'],
+                ['製造進捗', '準備中'],
+                ['施工進捗', '準備中'],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
                   <p className="text-xs font-semibold text-muted">{label}</p>
@@ -1249,7 +1270,7 @@ export async function CaseWorkspace({
                 <Badge tone="neutral">参考表示</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
-                現在の案件情報から引渡し対象の前提だけを確認します。引渡し完了・保証開始・点検実施などの正式な状態はまだ管理していません。
+                現在の案件情報から引渡し対象の前提だけを確認します。引渡し完了・保証開始・点検実施などを記録する機能は現在準備中です。
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -1270,10 +1291,10 @@ export async function CaseWorkspace({
                   未確定
                 </span>
               </div>
-              <span className="text-[0.65rem] text-muted">既存データからの参考表示</span>
+              <span className="text-[0.65rem] text-muted">既存情報からの参考表示</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted">
-              以下は引渡し確定情報ではありません。正式な契約、製造・施工完了、引渡し対象Revisionの固定後に確定する想定です。
+              以下は引渡し確定情報ではありません。契約、製造・施工完了、引渡し対象の見積版を確定する機能は現在準備中です。
             </p>
 
             <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -1294,7 +1315,7 @@ export async function CaseWorkspace({
               <div className="rounded-lg bg-[#f7f9f8] p-3">
                 <dt className="text-xs text-muted">参照見積</dt>
                 <dd className="mt-1 font-semibold">{quote.quote_no}</dd>
-                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／引渡し用には未固定</p>
+                <p className="mt-1 text-[0.65rem] text-muted">第{quote.revision}版／引渡し用の確定は準備中</p>
               </div>
             </dl>
           </section>
@@ -1302,18 +1323,18 @@ export async function CaseWorkspace({
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-handover-readiness">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">完了確認・引渡し</h3>
-              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">正式管理は未実装</span>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">管理機能は準備中</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted">
-              現在は保存先がないため、未登録を「未完了」とは判定しません。正式実装時に、完了確認と引渡しを施工進捗から独立した記録として扱います。
+              現在は完了確認・引渡しを記録する機能が準備中のため、未登録を「未完了」とは判定しません。
             </p>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                ['完了確認', '正式保存先なし'],
-                ['引渡し日', '正式保存先なし'],
-                ['引渡し確認', '正式保存先なし'],
-                ['引渡し資料', '正式保存先なし'],
+                ['完了確認', '準備中'],
+                ['引渡し日', '準備中'],
+                ['引渡し確認', '準備中'],
+                ['引渡し資料', '準備中'],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
                   <p className="text-xs font-semibold text-muted">{label}</p>
@@ -1326,18 +1347,18 @@ export async function CaseWorkspace({
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-aftercare-future">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">保証・点検・アフター対応</h3>
-              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">準備中</span>
             </div>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
-              保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を保存する正式機能はまだありません。
+              保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を記録する機能は現在準備中です。
               現在の見積承諾や案件メモを、引渡し済み・保証中・点検済みとは扱いません。
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                ['保証状態', '正式保存先なし'],
-                ['点検予定・履歴', '正式保存先なし'],
-                ['不具合・修理履歴', '正式保存先なし'],
-                ['問い合わせ履歴', '正式保存先なし'],
+                ['保証状態', '準備中'],
+                ['点検予定・履歴', '準備中'],
+                ['不具合・修理履歴', '準備中'],
+                ['問い合わせ履歴', '準備中'],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
                   <p className="text-xs font-semibold text-muted">{label}</p>
@@ -1379,7 +1400,7 @@ export async function CaseWorkspace({
                   参考情報
                 </span>
               </div>
-              <span className="text-[0.65rem] text-muted">既存案件データから表示</span>
+              <span className="text-[0.65rem] text-muted">既存案件情報から表示</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted">
               以下は完成個体の在庫情報や現在地ではありません。案件の見積・設置予定情報を、災害時提供の検討材料として表示しています。
@@ -1411,20 +1432,20 @@ export async function CaseWorkspace({
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-disaster-readiness">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">供給可否の確認項目</h3>
-              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">正式管理は未実装</span>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">管理機能は準備中</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted">
-              未登録を「提供不可」とは扱いません。正式実装時に、所有・契約関係、完成状態、現在地、移動可否などを確認したうえで供給可否を判定します。
+              現在は供給可否を記録する機能が準備中のため、未登録を「提供不可」とは扱いません。
             </p>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                ['災害時の提供意思', '正式保存先なし'],
-                ['完成個体', '正式保存先なし'],
-                ['現在地', '正式保存先なし'],
-                ['移動・運搬可否', '正式保存先なし'],
-                ['即時提供可否', '正式保存先なし'],
-                ['供給可能棟数', '正式保存先なし'],
+                ['災害時の提供意思', '準備中'],
+                ['完成個体', '準備中'],
+                ['現在地', '準備中'],
+                ['移動・運搬可否', '準備中'],
+                ['即時提供可否', '準備中'],
+                ['供給可能棟数', '準備中'],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
                   <p className="text-xs font-semibold text-muted">{label}</p>
@@ -1437,10 +1458,10 @@ export async function CaseWorkspace({
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-disaster-future">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">正式な災害時供給管理</h3>
-              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">今後対応予定</span>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">準備中</span>
             </div>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
-              提供意思の同意・撤回、対象となる完成個体、現在地、移動・運搬条件、即時提供可否、供給可能棟数を保存・集計する正式機能はまだありません。
+              提供意思の同意・撤回、対象となる完成個体、現在地、移動・運搬条件、即時提供可否、供給可能棟数を記録・集計する機能は現在準備中です。
               現在の案件棟数や設置予定地だけから「供給可能」と判定しません。
             </p>
           </section>

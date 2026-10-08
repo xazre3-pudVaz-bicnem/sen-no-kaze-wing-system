@@ -65,8 +65,9 @@ function expenseFor(amount: number, rate: number): number {
  * Excel標準見積を価格の正本とし、商品選択の変更分だけ商品マスター価格で差額反映する。
  * 標準状態ならtemplate.total等をそのまま返すため、Excel値を再計算で変えない。
  *
- * legacy baseline_option_idsに、現在の本体分類表では×になった商品が残っていても、
- * 差額比較は現在のお客様選択可能集合へ投影して行う。履歴明細自体はpricing.linesへ残す。
+ * BOX hotel-singleだけは、legacy baseline_option_idsに現在の本体分類表で×のmini-kitchenが
+ * 残っているため、差額比較を現在のお客様選択可能集合へ投影する。その他の標準見積は
+ * 従来どおり渡された選択商品そのものを差額比較に使う。履歴明細自体はpricing.linesへ残す。
  */
 export function computeStandardEstimatePricing(
   bundle: CatalogBundle,
@@ -88,28 +89,33 @@ export function computeStandardEstimatePricing(
     exteriorFaces
   );
 
-  const customerCtx = ruleContextForSpec(
-    {
-      options: bundle.options,
-      categories: bundle.categories,
-      dependencies: bundle.dependencies,
-      conflicts: bundle.conflicts,
-    },
-    template.template.spec_code,
-    model.slug
-  );
-  const customerOptionIds = new Set(customerCtx.options.map((option) => option.id));
-  const currentDeltaOptionIds = selectedOptionIds.filter((id) => customerOptionIds.has(id));
-  const currentForDelta = computePricing(
-    model,
-    bundle.options,
-    bundle.categories,
-    currentDeltaOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
-    template.template.tax_rate,
-    { groups: bundle.variantGroups, choices: bundle.variantChoices },
-    0,
-    exteriorFaces
-  );
+  const projectLegacyHotelSingle =
+    model.slug === 'box' && template.template.spec_code === 'hotel-single';
+  let currentForDelta = current;
+  if (projectLegacyHotelSingle) {
+    const customerCtx = ruleContextForSpec(
+      {
+        options: bundle.options,
+        categories: bundle.categories,
+        dependencies: bundle.dependencies,
+        conflicts: bundle.conflicts,
+      },
+      template.template.spec_code,
+      model.slug
+    );
+    const customerOptionIds = new Set(customerCtx.options.map((option) => option.id));
+    const currentDeltaOptionIds = selectedOptionIds.filter((id) => customerOptionIds.has(id));
+    currentForDelta = computePricing(
+      model,
+      bundle.options,
+      bundle.categories,
+      currentDeltaOptionIds.map((option_id) => ({ option_id, variant_choice_ids: variantChoiceIds })),
+      template.template.tax_rate,
+      { groups: bundle.variantGroups, choices: bundle.variantChoices },
+      0,
+      exteriorFaces
+    );
+  }
 
   const baselineOptionIds = buildEstimateBaselineSelection(
     {

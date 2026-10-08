@@ -8,9 +8,12 @@ on:
   pull_request:
     paths:
       - 'supabase/**'
-      - 'lib/data/**'
-      - 'lib/actions/**'
-      - 'scripts/db-rehearsal/**'
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/db-rehearsal.yml'
   workflow_dispatch:
 
@@ -66,10 +69,14 @@ jobs:
         if: success() || failure()
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --out db-check.json
 
-      # 権限境界の実行時検査（試験データを作って rollback する。ローカル DB 専用）
-      - name: Runtime security checks
-        if: success() || failure()
-        run: npm run db:check -- --db-url postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime.json
+      - name: Runtime security tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PGOPTIONS="-c statement_timeout=5000 -c lock_timeout=2000" \
+            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+              -X -v ON_ERROR_STOP=1 \
+              -f scripts/db-rehearsal/runtime-security.sql
 
       - name: Upload reports
         if: always()
@@ -79,5 +86,4 @@ jobs:
           path: |
             db-lint.json
             db-check.json
-            db-runtime.json
           if-no-files-found: ignore

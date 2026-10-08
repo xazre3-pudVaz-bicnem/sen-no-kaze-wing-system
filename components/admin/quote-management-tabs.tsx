@@ -29,7 +29,7 @@ export function QuoteManagementTabs({ active }: { active: 'case' | 'standard' | 
             : baseClass + ' text-ink-soft hover:bg-sand'
         }
       >
-        シミュレーター標準
+        標準見積
       </Link>
       <Link
         href="/admin/base-masters"

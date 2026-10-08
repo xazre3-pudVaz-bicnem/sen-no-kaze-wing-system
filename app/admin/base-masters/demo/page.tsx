@@ -8,7 +8,7 @@ export default async function BaseMasterDemoPage() {
   return (
     <AdminPage
       title="操作確認用 本体マスター"
-      lead="本体マスターと見積テンプレートの見た目・操作感を揃えるためのDB非連動サンプルです。変更内容は保存されません。"
+      lead="構成一覧・Base Master詳細・仕様マトリクスの完成イメージを確認するDB非連動サンプルです。変更内容は保存されません。"
     >
       <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
 

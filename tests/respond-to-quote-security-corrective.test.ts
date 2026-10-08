@@ -19,9 +19,10 @@ const corrective = fs
 function respondToQuoteDefinition(sql: string) {
   const start = sql.indexOf('create or replace function public.respond_to_quote(');
   expect(start).toBeGreaterThanOrEqual(0);
-  const end = sql.indexOf('\nalter function public.respond_to_quote(uuid, text) owner to postgres;', start);
+  const terminator = '$respond_to_quote$;';
+  const end = sql.indexOf(terminator, start);
   expect(end).toBeGreaterThan(start);
-  return sql.slice(start, end).trim();
+  return sql.slice(start, end + terminator.length).trim();
 }
 
 const previousDefinition = respondToQuoteDefinition(previous);
@@ -40,6 +41,7 @@ describe('respond_to_quote security corrective', () => {
           '  if v_uid is null then',
           "    raise exception 'UNAUTHENTICATED' using errcode = '42501';",
           '  end if;',
+          '',
           '',
         ].join('\n')
       )

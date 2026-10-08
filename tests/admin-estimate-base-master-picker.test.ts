@@ -67,8 +67,8 @@ describe('見積書の本体選択UI', () => {
     expect(newForm).toContain('space-y-3 p-4');
     expect(newForm).toContain('xl:grid-cols-5');
     expect(newForm).toContain('h-10 min-h-10');
-    expect(newForm).toContain('見積書名');
-    expect(newForm).toContain('見積書作成・管理へ戻る');
+    expect(newForm).toContain('標準見積名');
+    expect(newForm).toContain('標準見積一覧へ戻る');
     expect(newForm).not.toContain('本体・条件設定へ戻る');
   });
 

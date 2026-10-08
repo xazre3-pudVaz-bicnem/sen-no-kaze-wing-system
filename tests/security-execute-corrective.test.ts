@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +8,8 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').sp
 const migration = read('supabase/migrations/20261007120000_security_execute_corrective.sql');
 const source = read('supabase/migrations/20260830091000_exterior_four_faces.sql');
 const checks = read('scripts/db-rehearsal/checks.mjs');
+const checkCli = read('scripts/db-rehearsal/check.mjs');
+const workflow = read('.github/workflows/db-rehearsal.yml');
 
 const DOLLAR = '$' + '$';
 
@@ -31,38 +34,22 @@ describe('Security corrective: API ロールへ公開しない EXECUTE を閉じ
     let expected = duplicateConfiguration(source);
     expected = swap(
       expected,
-      `returns public.configurations language plpgsql security definer set search_path = public as ${DOLLAR}
-declare
-`,
-      `returns public.configurations
-language plpgsql
-security definer
-set search_path = ''
-as ${DOLLAR}
-declare
-  v_uid uuid := auth.uid();
-`
+      `returns public.configurations language plpgsql security definer set search_path = public as ${DOLLAR}\ndeclare\n`,
+      `returns public.configurations\nlanguage plpgsql\nsecurity definer\nset search_path = ''\nas ${DOLLAR}\ndeclare\n  v_uid uuid := auth.uid();\n`
     );
     expected = swap(
       expected,
-      `begin
-  select * into src from public.configurations where id = p_configuration_id;`,
-      `begin
-  -- 未ログインは最初に拒否する
-  if v_uid is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
-
-  select * into src from public.configurations where id = p_configuration_id;`
+      `begin\n  select * into src from public.configurations where id = p_configuration_id;`,
+      `begin\n  -- 未ログインは最初に拒否する\n  if v_uid is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;\n\n  select * into src from public.configurations where id = p_configuration_id;`
     );
     expected = swap(
       expected,
       '  if not (public.is_admin() or src.user_id = auth.uid()) then',
-      `  -- 判定不能を許可に倒さない（fail closed）
-  if not coalesce(public.is_admin() or src.user_id = v_uid, false) then`
+      `  -- 判定不能を許可に倒さない（fail closed）\n  if not coalesce(public.is_admin() or src.user_id = v_uid, false) then`
     );
     // 終端の書式だけ `end $$;` → `end;` + 改行 + `$$;` に変えている
     expect(expected.endsWith('end ')).toBe(true);
-    expected = `${expected.slice(0, -'end '.length)}end;
-`;
+    expected = `${expected.slice(0, -'end '.length)}end;\n`;
     expect(duplicateConfiguration(migration)).toBe(expected);
   });
 
@@ -86,8 +73,7 @@ declare
       'validate_configuration_items(uuid, uuid[])',
       'validate_configuration_items(uuid, uuid[], text)',
     ]) {
-      expect(migration).toContain(`revoke execute on function public.${fn}
-  from public, anon, authenticated, service_role;`);
+      expect(migration).toContain(`revoke execute on function public.${fn}\n  from public, anon, authenticated, service_role;`);
     }
     const grants = [...migration.matchAll(/^grant execute on function public\.([a-z_]+)\([^)]*\) to ([a-z_, ]+);$/gm)].map(
       (match) => `${match[1]}:${match[2]}`
@@ -105,5 +91,34 @@ declare
   it('リハーサル検査の「未是正」リストを空にし、許可リストは RLS 判定用の 4 関数だけにする', () => {
     expect(checks).toContain("export const ANON_DEFINER_ALLOWLIST = ['can_edit_catalog', 'current_role_rank', 'is_admin', 'is_dealer'];");
     expect(checks).toContain('export const ANON_DEFINER_PENDING_SECURITY_CORRECTIVE = [];');
+  });
+
+  it('Runtime Security は 1 件でも NG なら process を非 0 にし、CI もその経路を使う', () => {
+    expect(checks).toContain('export function checkExitCode(result, runtime = null)');
+    expect(checkCli).toContain('process.exitCode = checkExitCode(result, runtime);');
+    expect(workflow).toContain('npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime-check.json');
+    expect(workflow).not.toContain('-f scripts/db-rehearsal/runtime-security.sql');
+
+    const failProbe = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        "import { checkExitCode } from './scripts/db-rehearsal/checks.mjs'; process.exit(checkExitCode({ ok: true }, { ok: false }));",
+      ],
+      { cwd: root }
+    );
+    expect(failProbe.status).toBe(1);
+
+    const passProbe = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        "import { checkExitCode } from './scripts/db-rehearsal/checks.mjs'; process.exit(checkExitCode({ ok: true }, { ok: true }));",
+      ],
+      { cwd: root }
+    );
+    expect(passProbe.status).toBe(0);
   });
 });

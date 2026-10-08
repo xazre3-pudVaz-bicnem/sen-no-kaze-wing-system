@@ -66,7 +66,7 @@ const SAMPLE_BASE_MASTERS: SampleBaseMaster[] = [
     fireSpec: 'non-fire',
     revision: 3,
     status: 'published',
-    totalCost: 1654820,
+    totalCost: 1654620,
     history: [
       { revision: 3, status: 'published', label: '現在の公開版' },
       { revision: 2, status: 'historical', label: '過去Revision' },
@@ -90,7 +90,7 @@ const SAMPLE_BASE_MASTERS: SampleBaseMaster[] = [
     fireSpec: 'fire',
     revision: 2,
     status: 'published',
-    totalCost: 1812360,
+    totalCost: 1811060,
     history: [
       { revision: 2, status: 'published', label: '現在の公開版' },
       { revision: 1, status: 'historical', label: '過去Revision' },

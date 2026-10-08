@@ -76,7 +76,8 @@ describe('本体マスター UI', () => {
     expect(lines).not.toContain('cost_price');
     expect(lines).not.toContain('sale_price');
   });
-  it('見積書側に合わせて本体条件と保存・公開操作を編集枠へ集約する', () => {
+
+  it('正式編集画面は保存・公開操作を維持し、画面確認サンプルは表示専用にする', () => {
     expect(page).not.toContain('card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-4');
     expect(page).toContain('modelName={model?.name');
     expect(page).toContain('ownerName={owner?.name');
@@ -87,12 +88,13 @@ describe('本体マスター UI', () => {
     expect(editor).toContain('form="base-master-save-form"');
     expect(editor).toContain('この内容で公開');
     expect(demoPage).not.toContain('操作確認用・DB非連動');
-    expect(demo).toContain('この内容で公開');
+    expect(demo).toContain('画面確認用サンプル');
+    expect(demo).toContain('表示のみ・操作未接続');
+    expect(demo).not.toContain('この内容で公開');
   });
 
   it('工事区分見出しから明細を直接追加できる', () => {
     expect(lines).toContain('＋明細');
     expect(lines).toContain('onClick={() => addRow(section.key)}');
   });
-
 });

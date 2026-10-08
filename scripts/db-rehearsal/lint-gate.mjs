@@ -6,6 +6,9 @@
  *
  * level=error が 1 件でもあれば終了コード 1。ただし下の KNOWN に載せた既知の事象は除く。
  * KNOWN は「直さない理由が説明できるもの」だけにする。新しいエラーを黙らせるために足さないこと。
+ *
+ * Supabase CLI は workflow で 2.120.0 に固定しており、現在の db lint 出力は JSON 配列そのもの。
+ * 前後に別テキストが混ざった場合は、配列らしい部分だけを拾わず異常出力として fail closed にする。
  */
 import fs from 'node:fs';
 
@@ -25,19 +28,16 @@ if (!file) {
   console.error('lint 結果の JSON ファイルを指定してください');
   process.exit(1);
 }
-const raw = fs.readFileSync(file, 'utf8');
-// CLI は JSON の前後に案内文を出すことがあるので、配列部分だけを取り出す。
-// 期待する配列が見つからない／壊れている場合は、lint 未実施を成功扱いしない。
-const start = raw.indexOf('[');
-const end = raw.lastIndexOf(']');
-if (start < 0 || end < start) {
-  console.error('plpgsql_check の JSON 配列を lint 出力から取得できませんでした');
+
+const raw = fs.readFileSync(file, 'utf8').trim();
+if (!raw.startsWith('[') || !raw.endsWith(']')) {
+  console.error('plpgsql_check の lint 出力が期待する JSON 配列形式ではありません');
   process.exit(1);
 }
 
 let results;
 try {
-  results = JSON.parse(raw.slice(start, end + 1));
+  results = JSON.parse(raw);
 } catch (error) {
   console.error('plpgsql_check の JSON 配列を解析できませんでした');
   console.error(error instanceof Error ? error.message : String(error));

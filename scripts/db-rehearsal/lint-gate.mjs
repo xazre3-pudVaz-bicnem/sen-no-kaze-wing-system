@@ -26,9 +26,27 @@ if (!file) {
   process.exit(1);
 }
 const raw = fs.readFileSync(file, 'utf8');
-// CLI は JSON の前後に案内文を出すことがあるので、配列部分だけを取り出す
+// CLI は JSON の前後に案内文を出すことがあるので、配列部分だけを取り出す。
+// 期待する配列が見つからない／壊れている場合は、lint 未実施を成功扱いしない。
 const start = raw.indexOf('[');
-const results = start < 0 ? [] : JSON.parse(raw.slice(start, raw.lastIndexOf(']') + 1));
+const end = raw.lastIndexOf(']');
+if (start < 0 || end < start) {
+  console.error('plpgsql_check の JSON 配列を lint 出力から取得できませんでした');
+  process.exit(1);
+}
+
+let results;
+try {
+  results = JSON.parse(raw.slice(start, end + 1));
+} catch (error) {
+  console.error('plpgsql_check の JSON 配列を解析できませんでした');
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+if (!Array.isArray(results)) {
+  console.error('plpgsql_check の lint 結果が JSON 配列ではありません');
+  process.exit(1);
+}
 
 const isKnown = (fn, issue) => KNOWN.some((k) => k.function === fn && k.sqlState === issue.sqlState && issue.message === k.message);
 const errors = [];

@@ -40,20 +40,24 @@ type MatrixItem =
   | 'interior'
   | 'entranceDoor'
   | 'sash'
-  | 'ub'
+  | 'bath'
   | 'kitchen'
   | 'washbasin'
   | 'toilet'
-  | 'storage'
+  | 'boiler'
+  | 'entranceStorage'
+  | 'interiorDoor'
+  | 'closet'
   | 'bed'
-  | 'equipment';
+  | 'furnishings'
+  | 'other';
 
 type MatrixRow = {
   id: string;
   model: string;
   purpose: string;
   size: string;
-  fireSpec: FireSpec;
+  fireSelectable: boolean;
   availability: Record<MatrixItem, boolean>;
 };
 
@@ -148,81 +152,170 @@ const MATRIX_ITEMS: Array<{ key: MatrixItem; label: string }> = [
   { key: 'interior', label: '内装' },
   { key: 'entranceDoor', label: '玄関ドア' },
   { key: 'sash', label: 'サッシ' },
-  { key: 'ub', label: 'UB' },
+  { key: 'bath', label: 'UB / シャワー' },
   { key: 'kitchen', label: 'キッチン' },
   { key: 'washbasin', label: '洗面' },
   { key: 'toilet', label: 'トイレ' },
-  { key: 'storage', label: '収納' },
+  { key: 'boiler', label: '給湯器' },
+  { key: 'entranceStorage', label: '玄関収納' },
+  { key: 'interiorDoor', label: '室内建具' },
+  { key: 'closet', label: 'クローゼット' },
   { key: 'bed', label: 'ベッド' },
-  { key: 'equipment', label: '備品' },
+  { key: 'furnishings', label: '備品' },
+  { key: 'other', label: 'その他' },
 ];
 
-const MATRIX_ROWS: MatrixRow[] = [
+const INITIAL_MATRIX_ROWS: MatrixRow[] = [
   {
-    id: 'matrix-wing-hotel-normal',
+    id: 'matrix-wing-hotel',
     model: 'Wing',
     purpose: 'ホテル仕様',
     size: '3,640×4,550',
-    fireSpec: 'non-fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: true, kitchen: true, washbasin: true, toilet: true, storage: true, bed: true, equipment: true },
+    fireSelectable: true,
+    availability: {
+      roofExterior: true,
+      interior: true,
+      entranceDoor: true,
+      sash: true,
+      bath: true,
+      kitchen: false,
+      washbasin: true,
+      toilet: true,
+      boiler: true,
+      entranceStorage: true,
+      interiorDoor: true,
+      closet: false,
+      bed: true,
+      furnishings: true,
+      other: true,
+    },
   },
   {
-    id: 'matrix-wing-residence-normal',
+    id: 'matrix-wing-residence',
     model: 'Wing',
     purpose: '住居仕様',
     size: '3,640×4,550',
-    fireSpec: 'non-fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: true, kitchen: true, washbasin: true, toilet: true, storage: true, bed: false, equipment: true },
+    fireSelectable: true,
+    availability: {
+      roofExterior: true,
+      interior: true,
+      entranceDoor: true,
+      sash: true,
+      bath: true,
+      kitchen: true,
+      washbasin: true,
+      toilet: true,
+      boiler: true,
+      entranceStorage: true,
+      interiorDoor: true,
+      closet: false,
+      bed: true,
+      furnishings: true,
+      other: true,
+    },
   },
   {
-    id: 'matrix-wing-office-normal',
+    id: 'matrix-wing-office',
     model: 'Wing',
     purpose: '事務所仕様',
     size: '3,640×4,550',
-    fireSpec: 'non-fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: false, kitchen: true, washbasin: true, toilet: true, storage: true, bed: false, equipment: true },
+    fireSelectable: true,
+    availability: {
+      roofExterior: true,
+      interior: true,
+      entranceDoor: true,
+      sash: true,
+      bath: true,
+      kitchen: true,
+      washbasin: false,
+      toilet: true,
+      boiler: true,
+      entranceStorage: false,
+      interiorDoor: false,
+      closet: false,
+      bed: false,
+      furnishings: true,
+      other: true,
+    },
   },
   {
-    id: 'matrix-box-hotel-normal',
+    id: 'matrix-box-hotel',
     model: 'BOX',
     purpose: 'ホテル仕様',
     size: '2,100×4,550',
-    fireSpec: 'non-fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: true, kitchen: true, washbasin: true, toilet: true, storage: true, bed: true, equipment: true },
+    fireSelectable: true,
+    availability: {
+      roofExterior: true,
+      interior: true,
+      entranceDoor: true,
+      sash: true,
+      bath: true,
+      kitchen: false,
+      washbasin: true,
+      toilet: true,
+      boiler: true,
+      entranceStorage: true,
+      interiorDoor: true,
+      closet: false,
+      bed: true,
+      furnishings: true,
+      other: true,
+    },
   },
   {
-    id: 'matrix-box-storage-normal',
+    id: 'matrix-box-water-kit',
     model: 'BOX',
-    purpose: '物置仕様',
+    purpose: '水回りBOX',
     size: '2,100×4,550',
-    fireSpec: 'non-fire',
-    availability: { roofExterior: true, interior: false, entranceDoor: true, sash: true, ub: false, kitchen: false, washbasin: false, toilet: false, storage: true, bed: false, equipment: false },
+    fireSelectable: true,
+    availability: {
+      roofExterior: true,
+      interior: true,
+      entranceDoor: true,
+      sash: true,
+      bath: true,
+      kitchen: true,
+      washbasin: true,
+      toilet: true,
+      boiler: true,
+      entranceStorage: false,
+      interiorDoor: false,
+      closet: false,
+      bed: false,
+      furnishings: false,
+      other: false,
+    },
   },
   {
-    id: 'matrix-wing-hotel-fire',
-    model: 'Wing',
-    purpose: 'ホテル仕様',
-    size: '3,640×4,550',
-    fireSpec: 'fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: true, kitchen: true, washbasin: true, toilet: true, storage: true, bed: true, equipment: true },
-  },
-  {
-    id: 'matrix-wing-residence-fire',
-    model: 'Wing',
-    purpose: '住居仕様',
-    size: '3,640×4,550',
-    fireSpec: 'fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: true, kitchen: true, washbasin: true, toilet: true, storage: true, bed: false, equipment: true },
-  },
-  {
-    id: 'matrix-box-hotel-fire',
-    model: 'BOX',
-    purpose: 'ホテル仕様',
+    id: 'matrix-flat-office',
+    model: 'Flat',
+    purpose: '事務所用',
     size: '2,100×4,550',
-    fireSpec: 'fire',
-    availability: { roofExterior: true, interior: true, entranceDoor: true, sash: true, ub: true, kitchen: true, washbasin: true, toilet: true, storage: true, bed: true, equipment: true },
+    fireSelectable: false,
+    availability: {
+      roofExterior: true,
+      interior: true,
+      entranceDoor: true,
+      sash: true,
+      bath: false,
+      kitchen: false,
+      washbasin: false,
+      toilet: false,
+      boiler: false,
+      entranceStorage: false,
+      interiorDoor: false,
+      closet: false,
+      bed: false,
+      furnishings: false,
+      other: false,
+    },
   },
 ];
+
+const cloneMatrixRows = (rows: MatrixRow[]) => rows.map((row) => ({
+  ...row,
+  availability: { ...row.availability },
+}));
 
 const statusLabel = (status: SampleRevisionStatus) => {
   if (status === 'published') return '公開中';
@@ -240,13 +333,12 @@ const fireLabel = (fireSpec: FireSpec) => fireSpec === 'fire' ? '防火' : '非�
 
 export function BaseMasterExcelDemo() {
   const [selectedId, setSelectedId] = useState(SAMPLE_BASE_MASTERS[0].id);
-  const [matrixFireSpec, setMatrixFireSpec] = useState<FireSpec>('non-fire');
+  const [savedMatrixRows, setSavedMatrixRows] = useState<MatrixRow[]>(() => cloneMatrixRows(INITIAL_MATRIX_ROWS));
+  const [matrixRows, setMatrixRows] = useState<MatrixRow[]>(() => cloneMatrixRows(INITIAL_MATRIX_ROWS));
+  const [isMatrixEditing, setIsMatrixEditing] = useState(false);
+  const [matrixNotice, setMatrixNotice] = useState<string | null>(null);
 
   const selected = SAMPLE_BASE_MASTERS.find((master) => master.id === selectedId) ?? SAMPLE_BASE_MASTERS[0];
-  const matrixRows = useMemo(
-    () => MATRIX_ROWS.filter((row) => row.fireSpec === matrixFireSpec),
-    [matrixFireSpec]
-  );
 
   const groupedLines = useMemo(() => {
     const groups: Array<{ section: string; rows: SampleLine[] }> = [];
@@ -257,6 +349,34 @@ export function BaseMasterExcelDemo() {
     }
     return groups;
   }, [selected]);
+
+  const toggleMatrixItem = (rowId: string, item: MatrixItem) => {
+    if (!isMatrixEditing) return;
+    setMatrixNotice(null);
+    setMatrixRows((current) => current.map((row) => row.id === rowId
+      ? { ...row, availability: { ...row.availability, [item]: !row.availability[item] } }
+      : row));
+  };
+
+  const toggleFireSelectable = (rowId: string) => {
+    if (!isMatrixEditing) return;
+    setMatrixNotice(null);
+    setMatrixRows((current) => current.map((row) => row.id === rowId
+      ? { ...row, fireSelectable: !row.fireSelectable }
+      : row));
+  };
+
+  const saveMatrixMock = () => {
+    setSavedMatrixRows(cloneMatrixRows(matrixRows));
+    setIsMatrixEditing(false);
+    setMatrixNotice('画面内のサンプル状態を保存しました。DBには保存されません。');
+  };
+
+  const cancelMatrixEdit = () => {
+    setMatrixRows(cloneMatrixRows(savedMatrixRows));
+    setIsMatrixEditing(false);
+    setMatrixNotice('編集内容をキャンセルしました。');
+  };
 
   return (
     <div className="space-y-6">
@@ -402,8 +522,8 @@ export function BaseMasterExcelDemo() {
             <h3 className="text-sm font-semibold text-slate-800">本体基準図面（サンプル枠）</h3>
             <span className="text-xs text-slate-500">お客様向け平面図・立面図・完成パースはここに置きません。</span>
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {['構造図', '骨組み図', '本体基準寸法図'].map((label) => (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {['構造図', '骨組み図', '製造用図面', '本体基準寸法図'].map((label) => (
               <div key={label} className="flex min-h-28 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-sm font-medium text-slate-500">
                 {label}・表示位置
               </div>
@@ -414,53 +534,109 @@ export function BaseMasterExcelDemo() {
 
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
-          <p className="text-xs font-semibold tracking-wide text-slate-500">SPECIFICATION MATRIX</p>
-          <h2 className="mt-1 text-lg font-semibold text-slate-900">3. 仕様マトリクス</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            Base MasterのRevision一覧とは別の確認表です。本体 × 用途・基本仕様 × サイズに対し、Standard Estimate側の商品カテゴリーを選択できるかを○／×で確認します。
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-slate-500">SPECIFICATION MATRIX</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-900">3. 仕様マトリクス</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Base MasterのRevision一覧とは別の確認表です。本体 × 用途・基本仕様 × サイズに対し、Standard Estimate側で各仕様項目を選択可能とするかを○／×で確認します。Matrix Itemと商品Categoryは別概念です。
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {!isMatrixEditing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMatrixEditing(true);
+                    setMatrixNotice(null);
+                  }}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  編集
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={cancelMatrixEdit}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveMatrixMock}
+                    className="rounded-md border border-emerald-800 bg-emerald-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-900"
+                  >
+                    保存
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
-          <span className="font-semibold text-slate-600">防火条件</span>
-          {(['non-fire', 'fire'] as FireSpec[]).map((fireSpec) => (
-            <button
-              key={fireSpec}
-              type="button"
-              onClick={() => setMatrixFireSpec(fireSpec)}
-              className={`rounded-md border px-3 py-1.5 font-semibold transition ${matrixFireSpec === fireSpec ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-            >
-              {fireLabel(fireSpec)}
-            </button>
-          ))}
-          <span className="ml-2 text-slate-500">防火は通常のmatrix item列ではなく、別条件として切り替えます。</span>
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-950">
+          画面確認用サンプル。変更はDBへ保存されません。
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-600">
+          <span>初期seed：6行 × 15 Matrix Item = 90 selectableセル</span>
+          <span>非防火：全行利用可</span>
+          <span>防火：各行の fire_selectable を表示</span>
           <span className="ml-auto font-medium text-emerald-700">○ 選択可</span>
           <span className="font-medium text-slate-500">× 対象外</span>
         </div>
 
+        {matrixNotice && (
+          <div className="border-b border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-900">{matrixNotice}</div>
+        )}
+
         <div className="overflow-x-auto">
-          <table className="min-w-[84rem] w-full border-collapse text-xs">
+          <table className="min-w-[118rem] w-full border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100 text-slate-600">
-                <th className="sticky left-0 z-10 min-w-24 border-b border-r border-slate-300 bg-slate-100 px-2 py-2 text-left font-semibold">本体</th>
+                <th className="min-w-24 border-b border-r border-slate-300 px-2 py-2 text-left font-semibold">本体</th>
                 <th className="min-w-32 border-b border-r border-slate-300 px-2 py-2 text-left font-semibold">用途・基本仕様</th>
                 <th className="min-w-32 border-b border-r border-slate-300 px-2 py-2 text-left font-semibold">サイズ</th>
+                <th className="min-w-20 border-b border-r border-slate-300 px-2 py-2 text-center font-semibold">非防火</th>
+                <th className="min-w-20 border-b border-r border-slate-300 px-2 py-2 text-center font-semibold">防火</th>
                 {MATRIX_ITEMS.map((item) => (
-                  <th key={item.key} className="min-w-20 border-b border-r border-slate-300 px-2 py-2 text-center font-semibold">{item.label}</th>
+                  <th key={item.key} className="min-w-24 border-b border-r border-slate-300 px-2 py-2 text-center font-semibold">{item.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {matrixRows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-200 bg-white">
-                  <td className="sticky left-0 z-[1] border-r border-slate-200 bg-white px-2 py-2 font-semibold text-slate-900">{row.model}</td>
+                  <td className="border-r border-slate-200 px-2 py-2 font-semibold text-slate-900">{row.model}</td>
                   <td className="border-r border-slate-200 px-2 py-2">{row.purpose}</td>
                   <td className="border-r border-slate-200 px-2 py-2 tabular-nums">{row.size}</td>
+                  <td className="border-r border-slate-200 bg-emerald-50/60 px-2 py-2 text-center font-semibold text-emerald-800">利用可</td>
+                  <td className="border-r border-slate-200 px-1 py-1.5 text-center">
+                    <button
+                      type="button"
+                      disabled={!isMatrixEditing}
+                      onClick={() => toggleFireSelectable(row.id)}
+                      aria-label={`${row.model} ${row.purpose} 防火利用可否を切替`}
+                      className={`min-w-16 rounded border px-2 py-1 text-xs font-semibold ${row.fireSelectable ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-300 bg-slate-100 text-slate-500'} ${isMatrixEditing ? 'cursor-pointer hover:ring-2 hover:ring-emerald-600/20' : 'cursor-default'}`}
+                    >
+                      {row.fireSelectable ? '利用可' : '対象外'}
+                    </button>
+                  </td>
                   {MATRIX_ITEMS.map((item) => {
                     const available = row.availability[item.key];
                     return (
-                      <td key={item.key} className={`border-r border-slate-200 px-2 py-2 text-center text-sm font-bold ${available ? 'bg-emerald-50/60 text-emerald-700' : 'bg-slate-50 text-slate-400'}`}>
-                        {available ? '○' : '×'}
+                      <td key={item.key} className={`border-r border-slate-200 px-1 py-1.5 text-center ${available ? 'bg-emerald-50/40' : 'bg-slate-50'}`}>
+                        <button
+                          type="button"
+                          disabled={!isMatrixEditing}
+                          onClick={() => toggleMatrixItem(row.id, item.key)}
+                          aria-label={`${row.model} ${row.purpose} ${item.label}を切替`}
+                          className={`inline-flex size-8 items-center justify-center rounded text-sm font-bold ${available ? 'text-emerald-700' : 'text-slate-400'} ${isMatrixEditing ? 'cursor-pointer hover:bg-white hover:ring-2 hover:ring-emerald-600/20' : 'cursor-default'}`}
+                        >
+                          {available ? '○' : '×'}
+                        </button>
                       </td>
                     );
                   })}
@@ -470,7 +646,7 @@ export function BaseMasterExcelDemo() {
           </table>
         </div>
         <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs leading-5 text-slate-500">
-          屋根・外壁・内装・設備等の○／×は選択可否のサンプルです。ここから本体マスターの構造明細へ商品価格を混ぜるものではありません。
+          ○／×はMatrix Itemの選択可否を表します。防火は15項目を複製せず、各Matrix Rowの別条件として表示しています。編集・保存は画面内mockのみで、DB・Revision・Published状態には影響しません。
         </div>
       </section>
     </div>

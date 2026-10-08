@@ -4,7 +4,7 @@
  *   1. public の全テーブルで RLS が有効
  *   2. 未ログイン（anon）が実行できる SECURITY DEFINER 関数は許可リストの範囲だけ
  *   3. SECURITY DEFINER 関数は search_path を固定している
- *   4. アプリの Supabase 呼び出し（RPC・テーブル・列）が DB と一致している
+ *   4. アプリの Supabase 呼び出し（RPC／テーブル／列）が DB と一致している
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -77,6 +77,14 @@ export function evaluate(schema, repo = REPO) {
       contract: { ...contract.stats, missingRpc: contract.missingRpc, missingTables: contract.missingTables, missingColumns: contract.missingColumns },
     },
   };
+}
+
+/**
+ * 静的検査と Runtime Security の合否を process の終了コードへ変換する。
+ * Runtime が 1 件でも NG の場合は必ず非 0 にする（CI の fail-open 防止）。
+ */
+export function checkExitCode(result, runtime = null) {
+  return result.ok && (runtime?.ok ?? true) ? 0 : 1;
 }
 
 /**

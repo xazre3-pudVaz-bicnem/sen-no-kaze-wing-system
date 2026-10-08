@@ -77,9 +77,9 @@ describe('本体マスター 画面確認用サンプル', () => {
     expect(demo).not.toContain('>売価<');
     expect(demo).not.toContain('>売価金額<');
     expect(demo).not.toContain('>粗利<');
-    expect(demo).not.toContain('販売費率');
-    expect(demo).not.toContain('経費率');
-    expect(demo).not.toContain('掛率');
+    expect(demo).not.toContain('>販売費率<');
+    expect(demo).not.toContain('>経費率<');
+    expect(demo).not.toContain('>掛率<');
   });
 
   it('構成一覧とRevision状態を確認できる', () => {

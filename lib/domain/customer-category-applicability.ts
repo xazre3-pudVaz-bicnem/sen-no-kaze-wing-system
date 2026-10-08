@@ -124,7 +124,9 @@ const STORAGE_OR_FLAT_OFFICE = ['roof-exterior', 'interior', 'entrance-door', 's
  * 本体分類表の「モデル × 仕様 × 項目 = 選択 / ×」。
  * `base` と BOX `hotel-single` は分類表そのものの行ではなく既存システム互換行。
  * - base: 本体のみUIの従来互換
- * - hotel-single: 既存BOX標準見積のlegacy identity。住居用相当として扱う
+ * - hotel-single: 既存BOX標準見積のlegacy identityだが、業務カテゴリー可否はBOXホテル仕様に従う
+ *
+ * `hotel-single ↔ residence` は個別商品のtechnical aliasだけに限定し、業務カテゴリー行へは持ち込まない。
  */
 export const CUSTOMER_CATEGORY_MATRIX: Readonly<
   Record<string, Readonly<Record<string, readonly CustomerBusinessItemCode[]>>>
@@ -142,7 +144,7 @@ export const CUSTOMER_CATEGORY_MATRIX: Readonly<
     residence: RESIDENCE,
     room: ROOM,
     office: OFFICE,
-    'hotel-single': RESIDENCE,
+    'hotel-single': HOTEL,
     'water-kit': BOX_WATER,
     storage: STORAGE_OR_FLAT_OFFICE,
   },
@@ -176,6 +178,7 @@ export function customerCategorySelectable(
 
 /**
  * legacy BOX `hotel-single` は、商品適合上 `residence` と同一互換範囲として扱う。
+ * これは商品technical aliasだけであり、業務カテゴリー可否はCUSTOMER_CATEGORY_MATRIXのhotel行を使う。
  * それ以外のモデルでは文字列一致だけを使い、aliasを横展開しない。
  */
 export function compatibleProductSpecCodes(
@@ -206,7 +209,7 @@ export function productSpecCodesAllow(
  *
  * - DB spec_codes=[]: 商品側は全仕様共通 → カテゴリーが「選択」の仕様だけへ限定
  * - DB spec_codes!=[]: 商品側ホワイトリスト ∩ カテゴリー「選択」仕様
- * - BOX hotel-single: residence互換resolverを通す
+ * - BOX hotel-single: 商品適合のresidence technical aliasは維持するが、カテゴリー可否はhotel行を使う
  * - 交差結果0件: []は「全仕様共通」の意味なので、非永続sentinelでdeny-allを表す
  */
 export function effectiveCustomerSpecCodes(

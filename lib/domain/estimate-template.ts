@@ -1,5 +1,9 @@
 import { defaultSelection, pruneToScope, toggleOption, type RuleContext } from './rules';
-import { productSpecCodesAllow } from './customer-category-applicability';
+import {
+  customerBusinessItemForCategory,
+  customerCategorySelectable,
+  productSpecCodesAllow,
+} from './customer-category-applicability';
 import type { BaseModel, EstimateTemplateBundle, ModelPreset, ProductOption } from './types';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
@@ -36,15 +40,26 @@ export function optionAvailableForSpec(
 }
 
 /**
- * 仕様に対して選択できる商品だけで RuleContext を作る。
+ * 仕様に対してお客様が選択できる商品だけで RuleContext を作る。
+ * 商品technical aliasと、本体分類表の業務カテゴリー可否をここで交差させる。
  * dependency / conflict も候補外の商品を参照しないよう同じ集合へ閉じる。
+ * modelSlug未指定の既存内部利用では従来どおり商品specだけを判定する。
  */
 export function ruleContextForSpec(
   ctx: RuleContext,
   specCode: string,
   modelSlug = ''
 ): RuleContext {
-  const options = ctx.options.filter((option) => optionAvailableForSpec(option, specCode, modelSlug));
+  const categoryById = new Map(ctx.categories.map((category) => [category.id, category]));
+  const options = ctx.options.filter((option) => {
+    if (!optionAvailableForSpec(option, specCode, modelSlug)) return false;
+    if (!modelSlug) return true;
+
+    const category = categoryById.get(option.category_id);
+    if (!category) return true;
+    if (!customerBusinessItemForCategory(category.code)) return true;
+    return customerCategorySelectable(modelSlug, specCode, category.code);
+  });
   const ids = new Set(options.map((option) => option.id));
   return {
     categories: ctx.categories,
@@ -189,6 +204,9 @@ export function estimateBaselineOptionCodes(
  * DB の baseline_option_ids が一部だけ古い／不足している場合でも、
  * 依存関係と必須カテゴリーを同じルールで補完することで、
  * UI の「標準状態」と差額計算側の「基準状態」を必ず一致させる。
+ *
+ * baseline_option_ids自体は履歴として保持しつつ、現在の本体分類表で×のカテゴリーは
+ * 新規Configurationの標準選択には持ち込まない。
  */
 export function buildEstimateSpecSelection(
   ctx: RuleContext,

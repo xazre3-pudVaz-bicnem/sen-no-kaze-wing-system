@@ -79,6 +79,7 @@ const matrixRows: Array<[string, string, readonly CustomerBusinessItemCode[]]> =
   ['box', 'residence', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
   ['box', 'room', ['roof-exterior','interior','interior-door','closet','bed','furnishings','other']],
   ['box', 'office', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']],
+  ['box', 'hotel-single', ['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']],
   ['box', 'water-kit', ['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler']],
   ['box', 'storage', ['roof-exterior','interior','entrance-door','sash']],
   ['flat', 'office', ['roof-exterior','interior','entrance-door','sash']],
@@ -132,20 +133,21 @@ describe('confirmed classification-sheet business-item matrix', () => {
         );
       }
     }
-    // UB/SWR が × の居室では給湯器も ×（「その他」は選択のまま）
     expect(customerCategorySelectable('wing-01', 'room', 'boiler')).toBe(false);
     expect(customerCategorySelectable('wing-01', 'room', 'aircon')).toBe(true);
-    // UB/SWR が選択の BOX 水回りキットでは給湯器も選択（「その他」は × のまま）
     expect(customerCategorySelectable('box', 'water-kit', 'boiler')).toBe(true);
     expect(customerCategorySelectable('box', 'water-kit', 'aircon')).toBe(false);
   });
 
-  it('keeps legacy BOX hotel-single as the residence-compatible business row', () => {
+  it('keeps legacy BOX hotel-single on the hotel business row while preserving the residence product alias', () => {
     for (const categoryCode of controlledCategoryCodes) {
       expect(customerCategorySelectable('box', 'hotel-single', categoryCode)).toBe(
-        customerCategorySelectable('box', 'residence', categoryCode)
+        customerCategorySelectable('box', 'hotel', categoryCode)
       );
     }
+    expect(customerCategorySelectable('box', 'hotel-single', 'kitchen')).toBe(false);
+    expect(customerCategorySelectable('box', 'residence', 'kitchen')).toBe(true);
+    expect(productSpecCodesAllow(['residence'], 'hotel-single', 'box')).toBe(true);
   });
 
   it('keeps base as an explicit compatibility row instead of inventing an Excel row', () => {
@@ -198,6 +200,21 @@ describe('customer spec product eligibility', () => {
   it('keeps room bed category selectable even when the current folding-bed product is not room-compatible', () => {
     expect(customerCategorySelectable('wing-01', 'room', 'bed')).toBe(true);
     expect(effectiveCustomerSpecCodes('wing-01', 'bed', ['hotel','residence'])).toEqual(['hotel','residence']);
+  });
+
+  it('filters BOX hotel-single kitchen out of the customer rule context without removing the product alias itself', () => {
+    const kitchen = category({ id:'cat-kitchen', code:'kitchen', name:'キッチン' });
+    const ub = category({ id:'cat-ub', code:'ub', name:'浴室' });
+    const ctx: RuleContext = {
+      categories:[kitchen, ub],
+      options:[
+        option({ id:'mini-kitchen', code:'mini-kitchen', name:'ミニキッチン', category_id:kitchen.id, spec_codes:['residence'] }),
+        option({ id:'shower', code:'shower', name:'シャワー', category_id:ub.id, spec_codes:['residence'] }),
+      ],
+      dependencies:[], conflicts:[],
+    };
+    expect(productSpecCodesAllow(['residence'], 'hotel-single', 'box')).toBe(true);
+    expect(ruleContextForSpec(ctx, 'hotel-single', 'box').options.map((row) => row.id)).toEqual(['shower']);
   });
 
   it('applies model-specific category applicability before simulator rule evaluation', () => {
@@ -268,37 +285,61 @@ function boxHotelSinglePricingFixture() {
 }
 
 describe('BOX hotel-single Standard Estimate compatibility', () => {
-  it('keeps all five curated baseline products and the audited 1,518,904 yen master baseline', () => {
+  it('keeps the audited five-product legacy baseline while the customer selection excludes kitchen', () => {
     const { bundle, model, options, baselineIds } = boxHotelSinglePricingFixture();
+    expect(baselineIds.reduce((sum, id) => sum + (options.find((row) => row.id === id)?.price ?? 0), 0)).toBe(1518904);
     const selection = buildEstimateSpecSelection(
       { options, categories:bundle.categories, dependencies:[], conflicts:[] },
       model,
       'hotel-single',
       baselineIds
     );
-    expect(selection.sort()).toEqual([...baselineIds].sort());
-    expect(selection.reduce((sum, id) => sum + (options.find((row) => row.id === id)?.price ?? 0), 0)).toBe(1518904);
+    expect(selection.sort()).toEqual(
+      baselineIds.filter((id) => id !== 'mini-kitchen').sort()
+    );
+    expect(selection.reduce((sum, id) => sum + (options.find((row) => row.id === id)?.price ?? 0), 0)).toBe(1331404);
   });
 
-  it('keeps the Excel standard total 3,812,600 yen unchanged at standard state', () => {
-    const { bundle, baselineIds, template } = boxHotelSinglePricingFixture();
-    const result = computeStandardEstimatePricing(bundle, template, baselineIds, [], [], 'full');
+  it('keeps the Excel standard total 3,812,600 yen unchanged at the customer-selectable standard state', () => {
+    const { bundle, model, options, baselineIds, template } = boxHotelSinglePricingFixture();
+    const selection = buildEstimateSpecSelection(
+      { options, categories:bundle.categories, dependencies:[], conflicts:[] },
+      model,
+      'hotel-single',
+      baselineIds
+    );
+    const result = computeStandardEstimatePricing(bundle, template, selection, [], [], 'full');
     expect(result.has_changes).toBe(false);
     expect(result.pricing.total).toBe(3812600);
   });
 
-  it('calculates product-change delta from the complete curated baseline', () => {
+  it('does not treat a historical five-product selection as a new price change', () => {
     const { bundle, baselineIds, template } = boxHotelSinglePricingFixture();
-    const withoutMiniKitchen = baselineIds.filter((id) => id !== 'mini-kitchen');
-    const result = computeStandardEstimatePricing(bundle, template, withoutMiniKitchen, [], [], 'full');
+    const result = computeStandardEstimatePricing(bundle, template, baselineIds, [], [], 'full');
+    expect(result.has_changes).toBe(false);
+    expect(result.pricing.total).toBe(3812600);
+    expect(result.pricing.lines.some((line) => line.option_id === 'mini-kitchen')).toBe(true);
+  });
+
+  it('calculates customer product-change delta from the customer-selectable baseline', () => {
+    const { bundle, model, options, baselineIds, template } = boxHotelSinglePricingFixture();
+    const standardSelection = buildEstimateSpecSelection(
+      { options, categories:bundle.categories, dependencies:[], conflicts:[] },
+      model,
+      'hotel-single',
+      baselineIds
+    );
+    const withoutBed = standardSelection.filter((id) => id !== 'folding-bed');
+    const result = computeStandardEstimatePricing(bundle, template, withoutBed, [], [], 'full');
     expect(result.has_changes).toBe(true);
-    expect(result.sections.find((section) => section.code === 'option')?.delta_line).toBe(-187500);
-    expect(result.pricing.total).toBe(3605800);
+    expect(result.sections.find((section) => section.code === 'option')?.delta_line).toBe(-120000);
+    expect(result.pricing.total).toBe(3680600);
   });
 });
 
 describe('corrective migration and simulator contract', () => {
   const migration = readFileSync('supabase/migrations/20261006183000_customer_spec_category_applicability_corrective.sql', 'utf8');
+  const hotelSingleBusinessCorrective = readFileSync('supabase/migrations/20261006233000_box_hotel_single_business_category_corrective.sql', 'utf8');
   const simulator = readFileSync('components/simulator/simulator-app.tsx', 'utf8');
   const equipment = readFileSync('components/simulator/equipment-board.tsx', 'utf8');
   const publicCatalog = readFileSync('lib/data/public-catalog.ts', 'utf8');
@@ -318,8 +359,8 @@ describe('corrective migration and simulator contract', () => {
     expect(equipment).toContain("'bed'");
   });
 
-  it('keeps the SQL matrix and business-item mapping identical to the TS helper', () => {
-    const sqlRows = [...migration.matchAll(/^\s+\('([a-z0-9-]+)', '([a-z-]+)', array\[([^\]]*)\]::text\[\]\),?$/gm)].map(
+  it('keeps the effective SQL matrix and business-item mapping identical to the TS helper', () => {
+    const sqlRows = [...hotelSingleBusinessCorrective.matchAll(/^\s+\('([a-z0-9-]+)', '([a-z-]+)', array\[([^\]]*)\]::text\[\]\),?$/gm)].map(
       (m) => [m[1], m[2], m[3].split(',').map((item) => item.trim().replace(/'/g, ''))] as const
     );
     expect(sqlRows).toHaveLength(15);
@@ -333,27 +374,31 @@ describe('corrective migration and simulator contract', () => {
     expect(migration).toContain("when 'boiler' then 'boiler'");
     expect(migration).not.toContain("when 'boiler' then 'other'");
     expect(migration).toContain('POSTCONDITION: boiler selectability must equal UB/SWR on every model/spec row');
+    expect(hotelSingleBusinessCorrective).toContain('BOX hotel-single kitchen must be unselectable');
+    expect(hotelSingleBusinessCorrective).toContain('1,518,904');
+    expect(hotelSingleBusinessCorrective).toContain('1,331,404');
+    expect(hotelSingleBusinessCorrective).toContain('3,812,600');
   });
 
   it('stays replayable on an empty database without relaxing the production preconditions', () => {
-    // 商品マスターが空の新規DB（CI・新規環境）では是正対象が無いので、データ前提の検査だけを飛ばす
     const preflight = migration.slice(migration.indexOf('-- ---------- preflight / fail closed ----------'), migration.indexOf('-- ---------- category semantics ----------'));
     const skip = preflight.indexOf('if not exists (select 1 from public.options) then');
     expect(skip).toBeGreaterThan(0);
     expect(preflight.indexOf('return;', skip)).toBeLessThan(preflight.indexOf('foreach v_code in array'));
-    // 商品マスターがある環境（本番）の検査は残っている
     expect(preflight).toContain("raise exception 'PRECONDITION: required published category % is missing', v_code;");
     expect(preflight).toContain("raise exception 'PRECONDITION: audited product % is missing', v_code;");
     expect(preflight).toContain('), -1) <> 1518904 then');
     expect(migration).toContain("if exists (select 1 from public.options)\n     and coalesce((");
   });
 
-  it('uses the same hotel-single compatibility rule in TS/SQL and keeps the existing save RPC literal check compatible', () => {
+  it('uses the same hotel-single product compatibility rule in TS/SQL without reusing residence as the business row', () => {
     expect(migration).toContain('create or replace function public.customer_product_spec_selectable');
     expect(migration).toContain("set spec_codes = array_append(spec_codes, 'hotel-single')");
     expect(migration).toContain("where 'residence' = any(spec_codes)");
     expect(migration).toContain('1518904');
     expect(migration).toContain('public.customer_product_spec_selectable(m.slug, t.spec_code');
+    expect(customerCategorySelectable('box', 'hotel-single', 'kitchen')).toBe(false);
+    expect(productSpecCodesAllow(['residence'], 'hotel-single', 'box')).toBe(true);
   });
 
   it('rejects NULL spec on editable drafts while preserving historical non-draft read compatibility', () => {
@@ -382,6 +427,7 @@ describe('corrective migration and simulator contract', () => {
     expect(migration).not.toMatch(/update\s+public\.quotes\b/i);
     expect(migration).not.toMatch(/update\s+public\.quote_items\b/i);
     expect(migration).not.toMatch(/update\s+public\.configuration_items\b/i);
+    expect(hotelSingleBusinessCorrective).not.toMatch(/update\s+public\.(estimate_templates|configurations|quotes|quote_items|configuration_items)\b/i);
   });
 
   it('hardens internal helpers and leaves transaction ownership to the migration runner', () => {
@@ -389,5 +435,7 @@ describe('corrective migration and simulator contract', () => {
     expect(migration).toContain('from public, anon, authenticated, service_role');
     expect(migration).not.toMatch(/^\s*begin;\s*$/im);
     expect(migration).not.toMatch(/^\s*commit;\s*$/im);
+    expect(hotelSingleBusinessCorrective).not.toMatch(/^\s*begin;\s*$/im);
+    expect(hotelSingleBusinessCorrective).not.toMatch(/^\s*commit;\s*$/im);
   });
 });

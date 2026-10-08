@@ -11,6 +11,7 @@
 1. `supabase db start` … 本物の Supabase ローカル DB へ全マイグレーションを古い順に適用
 2. `supabase db lint` … plpgsql_check で関数本体をスキーマと照合
 3. `npm run db:check` … 下記の検査
+4. `npm run db:check -- --runtime` … 権限境界の実行時検査（`runtime-security.sql`）
 
 ## ローカル（docker 不要）
 
@@ -29,6 +30,7 @@ PostgreSQL 17 を一時起動し、`bootstrap.sql` で本番 Supabase と同じ�
 | `--seed <json>` | 区切りの時点でマスターデータを投入する（`{ "tables": { "<table>": [rows] } }`） |
 | `--extra <dir>` | 別ブランチのマイグレーションを足して試す |
 | `--baseline-only` | 区切りまでで止める（現在の本番相当のスキーマを作る） |
+| `--runtime` | 権限境界の実行時検査も行う（下記） |
 | `--keep` | 検査後も起動したままにする（`127.0.0.1:54329`） |
 
 本番カタログの取得（読み取りのみ・データは含まない）:
@@ -40,10 +42,20 @@ npx supabase db query --linked --output-format json -f scripts/db-rehearsal/cata
 ## 検査内容（`checks.mjs`）
 
 1. `public` の全テーブルで RLS が有効
-2. 未ログイン（`anon`）が実行できる `SECURITY DEFINER` 関数は許可リスト（RLS 判定用の 4 関数）の範囲だけ。
-   既存 migration では閉じきれていない関数は、Security corrective が入るまで「未是正」として表示します
+2. 未ログイン（`anon`）が実行できる `SECURITY DEFINER` 関数は許可リスト（RLS 判定用の 4 関数）の範囲だけ
 3. `SECURITY DEFINER` 関数は `search_path` を固定している
 4. アプリの Supabase 呼び出し（RPC 名と引数名・テーブル・列）が DB と一致している
+
+## 権限境界の実行時検査（`runtime-security.sql`）
+
+試験用の利用者・案件を作り、API と同じロール（`anon`／`authenticated` ＋ JWT の `sub`）へ切り替えて確かめます。
+最後に必ず rollback します。**使い捨て DB 専用で、本番では実行しません。**
+
+- 案件の閲覧境界：未ログイン 0 件／顧客は自分の案件だけ／代理店・総代理店は担当案件だけ／本部は全件
+- 直接書き込みの拒否：保存済みプラン・見積金額・見積下書きテーブル
+- API から実行させない関数：`notify`／`write_audit`／`configuration_pricing_json`／`recalculate_configuration`／旧 `save_configuration`／`validate_configuration_items`
+- `duplicate_configuration`：未ログイン・他人・担当代理店は拒否、本人と本部だけ
+- 内部関数を閉じても、トリガー経由の通知・監査ログが作られること
 
 ### EXECUTE 権限の注意
 

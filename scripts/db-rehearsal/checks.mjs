@@ -4,7 +4,7 @@
  *   1. public の全テーブルで RLS が有効
  *   2. 未ログイン（anon）が実行できる SECURITY DEFINER 関数は許可リストの範囲だけ
  *   3. SECURITY DEFINER 関数は search_path を固定している
- *   4. アプリの Supabase 呼び出し（RPC・テーブル・列）が DB と一致している
+ *   4. アプリの Supabase 呼び出し（RPC／テーブル／列）が DB と一致している
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,11 +21,11 @@ export const REPO = path.resolve(HERE, '..', '..');
 export const ANON_DEFINER_ALLOWLIST = ['can_edit_catalog', 'current_role_rank', 'is_admin', 'is_dealer'];
 
 /**
- * 既存 migration を全て適用しても anon の EXECUTE が残る関数（2026-10-07 の実 DB リハーサルで確認）。
- * 独立した Security corrective で閉じるまでの間だけ、不合格にせず「未是正」として表示する。
- * corrective が入ったらここを空にすること。新しい関数を足して検査を黙らせないこと。
+ * 既存 migration を全て適用しても anon の EXECUTE が残る関数を、是正までの間だけ「未是正」として表示するための枠。
+ * 20261007120000_security_execute_corrective で 4 関数を閉じたため、現在は空。
+ * 新しい関数を足して検査を黙らせないこと。
  */
-export const ANON_DEFINER_PENDING_SECURITY_CORRECTIVE = ['duplicate_configuration', 'notify', 'validate_configuration_items', 'write_audit'];
+export const ANON_DEFINER_PENDING_SECURITY_CORRECTIVE = [];
 
 const isTriggerFn = (f) => f.ret === 'trigger' || f.ret === 'event_trigger';
 
@@ -77,6 +77,40 @@ export function evaluate(schema, repo = REPO) {
       contract: { ...contract.stats, missingRpc: contract.missingRpc, missingTables: contract.missingTables, missingColumns: contract.missingColumns },
     },
   };
+}
+
+/**
+ * 静的検査と Runtime Security の合否を process の終了コードへ変換する。
+ * Runtime が 1 件でも NG の場合は必ず非 0 にする（CI の fail-open 防止）。
+ */
+export function checkExitCode(result, runtime = null) {
+  return result.ok && (runtime?.ok ?? true) ? 0 : 1;
+}
+
+/**
+ * 権限境界の実行時検査（runtime-security.sql）。試験データを作って最後に rollback する。
+ * スーパーユーザーで接続した使い捨て DB でだけ実行すること（本番では実行しない）。
+ */
+export async function runtimeSecurity(client) {
+  const sql = fs.readFileSync(path.join(HERE, 'runtime-security.sql'), 'utf8').split('\r').join('');
+  let results = [];
+  try {
+    const res = await client.query(sql);
+    results = (Array.isArray(res) ? res : [res]).find((r) => r.rows?.[0]?.j)?.rows[0].j ?? [];
+  } catch (e) {
+    await client.query('rollback').catch(() => {});
+    return { ok: false, results, error: e.message };
+  }
+  return { ok: results.length > 0 && results.every((r) => r.ok), results };
+}
+
+export function printRuntime(runtime, log = console.log) {
+  for (const r of runtime.results) {
+    log(`${r.ok ? 'ok  ' : 'NG  '}${r.step}${r.ok ? '' : `\n      期待: ${r.expected}\n      結果: ${r.actual}`}`);
+  }
+  if (runtime.error) log(`✗ 実行時検査を完了できませんでした: ${runtime.error}`);
+  const failed = runtime.results.filter((r) => !r.ok).length;
+  log(`権限境界の実行時検査: ${runtime.results.length} 件中 ${runtime.results.length - failed} 件通過${runtime.ok ? '' : '（不合格）'}`);
 }
 
 export function printResult(result, log = console.log) {

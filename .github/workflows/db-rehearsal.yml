@@ -69,6 +69,10 @@ jobs:
         if: success() || failure()
         run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --out db-check.json
 
+      # runtime-security.sql の各 ok 値を check.mjs が集約し、1 件でも NG なら終了コード 1 にする。
+      - name: Runtime security tests
+        run: npm run db:check -- --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres --runtime --out db-runtime-check.json
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -77,4 +81,5 @@ jobs:
           path: |
             db-lint.json
             db-check.json
+            db-runtime-check.json
           if-no-files-found: ignore

@@ -146,15 +146,16 @@ export default async function BaseMastersPage({
   const query = (sp.q ?? '').trim().toLocaleLowerCase('ja-JP');
   const modelFilter = sp.model ?? '';
   const statusFilter = sp.status ?? '';
+  const fireFilter = sp.fire ?? '';
   const filteredMasterRows = masterRows.filter((master) => {
     if (modelFilter && master.base_model_id !== modelFilter) return false;
     if (statusFilter && master.status !== statusFilter) return false;
+    if (fireFilter && master.fire_spec_code !== fireFilter) return false;
     if (!query) return true;
 
     const modelName = modelMap.get(master.base_model_id)?.name ?? '';
     const ownerName = orgMap.get(master.owner_organization_id)?.name ?? '';
-    const fireLabel = master.fire_spec_code === 'fire' ? '防火' : '非防火';
-    return [master.name, modelName, ownerName, fireLabel]
+    return [master.name, modelName, ownerName]
       .join(' ')
       .toLocaleLowerCase('ja-JP')
       .includes(query);
@@ -175,14 +176,14 @@ export default async function BaseMastersPage({
       {masterRows.length === 0 && <BaseMasterExcelDemo />}
 
       {masterRows.length > 0 && (
-        <form method="get" className="card grid gap-3 p-4 md:grid-cols-[minmax(16rem,1fr)_14rem_12rem_auto] md:items-end">
+        <form method="get" className="card grid gap-3 p-4 md:grid-cols-2 md:items-end xl:grid-cols-[minmax(16rem,1fr)_14rem_12rem_12rem_auto]">
           <label className="space-y-1 text-sm">
             <span className="block text-xs font-semibold text-muted">検索</span>
             <input
               type="search"
               name="q"
               defaultValue={sp.q ?? ''}
-              placeholder="本体名・モデル・管理元・防火区分"
+              placeholder="本体名・モデル・管理元"
               className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
             />
           </label>
@@ -211,11 +212,23 @@ export default async function BaseMastersPage({
               <option value="archived">アーカイブ</option>
             </select>
           </label>
+          <label className="space-y-1 text-sm">
+            <span className="block text-xs font-semibold text-muted">防火仕様</span>
+            <select
+              name="fire"
+              defaultValue={fireFilter}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            >
+              <option value="">すべて</option>
+              <option value="non_fire">非防火</option>
+              <option value="fire">防火</option>
+            </select>
+          </label>
           <div className="flex flex-wrap items-center gap-2">
             <button type="submit" className="btn-primary btn-sm">絞り込む</button>
             <Link href="/admin/base-masters" className="btn-secondary btn-sm">クリア</Link>
           </div>
-          <p className="text-xs text-muted md:col-span-4">
+          <p className="text-xs text-muted md:col-span-2 xl:col-span-5">
             {filteredMasterRows.length}件表示／全{masterRows.length}件
           </p>
         </form>
@@ -227,7 +240,7 @@ export default async function BaseMastersPage({
             <Th>本体名</Th>
             <Th>商品モデル</Th>
             <Th>本体管理元</Th>
-            <Th>防火</Th>
+            <Th>防火仕様</Th>
             <Th>状態</Th>
             <Th>現在の公開版</Th>
             <Th right>本体価格</Th>

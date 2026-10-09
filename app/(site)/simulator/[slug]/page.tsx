@@ -83,6 +83,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           site_prefecture: found.configuration.site_prefecture ?? null,
           site_municipality: found.configuration.site_municipality ?? null,
           site_location_undecided: found.configuration.site_location_undecided ?? false,
+          lock_version: found.configuration.lock_version ?? null,
         };
       }
     }

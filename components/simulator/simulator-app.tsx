@@ -70,6 +70,8 @@ export interface SimulatorInitial {
   site_prefecture: string | null;
   site_municipality: string | null;
   site_location_undecided: boolean;
+  /** 読み込んだ時点の版（同時編集の検知）。版の列が無い DB では null */
+  lock_version: number | null;
 }
 
 interface Props {
@@ -97,6 +99,8 @@ interface Draft {
   siteLocationUndecided?: boolean;
   name: string;
   configId: string | null;
+  /** configId のプランを読み込んだ（または最後に保存した）時点の版 */
+  lockVersion?: number | null;
   pending: 'save' | 'quote' | null;
   savedAt: number;
 }
@@ -255,6 +259,8 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const [exteriorFacePicker, setExteriorFacePicker] = useState<ExteriorFaceCode | null>(null);
   const [name, setName] = useState(initial?.name ?? `${displayModelName} の仕様`);
   const [configId, setConfigId] = useState<string | null>(initial?.id ?? null);
+  // 同時編集の検知：読み込んだ時点の版を保持し、保存時に渡す。保存に成功したら返ってきた版へ進める
+  const [lockVersion, setLockVersion] = useState<number | null>(initial?.lock_version ?? null);
   const [status, setStatus] = useState<ConfigurationStatus>(initial?.status ?? 'draft');
   const [view, setView] = useState<ViewKey>('exterior');
   const [hydrated, setHydrated] = useState(false);
@@ -421,7 +427,11 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         setSitePrefecture(draft.siteLocationUndecided ? null : (draft.sitePrefecture ?? null));
         setSiteMunicipality(draft.siteLocationUndecided ? null : (draft.siteMunicipality ?? null));
         if (draft.name) setName(draft.name);
-        if (draft.configId && !hasInvalidSpec) setConfigId(draft.configId);
+        if (draft.configId && !hasInvalidSpec) {
+          setConfigId(draft.configId);
+          // サーバーから読み込んだ版が無いとき（ログイン後の再開など）だけ、下書きに残した版を使う
+          if (!initial) setLockVersion(draft.lockVersion ?? null);
+        }
         if (resume && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);
@@ -451,13 +461,14 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         siteLocationUndecided,
         name,
         configId,
+        lockVersion,
         pending: null,
         savedAt: Date.now(),
         ...patch,
       };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, exteriorFaces, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, model.slug]
+    [selected, variantIds, exteriorFaces, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, model.slug]
   );
 
   useEffect(() => {
@@ -849,6 +860,7 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
         site_prefecture: sitePrefecture,
         site_municipality: siteMunicipality,
         site_location_undecided: siteLocationUndecided,
+        expected_lock_version: configId ? lockVersion : null,
       });
       if (!result.ok) {
         if (result.code === 'UNAUTHENTICATED') {
@@ -860,9 +872,10 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
       }
       setName(saveName);
       setConfigId(result.configuration.id);
+      setLockVersion(result.configuration.lock_version ?? null);
       setStatus(result.configuration.status);
       setDirty(false);
-      persistDraft({ name: saveName, configId: result.configuration.id });
+      persistDraft({ name: saveName, configId: result.configuration.id, lockVersion: result.configuration.lock_version ?? null });
       setDialog(null);
       if (then === 'quote') {
         router.push(`/mypage/configurations/${result.configuration.id}/request-quote`);

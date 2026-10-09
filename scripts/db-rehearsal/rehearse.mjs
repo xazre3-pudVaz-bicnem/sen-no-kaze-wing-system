@@ -20,7 +20,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
-import { REPO, evaluate, inspect, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
+import { REPO, evaluate, inspect, mergeRuntime, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
+import { runtimeConcurrency } from './runtime-concurrency.mjs';
 
 const HERE = path.join(REPO, 'scripts', 'db-rehearsal');
 const PORT = Number(process.env.REHEARSAL_PG_PORT ?? 54329);
@@ -207,7 +208,10 @@ try {
     if (!result.ok && !opt.baselineOnly) failed = true;
 
     if (opt.runtime && !opt.baselineOnly) {
-      const runtime = await runtimeSecurity(admin);
+      const runtime = mergeRuntime(
+        await runtimeSecurity(admin),
+        await runtimeConcurrency({ host: '127.0.0.1', port: PORT, user: 'supabase_admin', password: 'supabase_admin', database: 'postgres' })
+      );
       report.runtime = runtime;
       printRuntime(runtime, log);
       if (!runtime.ok) failed = true;

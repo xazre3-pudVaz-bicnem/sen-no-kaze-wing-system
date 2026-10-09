@@ -874,7 +874,13 @@ export class LocalStore implements DataStore {
         if (found.status !== 'draft') {
           throw new StoreError('LOCKED', '見積依頼済みの仕様は編集できません。複製して編集してください。');
         }
+        // 同時編集の検知（SQL の save_configuration_atomic と同じ判定）。版の指定が無い保存も拒否する
+        const currentLockVersion = found.lock_version ?? 1;
+        if ((input.expected_lock_version ?? null) !== currentLockVersion) {
+          throw new StoreError('LOCKED', '他の画面でこのプランが更新されています。再読み込みして内容を確認してください');
+        }
         cfg = found;
+        cfg.lock_version = currentLockVersion + 1;
         cfg.name = input.name || cfg.name;
         cfg.base_model_id = model.id;
         cfg.finish_level = level;
@@ -893,6 +899,7 @@ export class LocalStore implements DataStore {
           base_model_id: model.id,
           name: input.name || '無題の仕様',
           status: 'draft',
+          lock_version: 1,
           finish_level: level,
           spec_code: input.spec_code ?? null,
           site_prefecture: sitePrefecture,
@@ -945,6 +952,8 @@ export class LocalStore implements DataStore {
         id: randomUUID(),
         name: `${src.name}（コピー）`,
         status: 'draft',
+        // 複製は新しいプラン。版は 1 から始める（SQL の duplicate_configuration と同じ）
+        lock_version: 1,
         created_at: nowIso(),
         updated_at: nowIso(),
       };

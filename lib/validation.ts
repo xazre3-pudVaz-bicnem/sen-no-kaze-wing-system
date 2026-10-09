@@ -82,6 +82,8 @@ export const saveConfigurationSchema = z.object({
     .default(null),
   site_location_undecided: z.boolean().default(false),
   exterior_faces: z.array(exteriorFaceSchema).max(4).default([]),
+  /** 既存の Draft を保存するとき、読み込んだ時点の版（同時編集の検知） */
+  expected_lock_version: z.number().int().min(1).nullable().default(null),
 });
 
 export const quoteRequestSchema = z.object({

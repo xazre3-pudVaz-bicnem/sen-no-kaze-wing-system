@@ -7,6 +7,7 @@ import {
   saveBaseMasterDraftAction,
   type BaseMasterActionState,
 } from '@/lib/actions/base-masters';
+import { formatBaseMasterRevision } from '@/lib/domain/base-master-ui';
 import { Button, Field, Input, Select, Spinner } from '@/components/ui';
 import { BaseMasterActionStatus } from './base-master-form';
 import { BaseMasterLinesEditor, type BaseMasterRevisionLine } from './base-master-lines';
@@ -61,6 +62,8 @@ export function BaseMasterDraftEditor({
   const [dirty, setDirty] = useState(false);
   const [resetVersion, setResetVersion] = useState(0);
 
+  const revisionNumber = formatBaseMasterRevision(revision.version);
+
   const resetDraft = () => {
     if (dirty && !window.confirm('未保存の変更を破棄して、保存時点の内容に戻しますか？')) return;
     setName(master.name);
@@ -79,7 +82,7 @@ export function BaseMasterDraftEditor({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold">本体マスター編集</h2>
-              <span className="rounded-full bg-warn/10 px-2.5 py-1 text-xs font-semibold text-warn">下書き v{revision.version}</span>
+              <span className="rounded-full bg-warn/10 px-2.5 py-1 text-xs font-semibold text-warn">下書き {revisionNumber}</span>
               {dirty ? (
                 <span className="rounded-full bg-warn/10 px-2.5 py-1 text-xs font-semibold text-warn">未保存の変更あり</span>
               ) : (
@@ -109,7 +112,7 @@ export function BaseMasterDraftEditor({
                 size="sm"
                 disabled={publishing || dirty || lines.length === 0}
                 onClick={(event) => {
-                  if (!window.confirm(`下書き v${revision.version} を公開します。公開後、この版の内容は直接変更できません。よろしいですか？`)) {
+                  if (!window.confirm(`下書き ${revisionNumber} を公開します。公開後、この版の内容は直接変更できません。よろしいですか？`)) {
                     event.preventDefault();
                   }
                 }}
@@ -154,7 +157,7 @@ export function BaseMasterDraftEditor({
               <div>
                 <p className="text-xs text-muted">現在の公開版</p>
                 <div className="mt-1 flex h-10 items-center rounded-lg border border-line bg-sand/40 px-3 text-sm font-semibold">
-                  {currentPublishedVersion == null ? '未公開' : `v${currentPublishedVersion}`}
+                  {currentPublishedVersion == null ? '未公開' : formatBaseMasterRevision(currentPublishedVersion)}
                 </div>
               </div>
             </div>

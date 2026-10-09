@@ -80,6 +80,7 @@ declare
   r_l2 constant uuid := '00000000-0000-4000-8000-00000000e0bb';
   q_l1 constant uuid := '00000000-0000-4000-8000-00000000f0b1';
   q_l2 constant uuid := '00000000-0000-4000-8000-00000000f0b2';
+  q_l3 constant uuid := '00000000-0000-4000-8000-00000000f0b3';
   c_l1 constant uuid := '00000000-0000-4000-8000-00000000c0cc';
   r_l1 constant uuid := '00000000-0000-4000-8000-00000000e0cc';
   q_lp constant uuid := '00000000-0000-4000-8000-00000000f0c1';
@@ -330,9 +331,22 @@ begin
     pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_l2)));
   perform pg_temp.expect_eq('7-9 拒否された互換処理で、承諾済みの見積と版数は変わっていない', 'RT-0201:superseded,RT-0202:accepted',
     (select string_agg(quote_no || ':' || status, ',' order by quote_no) from public.quotes where quote_request_id = r_l2));
-  perform pg_temp.expect_eq('7-10 旧形式で承諾済みの第1版（概算）には、担当代理店が互換処理を実行できる', 'true',
+
+  -- legacy 改訂版を historical にした場合も preliminary 互換候補へ戻らないことを確認する。
+  set local session_replication_role = replica;
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, revision, parent_quote_id, quote_kind)
+  values (q_l3, 'RT-0202-3', r_l2, c_l2, u_cust_x, u_dealer1, 'issued', now() + interval '30 days',
+          '顧客X', '権限検査用モデル', 1000000, 0, 300000, 1300000, 0.10, 130000, 1430000, 3, q_l2, 'formal');
+  update public.quote_requests set quote_id = q_l3 where id = r_l2;
+  set local session_replication_role = origin;
+  perform pg_temp.expect_eq('7-10 旧形式の改訂版がhistoricalでも、互換状態はineligible', 'ineligible',
+    pg_temp.run_as('authenticated', u_dealer1, format($q$ select state from public.get_legacy_accepted_formalization_state(%L) $q$, q_l2)));
+
+  perform pg_temp.expect_eq('7-11 旧形式で承諾済みの第1版（概算）には、担当代理店が互換処理を実行できる', 'true',
     (pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_lp)) not like 'ERROR %')::text);
-  perform pg_temp.expect_eq('7-11 互換処理後も、承諾済みの概算見積（親）は変わらず、確定見積が 1 つ発行される', 'RT-0203:accepted:,RT-0203-2:issued:formal',
+  perform pg_temp.expect_eq('7-12 互換処理後も、承諾済みの概算見積（親）は変わらず、確定見積が 1 つ発行される', 'RT-0203:accepted:,RT-0203-2:issued:formal',
     (select string_agg(quote_no || ':' || status || ':' || coalesce(quote_kind, ''), ',' order by quote_no) from public.quotes where quote_request_id = r_l1));
 end
 $test$;

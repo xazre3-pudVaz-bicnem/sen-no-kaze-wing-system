@@ -3,6 +3,7 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { formatYen } from '@/lib/domain/pricing';
+import { formatBaseMasterRevision } from '@/lib/domain/base-master-ui';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 import { BaseMasterCreateForm } from '@/components/admin/base-master-form';
@@ -142,10 +143,27 @@ export default async function BaseMastersPage({
     .filter((org) => org.organization_type === 'headquarters' || org.organization_type === 'master_dealer')
     .map((org) => ({ id: org.id, name: org.name }));
 
+  const query = (sp.q ?? '').trim().toLocaleLowerCase('ja-JP');
+  const modelFilter = sp.model ?? '';
+  const statusFilter = sp.status ?? '';
+  const filteredMasterRows = masterRows.filter((master) => {
+    if (modelFilter && master.base_model_id !== modelFilter) return false;
+    if (statusFilter && master.status !== statusFilter) return false;
+    if (!query) return true;
+
+    const modelName = modelMap.get(master.base_model_id)?.name ?? '';
+    const ownerName = orgMap.get(master.owner_organization_id)?.name ?? '';
+    const fireLabel = master.fire_spec_code === 'fire' ? '防火' : '非防火';
+    return [master.name, modelName, ownerName, fireLabel]
+      .join(' ')
+      .toLocaleLowerCase('ja-JP')
+      .includes(query);
+  });
+
   return (
     <AdminPage
       title="本体マスター"
-      lead="Wing・BOXなどの商品モデルごとに、本体基準明細・価格・公開履歴を管理します。"
+      lead="商品モデルごとに、本体基準明細・価格・公開履歴を管理します。"
       actions={<Link href="/admin/base-masters/demo" className="btn-secondary btn-sm">操作確認用サンプル</Link>}
     >
       {showQuoteManagementTabs && <QuoteManagementTabs active="base" />}
@@ -155,6 +173,53 @@ export default async function BaseMastersPage({
       </Alert>
 
       {masterRows.length === 0 && <BaseMasterExcelDemo />}
+
+      {masterRows.length > 0 && (
+        <form method="get" className="card grid gap-3 p-4 md:grid-cols-[minmax(16rem,1fr)_14rem_12rem_auto] md:items-end">
+          <label className="space-y-1 text-sm">
+            <span className="block text-xs font-semibold text-muted">検索</span>
+            <input
+              type="search"
+              name="q"
+              defaultValue={sp.q ?? ''}
+              placeholder="本体名・モデル・管理元・防火区分"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="block text-xs font-semibold text-muted">商品モデル</span>
+            <select
+              name="model"
+              defaultValue={modelFilter}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            >
+              <option value="">すべて</option>
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="block text-xs font-semibold text-muted">状態</span>
+            <select
+              name="status"
+              defaultValue={statusFilter}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            >
+              <option value="">すべて</option>
+              <option value="active">有効</option>
+              <option value="archived">アーカイブ</option>
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="submit" className="btn-primary btn-sm">絞り込む</button>
+            <Link href="/admin/base-masters" className="btn-secondary btn-sm">クリア</Link>
+          </div>
+          <p className="text-xs text-muted md:col-span-4">
+            {filteredMasterRows.length}件表示／全{masterRows.length}件
+          </p>
+        </form>
+      )}
 
       <Table minWidth="64rem">
         <thead className="bg-sand/60">
@@ -171,7 +236,7 @@ export default async function BaseMastersPage({
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
-          {masterRows.map((master) => {
+          {filteredMasterRows.map((master) => {
             const revisions = revisionsByMaster.get(master.id) ?? [];
             const current = revisions.find((revision) => revision.id === master.current_published_revision_id) ?? null;
             const draft = revisions.find((revision) => revision.status === 'draft') ?? null;
@@ -187,10 +252,10 @@ export default async function BaseMastersPage({
                     {master.status === 'active' ? '有効' : 'アーカイブ'}
                   </Badge>
                 </Td>
-                <Td>{current ? `v${current.version}` : '未公開'}</Td>
+                <Td>{current ? formatBaseMasterRevision(current.version) : '未公開'}</Td>
                 <Td right>{current ? formatYen(current.total) : '—'}</Td>
                 <Td>
-                  {draft ? <Badge tone="warn">v{draft.version}・編集中</Badge> : <span className="text-muted">なし</span>}
+                  {draft ? <Badge tone="warn">{formatBaseMasterRevision(draft.version)}・編集中</Badge> : <span className="text-muted">なし</span>}
                 </Td>
                 <Td right>
                   <Link href={`/admin/base-masters/${master.id}`} className="btn-secondary btn-sm">
@@ -203,6 +268,11 @@ export default async function BaseMastersPage({
           {masterRows.length === 0 && (
             <tr>
               <Td colSpan={9} className="py-10 text-center text-muted">本体マスターはまだありません。</Td>
+            </tr>
+          )}
+          {masterRows.length > 0 && filteredMasterRows.length === 0 && (
+            <tr>
+              <Td colSpan={9} className="py-10 text-center text-muted">条件に一致する本体マスターはありません。</Td>
             </tr>
           )}
         </tbody>

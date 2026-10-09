@@ -173,6 +173,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const [groupCode, setGroupCode] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [status, setStatus] = useState('');
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState<LedgerSort>('updated-desc');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [page, setPage] = useState(1);
@@ -211,9 +212,9 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const filtered = useMemo(
     () =>
       options
-        .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick: 'all' }))
+        .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick: attentionOnly ? 'needs-attention' : 'all' }))
         .sort((a, b) => compareOptions(a, b, sort, categoryMap)),
-    [categoryId, categoryMap, groupCode, options, query, selectedGroupCategoryIds, sort, status]
+    [attentionOnly, categoryId, categoryMap, groupCode, options, query, selectedGroupCategoryIds, sort, status]
   );
 
   /* eslint-disable react-hooks/set-state-in-effect -- フィルター外選択の解除と商品切替時のローカルプレビュー初期化に限定 */
@@ -249,11 +250,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const visiblePreviewGroups = visibleVariantGroups(preview.groups, preview.choices, previewVariantIds);
 
   const categoryCounts = useMemo(() => {
-    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick: 'all' }));
+    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick: attentionOnly ? 'needs-attention' : 'all' }));
     const counts = new Map<string, number>();
     for (const option of base) counts.set(option.category_id, (counts.get(option.category_id) ?? 0) + 1);
     return counts;
-  }, [options, query, status]);
+  }, [attentionOnly, options, query, status]);
   const categoryTotal = Array.from(categoryCounts.values()).reduce((sum, count) => sum + count, 0);
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -265,6 +266,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
   const registeredCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
   const draftCount = options.length - registeredCount;
+  const attentionCount = useMemo(() => options.filter(needsProductAttention).length, [options]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * pageSize;
@@ -300,14 +302,17 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
         <div className="sticky top-0 z-30 border-b border-line bg-white/95 shadow-sm backdrop-blur" data-testid="ledger-sticky-category-bar">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 sm:px-4">
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="登録状態">
-              <button type="button" role="tab" aria-selected={status === ''} onClick={() => { setStatus(''); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+              <button type="button" role="tab" aria-selected={status === '' && !attentionOnly} onClick={() => { setStatus(''); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 すべて <span className="ml-1 text-xs">{options.length}</span>
               </button>
-              <button type="button" role="tab" aria-selected={status === 'published'} onClick={() => { setStatus('published'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+              <button type="button" role="tab" aria-selected={status === 'published' && !attentionOnly} onClick={() => { setStatus('published'); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'published' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 登録済み <span className="ml-1 text-xs">{registeredCount}</span>
               </button>
-              <button type="button" role="tab" aria-selected={status === 'draft'} onClick={() => { setStatus('draft'); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+              <button type="button" role="tab" aria-selected={status === 'draft' && !attentionOnly} onClick={() => { setStatus('draft'); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 下書き <span className="ml-1 text-xs">{draftCount}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={attentionOnly} onClick={() => { setStatus(''); setAttentionOnly(true); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (attentionOnly ? 'bg-amber-100 text-amber-900' : 'text-muted hover:bg-amber-50 hover:text-ink')}>
+                要確認 <span className="ml-1 text-xs">{attentionCount}</span>
               </button>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-1.5">

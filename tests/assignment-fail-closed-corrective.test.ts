@@ -45,13 +45,14 @@ function latestDefinition(functionName: string): { file: string; body: string } 
 describe('NULL で判定が素通りする条件を fail closed にする corrective', () => {
   const patches = patchTable();
 
-  it('担当判定 4 箇所と旧形式の種別判定 1 箇所を、coalesce(..., false) で包むだけの置き換えにしている', () => {
+  it('担当判定 4 箇所と旧形式の種別判定 2 箇所を、coalesce(..., false) で包むだけの置き換えにしている', () => {
     expect(patches.map((patch) => `${patch.seq}:${patch.signature}`)).toEqual([
       '1:public.create_quote_revision(uuid, jsonb, text)',
       '2:public.get_case_plan_configuration(uuid)',
       '3:public.get_legacy_accepted_formalization_state(uuid)',
       '4:public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)',
       '5:public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)',
+      '6:public.get_legacy_accepted_formalization_state(uuid)',
     ]);
     for (const patch of patches) {
       const comparison = patch.oldText.match(/([a-z_]+\.(?:dealer_id = v_uid|quote_kind = 'preliminary'))/);
@@ -80,11 +81,15 @@ describe('NULL で判定が素通りする条件を fail closed にする correc
     expect(corrective).toContain('v_after.prosecdef is distinct from v_before.prosecdef');
     expect(corrective).toContain('v_after.proconfig is distinct from v_before.proconfig');
     expect(corrective).toContain('v_after.acl is distinct from v_before.acl');
+    // Security corrective 自身は ACL を修復せず、期待と違う権限なら停止する。
+    expect(corrective).toContain("pg_catalog.has_function_privilege('anon', v_fn, 'EXECUTE')");
+    expect(corrective).toContain("pg_catalog.has_function_privilege('service_role', v_fn, 'EXECUTE')");
+    expect(corrective).toContain("not pg_catalog.has_function_privilege('authenticated', v_fn, 'EXECUTE')");
     // テーブル・データは変更しない。権限の付け替えもしない
     expect(corrective).not.toMatch(/^\s*(insert\s+into|update|delete\s+from|truncate|alter\s+table|drop|grant|revoke)\b/im);
   });
 
-  it('実行時検査が、担当未割当の見積と旧形式の見積の境界を確認している', () => {
+  it('実行時検査が、担当未割当と legacy 第1版・改訂版 current/historical の境界を確認している', () => {
     for (const step of [
       '7-1 担当外の代理店は、担当未割当の見積のプランを読めない',
       '7-3 担当外の代理店は、担当未割当の見積を改訂できない',
@@ -92,7 +97,8 @@ describe('NULL で判定が素通りする条件を fail closed にする correc
       '7-5 担当外の代理店は、担当未割当の見積の互換状態を問い合わせできない',
       '7-7 本部は担当未割当の見積のプランを読める',
       '7-8 旧形式で承諾済みの改訂版（確定見積）には、概算→確定の互換処理を実行できない',
-      '7-10 旧形式で承諾済みの第1版（概算）には、担当代理店が互換処理を実行できる',
+      '7-10 旧形式の改訂版がhistoricalでも、互換状態はineligible',
+      '7-11 旧形式で承諾済みの第1版（概算）には、担当代理店が互換処理を実行できる',
     ]) {
       expect(runtime).toContain(step);
     }

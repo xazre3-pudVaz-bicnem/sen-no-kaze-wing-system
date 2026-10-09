@@ -24,6 +24,8 @@ describe('本体マスターUI', () => {
     expect(listPage).toContain('name="q"');
     expect(listPage).toContain('name="model"');
     expect(listPage).toContain('name="status"');
+    expect(listPage).toContain('name="fire"');
+    expect(listPage).toContain("master.fire_spec_code !== fireFilter");
     expect(listPage).toContain('条件に一致する本体マスターはありません。');
   });
 

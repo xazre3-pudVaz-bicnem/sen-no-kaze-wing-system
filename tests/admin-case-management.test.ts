@@ -11,6 +11,7 @@ const list = fs.readFileSync(path.join(root, 'app/admin/quotes/page.tsx'), 'utf8
 const detail = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/page.tsx'), 'utf8');
 const legacyEditPage = fs.readFileSync(path.join(root, 'app/admin/quotes/[id]/edit/page.tsx'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace.tsx'), 'utf8');
+const completeWorkspace = fs.readFileSync(path.join(root, 'components/admin/case-workspace-complete.tsx'), 'utf8');
 const quoteEstimateSheet = fs.readFileSync(path.join(root, 'components/admin/quote-estimate-sheet.tsx'), 'utf8');
 const quoteRevisionDraftForm = fs.readFileSync(path.join(root, 'components/admin/quote-revision-draft-form.tsx'), 'utf8');
 const quoteDraftPage = fs.readFileSync(path.join(root, 'app/admin/quotes/drafts/[id]/page.tsx'), 'utf8');
@@ -163,10 +164,12 @@ describe('Admin case management UI', () => {
     expect(list).toContain('<CaseWorkspace');
     expect(list).toContain('embedded');
     expect(list).toContain('listSearchParams={sp}');
-    expect(list).toContain('顧客・住所・見積番号・商品モデル');
+    expect(list).toContain('顧客・住所・見積番号・商品モデル・担当');
     expect(list).toContain('状態：すべて');
     expect(list).toContain('担当：すべて');
     expect(list).toContain('data-testid="case-list-scroll"');
+    expect(list).toContain('min-w-[72rem]');
+    expect(list).toContain('sticky left-0 z-20');
     expect(list).toContain('見積番号');
     expect(list).toContain('現在フェーズ');
     expect(list).not.toContain('工程・状態');
@@ -180,18 +183,17 @@ describe('Admin case management UI', () => {
     expect(list).not.toContain('概算見積 承諾履歴');
     expect(list).not.toContain('確定見積 承諾済み');
     expect(list).not.toContain("<Badge tone={request.status === 'new' ? 'danger' : request.status === 'closed' ? 'success' : 'neutral'}>");
-    expect(list).toContain("{initialDraft ? '見積作成中（下書き）' : 'F5/15 見積依頼'}");
-    expect(list).toContain('{casePhaseLabel(quote)}');
-    expect(list).toContain('{casePhaseLabel(q)}');
+    expect(list).toContain("const phaseLabel = quote ? casePhaseLabel(quote) : initialDraft ? '見積作成中（下書き）' : 'F5/15 見積依頼';");
+    expect(list).toContain('const phaseLabel = casePhaseLabel(q);');
+    expect(list).toContain('caseNextActionLabel(phaseLabel)');
     expect(list).toContain('表示 {shown.length}件 / 全{requests.length}件');
     expect(list).toContain('>選択中</span>');
     expect(list).toContain('data-testid="case-row-meta"');
-    expect(list).not.toContain('min-w-[56rem]');
     expect(list).toContain('colSpan={6}');
     expect(list).toContain('px-2 py-1 align-middle');
-    expect(list).toContain('px-2 pb-0.5 pt-0');
+    expect(list).toContain('px-2 pb-1 pt-0');
     expect(list).toContain('gap-x-3 gap-y-0.5 text-[0.59rem] leading-4');
-    for (const label of ['棟数', '見積額', '原価', '利益', '利益率', '担当組織／担当者', '災害時供給']) {
+    for (const label of ['次にやること', '棟数', '防火', '状態', '見積額', '原価', '利益', '利益率', '担当代理店', '災害時供給']) {
       expect(list).toContain(label);
     }
     expect(list).toContain('未登録');
@@ -235,8 +237,10 @@ describe('Admin case management UI', () => {
   });
 
   it('uses one reusable workspace for the inline list and the existing detail route', () => {
-    expect(detail).toContain("import { CaseWorkspace } from '@/components/admin/case-workspace'");
+    expect(detail).toContain("import { CaseWorkspace } from '@/components/admin/case-workspace-complete'");
     expect(detail).toContain('<CaseWorkspace');
+    expect(completeWorkspace).toContain("import { CaseWorkspace as BaseCaseWorkspace } from '@/components/admin/case-workspace'");
+    expect(completeWorkspace).toContain('<BaseCaseWorkspace {...props} />');
     expect(workspace).toContain('data-testid="case-workspace"');
     expect(workspace).toContain('data-testid="case-workspace-header"');
     expect(workspace).toContain('<h2 className="min-w-0 text-base font-semibold text-white sm:text-lg">{caseTitle}</h2>');

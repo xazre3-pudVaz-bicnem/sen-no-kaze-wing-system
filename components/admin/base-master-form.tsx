@@ -70,7 +70,7 @@ export function BaseMasterCreateForm({
           </Select>
         </Field>
         <Field label="本体名" htmlFor="name" required errors={e.name}>
-          <Input id="name" name="name" required placeholder="例：本部 Wing ホテル非防火" />
+          <Input id="name" name="name" required placeholder="例：本部 ホテル仕様 非防火" />
         </Field>
         <Field label="防火区分" htmlFor="fire_spec_code" required errors={e.fire_spec_code}>
           <Select id="fire_spec_code" name="fire_spec_code" defaultValue="non_fire">

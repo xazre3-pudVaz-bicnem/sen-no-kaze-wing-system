@@ -82,28 +82,28 @@ describe('本体マスター 画面確認用サンプル', () => {
     expect(demo).not.toContain('>掛率<');
   });
 
-  it('構成一覧とRevision状態を確認できる', () => {
+  it('構成一覧と版状態を日本語で確認できる', () => {
     expect(demo).toContain('1. 構成一覧');
-    expect(demo).toContain('Published');
-    expect(demo).toContain('Draft');
-    expect(demo).toContain('過去Revision');
-    expect(demo).toContain('行を選択すると、下のBase Master詳細が切り替わります');
+    expect(demo).toContain('公開中');
+    expect(demo).toContain('下書き');
+    expect(demo).toContain('過去の公開版');
+    expect(demo).toContain('行を選択すると、下の本体マスター詳細が切り替わります');
   });
 
-  it('Base Master詳細は構造・製造の基準原価と本体図面だけを扱う', () => {
-    expect(demo).toContain('2. Base Master詳細');
+  it('本体マスター詳細は構造・製造の基準原価と本体図面だけを扱う', () => {
+    expect(demo).toContain('2. 本体マスター詳細');
     expect(demo).toContain('本体基準図面（サンプル枠）');
     expect(demo).toContain('構造図');
     expect(demo).toContain('骨組み図');
     expect(demo).toContain('製造用図面');
     expect(demo).toContain('本体基準寸法図');
     expect(demo).toContain('お客様向け平面図・立面図・完成パースはここに置きません');
-    expect(demo).toContain('売価・粗利等はStandard Estimate側');
+    expect(demo).toContain('売価・粗利等は標準見積側');
   });
 
-  it('仕様マトリクスは15 Matrix Itemと確定6行を表示する', () => {
+  it('仕様マトリクスは15項目と確定6行を表示する', () => {
     expect(demo).toContain('3. 仕様マトリクス');
-    expect(demo).toContain('6行 × 15 Matrix Item = 90 selectableセル');
+    expect(demo).toContain('15項目のうち給湯器は独立項目です。');
     for (const label of [
       '屋根・外壁', '内装', '玄関ドア', 'サッシ', 'UB / シャワー', 'キッチン', '洗面', 'トイレ',
       '給湯器', '玄関収納', '室内建具', 'クローゼット', 'ベッド', '備品', 'その他',
@@ -179,9 +179,8 @@ describe('本体マスター 画面確認用サンプル', () => {
     expect(demo).not.toContain('publishBaseMasterDraftAction');
   });
 
-  it('Matrix Itemと商品Categoryを混同する説明を使わない', () => {
-    expect(demo).toContain('Standard Estimate側で各仕様項目を選択可能とするか');
-    expect(demo).toContain('Matrix Itemと商品Categoryは別概念');
-    expect(demo).not.toContain('Standard Estimate側の商品カテゴリーを選択できるか');
+  it('仕様マトリクスと商品カテゴリーを混同する説明を使わない', () => {
+    expect(demo).toContain('標準見積側で各仕様項目を選択可能とするか');
+    expect(demo).not.toContain('標準見積側の商品カテゴリーを選択できるか');
   });
 });

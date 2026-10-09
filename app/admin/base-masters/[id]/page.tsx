@@ -4,6 +4,7 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 import { resolveBaseMasterDetailView } from '@/lib/domain/base-master-detail';
+import { formatBaseMasterRevision } from '@/lib/domain/base-master-ui';
 import { formatYen } from '@/lib/domain/pricing';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
@@ -32,9 +33,10 @@ function revisionLabel(status: string) {
 }
 
 function readOnlyRevisionTitle(revision: BaseMasterRevisionView) {
-  if (revision.status === 'draft') return `下書き v${revision.version}（参照のみ）`;
-  if (revision.status === 'published') return `現在の公開版 v${revision.version}`;
-  return `公開履歴 v${revision.version}`;
+  const revisionNumber = formatBaseMasterRevision(revision.version);
+  if (revision.status === 'draft') return `下書き ${revisionNumber}（参照のみ）`;
+  if (revision.status === 'published') return `現在の公開版 ${revisionNumber}`;
+  return `公開履歴 ${revisionNumber}`;
 }
 
 export default async function BaseMasterDetailPage({
@@ -215,7 +217,7 @@ export default async function BaseMasterDetailPage({
     >
       <BackLink href="/admin/base-masters" label="本体マスター一覧へ戻る" />
 
-      {sp.created && <Alert tone="success">本体と下書き v1を作成しました。明細を登録してください。</Alert>}
+      {sp.created && <Alert tone="success">本体と第1版の下書きを作成しました。明細を登録してください。</Alert>}
       {sp.saved && <Alert tone="success">下書きを保存しました。</Alert>}
       {sp.published && <Alert tone="success">新しい公開版を作成しました。</Alert>}
       {sp.draft && <Alert tone="success">現在の公開版から新しい下書きを作成しました。</Alert>}
@@ -280,7 +282,7 @@ export default async function BaseMasterDetailPage({
       {editable && !draft && current && (
         <section className="card space-y-4 p-6">
           <div>
-            <h2 className="font-semibold">現在の公開版 v{current.version}</h2>
+            <h2 className="font-semibold">現在の公開版 {formatBaseMasterRevision(current.version)}</h2>
             <p className="mt-1 text-sm text-muted">公開済みの内容は直接変更しません。変更するときは新しい下書きを作成します。</p>
           </div>
           <StartBaseMasterDraftForm masterId={master.id} />
@@ -294,7 +296,7 @@ export default async function BaseMasterDetailPage({
           <section key={revision.id} id={`revision-${revision.id}`} className="card overflow-x-auto">
             <div className="border-b border-line px-5 py-4">
               <h2 className="font-semibold">
-                {isMigrationDraft ? `下書き v${revision.version}（移行監査・参照のみ）` : readOnlyRevisionTitle(revision)}
+                {isMigrationDraft ? `下書き ${formatBaseMasterRevision(revision.version)}（移行監査・参照のみ）` : readOnlyRevisionTitle(revision)}
               </h2>
               <p className="mt-1 text-xs text-muted">
                 {lines.length}行・明細合計 {formatYen(revision.line_subtotal)}・本体価格計 {formatYen(revision.total)}
@@ -330,7 +332,7 @@ export default async function BaseMasterDetailPage({
               const isShown = readOnlyRevisionIds.includes(revision.id);
               return (
                 <tr key={revision.id}>
-                  <Td className="font-semibold">v{revision.version}</Td>
+                  <Td className="font-semibold">{formatBaseMasterRevision(revision.version)}</Td>
                   <Td><Badge tone={revisionTone(revision.status)}>{revisionLabel(revision.status)}</Badge></Td>
                   <Td right>{formatYen(revision.line_subtotal)}</Td>
                   <Td right>{formatYen(revision.expense_amount)}</Td>

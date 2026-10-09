@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
 
@@ -15,9 +15,13 @@ interface Props {
   onSubmit: (name: string) => void;
 }
 
+const CONFIGURATION_CONFLICT_MESSAGE = '他の画面でこのプランが更新されています';
+
 export function SaveDialog({ mode, initialName, saving, error, total, onClose, onSubmit }: Props) {
   const [name, setName] = useState(initialName);
   const ref = useRef<HTMLDialogElement>(null);
+  const isSaveConflict = Boolean(error?.includes(CONFIGURATION_CONFLICT_MESSAGE));
+  const displayError = isSaveConflict ? error?.replace(/^LOCKED:\s*/, '') : error;
 
   useEffect(() => {
     const d = ref.current;
@@ -65,7 +69,30 @@ export function SaveDialog({ mode, initialName, saving, error, total, onClose, o
           <span className="text-muted">概算合計（税込）</span>
           <span className="font-serif text-2xl">{formatYen(total)}</span>
         </p>
-        {error && <Alert tone="danger" className="mt-4">{error}</Alert>}
+        {isSaveConflict ? (
+          <Alert tone="warn" className="mt-4">
+            <div data-testid="save-conflict-message">
+              <p className="font-semibold text-ink">ほかの画面でこのプランが更新されています。</p>
+              {displayError && <p className="mt-1 text-sm">{displayError}</p>}
+              <p className="mt-2 text-sm leading-relaxed">
+                この画面からは上書きしていません。最新の内容を再読み込みして確認し、必要な変更をもう一度行ってください。
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-3"
+                onClick={() => window.location.reload()}
+                data-testid="save-conflict-reload"
+              >
+                <RefreshCw className="size-4" aria-hidden="true" />
+                最新の内容を再読み込み
+              </Button>
+            </div>
+          </Alert>
+        ) : error ? (
+          <Alert tone="danger" className="mt-4">{error}</Alert>
+        ) : null}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
             キャンセル

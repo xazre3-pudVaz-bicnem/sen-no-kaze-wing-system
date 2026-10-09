@@ -35,6 +35,34 @@ export function pruneToScope(ctx: RuleContext, selectedIds: string[], level: Fin
 
 const nameOf = (ctx: RuleContext, id: string) => ctx.options.find((o) => o.id === id)?.name ?? '不明なオプション';
 
+/** 候補（公開中・このモデル／仕様で選べる商品）に含まれているか */
+const isAvailable = (ctx: RuleContext, id: string) => ctx.options.some((o) => o.id === id && o.status === 'published');
+
+/**
+ * optionId を選ぶために必要な前提商品（依存の連鎖を含む）のうち、候補に無いものがあれば
+ * その依存元の商品 ID を返す。前提商品が候補から外れても依存ルール自体は消さず、
+ * 「前提を満たせないので選べない」と明示的に扱うために使う。
+ */
+export function unsatisfiableDependencyOf(ctx: RuleContext, optionId: string): string | null {
+  const seen = new Set<string>([optionId]);
+  const queue = [optionId];
+  while (queue.length) {
+    const cur = queue.shift() as string;
+    for (const d of ctx.dependencies) {
+      if (d.option_id !== cur) continue;
+      if (!isAvailable(ctx, d.requires_option_id)) return cur;
+      if (!seen.has(d.requires_option_id)) {
+        seen.add(d.requires_option_id);
+        queue.push(d.requires_option_id);
+      }
+    }
+  }
+  return null;
+}
+
+const UNSATISFIABLE_DEPENDENCY = (name: string) =>
+  `「${name}」に必要な商品が、このモデル・仕様では選択できないため選べません。`;
+
 /** 選択集合全体の整合性を検証する（サーバー側の保存・見積時にも使う） */
 export function validateSelection(ctx: RuleContext, selectedIds: string[], level: FinishLevel = 'full'): RuleIssue[] {
   const selected = new Set(selectedIds);
@@ -55,10 +83,14 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[], level
   }
   for (const d of ctx.dependencies) {
     if (selected.has(d.option_id) && !selected.has(d.requires_option_id)) {
+      // 前提商品が候補に無い場合は、追加を促すのではなく依存元を外すよう明示する
+      const satisfiable = isAvailable(ctx, d.requires_option_id);
       issues.push({
         type: 'dependency',
-        message: d.message ?? `「${nameOf(ctx, d.option_id)}」には「${nameOf(ctx, d.requires_option_id)}」が必要です。`,
-        option_ids: [d.option_id, d.requires_option_id],
+        message: satisfiable
+          ? (d.message ?? `「${nameOf(ctx, d.option_id)}」には「${nameOf(ctx, d.requires_option_id)}」が必要です。`)
+          : `${UNSATISFIABLE_DEPENDENCY(nameOf(ctx, d.option_id))}「${nameOf(ctx, d.option_id)}」を外してください。`,
+        option_ids: satisfiable ? [d.option_id, d.requires_option_id] : [d.option_id],
       });
     }
   }
@@ -160,6 +192,11 @@ export function toggleOption(ctx: RuleContext, selectedIds: string[], optionId: 
       }
     }
   }
+  // 前提商品（連鎖を含む）がこのモデル・仕様で選べない場合は、依存ルールを無視せず選択を拒否する
+  const blockedBy = unsatisfiableDependencyOf(ctx, optionId);
+  if (blockedBy) {
+    return { next: selectedIds, notices: [UNSATISFIABLE_DEPENDENCY(nameOf(ctx, blockedBy))], rejected: true };
+  }
   if (category?.selection_mode === 'single') {
     for (const o of ctx.options) {
       if (o.category_id === category.id && selected.has(o.id)) selected.delete(o.id);
@@ -173,6 +210,7 @@ export function toggleOption(ctx: RuleContext, selectedIds: string[], optionId: 
     for (const d of ctx.dependencies.filter((d) => d.option_id === cur)) {
       if (selected.has(d.requires_option_id)) continue;
       const req = ctx.options.find((o) => o.id === d.requires_option_id);
+      // 候補に無い前提商品は上の事前判定で拒否済み（ここへは到達しない）
       if (!req || req.status !== 'published') continue;
       const reqCat = ctx.categories.find((c) => c.id === req.category_id);
       if (reqCat?.selection_mode === 'single') {
@@ -199,6 +237,12 @@ export function explainBlocked(ctx: RuleContext, selectedIds: string[]): Map<str
     if (sameSingle) continue;
     if (selected.has(a.id) && !selected.has(b.id)) map.set(b.id, c.message ?? `「${a.name}」と同時に選べません`);
     if (selected.has(b.id) && !selected.has(a.id)) map.set(a.id, c.message ?? `「${b.name}」と同時に選べません`);
+  }
+  // 前提商品がこのモデル・仕様で選べない商品は、理由を示して選べないことを伝える
+  for (const d of ctx.dependencies) {
+    if (selected.has(d.option_id) || map.has(d.option_id) || !isAvailable(ctx, d.option_id)) continue;
+    const blockedBy = unsatisfiableDependencyOf(ctx, d.option_id);
+    if (blockedBy) map.set(d.option_id, UNSATISFIABLE_DEPENDENCY(nameOf(ctx, blockedBy)));
   }
   return map;
 }

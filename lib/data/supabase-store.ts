@@ -228,7 +228,8 @@ export class SupabaseStore implements DataStore {
       images: (images.data ?? []) as ProductImage[],
       categories: normalizeCategories(pub((categories.data ?? []) as OptionCategory[])),
       options: opts_,
-      dependencies: ((deps.data ?? []) as CatalogBundle['dependencies']).filter((d) => idSet.has(d.requires_option_id)),
+      // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+      dependencies: (deps.data ?? []) as CatalogBundle['dependencies'],
       conflicts: ((confs.data ?? []) as CatalogBundle['conflicts']).filter((c) => idSet.has(c.conflicts_with_option_id)),
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],

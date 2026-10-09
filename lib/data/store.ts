@@ -186,6 +186,11 @@ export interface SaveConfigurationInput {
   site_municipality?: string | null;
   /** 「設置予定地は未定」を明示選択した状態 */
   site_location_undecided?: boolean;
+  /**
+   * 既存の Draft を保存するとき、読み込んだ時点の lock_version。
+   * 一致しなければ保存を拒否する（他の画面の保存を後勝ちで上書きしない）。新規保存では不要。
+   */
+  expected_lock_version?: number | null;
   /** 選ばれたバリエーション（選択肢 ID） */
   variant_choice_ids?: string[];
   /** 外壁4面の割当。未指定は既存互換用に空配列として保存する */

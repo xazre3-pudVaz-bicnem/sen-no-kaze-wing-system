@@ -497,6 +497,8 @@ export class SupabaseStore implements DataStore {
       p_site_prefecture: sitePrefecture,
       p_site_municipality: siteMunicipality,
       p_site_location_undecided: undecided,
+      // 同時編集の検知。既存 Draft の保存で版が一致しなければ DB が LOCKED で拒否する
+      p_expected_lock_version: input.expected_lock_version ?? null,
     };
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;

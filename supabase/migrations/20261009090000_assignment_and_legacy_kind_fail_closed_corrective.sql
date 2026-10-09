@@ -11,9 +11,10 @@
 --        - get_legacy_accepted_formalization_state
 --        - create_formal_quote_from_accepted_preliminary（先行の検証で到達しないが、同じ形のため揃える）
 --
---   2. 旧形式の種別判定   `if not (parent.quote_kind = 'preliminary' or (<旧形式の第1版>)) then raise LOCKED`
---      quote_kind が NULL の旧形式で、親を持つ改訂版（確定見積として承諾済み）のとき条件全体が NULL になり、
---      「概算見積ではない」として拒否されるべき対象に、概算→確定の互換処理を実行できる状態だった。
+--   2. 旧形式の種別判定
+--      quote_kind が NULL の旧形式で、親を持つ改訂版（確定見積）を legacy 第1版の preliminary 互換候補として
+--      扱い得る三値論理を、状態問い合わせと書き込み RPC の双方で fail closed にする。
+--        - get_legacy_accepted_formalization_state
 --        - create_formal_quote_from_accepted_preliminary
 --
 -- 是正は、該当する比較を coalesce(..., false) で包むだけ。業務上の権限境界・見積の意味は変えない。
@@ -57,7 +58,11 @@ begin
         (5,
          'public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)',
          '    parent.quote_kind = ''preliminary''',
-         '    coalesce(parent.quote_kind = ''preliminary'', false)')
+         '    coalesce(parent.quote_kind = ''preliminary'', false)'),
+        (6,
+         'public.get_legacy_accepted_formalization_state(uuid)',
+         '      q.quote_kind = ''preliminary''',
+         '      coalesce(q.quote_kind = ''preliminary'', false)')
       ) as t(seq, signature, old_text, new_text)
      order by seq
   loop
@@ -136,9 +141,11 @@ begin
         using errcode = 'P0001';
     end if;
 
+    -- anon が true なら PUBLIC 経由の EXECUTE も検出できる。service_role への直接権限も明示的に拒否する。
     if pg_catalog.has_function_privilege('anon', v_fn, 'EXECUTE')
+       or pg_catalog.has_function_privilege('service_role', v_fn, 'EXECUTE')
        or not pg_catalog.has_function_privilege('authenticated', v_fn, 'EXECUTE') then
-      raise exception 'FAIL_CLOSED_CORRECTIVE: % must be executable by authenticated only', v_fn
+      raise exception 'FAIL_CLOSED_CORRECTIVE: % must be executable by authenticated only (not PUBLIC/anon/service_role)', v_fn
         using errcode = 'P0001';
     end if;
   end loop;

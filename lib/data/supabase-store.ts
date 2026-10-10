@@ -228,7 +228,8 @@ export class SupabaseStore implements DataStore {
       images: (images.data ?? []) as ProductImage[],
       categories: normalizeCategories(pub((categories.data ?? []) as OptionCategory[])),
       options: opts_,
-      dependencies: ((deps.data ?? []) as CatalogBundle['dependencies']).filter((d) => idSet.has(d.requires_option_id)),
+      // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+      dependencies: (deps.data ?? []) as CatalogBundle['dependencies'],
       conflicts: ((confs.data ?? []) as CatalogBundle['conflicts']).filter((c) => idSet.has(c.conflicts_with_option_id)),
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
@@ -497,6 +498,8 @@ export class SupabaseStore implements DataStore {
       p_site_prefecture: sitePrefecture,
       p_site_municipality: siteMunicipality,
       p_site_location_undecided: undecided,
+      // 同時編集の検知。既存 Draft の保存で版が一致しなければ DB が LOCKED で拒否する
+      p_expected_lock_version: input.expected_lock_version ?? null,
     };
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;

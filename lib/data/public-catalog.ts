@@ -16,6 +16,7 @@ import type {
   ProductImage,
   ProductOption,
 } from '@/lib/domain/types';
+import { applyCustomerCategoryApplicability } from '@/lib/domain/customer-category-applicability';
 import { isLocalMode } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -52,19 +53,20 @@ function assemble(
       }))
       .sort((a, b) => a.sort_order - b.sort_order);
     const ids = new Set(opts.map((o) => o.id));
-    bundles[model.id] = {
+    bundles[model.id] = applyCustomerCategoryApplicability({
       model,
       images: images.filter((i) => i.base_model_id === model.id).sort((a, b) => a.sort_order - b.sort_order),
       categories,
       options: opts,
-      dependencies: dependencies.filter((d) => ids.has(d.option_id) && ids.has(d.requires_option_id)),
+      // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+      dependencies: dependencies.filter((d) => ids.has(d.option_id)),
       conflicts: conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
       previewRules: previewRules.filter((r) => r.base_model_id === model.id),
       hotspots: hotspots.filter((h) => previewRules.some((r) => r.id === h.rule_id && r.base_model_id === model.id)),
       variantGroups: variantGroups.filter((g) => ids.has(g.option_id)),
       variantChoices: variantChoices.filter((c) => variantGroups.some((g) => g.id === c.group_id && ids.has(g.option_id))),
       baseBreakdowns: baseBreakdowns.filter((b) => b.base_model_id === model.id),
-    };
+    });
   }
   return { models, bundles };
 }
@@ -81,7 +83,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     const bundles: Record<string, CatalogBundle> = {};
     for (const m of models) {
       const b = await store.getCatalogBundle(m.id);
-      if (b) bundles[m.id] = b;
+      if (b) bundles[m.id] = applyCustomerCategoryApplicability(b);
     }
     return { models, bundles };
   }
@@ -135,7 +137,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
 /**
  * 公開ページ用。管理画面で内容を更新すると revalidateTag(CATALOG_TAG) で破棄される。
  */
-export const getPublicCatalog = unstable_cache(fetchPublicCatalog, ['public-catalog-v3-current-options'], {
+export const getPublicCatalog = unstable_cache(fetchPublicCatalog, ['public-catalog-v4-customer-category-matrix'], {
   tags: [CATALOG_TAG],
   revalidate: 300,
 });

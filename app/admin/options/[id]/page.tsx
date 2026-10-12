@@ -122,14 +122,26 @@ export default async function EditOptionPage({
     return `?${params.toString()}`;
   };
 
+  const stepOneSections = [
+    ['1', '基本情報', 'カテゴリー・メーカー・商品名・型番・サイズ'],
+    ['2', '商品の詳細', '商品説明・メーカー記載の特徴'],
+    ['3', '画像・資料', 'メイン画像・サブ画像・メーカー資料'],
+    ['4', 'お客様選択', '色・仕様など、お客様が選べる項目'],
+    ['5', '価格・対象モデル', '商品価格・対象モデル・公開条件'],
+    ['6', '登録前チェック', '重複・画像・価格・選択項目を確認'],
+  ];
+
   return (
-    <AdminPage title={option.name} lead={option.product_no ?? '商品管理番号はDB反映後に表示'}>
+    <AdminPage
+      title="商品を追加"
+      lead={`下書き：${option.name} ／ ${option.product_no ?? '商品管理番号はDB反映後に表示'}`}
+    >
       <OptionRegistrationSaveBoundary>
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.created && (
           <Alert tone="success">
-            基本情報を登録しました。続けて必要な画像・資料・お客様選択・価格を登録してください。
+            基本情報を保存しました。同じSTEP 1の続きとして、商品の詳細・画像や資料・お客様選択・価格を入力してください。
           </Alert>
         )}
 
@@ -137,7 +149,7 @@ export default async function EditOptionPage({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="font-semibold">商品登録の流れ</h2>
-              <p className="mt-1 text-xs text-muted">STEP 1で必要な情報を保存し、STEP 2で実際のお客様表示を確認します。</p>
+              <p className="mt-1 text-xs text-muted">STEP 1は1つの入力画面です。商品情報を上から順に入力し、STEP 2で実際のお客様表示を確認します。</p>
             </div>
             <p className="text-xs font-semibold text-brown">現在：STEP {step === 'preview' ? 2 : 1}</p>
           </div>
@@ -187,9 +199,31 @@ export default async function EditOptionPage({
             <div>
               <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
               <p className="mt-1 text-sm text-muted">
-                下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。
+                基本情報から登録前チェックまで、この画面で続けて入力します。STEP 2へ進むときや画像・資料など別の登録操作の前に未保存内容を自動保存します。
               </p>
             </div>
+
+            <section className="card p-4 sm:p-5" aria-label="STEP 1 商品情報の流れ" data-testid="option-registration-step1-progress">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">STEP 1の入力項目</h3>
+                  <p className="mt-1 text-xs text-muted">基本情報は保存済みです。残りの項目を上から順に確認してください。</p>
+                </div>
+                <span className="rounded-full bg-[#eaf6f1] px-3 py-1 text-xs font-semibold text-[#245a48]">下書き保存済み</span>
+              </div>
+              <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {stepOneSections.map(([no, label, note]) => (
+                  <li key={no} className="rounded-xl border border-line bg-white px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-brown">{no}</span>
+                      {no === '1' && <span className="text-[0.65rem] font-semibold text-[#245a48]">保存済み</span>}
+                    </div>
+                    <span className="mt-1 block text-sm font-semibold text-ink">{label}</span>
+                    <span className="mt-1 block text-[0.7rem] leading-5 text-muted">{note}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
 
             <OptionForm
               mode="all"

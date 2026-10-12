@@ -31,25 +31,25 @@ const planCaptionHints: Record<string, string[]> = {
 
 const modelPositioning: Record<
   string,
-  { headline: string; structure: string; bestUse: string; uses: string }
+  { size: string; structure: string; uses: string; feature: string }
 > = {
   'wing-01': {
-    headline: '折り畳んで運び、現地で広げる',
-    structure: '折り畳み式',
-    bestUse: '広い室内をつくる',
-    uses: '住宅・ホテル・店舗・事務所',
+    size: '3,900 × 4,800',
+    structure: '折り畳み式。トラック1台分の運搬サイズから、設置後はコンテナ2個分の広さに展開',
+    uses: '住宅・ホテル・事務所・店舗など',
+    feature: '広い室内空間と木造ならではの雰囲気を両立',
   },
   box: {
-    headline: 'コンパクトな箱型ユニット',
-    structure: '固定式',
-    bestUse: '設備や個室をまとめる',
-    uses: '客室・水回り・ワンルーム',
+    size: '2,100 × 4,800',
+    structure: '固定式。上下に重ねて、2階建て以上の構成にも対応可能',
+    uses: 'ホテル・ワンルーム・仮設事務所・水回りユニットなど',
+    feature: 'コンパクトに機能をまとめやすく、Wingと水回りキットとして組み合わせ可能',
   },
   flat: {
-    headline: '必要な場所に、もう一室',
-    structure: '水平折畳み',
-    bestUse: '必要な一室を足す',
-    uses: '寝室・書斎・事務所・物置',
+    size: '2,100 × 1,800〜4,800（複数サイズあり）',
+    structure: '水平折り畳み式。平らに折り畳んで平積み配送可能',
+    uses: '物置・寝室・書斎・事務所など、追加の一室として',
+    feature: 'Wing＋Flatで2LDK、BOX＋Flatなど、他モデルと組み合わせて使いやすい',
   },
 };
 
@@ -280,28 +280,26 @@ export default async function PlansPage() {
                     </Reveal>
 
                     <Reveal className="rounded-xl border border-line bg-white p-3.5 shadow-sm sm:p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="font-serif text-base sm:text-lg">{modelName} の特徴</h3>
-                        <span className="text-[10px] text-muted">商品共通</span>
-                      </div>
+                      <h3 className="font-serif text-base sm:text-lg">{modelName} の特徴</h3>
                       {positioning ? (
-                        <div className="mt-3">
-                          <p className="font-serif text-lg text-forest sm:text-xl">{positioning.headline}</p>
-                          <div className="mt-4 grid border-t border-line/80 sm:grid-cols-3">
-                            <div className="py-3 sm:pr-4">
-                              <p className="text-[10px] font-semibold text-muted">形・構造</p>
-                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.structure}</p>
-                            </div>
-                            <div className="border-t border-line/80 py-3 sm:border-l sm:border-t-0 sm:px-4">
-                              <p className="text-[10px] font-semibold text-muted">得意な使い方</p>
-                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.bestUse}</p>
-                            </div>
-                            <div className="border-t border-line/80 py-3 sm:border-l sm:border-t-0 sm:pl-4">
-                              <p className="text-[10px] font-semibold text-muted">主な用途</p>
-                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.uses}</p>
-                            </div>
+                        <dl className="mt-3 divide-y divide-line/80 border-t border-line/80">
+                          <div className="grid gap-1 py-3 sm:grid-cols-[5rem_1fr] sm:gap-4">
+                            <dt className="text-[10px] font-semibold text-muted">基本サイズ</dt>
+                            <dd className="text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.size}</dd>
                           </div>
-                        </div>
+                          <div className="grid gap-1 py-3 sm:grid-cols-[5rem_1fr] sm:gap-4">
+                            <dt className="text-[10px] font-semibold text-muted">構造</dt>
+                            <dd className="text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.structure}</dd>
+                          </div>
+                          <div className="grid gap-1 py-3 sm:grid-cols-[5rem_1fr] sm:gap-4">
+                            <dt className="text-[10px] font-semibold text-muted">用途</dt>
+                            <dd className="text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.uses}</dd>
+                          </div>
+                          <div className="grid gap-1 py-3 sm:grid-cols-[5rem_1fr] sm:gap-4">
+                            <dt className="text-[10px] font-semibold text-muted">特徴</dt>
+                            <dd className="text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.feature}</dd>
+                          </div>
+                        </dl>
                       ) : modelFeatures.length > 0 ? (
                         <div className="mt-3 grid grid-cols-2 gap-2.5">
                           {modelFeatures.map((feature) => (

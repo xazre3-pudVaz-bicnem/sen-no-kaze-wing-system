@@ -141,7 +141,7 @@ export default async function EditOptionPage({
         <FlashMessages sp={sp} />
         {sp.created && (
           <Alert tone="success">
-            基本情報を保存しました。同じSTEP 1の続きとして、商品の詳細・画像や資料・お客様選択・価格を入力してください。
+            基本情報を登録しました。続けて必要な画像・資料・お客様選択・価格を登録してください。同じSTEP 1の続きとして入力できます。
           </Alert>
         )}
 
@@ -199,7 +199,7 @@ export default async function EditOptionPage({
             <div>
               <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
               <p className="mt-1 text-sm text-muted">
-                基本情報から登録前チェックまで、この画面で続けて入力します。STEP 2へ進むときや画像・資料など別の登録操作の前に未保存内容を自動保存します。
+                基本情報から登録前チェックまで、この画面で続けて入力します。下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。
               </p>
             </div>
 

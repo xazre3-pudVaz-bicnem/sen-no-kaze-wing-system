@@ -9,9 +9,12 @@ const productChapters = fs.readFileSync(path.join(root, 'components/sections/pro
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
 describe('公開 商品・仕様・間取りページ', () => {
-  it('モデルのパースと商品特徴を上段にまとめ、その下で仕様別平面図を比較する', () => {
+  it('間取りからモデルを選ぶ導入文の下でパース・特徴・仕様別平面図を比較する', () => {
     expect(plansPage).toContain('getPublicCatalog');
-    expect(plansPage).toContain('パースと平面図を見ながら、単体モデルと組み合わせ例を比べられます。');
+    expect(plansPage).toContain('間取りからモデルを選ぶ');
+    expect(plansPage).toContain('外観・特徴・間取りを見ながら、Wing・BOX・Flatの違いや組み合わせ例を比較できます。');
+    expect(plansPage).not.toContain('平面図とパースから仕様を選ぶ');
+    expect(plansPage).not.toContain('パースと平面図を見ながら、単体モデルと組み合わせ例を比べられます。');
     expect(plansPage).toContain('model.features.slice(0, 4)');
     expect(plansPage).toContain('の特徴');
     expect(plansPage).toContain('仕様ごとの平面図');
@@ -50,17 +53,20 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).not.toContain('WingStructureMotion');
   });
 
-  it('上部ナビは単体モデルと組み合わせを上下2段で画像付き表示する', () => {
+  it('上部ナビは単体モデルと組み合わせを上下2段で代表外観付き表示する', () => {
     expect(plansPage).toContain('単体モデル');
     expect(plansPage).toContain('組み合わせ');
     expect(plansPage).toContain('modelNavItems');
+    expect(plansPage).toContain('representativeImageBySlug');
     expect(plansPage).toContain('visibleCombinations');
     expect(plansPage).toContain('href={`#model-${model.slug}`}');
     expect(plansPage).toContain('href={`#combo-${combination.id}`}');
-    expect(plansPage).toContain('h-9 w-12');
+    expect(plansPage).toContain('combination.modelSlugs.map((slug) =>');
+    expect(plansPage).toContain('representativeImageBySlug.get(slug)');
+    expect(plansPage).toContain('sizes="24px"');
   });
 
-  it('Wing+BOX・Wing+Flat・BOX+Flatの既存画像を組み合わせ例として表示する', () => {
+  it('Wing+BOX・Wing+Flat・BOX+Flatの既存平面図は下部の組み合わせ例として残す', () => {
     expect(plansPage).toContain("image: '/images/plan/wing-box-combo.jpg'");
     expect(plansPage).toContain("image: '/images/plan/flat-wing-2ldk.jpg'");
     expect(plansPage).toContain("image: '/images/plan/box-flat-combo.jpg'");
@@ -110,6 +116,8 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('title={`${modelName} ${preset.name}の平面図`}');
     expect(plansPage).toContain('const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`');
     expect(plansPage).toContain('この仕様で見積する');
+    expect(plansPage).toContain('text-[13px]');
+    expect(plansPage).toContain('sm:text-sm');
     expect(plansPage).toContain('平面図準備中');
 
     expect(imageLightbox).toContain("'use client'");

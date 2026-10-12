@@ -116,7 +116,8 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('title={`${modelName}の代表パース`}');
     expect(plansPage).toContain('title={`${modelName} ${preset.name}の平面図`}');
     expect(plansPage).toContain('const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`');
-    expect(plansPage).toContain('この仕様で見積する');
+    expect(plansPage).toContain('この仕様で見積をシミュレーションする');
+    expect(plansPage).not.toContain('この仕様で見積する');
     expect(plansPage).toContain('text-[13px]');
     expect(plansPage).toContain('sm:text-sm');
     expect(plansPage).toContain('平面図準備中');

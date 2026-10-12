@@ -76,7 +76,7 @@ export function ProductShowcase() {
                 alt="玄関ドア側と掃き出し窓側の立面図"
                 fill
                 sizes="(min-width: 1024px) 45vw, 100vw"
-                unoptimized
+                quality={90}
                 className="object-contain"
               />
             </Reveal>
@@ -86,7 +86,7 @@ export function ProductShowcase() {
                 alt="設備側と木板外壁側の立面図"
                 fill
                 sizes="(min-width: 1024px) 45vw, 100vw"
-                unoptimized
+                quality={90}
                 className="object-contain"
               />
             </Reveal>
@@ -108,10 +108,10 @@ export function ProductShowcase() {
                 </div>
                 <div className="space-y-1.5 sm:space-y-3">
                   <div className="relative mx-auto aspect-[1672/941] w-[88%]">
-                    <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 42vw" unoptimized className="object-contain" />
+                    <Image src={box.images[0].src} alt={box.images[0].alt} fill sizes="(min-width: 1024px) 20vw, 42vw" quality={90} className="object-contain" />
                   </div>
                   <div className="relative mx-auto aspect-[2098/750] w-[88%]">
-                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 20vw, 42vw" unoptimized className="object-contain" />
+                    <Image src={box.images[1].src} alt={box.images[1].alt} fill sizes="(min-width: 1024px) 20vw, 42vw" quality={90} className="object-contain" />
                   </div>
                 </div>
               </div>
@@ -132,7 +132,7 @@ export function ProductShowcase() {
                       alt={t.alt}
                       fill
                       sizes="(min-width: 1024px) 18vw, 40vw"
-                      unoptimized
+                      quality={75}
                       className={t.size === 'sm' ? 'object-cover' : 'object-contain'}
                     />
                     {t.caption && (
@@ -182,7 +182,7 @@ export function ProductShowcase() {
                 {flat.storagePhoto && (
                   <>
                     <div className="relative mr-auto aspect-[4/3] w-[69%]">
-                      <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" unoptimized className="object-cover" />
+                      <Image src={flat.storagePhoto.image} alt={flat.storagePhoto.alt} fill sizes="(min-width: 1024px) 20vw, 45vw" quality={75} className="object-cover" />
                     </div>
                     {flat.storagePhoto.note && <p className="mt-1 mr-auto w-[69%] text-[0.76rem] text-white/85 sm:text-[0.84rem]">{flat.storagePhoto.note}</p>}
                   </>

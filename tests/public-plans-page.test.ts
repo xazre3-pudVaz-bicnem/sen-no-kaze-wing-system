@@ -28,15 +28,22 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(floorplanIndex).toBeGreaterThan(featureIndex);
   });
 
-  it('Wing・BOX・Flatを用途で固定せず、自然な商品説明で違いを伝える', () => {
+  it('Wing・BOX・Flatを形・構造、得意な使い方、主な用途の3項目で簡潔に比較する', () => {
     expect(plansPage).toContain("headline: '折り畳んで運び、現地で広げる'");
-    expect(plansPage).toContain("headline: 'コンパクトな箱型ユニット'");
-    expect(plansPage).toContain("headline: '必要な場所に、もう一室'");
-    expect(plansPage).toContain('特徴');
+    expect(plansPage).toContain("structure: '折り畳み式'");
+    expect(plansPage).toContain("bestUse: '広い室内をつくる'");
+    expect(plansPage).toContain("structure: '固定式'");
+    expect(plansPage).toContain("bestUse: '設備や個室をまとめる'");
+    expect(plansPage).toContain("structure: '水平折畳み'");
+    expect(plansPage).toContain("bestUse: '必要な一室を足す'");
+    expect(plansPage).toContain('形・構造');
+    expect(plansPage).toContain('得意な使い方');
     expect(plansPage).toContain('主な用途');
     expect(plansPage).toContain('住宅・ホテル・店舗・事務所');
-    expect(plansPage).toContain('ホテル客室・単身者用・水回り・個室');
+    expect(plansPage).toContain('客室・水回り・ワンルーム');
     expect(plansPage).toContain('寝室・書斎・事務所・物置');
+    expect(plansPage).not.toContain('positioning.summary');
+    expect(plansPage).not.toContain('positioning.strength');
     expect(plansPage).not.toContain('構造の強み');
     expect(plansPage).not.toContain('向いている空間');
     expect(plansPage).not.toContain('WingStructureMotion');

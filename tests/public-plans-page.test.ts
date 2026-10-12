@@ -20,7 +20,7 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).not.toContain('パースはモデル共通の参考画像です');
 
     const perspectiveIndex = plansPage.indexOf('共通パース');
-    const featureIndex = plansPage.indexOf('の特徴');
+    const featureIndex = plansPage.indexOf('の特徴', perspectiveIndex + 1);
     const floorplanIndex = plansPage.indexOf('仕様ごとの平面図', featureIndex + 1);
     expect(perspectiveIndex).toBeGreaterThan(-1);
     expect(featureIndex).toBeGreaterThan(perspectiveIndex);

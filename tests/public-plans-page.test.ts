@@ -41,8 +41,11 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('model.description');
   });
 
-  it('共通パースはモデル単位、平面図は仕様単位で拡大できる', () => {
+  it('共通パースは拡大でき、仕様別平面図は仕様指定でシミュレーターへ進める', () => {
     expect(plansPage).toContain('の共通パースを拡大');
+    expect(plansPage).toContain('const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`');
+    expect(plansPage).toContain('で見積シミュレーターを開く');
+    expect(plansPage).toContain('この仕様で見積する');
     expect(plansPage).toContain('の平面図を拡大');
     expect(plansPage).toContain('target="_blank"');
     expect(plansPage).toContain('平面図準備中');

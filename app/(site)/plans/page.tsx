@@ -198,7 +198,7 @@ export default async function PlansPage() {
                   <div className="mt-5 flex items-end justify-between gap-3 border-b border-line pb-2">
                     <div>
                       <p className="text-xs font-semibold text-forest">仕様ごとの平面図</p>
-                      <p className="mt-0.5 text-[11px] text-muted">用途に合う間取りを見比べられます。</p>
+                      <p className="mt-0.5 text-[11px] text-muted">用途に合う間取りを見比べられます。平面図を押すと、その仕様で見積を始められます。</p>
                     </div>
                   </div>
 
@@ -209,6 +209,7 @@ export default async function PlansPage() {
                       {presets.map((preset) => {
                         const registeredFloorplan = registeredFloorplanForPreset(bundle, preset);
                         const floorplan = registeredFloorplan ?? floorplanForPreset(model.slug, preset.code, floorplans);
+                        const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`;
 
                         return (
                           <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
@@ -217,21 +218,30 @@ export default async function PlansPage() {
                             </div>
 
                             {floorplan ? (
-                              <a
-                                href={floorplan.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="relative block aspect-[4/3] bg-[#f5f2eb]"
-                                aria-label={`${modelName} ${preset.name}の平面図を拡大`}
-                              >
-                                <SmartImage
-                                  src={floorplan.url}
-                                  alt={floorplan.alt}
-                                  fill
-                                  sizes="(min-width: 1280px) 28vw, (min-width: 768px) 44vw, 50vw"
-                                  className="object-contain p-1.5"
-                                />
-                              </a>
+                              <div className="relative aspect-[4/3] bg-[#f5f2eb]">
+                                <Link
+                                  href={simulatorHref}
+                                  className="absolute inset-0 block"
+                                  aria-label={`${modelName} ${preset.name}で見積シミュレーターを開く`}
+                                >
+                                  <SmartImage
+                                    src={floorplan.url}
+                                    alt={floorplan.alt}
+                                    fill
+                                    sizes="(min-width: 1280px) 28vw, (min-width: 768px) 44vw, 50vw"
+                                    className="object-contain p-1.5 transition hover:opacity-90"
+                                  />
+                                </Link>
+                                <a
+                                  href={floorplan.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="absolute right-2 top-2 z-10 rounded-full border border-line bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-forest shadow-sm backdrop-blur hover:border-forest"
+                                  aria-label={`${modelName} ${preset.name}の平面図を拡大`}
+                                >
+                                  拡大
+                                </a>
+                              </div>
                             ) : (
                               <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>
                             )}
@@ -239,6 +249,13 @@ export default async function PlansPage() {
                             <div className="px-3 py-2">
                               <p className="max-h-10 overflow-hidden text-[11px] leading-5 text-ink-soft">{preset.description}</p>
                               {floorplan?.caption && <p className="mt-1 truncate text-[10px] text-muted">{floorplan.caption}</p>}
+                              <Link
+                                href={simulatorHref}
+                                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest"
+                              >
+                                この仕様で見積する
+                                <ArrowRight className="size-3" aria-hidden="true" />
+                              </Link>
                             </div>
                           </article>
                         );

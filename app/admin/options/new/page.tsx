@@ -39,10 +39,19 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
     );
   }
 
+  const stepOneSections = [
+    ['1', '基本情報', 'カテゴリー・メーカー・商品名・型番・サイズ'],
+    ['2', '商品の詳細', '商品説明・メーカー記載の特徴'],
+    ['3', '画像・資料', 'メイン画像・サブ画像・メーカー資料'],
+    ['4', 'お客様選択', '色・仕様など、お客様が選べる項目'],
+    ['5', '価格・対象モデル', '商品価格・対象モデル・公開条件'],
+    ['6', '登録前チェック', '重複・画像・価格・選択項目を確認'],
+  ];
+
   return (
     <AdminPage
       title="商品を追加"
-      lead="商品情報を入力し、登録内容を確認してから登録します。"
+      lead="STEP 1の商品情報を1画面で入力し、STEP 2でお客様表示を確認してから登録します。"
     >
       <BackLink href={returnTo ?? '/admin/options'} label={returnLabel} />
       {returnTo && !returnToLedger && (
@@ -56,6 +65,9 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         <p className="mt-1 text-xs text-muted">
           最初は基本情報だけ入力します。「次へ：画像・資料」で商品を作成し、そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。最後にSTEP 2で登録内容とお客様表示を確認し、「この内容で登録」します。
         </p>
+        <p className="mt-2 text-xs leading-5 text-ink-soft">
+          STEP 1は1つの入力画面です。最初に基本情報を保存して下書きを作成すると、同じSTEP 1の続きとして残りの項目を入力できます。
+        </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
             ['1', '商品情報', '商品・資料・選択項目・価格を入力'],
@@ -65,6 +77,34 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
               <span className="text-xs font-semibold text-brown">STEP {no}</span>
               <span className="mt-1 block text-sm font-semibold">{label}</span>
               <span className="mt-1 block text-[0.7rem] leading-5 text-muted">{note}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="card p-4 sm:p-5" aria-label="STEP 1 商品情報の流れ" data-testid="option-registration-step1-outline">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">STEP 1 商品情報</h2>
+            <p className="mt-1 text-xs text-muted">上から順に入力します。基本情報を保存すると、残りの項目を続けて入力できます。</p>
+          </div>
+          <span className="rounded-full bg-ivory px-3 py-1 text-xs font-semibold text-brown">現在：1 基本情報</span>
+        </div>
+        <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {stepOneSections.map(([no, label, note], index) => (
+            <li
+              key={no}
+              className={`rounded-xl border px-3 py-3 ${
+                index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-sand/20 text-muted'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-brown">{no}</span>
+                {index > 0 && <span className="text-[0.65rem] font-semibold">基本情報保存後</span>}
+              </div>
+              <span className="mt-1 block text-sm font-semibold text-ink">{label}</span>
+              <span className="mt-1 block text-[0.7rem] leading-5">{note}</span>
+              {index > 0 && <span className="mt-2 block text-[0.65rem]">基本情報を保存すると入力できます</span>}
             </li>
           ))}
         </ol>

@@ -8,16 +8,28 @@ const productChapters = fs.readFileSync(path.join(root, 'components/sections/pro
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
 describe('公開 商品・仕様・間取りページ', () => {
-  it('モデル共通パースを1枚だけ表示し、仕様差は平面図と短い説明で比較する', () => {
+  it('モデルのパースと商品特徴を上段にまとめ、その下で仕様別平面図を比較する', () => {
     expect(plansPage).toContain('getPublicCatalog');
-    expect(plansPage).toContain('各モデルの共通パースと、仕様ごとの平面図・特徴を見比べられます。');
-    expect(plansPage).toContain('model.presets ?? []');
-    expect(plansPage).toContain('共通パース');
-    expect(plansPage).toContain('preset.description');
+    expect(plansPage).toContain('各モデルのパースと特徴、その下で仕様ごとの平面図を比較できます。');
+    expect(plansPage).toContain('model.features.slice(0, 4)');
+    expect(plansPage).toContain('の特徴');
+    expect(plansPage).toContain('商品共通');
+    expect(plansPage).toContain('仕様ごとの平面図');
     expect(plansPage).toContain('grid grid-cols-2 gap-3 xl:grid-cols-3');
     expect(plansPage).not.toContain('共通参考パース');
     expect(plansPage).not.toContain('パースはモデル共通の参考画像です');
-    expect(plansPage).not.toContain('imageForPreset(model.slug, preset.code, perspectives)');
+
+    const perspectiveIndex = plansPage.indexOf('共通パース');
+    const featureIndex = plansPage.indexOf('の特徴');
+    const floorplanIndex = plansPage.indexOf('仕様ごとの平面図');
+    expect(perspectiveIndex).toBeGreaterThan(-1);
+    expect(featureIndex).toBeGreaterThan(perspectiveIndex);
+    expect(floorplanIndex).toBeGreaterThan(featureIndex);
+  });
+
+  it('商品特徴がない場合も既存の商品説明で安全に補完する', () => {
+    expect(plansPage).toContain('modelFeatures.length > 0');
+    expect(plansPage).toContain('model.description');
   });
 
   it('共通パースはモデル単位、平面図は仕様単位で拡大できる', () => {

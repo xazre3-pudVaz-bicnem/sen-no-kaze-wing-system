@@ -29,9 +29,11 @@ function displayModelName(name: string) {
   return name === 'フラット' ? 'Flat' : name;
 }
 
-function imageForPreset(modelSlug: string, presetCode: string, images: PlanImage[]) {
+function floorplanForPreset(modelSlug: string, presetCode: string, floorplans: PlanImage[]) {
   const hints = planCaptionHints[`${modelSlug}:${presetCode}`] ?? [];
-  return images.find((image) => hints.some((hint) => image.caption?.includes(hint))) ?? null;
+  const matched = floorplans.find((image) => hints.some((hint) => image.caption?.includes(hint)));
+  if (matched) return matched;
+  return floorplans.length === 1 ? floorplans[0] : null;
 }
 
 export default async function PlansPage() {
@@ -47,7 +49,7 @@ export default async function PlansPage() {
           <p className="label-en text-forest">Plans &amp; styles</p>
           <h1 className="mt-2.5 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
           <p className="mt-2.5 text-sm leading-6 text-ink-soft sm:text-base">
-            各仕様のパースと平面図をセットで見比べられます。
+            各モデルの共通パースと、仕様ごとの平面図・特徴を見比べられます。
           </p>
         </Reveal>
 
@@ -82,11 +84,11 @@ export default async function PlansPage() {
               .filter((image) => image.kind === 'floorplan')
               .sort((a, b) => a.sort_order - b.sort_order)
               .map((image) => ({ url: image.url, alt: image.alt, caption: image.caption }));
-            const perspectives = images
-              .filter((image) => image.kind === 'hero' || image.kind === 'exterior' || image.kind === 'interior')
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map((image) => ({ url: image.url, alt: image.alt, caption: image.caption }));
-            const commonPerspective = perspectives[0] ?? null;
+            const commonPerspective =
+              images.find((image) => image.kind === 'hero') ??
+              images.find((image) => image.kind === 'exterior') ??
+              images.find((image) => image.kind === 'interior') ??
+              null;
             const presets = model.presets ?? [];
             const modelName = displayModelName(model.name);
 
@@ -110,80 +112,78 @@ export default async function PlansPage() {
                     </Link>
                   </Reveal>
 
-                  {presets.length === 0 ? (
-                    <p className="mt-4 rounded-xl border border-line bg-white p-4 text-sm text-muted">現在、公開中の用途別仕様はありません。</p>
-                  ) : (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {presets.map((preset) => {
-                        const floorplan = imageForPreset(model.slug, preset.code, floorplans) ?? (floorplans.length === 1 ? floorplans[0] : null);
-                        const matchedPerspective = imageForPreset(model.slug, preset.code, perspectives);
-                        const perspective = matchedPerspective ?? commonPerspective;
-                        const usesCommonPerspective = Boolean(perspective && !matchedPerspective);
+                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(12rem,0.55fr)_minmax(0,2fr)] md:items-start">
+                    <Reveal variant="image" className="w-full max-w-xs md:max-w-none">
+                      <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
+                        <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                          <span className="text-xs font-semibold text-forest">共通パース</span>
+                          <span className="text-[10px] text-muted">{modelName}</span>
+                        </div>
+                        {commonPerspective ? (
+                          <a
+                            href={commonPerspective.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="relative block aspect-[4/3] bg-sand"
+                            aria-label={`${modelName}の共通パースを拡大`}
+                          >
+                            <SmartImage
+                              src={commonPerspective.url}
+                              alt={commonPerspective.alt}
+                              fill
+                              sizes="(min-width: 768px) 24vw, 80vw"
+                              className="object-cover"
+                            />
+                          </a>
+                        ) : (
+                          <div className="flex aspect-[4/3] items-center justify-center bg-sand px-3 text-center text-xs text-muted">パース準備中</div>
+                        )}
+                      </div>
+                    </Reveal>
 
-                        return (
-                          <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-                            <div className="flex items-center justify-between gap-2 border-b border-line px-3.5 py-2">
-                              <h3 className="font-serif text-base sm:text-lg">{preset.name}</h3>
-                              {usesCommonPerspective && <span className="text-[10px] text-muted">共通参考パース</span>}
-                            </div>
+                    {presets.length === 0 ? (
+                      <p className="rounded-xl border border-line bg-white p-4 text-sm text-muted">現在、公開中の用途別仕様はありません。</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+                        {presets.map((preset) => {
+                          const floorplan = floorplanForPreset(model.slug, preset.code, floorplans);
 
-                            <div className="grid grid-cols-2 gap-px bg-line">
-                              <div className="bg-white">
-                                <div className="border-b border-line px-2.5 py-1 text-[10px] font-semibold text-forest">パース</div>
-                                {perspective ? (
-                                  <a
-                                    href={perspective.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="relative block aspect-[4/3] bg-sand"
-                                    aria-label={`${modelName} ${preset.name}のパースを拡大`}
-                                  >
-                                    <SmartImage
-                                      src={perspective.url}
-                                      alt={perspective.alt}
-                                      fill
-                                      sizes="(min-width: 1280px) 15vw, (min-width: 640px) 24vw, 50vw"
-                                      className="object-cover"
-                                    />
-                                  </a>
-                                ) : (
-                                  <div className="flex aspect-[4/3] items-center justify-center bg-sand px-2 text-center text-xs text-muted">パース準備中</div>
-                                )}
+                          return (
+                            <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
+                              <div className="border-b border-line px-3 py-2">
+                                <h3 className="font-serif text-sm sm:text-base">{preset.name}</h3>
                               </div>
 
-                              <div className="bg-white">
-                                <div className="border-b border-line px-2.5 py-1 text-[10px] font-semibold text-forest">平面図</div>
-                                {floorplan ? (
-                                  <a
-                                    href={floorplan.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="relative block aspect-[4/3] bg-[#f5f2eb]"
-                                    aria-label={`${modelName} ${preset.name}の平面図を拡大`}
-                                  >
-                                    <SmartImage
-                                      src={floorplan.url}
-                                      alt={floorplan.alt}
-                                      fill
-                                      sizes="(min-width: 1280px) 15vw, (min-width: 640px) 24vw, 50vw"
-                                      className="object-contain p-1.5"
-                                    />
-                                  </a>
-                                ) : (
-                                  <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>
-                                )}
-                              </div>
-                            </div>
+                              {floorplan ? (
+                                <a
+                                  href={floorplan.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="relative block aspect-[4/3] bg-[#f5f2eb]"
+                                  aria-label={`${modelName} ${preset.name}の平面図を拡大`}
+                                >
+                                  <SmartImage
+                                    src={floorplan.url}
+                                    alt={floorplan.alt}
+                                    fill
+                                    sizes="(min-width: 1280px) 20vw, (min-width: 768px) 31vw, 50vw"
+                                    className="object-contain p-1.5"
+                                  />
+                                </a>
+                              ) : (
+                                <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>
+                              )}
 
-                            <div className="flex items-center justify-between gap-2 px-3.5 py-2 text-[11px] text-muted">
-                              <span>{usesCommonPerspective ? 'パースはモデル共通の参考画像です' : '画像を押すと拡大できます'}</span>
-                              {floorplan?.caption && <span className="max-w-[45%] truncate">{floorplan.caption}</span>}
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
+                              <div className="px-3 py-2">
+                                <p className="max-h-10 overflow-hidden text-[11px] leading-5 text-ink-soft">{preset.description}</p>
+                                {floorplan?.caption && <p className="mt-1 truncate text-[10px] text-muted">{floorplan.caption}</p>}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="mt-4 flex justify-end">
                     <ButtonLink href={`/simulator/${model.slug}`} size="sm">

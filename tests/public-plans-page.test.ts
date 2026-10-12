@@ -8,21 +8,22 @@ const productChapters = fs.readFileSync(path.join(root, 'components/sections/pro
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
 describe('公開 商品・仕様・間取りページ', () => {
-  it('仕様ごとにパースと平面図をセットでコンパクト表示する', () => {
+  it('モデル共通パースを1枚だけ表示し、仕様差は平面図と短い説明で比較する', () => {
     expect(plansPage).toContain('getPublicCatalog');
-    expect(plansPage).toContain('各仕様のパースと平面図をセットで見比べられます。');
+    expect(plansPage).toContain('各モデルの共通パースと、仕様ごとの平面図・特徴を見比べられます。');
     expect(plansPage).toContain('model.presets ?? []');
-    expect(plansPage).toContain('grid grid-cols-2 gap-px bg-line');
-    expect(plansPage).toContain('共通参考パース');
-    expect(plansPage).toContain('パースはモデル共通の参考画像です');
-    expect(plansPage).toContain('sm:grid-cols-2 xl:grid-cols-3');
-    expect(plansPage).not.toContain('model.description');
+    expect(plansPage).toContain('共通パース');
+    expect(plansPage).toContain('preset.description');
+    expect(plansPage).toContain('grid grid-cols-2 gap-3 xl:grid-cols-3');
+    expect(plansPage).not.toContain('共通参考パース');
+    expect(plansPage).not.toContain('パースはモデル共通の参考画像です');
+    expect(plansPage).not.toContain('imageForPreset(model.slug, preset.code, perspectives)');
   });
 
-  it('仕様名に対応する画像があれば優先し、未登録時は安全な代替表示にする', () => {
-    expect(plansPage).toContain('imageForPreset(model.slug, preset.code, perspectives)');
-    expect(plansPage).toContain('matchedPerspective ?? commonPerspective');
-    expect(plansPage).toContain('パース準備中');
+  it('共通パースはモデル単位、平面図は仕様単位で拡大できる', () => {
+    expect(plansPage).toContain('の共通パースを拡大');
+    expect(plansPage).toContain('の平面図を拡大');
+    expect(plansPage).toContain('target="_blank"');
     expect(plansPage).toContain('平面図準備中');
   });
 
@@ -30,12 +31,6 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('href={`#model-${model.slug}`}');
     expect(plansPage).toContain('id={`model-${model.slug}`}');
     expect(plansPage).toContain("name === 'フラット' ? 'Flat' : name");
-  });
-
-  it('パースと平面図はどちらも拡大できる', () => {
-    expect(plansPage).toContain('のパースを拡大');
-    expect(plansPage).toContain('の平面図を拡大');
-    expect(plansPage).toContain('target="_blank"');
   });
 
   it('確認後に各モデルの見積シミュレーターへ進める', () => {

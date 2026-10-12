@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
+import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
@@ -11,7 +12,7 @@ import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
 
 type Params = Promise<{ slug: string }>;
-type Search = Promise<{ c?: string; resume?: string }>;
+type Search = Promise<{ c?: string; resume?: string; spec?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function SimulatorPage({ params, searchParams }: { params: Params; searchParams: Search }) {
-  const [{ slug }, { c, resume }] = await Promise.all([params, searchParams]);
+  const [{ slug }, { c, resume, spec }] = await Promise.all([params, searchParams]);
 
   // 公開カタログと認証確認は互いに依存しないため並列取得する。
   // カタログは1回だけ取得し、bundle とモデル一覧を同じ結果から組み立てる。
@@ -85,6 +86,27 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           site_location_undecided: found.configuration.site_location_undecided ?? false,
         };
       }
+    }
+  } else if (spec) {
+    // /plans の平面図から入った場合は、該当仕様の標準構成を選択済みで開始する。
+    // 未知の spec_code は helper 側で無視し、通常の既定仕様へ安全にフォールバックする。
+    const entry = buildSimulatorEntryState(bundle, estimateTemplates, spec);
+    if (entry) {
+      initial = {
+        // URL指定の新規下書きなので保存済みConfiguration IDは持たない。
+        // SimulatorApp は nullish 値を新規保存として扱うため、runtimeでは null を渡す。
+        id: null as never,
+        name: `${model.name === 'フラット' ? 'Flat' : model.name} の仕様`,
+        option_ids: entry.option_ids,
+        variant_choice_ids: entry.variant_choice_ids,
+        exterior_faces: entry.exterior_faces,
+        status: 'draft',
+        finish_level: entry.finish_level,
+        spec_code: entry.spec_code,
+        site_prefecture: null,
+        site_municipality: null,
+        site_location_undecided: false,
+      };
     }
   }
 

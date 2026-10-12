@@ -49,7 +49,7 @@ export default async function PlansPage() {
           <p className="label-en text-forest">Plans &amp; styles</p>
           <h1 className="mt-2.5 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
           <p className="mt-2.5 text-sm leading-6 text-ink-soft sm:text-base">
-            各モデルの共通パースと、仕様ごとの平面図・特徴を見比べられます。
+            各モデルのパースと特徴、その下で仕様ごとの平面図を比較できます。
           </p>
         </Reveal>
 
@@ -91,6 +91,7 @@ export default async function PlansPage() {
               null;
             const presets = model.presets ?? [];
             const modelName = displayModelName(model.name);
+            const modelFeatures = model.features.slice(0, 4);
 
             return (
               <section
@@ -112,9 +113,9 @@ export default async function PlansPage() {
                     </Link>
                   </Reveal>
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(12rem,0.55fr)_minmax(0,2fr)] md:items-start">
-                    <Reveal variant="image" className="w-full max-w-xs md:max-w-none">
-                      <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
+                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(13rem,0.72fr)_minmax(0,1.28fr)] md:items-stretch">
+                    <Reveal variant="image" className="w-full max-w-sm md:max-w-none">
+                      <div className="h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm">
                         <div className="flex items-center justify-between border-b border-line px-3 py-2">
                           <span className="text-xs font-semibold text-forest">共通パース</span>
                           <span className="text-[10px] text-muted">{modelName}</span>
@@ -131,7 +132,7 @@ export default async function PlansPage() {
                               src={commonPerspective.url}
                               alt={commonPerspective.alt}
                               fill
-                              sizes="(min-width: 768px) 24vw, 80vw"
+                              sizes="(min-width: 768px) 32vw, 92vw"
                               className="object-cover"
                             />
                           </a>
@@ -141,49 +142,75 @@ export default async function PlansPage() {
                       </div>
                     </Reveal>
 
-                    {presets.length === 0 ? (
-                      <p className="rounded-xl border border-line bg-white p-4 text-sm text-muted">現在、公開中の用途別仕様はありません。</p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-                        {presets.map((preset) => {
-                          const floorplan = floorplanForPreset(model.slug, preset.code, floorplans);
-
-                          return (
-                            <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-                              <div className="border-b border-line px-3 py-2">
-                                <h3 className="font-serif text-sm sm:text-base">{preset.name}</h3>
-                              </div>
-
-                              {floorplan ? (
-                                <a
-                                  href={floorplan.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="relative block aspect-[4/3] bg-[#f5f2eb]"
-                                  aria-label={`${modelName} ${preset.name}の平面図を拡大`}
-                                >
-                                  <SmartImage
-                                    src={floorplan.url}
-                                    alt={floorplan.alt}
-                                    fill
-                                    sizes="(min-width: 1280px) 20vw, (min-width: 768px) 31vw, 50vw"
-                                    className="object-contain p-1.5"
-                                  />
-                                </a>
-                              ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>
-                              )}
-
-                              <div className="px-3 py-2">
-                                <p className="max-h-10 overflow-hidden text-[11px] leading-5 text-ink-soft">{preset.description}</p>
-                                {floorplan?.caption && <p className="mt-1 truncate text-[10px] text-muted">{floorplan.caption}</p>}
-                              </div>
-                            </article>
-                          );
-                        })}
+                    <Reveal className="rounded-xl border border-line bg-white p-3.5 shadow-sm sm:p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="font-serif text-base sm:text-lg">{modelName} の特徴</h3>
+                        <span className="text-[10px] text-muted">商品共通</span>
                       </div>
-                    )}
+                      {modelFeatures.length > 0 ? (
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          {modelFeatures.map((feature) => (
+                            <div key={feature.title} className="rounded-lg bg-ivory px-3 py-2.5">
+                              <p className="text-xs font-semibold text-forest sm:text-sm">{feature.title}</p>
+                              <p className="mt-1 max-h-10 overflow-hidden text-[10px] leading-5 text-ink-soft sm:text-[11px]">{feature.body}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-xs leading-6 text-ink-soft sm:text-sm">{model.description}</p>
+                      )}
+                    </Reveal>
                   </div>
+
+                  <div className="mt-5 flex items-end justify-between gap-3 border-b border-line pb-2">
+                    <div>
+                      <p className="text-xs font-semibold text-forest">仕様ごとの平面図</p>
+                      <p className="mt-0.5 text-[11px] text-muted">用途に合う間取りを見比べられます。</p>
+                    </div>
+                  </div>
+
+                  {presets.length === 0 ? (
+                    <p className="mt-3 rounded-xl border border-line bg-white p-4 text-sm text-muted">現在、公開中の用途別仕様はありません。</p>
+                  ) : (
+                    <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-3">
+                      {presets.map((preset) => {
+                        const floorplan = floorplanForPreset(model.slug, preset.code, floorplans);
+
+                        return (
+                          <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
+                            <div className="border-b border-line px-3 py-2">
+                              <h3 className="font-serif text-sm sm:text-base">{preset.name}</h3>
+                            </div>
+
+                            {floorplan ? (
+                              <a
+                                href={floorplan.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="relative block aspect-[4/3] bg-[#f5f2eb]"
+                                aria-label={`${modelName} ${preset.name}の平面図を拡大`}
+                              >
+                                <SmartImage
+                                  src={floorplan.url}
+                                  alt={floorplan.alt}
+                                  fill
+                                  sizes="(min-width: 1280px) 28vw, (min-width: 768px) 44vw, 50vw"
+                                  className="object-contain p-1.5"
+                                />
+                              </a>
+                            ) : (
+                              <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>
+                            )}
+
+                            <div className="px-3 py-2">
+                              <p className="max-h-10 overflow-hidden text-[11px] leading-5 text-ink-soft">{preset.description}</p>
+                              {floorplan?.caption && <p className="mt-1 truncate text-[10px] text-muted">{floorplan.caption}</p>}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <div className="mt-4 flex justify-end">
                     <ButtonLink href={`/simulator/${model.slug}`} size="sm">

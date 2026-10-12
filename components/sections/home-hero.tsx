@@ -31,6 +31,9 @@ export function HomeHero() {
                   alt=""
                   fill
                   sizes={gridIndex % 2 === 0 ? '44vw' : '56vw'}
+                  loading="lazy"
+                  fetchPriority="low"
+                  quality={75}
                   className="object-cover"
                 />
               </div>
@@ -44,8 +47,10 @@ export function HomeHero() {
             aria-hidden="true"
             fill
             sizes="100vw"
+            loading="lazy"
+            fetchPriority="low"
             className={`hero-slide object-cover ${i === 1 ? 'object-[center_60%]' : ''}`}
-            quality={90}
+            quality={75}
             style={{ animationDelay: `${(i + 1) * 5}s` }}
           />
         ),

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const plansPage = fs.readFileSync(path.join(root, 'app/(site)/plans/page.tsx'), 'utf8');
-const wingMotion = fs.readFileSync(path.join(root, 'components/sections/wing-structure-motion.tsx'), 'utf8');
+const floorplanLightbox = fs.readFileSync(path.join(root, 'components/sections/floorplan-lightbox.tsx'), 'utf8');
 const productChapters = fs.readFileSync(path.join(root, 'components/sections/product-chapters.tsx'), 'utf8');
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
@@ -39,22 +39,7 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('寝室・書斎・事務所・物置');
     expect(plansPage).not.toContain('構造の強み');
     expect(plansPage).not.toContain('向いている空間');
-  });
-
-  it('Wingは正しい展開順を線だけの4コマ風アニメで見せる', () => {
-    expect(plansPage).toContain("import { WingStructureMotion } from '@/components/sections/wing-structure-motion'");
-    expect(plansPage).toContain("model.slug === 'wing-01' && <WingStructureMotion />");
-    expect(wingMotion).toContain('展開の流れ');
-    expect(wingMotion).toContain('構造を簡略化したイメージ');
-    const folded = wingMotion.indexOf('折り畳み</span>');
-    const wall = wingMotion.indexOf('壁が開く</span>');
-    const floor = wingMotion.indexOf('床が下りる</span>');
-    const opened = wingMotion.indexOf('展開</span>');
-    expect(folded).toBeGreaterThan(-1);
-    expect(wall).toBeGreaterThan(folded);
-    expect(floor).toBeGreaterThan(wall);
-    expect(opened).toBeGreaterThan(floor);
-    expect(wingMotion).toContain('prefers-reduced-motion: reduce');
+    expect(plansPage).not.toContain('WingStructureMotion');
   });
 
   it('上部ナビは単体モデルと組み合わせを上下2段で画像付き表示する', () => {
@@ -100,14 +85,28 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('model.description');
   });
 
-  it('共通パースは拡大でき、仕様別平面図は仕様指定でシミュレーターへ進める', () => {
-    expect(plansPage).toContain('の共通パースを拡大');
+  it('仕様別平面図はページ内ポップアップで拡大し、見積導線は別リンクにする', () => {
+    expect(plansPage).toContain("import { FloorplanLightbox } from '@/components/sections/floorplan-lightbox'");
+    expect(plansPage).toContain('平面図を押すと大きく確認できます。');
+    expect(plansPage).toContain('<FloorplanLightbox');
+    expect(plansPage).toContain('src={floorplan.url}');
+    expect(plansPage).toContain('presetName={preset.name}');
     expect(plansPage).toContain('const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`');
-    expect(plansPage).toContain('で見積シミュレーターを開く');
     expect(plansPage).toContain('この仕様で見積する');
-    expect(plansPage).toContain('の平面図を拡大');
-    expect(plansPage).toContain('target="_blank"');
     expect(plansPage).toContain('平面図準備中');
+
+    expect(floorplanLightbox).toContain("'use client'");
+    expect(floorplanLightbox).toContain('showModal()');
+    expect(floorplanLightbox).toContain('<dialog');
+    expect(floorplanLightbox).toContain('dialogRef.current?.close()');
+    expect(floorplanLightbox).toContain('cursor-zoom-in');
+    expect(floorplanLightbox).toContain('平面図を閉じる');
+    expect(floorplanLightbox).toContain('backdrop:bg-black/70');
+  });
+
+  it('共通パースは従来どおり拡大できる', () => {
+    expect(plansPage).toContain('の共通パースを拡大');
+    expect(plansPage).toContain('target="_blank"');
   });
 
   it('Wing / BOX / Flatを同じページ内で移動して確認できる', () => {

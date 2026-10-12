@@ -370,7 +370,7 @@ export default async function PlansPage() {
                                 href={simulatorHref}
                                 className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest sm:text-sm"
                               >
-                                この仕様で見積する
+                                この仕様で見積をシミュレーションする
                                 <ArrowRight className="size-3" aria-hidden="true" />
                               </Link>
                             </div>

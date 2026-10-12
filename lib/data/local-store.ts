@@ -39,7 +39,9 @@ import {
   computeStandardEstimatePricing,
   type StandardEstimatePricingResult,
 } from '@/lib/domain/standard-estimate-pricing';
-import { categoriesInScope, validateSelection } from '@/lib/domain/rules';
+import { categoriesInScope, validateSelection, type RuleContext } from '@/lib/domain/rules';
+import { effectiveCustomerSpecCodes } from '@/lib/domain/customer-category-applicability';
+import { ruleContextForSpec } from '@/lib/domain/estimate-template';
 import { hasRoleAtLeast } from '@/lib/domain/types';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
@@ -132,7 +134,8 @@ export class LocalStore implements DataStore {
         images: db.images.filter((i) => i.base_model_id === modelId).sort((a, b) => a.sort_order - b.sort_order),
         categories: db.categories.filter(pub).sort((a, b) => a.sort_order - b.sort_order),
         options,
-        dependencies: db.dependencies.filter((d) => ids.has(d.option_id) && ids.has(d.requires_option_id)),
+        // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+        dependencies: db.dependencies.filter((d) => ids.has(d.option_id)),
         conflicts: db.conflicts.filter((c) => ids.has(c.option_id) && ids.has(c.conflicts_with_option_id)),
         previewRules: db.previewRules.filter((r) => r.base_model_id === modelId && pub(r)),
         hotspots: db.hotspots.filter((h) => db.previewRules.some((r) => r.id === h.rule_id && r.base_model_id === modelId)),
@@ -711,9 +714,8 @@ export class LocalStore implements DataStore {
         images: db.images.filter((image) => image.base_model_id === model.id),
         categories: db.categories.filter((category) => category.status === 'published'),
         options,
-        dependencies: db.dependencies.filter(
-          (row) => optionIds.has(row.option_id) && optionIds.has(row.requires_option_id)
-        ),
+        // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+        dependencies: db.dependencies.filter((row) => optionIds.has(row.option_id)),
         conflicts: db.conflicts.filter(
           (row) => optionIds.has(row.option_id) && optionIds.has(row.conflicts_with_option_id)
         ),
@@ -802,6 +804,41 @@ export class LocalStore implements DataStore {
   private recalc(db: LocalDb, cfg: Configuration) {
     return LocalStore.recalculateInMemory(db, cfg);
   }
+
+  /**
+   * 保存・見積依頼の検証に使うルール文脈。
+   * 仕様が決まっている場合は、本体分類表（選択 / ×）と商品側の仕様適合を通した商品だけを候補にする。
+   * SQL 側（configuration_items のガードと、Configuration 側の必須判定）と同じ結果になるようにそろえている:
+   *   - × のカテゴリー・仕様不適合の商品は保存できない
+   *   - 必須カテゴリーは「選択」かつ適合商品が 1 件以上ある場合だけ必須
+   *   - 依存ルールは候補の絞り込みで消さない
+   */
+  private static ruleContextFor(db: LocalDb, model: BaseModel, specCode: string | null): RuleContext {
+    const full: RuleContext = {
+      options: db.options,
+      categories: db.categories,
+      dependencies: db.dependencies,
+      conflicts: db.conflicts,
+    };
+    if (!specCode) return full;
+    const categoryCode = new Map(db.categories.map((c) => [c.id, c.code]));
+    const options = db.options
+      .filter((o) => o.base_model_id === null || o.base_model_id === model.id)
+      .map((o) => ({
+        ...o,
+        spec_codes: effectiveCustomerSpecCodes(model.slug, categoryCode.get(o.category_id) ?? '', o.spec_codes ?? []),
+      }));
+    return ruleContextForSpec({ ...full, options }, specCode, model.slug);
+  }
+
+  /** 選択中のモデル・仕様では選べない商品が含まれていたら拒否する（SQL の VALIDATION と同じ扱い） */
+  private static assertSelectableForSpec(ctx: RuleContext, optionIds: string[], specCode: string | null) {
+    if (!specCode) return;
+    const available = new Set(ctx.options.map((o) => o.id));
+    if (optionIds.some((id) => !available.has(id))) {
+      throw new StoreError('VALIDATION', '選択中のモデル・仕様では選択できない商品が含まれています。');
+    }
+  }
   async saveConfiguration(actor: SessionUser, input: SaveConfigurationInput): Promise<Configuration> {
     return this.mutate((db) => {
       const undecided = input.site_location_undecided ?? false;
@@ -823,11 +860,10 @@ export class LocalStore implements DataStore {
           scope.has(o.category_id)
       );
       const ids = [...new Set(valid.map((o) => o.id))];
-      const issues = validateSelection(
-        { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },
-        ids,
-        level
-      );
+      const specCode = input.spec_code ?? db.configurations.find((c) => c.id === input.id)?.spec_code ?? null;
+      const ruleCtx = LocalStore.ruleContextFor(db, model, specCode);
+      LocalStore.assertSelectableForSpec(ruleCtx, ids, specCode);
+      const issues = validateSelection(ruleCtx, ids, level);
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
 
       let cfg: Configuration;
@@ -981,11 +1017,13 @@ export class LocalStore implements DataStore {
       if (!cfg) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
       if (cfg.user_id !== actor.id) throw new StoreError('FORBIDDEN', '権限がありません');
       const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
-      const issues = validateSelection(
-        { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },
-        items.map((i) => i.option_id),
-        cfg.finish_level ?? 'full'
-      );
+      const cfgModel = db.models.find((m) => m.id === cfg.base_model_id);
+      const ruleCtx = cfgModel
+        ? LocalStore.ruleContextFor(db, cfgModel, cfg.spec_code ?? null)
+        : { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts };
+      const itemOptionIds = items.map((i) => i.option_id);
+      LocalStore.assertSelectableForSpec(ruleCtx, itemOptionIds, cfgModel ? (cfg.spec_code ?? null) : null);
+      const issues = validateSelection(ruleCtx, itemOptionIds, cfg.finish_level ?? 'full');
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
       const { pricing, model, standardPricing } = this.recalc(db, cfg);
 

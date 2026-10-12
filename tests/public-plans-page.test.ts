@@ -14,7 +14,6 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('パースと平面図を見ながら、単体モデルと組み合わせ例を比べられます。');
     expect(plansPage).toContain('model.features.slice(0, 4)');
     expect(plansPage).toContain('の特徴');
-    expect(plansPage).toContain('商品共通');
     expect(plansPage).toContain('仕様ごとの平面図');
     expect(plansPage).toContain('grid grid-cols-2 gap-3 xl:grid-cols-3');
     expect(plansPage).not.toContain('共通参考パース');
@@ -28,24 +27,26 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(floorplanIndex).toBeGreaterThan(featureIndex);
   });
 
-  it('Wing・BOX・Flatを形・構造、得意な使い方、主な用途の3項目で簡潔に比較する', () => {
-    expect(plansPage).toContain("headline: '折り畳んで運び、現地で広げる'");
-    expect(plansPage).toContain("structure: '折り畳み式'");
-    expect(plansPage).toContain("bestUse: '広い室内をつくる'");
-    expect(plansPage).toContain("structure: '固定式'");
-    expect(plansPage).toContain("bestUse: '設備や個室をまとめる'");
-    expect(plansPage).toContain("structure: '水平折畳み'");
-    expect(plansPage).toContain("bestUse: '必要な一室を足す'");
-    expect(plansPage).toContain('形・構造');
-    expect(plansPage).toContain('得意な使い方');
-    expect(plansPage).toContain('主な用途');
-    expect(plansPage).toContain('住宅・ホテル・店舗・事務所');
-    expect(plansPage).toContain('客室・水回り・ワンルーム');
-    expect(plansPage).toContain('寝室・書斎・事務所・物置');
-    expect(plansPage).not.toContain('positioning.summary');
-    expect(plansPage).not.toContain('positioning.strength');
-    expect(plansPage).not.toContain('構造の強み');
-    expect(plansPage).not.toContain('向いている空間');
+  it('Wing・BOX・Flatを基本サイズ・構造・用途・特徴の4項目で表示する', () => {
+    expect(plansPage).toContain("size: '3,900 × 4,800'");
+    expect(plansPage).toContain("structure: '折り畳み式。トラック1台分の運搬サイズから、設置後はコンテナ2個分の広さに展開'");
+    expect(plansPage).toContain("uses: '住宅・ホテル・事務所・店舗など'");
+    expect(plansPage).toContain("feature: '広い室内空間と木造ならではの雰囲気を両立'");
+    expect(plansPage).toContain("size: '2,100 × 4,800'");
+    expect(plansPage).toContain("structure: '固定式。上下に重ねて、2階建て以上の構成にも対応可能'");
+    expect(plansPage).toContain("uses: 'ホテル・ワンルーム・仮設事務所・水回りユニットなど'");
+    expect(plansPage).toContain("feature: 'コンパクトに機能をまとめやすく、Wingと水回りキットとして組み合わせ可能'");
+    expect(plansPage).toContain("size: '2,100 × 1,800〜4,800（複数サイズあり）'");
+    expect(plansPage).toContain("structure: '水平折り畳み式。平らに折り畳んで平積み配送可能'");
+    expect(plansPage).toContain("uses: '物置・寝室・書斎・事務所など、追加の一室として'");
+    expect(plansPage).toContain("feature: 'Wing＋Flatで2LDK、BOX＋Flatなど、他モデルと組み合わせて使いやすい'");
+    expect(plansPage).toContain('基本サイズ');
+    expect(plansPage).toContain('構造');
+    expect(plansPage).toContain('用途');
+    expect(plansPage).toContain('特徴');
+    expect(plansPage).not.toContain('得意な使い方');
+    expect(plansPage).not.toContain('主な用途');
+    expect(plansPage).not.toContain('positioning.headline');
     expect(plansPage).not.toContain('WingStructureMotion');
   });
 

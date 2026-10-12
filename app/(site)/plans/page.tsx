@@ -23,19 +23,15 @@ const planCaptionHints: Record<string, string[]> = {
   'flat:office': ['6.8帖', '事務所'],
 };
 
+type PlanImage = { url: string; alt: string; caption: string | null };
+
 function displayModelName(name: string) {
   return name === 'フラット' ? 'Flat' : name;
 }
 
-function floorplanForPreset(
-  modelSlug: string,
-  presetCode: string,
-  floorplans: { url: string; alt: string; caption: string | null }[]
-) {
+function imageForPreset(modelSlug: string, presetCode: string, images: PlanImage[]) {
   const hints = planCaptionHints[`${modelSlug}:${presetCode}`] ?? [];
-  const matched = floorplans.find((image) => hints.some((hint) => image.caption?.includes(hint)));
-  if (matched) return matched;
-  return floorplans.length === 1 ? floorplans[0] : null;
+  return images.find((image) => hints.some((hint) => image.caption?.includes(hint))) ?? null;
 }
 
 export default async function PlansPage() {
@@ -45,13 +41,13 @@ export default async function PlansPage() {
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品・仕様・間取り', path: '/plans' }])} />
 
-      <Container className="pt-8 sm:pt-10">
+      <Container className="pt-7 sm:pt-9">
         <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '商品・仕様・間取り' }]} />
-        <Reveal className="max-w-3xl pb-6 pt-8 sm:pb-8 sm:pt-10">
+        <Reveal className="max-w-3xl pb-5 pt-7 sm:pb-6 sm:pt-8">
           <p className="label-en text-forest">Plans &amp; styles</p>
-          <h1 className="mt-3 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
-          <p className="mt-3 text-sm leading-7 text-ink-soft sm:text-base">
-            Wing・BOX・Flatの間取りと完成イメージを見比べて、用途に合う仕様を選べます。
+          <h1 className="mt-2.5 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
+          <p className="mt-2.5 text-sm leading-6 text-ink-soft sm:text-base">
+            各仕様のパースと平面図をセットで見比べられます。
           </p>
         </Reveal>
 
@@ -73,20 +69,24 @@ export default async function PlansPage() {
       </Container>
 
       {models.length === 0 ? (
-        <Container className="pb-20">
-          <p className="py-12 text-center text-muted">現在公開中の商品はありません。</p>
+        <Container className="pb-16">
+          <p className="py-10 text-center text-muted">現在公開中の商品はありません。</p>
         </Container>
       ) : (
-        <div className="pb-16 sm:pb-20">
+        <div className="pb-14 sm:pb-16">
           {models.map((model, modelIndex) => {
             const bundle = bundles[model.id];
             if (!bundle) return null;
             const images = bundle.images;
-            const hero = images.find((image) => image.kind === 'hero') ?? images.find((image) => image.kind === 'exterior') ?? null;
             const floorplans = images
               .filter((image) => image.kind === 'floorplan')
               .sort((a, b) => a.sort_order - b.sort_order)
               .map((image) => ({ url: image.url, alt: image.alt, caption: image.caption }));
+            const perspectives = images
+              .filter((image) => image.kind === 'hero' || image.kind === 'exterior' || image.kind === 'interior')
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((image) => ({ url: image.url, alt: image.alt, caption: image.caption }));
+            const commonPerspective = perspectives[0] ?? null;
             const presets = model.presets ?? [];
             const modelName = displayModelName(model.name);
 
@@ -96,11 +96,11 @@ export default async function PlansPage() {
                 id={`model-${model.slug}`}
                 className={`scroll-mt-20 border-t border-line ${modelIndex % 2 === 0 ? 'bg-ivory' : 'bg-white'}`}
               >
-                <Container className="py-9 sm:py-12">
-                  <Reveal className="flex flex-wrap items-end justify-between gap-3">
+                <Container className="py-7 sm:py-9">
+                  <Reveal className="flex flex-wrap items-end justify-between gap-2.5">
                     <div>
                       <p className="label-en text-forest">Model {String(modelIndex + 1).padStart(2, '0')}</p>
-                      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                      <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <h2 className="text-3xl sm:text-4xl">{modelName}</h2>
                         <p className="text-sm text-ink-soft">{model.tagline}</p>
                       </div>
@@ -110,72 +110,83 @@ export default async function PlansPage() {
                     </Link>
                   </Reveal>
 
-                  <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.7fr)] lg:items-start">
-                    <Reveal variant="image">
-                      <div className="overflow-hidden rounded-xl border border-line bg-white">
-                        <div className="relative aspect-[4/3] bg-sand">
-                          {hero ? (
-                            <SmartImage
-                              src={hero.url}
-                              alt={hero.alt}
-                              fill
-                              sizes="(min-width: 1024px) 34vw, 100vw"
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-sm text-muted">参考パース準備中</div>
-                          )}
-                          <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-ink shadow-sm">
-                            参考パース
-                          </span>
-                        </div>
-                      </div>
-                      <p className="mt-1.5 text-xs text-muted">{hero?.caption ?? `${modelName} 完成イメージ`} ※モデル共通の参考パースです。</p>
-                    </Reveal>
+                  {presets.length === 0 ? (
+                    <p className="mt-4 rounded-xl border border-line bg-white p-4 text-sm text-muted">現在、公開中の用途別仕様はありません。</p>
+                  ) : (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {presets.map((preset) => {
+                        const floorplan = imageForPreset(model.slug, preset.code, floorplans) ?? (floorplans.length === 1 ? floorplans[0] : null);
+                        const matchedPerspective = imageForPreset(model.slug, preset.code, perspectives);
+                        const perspective = matchedPerspective ?? commonPerspective;
+                        const usesCommonPerspective = Boolean(perspective && !matchedPerspective);
 
-                    {presets.length === 0 ? (
-                      <p className="rounded-xl border border-line bg-white p-5 text-sm text-muted">現在、公開中の用途別仕様はありません。</p>
-                    ) : (
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {presets.map((preset) => {
-                          const floorplan = floorplanForPreset(model.slug, preset.code, floorplans);
-                          return (
-                            <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
-                              <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-                                <h3 className="font-serif text-lg">{preset.name}</h3>
-                                <span className="shrink-0 text-[11px] font-semibold text-forest">平面図</span>
+                        return (
+                          <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
+                            <div className="flex items-center justify-between gap-2 border-b border-line px-3.5 py-2">
+                              <h3 className="font-serif text-base sm:text-lg">{preset.name}</h3>
+                              {usesCommonPerspective && <span className="text-[10px] text-muted">共通参考パース</span>}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-px bg-line">
+                              <div className="bg-white">
+                                <div className="border-b border-line px-2.5 py-1 text-[10px] font-semibold text-forest">パース</div>
+                                {perspective ? (
+                                  <a
+                                    href={perspective.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="relative block aspect-[4/3] bg-sand"
+                                    aria-label={`${modelName} ${preset.name}のパースを拡大`}
+                                  >
+                                    <SmartImage
+                                      src={perspective.url}
+                                      alt={perspective.alt}
+                                      fill
+                                      sizes="(min-width: 1280px) 15vw, (min-width: 640px) 24vw, 50vw"
+                                      className="object-cover"
+                                    />
+                                  </a>
+                                ) : (
+                                  <div className="flex aspect-[4/3] items-center justify-center bg-sand px-2 text-center text-xs text-muted">パース準備中</div>
+                                )}
                               </div>
-                              {floorplan ? (
-                                <a
-                                  href={floorplan.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="relative block aspect-[4/3] bg-[#f5f2eb]"
-                                  aria-label={`${modelName} ${preset.name}の平面図を拡大`}
-                                >
-                                  <SmartImage
-                                    src={floorplan.url}
-                                    alt={floorplan.alt}
-                                    fill
-                                    sizes="(min-width: 1280px) 22vw, (min-width: 640px) 43vw, 100vw"
-                                    className="object-contain p-2"
-                                  />
-                                </a>
-                              ) : (
-                                <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-4 text-center text-sm text-muted">
-                                  平面図準備中
-                                </div>
-                              )}
-                              {floorplan?.caption && <p className="truncate px-4 py-2 text-xs text-muted">{floorplan.caption}</p>}
-                            </article>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="mt-5 flex justify-end">
-                    <ButtonLink href={`/simulator/${model.slug}`}>
+                              <div className="bg-white">
+                                <div className="border-b border-line px-2.5 py-1 text-[10px] font-semibold text-forest">平面図</div>
+                                {floorplan ? (
+                                  <a
+                                    href={floorplan.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="relative block aspect-[4/3] bg-[#f5f2eb]"
+                                    aria-label={`${modelName} ${preset.name}の平面図を拡大`}
+                                  >
+                                    <SmartImage
+                                      src={floorplan.url}
+                                      alt={floorplan.alt}
+                                      fill
+                                      sizes="(min-width: 1280px) 15vw, (min-width: 640px) 24vw, 50vw"
+                                      className="object-contain p-1.5"
+                                    />
+                                  </a>
+                                ) : (
+                                  <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 px-3.5 py-2 text-[11px] text-muted">
+                              <span>{usesCommonPerspective ? 'パースはモデル共通の参考画像です' : '画像を押すと拡大できます'}</span>
+                              {floorplan?.caption && <span className="max-w-[45%] truncate">{floorplan.caption}</span>}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex justify-end">
+                    <ButtonLink href={`/simulator/${model.slug}`} size="sm">
                       {modelName} の見積シミュレーターへ
                       <ArrowRight className="size-4" aria-hidden="true" />
                     </ButtonLink>

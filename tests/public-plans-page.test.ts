@@ -8,14 +8,22 @@ const productChapters = fs.readFileSync(path.join(root, 'components/sections/pro
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
 describe('公開 商品・仕様・間取りページ', () => {
-  it('公開カタログから平面図と参考パース中心のコンパクト表示を組み立てる', () => {
+  it('仕様ごとにパースと平面図をセットでコンパクト表示する', () => {
     expect(plansPage).toContain('getPublicCatalog');
-    expect(plansPage).toContain('平面図とパースから仕様を選ぶ');
+    expect(plansPage).toContain('各仕様のパースと平面図をセットで見比べられます。');
     expect(plansPage).toContain('model.presets ?? []');
-    expect(plansPage).toContain('※モデル共通の参考パースです。');
+    expect(plansPage).toContain('grid grid-cols-2 gap-px bg-line');
+    expect(plansPage).toContain('共通参考パース');
+    expect(plansPage).toContain('パースはモデル共通の参考画像です');
     expect(plansPage).toContain('sm:grid-cols-2 xl:grid-cols-3');
     expect(plansPage).not.toContain('model.description');
-    expect(plansPage).not.toContain("image.kind === 'interior'");
+  });
+
+  it('仕様名に対応する画像があれば優先し、未登録時は安全な代替表示にする', () => {
+    expect(plansPage).toContain('imageForPreset(model.slug, preset.code, perspectives)');
+    expect(plansPage).toContain('matchedPerspective ?? commonPerspective');
+    expect(plansPage).toContain('パース準備中');
+    expect(plansPage).toContain('平面図準備中');
   });
 
   it('Wing / BOX / Flatを同じページ内で移動して確認できる', () => {
@@ -24,10 +32,10 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain("name === 'フラット' ? 'Flat' : name");
   });
 
-  it('平面図は拡大でき、未登録仕様は準備中として扱う', () => {
+  it('パースと平面図はどちらも拡大できる', () => {
+    expect(plansPage).toContain('のパースを拡大');
+    expect(plansPage).toContain('の平面図を拡大');
     expect(plansPage).toContain('target="_blank"');
-    expect(plansPage).toContain('平面図を拡大');
-    expect(plansPage).toContain('平面図準備中');
   });
 
   it('確認後に各モデルの見積シミュレーターへ進める', () => {

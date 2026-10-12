@@ -31,24 +31,24 @@ const planCaptionHints: Record<string, string[]> = {
 
 const modelPositioning: Record<
   string,
-  { headline: string; summary: string; strength: string; uses: string }
+  { headline: string; structure: string; bestUse: string; uses: string }
 > = {
   'wing-01': {
     headline: '折り畳んで運び、現地で広げる',
-    summary: '運搬時はコンパクトに。設置後は左右を広げて、ゆとりのある室内になります。',
-    strength: '折り畳み式。設置場所で左右へ展開',
+    structure: '折り畳み式',
+    bestUse: '広い室内をつくる',
     uses: '住宅・ホテル・店舗・事務所',
   },
   box: {
     headline: 'コンパクトな箱型ユニット',
-    summary: '水回りや個室など、必要な設備をひとつのユニットにまとめやすい形です。',
-    strength: '箱型のまま設置。並べる・重ねる構成にも対応',
-    uses: 'ホテル客室・単身者用・水回り・個室',
+    structure: '固定式',
+    bestUse: '設備や個室をまとめる',
+    uses: '客室・水回り・ワンルーム',
   },
   flat: {
     headline: '必要な場所に、もう一室',
-    summary: '寝室、書斎、事務所、物置など、用途に合わせてシンプルな一室を追加できます。',
-    strength: '用途を限定しないシンプルな一室',
+    structure: '水平折畳み',
+    bestUse: '必要な一室を足す',
     uses: '寝室・書斎・事務所・物置',
   },
 };
@@ -282,13 +282,16 @@ export default async function PlansPage() {
                       {positioning ? (
                         <div className="mt-3">
                           <p className="font-serif text-lg text-forest sm:text-xl">{positioning.headline}</p>
-                          <p className="mt-1.5 text-xs leading-6 text-ink-soft sm:text-sm">{positioning.summary}</p>
-                          <div className="mt-3 grid grid-cols-2 gap-2.5">
-                            <div className="rounded-lg bg-ivory px-3 py-2.5">
-                              <p className="text-[10px] font-semibold text-muted">特徴</p>
-                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.strength}</p>
+                          <div className="mt-4 grid border-t border-line/80 sm:grid-cols-3">
+                            <div className="py-3 sm:pr-4">
+                              <p className="text-[10px] font-semibold text-muted">形・構造</p>
+                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.structure}</p>
                             </div>
-                            <div className="rounded-lg bg-ivory px-3 py-2.5">
+                            <div className="border-t border-line/80 py-3 sm:border-l sm:border-t-0 sm:px-4">
+                              <p className="text-[10px] font-semibold text-muted">得意な使い方</p>
+                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.bestUse}</p>
+                            </div>
+                            <div className="border-t border-line/80 py-3 sm:border-l sm:border-t-0 sm:pl-4">
                               <p className="text-[10px] font-semibold text-muted">主な用途</p>
                               <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.uses}</p>
                             </div>

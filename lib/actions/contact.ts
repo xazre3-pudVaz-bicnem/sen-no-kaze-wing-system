@@ -1,8 +1,10 @@
 'use server';
 
+import { z } from 'zod';
 import { getStore } from '@/lib/data/store';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { contactSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
+import { contactTopics } from '@/data/contact-topics';
 
 export interface ContactState {
   ok: boolean;
@@ -13,6 +15,9 @@ export interface ContactState {
 
 const MAX_ATTACHMENT = 10 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf']);
+const contactSubmitSchema = contactSchema.extend({
+  topic: z.enum(contactTopics, { error: 'お問い合わせの種類を選択してください' }),
+});
 
 /**
  * お問い合わせを保存する（添付は非公開ストレージへ）。
@@ -25,7 +30,7 @@ export async function submitContactAction(_prev: ContactState, formData: FormDat
       .filter(([, v]) => typeof v === 'string')
       .map(([k, v]) => [k, String(v)])
   );
-  const parsed = contactSchema.safeParse(raw);
+  const parsed = contactSubmitSchema.safeParse(raw);
   if (!parsed.success) {
     return { ok: false, fieldErrors: flattenErrors(parsed.error), values };
   }

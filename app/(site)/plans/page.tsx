@@ -409,21 +409,15 @@ export default async function PlansPage() {
                       id={`combo-${combination.id}`}
                       className="scroll-mt-40 overflow-hidden rounded-xl border border-line bg-ivory shadow-sm"
                     >
-                      <a
-                        href={combination.image}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="relative block aspect-[4/3] bg-white"
-                        aria-label={`${combination.name}の組み合わせイメージを拡大`}
-                      >
-                        <SmartImage
+                      <div className="relative aspect-[4/3] bg-white">
+                        <ImageLightbox
                           src={combination.image}
                           alt={`${combination.name}の組み合わせ例`}
-                          fill
-                          sizes="(min-width: 768px) 31vw, 92vw"
-                          className="object-contain p-2"
+                          title={`${combination.name}の組み合わせ平面図`}
+                          triggerSizes="(min-width: 768px) 31vw, 92vw"
+                          triggerImageClassName="object-contain p-2 transition hover:opacity-90"
                         />
-                      </a>
+                      </div>
                       <div className="border-t border-line bg-white p-3.5">
                         <div className="flex items-center justify-between gap-2">
                           <h3 className="font-serif text-lg">{combination.name}</h3>
@@ -453,6 +447,13 @@ export default async function PlansPage() {
                             );
                           })}
                         </div>
+                        <Link
+                          href="/contact"
+                          className="mt-3 inline-flex items-center gap-1 text-[13px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest sm:text-sm"
+                        >
+                          この組み合わせについて相談する
+                          <ArrowRight className="size-3" aria-hidden="true" />
+                        </Link>
                       </div>
                     </Reveal>
                   ))}

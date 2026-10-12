@@ -4,16 +4,26 @@ import { useRef } from 'react';
 import { X } from 'lucide-react';
 import { SmartImage } from '@/components/ui/smart-image';
 
-type FloorplanLightboxProps = {
+type ImageLightboxProps = {
   src: string;
   alt: string;
-  modelName: string;
-  presetName: string;
+  title: string;
+  triggerSizes: string;
+  triggerImageClassName: string;
+  modalImageClassName?: string;
+  modalBackgroundClassName?: string;
 };
 
-export function FloorplanLightbox({ src, alt, modelName, presetName }: FloorplanLightboxProps) {
+export function ImageLightbox({
+  src,
+  alt,
+  title,
+  triggerSizes,
+  triggerImageClassName,
+  modalImageClassName = 'object-contain p-3 sm:p-5',
+  modalBackgroundClassName = 'bg-[#f5f2eb]',
+}: ImageLightboxProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const title = `${modelName} ${presetName}の平面図`;
 
   return (
     <>
@@ -23,13 +33,7 @@ export function FloorplanLightbox({ src, alt, modelName, presetName }: Floorplan
         className="absolute inset-0 block w-full cursor-zoom-in text-left"
         aria-label={`${title}を拡大`}
       >
-        <SmartImage
-          src={src}
-          alt={alt}
-          fill
-          sizes="(min-width: 1280px) 28vw, (min-width: 768px) 44vw, 50vw"
-          className="object-contain p-1.5 transition hover:opacity-90"
-        />
+        <SmartImage src={src} alt={alt} fill sizes={triggerSizes} className={triggerImageClassName} />
         <span className="absolute right-2 top-2 z-10 rounded-full border border-line bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-forest shadow-sm backdrop-blur">
           拡大
         </span>
@@ -50,14 +54,19 @@ export function FloorplanLightbox({ src, alt, modelName, presetName }: Floorplan
               type="button"
               onClick={() => dialogRef.current?.close()}
               className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-line text-ink-soft transition hover:border-forest hover:text-forest"
-              aria-label="平面図を閉じる"
+              aria-label="画像を閉じる"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
           </div>
-          <div className="relative h-[min(78vh,820px)] w-full bg-[#f5f2eb]">
-            <SmartImage src={src} alt={alt} fill sizes="96vw" className="object-contain p-3 sm:p-5" />
-          </div>
+          <button
+            type="button"
+            onClick={() => dialogRef.current?.close()}
+            className={`relative h-[min(78vh,820px)] w-full cursor-zoom-out ${modalBackgroundClassName}`}
+            aria-label={`${title}を閉じる`}
+          >
+            <SmartImage src={src} alt={alt} fill sizes="96vw" className={modalImageClassName} />
+          </button>
         </div>
       </dialog>
     </>

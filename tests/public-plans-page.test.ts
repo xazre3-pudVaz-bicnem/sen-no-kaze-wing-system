@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const plansPage = fs.readFileSync(path.join(root, 'app/(site)/plans/page.tsx'), 'utf8');
-const floorplanLightbox = fs.readFileSync(path.join(root, 'components/sections/floorplan-lightbox.tsx'), 'utf8');
+const imageLightbox = fs.readFileSync(path.join(root, 'components/sections/image-lightbox.tsx'), 'utf8');
 const productChapters = fs.readFileSync(path.join(root, 'components/sections/product-chapters.tsx'), 'utf8');
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
@@ -77,6 +77,15 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).not.toContain('この組み合わせで見積する');
   });
 
+  it('管理画面で登録した共通パースを旧product_imagesより優先する', () => {
+    expect(plansPage).toContain('registeredCommonPerspective');
+    expect(plansPage).toContain("rule.view === 'exterior' || rule.view === 'interior'");
+    expect(plansPage).toContain("rule.kind === 'composite'");
+    expect(plansPage).toContain("rule.status === 'published'");
+    expect(plansPage).toContain('rule.preview_keys.length === 0');
+    expect(plansPage).toContain('registeredCommonPerspective(bundle) ?? legacyCommonPerspective(images)');
+  });
+
   it('管理画面で登録した仕様別平面図を旧product_imagesより優先する', () => {
     expect(plansPage).toContain('registeredFloorplanForPreset');
     expect(plansPage).toContain('bundle.previewRules.filter');
@@ -92,28 +101,23 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('model.description');
   });
 
-  it('仕様別平面図はページ内ポップアップで拡大し、見積導線は別リンクにする', () => {
-    expect(plansPage).toContain("import { FloorplanLightbox } from '@/components/sections/floorplan-lightbox'");
+  it('パースと平面図は同じページ内ポップアップで拡大し、拡大画像のクリックでも閉じる', () => {
+    expect(plansPage).toContain("import { ImageLightbox } from '@/components/sections/image-lightbox'");
     expect(plansPage).toContain('平面図を押すと大きく確認できます。');
-    expect(plansPage).toContain('<FloorplanLightbox');
-    expect(plansPage).toContain('src={floorplan.url}');
-    expect(plansPage).toContain('presetName={preset.name}');
+    expect(plansPage).toContain('title={`${modelName}の共通パース`}');
+    expect(plansPage).toContain('title={`${modelName} ${preset.name}の平面図`}');
     expect(plansPage).toContain('const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`');
     expect(plansPage).toContain('この仕様で見積する');
     expect(plansPage).toContain('平面図準備中');
 
-    expect(floorplanLightbox).toContain("'use client'");
-    expect(floorplanLightbox).toContain('showModal()');
-    expect(floorplanLightbox).toContain('<dialog');
-    expect(floorplanLightbox).toContain('dialogRef.current?.close()');
-    expect(floorplanLightbox).toContain('cursor-zoom-in');
-    expect(floorplanLightbox).toContain('平面図を閉じる');
-    expect(floorplanLightbox).toContain('backdrop:bg-black/70');
-  });
-
-  it('共通パースは従来どおり拡大できる', () => {
-    expect(plansPage).toContain('の共通パースを拡大');
-    expect(plansPage).toContain('target="_blank"');
+    expect(imageLightbox).toContain("'use client'");
+    expect(imageLightbox).toContain('showModal()');
+    expect(imageLightbox).toContain('<dialog');
+    expect(imageLightbox).toContain('dialogRef.current?.close()');
+    expect(imageLightbox).toContain('cursor-zoom-in');
+    expect(imageLightbox).toContain('cursor-zoom-out');
+    expect(imageLightbox).toContain('aria-label={`${title}を閉じる`}');
+    expect(imageLightbox).toContain('backdrop:bg-black/70');
   });
 
   it('Wing / BOX / Flatを同じページ内で移動して確認できる', () => {

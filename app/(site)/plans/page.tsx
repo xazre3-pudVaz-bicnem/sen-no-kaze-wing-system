@@ -86,15 +86,10 @@ function displayModelName(name: string) {
   return name === 'フラット' ? 'Flat' : name;
 }
 
-function registeredCommonPerspective(bundle: CatalogBundle): PlanImage | null {
-  const commonRules = bundle.previewRules.filter(
-    (rule) =>
-      (rule.view === 'exterior' || rule.view === 'interior') &&
-      rule.kind === 'composite' &&
-      rule.status === 'published' &&
-      rule.preview_keys.length === 0
-  );
-  const rule = commonRules.find((row) => row.view === 'exterior') ?? commonRules.find((row) => row.view === 'interior') ?? null;
+function registeredRepresentativePerspective(bundle: CatalogBundle): PlanImage | null {
+  const rule = bundle.previewRules
+    .filter((row) => row.view === 'exterior' && row.kind === 'composite' && row.status === 'published')
+    .sort((a, c) => a.preview_keys.length - c.preview_keys.length)[0] ?? null;
   return rule ? { url: rule.url, alt: rule.alt, caption: null } : null;
 }
 
@@ -151,7 +146,7 @@ export default async function PlansPage() {
   const modelNavItems = models.map((model) => {
     const bundle = bundles[model.id];
     const images = bundle?.images ?? [];
-    const image = (bundle ? registeredCommonPerspective(bundle) : null) ?? legacyCommonPerspective(images);
+    const image = (bundle ? registeredRepresentativePerspective(bundle) : null) ?? legacyCommonPerspective(images);
     return { model, image };
   });
 
@@ -233,7 +228,7 @@ export default async function PlansPage() {
               .filter((image) => image.kind === 'floorplan')
               .sort((a, b) => a.sort_order - b.sort_order)
               .map((image) => ({ url: image.url, alt: image.alt, caption: image.caption }));
-            const commonPerspective = registeredCommonPerspective(bundle) ?? legacyCommonPerspective(images);
+            const commonPerspective = registeredRepresentativePerspective(bundle) ?? legacyCommonPerspective(images);
             const presets = model.presets ?? [];
             const modelName = displayModelName(model.name);
             const modelFeatures = model.features.slice(0, 4);
@@ -263,7 +258,7 @@ export default async function PlansPage() {
                     <Reveal variant="image" className="w-full max-w-sm md:max-w-none">
                       <div className="h-full overflow-hidden rounded-xl border border-line bg-white shadow-sm">
                         <div className="flex items-center justify-between border-b border-line px-3 py-2">
-                          <span className="text-xs font-semibold text-forest">共通パース</span>
+                          <span className="text-xs font-semibold text-forest">代表パース</span>
                           <span className="text-[10px] text-muted">{modelName}</span>
                         </div>
                         {commonPerspective ? (
@@ -271,7 +266,7 @@ export default async function PlansPage() {
                             <ImageLightbox
                               src={commonPerspective.url}
                               alt={commonPerspective.alt}
-                              title={`${modelName}の共通パース`}
+                              title={`${modelName}の代表パース`}
                               triggerSizes="(min-width: 768px) 32vw, 92vw"
                               triggerImageClassName="object-cover transition hover:opacity-90"
                               modalImageClassName="object-contain p-2 sm:p-4"

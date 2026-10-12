@@ -431,33 +431,17 @@ export default async function PlansPage() {
                             </span>
                           ))}
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
-                          {combination.modelSlugs.map((slug) => {
-                            const model = models.find((row) => row.slug === slug);
-                            if (!model) return null;
-                            return (
-                              <Link
-                                key={slug}
-                                href={`#model-${slug}`}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest"
-                              >
-                                {displayModelName(model.name)}を見る
-                                <ArrowRight className="size-3" aria-hidden="true" />
-                              </Link>
-                            );
-                          })}
-                        </div>
-                        <Link
-                          href="/contact"
-                          className="mt-3 inline-flex items-center gap-1 text-[13px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest sm:text-sm"
-                        >
-                          この組み合わせについて相談する
-                          <ArrowRight className="size-3" aria-hidden="true" />
-                        </Link>
                       </div>
                     </Reveal>
                   ))}
                 </div>
+
+                <Reveal className="mt-6 flex justify-center">
+                  <ButtonLink href="/contact" size="sm">
+                    組み合わせについて問い合わせる
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </ButtonLink>
+                </Reveal>
               </Container>
             </section>
           )}

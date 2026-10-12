@@ -74,7 +74,7 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain("id: 'wing-flat'");
     expect(plansPage).toContain("id: 'box-flat'");
     expect(plansPage).toContain('id={`combo-${combination.id}`}');
-    expect(plansPage).toContain('組み合わせイメージを拡大');
+    expect(plansPage).toContain('title={`${combination.name}の組み合わせ平面図`}');
   });
 
   it('組み合わせ例は専用見積へ直結させず構成モデルへ戻れる', () => {

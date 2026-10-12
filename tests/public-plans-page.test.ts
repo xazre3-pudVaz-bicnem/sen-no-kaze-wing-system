@@ -4,13 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const plansPage = fs.readFileSync(path.join(root, 'app/(site)/plans/page.tsx'), 'utf8');
+const wingMotion = fs.readFileSync(path.join(root, 'components/sections/wing-structure-motion.tsx'), 'utf8');
 const productChapters = fs.readFileSync(path.join(root, 'components/sections/product-chapters.tsx'), 'utf8');
 const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 
 describe('公開 商品・仕様・間取りページ', () => {
   it('モデルのパースと商品特徴を上段にまとめ、その下で仕様別平面図を比較する', () => {
     expect(plansPage).toContain('getPublicCatalog');
-    expect(plansPage).toContain('各モデルの特徴と仕様ごとの平面図に加え、組み合わせ例も確認できます。');
+    expect(plansPage).toContain('パースと平面図を見ながら、単体モデルと組み合わせ例を比べられます。');
     expect(plansPage).toContain('model.features.slice(0, 4)');
     expect(plansPage).toContain('の特徴');
     expect(plansPage).toContain('商品共通');
@@ -27,15 +28,33 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(floorplanIndex).toBeGreaterThan(featureIndex);
   });
 
-  it('Wing・BOX・Flatを用途で固定せず、構造から来る得意分野で説明する', () => {
-    expect(plansPage).toContain("headline: '広い空間をつくる'");
-    expect(plansPage).toContain("headline: '機能をまとめる'");
-    expect(plansPage).toContain("headline: '必要な空間を足す'");
-    expect(plansPage).toContain('構造の強み');
-    expect(plansPage).toContain('向いている空間');
-    expect(plansPage).toContain('住まい・LDK・広めの客室・店舗・事務所');
-    expect(plansPage).toContain('水回り・個室・ホテル客室・単身者用');
-    expect(plansPage).toContain('寝室・書斎・事務所・物置・バックヤード');
+  it('Wing・BOX・Flatを用途で固定せず、自然な商品説明で違いを伝える', () => {
+    expect(plansPage).toContain("headline: '折り畳んで運び、現地で広げる'");
+    expect(plansPage).toContain("headline: 'コンパクトな箱型ユニット'");
+    expect(plansPage).toContain("headline: '必要な場所に、もう一室'");
+    expect(plansPage).toContain('特徴');
+    expect(plansPage).toContain('主な用途');
+    expect(plansPage).toContain('住宅・ホテル・店舗・事務所');
+    expect(plansPage).toContain('ホテル客室・単身者用・水回り・個室');
+    expect(plansPage).toContain('寝室・書斎・事務所・物置');
+    expect(plansPage).not.toContain('構造の強み');
+    expect(plansPage).not.toContain('向いている空間');
+  });
+
+  it('Wingは正しい展開順を線だけの4コマ風アニメで見せる', () => {
+    expect(plansPage).toContain("import { WingStructureMotion } from '@/components/sections/wing-structure-motion'");
+    expect(plansPage).toContain("model.slug === 'wing-01' && <WingStructureMotion />");
+    expect(wingMotion).toContain('展開の流れ');
+    expect(wingMotion).toContain('構造を簡略化したイメージ');
+    const folded = wingMotion.indexOf('折り畳み</span>');
+    const wall = wingMotion.indexOf('壁が開く</span>');
+    const floor = wingMotion.indexOf('床が下りる</span>');
+    const opened = wingMotion.indexOf('展開</span>');
+    expect(folded).toBeGreaterThan(-1);
+    expect(wall).toBeGreaterThan(folded);
+    expect(floor).toBeGreaterThan(wall);
+    expect(opened).toBeGreaterThan(floor);
+    expect(wingMotion).toContain('prefers-reduced-motion: reduce');
   });
 
   it('上部ナビは単体モデルと組み合わせを上下2段で画像付き表示する', () => {

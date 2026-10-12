@@ -14,7 +14,7 @@ import { Reveal } from '@/components/ui/reveal';
 export const metadata = buildMetadata({
   title: '商品・仕様・間取り｜Wing・BOX・Flatを比較',
   description:
-    'Wing・BOX・Flatの用途別仕様を、平面図と完成イメージで比較できます。ホテル仕様・住宅仕様・事務所・店舗用などの違いを確認してから見積シミュレーターへ進めます。',
+    'Wing・BOX・Flatの特徴と用途別仕様、組み合わせ例を、平面図と完成イメージで比較できます。違いを確認してから見積シミュレーターへ進めます。',
   path: '/plans',
   image: '/images/plan/wing-isometric.jpg',
 });
@@ -51,6 +51,33 @@ const modelPositioning: Record<
     uses: '寝室・書斎・事務所・物置・バックヤード',
   },
 };
+
+const combinationExamples = [
+  {
+    id: 'wing-box',
+    name: 'Wing + BOX',
+    image: '/images/plan/wing-box-combo.jpg',
+    summary: 'Wingの広い主空間に、BOXの水回りや個室などの機能を組み合わせる例です。',
+    roles: ['Wing：広い主空間', 'BOX：水回り・個室'],
+    modelSlugs: ['wing-01', 'box'],
+  },
+  {
+    id: 'wing-flat',
+    name: 'Wing + Flat',
+    image: '/images/plan/flat-wing-2ldk.jpg',
+    summary: 'Wingを主空間にし、Flatを寝室・書斎など必要な空間として追加する例です。',
+    roles: ['Wing：主空間', 'Flat：寝室・書斎など'],
+    modelSlugs: ['wing-01', 'flat'],
+  },
+  {
+    id: 'box-flat',
+    name: 'BOX + Flat',
+    image: '/images/plan/box-flat-combo.jpg',
+    summary: 'BOXに設備や個室をまとめ、Flatでシンプルな追加空間をつくる例です。',
+    roles: ['BOX：設備・個室', 'Flat：追加空間'],
+    modelSlugs: ['box', 'flat'],
+  },
+] as const;
 
 type PlanImage = { url: string; alt: string; caption: string | null };
 
@@ -95,6 +122,19 @@ function registeredFloorplanForPreset(bundle: CatalogBundle, preset: ModelPreset
 
 export default async function PlansPage() {
   const { models, bundles } = await getPublicCatalog();
+  const availableModelSlugs = new Set(models.map((model) => model.slug));
+  const visibleCombinations = combinationExamples.filter((combination) =>
+    combination.modelSlugs.every((slug) => availableModelSlugs.has(slug))
+  );
+  const modelNavItems = models.map((model) => {
+    const images = bundles[model.id]?.images ?? [];
+    const image =
+      images.find((row) => row.kind === 'hero') ??
+      images.find((row) => row.kind === 'exterior') ??
+      images.find((row) => row.kind === 'interior') ??
+      null;
+    return { model, image };
+  });
 
   return (
     <>
@@ -106,23 +146,56 @@ export default async function PlansPage() {
           <p className="label-en text-forest">Plans &amp; styles</p>
           <h1 className="mt-2.5 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
           <p className="mt-2.5 text-sm leading-6 text-ink-soft sm:text-base">
-            各モデルのパースと特徴、その下で仕様ごとの平面図を比較できます。
+            各モデルの特徴と仕様ごとの平面図に加え、組み合わせ例も確認できます。
           </p>
         </Reveal>
 
         {models.length > 0 && (
-          <nav aria-label="商品モデル" className="sticky top-0 z-20 -mx-4 border-y border-line bg-white/95 px-4 py-2 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
-            <div className="flex gap-2 overflow-x-auto">
-              {models.map((model) => (
-                <Link
-                  key={model.id}
-                  href={`#model-${model.slug}`}
-                  className="shrink-0 rounded-full border border-line bg-white px-4 py-1.5 text-sm font-semibold text-ink-soft transition hover:border-forest hover:text-forest"
-                >
-                  {displayModelName(model.name)}
-                </Link>
-              ))}
+          <nav
+            aria-label="商品・組み合わせ"
+            className="sticky top-0 z-20 -mx-4 border-y border-line bg-white/95 px-4 py-2.5 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
+          >
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold text-muted">単体モデル</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {modelNavItems.map(({ model, image }) => (
+                  <Link
+                    key={model.id}
+                    href={`#model-${model.slug}`}
+                    className="flex min-w-[7.2rem] shrink-0 items-center gap-2 rounded-lg border border-line bg-white p-1.5 text-ink-soft shadow-sm transition hover:border-forest hover:text-forest"
+                  >
+                    <span className="relative h-9 w-12 shrink-0 overflow-hidden rounded-md bg-sand">
+                      {image ? (
+                        <SmartImage src={image.url} alt="" fill sizes="48px" className="object-cover" />
+                      ) : (
+                        <span className="flex h-full items-center justify-center text-[9px] text-muted">画像準備中</span>
+                      )}
+                    </span>
+                    <span className="whitespace-nowrap text-xs font-semibold">{displayModelName(model.name)}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
+
+            {visibleCombinations.length > 0 && (
+              <div className="mt-2 border-t border-line/70 pt-2">
+                <p className="mb-1.5 text-[10px] font-semibold text-muted">組み合わせ</p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {visibleCombinations.map((combination) => (
+                    <Link
+                      key={combination.id}
+                      href={`#combo-${combination.id}`}
+                      className="flex min-w-[8.6rem] shrink-0 items-center gap-2 rounded-lg border border-line bg-white p-1.5 text-ink-soft shadow-sm transition hover:border-forest hover:text-forest"
+                    >
+                      <span className="relative h-9 w-12 shrink-0 overflow-hidden rounded-md bg-sand">
+                        <SmartImage src={combination.image} alt="" fill sizes="48px" className="object-cover" />
+                      </span>
+                      <span className="whitespace-nowrap text-xs font-semibold">{combination.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
           </nav>
         )}
       </Container>
@@ -155,7 +228,7 @@ export default async function PlansPage() {
               <section
                 key={model.id}
                 id={`model-${model.slug}`}
-                className={`scroll-mt-20 border-t border-line ${modelIndex % 2 === 0 ? 'bg-ivory' : 'bg-white'}`}
+                className={`scroll-mt-40 border-t border-line ${modelIndex % 2 === 0 ? 'bg-ivory' : 'bg-white'}`}
               >
                 <Container className="py-7 sm:py-9">
                   <Reveal className="flex flex-wrap items-end justify-between gap-2.5">
@@ -313,6 +386,76 @@ export default async function PlansPage() {
               </section>
             );
           })}
+
+          {visibleCombinations.length > 0 && (
+            <section className="border-t border-line bg-white">
+              <Container className="py-8 sm:py-10">
+                <Reveal>
+                  <p className="label-en text-forest">Combinations</p>
+                  <h2 className="mt-1 text-3xl sm:text-4xl">組み合わせ例</h2>
+                  <p className="mt-2 text-sm leading-6 text-ink-soft">
+                    単体モデルの得意な空間を組み合わせることで、住まいや施設の構成を広げられます。
+                  </p>
+                </Reveal>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  {visibleCombinations.map((combination) => (
+                    <Reveal
+                      key={combination.id}
+                      id={`combo-${combination.id}`}
+                      className="scroll-mt-40 overflow-hidden rounded-xl border border-line bg-ivory shadow-sm"
+                    >
+                      <a
+                        href={combination.image}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="relative block aspect-[4/3] bg-white"
+                        aria-label={`${combination.name}の組み合わせイメージを拡大`}
+                      >
+                        <SmartImage
+                          src={combination.image}
+                          alt={`${combination.name}の組み合わせ例`}
+                          fill
+                          sizes="(min-width: 768px) 31vw, 92vw"
+                          className="object-contain p-2"
+                        />
+                      </a>
+                      <div className="border-t border-line bg-white p-3.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-serif text-lg">{combination.name}</h3>
+                          <span className="text-[10px] text-muted">組み合わせ例</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-ink-soft">{combination.summary}</p>
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {combination.roles.map((role) => (
+                            <span key={role} className="rounded-full bg-ivory px-2.5 py-1 text-[10px] font-semibold text-ink-soft">
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+                          {combination.modelSlugs.map((slug) => {
+                            const model = models.find((row) => row.slug === slug);
+                            if (!model) return null;
+                            return (
+                              <Link
+                                key={slug}
+                                href={`#model-${slug}`}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest"
+                              >
+                                {displayModelName(model.name)}を見る
+                                <ArrowRight className="size-3" aria-hidden="true" />
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </Reveal>
+                  ))}
+                </div>
+              </Container>
+            </section>
+          )}
         </div>
       )}
     </>

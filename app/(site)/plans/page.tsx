@@ -140,15 +140,16 @@ function registeredFloorplanForPreset(bundle: CatalogBundle, preset: ModelPreset
 export default async function PlansPage() {
   const { models, bundles } = await getPublicCatalog();
   const availableModelSlugs = new Set(models.map((model) => model.slug));
-  const visibleCombinations = combinationExamples.filter((combination) =>
-    combination.modelSlugs.every((slug) => availableModelSlugs.has(slug))
-  );
   const modelNavItems = models.map((model) => {
     const bundle = bundles[model.id];
     const images = bundle?.images ?? [];
     const image = (bundle ? registeredRepresentativePerspective(bundle) : null) ?? legacyCommonPerspective(images);
     return { model, image };
   });
+  const representativeImageBySlug = new Map(modelNavItems.map(({ model, image }) => [model.slug, image] as const));
+  const visibleCombinations = combinationExamples.filter((combination) =>
+    combination.modelSlugs.every((slug) => availableModelSlugs.has(slug))
+  );
 
   return (
     <>
@@ -158,9 +159,9 @@ export default async function PlansPage() {
         <Breadcrumbs items={[{ name: 'ホーム', path: '/' }, { name: '商品・仕様・間取り' }]} />
         <Reveal className="max-w-3xl pb-5 pt-7 sm:pb-6 sm:pt-8">
           <p className="label-en text-forest">Plans &amp; styles</p>
-          <h1 className="mt-2.5 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
+          <h1 className="mt-2.5 text-3xl sm:text-4xl">間取りからモデルを選ぶ</h1>
           <p className="mt-2.5 text-sm leading-6 text-ink-soft sm:text-base">
-            パースと平面図を見ながら、単体モデルと組み合わせ例を比べられます。
+            外観・特徴・間取りを見ながら、Wing・BOX・Flatの違いや組み合わせ例を比較できます。
           </p>
         </Reveal>
 
@@ -201,8 +202,19 @@ export default async function PlansPage() {
                       href={`#combo-${combination.id}`}
                       className="flex min-w-[8.6rem] shrink-0 items-center gap-2 rounded-lg border border-line bg-white p-1.5 text-ink-soft shadow-sm transition hover:border-forest hover:text-forest"
                     >
-                      <span className="relative h-9 w-12 shrink-0 overflow-hidden rounded-md bg-sand">
-                        <SmartImage src={combination.image} alt="" fill sizes="48px" className="object-cover" />
+                      <span className="flex h-9 w-12 shrink-0 overflow-hidden rounded-md bg-sand">
+                        {combination.modelSlugs.map((slug) => {
+                          const image = representativeImageBySlug.get(slug) ?? null;
+                          return (
+                            <span key={slug} className="relative h-full min-w-0 flex-1 border-r border-white/70 last:border-r-0">
+                              {image ? (
+                                <SmartImage src={image.url} alt="" fill sizes="24px" className="object-cover" />
+                              ) : (
+                                <span className="flex h-full items-center justify-center text-[7px] text-muted">—</span>
+                              )}
+                            </span>
+                          );
+                        })}
                       </span>
                       <span className="whitespace-nowrap text-xs font-semibold">{combination.name}</span>
                     </Link>
@@ -356,7 +368,7 @@ export default async function PlansPage() {
                               {floorplan?.caption && <p className="mt-1 truncate text-[10px] text-muted">{floorplan.caption}</p>}
                               <Link
                                 href={simulatorHref}
-                                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest"
+                                className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-forest underline decoration-forest/30 underline-offset-4 hover:decoration-forest sm:text-sm"
                               >
                                 この仕様で見積する
                                 <ArrowRight className="size-3" aria-hidden="true" />

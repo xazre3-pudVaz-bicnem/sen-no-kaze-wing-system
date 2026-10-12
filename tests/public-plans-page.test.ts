@@ -10,7 +10,7 @@ const sitemap = fs.readFileSync(path.join(root, 'app/sitemap.ts'), 'utf8');
 describe('公開 商品・仕様・間取りページ', () => {
   it('モデルのパースと商品特徴を上段にまとめ、その下で仕様別平面図を比較する', () => {
     expect(plansPage).toContain('getPublicCatalog');
-    expect(plansPage).toContain('各モデルのパースと特徴、その下で仕様ごとの平面図を比較できます。');
+    expect(plansPage).toContain('各モデルの特徴と仕様ごとの平面図に加え、組み合わせ例も確認できます。');
     expect(plansPage).toContain('model.features.slice(0, 4)');
     expect(plansPage).toContain('の特徴');
     expect(plansPage).toContain('商品共通');
@@ -36,6 +36,34 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('住まい・LDK・広めの客室・店舗・事務所');
     expect(plansPage).toContain('水回り・個室・ホテル客室・単身者用');
     expect(plansPage).toContain('寝室・書斎・事務所・物置・バックヤード');
+  });
+
+  it('上部ナビは単体モデルと組み合わせを上下2段で画像付き表示する', () => {
+    expect(plansPage).toContain('単体モデル');
+    expect(plansPage).toContain('組み合わせ');
+    expect(plansPage).toContain('modelNavItems');
+    expect(plansPage).toContain('visibleCombinations');
+    expect(plansPage).toContain('href={`#model-${model.slug}`}');
+    expect(plansPage).toContain('href={`#combo-${combination.id}`}');
+    expect(plansPage).toContain('h-9 w-12');
+  });
+
+  it('Wing+BOX・Wing+Flat・BOX+Flatの既存画像を組み合わせ例として表示する', () => {
+    expect(plansPage).toContain("image: '/images/plan/wing-box-combo.jpg'");
+    expect(plansPage).toContain("image: '/images/plan/flat-wing-2ldk.jpg'");
+    expect(plansPage).toContain("image: '/images/plan/box-flat-combo.jpg'");
+    expect(plansPage).toContain("id: 'wing-box'");
+    expect(plansPage).toContain("id: 'wing-flat'");
+    expect(plansPage).toContain("id: 'box-flat'");
+    expect(plansPage).toContain('id={`combo-${combination.id}`}');
+    expect(plansPage).toContain('組み合わせイメージを拡大');
+  });
+
+  it('組み合わせ例は専用見積へ直結させず構成モデルへ戻れる', () => {
+    expect(plansPage).toContain('combination.modelSlugs.map');
+    expect(plansPage).toContain('href={`#model-${slug}`}');
+    expect(plansPage).toContain('を見る');
+    expect(plansPage).not.toContain('この組み合わせで見積する');
   });
 
   it('管理画面で登録した仕様別平面図を旧product_imagesより優先する', () => {

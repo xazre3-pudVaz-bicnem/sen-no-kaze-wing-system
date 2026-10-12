@@ -10,6 +10,7 @@ import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
+import { WingStructureMotion } from '@/components/sections/wing-structure-motion';
 
 export const metadata = buildMetadata({
   title: '商品・仕様・間取り｜Wing・BOX・Flatを比較',
@@ -33,22 +34,22 @@ const modelPositioning: Record<
   { headline: string; summary: string; strength: string; uses: string }
 > = {
   'wing-01': {
-    headline: '広い空間をつくる',
-    summary: '運ぶときはコンパクト。設置場所で横に展開し、人が長く過ごす主空間を広く取れます。',
-    strength: '折り畳んで運び、現地で広い一室へ展開',
-    uses: '住まい・LDK・広めの客室・店舗・事務所',
+    headline: '折り畳んで運び、現地で広げる',
+    summary: '運搬時はコンパクトに。設置後は左右を広げて、ゆとりのある室内になります。',
+    strength: '折り畳み式。設置場所で左右へ展開',
+    uses: '住宅・ホテル・店舗・事務所',
   },
   box: {
-    headline: '機能をまとめる',
-    summary: 'コンパクトな箱型に、水回りや個室など一つの機能をまとめやすいモデルです。',
-    strength: '設備や個室をコンパクトな箱型に集約',
-    uses: '水回り・個室・ホテル客室・単身者用',
+    headline: 'コンパクトな箱型ユニット',
+    summary: '水回りや個室など、必要な設備をひとつのユニットにまとめやすい形です。',
+    strength: '箱型のまま設置。並べる・重ねる構成にも対応',
+    uses: 'ホテル客室・単身者用・水回り・個室',
   },
   flat: {
-    headline: '必要な空間を足す',
-    summary: 'シンプルな一室として、必要な場所へ追加・組み合わせしやすいモデルです。',
-    strength: 'シンプルなフラット型で追加・組み合わせしやすい',
-    uses: '寝室・書斎・事務所・物置・バックヤード',
+    headline: '必要な場所に、もう一室',
+    summary: '寝室、書斎、事務所、物置など、用途に合わせてシンプルな一室を追加できます。',
+    strength: '用途を限定しないシンプルな一室',
+    uses: '寝室・書斎・事務所・物置',
   },
 };
 
@@ -57,7 +58,7 @@ const combinationExamples = [
     id: 'wing-box',
     name: 'Wing + BOX',
     image: '/images/plan/wing-box-combo.jpg',
-    summary: 'Wingの広い主空間に、BOXの水回りや個室などの機能を組み合わせる例です。',
+    summary: 'Wingを広く使い、BOX側に水回りや個室をまとめる組み合わせです。',
     roles: ['Wing：広い主空間', 'BOX：水回り・個室'],
     modelSlugs: ['wing-01', 'box'],
   },
@@ -65,7 +66,7 @@ const combinationExamples = [
     id: 'wing-flat',
     name: 'Wing + Flat',
     image: '/images/plan/flat-wing-2ldk.jpg',
-    summary: 'Wingを主空間にし、Flatを寝室・書斎など必要な空間として追加する例です。',
+    summary: 'Wingを中心に、Flatを寝室や書斎などの一室として加える組み合わせです。',
     roles: ['Wing：主空間', 'Flat：寝室・書斎など'],
     modelSlugs: ['wing-01', 'flat'],
   },
@@ -73,7 +74,7 @@ const combinationExamples = [
     id: 'box-flat',
     name: 'BOX + Flat',
     image: '/images/plan/box-flat-combo.jpg',
-    summary: 'BOXに設備や個室をまとめ、Flatでシンプルな追加空間をつくる例です。',
+    summary: 'BOXに水回りや個室をまとめ、Flatを必要な一室として加える組み合わせです。',
     roles: ['BOX：設備・個室', 'Flat：追加空間'],
     modelSlugs: ['box', 'flat'],
   },
@@ -146,7 +147,7 @@ export default async function PlansPage() {
           <p className="label-en text-forest">Plans &amp; styles</p>
           <h1 className="mt-2.5 text-3xl sm:text-4xl">平面図とパースから仕様を選ぶ</h1>
           <p className="mt-2.5 text-sm leading-6 text-ink-soft sm:text-base">
-            各モデルの特徴と仕様ごとの平面図に加え、組み合わせ例も確認できます。
+            パースと平面図を見ながら、単体モデルと組み合わせ例を比べられます。
           </p>
         </Reveal>
 
@@ -282,13 +283,14 @@ export default async function PlansPage() {
                         <div className="mt-3">
                           <p className="font-serif text-lg text-forest sm:text-xl">{positioning.headline}</p>
                           <p className="mt-1.5 text-xs leading-6 text-ink-soft sm:text-sm">{positioning.summary}</p>
+                          {model.slug === 'wing-01' && <WingStructureMotion />}
                           <div className="mt-3 grid grid-cols-2 gap-2.5">
                             <div className="rounded-lg bg-ivory px-3 py-2.5">
-                              <p className="text-[10px] font-semibold text-muted">構造の強み</p>
+                              <p className="text-[10px] font-semibold text-muted">特徴</p>
                               <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.strength}</p>
                             </div>
                             <div className="rounded-lg bg-ivory px-3 py-2.5">
-                              <p className="text-[10px] font-semibold text-muted">向いている空間</p>
+                              <p className="text-[10px] font-semibold text-muted">主な用途</p>
                               <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.uses}</p>
                             </div>
                           </div>
@@ -394,7 +396,7 @@ export default async function PlansPage() {
                   <p className="label-en text-forest">Combinations</p>
                   <h2 className="mt-1 text-3xl sm:text-4xl">組み合わせ例</h2>
                   <p className="mt-2 text-sm leading-6 text-ink-soft">
-                    単体モデルの得意な空間を組み合わせて、必要な構成へ広げる例です。
+                    単体だけでなく、用途に合わせてモデル同士を組み合わせることもできます。
                   </p>
                 </Reveal>
 

@@ -10,7 +10,7 @@ import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
-import { FloorplanLightbox } from '@/components/sections/floorplan-lightbox';
+import { ImageLightbox } from '@/components/sections/image-lightbox';
 
 export const metadata = buildMetadata({
   title: '商品・仕様・間取り｜Wing・BOX・Flatを比較',
@@ -86,6 +86,27 @@ function displayModelName(name: string) {
   return name === 'フラット' ? 'Flat' : name;
 }
 
+function registeredCommonPerspective(bundle: CatalogBundle): PlanImage | null {
+  const commonRules = bundle.previewRules.filter(
+    (rule) =>
+      (rule.view === 'exterior' || rule.view === 'interior') &&
+      rule.kind === 'composite' &&
+      rule.status === 'published' &&
+      rule.preview_keys.length === 0
+  );
+  const rule = commonRules.find((row) => row.view === 'exterior') ?? commonRules.find((row) => row.view === 'interior') ?? null;
+  return rule ? { url: rule.url, alt: rule.alt, caption: null } : null;
+}
+
+function legacyCommonPerspective(images: CatalogBundle['images']): PlanImage | null {
+  const image =
+    images.find((row) => row.kind === 'hero') ??
+    images.find((row) => row.kind === 'exterior') ??
+    images.find((row) => row.kind === 'interior') ??
+    null;
+  return image ? { url: image.url, alt: image.alt, caption: image.caption } : null;
+}
+
 function floorplanForPreset(modelSlug: string, presetCode: string, floorplans: PlanImage[]) {
   const hints = planCaptionHints[`${modelSlug}:${presetCode}`] ?? [];
   const matched = floorplans.find((image) => hints.some((hint) => image.caption?.includes(hint)));
@@ -128,12 +149,9 @@ export default async function PlansPage() {
     combination.modelSlugs.every((slug) => availableModelSlugs.has(slug))
   );
   const modelNavItems = models.map((model) => {
-    const images = bundles[model.id]?.images ?? [];
-    const image =
-      images.find((row) => row.kind === 'hero') ??
-      images.find((row) => row.kind === 'exterior') ??
-      images.find((row) => row.kind === 'interior') ??
-      null;
+    const bundle = bundles[model.id];
+    const images = bundle?.images ?? [];
+    const image = (bundle ? registeredCommonPerspective(bundle) : null) ?? legacyCommonPerspective(images);
     return { model, image };
   });
 
@@ -215,11 +233,7 @@ export default async function PlansPage() {
               .filter((image) => image.kind === 'floorplan')
               .sort((a, b) => a.sort_order - b.sort_order)
               .map((image) => ({ url: image.url, alt: image.alt, caption: image.caption }));
-            const commonPerspective =
-              images.find((image) => image.kind === 'hero') ??
-              images.find((image) => image.kind === 'exterior') ??
-              images.find((image) => image.kind === 'interior') ??
-              null;
+            const commonPerspective = registeredCommonPerspective(bundle) ?? legacyCommonPerspective(images);
             const presets = model.presets ?? [];
             const modelName = displayModelName(model.name);
             const modelFeatures = model.features.slice(0, 4);
@@ -253,21 +267,17 @@ export default async function PlansPage() {
                           <span className="text-[10px] text-muted">{modelName}</span>
                         </div>
                         {commonPerspective ? (
-                          <a
-                            href={commonPerspective.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="relative block aspect-[4/3] bg-sand"
-                            aria-label={`${modelName}の共通パースを拡大`}
-                          >
-                            <SmartImage
+                          <div className="relative aspect-[4/3] bg-sand">
+                            <ImageLightbox
                               src={commonPerspective.url}
                               alt={commonPerspective.alt}
-                              fill
-                              sizes="(min-width: 768px) 32vw, 92vw"
-                              className="object-cover"
+                              title={`${modelName}の共通パース`}
+                              triggerSizes="(min-width: 768px) 32vw, 92vw"
+                              triggerImageClassName="object-cover transition hover:opacity-90"
+                              modalImageClassName="object-contain p-2 sm:p-4"
+                              modalBackgroundClassName="bg-sand"
                             />
-                          </a>
+                          </div>
                         ) : (
                           <div className="flex aspect-[4/3] items-center justify-center bg-sand px-3 text-center text-xs text-muted">パース準備中</div>
                         )}
@@ -336,11 +346,12 @@ export default async function PlansPage() {
 
                             {floorplan ? (
                               <div className="relative aspect-[4/3] bg-[#f5f2eb]">
-                                <FloorplanLightbox
+                                <ImageLightbox
                                   src={floorplan.url}
                                   alt={floorplan.alt}
-                                  modelName={modelName}
-                                  presetName={preset.name}
+                                  title={`${modelName} ${preset.name}の平面図`}
+                                  triggerSizes="(min-width: 1280px) 28vw, (min-width: 768px) 44vw, 50vw"
+                                  triggerImageClassName="object-contain p-1.5 transition hover:opacity-90"
                                 />
                               </div>
                             ) : (

@@ -28,6 +28,30 @@ const planCaptionHints: Record<string, string[]> = {
   'flat:office': ['6.8帖', '事務所'],
 };
 
+const modelPositioning: Record<
+  string,
+  { headline: string; summary: string; strength: string; uses: string }
+> = {
+  'wing-01': {
+    headline: '広い空間をつくる',
+    summary: '運ぶときはコンパクト。設置場所で横に展開し、人が長く過ごす主空間を広く取れます。',
+    strength: '折り畳んで運び、現地で広い一室へ展開',
+    uses: '住まい・LDK・広めの客室・店舗・事務所',
+  },
+  box: {
+    headline: '機能をまとめる',
+    summary: 'コンパクトな箱型に、水回りや個室など一つの機能をまとめやすいモデルです。',
+    strength: '設備や個室をコンパクトな箱型に集約',
+    uses: '水回り・個室・ホテル客室・単身者用',
+  },
+  flat: {
+    headline: '必要な空間を足す',
+    summary: 'シンプルな一室として、必要な場所へ追加・組み合わせしやすいモデルです。',
+    strength: 'シンプルなフラット型で追加・組み合わせしやすい',
+    uses: '寝室・書斎・事務所・物置・バックヤード',
+  },
+};
+
 type PlanImage = { url: string; alt: string; caption: string | null };
 
 function displayModelName(name: string) {
@@ -125,6 +149,7 @@ export default async function PlansPage() {
             const presets = model.presets ?? [];
             const modelName = displayModelName(model.name);
             const modelFeatures = model.features.slice(0, 4);
+            const positioning = modelPositioning[model.slug] ?? null;
 
             return (
               <section
@@ -180,7 +205,22 @@ export default async function PlansPage() {
                         <h3 className="font-serif text-base sm:text-lg">{modelName} の特徴</h3>
                         <span className="text-[10px] text-muted">商品共通</span>
                       </div>
-                      {modelFeatures.length > 0 ? (
+                      {positioning ? (
+                        <div className="mt-3">
+                          <p className="font-serif text-lg text-forest sm:text-xl">{positioning.headline}</p>
+                          <p className="mt-1.5 text-xs leading-6 text-ink-soft sm:text-sm">{positioning.summary}</p>
+                          <div className="mt-3 grid grid-cols-2 gap-2.5">
+                            <div className="rounded-lg bg-ivory px-3 py-2.5">
+                              <p className="text-[10px] font-semibold text-muted">構造の強み</p>
+                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.strength}</p>
+                            </div>
+                            <div className="rounded-lg bg-ivory px-3 py-2.5">
+                              <p className="text-[10px] font-semibold text-muted">向いている空間</p>
+                              <p className="mt-1 text-xs font-semibold leading-5 text-ink-soft sm:text-sm">{positioning.uses}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : modelFeatures.length > 0 ? (
                         <div className="mt-3 grid grid-cols-2 gap-2.5">
                           {modelFeatures.map((feature) => (
                             <div key={feature.title} className="rounded-lg bg-ivory px-3 py-2.5">

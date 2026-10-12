@@ -394,7 +394,7 @@ export default async function PlansPage() {
                   <p className="label-en text-forest">Combinations</p>
                   <h2 className="mt-1 text-3xl sm:text-4xl">組み合わせ例</h2>
                   <p className="mt-2 text-sm leading-6 text-ink-soft">
-                    単体モデルの得意な空間を組み合わせることで、住まいや施設の構成を広げられます。
+                    単体モデルの得意な空間を組み合わせて、必要な構成へ広げる例です。
                   </p>
                 </Reveal>
 

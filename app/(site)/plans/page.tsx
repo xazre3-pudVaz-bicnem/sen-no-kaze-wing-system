@@ -10,7 +10,7 @@ import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
-import { WingStructureMotion } from '@/components/sections/wing-structure-motion';
+import { FloorplanLightbox } from '@/components/sections/floorplan-lightbox';
 
 export const metadata = buildMetadata({
   title: '商品・仕様・間取り｜Wing・BOX・Flatを比較',
@@ -283,7 +283,6 @@ export default async function PlansPage() {
                         <div className="mt-3">
                           <p className="font-serif text-lg text-forest sm:text-xl">{positioning.headline}</p>
                           <p className="mt-1.5 text-xs leading-6 text-ink-soft sm:text-sm">{positioning.summary}</p>
-                          {model.slug === 'wing-01' && <WingStructureMotion />}
                           <div className="mt-3 grid grid-cols-2 gap-2.5">
                             <div className="rounded-lg bg-ivory px-3 py-2.5">
                               <p className="text-[10px] font-semibold text-muted">特徴</p>
@@ -313,7 +312,7 @@ export default async function PlansPage() {
                   <div className="mt-5 flex items-end justify-between gap-3 border-b border-line pb-2">
                     <div>
                       <p className="text-xs font-semibold text-forest">仕様ごとの平面図</p>
-                      <p className="mt-0.5 text-[11px] text-muted">用途に合う間取りを見比べられます。平面図を押すと、その仕様で見積を始められます。</p>
+                      <p className="mt-0.5 text-[11px] text-muted">用途に合う間取りを見比べられます。平面図を押すと大きく確認できます。</p>
                     </div>
                   </div>
 
@@ -334,28 +333,12 @@ export default async function PlansPage() {
 
                             {floorplan ? (
                               <div className="relative aspect-[4/3] bg-[#f5f2eb]">
-                                <Link
-                                  href={simulatorHref}
-                                  className="absolute inset-0 block"
-                                  aria-label={`${modelName} ${preset.name}で見積シミュレーターを開く`}
-                                >
-                                  <SmartImage
-                                    src={floorplan.url}
-                                    alt={floorplan.alt}
-                                    fill
-                                    sizes="(min-width: 1280px) 28vw, (min-width: 768px) 44vw, 50vw"
-                                    className="object-contain p-1.5 transition hover:opacity-90"
-                                  />
-                                </Link>
-                                <a
-                                  href={floorplan.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="absolute right-2 top-2 z-10 rounded-full border border-line bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-forest shadow-sm backdrop-blur hover:border-forest"
-                                  aria-label={`${modelName} ${preset.name}の平面図を拡大`}
-                                >
-                                  拡大
-                                </a>
+                                <FloorplanLightbox
+                                  src={floorplan.url}
+                                  alt={floorplan.alt}
+                                  modelName={modelName}
+                                  presetName={preset.name}
+                                />
                               </div>
                             ) : (
                               <div className="flex aspect-[4/3] items-center justify-center bg-[#f5f2eb] px-2 text-center text-xs text-muted">平面図準備中</div>

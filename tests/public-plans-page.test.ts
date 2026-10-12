@@ -27,6 +27,17 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(floorplanIndex).toBeGreaterThan(featureIndex);
   });
 
+  it('Wing・BOX・Flatを用途で固定せず、構造から来る得意分野で説明する', () => {
+    expect(plansPage).toContain("headline: '広い空間をつくる'");
+    expect(plansPage).toContain("headline: '機能をまとめる'");
+    expect(plansPage).toContain("headline: '必要な空間を足す'");
+    expect(plansPage).toContain('構造の強み');
+    expect(plansPage).toContain('向いている空間');
+    expect(plansPage).toContain('住まい・LDK・広めの客室・店舗・事務所');
+    expect(plansPage).toContain('水回り・個室・ホテル客室・単身者用');
+    expect(plansPage).toContain('寝室・書斎・事務所・物置・バックヤード');
+  });
+
   it('管理画面で登録した仕様別平面図を旧product_imagesより優先する', () => {
     expect(plansPage).toContain('registeredFloorplanForPreset');
     expect(plansPage).toContain('bundle.previewRules.filter');
@@ -36,7 +47,8 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('registeredFloorplan ?? floorplanForPreset');
   });
 
-  it('商品特徴がない場合も既存の商品説明で安全に補完する', () => {
+  it('既知の比較説明がないモデルは既存の商品特徴・商品説明で安全に補完する', () => {
+    expect(plansPage).toContain('modelPositioning[model.slug] ?? null');
     expect(plansPage).toContain('modelFeatures.length > 0');
     expect(plansPage).toContain('model.description');
   });

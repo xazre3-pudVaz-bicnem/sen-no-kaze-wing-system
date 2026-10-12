@@ -18,10 +18,12 @@ function ProductHeading({ p }: { p: ShowcaseProduct }) {
   );
 }
 
-function EstimateButton({ p }: { p: ShowcaseProduct }) {
+function PlansButton({ p }: { p: ShowcaseProduct }) {
+  const modelName = p.slug === 'wing-01' ? 'Wing' : p.slug === 'box' ? 'BOX' : 'Flat';
+
   return (
-    <Link href={`/simulator/${p.slug}`} className="btn-gold mt-3 px-3 py-1.5 text-[0.72rem] sm:px-5 sm:py-2.5 sm:text-sm">
-      {showcase.cta}
+    <Link href={`/plans#model-${p.slug}`} className="btn-gold mt-3 px-3 py-1.5 text-[0.72rem] sm:px-5 sm:py-2.5 sm:text-sm">
+      {modelName}の仕様・間取りを見る
       <ArrowRight className="size-4" aria-hidden="true" />
     </Link>
   );
@@ -45,7 +47,7 @@ export function ProductShowcase() {
               <div className="mt-2 grid grid-cols-[1.15fr_1fr] items-start gap-3">
                 <div>
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{wing.body}</p>
-                  <EstimateButton p={wing} />
+                  <PlansButton p={wing} />
                 </div>
                 <div className="relative aspect-[4/5] w-full">
                   <Image src={wing.images[0].src} alt={wing.images[0].alt} fill sizes="(min-width: 1024px) 24vw, 50vw" className="object-contain" />
@@ -102,7 +104,7 @@ export function ProductShowcase() {
               <div className="mt-2 grid grid-cols-[1.1fr_1fr] items-start gap-3">
                 <div>
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{box.body}</p>
-                  <EstimateButton p={box} />
+                  <PlansButton p={box} />
                 </div>
                 <div className="space-y-1.5 sm:space-y-3">
                   <div className="relative mx-auto aspect-[1672/941] w-[88%]">
@@ -155,7 +157,7 @@ export function ProductShowcase() {
               <div className="mt-2 grid grid-cols-[1.15fr_1fr] items-start gap-3">
                 <div>
                   <p className="text-[0.8rem] leading-[1.85] whitespace-pre-line text-white/90 sm:text-[0.9rem]">{flat.body}</p>
-                  <EstimateButton p={flat} />
+                  <PlansButton p={flat} />
                 </div>
                 <div className="mx-auto w-[88%] space-y-3 lg:w-[90%]">
                   <div className="relative mx-auto aspect-[237/202] w-[74%]">

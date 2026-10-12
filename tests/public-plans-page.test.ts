@@ -77,10 +77,11 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).toContain('title={`${combination.name}の組み合わせ平面図`}');
   });
 
-  it('組み合わせ例は専用見積へ直結させず構成モデルへ戻れる', () => {
-    expect(plansPage).toContain('combination.modelSlugs.map');
-    expect(plansPage).toContain('href={`#model-${slug}`}');
-    expect(plansPage).toContain('を見る');
+  it('組み合わせ例はカード内リンクを置かず、共通問い合わせへまとめる', () => {
+    expect(plansPage).not.toContain('href={`#model-${slug}`}');
+    expect(plansPage).not.toContain('この組み合わせについて相談する');
+    expect(plansPage).toContain('<ButtonLink href="/contact" size="sm">');
+    expect(plansPage).toContain('組み合わせについて問い合わせる');
     expect(plansPage).not.toContain('この組み合わせで見積する');
   });
 

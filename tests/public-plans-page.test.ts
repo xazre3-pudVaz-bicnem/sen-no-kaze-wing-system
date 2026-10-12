@@ -27,6 +27,15 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(floorplanIndex).toBeGreaterThan(featureIndex);
   });
 
+  it('管理画面で登録した仕様別平面図を旧product_imagesより優先する', () => {
+    expect(plansPage).toContain('registeredFloorplanForPreset');
+    expect(plansPage).toContain('bundle.previewRules.filter');
+    expect(plansPage).toContain('isPresetFloorplanRule(rule, preset.code)');
+    expect(plansPage).toContain("selectedPreviewKeys(bundle.options, selectedIds, 'floorplan')");
+    expect(plansPage).toContain('samePreviewKeys(rule.preview_keys, keys)');
+    expect(plansPage).toContain('registeredFloorplan ?? floorplanForPreset');
+  });
+
   it('商品特徴がない場合も既存の商品説明で安全に補完する', () => {
     expect(plansPage).toContain('modelFeatures.length > 0');
     expect(plansPage).toContain('model.description');

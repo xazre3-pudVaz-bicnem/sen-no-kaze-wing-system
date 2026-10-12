@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { getPublicCatalog } from '@/lib/data/public-catalog';
+import { buildPresetSelection } from '@/lib/domain/preset';
+import { selectedPreviewKeys } from '@/lib/domain/preview';
+import { isDedicatedBaseFloorplanRule, isPresetFloorplanRule, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
+import { samePreviewKeys } from '@/lib/domain/floorplan-admin';
+import type { CatalogBundle, ModelPreset } from '@/lib/domain/types';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { Breadcrumbs, ButtonLink, Container, JsonLd } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -34,6 +39,34 @@ function floorplanForPreset(modelSlug: string, presetCode: string, floorplans: P
   const matched = floorplans.find((image) => hints.some((hint) => image.caption?.includes(hint)));
   if (matched) return matched;
   return floorplans.length === 1 ? floorplans[0] : null;
+}
+
+function registeredFloorplanForPreset(bundle: CatalogBundle, preset: ModelPreset): PlanImage | null {
+  const floorplanRules = bundle.previewRules.filter(
+    (rule) => rule.view === 'floorplan' && rule.kind === 'composite' && rule.status === 'published'
+  );
+  const dedicated = floorplanRules.find((rule) => isPresetFloorplanRule(rule, preset.code));
+  if (dedicated) {
+    return { url: dedicated.url, alt: dedicated.alt, caption: null };
+  }
+
+  const ctx = {
+    options: bundle.options,
+    categories: bundle.categories,
+    dependencies: bundle.dependencies,
+    conflicts: bundle.conflicts,
+  };
+  const selectedIds = buildPresetSelection(ctx, preset);
+  const keys = selectedPreviewKeys(bundle.options, selectedIds, 'floorplan');
+  if (keys.length === 0) return null;
+
+  const legacyMatched = floorplanRules.find((rule) => {
+    if (isDedicatedBaseFloorplanRule(rule)) return false;
+    if (presetFloorplanCode(rule)) return false;
+    return samePreviewKeys(rule.preview_keys, keys);
+  });
+
+  return legacyMatched ? { url: legacyMatched.url, alt: legacyMatched.alt, caption: null } : null;
 }
 
 export default async function PlansPage() {
@@ -174,7 +207,8 @@ export default async function PlansPage() {
                   ) : (
                     <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-3">
                       {presets.map((preset) => {
-                        const floorplan = floorplanForPreset(model.slug, preset.code, floorplans);
+                        const registeredFloorplan = registeredFloorplanForPreset(bundle, preset);
+                        const floorplan = registeredFloorplan ?? floorplanForPreset(model.slug, preset.code, floorplans);
 
                         return (
                           <article key={preset.code} className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">

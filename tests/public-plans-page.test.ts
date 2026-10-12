@@ -20,7 +20,7 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).not.toContain('共通参考パース');
     expect(plansPage).not.toContain('パースはモデル共通の参考画像です');
 
-    const perspectiveIndex = plansPage.indexOf('共通パース');
+    const perspectiveIndex = plansPage.indexOf('代表パース');
     const featureIndex = plansPage.indexOf('の特徴', perspectiveIndex + 1);
     const floorplanIndex = plansPage.indexOf('仕様ごとの平面図', featureIndex + 1);
     expect(perspectiveIndex).toBeGreaterThan(-1);
@@ -77,13 +77,14 @@ describe('公開 商品・仕様・間取りページ', () => {
     expect(plansPage).not.toContain('この組み合わせで見積する');
   });
 
-  it('管理画面で登録した共通パースを旧product_imagesより優先する', () => {
-    expect(plansPage).toContain('registeredCommonPerspective');
-    expect(plansPage).toContain("rule.view === 'exterior' || rule.view === 'interior'");
-    expect(plansPage).toContain("rule.kind === 'composite'");
-    expect(plansPage).toContain("rule.status === 'published'");
-    expect(plansPage).toContain('rule.preview_keys.length === 0');
-    expect(plansPage).toContain('registeredCommonPerspective(bundle) ?? legacyCommonPerspective(images)');
+  it('管理画面の完成イメージで先頭に並ぶ公開外観を代表パースにする', () => {
+    expect(plansPage).toContain('registeredRepresentativePerspective');
+    expect(plansPage).toContain("row.view === 'exterior'");
+    expect(plansPage).toContain("row.kind === 'composite'");
+    expect(plansPage).toContain("row.status === 'published'");
+    expect(plansPage).toContain('.sort((a, c) => a.preview_keys.length - c.preview_keys.length)[0] ?? null');
+    expect(plansPage).toContain('registeredRepresentativePerspective(bundle) ?? legacyCommonPerspective(images)');
+    expect(plansPage).not.toContain("rule.preview_keys.length === 0");
   });
 
   it('管理画面で登録した仕様別平面図を旧product_imagesより優先する', () => {
@@ -104,7 +105,7 @@ describe('公開 商品・仕様・間取りページ', () => {
   it('パースと平面図は同じページ内ポップアップで拡大し、拡大画像のクリックでも閉じる', () => {
     expect(plansPage).toContain("import { ImageLightbox } from '@/components/sections/image-lightbox'");
     expect(plansPage).toContain('平面図を押すと大きく確認できます。');
-    expect(plansPage).toContain('title={`${modelName}の共通パース`}');
+    expect(plansPage).toContain('title={`${modelName}の代表パース`}');
     expect(plansPage).toContain('title={`${modelName} ${preset.name}の平面図`}');
     expect(plansPage).toContain('const simulatorHref = `/simulator/${model.slug}?spec=${encodeURIComponent(preset.code)}`');
     expect(plansPage).toContain('この仕様で見積する');

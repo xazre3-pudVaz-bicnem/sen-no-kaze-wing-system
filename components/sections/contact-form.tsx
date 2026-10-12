@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { submitContactAction, type ContactState } from '@/lib/actions/contact';
-import { contactTopics } from '@/data/site-content';
+import { contactTopics } from '@/data/contact-topics';
 import { Alert, Button, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 
 const initial: ContactState = { ok: false };
 
+type ContactTopic = (typeof contactTopics)[number];
+
 /** 先方サイトと同じ項目（お名前・メール・電話・種別・内容・添付・同意） */
-export function ContactForm({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
+export function ContactForm({ tone = 'light', initialTopic }: { tone?: 'light' | 'dark'; initialTopic?: ContactTopic }) {
   const [state, action, pending] = useActionState(submitContactAction, initial);
   if (state.ok) {
     return (
@@ -34,7 +36,7 @@ export function ContactForm({ tone = 'light' }: { tone?: 'light' | 'dark' }) {
           <Input id="phone" name="phone" type="tel" autoComplete="tel" inputMode="tel" defaultValue={v.phone} />
         </Field>
         <Field label="お問い合わせの種類" htmlFor="topic" required errors={state.fieldErrors?.topic}>
-          <Select id="topic" name="topic" defaultValue={v.topic ?? ''} required>
+          <Select id="topic" name="topic" defaultValue={v.topic ?? initialTopic ?? ''} required>
             <option value="">内容を選択ください</option>
             {contactTopics.map((t) => (
               <option key={t} value={t}>

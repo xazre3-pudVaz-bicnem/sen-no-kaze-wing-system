@@ -80,7 +80,7 @@ describe('公開 商品・仕様・間取りページ', () => {
   it('組み合わせ例はカード内リンクを置かず、共通問い合わせへまとめる', () => {
     expect(plansPage).not.toContain('href={`#model-${slug}`}');
     expect(plansPage).not.toContain('この組み合わせについて相談する');
-    expect(plansPage).toContain('<ButtonLink href="/contact" size="sm">');
+    expect(plansPage).toContain('<ButtonLink href="/contact?topic=multi-model" size="sm">');
     expect(plansPage).toContain('組み合わせについて問い合わせる');
     expect(plansPage).not.toContain('この組み合わせで見積する');
   });

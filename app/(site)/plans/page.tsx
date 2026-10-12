@@ -437,7 +437,7 @@ export default async function PlansPage() {
                 </div>
 
                 <Reveal className="mt-6 flex justify-center">
-                  <ButtonLink href="/contact" size="sm">
+                  <ButtonLink href="/contact?topic=multi-model" size="sm">
                     組み合わせについて問い合わせる
                     <ArrowRight className="size-4" aria-hidden="true" />
                   </ButtonLink>

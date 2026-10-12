@@ -14,7 +14,7 @@ describe('公開プランの組み合わせ例', () => {
   });
 
   it('各カード内にリンクを置かず、カード群の下に共通問い合わせ導線を置く', () => {
-    expect(plansPage).toContain('<ButtonLink href="/contact" size="sm">');
+    expect(plansPage).toContain('<ButtonLink href="/contact?topic=multi-model" size="sm">');
     expect(plansPage).toContain('組み合わせについて問い合わせる');
     expect(plansPage).not.toContain('この組み合わせについて相談する');
     expect(plansPage).not.toContain('href={`#model-${slug}`}');

@@ -31,6 +31,7 @@ import type {
   QuoteRequestStatus,
   ContactMessage,
   ContactStatus,
+  SpecMatrix,
 } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -284,6 +285,33 @@ export class SupabaseStore implements DataStore {
     const ins = await db.from('base_breakdown_items').insert(rows).select('*');
     if (ins.error) mapPgError(ins.error);
     return (ins.data ?? []) as BaseBreakdownItem[];
+  }
+
+  // ---------- 本体仕様マトリクス ----------
+  async getSpecMatrix(): Promise<SpecMatrix | null> {
+    const db = await this.db();
+    const [specs, sizes, items, rows, cells, categoryItems] = await Promise.all([
+      db.from('matrix_specs').select('code, label, sort_order, status').order('sort_order').order('code'),
+      db.from('matrix_sizes').select('code, width_mm, depth_mm, label, sort_order, status').order('sort_order').order('code'),
+      db.from('matrix_items').select('code, label, sort_order, status').order('sort_order').order('code'),
+      db.from('matrix_rows').select('id, base_model_id, spec_code, size_code, fire_selectable, status, lock_version').order('created_at').order('id'),
+      db.from('matrix_cells').select('matrix_row_id, matrix_item_code, selectable'),
+      db.from('option_category_matrix_items').select('category_id, matrix_item_code'),
+    ]);
+    for (const result of [specs, sizes, items, rows, cells, categoryItems]) {
+      if (!result.error) continue;
+      // migration 未適用の DB（現在の本番）では表が無い。画面側はマトリクス無しとして扱う
+      if (isMissingRelation(result.error)) return null;
+      mapPgError(result.error);
+    }
+    return {
+      specs: (specs.data ?? []) as SpecMatrix['specs'],
+      sizes: (sizes.data ?? []) as SpecMatrix['sizes'],
+      items: (items.data ?? []) as SpecMatrix['items'],
+      rows: (rows.data ?? []) as SpecMatrix['rows'],
+      cells: (cells.data ?? []) as SpecMatrix['cells'],
+      categoryItems: (categoryItems.data ?? []) as SpecMatrix['categoryItems'],
+    };
   }
 
   // ---------- 標準見積テンプレート ----------

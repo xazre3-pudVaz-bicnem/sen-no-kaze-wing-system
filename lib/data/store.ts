@@ -35,6 +35,7 @@ import type {
   EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
+  SpecMatrix,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 
@@ -479,6 +480,8 @@ export interface DataStore {
   ): Promise<BaseBreakdownItem[]>;
 
   // ---- 標準見積テンプレート（Excelが価格の正本） ----
+  /** 本体仕様マトリクス（誰でも読める公開情報）。表が無い DB（migration 未適用）では null */
+  getSpecMatrix(): Promise<SpecMatrix | null>;
   listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]>;
   getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null>;
   /** 解析・検算済みの標準見積を一括置換する。base 明細も同じ transaction で更新する。 */

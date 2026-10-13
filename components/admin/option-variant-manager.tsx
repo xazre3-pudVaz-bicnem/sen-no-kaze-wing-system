@@ -352,8 +352,8 @@ export function OptionVariantManager({
         </p>
       </div>
 
-      <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add">
-        <p className="text-sm font-semibold">選ぶ項目を追加</p>
+      <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="＋ 色・仕様を追加">
+        <p className="text-sm font-semibold">お客様は何を選びますか？</p>
         <p className="mt-1 text-xs text-muted">よく使う項目はボタンから始められます。</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {QUICK_GROUPS.map((name) => (

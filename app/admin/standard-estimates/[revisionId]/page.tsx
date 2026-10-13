@@ -2,14 +2,20 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
+import { getPublicCatalog } from '@/lib/data/public-catalog';
+import { buildEstimateSpecSelection, ruleContextForSpec } from '@/lib/domain/estimate-template';
+import { defaultVariantIdsFor } from '@/lib/domain/preset';
 import { formatYen } from '@/lib/domain/pricing';
 import type { ExpenseMethod, PriceMode } from '@/lib/domain/standard-estimate-money';
+import { INTERIOR_EXTERIOR_CATEGORY_CODES } from '@/lib/domain/standard-estimate-pricing';
 import type { StandardEstimateEditorState, StandardLineSectionCode, StandardSectionCode } from '@/lib/domain/standard-estimate-view';
+import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { startNextStandardEstimateRevisionAction } from '@/lib/actions/standard-estimates';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { StandardEstimateEditor } from '@/components/admin/standard-estimate-editor';
+import { StandardEstimateBaselineEditor, type BaselineCandidate, type BaselineItemView } from '@/components/admin/standard-estimate-baseline-editor';
 
 export const metadata: Metadata = { title: '標準見積の Revision | 管理画面', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -49,8 +55,12 @@ export default async function StandardEstimateRevisionPage({
   }
   if (!revision) notFound();
 
-  const [{ data: master }, { data: sections }, { data: lines }, { data: baseLines }, store] = await Promise.all([
-    supabase.from('standard_estimate_masters').select('id, base_master_id, name, current_published_revision_id').eq('id', revision.standard_estimate_master_id).maybeSingle(),
+  const [{ data: master }, { data: sections }, { data: lines }, { data: baseLines }, { data: baselineRows }, store] = await Promise.all([
+    supabase
+      .from('standard_estimate_masters')
+      .select('id, base_master_id, base_model_id, spec_code, name, current_published_revision_id')
+      .eq('id', revision.standard_estimate_master_id)
+      .maybeSingle(),
     supabase.from('standard_estimate_revision_sections').select('section_code, expense_method').eq('revision_id', revision.id),
     supabase
       .from('standard_estimate_revision_lines')
@@ -58,6 +68,11 @@ export default async function StandardEstimateRevisionPage({
       .eq('revision_id', revision.id)
       .order('sort_order'),
     supabase.from('base_master_revision_lines').select('section, name, quantity, unit, unit_price, sort_order').eq('revision_id', revision.base_master_revision_id).order('sort_order'),
+    supabase
+      .from('standard_estimate_revision_baseline_items')
+      .select('option_id, section_code, quantity, unit_price_snapshot, price_on_request_snapshot, option_name_snapshot, category_name_snapshot, sort_order')
+      .eq('revision_id', revision.id)
+      .order('sort_order'),
     getStore(),
   ]);
   const { data: base } = await supabase
@@ -94,6 +109,43 @@ export default async function StandardEstimateRevisionPage({
     })),
   };
   const isDraft = revision.status === 'draft';
+
+  // 標準状態の商品の候補：その仕様でお客様が選べる公開中の商品（シミュレーターと同じ絞り込み。DB でも確かめる）
+  const catalogModel = models.find((model) => model.id === master?.base_model_id) ?? null;
+  const bundle = catalogModel ? ((await getPublicCatalog()).bundles[catalogModel.id] ?? null) : null;
+  const ruleCtx = bundle
+    ? {
+        options: bundle.options,
+        categories: bundle.categories,
+        dependencies: bundle.dependencies,
+        conflicts: bundle.conflicts,
+        customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
+      }
+    : null;
+  const specCtx = ruleCtx && catalogModel && master ? ruleContextForSpec(ruleCtx, master.spec_code, catalogModel.slug) : null;
+  const categoryById = new Map((bundle?.categories ?? []).map((category) => [category.id, category] as const));
+  const baselineCandidates: BaselineCandidate[] = (specCtx?.options ?? []).map((option) => {
+    const code = categoryById.get(option.category_id)?.code ?? '';
+    return {
+      id: option.id,
+      name: option.name,
+      categoryName: categoryById.get(option.category_id)?.name ?? '未分類',
+      section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+      defaultVariantChoiceIds: bundle ? defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, [option.id]) : [],
+    };
+  });
+  const suggestedBaselineIds = ruleCtx && catalogModel && master ? buildEstimateSpecSelection(ruleCtx, catalogModel, master.spec_code) : [];
+  const baselineItems: BaselineItemView[] = (baselineRows ?? []).map((item) => ({
+    option_id: item.option_id,
+    quantity: String(item.quantity),
+    unit_price_snapshot: item.unit_price_snapshot,
+    price_on_request: item.price_on_request_snapshot,
+    option_name: item.option_name_snapshot,
+    category_name: item.category_name_snapshot,
+    section_code: item.section_code as BaselineItemView['section_code'],
+  }));
   const newerBase = base?.current_published_revision_id && base.current_published_revision_id !== revision.base_master_revision_id;
 
   return (
@@ -143,6 +195,16 @@ export default async function StandardEstimateRevisionPage({
         taxRate={String(revision.tax_rate)}
         baseLines={(baseLines ?? []).map((line) => ({ section: line.section, name: line.name, quantity: line.quantity, unit: line.unit, unit_price: line.unit_price }))}
         initial={initial}
+      />
+
+      <StandardEstimateBaselineEditor
+        key={`baseline-${revision.lock_version}`}
+        revisionId={revision.id}
+        lockVersion={revision.lock_version}
+        readOnly={!isDraft}
+        items={baselineItems}
+        candidates={baselineCandidates}
+        suggestedOptionIds={suggestedBaselineIds}
       />
     </AdminPage>
   );

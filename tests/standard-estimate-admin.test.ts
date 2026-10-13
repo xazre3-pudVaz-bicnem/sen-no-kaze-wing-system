@@ -62,7 +62,8 @@ describe('標準見積の管理画面：権限と DB の呼び方', () => {
   const list = read('app/admin/standard-estimates/page.tsx');
 
   it('操作は本部だけで、金額は DB の RPC（PR E）に計算させる', () => {
-    expect(actions.match(/await requireAdmin\('\/admin\/standard-estimates'\)/g)).toHaveLength(4);
+    // 作成・保存・公開・次の Revision・標準状態の商品（PR C1）
+    expect(actions.match(/await requireAdmin\('\/admin\/standard-estimates'\)/g)).toHaveLength(5);
     for (const rpc of ['create_standard_estimate_draft', 'save_standard_estimate_draft', 'publish_standard_estimate_revision', 'start_next_standard_estimate_revision']) {
       expect(actions).toContain(`rpc('${rpc}'`);
     }

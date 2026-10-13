@@ -107,6 +107,13 @@ declare
   v_sq_rev2_text text;
   v_old_rev2_text text;
   v_manual_text text;
+  -- 標準状態の商品・売価だけの取得経路（PR C1）の検査用
+  cat_free constant uuid := '00000000-0000-4000-8000-000000000c01';
+  cat_kitchen constant uuid := '00000000-0000-4000-8000-000000000c02';
+  opt_a constant uuid := '00000000-0000-4000-8000-000000000c11';
+  opt_k constant uuid := '00000000-0000-4000-8000-000000000c12';
+  v_se3_text text;
+  v_se4_text text;
 begin
   ---------------------------------------------------------------------------
   -- 試験データ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる）
@@ -674,6 +681,82 @@ begin
           perform pg_temp.expect_eq('15-19 代理店組織の所属者でも、標準見積（原価・率を含む）は読めない', '0/0',
             pg_temp.run_as('authenticated', u_dealer2, $q$ select count(*)::text from public.standard_estimate_revisions $q$) || '/' ||
             pg_temp.run_as('authenticated', u_dealer2, $q$ select count(*)::text from public.standard_estimate_revision_lines $q$));
+        end if;
+
+        -- 16. 標準状態の商品（PR C1）：本部だけが下書きで登録し、次の Revision へ引き継ぎ、公開時に snapshot を取り直す。
+        --     売価だけの取得経路は、未ログインでも使えて原価・社内の率・備考を返さない
+        if to_regprocedure('public.set_standard_estimate_baseline(uuid, jsonb, integer)') is not null then
+          -- 検査用の商品：マトリクスの対象外のカテゴリー（選べる）と、キッチンに対応するカテゴリー（この行では選べない）
+          set local session_replication_role = replica;
+          insert into public.option_categories (id, code, name, status, sort_order)
+          values (cat_free, 'runtime-check-free', '検査カテゴリー', 'published', 900),
+                 (cat_kitchen, 'runtime-check-kitchen', '検査キッチン', 'published', 901);
+          insert into public.option_category_matrix_items (category_id, matrix_item_code) values (cat_kitchen, 'kitchen');
+          insert into public.options (id, product_no, base_model_id, category_id, code, name, price, status, sort_order)
+          values (opt_a, 'PRD-990001', v_model, cat_free, 'runtime-check-a', '検査商品A', 10000, 'published', 1),
+                 (opt_k, 'PRD-990002', v_model, cat_kitchen, 'runtime-check-k', '検査キッチン', 50000, 'published', 2);
+          set local session_replication_role = origin;
+
+          v_se3_text := (select r.id::text from public.standard_estimate_revisions r
+                          where r.status = 'draft'
+                            and r.standard_estimate_master_id = (select p.standard_estimate_master_id from public.standard_estimate_revisions p where p.id::text = v_se_text));
+          if v_se3_text is null then
+            v_se3_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.start_next_standard_estimate_revision(%L)::text $q$,
+              (select p.standard_estimate_master_id from public.standard_estimate_revisions p where p.id::text = v_se_text)));
+          end if;
+
+          perform pg_temp.expect_denied('16-1 お客様は標準状態の商品を登録できない', '42501',
+            pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.set_standard_estimate_baseline(%L, '[]'::jsonb, 1)).id::text $q$, v_se3_text)));
+          perform pg_temp.expect_denied('16-2 その仕様でお客様が選べないカテゴリーの商品は登録できない', 'P0001',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select (public.set_standard_estimate_baseline(%L, %L::jsonb, %s)).id::text $q$,
+              v_se3_text, jsonb_build_array(jsonb_build_object('option_id', opt_k))::text,
+              (select r.lock_version from public.standard_estimate_revisions r where r.id::text = v_se3_text))));
+          v_tmp := pg_temp.run_as('authenticated', u_admin, format($q$ select (public.set_standard_estimate_baseline(%L, %L::jsonb, %s)).lock_version::text $q$,
+            v_se3_text, jsonb_build_array(jsonb_build_object('option_id', opt_a, 'quantity', 2))::text,
+            (select r.lock_version from public.standard_estimate_revisions r where r.id::text = v_se3_text)));
+          perform pg_temp.expect_eq('16-3 本部は下書きに登録でき、価格・区分は DB が商品台帳から決める', '2/10000/option/2',
+            v_tmp || '/' || coalesce((select b.unit_price_snapshot || '/' || b.section_code || '/' || b.quantity::integer
+                                        from public.standard_estimate_revision_baseline_items b where b.revision_id::text = v_se3_text), '(なし)'));
+          perform pg_temp.expect_denied('16-4 古い版のままの登録は拒否される', 'P0001',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select (public.set_standard_estimate_baseline(%L, '[]'::jsonb, 1)).id::text $q$, v_se3_text)));
+
+          -- 公開の直前に商品台帳の価格が変わったら、公開時の価格で snapshot を取り直す
+          set local session_replication_role = replica;
+          update public.options set price = 12000 where id = opt_a;
+          set local session_replication_role = origin;
+          perform pg_temp.run_as('authenticated', u_admin, format($q$ select (public.publish_standard_estimate_revision(%L, 2)).id::text $q$, v_se3_text));
+          perform pg_temp.expect_eq('16-5 公開時に、商品台帳の現在の価格で snapshot を取り直す', 'published/12000',
+            coalesce((select r.status || '/' || b.unit_price_snapshot
+                        from public.standard_estimate_revisions r
+                        join public.standard_estimate_revision_baseline_items b on b.revision_id = r.id
+                       where r.id::text = v_se3_text), '(なし)'));
+          perform pg_temp.expect_denied('16-6 公開済みの Revision の標準状態は変更できない', 'P0001',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select (public.set_standard_estimate_baseline(%L, '[]'::jsonb, 3)).id::text $q$, v_se3_text)));
+          v_se4_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.start_next_standard_estimate_revision(%L)::text $q$,
+            (select r.standard_estimate_master_id from public.standard_estimate_revisions r where r.id::text = v_se3_text)));
+          perform pg_temp.expect_eq('16-7 次の Revision へ標準状態の商品を引き継ぐ', '1/2',
+            coalesce((select count(*)::text || '/' || max(b.quantity)::integer
+                        from public.standard_estimate_revision_baseline_items b where b.revision_id::text = v_se4_text), '(なし)'));
+
+          perform pg_temp.expect_eq('16-8 未ログインでも売価だけの標準見積を取得でき、原価・社内の率・備考は含まれない', 'true/false/12000',
+            pg_temp.run_as('anon', null, format($q$
+              select exists (select 1 from jsonb_array_elements(s.v) e where e ->> 'revision_id' = %L)::text || '/' ||
+                     (s.v::text ~ '"(cost_[a-z_]*|sales_fee_rate|markup_rate|remark|standard_adjustment_reason)"')::text || '/' ||
+                     coalesce((select e -> 'baseline' -> 0 ->> 'unit_price' from jsonb_array_elements(s.v) e where e ->> 'revision_id' = %L), '(なし)')
+                from (select public.get_standard_estimate_sale_views(%L) as v) s $q$, v_se3_text, v_se3_text, v_model)));
+          perform pg_temp.expect_eq('16-9 売価だけの本体の明細の合計は、標準見積の本体の明細小計と同じ（販売費率・掛率を掛けた売価）', 'true',
+            pg_temp.run_as('anon', null, format($q$
+              select (sum((l ->> 'amount')::integer) = min(b.line_subtotal))::text
+                from jsonb_array_elements(public.get_standard_estimate_sale_views(%L)) e
+                cross join lateral jsonb_array_elements(e -> 'base_lines') l
+                cross join lateral (
+                  select (x ->> 'line_subtotal')::integer as line_subtotal
+                    from jsonb_array_elements(e -> 'sections') x
+                   where x ->> 'code' = 'base'
+                ) b
+               where e ->> 'revision_id' = %L $q$, v_model, v_se3_text)));
+          perform pg_temp.expect_blocked('16-10 お客様は標準状態の商品の表を直接読めない',
+            pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.standard_estimate_revision_baseline_items $q$));
         end if;
       end if;
     end if;

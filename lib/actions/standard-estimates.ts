@@ -118,6 +118,42 @@ export async function publishStandardEstimateRevisionAction(input: unknown): Pro
   return { ok: true, message: '公開しました。' };
 }
 
+const baselineSchema = z.object({
+  revision_id: z.uuid(),
+  expected_lock_version: z.number().int().min(1),
+  items: z
+    .array(
+      z.object({
+        option_id: z.uuid(),
+        quantity: z.union([z.string(), z.number()]).transform((value) => String(value).trim()),
+        variant_choice_ids: z.array(z.uuid()).max(20),
+      })
+    )
+    .max(200),
+});
+
+/** 下書きの標準状態の商品（シミュレーターの差額の基準）を置き換える。価格・区分は DB が商品台帳から決める */
+export async function setStandardEstimateBaselineAction(input: unknown): Promise<StandardEstimateActionResult> {
+  await requireAdmin('/admin/standard-estimates');
+  const unavailable = localUnavailable();
+  if (unavailable) return unavailable;
+  const parsed = baselineSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('set_standard_estimate_baseline', {
+    p_revision_id: parsed.data.revision_id,
+    p_items: parsed.data.items,
+    p_expected_lock_version: parsed.data.expected_lock_version,
+  });
+  if (error) return { ok: false, error: message(error) };
+  revalidatePath(`/admin/standard-estimates/${parsed.data.revision_id}`);
+  return {
+    ok: true,
+    message: '標準状態の商品を保存しました。価格は公開時に商品台帳の価格で確定します。',
+    lockVersion: (data as { lock_version?: number } | null)?.lock_version,
+  };
+}
+
 /** 公開版の率・明細を写して次の Revision の下書きを作る */
 export async function startNextStandardEstimateRevisionAction(formData: FormData): Promise<void> {
   await requireAdmin('/admin/standard-estimates');

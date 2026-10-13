@@ -163,45 +163,14 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   };
 
   return (
-    <section id="product-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">サブ画像・メーカー資料</h2>
-          <p className="mt-1 text-sm text-muted">
-            商品画像とメーカーPDFを同じ商品情報画面で確認できます。メーカーPDFは1商品につき1ファイルを基本とし、PDF内の複数ページはそのまま利用できます。
-          </p>
-        </div>
-        <div className="rounded-lg border border-line bg-ivory/50 px-3 py-2 text-xs text-ink-soft">
-          サブ画像 {images.length}枚 ／ メーカー資料 {option.manufacturer_document_url ? '登録済み' : '未登録'}
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-line bg-white p-4">
-          <p className="text-sm font-semibold">商品画像</p>
-          <p className="mt-1 text-xs text-muted">メイン画像＋必要なサブ画像。商品の見た目を確認するための資料です。</p>
-          <p className="mt-3 text-xs text-ink-soft">メイン画像：{option.image_url ? '登録済み' : '未登録'} ／ サブ画像：{images.length}枚</p>
-        </div>
-        <div className="rounded-xl border border-line bg-white p-4">
-          <p className="text-sm font-semibold">メーカー資料</p>
-          <p className="mt-1 text-xs text-muted">仕様・固定構成・標準装備などを確認するPDFです。自動解析は必須ではなく、必要事項は手入力で補えます。</p>
-          {option.manufacturer_document_url ? (
-            <a href={option.manufacturer_document_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-brown underline underline-offset-4">
-              登録済みPDFを確認
-            </a>
-          ) : (
-            <p className="mt-3 text-xs text-muted">PDFはまだ登録されていません。</p>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-6">
-      <div className="space-y-5">
-        <div>
-          <h3 className="font-semibold">サブ画像</h3>
-          <p className="mt-1 text-xs text-muted">
-            メイン画像は上の「商品情報」で管理します。ここでは商品詳細に追加する画像を登録します。
-          </p>
+    <div id="product-media" className="space-y-6">
+      <section id="product-sub-images" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">サブ画像 <span className="text-xs font-normal text-muted">任意</span></h2>
+            <p className="mt-1 text-xs text-muted">商品詳細で見せたい追加画像がある場合だけ登録します。</p>
+          </div>
+          <span className="rounded-full bg-ivory px-3 py-1 text-xs font-semibold text-ink-soft">{images.length}枚</span>
         </div>
 
         {images.length > 0 ? (
@@ -211,7 +180,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             ))}
           </ul>
         ) : (
-          <div className="rounded-lg border border-dashed border-line px-4 py-6 text-sm text-muted">
+          <div className="rounded-lg border border-dashed border-line px-4 py-5 text-sm text-muted">
             サブ画像はまだ登録されていません。
           </div>
         )}
@@ -222,7 +191,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             <Field
               label="サブ画像ファイル"
               htmlFor="option-sub-image"
-              hint="複数選択可・1枚10MBまで。選択すると自動で保存します。説明と表示順は保存後に各画像から変更できます。"
+              hint="複数選択可・1枚10MBまで。選択すると自動保存します。"
               errors={imageState.fieldErrors?.file}
             >
               <Input
@@ -244,15 +213,31 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="space-y-5 border-t border-line pt-6">
-        <div>
-          <h3 className="font-semibold">メーカー資料</h3>
-          <p className="mt-1 text-xs text-muted">
-            1商品につき1つのPDFを登録します。登録したPDFは自社Storageに保存し、商品詳細の「メーカー資料」タブで表示します。
-          </p>
+      <section id="manufacturer-documents" className="card space-y-5 p-5 sm:p-6 scroll-mt-6" data-testid="manufacturer-document-section">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">4. メーカー資料</h2>
+              <span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。
+            </p>
+          </div>
+          <span
+            data-testid="manufacturer-document-status"
+            data-registered={option.manufacturer_document_url ? 'true' : 'false'}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${option.manufacturer_document_url ? 'bg-[#eaf6f1] text-[#245a48]' : 'bg-[#fff8e8] text-[#7c5a18]'}`}
+          >
+            {option.manufacturer_document_url ? '登録済み' : '未登録'}
+          </span>
         </div>
+
+        <p className="text-xs leading-5 text-ink-soft">
+          メーカー資料が用意されていない商品は未登録のまま進められます。その場合は登録前チェックで確認事項として表示します。
+        </p>
 
         {option.manufacturer_document_url ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ivory/50 px-4 py-3">
@@ -276,37 +261,34 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-line px-4 py-4 text-sm text-muted">
-            メーカー資料は未登録です。
+            メーカー資料PDFはまだ登録されていません。
           </div>
         )}
 
         <ActionStatus state={docState} />
-        <div>
-          <Field
-            label={option.manufacturer_document_url ? 'メーカー資料PDFを差し替える' : 'メーカー資料PDFを登録'}
-            htmlFor="manufacturer-document"
-            hint="PDFのみ・20MBまで。ファイルを選択すると自動で保存します。"
-            errors={docState.fieldErrors?.file}
-          >
-            <Input
-              id="manufacturer-document"
-              name="file"
-              type="file"
-              accept="application/pdf,.pdf"
-              className="py-2"
-              disabled={docPending}
-              onChange={(event) => void handleManufacturerDocument(event)}
-            />
-          </Field>
-          {docPending && (
-            <p className="mt-2 flex items-center gap-2 text-xs text-muted">
-              <Spinner />
-              メーカー資料PDFを保存しています…
-            </p>
-          )}
-        </div>
-      </div>
-      </div>
-    </section>
+        <Field
+          label={option.manufacturer_document_url ? 'メーカー資料PDFを差し替える' : 'メーカー資料PDFを登録'}
+          htmlFor="manufacturer-document"
+          hint="PDFのみ・20MBまで。ファイルを選択すると自動保存します。"
+          errors={docState.fieldErrors?.file}
+        >
+          <Input
+            id="manufacturer-document"
+            name="file"
+            type="file"
+            accept="application/pdf,.pdf"
+            className="py-2"
+            disabled={docPending}
+            onChange={(event) => void handleManufacturerDocument(event)}
+          />
+        </Field>
+        {docPending && (
+          <p className="flex items-center gap-2 text-xs text-muted">
+            <Spinner />
+            メーカー資料PDFを保存しています…
+          </p>
+        )}
+      </section>
+    </div>
   );
 }

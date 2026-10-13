@@ -8,7 +8,7 @@ import { getStore, StoreError } from '@/lib/data/store';
 
 const ledgerPath = '/admin/ledger';
 
-function ledgerRedirect(params: Record<string, string>) {
+function ledgerRedirect(params: Record<string, string>): never {
   const search = new URLSearchParams(params);
   redirect(`${ledgerPath}?${search.toString()}`);
 }

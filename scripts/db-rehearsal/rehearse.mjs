@@ -70,6 +70,20 @@ function listMigrations() {
 }
 
 /** 本番カタログとマイグレーション再現の差分。関数本体は改行コードを除いて比較する */
+/**
+ * 本番で catalog.sql を実行した結果を読む。
+ * Supabase CLI の JSON 出力（新しい CLI は { boundary, rows: [{ j }] }、古い CLI は [{ j }]）と、j を取り出し済みの形のどちらでもよい
+ */
+function readCatalogJson(file) {
+  let value = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (value && !Array.isArray(value) && Array.isArray(value.rows)) value = value.rows;
+  if (Array.isArray(value)) value = value[0];
+  if (value && value.j !== undefined) value = value.j;
+  if (typeof value === 'string') value = JSON.parse(value);
+  if (!value || !Array.isArray(value.tables)) throw new Error(`本番カタログの形式を読めません: ${file}`);
+  return value;
+}
+
 function diffCatalog(prod, local) {
   const out = [];
   const cmp = (kind, pRows, lRows, keyFn, fields) => {
@@ -162,7 +176,7 @@ try {
     const catalog = (await admin.query(readSql(path.join(HERE, 'catalog.sql')))).rows[0].j;
     writeJson('catalog-applied.json', catalog);
     if (opt.prodCatalog) {
-      const drift = diffCatalog(JSON.parse(fs.readFileSync(opt.prodCatalog, 'utf8')), catalog);
+      const drift = diffCatalog(readCatalogJson(opt.prodCatalog), catalog);
       writeJson('drift.json', drift);
       report.drift = drift.length;
       log(`本番カタログとの差分: ${drift.length} 件${drift.length ? '（drift.json を確認）' : ''}`);

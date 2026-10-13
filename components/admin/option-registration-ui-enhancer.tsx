@@ -28,6 +28,11 @@ function setTextIfChanged(element: HTMLElement, value: string) {
   if (element.textContent !== value) element.textContent = value;
 }
 
+function setLeadingTextIfChanged(element: HTMLElement, value: string) {
+  const textNode = Array.from(element.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
+  if (textNode && textNode.textContent?.trim() !== value) textNode.textContent = `${value} `;
+}
+
 function applyCompactCategoryTypography(element: HTMLOptionElement | HTMLOptGroupElement | HTMLSelectElement) {
   element.style.fontSize = '14px';
   element.style.lineHeight = '1.4';
@@ -259,6 +264,100 @@ function enhanceSalesSettings() {
   }
 }
 
+function simplifyRegistrationGuidance() {
+  document.querySelectorAll<HTMLElement>('[data-testid="category-registration-guidance"]').forEach((guidance) => {
+    guidance.style.display = 'none';
+  });
+}
+
+function enhanceProductImages() {
+  const mainMedia = document.getElementById('product-main-media');
+  const subImages = document.getElementById('product-sub-images');
+
+  if (mainMedia) {
+    mainMedia.style.borderBottomLeftRadius = '0';
+    mainMedia.style.borderBottomRightRadius = '0';
+    const oldNote = Array.from(mainMedia.querySelectorAll<HTMLElement>('p')).find((row) =>
+      row.textContent?.includes('サブ画像とメーカーPDF')
+    );
+    if (oldNote) oldNote.style.display = 'none';
+  }
+
+  if (!subImages) return;
+
+  const mediaBlock = subImages.parentElement;
+  const registrationWrapper = mediaBlock?.parentElement;
+  if (registrationWrapper) registrationWrapper.style.marginTop = '-1.5rem';
+
+  subImages.style.borderTopWidth = '0px';
+  subImages.style.borderTopLeftRadius = '0';
+  subImages.style.borderTopRightRadius = '0';
+
+  const heading = subImages.querySelector<HTMLElement>('h2');
+  if (heading) setLeadingTextIfChanged(heading, '追加画像');
+
+  const emptyState = Array.from(subImages.querySelectorAll<HTMLElement>('div')).find(
+    (row) => row.textContent?.trim() === 'サブ画像はまだ登録されていません。'
+  );
+  if (emptyState) emptyState.style.display = 'none';
+
+  const uploadLabel = document.querySelector<HTMLLabelElement>('label[for="option-sub-image"]');
+  if (uploadLabel) setTextIfChanged(uploadLabel, '追加画像');
+
+  Array.from(subImages.querySelectorAll<HTMLButtonElement>('button')).forEach((button) => {
+    if (button.textContent?.trim() === 'このサブ画像を削除') {
+      setTextIfChanged(button, 'この追加画像を削除');
+    }
+  });
+}
+
+function enhanceCustomerSelection() {
+  const section = document.getElementById('customer-selection');
+  if (!section) return;
+
+  const intro = section.querySelector<HTMLElement>(':scope > div:first-child > p');
+  if (intro) setTextIfChanged(intro, 'お客様が選べる部位・色・仕様などがある場合だけ設定します。');
+
+  const quickAdd = section.querySelector<HTMLElement>('[data-testid="variant-quick-add"]');
+  if (quickAdd) {
+    quickAdd.setAttribute('aria-label', '選択項目を追加');
+    const directParagraphs = Array.from(quickAdd.children).filter(
+      (child): child is HTMLParagraphElement => child instanceof HTMLParagraphElement
+    );
+    if (directParagraphs[0]) setTextIfChanged(directParagraphs[0], '選択項目を追加');
+    if (directParagraphs[1]) {
+      setTextIfChanged(directParagraphs[1], '例：床、カウンター、アクセントパネル、浴槽など');
+    }
+
+    const actionRow = Array.from(quickAdd.children).find((child) =>
+      child instanceof HTMLElement && child.querySelectorAll(':scope > button').length >= 4
+    );
+    if (actionRow instanceof HTMLElement) {
+      const buttons = Array.from(actionRow.querySelectorAll<HTMLButtonElement>(':scope > button'));
+      buttons.slice(0, -1).forEach((button) => {
+        button.style.display = 'none';
+      });
+      const addButton = buttons.at(-1);
+      if (addButton) {
+        addButton.style.display = '';
+        setTextIfChanged(addButton, '＋ 選択項目を追加');
+      }
+    }
+  }
+
+  section.querySelectorAll<HTMLInputElement>('input[id^="variant-group-name-"]').forEach((input) => {
+    input.placeholder = '例：床／カウンター／アクセントパネル／浴槽';
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(input.id)}"]`);
+    if (!label) return;
+    setTextIfChanged(label, '選択項目名');
+    const field = label.parentElement;
+    const hint = field
+      ? Array.from(field.querySelectorAll<HTMLElement>('p')).find((row) => row.textContent?.includes('例：'))
+      : null;
+    if (hint) setTextIfChanged(hint, '例：床／カウンター／アクセントパネル／浴槽');
+  });
+}
+
 function hideCreateSizeField() {
   const input = document.getElementById('size_note-create');
   if (!(input instanceof HTMLElement)) return;
@@ -279,6 +378,9 @@ export function OptionRegistrationUiEnhancer({
     const enhance = () => {
       enhanceCategorySelects();
       enhanceSalesSettings();
+      simplifyRegistrationGuidance();
+      enhanceProductImages();
+      enhanceCustomerSelection();
       if (hideCreateSize) hideCreateSizeField();
     };
 

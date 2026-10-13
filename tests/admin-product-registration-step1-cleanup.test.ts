@@ -12,11 +12,14 @@ const refinement = fs.readFileSync(
 );
 
 describe('商品登録 STEP1 の簡潔化', () => {
-  it('選択項目の入力フォームは追加ボタンの後に展開する', () => {
+  it('選択項目の追加ボタンを残したまま、その直下に入力フォームを展開する', () => {
     const button = refinement.indexOf('＋ 選択項目を追加');
     const openedForm = refinement.indexOf("rounded-xl border border-dashed border-line bg-ivory/20 p-4", button);
     expect(button).toBeGreaterThan(-1);
     expect(openedForm).toBeGreaterThan(button);
+    expect(refinement).toContain('aria-expanded={open}');
+    expect(refinement).toContain('{open && (');
+    expect(refinement).not.toContain('!open ? (');
     expect(css).toContain("[data-combined-create-root='true']");
     expect(css).toContain('flex-direction: column;');
   });

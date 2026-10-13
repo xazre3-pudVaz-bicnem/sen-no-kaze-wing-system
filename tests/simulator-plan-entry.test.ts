@@ -8,8 +8,8 @@ const entryHelper = fs.readFileSync(path.join(root, 'lib/domain/simulator-entry.
 
 describe('平面図からシミュレーターへの仕様指定導線', () => {
   it('spec queryを受け取り、保存済みConfigurationがない場合だけ新規初期状態へ使う', () => {
-    expect(simulatorPage).toContain("type Search = Promise<{ c?: string; resume?: string; spec?: string }>");
-    expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec }]');
+    expect(simulatorPage).toContain("type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string }>");
+    expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec, preview }]');
     expect(simulatorPage).toContain('if (c) {');
     expect(simulatorPage).toContain('} else if (spec) {');
     expect(simulatorPage).toContain('buildSimulatorEntryState(bundle, estimateTemplates, spec)');

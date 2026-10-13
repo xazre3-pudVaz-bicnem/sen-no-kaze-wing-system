@@ -4,7 +4,8 @@ import { requireAdmin } from '@/lib/auth/session';
 import { getStore, isLocalMode } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { createClient } from '@/lib/supabase/server';
-import { createStandardEstimateDraftAction } from '@/lib/actions/standard-estimates';
+import { createStandardEstimateDraftAction, setSimulatorStandardPricingAction } from '@/lib/actions/standard-estimates';
+import { isMissingNamedFunction } from '@/lib/data/schema-compat';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, Table, Td, Th } from '@/components/admin/ui';
 
@@ -18,7 +19,74 @@ type BaseMasterRow = { id: string; name: string; fire_spec_code: string; matrix_
 const ERROR_TEXT: Record<string, string> = {
   local: '標準見積の管理はSupabase接続環境で利用できます。',
   invalid: '入力内容を確認してください。',
+  switch_confirm: '切り替える前に、確認の欄にチェックを入れてください。',
 };
+
+/**
+ * シミュレーターの価格（サイトの新価格への切り替えスイッチ）。
+ * 切り替えるまでは、標準状態の商品を登録して公開しても、お客様の画面・保存した仕様・見積依頼は現在の価格のまま。
+ */
+function SimulatorPricingPanel({
+  state,
+  models,
+}: {
+  state: 'off' | 'on' | 'unavailable';
+  models: { slug: string; name: string }[];
+}) {
+  return (
+    <section className="space-y-3 rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="simulator-pricing-panel">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-semibold">シミュレーターの価格</h2>
+        {state === 'on' ? (
+          <Badge tone="success">新しい標準見積の価格</Badge>
+        ) : state === 'off' ? (
+          <Badge tone="neutral">現在のサイト価格（切り替え前）</Badge>
+        ) : (
+          <Badge tone="warn">切り替えの仕組みが未適用</Badge>
+        )}
+      </div>
+      <p className="text-xs leading-5 text-muted">
+        標準状態の商品を登録して公開しても、ここで切り替えるまでは、お客様のシミュレーター・保存した仕様の金額・見積依頼は現在の価格のままです。
+        切り替えは、本番の画面で最終金額を確認し、先方の確認が済んでから行います。
+      </p>
+      {models.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {models.map((model) => (
+            <Link
+              key={model.slug}
+              href={`/simulator/${model.slug}?preview=standard`}
+              target="_blank"
+              rel="noopener"
+              className="btn-secondary btn-sm"
+            >
+              {model.name}を新しい価格でプレビュー
+            </Link>
+          ))}
+        </div>
+      )}
+      {state === 'off' && (
+        <form action={setSimulatorStandardPricingAction} className="flex flex-wrap items-center gap-3 rounded-lg bg-[#fbf7ef] p-3">
+          <input type="hidden" name="enabled" value="true" />
+          <label className="flex items-center gap-2 text-xs text-ink-soft">
+            <input type="checkbox" name="confirmed" />
+            先方の最終確認が済み、サイトの新価格へ切り替えます
+          </label>
+          <button type="submit" className="btn-secondary btn-sm">
+            新しい標準見積の価格に切り替える
+          </button>
+        </form>
+      )}
+      {state === 'on' && (
+        <form action={setSimulatorStandardPricingAction}>
+          <input type="hidden" name="enabled" value="false" />
+          <button type="submit" className="btn-secondary btn-sm">
+            これまでの計算に戻す
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
 
 /** 標準見積（本部）：機種・用途・サイズ・防火ごとの標準見積と、その公開版・下書き */
 export default async function StandardEstimatesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -36,13 +104,21 @@ export default async function StandardEstimatesPage({ searchParams }: { searchPa
 
   const supabase = await createClient();
   const store = await getStore();
-  const [matrix, models, masters, revisions, baseMasters] = await Promise.all([
+  const [matrix, models, masters, revisions, baseMasters, pricingSwitch] = await Promise.all([
     store.getSpecMatrix(),
     store.listModels({ includeDraft: true }),
     supabase.from('standard_estimate_masters').select('id, base_master_id, base_model_id, spec_code, name, current_published_revision_id').eq('status', 'active'),
     supabase.from('standard_estimate_revisions').select('id, standard_estimate_master_id, version, status, total, has_por, published_at').in('status', ['draft', 'published']),
     supabase.from('base_masters').select('id, name, fire_spec_code, matrix_row_id, current_published_revision_id').eq('status', 'active'),
+    supabase.rpc('simulator_standard_pricing_enabled'),
   ]);
+  const pricingState: 'off' | 'on' | 'unavailable' = pricingSwitch.error
+    ? isMissingNamedFunction(pricingSwitch.error, 'simulator_standard_pricing_enabled')
+      ? 'unavailable'
+      : 'off'
+    : pricingSwitch.data === true
+      ? 'on'
+      : 'off';
   const loadError = masters.error || revisions.error || baseMasters.error;
   if (loadError) {
     return (
@@ -79,6 +155,12 @@ export default async function StandardEstimatesPage({ searchParams }: { searchPa
       }
     >
       {errorText && <Alert tone="danger">{errorText}</Alert>}
+      {sp.switched === 'on' && <Alert tone="success">シミュレーターの価格を新しい標準見積に切り替えました。</Alert>}
+      {sp.switched === 'off' && <Alert tone="success">シミュレーターの価格をこれまでの計算に戻しました。</Alert>}
+      <SimulatorPricingPanel
+        state={pricingState}
+        models={models.filter((model) => model.status === 'published').map((model) => ({ slug: model.slug, name: model.name }))}
+      />
       <Table minWidth="56rem">
         <thead>
           <tr>

@@ -159,7 +159,8 @@ describe('シミュレーターの標準見積（PR C2）：画面', () => {
     const page = read('app/(site)/simulator/[slug]/page.tsx');
     const app = read('components/simulator/simulator-app.tsx');
     const data = read('lib/data/standard-estimate-sale-views.ts');
-    expect(page).toContain('getStandardEstimateSaleViews(model.id)');
+    // サイトの新価格へ切り替えるスイッチ（20261013210000）を通して読み込む
+    expect(page).toContain('getSimulatorSaleViews(model.id, { preview: previewRequested })');
     expect(page).toContain('saleViews={saleViews}');
     expect(app).toContain('pickSaleView(saleViews, model.slug, specCode, fireSelected)');
     expect(app).toContain('computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces)');

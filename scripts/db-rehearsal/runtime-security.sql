@@ -116,6 +116,17 @@ declare
   v_se4_text text;
   -- サイトの新価格への切り替えスイッチの検査用
   v_switch_text text;
+  -- 案件の進行（フェーズ9〜10）の検査用：書面の契約を記録する、承諾済みの現在の確定見積
+  c_pc constant uuid := '00000000-0000-4000-8000-00000000c0f1';
+  r_pc constant uuid := '00000000-0000-4000-8000-00000000e0f1';
+  q_pc constant uuid := '00000000-0000-4000-8000-00000000f0f1';
+  -- 修正依頼の検査用：発行済みの現在の見積（第2版）と、その旧版
+  c_cr constant uuid := '00000000-0000-4000-8000-00000000c0f2';
+  r_cr constant uuid := '00000000-0000-4000-8000-00000000e0f2';
+  q_cr constant uuid := '00000000-0000-4000-8000-00000000f0f2';
+  q_cr_old constant uuid := '00000000-0000-4000-8000-00000000f0f3';
+  v_cf_change text;
+  v_cf_paper text;
   -- 案件の進行（フェーズ4〜7）の検査用
   v_cf_appt text;
   v_cf_file_cust text;
@@ -1022,6 +1033,80 @@ begin
       pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.delete_case_file(%L)::text $q$, v_cf_file_staff)));
     perform pg_temp.expect_eq('19-35 保存先の名前は DB が決める（案件ごとの非公開の場所）', 'true',
       exists (select 1 from public.case_files f where f.id::text = v_cf_file_cust and f.storage_path like 'cases/' || r_x::text || '/%.pdf' and f.customer_visible)::text);
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 20. 見積の修正依頼（フェーズ9）・書面で締結した契約（フェーズ10）
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.request_quote_change(uuid, text)') is not null then
+    -- 発行済みの現在の見積（第2版）と旧版を用意する（前の検査で q_x は回答済みになっているため）
+    set local session_replication_role = replica;
+    insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+    values (c_cr, u_cust_x, v_model, '修正依頼の検査', 'quote_requested', 'office', 'full');
+    insert into public.quote_requests (id, configuration_id, user_id, quote_id, status) values (r_cr, c_cr, u_cust_x, q_cr, 'sent');
+    insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                               customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                               subtotal, tax_rate, tax, total, quote_kind, revision, parent_quote_id)
+    values (q_cr_old, 'RT-CHANGE-1', r_cr, c_cr, u_cust_x, u_dealer1, 'superseded', now() + interval '30 days', '顧客X', '権限検査用モデル',
+            1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal', 1, null),
+           (q_cr, 'RT-CHANGE-2', r_cr, c_cr, u_cust_x, u_dealer1, 'issued', now() + interval '30 days', '顧客X', '権限検査用モデル',
+            1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal', 2, q_cr_old);
+    set local session_replication_role = origin;
+
+    perform pg_temp.expect_denied('20-1 他のお客様は修正を依頼できない（存在も分からない）', 'P0002',
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select public.request_quote_change(%L, 'x')::text $q$, q_cr)));
+    perform pg_temp.expect_denied('20-2 担当代理店はお客様の代わりに修正を依頼できない', 'P0002',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.request_quote_change(%L, 'x')::text $q$, q_cr)));
+    perform pg_temp.expect_denied('20-3 最新でない版には修正を依頼できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.request_quote_change(%L, 'x')::text $q$, q_cr_old)));
+    v_cf_change := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.request_quote_change(%L, 'エアコンを外したい')::text $q$, q_cr));
+    perform pg_temp.expect_denied('20-4 対応中の依頼があるうちは、同じ見積に重ねて依頼できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.request_quote_change(%L, 'もう一件')::text $q$, q_cr)));
+    perform pg_temp.expect_eq('20-5 修正依頼は見積の状態を変えず、担当へ知らせる。関係の無い代理店には見えない', 'issued/true/0',
+      (select q.status from public.quotes q where q.id = q_cr) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'quote_change_requested')::text || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.quote_change_requests where id::text = %L $q$, v_cf_change)));
+    perform pg_temp.expect_denied('20-6 お客様は修正依頼を対応済みにできない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.resolve_quote_change_request(%L, 'x')::text $q$, v_cf_change)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.resolve_quote_change_request(%L, '第 2 版を発行します')::text $q$, v_cf_change));
+    perform pg_temp.expect_eq('20-7 担当代理店が対応済みにすると、お客様へ知らせる', 'resolved/true',
+      (select c.status from public.quote_change_requests c where c.id::text = v_cf_change) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'quote_change_resolved')::text);
+
+    -- 書面の契約：承諾済みの現在の確定見積を用意する
+    set local session_replication_role = replica;
+    insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+    values (c_pc, u_cust_x, v_model, '書面の契約の検査', 'quote_requested', 'office', 'full');
+    insert into public.quote_requests (id, configuration_id, user_id, quote_id, status) values (r_pc, c_pc, u_cust_x, q_pc, 'sent');
+    insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                               customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                               subtotal, tax_rate, tax, total, quote_kind)
+    values (q_pc, 'RT-PAPER-1', r_pc, c_pc, u_cust_x, u_dealer1, 'accepted', now() + interval '30 days', '顧客X', '権限検査用モデル',
+            1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal');
+    set local session_replication_role = origin;
+
+    perform pg_temp.expect_denied('20-8 担当代理店は書面の契約を記録できない（本部だけ）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000001.pdf')::text $q$, q_pc)));
+    perform pg_temp.expect_denied('20-9 保存先は決まった場所だけ', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/other/x.pdf')::text $q$, q_pc)));
+    perform pg_temp.expect_denied('20-10 承諾されていない見積には記録できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000001.pdf')::text $q$, q_x)));
+    v_cf_paper := pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000001.pdf')::text $q$, q_pc));
+    perform pg_temp.expect_eq('20-11 本部は書面の契約を締結済みとして記録でき、お客様本人だけが読める', 'paper/signed/1100000/1/0',
+      coalesce((select c.provider || '/' || c.status || '/' || c.contract_total from public.contracts c where c.id::text = v_cf_paper), '(なし)') || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.contracts where id::text = %L $q$, v_cf_paper)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select count(*)::text from public.contracts where id::text = %L $q$, v_cf_paper)));
+    perform pg_temp.expect_denied('20-12 契約は同時に 1 つだけ', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000002.pdf')::text $q$, q_pc)));
+    perform pg_temp.expect_denied('20-13 書面の契約を無効にできるのは本部だけ', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.void_paper_contract(%L, '誤記録')::text $q$, v_cf_paper)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.void_paper_contract(%L, '誤記録')::text $q$, v_cf_paper));
+    perform pg_temp.expect_eq('20-14 無効にすると取り消しとして残り、記録し直せる', 'canceled/uuid',
+      (select c.status from public.contracts c where c.id::text = v_cf_paper) || '/' ||
+      case when pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000003.pdf')::text $q$, q_pc))
+                ~ '^[0-9a-f-]{36}$' then 'uuid' else 'error' end);
+    perform pg_temp.expect_denied('20-15 電子契約の取り消し（cancel_electronic_contract）では書面の契約を取り消せない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.cancel_electronic_contract((select id from public.contracts where quote_id = %L and status = 'signed'), 'x')::text $q$, q_pc)));
   end if;
 end
 $test$;

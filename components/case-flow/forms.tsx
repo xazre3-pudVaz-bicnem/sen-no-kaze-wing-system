@@ -5,7 +5,9 @@ import {
   addCaseNoteAction,
   confirmAppointmentAction,
   proposeAppointmentAction,
+  recordPaperContractAction,
   requestAppointmentChangeAction,
+  requestQuoteChangeAction,
   saveDealerProfileAction,
   saveSiteSurveyAction,
   uploadCaseFileAction,
@@ -310,6 +312,68 @@ export function CaseFileUploadForm({
         {label}
       </Button>
       <p className="text-[0.65rem] text-muted">JPEG・PNG・WebP の画像と PDF（20MB まで）</p>
+    </form>
+  );
+}
+
+// ---------- 見積の修正依頼（お客様） ----------
+
+export function QuoteChangeRequestForm({ quoteId, requestId }: { quoteId: string; requestId: string }) {
+  const [state, action, pending] = useActionState(requestQuoteChangeAction, initial);
+  if (state.ok) return <Result state={state} />;
+  return (
+    <form action={action} className="space-y-2" data-testid="quote-change-request-form">
+      <input type="hidden" name="quote_id" value={quoteId} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <Result state={state} />
+      <Textarea name="message" rows={3} required maxLength={2000} placeholder="変更したい設備・仕様、ご予算、ご不明な点などをお書きください" aria-label="修正したい内容" />
+      <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+        {pending && <Spinner />}
+        内容の修正を依頼する
+      </Button>
+    </form>
+  );
+}
+
+// ---------- 書面で締結した契約（本部） ----------
+
+export function PaperContractForm({
+  quoteId,
+  requestId,
+  defaultName,
+  defaultEmail,
+  today,
+}: {
+  quoteId: string;
+  requestId: string;
+  defaultName: string;
+  defaultEmail: string;
+  today: string;
+}) {
+  const [state, action, pending] = useActionState(recordPaperContractAction, initial);
+  return (
+    <form action={action} className="space-y-3" data-testid="paper-contract-form">
+      <input type="hidden" name="quote_id" value={quoteId} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <Result state={state} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="署名者の氏名" htmlFor={`paper-name-${quoteId}`}>
+          <Input id={`paper-name-${quoteId}`} name="signer_name" defaultValue={defaultName} required maxLength={100} />
+        </Field>
+        <Field label="署名者のメールアドレス" htmlFor={`paper-email-${quoteId}`}>
+          <Input id={`paper-email-${quoteId}`} name="signer_email" type="email" defaultValue={defaultEmail} required />
+        </Field>
+        <Field label="締結日" htmlFor={`paper-date-${quoteId}`}>
+          <Input id={`paper-date-${quoteId}`} name="signed_on" type="date" max={today} defaultValue={today} required />
+        </Field>
+      </div>
+      <Field label="署名済みの契約書（PDF・20MB まで）" htmlFor={`paper-file-${quoteId}`}>
+        <Input id={`paper-file-${quoteId}`} name="file" type="file" accept="application/pdf" required />
+      </Field>
+      <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+        {pending && <Spinner />}
+        書面の契約を記録する
+      </Button>
     </form>
   );
 }

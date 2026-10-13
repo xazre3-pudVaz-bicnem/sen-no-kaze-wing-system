@@ -1,6 +1,7 @@
 import { CaseWorkspace as BaseCaseWorkspace } from '@/components/admin/case-workspace';
 import { ElectronicContractPanel } from '@/components/admin/electronic-contract-panel';
 import { CaseSitePanels } from '@/components/case-flow/case-site-panels';
+import { CaseChangeRequestsPanel, PaperContractPanel } from '@/components/case-flow/case-contract-panels';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -217,14 +218,19 @@ export async function CaseWorkspace(props: CaseWorkspaceProps) {
   return (
     <>
       <BaseCaseWorkspace {...baseProps} />
+      {activeTab === 'estimate' && (
+        // お客様からの見積の修正依頼（フェーズ9）。依頼があるときだけ表示する
+        <CaseChangeRequestsPanel quoteId={props.quoteId} actor={props.actor} flash={flash} />
+      )}
       {activeTab === 'site' && (
         // 受付・担当・日程・現地確認・技術検討（フェーズ5〜7）。上の「正式登録候補」は案件資料からの参考表示
         <CaseSitePanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
       )}
       {quoteReference && activeTab === 'documents' && (
         <div className="mt-2 space-y-2">
-          {/* 電子契約（GMOサイン）は正式な保存・判定を行う。下の契約変更履歴はモックのまま */}
+          {/* 電子契約（GMOサイン）と書面の契約は正式な保存・判定を行う。下の契約変更履歴はモックのまま */}
           <ElectronicContractPanel quoteId={props.quoteId} actor={props.actor} />
+          <PaperContractPanel quoteId={props.quoteId} actor={props.actor} flash={flash} />
           <ContractHistoryMock
             quoteNo={quoteReference.quoteNo}
             revision={quoteReference.revision}

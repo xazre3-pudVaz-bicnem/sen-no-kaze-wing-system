@@ -11,6 +11,8 @@ import {
   isQuoteDeclineEligible,
 } from '@/lib/domain/quote-lifecycle';
 import { respondToQuoteAction } from '@/lib/actions/configurations';
+import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { QuoteChangeRequestForm } from '@/components/case-flow/forms';
 import { activeContract } from '@/lib/domain/electronic-contract';
 import { COMPANY } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
@@ -41,6 +43,12 @@ export default async function QuoteDetailPage({
   const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';
   // 電子契約（GMOサイン）。お客様には自分の案件の契約だけが見える（RLS）
   const contract = request ? activeContract(await store.listElectronicContracts(request.id, user)) : null;
+  // 見積の修正依頼（フェーズ9）。発行済みの現在の見積だけ依頼できる
+  const changeRequests = request
+    ? (await (await getCaseFlowStore()).listQuoteChangeRequests(user, request.id)).filter((c) => c.quote_id === quote.id)
+    : [];
+  const canRequestChange =
+    Boolean(request) && quote.status === 'issued' && request?.quote_id === quote.id && !changeRequests.some((c) => c.status === 'open');
 
   return (
     <Section className="py-10 sm:py-14">
@@ -175,6 +183,21 @@ export default async function QuoteDetailPage({
           <Alert tone="info" className="mt-6">
             今回は見送るとご回答いただきました。仕様を変えて再度お見積りすることもできます。
           </Alert>
+        )}
+        {(canRequestChange || changeRequests.length > 0) && request && (
+          <div className="card mt-6 space-y-3 p-5" data-testid="quote-change-requests">
+            <h2 className="text-base font-semibold">見積の内容を修正したいとき</h2>
+            {changeRequests.map((c) => (
+              <div key={c.id} className="rounded-lg bg-[#f7f8f8] p-3 text-sm">
+                <p className="text-xs text-muted">
+                  {formatDate(c.created_at)} にご依頼{c.status === 'open' ? '（担当が対応中です）' : `（${formatDate(c.resolved_at)} に対応しました）`}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">{c.message}</p>
+                {c.resolution && <p className="mt-1 text-xs text-ink-soft">担当より：{c.resolution}</p>}
+              </div>
+            ))}
+            {canRequestChange && <QuoteChangeRequestForm quoteId={quote.id} requestId={request.id} />}
+          </div>
         )}
         {quote.status === 'superseded' && (
           <Alert tone="info" className="mt-6">

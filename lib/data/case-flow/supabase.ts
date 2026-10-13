@@ -1,4 +1,5 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -16,6 +17,8 @@ import type {
   CaseWorkflow,
   DealerProfile,
   DealerProfileInput,
+  PaperContractInput,
+  QuoteChangeRequest,
   QuoteRequestPreferences,
   QuoteRequestPreferencesInput,
   SiteSurvey,
@@ -27,6 +30,7 @@ import type { BoardAppointment, CaseFlowStore } from './store';
 type Db = SupabaseClient<any, 'public', any>;
 
 const CASE_FILES_BUCKET = 'case-files';
+const CONTRACT_DOCUMENTS_BUCKET = 'contract-documents';
 
 /** DB のエラーを画面向けの StoreError にする（lib/data/supabase-store.ts の mapPgError と同じ規則） */
 function fail(e: { code?: string; message?: string } | null): never {
@@ -256,6 +260,52 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
   }
   async addCaseNote(_actor: SessionUser, requestId: string, input: CaseNoteInput) {
     return this.rpc<string>('add_case_note', { p_request_id: requestId, p_note: input });
+  }
+
+  // ---------- 見積の修正依頼 ----------
+  async listQuoteChangeRequests(_actor: SessionUser, requestId: string): Promise<QuoteChangeRequest[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('quote_change_requests')
+      .select('*')
+      .eq('quote_request_id', requestId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as QuoteChangeRequest[];
+  }
+  async requestQuoteChange(_actor: SessionUser, quoteId: string, message: string) {
+    return this.rpc<string>('request_quote_change', { p_quote_id: quoteId, p_message: message });
+  }
+  async resolveQuoteChangeRequest(_actor: SessionUser, changeRequestId: string, resolution: string | null) {
+    await this.rpc<void>('resolve_quote_change_request', { p_change_request_id: changeRequestId, p_resolution: resolution });
+  }
+
+  // ---------- 書面で締結した契約 ----------
+  async recordPaperContract(_actor: SessionUser, quoteId: string, input: PaperContractInput, pdf: Uint8Array) {
+    // 署名済みの書面は、電子契約と同じ非公開の保存先（contract-documents）へ置いてから記録する。記録できなければ置いた書面を消す
+    const storagePath = `contracts/paper/${randomUUID()}.pdf`;
+    const admin = createAdminClient();
+    const up = await admin.storage.from(CONTRACT_DOCUMENTS_BUCKET).upload(storagePath, pdf, { contentType: 'application/pdf', upsert: false });
+    if (up.error) throw new StoreError('INTERNAL', '契約書を保存できませんでした。時間をおいてもう一度お試しください');
+    const db = await this.db();
+    const { data, error } = await db.rpc('record_paper_contract', {
+      p_quote_id: quoteId,
+      p_signer_name: input.signer_name,
+      p_signer_email: input.signer_email,
+      p_signed_on: input.signed_on,
+      p_file_path: storagePath,
+    });
+    if (error) {
+      await admin.storage.from(CONTRACT_DOCUMENTS_BUCKET).remove([storagePath]);
+      fail(error);
+    }
+    return data as string;
+  }
+  async voidPaperContract(_actor: SessionUser, contractId: string, reason: string) {
+    await this.rpc<void>('void_paper_contract', { p_contract_id: contractId, p_reason: reason });
   }
 
   // ---------- 写真・書類 ----------

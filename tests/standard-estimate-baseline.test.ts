@@ -56,7 +56,7 @@ describe('標準状態の商品（PR C1）：DB の取り決め', () => {
     expect(once(body('publish_standard_estimate_revision'), '  perform public.recalculate_standard_estimate_revision(rev.id);\n')).toBe(1);
   });
 
-  it('売価だけの取得経路は、原価・販売費率・掛率・調整理由・備考を返さない（未ログインでも使える）', () => {
+  it('売価だけの取得経路は、原価・販売費率・掛率・調整理由・備考を返さない（サーバー側のサービスロールだけが呼べる）', () => {
     const view = fn('get_standard_estimate_sale_views');
     const keys = [...view.matchAll(/'([a-z_]+)',\s/g)].map((m) => m[1]);
     expect(keys).toContain('unit_price');
@@ -66,7 +66,9 @@ describe('標準状態の商品（PR C1）：DB の取り決め', () => {
     }
     // 公開中の Revision だけ
     expect(view).toContain("r.status = 'published'");
-    expect(migration).toContain('grant execute on function public.get_standard_estimate_sale_views(uuid) to anon, authenticated;');
+    // anon へ開放できる SECURITY DEFINER 関数は RLS の判定関数だけ（リハーサルの許可リスト）。サーバー側から呼ぶ
+    expect(migration).toContain('grant execute on function public.get_standard_estimate_sale_views(uuid) to service_role;');
+    expect(migration).not.toMatch(/grant execute on function public\.get_standard_estimate_sale_views\(uuid\) to [^;]*(anon|authenticated)/);
   });
 
   it('内部の関数は API から実行させない', () => {

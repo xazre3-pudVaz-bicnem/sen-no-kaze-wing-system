@@ -738,14 +738,14 @@ begin
             coalesce((select count(*)::text || '/' || max(b.quantity)::integer
                         from public.standard_estimate_revision_baseline_items b where b.revision_id::text = v_se4_text), '(なし)'));
 
-          perform pg_temp.expect_eq('16-8 未ログインでも売価だけの標準見積を取得でき、原価・社内の率・備考は含まれない', 'true/false/12000',
-            pg_temp.run_as('anon', null, format($q$
+          perform pg_temp.expect_eq('16-8 サーバー（サービスロール）は売価だけの標準見積を取得でき、原価・社内の率・備考は含まれない', 'true/false/12000',
+            pg_temp.run_as('service_role', null, format($q$
               select exists (select 1 from jsonb_array_elements(s.v) e where e ->> 'revision_id' = %L)::text || '/' ||
                      (s.v::text ~ '"(cost_[a-z_]*|sales_fee_rate|markup_rate|remark|standard_adjustment_reason)"')::text || '/' ||
                      coalesce((select e -> 'baseline' -> 0 ->> 'unit_price' from jsonb_array_elements(s.v) e where e ->> 'revision_id' = %L), '(なし)')
                 from (select public.get_standard_estimate_sale_views(%L) as v) s $q$, v_se3_text, v_se3_text, v_model)));
           perform pg_temp.expect_eq('16-9 売価だけの本体の明細の合計は、標準見積の本体の明細小計と同じ（販売費率・掛率を掛けた売価）', 'true',
-            pg_temp.run_as('anon', null, format($q$
+            pg_temp.run_as('service_role', null, format($q$
               select (sum((l ->> 'amount')::integer) = min(b.line_subtotal))::text
                 from jsonb_array_elements(public.get_standard_estimate_sale_views(%L)) e
                 cross join lateral jsonb_array_elements(e -> 'base_lines') l
@@ -757,6 +757,9 @@ begin
                where e ->> 'revision_id' = %L $q$, v_model, v_se3_text)));
           perform pg_temp.expect_blocked('16-10 お客様は標準状態の商品の表を直接読めない',
             pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.standard_estimate_revision_baseline_items $q$));
+          perform pg_temp.expect_eq('16-11 未ログインの利用者・お客様は売価だけの取得経路を API から直接は呼べない（サーバー側だけ）', 'true/true',
+            (pg_temp.run_as('anon', null, format($q$ select public.get_standard_estimate_sale_views(%L)::text $q$, v_model)) like 'ERROR 42501:%')::text || '/' ||
+            (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_standard_estimate_sale_views(%L)::text $q$, v_model)) like 'ERROR 42501:%')::text);
         end if;
       end if;
     end if;

@@ -9,7 +9,9 @@
 --    - 区分（内外装・オプション・別途工事）はシミュレーターと同じ分け方で DB が決める
 --    - 次の Revision へ引き継ぎ、公開時に商品台帳の現在の価格・名称で snapshot を取り直す（公開後は変えない）
 -- 2. 売価だけの取得経路（get_standard_estimate_sale_views）
---    公開中の標準見積を、原価・販売費率・掛率・社内メモ（備考）を除いた売価だけの形で返す。未ログインのシミュレーターから使う。
+--    公開中の標準見積を、原価・販売費率・掛率・社内メモ（備考）を除いた売価だけの形で返す。
+--    シミュレーターのページ（サーバー側）がサービスロールで呼ぶ。未ログインの利用者・お客様が API から直接は呼べない
+--    （anon へ開放できる SECURITY DEFINER 関数は RLS の判定関数だけ、というリハーサルの決まりに合わせる）。
 --
 -- 既存の関数（start_next_standard_estimate_revision・publish_standard_estimate_revision）は、
 -- 適用済みの定義を検査してから置き換える（目印はちょうど 1 箇所、owner・SECURITY DEFINER・search_path・EXECUTE は不変）。
@@ -285,7 +287,7 @@ begin
 end;
 $set_baseline$;
 
--- 公開中の標準見積を、売価だけの形で返す（未ログインのシミュレーターから使う）。
+-- 公開中の標準見積を、売価だけの形で返す（シミュレーターのページがサーバー側でサービスロールから呼ぶ）。
 -- 原価・販売費率・掛率・調整理由・明細の備考（社内メモ）は返さない。POR の行は単価・金額とも NULL
 create function public.get_standard_estimate_sale_views(p_base_model_id uuid)
 returns jsonb
@@ -502,7 +504,7 @@ revoke all on function public.set_standard_estimate_baseline(uuid, jsonb, intege
 revoke all on function public.get_standard_estimate_sale_views(uuid) from public, anon, authenticated, service_role;
 
 grant execute on function public.set_standard_estimate_baseline(uuid, jsonb, integer) to authenticated;
-grant execute on function public.get_standard_estimate_sale_views(uuid) to anon, authenticated;
+grant execute on function public.get_standard_estimate_sale_views(uuid) to service_role;
 
 -- ---------- postconditions ----------
 
@@ -518,8 +520,10 @@ begin
     raise exception 'POSTCONDITION: % must be executable by authenticated only', v_fn;
   end if;
   v_fn := 'public.get_standard_estimate_sale_views(uuid)'::regprocedure;
-  if not has_function_privilege('anon', v_fn, 'EXECUTE') or not has_function_privilege('authenticated', v_fn, 'EXECUTE') then
-    raise exception 'POSTCONDITION: % must be executable by anon and authenticated', v_fn;
+  if has_function_privilege('anon', v_fn, 'EXECUTE')
+     or has_function_privilege('authenticated', v_fn, 'EXECUTE')
+     or not has_function_privilege('service_role', v_fn, 'EXECUTE') then
+    raise exception 'POSTCONDITION: % must be executable by service_role only (server side)', v_fn;
   end if;
   foreach v_fn in array array[
     'public.copy_standard_estimate_baseline(uuid, uuid)'::regprocedure,

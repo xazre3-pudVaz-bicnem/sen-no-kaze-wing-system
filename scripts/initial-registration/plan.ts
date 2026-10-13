@@ -3,7 +3,7 @@
  *
  * 確定資料：assets/source-docs/標準見積_初期登録候補整理_初期登録確認完了_20261008.xlsx（gitignore。原価を含むため公開リポジトリに置かない）
  * 規則（統合版依頼書 §11、xlsx の「行別要確認」「要確認事項」）
- *   - 「初期登録対象」の行のうち、初期登録アクションが「初期Revisionへ登録…」の行だけを登録する
+ *   - 「初期登録対象」の行のうち、初期登録アクションが「初期Revisionへ登録」「初期Revisionへ登録（…）」の行だけを登録する
  *     （数量 0・率計算の経費・集計・案件見積側・分類表 ×・重複／旧価格の行は登録しない）
  *   - 業務分類「Base Master」→ 本体マスターの明細、「標準見積／内外装」「標準見積／オプション」→ 標準見積の明細
  *   - 単価は原価として登録する（2026-10-13 決定：案 A。率は初期値の販売費率 100%・経費率 15%・掛率 150%）
@@ -110,7 +110,8 @@ export function buildRegistrationPlan(sheets: Sheet[]): RegistrationPlan {
 
     if (text(at('G')) !== '初期登録対象') continue;
     const action = text(at('T'));
-    if (!action.startsWith('初期Revisionへ登録')) continue;
+    // 「初期Revisionへ登録しない（重複・旧価格）」も同じ文字で始まるため、前方一致では判定しない
+    if (!/^初期Revisionへ登録(?:（[^）]*）)?$/.test(action)) continue;
 
     const model = text(at('C'));
     const spec = text(at('D'));

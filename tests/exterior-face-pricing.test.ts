@@ -172,7 +172,7 @@ describe.sequential('ローカル保存から見積生成までの外壁4面価�
       phone: '000-0000-0000',
       address: 'テスト住所',
       site_address: null,
-    }, null);
+    }, null, reloaded!.configuration.lock_version ?? null);
     const detail = await new LocalStore().getQuote(quote.id, actor);
     const faceRows = detail!.items.filter((item) => item.name.startsWith('外壁仕様（'));
 
@@ -279,7 +279,7 @@ describe.sequential('ローカル保存から見積生成までの外壁4面価�
       phone: '000-0000-0000',
       address: 'テスト住所',
       site_address: null,
-    }, null);
+    }, null, reloaded!.configuration.lock_version ?? null);
     const detail = await new LocalStore().getQuote(quote.id, actor);
     expect(detail).not.toBeNull();
     expect(quote).toMatchObject({

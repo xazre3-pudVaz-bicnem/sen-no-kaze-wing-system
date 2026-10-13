@@ -1,23 +1,52 @@
 'use client';
 
 import { useActionState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { requestQuoteAction, type QuoteRequestState } from '@/lib/actions/configurations';
 import { Alert, Button, Field, Input, Spinner, Textarea } from '@/components/ui';
 
 interface Props {
   configurationId: string;
+  /** この確認画面に表示しているプランの版。送信時に DB の版と照合する（版の列が無い DB では null） */
+  lockVersion: number | null;
   defaults: { full_name: string; company_name: string; email: string; phone: string; address: string };
 }
 
 const initial: QuoteRequestState = { ok: false };
 
-export function QuoteRequestForm({ configurationId, defaults }: Props) {
+const CONFIGURATION_CONFLICT_MESSAGE = '他の画面でこのプランが更新されています';
+
+export function QuoteRequestForm({ configurationId, lockVersion, defaults }: Props) {
   const [state, action, pending] = useActionState(requestQuoteAction, initial);
   const v: Record<string, string | undefined> = { ...defaults, ...(state.values ?? {}) };
+  const isConflict = Boolean(state.error?.includes(CONFIGURATION_CONFLICT_MESSAGE));
   return (
     <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form">
       <input type="hidden" name="configuration_id" value={configurationId} />
-      {state.error && <Alert tone="danger">{state.error}</Alert>}
+      <input type="hidden" name="expected_lock_version" value={lockVersion ?? ''} />
+      {isConflict ? (
+        <Alert tone="warn">
+          <div data-testid="quote-request-conflict-message">
+            <p className="font-semibold text-ink">ほかの画面でこのプランが更新されています。</p>
+            <p className="mt-2 text-sm leading-relaxed">
+              見積依頼はまだ送信していません。最新の内容を再読み込みして仕様と金額を確認してから、もう一度依頼してください。
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              onClick={() => window.location.reload()}
+              data-testid="quote-request-conflict-reload"
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              最新の内容を再読み込み
+            </Button>
+          </div>
+        </Alert>
+      ) : (
+        state.error && <Alert tone="danger">{state.error}</Alert>
+      )}
       <h2 className="text-xl">お客様情報</h2>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="お名前" htmlFor="full_name" required errors={state.fieldErrors?.full_name}>

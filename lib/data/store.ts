@@ -186,6 +186,11 @@ export interface SaveConfigurationInput {
   site_municipality?: string | null;
   /** 「設置予定地は未定」を明示選択した状態 */
   site_location_undecided?: boolean;
+  /**
+   * 既存の Draft を保存するとき、読み込んだ時点の lock_version。
+   * 一致しなければ保存を拒否する（他の画面の保存を後勝ちで上書きしない）。新規保存では不要。
+   */
+  expected_lock_version?: number | null;
   /** 選ばれたバリエーション（選択肢 ID） */
   variant_choice_ids?: string[];
   /** 外壁4面の割当。未指定は既存互換用に空配列として保存する */
@@ -415,7 +420,17 @@ export interface DataStore {
   saveQuoteDraft(id: string, input: QuoteDraftSaveInput, actor: SessionUser): Promise<number>;
   /** 非Web初回Draftをformal Revision 1として確定する */
   finalizeQuoteDraft(id: string, expectedLockVersion: number, actor: SessionUser): Promise<Quote>;
-  createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null): Promise<Quote>;
+  /**
+   * expectedLockVersion: 見積依頼の確認画面を表示した時点の Configuration の版。
+   * DB の版と一致しなければ（NULL を含む）見積を作らずに LOCKED で拒否する。
+   */
+  createQuoteFromConfiguration(
+    actor: SessionUser,
+    configurationId: string,
+    contact: QuoteContact,
+    message: string | null,
+    expectedLockVersion: number | null
+  ): Promise<Quote>;
   listQuotes(userId: string): Promise<Quote[]>;
   listQuotesByConfiguration(userId: string): Promise<Map<string, Quote>>;
   getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null>;

@@ -104,7 +104,20 @@ export async function runtimeSecurity(client) {
   return { ok: results.length > 0 && results.every((r) => r.ok), results };
 }
 
+/** 複数の実行時検査の結果を 1 つにまとめる（どれか 1 つでも不合格なら全体が不合格） */
+export function mergeRuntime(...parts) {
+  const present = parts.filter(Boolean);
+  const error = present.map((p) => p.error).filter(Boolean).join(' / ');
+  return {
+    ok: present.length > 0 && present.every((p) => p.ok),
+    results: present.flatMap((p) => p.results ?? []),
+    notes: present.map((p) => p.note).filter(Boolean),
+    ...(error ? { error } : {}),
+  };
+}
+
 export function printRuntime(runtime, log = console.log) {
+  for (const note of runtime.notes ?? []) log(`（${note}）`);
   for (const r of runtime.results) {
     log(`${r.ok ? 'ok  ' : 'NG  '}${r.step}${r.ok ? '' : `\n      期待: ${r.expected}\n      結果: ${r.actual}`}`);
   }

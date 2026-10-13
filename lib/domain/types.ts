@@ -444,6 +444,12 @@ export interface Configuration {
   site_municipality?: string | null;
   /** 「設置予定地は未定」を明示選択した状態 */
   site_location_undecided?: boolean;
+  /**
+   * 同時編集の検知用の版（保存のたびに 1 増える）。
+   * 既存の Draft を保存するときは、読み込んだ時点の値を expected_lock_version で渡す。
+   * DB が版の列を持つ前（migration 未適用）は undefined。
+   */
+  lock_version?: number;
   base_price: number;
   base_expense: number;
   option_subtotal: number;

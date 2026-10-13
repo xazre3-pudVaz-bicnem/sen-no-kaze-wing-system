@@ -11,7 +11,8 @@
  */
 import fs from 'node:fs';
 import pg from 'pg';
-import { checkExitCode, evaluate, inspect, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
+import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
+import { runtimeConcurrency } from './runtime-concurrency.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -34,6 +35,8 @@ try {
     await client.query("set statement_timeout = '5s'");
     await client.query("set lock_timeout = '2s'");
     runtime = await runtimeSecurity(client);
+    // 同時編集（optimistic locking）は 2 本の接続が必要なため、別の接続で実行する
+    runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     printRuntime(runtime);
   }
   const out = arg('--out');

@@ -57,6 +57,20 @@ npx supabase db query --linked --output-format json -f scripts/db-rehearsal/cata
 - `duplicate_configuration`：未ログイン・他人・担当代理店は拒否、本人と本部だけ
 - 内部関数を閉じても、トリガー経由の通知・監査ログが作られること
 
+## 同時編集の実行時検査（`runtime-concurrency.mjs`）
+
+`--runtime` を付けると、Configuration 保存の optimistic locking も 2 本の接続で確かめます。
+
+- 読み込んだ時点の版（`lock_version`）と一致する保存だけが成功し、版が 1 進む
+- 古い版のまま・版の指定なしの保存は拒否され、内容は上書きされない
+- 同時に届いた保存は、後から来た方が行 lock を待ち、先の保存の commit 後に拒否される（成功は片方だけ）
+
+2 本の接続から見えるように試験データを commit し、最後に削除します。そのため接続先がこのマシン上の DB
+（`127.0.0.1`／`localhost`）のときだけ実行します。商品マスターが空ではない DB では省略します。
+
+検査の SQL では、関数を必ず `select * from f(...)` の形で 1 回だけ呼びます。
+`select (f(...)).*` は列の数だけ関数を実行するため、書き込みを伴う関数の検査には使えません。
+
 ### EXECUTE 権限の注意
 
 Supabase は、`postgres` が `public` に作った関数へ `anon`／`authenticated`／`service_role` の EXECUTE を既定で付与します。

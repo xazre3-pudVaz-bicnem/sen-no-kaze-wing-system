@@ -88,6 +88,8 @@ import {
 } from './store';
 
 const nowIso = () => new Date().toISOString();
+/** SQL（save_configuration_atomic / create_quote_from_configuration）と同じ、版が一致しないときの文言 */
+const CONFIGURATION_LOCKED_MESSAGE = '他の画面でこのプランが更新されています。再読み込みして内容を確認してください';
 
 export class LocalStore implements DataStore {
   private mutate<T>(fn: (db: LocalDb) => T): T {
@@ -838,7 +840,13 @@ export class LocalStore implements DataStore {
         if (found.status !== 'draft') {
           throw new StoreError('LOCKED', '見積依頼済みの仕様は編集できません。複製して編集してください。');
         }
+        // 同時編集の検知（SQL の save_configuration_atomic と同じ判定）。版の指定が無い保存も拒否する
+        const currentLockVersion = found.lock_version ?? 1;
+        if ((input.expected_lock_version ?? null) !== currentLockVersion) {
+          throw new StoreError('LOCKED', CONFIGURATION_LOCKED_MESSAGE);
+        }
         cfg = found;
+        cfg.lock_version = currentLockVersion + 1;
         cfg.name = input.name || cfg.name;
         cfg.base_model_id = model.id;
         cfg.finish_level = level;
@@ -857,6 +865,7 @@ export class LocalStore implements DataStore {
           base_model_id: model.id,
           name: input.name || '無題の仕様',
           status: 'draft',
+          lock_version: 1,
           finish_level: level,
           spec_code: input.spec_code ?? null,
           site_prefecture: sitePrefecture,
@@ -909,6 +918,8 @@ export class LocalStore implements DataStore {
         id: randomUUID(),
         name: `${src.name}（コピー）`,
         status: 'draft',
+        // 複製は新しいプラン。版は 1 から始める（SQL の duplicate_configuration と同じ）
+        lock_version: 1,
         created_at: nowIso(),
         updated_at: nowIso(),
       };
@@ -975,11 +986,19 @@ export class LocalStore implements DataStore {
     throw new StoreError('VALIDATION', '非Web案件のDraft機能はSupabase接続環境で利用してください。');
   }
 
-  async createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null) {
+  async createQuoteFromConfiguration(
+    actor: SessionUser,
+    configurationId: string,
+    contact: QuoteContact,
+    message: string | null,
+    expectedLockVersion: number | null
+  ) {
     return this.mutate((db) => {
       const cfg = db.configurations.find((c) => c.id === configurationId);
       if (!cfg) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
       if (cfg.user_id !== actor.id) throw new StoreError('FORBIDDEN', '権限がありません');
+      // SQL と同じ判定：確認画面を表示した時点の版と一致しなければ、見積を作らずに拒否する（版の指定が無い依頼も拒否）
+      if (expectedLockVersion !== (cfg.lock_version ?? 1)) throw new StoreError('LOCKED', CONFIGURATION_LOCKED_MESSAGE);
       const items = db.configurationItems.filter((i) => i.configuration_id === cfg.id);
       const issues = validateSelection(
         { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts },

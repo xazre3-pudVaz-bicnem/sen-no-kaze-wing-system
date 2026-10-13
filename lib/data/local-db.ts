@@ -253,6 +253,8 @@ export function loadDb(): LocalDb {
   const raw = fs.readFileSync(p, 'utf8');
   const parsed = JSON.parse(raw) as Partial<LocalDb>;
   const db = { ...emptyDb(), ...parsed } as LocalDb;
+  // 版の列を持つ前に保存されたプランは、DB 側の既定値と同じ 1 として扱う
+  for (const configuration of db.configurations) configuration.lock_version ??= 1;
   const insulationChanged = reconcileIndependentInsulation(db);
   const productNumbersChanged = reconcileProductNumbers(db);
   if (insulationChanged || productNumbersChanged) saveDb(db);

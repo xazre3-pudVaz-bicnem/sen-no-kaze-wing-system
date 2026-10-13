@@ -84,6 +84,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           site_prefecture: found.configuration.site_prefecture ?? null,
           site_municipality: found.configuration.site_municipality ?? null,
           site_location_undecided: found.configuration.site_location_undecided ?? false,
+          lock_version: found.configuration.lock_version ?? null,
         };
       }
     }
@@ -106,6 +107,8 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
         site_prefecture: null,
         site_municipality: null,
         site_location_undecided: false,
+        // 未保存の新規下書き。版は最初の保存で 1 から始まる
+        lock_version: null,
       };
     }
   }

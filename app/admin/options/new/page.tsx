@@ -94,6 +94,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         <div className="registration-create-sections flex flex-col gap-6">
           <style>{`
             .registration-create-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
+            .registration-create-sections #product-identify .grid > *:has(#size_note-create) { display: none; }
             .registration-create-sections #product-identify [data-testid="admin-submit"] { font-size: 0; }
             .registration-create-sections #product-identify [data-testid="admin-submit"]::after { content: '基本情報を保存して続ける'; font-size: 0.875rem; }
           `}</style>

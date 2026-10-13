@@ -6,17 +6,19 @@ import { usePathname } from 'next/navigation';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { deleteUnusedPublishedOptionAction } from '@/lib/actions/unused-published-product-delete';
 
+type PortalTarget = {
+  element: HTMLElement;
+  optionId: string;
+};
+
 export function PublishedOptionDeleteControl({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
-  const [target, setTarget] = useState<HTMLElement | null>(null);
+  const [target, setTarget] = useState<PortalTarget | null>(null);
   const match = /^\/admin\/options\/([^/]+)$/.exec(pathname);
   const optionId = match?.[1] ?? '';
 
   useEffect(() => {
-    if (!enabled || !optionId) {
-      setTarget(null);
-      return;
-    }
+    if (!enabled || !optionId) return;
 
     let host: HTMLDivElement | null = null;
     let raf = 0;
@@ -39,14 +41,14 @@ export function PublishedOptionDeleteControl({ enabled }: { enabled: boolean }) 
 
         const existing = parent.querySelector<HTMLElement>('[data-published-option-delete-host="true"]');
         if (existing) {
-          setTarget(existing);
+          setTarget({ element: existing, optionId });
           return;
         }
 
         host = document.createElement('div');
         host.dataset.publishedOptionDeleteHost = 'true';
         parent.appendChild(host);
-        setTarget(host);
+        setTarget({ element: host, optionId });
       });
     };
 
@@ -58,11 +60,10 @@ export function PublishedOptionDeleteControl({ enabled }: { enabled: boolean }) 
       observer.disconnect();
       window.cancelAnimationFrame(raf);
       if (host?.isConnected) host.remove();
-      setTarget(null);
     };
   }, [enabled, optionId]);
 
-  if (!enabled || !optionId || !target) return null;
+  if (!enabled || !optionId || !target || target.optionId !== optionId) return null;
 
   return createPortal(
     <details className="rounded-xl border border-line bg-white" data-testid="published-option-delete-control">
@@ -84,6 +85,6 @@ export function PublishedOptionDeleteControl({ enabled }: { enabled: boolean }) 
         </form>
       </div>
     </details>,
-    target
+    target.element
   );
 }

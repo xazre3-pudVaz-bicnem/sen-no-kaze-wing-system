@@ -124,15 +124,6 @@ export default async function EditOptionPage({
     return `?${params.toString()}`;
   };
 
-  const stepOneSections = [
-    ['1', '基本情報', 'カテゴリー・メーカー・商品名・型番・サイズ'],
-    ['2', '商品の詳細', '商品説明・メーカー記載の特徴'],
-    ['3', '画像・資料', 'メイン画像・サブ画像・メーカー資料'],
-    ['4', 'お客様選択', '色・仕様など、お客様が選べる項目'],
-    ['5', '価格・対象モデル', '商品価格・対象モデル・公開条件'],
-    ['6', '登録前チェック', '重複・画像・価格・選択項目を確認'],
-  ];
-
   return (
     <AdminPage
       title="商品を追加"
@@ -143,7 +134,7 @@ export default async function EditOptionPage({
         <FlashMessages sp={sp} />
         {sp.created && (
           <Alert tone="success">
-            基本情報を登録しました。続けて必要な画像・資料・お客様選択・価格を登録してください。同じSTEP 1の続きとして入力できます。
+            1. 基本情報を保存しました。続けて2〜6を同じSTEP 1の画面で入力してください。
           </Alert>
         )}
 
@@ -201,94 +192,97 @@ export default async function EditOptionPage({
             <div>
               <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
               <p className="mt-1 text-sm text-muted">
-                基本情報から登録前チェックまで、この画面で続けて入力します。下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。
+                1. 基本情報から6. 登録前チェックまで、この画面で上から順に入力します。下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。
               </p>
             </div>
 
-            <section className="card p-4 sm:p-5" aria-label="STEP 1 商品情報の流れ" data-testid="option-registration-step1-progress">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold">STEP 1の入力項目</h3>
-                  <p className="mt-1 text-xs text-muted">基本情報は保存済みです。残りの項目を上から順に確認してください。</p>
-                </div>
-                <span className="rounded-full bg-[#eaf6f1] px-3 py-1 text-xs font-semibold text-[#245a48]">下書き保存済み</span>
-              </div>
-              <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {stepOneSections.map(([no, label, note]) => (
-                  <li key={no} className="rounded-xl border border-line bg-white px-3 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-brown">{no}</span>
-                      {no === '1' && <span className="text-[0.65rem] font-semibold text-[#245a48]">保存済み</span>}
-                    </div>
-                    <span className="mt-1 block text-sm font-semibold text-ink">{label}</span>
-                    <span className="mt-1 block text-[0.7rem] leading-5 text-muted">{note}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            <div className="registration-step1-sections flex flex-col gap-6">
+              <style>{`
+                .registration-step1-sections > form#option-main-form { display: contents; }
+                .registration-step1-sections #product-identify { order: 10; }
+                .registration-step1-sections #product-details { order: 20; }
+                .registration-step1-sections #product-main-media { order: 30; }
+                .registration-step1-sections #sales-settings { order: 50; }
+                .registration-step1-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
+                .registration-step1-sections #product-details > div:first-child > p:first-child::before { content: '2. '; }
+                .registration-step1-sections #product-main-media > div:first-child > p:first-child { font-size: 0; }
+                .registration-step1-sections #product-main-media > div:first-child > p:first-child::after { content: '3. 画像・資料'; font-size: 1.125rem; line-height: 1.75rem; }
+                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2 { font-size: 0; }
+                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2::after { content: '4. お客様選択'; font-size: 1.25rem; line-height: 1.75rem; }
+                .registration-step1-sections #sales-settings > div:first-child > p:first-child { font-size: 0; }
+                .registration-step1-sections #sales-settings > div:first-child > p:first-child::after { content: '5. 価格・対象モデル'; font-size: 1.125rem; line-height: 1.75rem; }
+              `}</style>
 
-            <OptionForm
-              mode="all"
-              option={option}
-              categories={registrationDisplayCategories}
-              models={models}
-              allOptions={options}
-              dependencies={deps}
-              conflicts={confs}
-              returnTo={returnTo}
-            />
+              <OptionForm
+                mode="all"
+                option={option}
+                categories={registrationDisplayCategories}
+                models={models}
+                allOptions={options}
+                dependencies={deps}
+                conflicts={confs}
+                returnTo={returnTo}
+              />
 
-            <OptionMediaManager option={option} />
-            {catalogEditor && <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />}
-
-            <section className="card space-y-4 p-4 sm:p-5" data-testid="option-registration-check">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="font-semibold">STEP 2前の自動チェック</h3>
-                  <p className="mt-1 text-xs text-muted">
-                    現在保存されている下書き内容を確認しています。未保存の変更はSTEP 2へ進むときに先に自動保存されます。
-                  </p>
-                </div>
-                <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${registrationCheckIssues.length > 0 ? 'bg-[#fff1cf] text-[#7c5a18]' : 'bg-[#eaf6f1] text-[#245a48]'}`}>
-                  {registrationCheckIssues.length > 0 ? `要確認：${registrationCheckIssues.length}件` : '基本チェックOK'}
-                </span>
+              <div style={{ order: 35 }}>
+                <OptionMediaManager option={option} />
               </div>
 
-              {registrationCheckIssues.length > 0 ? (
-                <ul className="space-y-1 rounded-xl border border-[#ead6a7] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-ink-soft">
-                  {registrationCheckIssues.map((issue) => <li key={issue}>・{issue}</li>)}
-                </ul>
-              ) : (
-                <p className="rounded-xl border border-line bg-ivory/30 px-4 py-3 text-xs leading-5 text-muted">
-                  重複候補・メイン画像・商品価格・お客様選択の基本項目に、現在の保存内容では要確認事項はありません。
-                </p>
+              {catalogEditor && (
+                <div className="registration-customer-selection" style={{ order: 40 }}>
+                  <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
+                </div>
               )}
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted">STEP 2では、シミュレーターと同じ商品詳細画面で最終表示を確認します。</p>
-                <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
-                  STEP 2 登録内容確認へ
-                </OptionRegistrationPreviewButton>
-              </div>
-            </section>
-
-            {catalogEditor && (
-              <details className="rounded-xl border border-line bg-white">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-muted">その他の操作</summary>
-                <div className="border-t border-line px-4 py-4">
-                  <p className="mb-3 text-xs text-muted">下書き商品は削除できます。保存済みの仕様で使用中の場合は削除できません。</p>
-                  <form action={deleteOptionAction} data-skip-option-autosave="true">
-                    <input type="hidden" name="id" value={option.id} />
-                    <ConfirmSubmit
-                      message={`「${option.name}」を削除しますか？保存済みの仕様で使用中の場合は削除できません。`}
-                      className="btn-ghost btn-sm text-danger"
-                    >
-                      商品を削除
-                    </ConfirmSubmit>
-                  </form>
+              <section className="card space-y-4 p-4 sm:p-5" data-testid="option-registration-check" style={{ order: 60 }}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">6. 登録前チェック</h3>
+                    <p className="mt-1 text-xs text-muted">
+                      現在保存されている下書き内容を確認しています。未保存の変更はSTEP 2へ進むときに先に自動保存されます。
+                    </p>
+                  </div>
+                  <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${registrationCheckIssues.length > 0 ? 'bg-[#fff1cf] text-[#7c5a18]' : 'bg-[#eaf6f1] text-[#245a48]'}`}>
+                    {registrationCheckIssues.length > 0 ? `要確認：${registrationCheckIssues.length}件` : '基本チェックOK'}
+                  </span>
                 </div>
-              </details>
-            )}
+
+                {registrationCheckIssues.length > 0 ? (
+                  <ul className="space-y-1 rounded-xl border border-[#ead6a7] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-ink-soft">
+                    {registrationCheckIssues.map((issue) => <li key={issue}>・{issue}</li>)}
+                  </ul>
+                ) : (
+                  <p className="rounded-xl border border-line bg-ivory/30 px-4 py-3 text-xs leading-5 text-muted">
+                    重複候補・メイン画像・商品価格・お客様選択の基本項目に、現在の保存内容では要確認事項はありません。
+                  </p>
+                )}
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-muted">STEP 2では、シミュレーターと同じ商品詳細画面で最終表示を確認します。</p>
+                  <OptionRegistrationPreviewButton href={stepHref('preview')} className="btn-primary shrink-0">
+                    STEP 2 登録内容確認へ
+                  </OptionRegistrationPreviewButton>
+                </div>
+              </section>
+
+              {catalogEditor && (
+                <details className="rounded-xl border border-line bg-white" style={{ order: 70 }}>
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-muted">その他の操作</summary>
+                  <div className="border-t border-line px-4 py-4">
+                    <p className="mb-3 text-xs text-muted">下書き商品は削除できます。保存済みの仕様で使用中の場合は削除できません。</p>
+                    <form action={deleteOptionAction} data-skip-option-autosave="true">
+                      <input type="hidden" name="id" value={option.id} />
+                      <ConfirmSubmit
+                        message={`「${option.name}」を削除しますか？保存済みの仕様で使用中の場合は削除できません。`}
+                        className="btn-ghost btn-sm text-danger"
+                      >
+                        商品を削除
+                      </ConfirmSubmit>
+                    </form>
+                  </div>
+                </details>
+              )}
+            </div>
           </section>
         ) : <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>)}
 

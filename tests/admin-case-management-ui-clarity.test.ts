@@ -17,12 +17,28 @@ describe('案件管理UIの未登録・準備中・権限表示と一覧復帰',
   });
 
   it('未実装機能を未登録と混同せず準備中として表示する', () => {
-    expect(workspace).toContain("{ label: '製造・施工', value: '準備中', state: 'pending' }");
-    expect(workspace).toContain('管理機能は準備中');
-    expect(workspace).toContain('記録する機能は現在準備中です');
+    // 契約書の保管・版管理など、まだ作っていない機能は準備中と表示する
+    expect(workspace).toContain('契約書の保管・差替え・版管理は現在準備中です。');
+    expect(workspace).toContain('案件資料のアップロード機能は現在準備中です。');
     expect(workspace).not.toContain('正式保存先なし');
     expect(workspace).not.toContain('正式管理は未実装');
     expect(workspace).not.toContain('バックエンド実装が必要');
+  });
+
+  it('案件の流れは、案件の進行の正式な記録（現地確認・契約・製造・引渡し・アフター）から表示する', () => {
+    expect(workspace).toContain('const caseFlow = await getCaseFlowStore();');
+    for (const fragment of [
+      "flowProgress?.site_survey_status === 'completed'",
+      "value: flowSigned ? '締結済み'",
+      'MANUFACTURING_ORDER_STATUS_LABELS[flowManufacturing]',
+      "value: flowHandover ? HANDOVER_STATUS_LABELS[flowHandover.status] : '未着手'",
+      "'引渡し後に受付'",
+    ]) {
+      expect(workspace).toContain(fragment);
+    }
+    // 準備中の固定表示は残さない
+    expect(workspace).not.toContain("{ label: '製造・施工', value: '準備中', state: 'pending' }");
+    expect(workspace).not.toContain("{ label: '引渡し', value: '準備中', state: 'pending' }");
   });
 
   it('権限による未取得をデータなしと断定しない', () => {

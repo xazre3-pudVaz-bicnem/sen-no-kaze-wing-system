@@ -88,6 +88,21 @@ export default async function AdminSettingsPage() {
                 title="製造の進み具合"
                 body="全国の製造依頼と、個体の出荷・設置の進み具合を確認します。"
               />
+              <AvailableCard
+                href="/admin/after-service"
+                title="アフター"
+                body="引渡し後の定期点検・問い合わせ・修理の受付と対応状況を確認します。"
+              />
+              <AvailableCard
+                href="/admin/stock-ledger"
+                title="全国ストック台帳"
+                body="引渡し済みの個体の、災害時に提供できるか（即時提供・輸送・72 時間／7 日の供給）を判定します。"
+              />
+              <AvailableCard
+                href="/admin/disaster-consent"
+                title="災害時提供の承諾書"
+                body="お客様に災害時提供の意思を伺うときの文面（先方が確定した文面）を登録します。"
+              />
             </div>
           </section>
 

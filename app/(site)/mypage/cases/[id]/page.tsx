@@ -6,17 +6,23 @@ import { getStore } from '@/lib/data/store';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
 import { activeContract } from '@/lib/domain/electronic-contract';
 import {
+  AFTER_SERVICE_KIND_LABELS,
   APPOINTMENT_PURPOSE_LABELS,
+  DISASTER_DECISION_LABELS,
   MANUFACTURING_ORDER_STATUS_LABELS,
   MEETING_METHOD_LABELS,
   SCHEDULE_CATEGORY_LABELS,
   SCHEDULE_STATUS_LABELS,
   formatCandidate,
+  type AfterServiceStatus,
+  type HandoverStatus,
+  type PunchItemStatus,
 } from '@/lib/domain/case-flow';
+import { setPunchItemStatusAction } from '@/lib/actions/case-flow';
 import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
 import { formatDate } from '@/lib/utils';
-import { Badge, Container, Section } from '@/components/ui';
-import { AppointmentChooseForm, CaseFileUploadForm } from '@/components/case-flow/forms';
+import { Alert, Badge, Container, Section } from '@/components/ui';
+import { AfterServiceRequestForm, AppointmentChooseForm, CaseFileUploadForm, DisasterConsentForm, HandoverConfirmForms } from '@/components/case-flow/forms';
 import { CaseFileList } from '@/components/case-flow/case-site-panels';
 
 export const metadata: Metadata = { title: 'ご依頼の進み具合 | マイページ', robots: { index: false } };
@@ -24,9 +30,19 @@ export const dynamic = 'force-dynamic';
 
 type Step = { key: string; label: string; done: boolean; detail: string | null };
 
-/** お客様の案件（見積依頼）の進み具合：受付・日程・現地確認・正式見積・契約（フェーズ5〜10） */
-export default async function CustomerCasePage({ params }: { params: Promise<{ id: string }> }) {
+const HANDOVER_TEXT: Record<HandoverStatus, string> = {
+  inspecting: '完成内容をご確認ください',
+  correcting: 'ご指摘の点を是正しています',
+  ready: 'お引渡しの準備ができました',
+  handed_over: 'お引渡し済み',
+};
+const PUNCH_TEXT: Record<PunchItemStatus, string> = { open: '是正の準備中', fixed: '是正しました（ご確認ください）', verified: 'ご確認済み' };
+const AFTER_SERVICE_TEXT: Record<AfterServiceStatus, string> = { open: '受付', in_progress: '対応中', escalated: '対応中（製造元で確認しています）', resolved: '対応済み' };
+
+/** お客様の案件（見積依頼）の進み具合：受付・日程・現地確認・正式見積・契約・製造・設置・引渡し・アフター（フェーズ5〜15） */
+export default async function CustomerCasePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
+  const sp = await searchParams;
   const user = await requireUser(`/mypage/cases/${id}`);
   const caseFlow = await getCaseFlowStore();
   const access = await caseFlow.getCaseAccess(user, id);
@@ -34,7 +50,7 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
   if (access !== 'customer') notFound();
 
   const store = await getStore();
-  const [progress, appointments, files, quotes, contracts, scheduleItems, reports] = await Promise.all([
+  const [progress, appointments, files, quotes, contracts, scheduleItems, reports, handover, punchItems, afterService, consentTexts, consents] = await Promise.all([
     caseFlow.getCaseProgress(user, id),
     caseFlow.listCaseAppointments(user, id),
     caseFlow.listCaseFiles(user, id),
@@ -43,6 +59,11 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
     // お客様には、担当が「お客様に表示」にした工程・記録だけが返る（RLS）
     caseFlow.listScheduleItems(user, id),
     caseFlow.listProgressReports(user, id),
+    caseFlow.getHandover(user, id),
+    caseFlow.listPunchItems(user, id),
+    caseFlow.listAfterServiceRequests(user, id),
+    caseFlow.listDisasterConsentTexts(user),
+    caseFlow.listDisasterConsents(user, id),
   ]);
   const caseQuotes = quotes.filter((q) => q.quote_request_id === id).sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0));
   const latest = caseQuotes[0] ?? null;
@@ -84,9 +105,22 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
       done: Boolean(progress?.unit_count) && (progress?.units_installed ?? 0) >= (progress?.unit_count ?? 0),
       detail: progress?.unit_count ? `${progress.units_installed ?? 0} / ${progress.unit_count} 棟 設置済み` : null,
     },
+    {
+      key: 'handover',
+      label: 'お引渡し',
+      done: handover?.status === 'handed_over',
+      detail: handover ? (handover.handed_over_on ?? HANDOVER_TEXT[handover.status]) : null,
+    },
   ];
   const progressFiles = files.filter((file) => file.context === 'progress');
-  const otherFiles = files.filter((file) => file.context !== 'progress');
+  const afterFiles = files.filter((file) => file.context === 'after_service');
+  const otherFiles = files.filter((file) => file.context !== 'progress' && file.context !== 'after_service');
+  const handedOver = handover?.status === 'handed_over';
+  const openPunch = punchItems.filter((item) => item.status !== 'verified');
+  // 承諾書の文面は先方が決める。本部が登録するまで、災害時提供の欄は表示しない
+  const consentText = consentTexts[0] ?? null;
+  const currentConsent = consents[0] ?? null;
+  const back = `/mypage/cases/${id}`;
 
   return (
     <Section className="py-10 sm:py-14">
@@ -103,7 +137,10 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
           </p>
         </div>
 
-        <ol className="grid gap-2 sm:grid-cols-4 lg:grid-cols-8" data-testid="customer-case-steps">
+        {sp.error && <Alert tone="danger">{sp.error}</Alert>}
+        {sp.done === 'punch_status' && <Alert tone="success">是正の内容をご確認いただきました。ありがとうございます。</Alert>}
+
+        <ol className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="customer-case-steps">
           {steps.map((step) => (
             <li key={step.key} className={`rounded-lg border p-3 text-sm ${step.done ? 'border-[#cfe3d6] bg-[#f3faf5]' : 'border-line bg-white'}`}>
               <p className="text-xs text-muted">{step.done ? '完了' : 'これから'}</p>
@@ -185,6 +222,122 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
                 <CaseFileList files={progressFiles.filter((file) => file.context_id === report.id)} actor={user} quoteId={null} requestId={id} back={`/mypage/cases/${id}`} />
               </article>
             ))}
+          </section>
+        )}
+
+        {handover && (
+          <section className="card space-y-4 p-5" data-testid="customer-case-handover">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">完成内容のご確認・お引渡し</h2>
+              <Badge tone={handedOver ? 'success' : handover.status === 'ready' ? 'navy' : 'warn'}>{HANDOVER_TEXT[handover.status]}</Badge>
+            </div>
+            <p className="text-sm text-ink-soft">
+              完成確認の日：{handover.inspection_on}
+              {handover.handed_over_on && <>　お引渡し日：{handover.handed_over_on}</>}
+            </p>
+            {handover.inspection_summary && <p className="whitespace-pre-wrap rounded-lg bg-[#f7f8f8] p-3 text-sm">{handover.inspection_summary}</p>}
+
+            {punchItems.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">ご指摘・是正の内容</h3>
+                <ul className="space-y-2">
+                  {punchItems.map((item) => (
+                    <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line p-3 text-sm">
+                      <span className="min-w-0 flex-1 whitespace-pre-wrap">{item.description}</span>
+                      <span className="flex items-center gap-2">
+                        <Badge tone={item.status === 'verified' ? 'success' : item.status === 'fixed' ? 'navy' : 'neutral'}>{PUNCH_TEXT[item.status]}</Badge>
+                        {item.status === 'fixed' && !handedOver && (
+                          <form action={setPunchItemStatusAction}>
+                            <input type="hidden" name="request_id" value={id} />
+                            <input type="hidden" name="item_id" value={item.id} />
+                            <input type="hidden" name="status" value="verified" />
+                            <input type="hidden" name="expected_lock_version" value={item.lock_version} />
+                            <input type="hidden" name="back" value={back} />
+                            <button type="submit" className="btn-secondary btn-sm">
+                              是正を確認しました
+                            </button>
+                          </form>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!handedOver && (
+              <div className="space-y-2 rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-4">
+                {handover.status === 'ready' ? (
+                  <p className="text-sm">ご確認ありがとうございます。担当よりお引渡しの日程をご連絡いたします。お引渡しの前に気になる点があれば、お知らせください。</p>
+                ) : openPunch.length > 0 ? (
+                  <p className="text-sm">是正が終わった点をご確認ください。すべてご確認いただくと「問題ありません」をお選びいただけます。</p>
+                ) : (
+                  <p className="text-sm">完成内容をご確認のうえ、問題がなければ「問題ありません」を、気になる点があればその内容をお知らせください。</p>
+                )}
+                <HandoverConfirmForms requestId={id} lockVersion={handover.lock_version} canSayOk={handover.status !== 'ready' && openPunch.length === 0} />
+                <details>
+                  <summary className="cursor-pointer text-xs">気になる点の写真を送る</summary>
+                  <div className="mt-2">
+                    <CaseFileUploadForm quoteId={null} requestId={id} context="punch" allowCustomerVisible={false} label="送る" />
+                  </div>
+                </details>
+              </div>
+            )}
+          </section>
+        )}
+
+        {handedOver && (
+          <section className="card space-y-4 p-5" data-testid="customer-case-after-service">
+            <h2 className="text-lg font-semibold">点検・修理などのご依頼</h2>
+            <p className="text-xs text-muted">定期点検のご相談、不具合の修理、使い方のご質問などを担当へお送りいただけます。</p>
+            {afterService.length > 0 && (
+              <ul className="space-y-3">
+                {afterService.map((row) => (
+                  <li key={row.id} className="space-y-2 rounded-lg border border-line p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Badge tone="neutral">{AFTER_SERVICE_KIND_LABELS[row.kind]}</Badge>
+                      <Badge tone={row.status === 'resolved' ? 'success' : 'warn'}>{AFTER_SERVICE_TEXT[row.status]}</Badge>
+                      <span className="text-muted">{formatDate(row.created_at)}</span>
+                    </div>
+                    <p className="font-semibold">{row.title}</p>
+                    {row.body && <p className="whitespace-pre-wrap text-ink-soft">{row.body}</p>}
+                    {row.response && <p className="whitespace-pre-wrap rounded-lg bg-[#f3faf5] p-3">担当より：{row.response}</p>}
+                    <CaseFileList files={afterFiles.filter((file) => file.context_id === row.id)} actor={user} quoteId={null} requestId={id} back={back} />
+                    {row.status !== 'resolved' && (
+                      <details>
+                        <summary className="cursor-pointer text-xs">このご依頼の写真を送る</summary>
+                        <div className="mt-2">
+                          <CaseFileUploadForm quoteId={null} requestId={id} context="after_service" contextId={row.id} allowCustomerVisible={false} label="送る" />
+                        </div>
+                      </details>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <details className="rounded-lg bg-[#f7f8f8] p-3" open={afterService.length === 0}>
+              <summary className="cursor-pointer text-sm font-semibold">新しく依頼する</summary>
+              <div className="mt-3">
+                <AfterServiceRequestForm quoteId={null} requestId={id} forCustomer />
+              </div>
+            </details>
+          </section>
+        )}
+
+        {handedOver && consentText && (
+          <section className="card space-y-4 p-5" data-testid="customer-case-disaster">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">災害時のご提供について</h2>
+              {currentConsent ? <Badge tone="neutral">現在：{DISASTER_DECISION_LABELS[currentConsent.decision]}</Badge> : <Badge tone="warn">未回答</Badge>}
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-line bg-[#fbfcfb] p-4 text-sm" data-testid="disaster-consent-text">
+              <p className="font-semibold">{consentText.title}</p>
+              <p className="mt-2 whitespace-pre-wrap leading-7 text-ink-soft">{consentText.body}</p>
+              <p className="mt-2 text-[0.65rem] text-muted">第{consentText.version}版</p>
+            </div>
+            {currentConsent?.conditions && <p className="text-xs text-ink-soft">現在の条件：{currentConsent.conditions}</p>}
+            <DisasterConsentForm requestId={id} textVersion={consentText.version} current={currentConsent ? { decision: currentConsent.decision, conditions: currentConsent.conditions } : null} />
+            <p className="text-[0.65rem] text-muted">ご意思はいつでも変更できます。変更の記録は残ります。</p>
           </section>
         )}
 

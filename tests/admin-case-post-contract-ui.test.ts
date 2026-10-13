@@ -43,10 +43,15 @@ describe('案件管理・契約以降UIモック', () => {
     }
   });
 
-  it('引渡し前の是正UIを持ち正式保存は行わない', () => {
-    expect(completeWorkspace).toContain('是正・引渡し前確認');
-    expect(completeWorkspace).toContain('是正事項');
-    expect(completeWorkspace).toContain('是正完了確認');
+  it('是正・引渡し・アフター・災害時提供は、モックではなく正式な欄で記録する（契約変更履歴はモックのまま）', () => {
+    const handoverPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-handover-panels.tsx'), 'utf8');
+    expect(completeWorkspace).toContain('<CaseHandoverPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />');
+    expect(completeWorkspace).toContain('<CaseDisasterPanel quoteId={props.quoteId} actor={props.actor} />');
+    expect(completeWorkspace).not.toContain('function HandoverCorrectionMock');
+    for (const label of ['是正事項', '是正した', '是正を確認した', '工事完了承諾書（署名済みの写し）', '引渡しを完了する', '災害時提供の意思', '全国ストック台帳（本部）']) {
+      expect(handoverPanels).toContain(label);
+    }
+    // 契約変更履歴は保存しないモックのまま
     expect(completeWorkspace).toContain('UIモック・保存なし');
     expect(completeWorkspace).not.toContain('createContract');
     expect(completeWorkspace).not.toContain('updateContract');

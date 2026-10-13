@@ -5,6 +5,11 @@ import {
   addCaseNoteAction,
   addProgressReportAction,
   confirmAppointmentAction,
+  confirmHandoverAction,
+  createAfterServiceRequestAction,
+  publishDisasterConsentTextAction,
+  setDisasterConsentAction,
+  startHandoverInspectionAction,
   saveManufacturingOrderAction,
   saveScheduleItemAction,
   proposeAppointmentAction,
@@ -17,9 +22,14 @@ import {
   type CaseFlowActionState,
 } from '@/lib/actions/case-flow';
 import {
+  AFTER_SERVICE_KIND_LABELS,
   APPOINTMENT_PURPOSES,
   APPOINTMENT_PURPOSE_LABELS,
   CASE_NOTE_KIND_LABELS,
+  DISASTER_DECISION_LABELS,
+  type AfterServiceKind,
+  type CaseHandover,
+  type DisasterDecision,
   DEALER_SERVICE_CODES,
   DEALER_SERVICE_LABELS,
   MEETING_METHODS,
@@ -572,6 +582,167 @@ export function ProgressReportForm({
       <Button type="submit" variant="secondary" size="sm" disabled={pending}>
         {pending && <Spinner />}
         記録する
+      </Button>
+    </form>
+  );
+}
+
+// ---------- 完了確認・引渡し（フェーズ14） ----------
+
+export function HandoverInspectionForm({
+  quoteId,
+  requestId,
+  handover,
+  today,
+}: {
+  quoteId: string;
+  requestId: string;
+  handover: CaseHandover | null;
+  today: string;
+}) {
+  const [state, action, pending] = useActionState(startHandoverInspectionAction, initial);
+  return (
+    <form action={action} className="space-y-2" data-testid="handover-inspection-form">
+      <input type="hidden" name="quote_id" value={quoteId} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <input type="hidden" name="expected_lock_version" value={handover?.lock_version ?? ''} />
+      <Result state={state} />
+      <div className="grid gap-2 sm:grid-cols-[11rem_1fr]">
+        <label className="text-[0.65rem] text-muted">
+          完成確認の日
+          <Input type="date" name="inspection_on" defaultValue={handover?.inspection_on ?? today} required />
+        </label>
+        <label className="text-[0.65rem] text-muted">
+          完成確認の内容（お客様にも表示されます）
+          <Textarea name="inspection_summary" rows={2} maxLength={2000} defaultValue={handover?.inspection_summary ?? ''} placeholder="確認した箇所・設備の動作・お客様への説明事項など" />
+        </label>
+      </div>
+      <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+        {pending && <Spinner />}
+        {handover ? '完成確認をやり直す（お客様に確認し直してもらう）' : '完成確認を記録して、お客様に確認をお願いする'}
+      </Button>
+    </form>
+  );
+}
+
+/** お客様の回答：問題なし／気になる点がある */
+export function HandoverConfirmForms({ requestId, lockVersion, canSayOk }: { requestId: string; lockVersion: number; canSayOk: boolean }) {
+  const [okState, okAction, okPending] = useActionState(confirmHandoverAction, initial);
+  const [issueState, issueAction, issuePending] = useActionState(confirmHandoverAction, initial);
+  if (okState.ok) return <Result state={okState} />;
+  if (issueState.ok) return <Result state={issueState} />;
+  return (
+    <div className="space-y-3" data-testid="handover-confirm-forms">
+      {canSayOk && (
+        <form action={okAction} className="space-y-2">
+          <input type="hidden" name="request_id" value={requestId} />
+          <input type="hidden" name="result" value="ok" />
+          <input type="hidden" name="expected_lock_version" value={lockVersion} />
+          <Result state={okState} />
+          <Button type="submit" size="sm" disabled={okPending}>
+            {okPending && <Spinner />}
+            問題ありません
+          </Button>
+        </form>
+      )}
+      <form action={issueAction} className="space-y-2">
+        <input type="hidden" name="request_id" value={requestId} />
+        <input type="hidden" name="result" value="issues" />
+        <input type="hidden" name="expected_lock_version" value={lockVersion} />
+        <Result state={issueState} />
+        <Textarea name="issues" rows={3} required placeholder={'気になる点を 1 行に 1 つお書きください（例：玄関ドアの閉まりが固い）'} aria-label="気になる点" />
+        <Button type="submit" variant="secondary" size="sm" disabled={issuePending}>
+          {issuePending && <Spinner />}
+          気になる点を伝える
+        </Button>
+        <p className="text-[0.65rem] text-muted">写真があれば、下の「写真・書類を送る」から「指摘事項」として送れます。</p>
+      </form>
+    </div>
+  );
+}
+
+// ---------- アフター（フェーズ15） ----------
+
+export function AfterServiceRequestForm({ quoteId, requestId, forCustomer }: { quoteId: string | null; requestId: string; forCustomer: boolean }) {
+  const [state, action, pending] = useActionState(createAfterServiceRequestAction, initial);
+  return (
+    <form action={action} className="space-y-2" data-testid="after-service-request-form">
+      <input type="hidden" name="quote_id" value={quoteId ?? ''} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <Result state={state} />
+      <div className="grid gap-2 sm:grid-cols-[9rem_1fr]">
+        <Select name="kind" defaultValue={forCustomer ? 'repair' : 'inspection'} aria-label="ご依頼の種類">
+          {(Object.keys(AFTER_SERVICE_KIND_LABELS) as AfterServiceKind[]).map((kind) => (
+            <option key={kind} value={kind}>
+              {AFTER_SERVICE_KIND_LABELS[kind]}
+            </option>
+          ))}
+        </Select>
+        <Input name="title" required maxLength={100} placeholder={forCustomer ? '件名（例：窓の鍵がかかりにくい）' : '件名（例：1 年点検）'} aria-label="件名" />
+      </div>
+      <Textarea name="body" rows={3} maxLength={4000} placeholder={forCustomer ? 'いつから・どこが・どのような状態か' : '内容・予定日など（お客様にも表示されます）'} aria-label="内容" />
+      <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+        {pending && <Spinner />}
+        {forCustomer ? '依頼する' : '登録する'}
+      </Button>
+    </form>
+  );
+}
+
+// ---------- 災害時提供の意思（フェーズ15） ----------
+
+export function DisasterConsentForm({
+  requestId,
+  textVersion,
+  current,
+}: {
+  requestId: string;
+  textVersion: number;
+  current: { decision: DisasterDecision; conditions: string | null } | null;
+}) {
+  const [state, action, pending] = useActionState(setDisasterConsentAction, initial);
+  return (
+    <form action={action} className="space-y-2" data-testid="disaster-consent-form">
+      <input type="hidden" name="request_id" value={requestId} />
+      <input type="hidden" name="text_version" value={textVersion} />
+      <Result state={state} />
+      <fieldset className="flex flex-wrap gap-4">
+        <legend className="sr-only">災害時提供のご意思</legend>
+        {(Object.keys(DISASTER_DECISION_LABELS) as DisasterDecision[]).map((decision) => (
+          <label key={decision} className="flex items-center gap-1.5 text-sm">
+            <input type="radio" name="decision" value={decision} defaultChecked={current?.decision === decision} required />
+            {DISASTER_DECISION_LABELS[decision]}
+          </label>
+        ))}
+      </fieldset>
+      <Textarea name="conditions" rows={2} maxLength={2000} defaultValue={current?.conditions ?? ''} placeholder="条件付きで承諾する場合の条件（例：連絡がついてから・○月〜○月を除く）" aria-label="条件" />
+      <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+        {pending && <Spinner />}
+        {current ? 'ご意思を変更する' : 'ご意思を記録する'}
+      </Button>
+    </form>
+  );
+}
+
+/** 本部：承諾書の文面（先方が確定した文面）を新しい版として登録する */
+export function DisasterConsentTextForm() {
+  const [state, action, pending] = useActionState(publishDisasterConsentTextAction, initial);
+  return (
+    <form action={action} className="space-y-3" data-testid="disaster-consent-text-form">
+      <Result state={state} />
+      <Field label="見出し" htmlFor="consent-title" required>
+        <Input id="consent-title" name="title" required maxLength={100} />
+      </Field>
+      <Field label="文面" htmlFor="consent-body" required hint="先方（本部・法務）が確定した文面をそのまま貼り付けてください。登録した版は変更できません（直すときは新しい版を登録します）。">
+        <Textarea id="consent-body" name="body" rows={10} required maxLength={20000} />
+      </Field>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="confirmed" required />
+        先方が確定した文面です。登録すると、引渡し済みのお客様のマイページに表示されます。
+      </label>
+      <Button type="submit" disabled={pending}>
+        {pending && <Spinner />}
+        新しい版として登録する
       </Button>
     </form>
   );

@@ -9,6 +9,17 @@ import { flushNotificationsSafely } from '@/lib/mail/send';
 import {
   CASE_FILE_MAX_BYTES,
   CaseFlowValidationError,
+  normalizeAfterServiceRequestInput,
+  normalizeAfterServiceUpdateInput,
+  normalizeCertificateSignedOn,
+  normalizeDisasterConsentInput,
+  normalizeDisasterConsentTextInput,
+  normalizeHandedOverOn,
+  normalizeHandoverInspectionInput,
+  normalizeHandoverIssues,
+  normalizePunchDescription,
+  normalizeStockLedgerEntryInput,
+  type AfterServiceStatus,
   normalizeChangeRequestMessage,
   normalizeManufacturingOrderInput,
   normalizePaperContractInput,
@@ -26,7 +37,7 @@ import {
 } from '@/lib/domain/case-flow';
 
 /**
- * 案件の進行（フェーズ4〜7）の画面の操作。権限・状態の判定は DB（RPC・RLS）が正本で、ここでは入力の形だけを整える。
+ * 案件の進行（フェーズ4〜15）の画面の操作。権限・状態の判定は DB（RPC・RLS）が正本で、ここでは入力の形だけを整える。
  */
 
 export interface CaseFlowActionState {
@@ -604,6 +615,222 @@ export async function setProgressReportVisibilityAction(formData: FormData): Pro
     redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
   }
   redirect(productionBack(quoteId, 'done=report_visibility'));
+}
+
+// ---------- 完了確認・是正・引渡し（フェーズ14） ----------
+
+/** 戻り先：画面が渡した戻り先（管理画面・マイページの中だけ）か、案件画面の「引渡し・アフター」タブ */
+function handoverBack(formData: FormData, query: string, fallback = '/admin/after-service') {
+  const back = text(formData, 'back');
+  const quoteId = text(formData, 'quote_id');
+  const base =
+    back.startsWith('/admin/') || back.startsWith('/mypage/')
+      ? back
+      : UUID.test(quoteId)
+        ? `/admin/quotes/${quoteId}?tab=handover`
+        : fallback;
+  return `${base}${base.includes('?') ? '&' : '?'}${query}`;
+}
+
+function revalidateHandover(formData: FormData, requestId: string | null) {
+  revalidateCase(text(formData, 'quote_id') || null, requestId);
+  revalidatePath('/admin/after-service');
+  revalidatePath('/admin/stock-ledger');
+}
+
+export async function startHandoverInspectionAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/admin/quotes');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const input = normalizeHandoverInspectionInput(
+      { inspection_on: text(formData, 'inspection_on'), inspection_summary: text(formData, 'inspection_summary') },
+      todayJst()
+    );
+    const store = await getCaseFlowStore();
+    await store.startHandoverInspection(user, requestId, input, intOrNull(formData, 'expected_lock_version'));
+    await flushNotificationsSafely();
+    revalidateHandover(formData, requestId);
+    return { ok: true, message: '完成確認を記録し、お客様へ確認をお願いしました。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function confirmHandoverAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/mypage');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const result = text(formData, 'result');
+    if (result !== 'ok' && result !== 'issues') throw new CaseFlowValidationError('回答の内容が正しくありません');
+    const issues = result === 'issues' ? normalizeHandoverIssues(text(formData, 'issues')) : [];
+    const store = await getCaseFlowStore();
+    await store.confirmHandover(user, requestId, result, issues, intOrNull(formData, 'expected_lock_version') ?? 0);
+    await flushNotificationsSafely();
+    revalidateHandover(formData, requestId);
+    return {
+      ok: true,
+      message: result === 'ok' ? 'ご確認ありがとうございます。担当より、お引渡しの日程をご連絡いたします。' : '気になる点をお送りしました。担当が是正してご連絡いたします。',
+    };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function addPunchItemAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const store = await getCaseFlowStore();
+    await store.addPunchItem(user, requestId, normalizePunchDescription(text(formData, 'description')), intOrNull(formData, 'expected_lock_version') ?? 0);
+    revalidateHandover(formData, requestId);
+  } catch (e) {
+    redirect(handoverBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(handoverBack(formData, 'done=punch_added'));
+}
+
+export async function setPunchItemStatusAction(formData: FormData): Promise<void> {
+  const user = await actor('/mypage');
+  try {
+    const status = text(formData, 'status');
+    if (status !== 'fixed' && status !== 'verified') throw new CaseFlowValidationError('状態の指定が正しくありません');
+    const store = await getCaseFlowStore();
+    await store.setPunchItemStatus(user, uuid(formData, 'item_id'), status, intOrNull(formData, 'expected_lock_version') ?? 0);
+    await flushNotificationsSafely();
+    revalidateHandover(formData, text(formData, 'request_id') || null);
+  } catch (e) {
+    redirect(handoverBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(handoverBack(formData, 'done=punch_status'));
+}
+
+export async function recordCompletionCertificateAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const signedOn = normalizeCertificateSignedOn(text(formData, 'signed_on'), todayJst(), text(formData, 'inspection_on'));
+    const store = await getCaseFlowStore();
+    await store.recordCompletionCertificate(user, requestId, uuid(formData, 'file_id'), signedOn, intOrNull(formData, 'expected_lock_version') ?? 0);
+    revalidateHandover(formData, requestId);
+  } catch (e) {
+    redirect(handoverBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(handoverBack(formData, 'done=certificate'));
+}
+
+export async function completeHandoverAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const handedOverOn = normalizeHandedOverOn(text(formData, 'handed_over_on'), todayJst(), text(formData, 'inspection_on'));
+    const store = await getCaseFlowStore();
+    await store.completeHandover(user, requestId, handedOverOn, intOrNull(formData, 'expected_lock_version') ?? 0);
+    await flushNotificationsSafely();
+    revalidateHandover(formData, requestId);
+    revalidatePath('/admin/manufacturing');
+  } catch (e) {
+    redirect(handoverBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(handoverBack(formData, 'done=handed_over'));
+}
+
+// ---------- アフター（フェーズ15） ----------
+
+export async function createAfterServiceRequestAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/mypage');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const input = normalizeAfterServiceRequestInput({ kind: text(formData, 'kind'), title: text(formData, 'title'), body: text(formData, 'body') });
+    const store = await getCaseFlowStore();
+    await store.createAfterServiceRequest(user, requestId, input);
+    await flushNotificationsSafely();
+    revalidateHandover(formData, requestId);
+    return { ok: true, message: user.role === 'customer' ? 'ご依頼を受け付けました。担当よりご連絡いたします。' : 'アフターを登録しました。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function updateAfterServiceRequestAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/after-service');
+  try {
+    const current = text(formData, 'current_status') as AfterServiceStatus;
+    const raw: Record<string, unknown> = { status: text(formData, 'status') };
+    if (formData.has('response')) raw.response = text(formData, 'response');
+    const input = normalizeAfterServiceUpdateInput(raw, current);
+    const store = await getCaseFlowStore();
+    await store.updateAfterServiceRequest(user, uuid(formData, 'after_service_id'), input, intOrNull(formData, 'expected_lock_version') ?? 0);
+    await flushNotificationsSafely();
+    revalidateHandover(formData, text(formData, 'request_id') || null);
+  } catch (e) {
+    redirect(handoverBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(handoverBack(formData, 'done=after_service'));
+}
+
+// ---------- 災害時提供の意思・全国ストック台帳（フェーズ15） ----------
+
+export async function setDisasterConsentAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/mypage');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const input = normalizeDisasterConsentInput({
+      decision: text(formData, 'decision'),
+      conditions: text(formData, 'conditions'),
+      text_version: text(formData, 'text_version'),
+    });
+    const store = await getCaseFlowStore();
+    await store.setDisasterConsent(user, requestId, input);
+    await flushNotificationsSafely();
+    revalidateHandover(formData, requestId);
+    return { ok: true, message: 'ご意思を記録しました。いつでも変更できます。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function publishDisasterConsentTextAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/admin/disaster-consent');
+  if (user.role !== 'admin') return { ok: false, error: '承諾書の文面を登録できるのは本部だけです' };
+  try {
+    if (text(formData, 'confirmed') !== 'on') throw new CaseFlowValidationError('先方が確定した文面であることを確認して、チェックを入れてください');
+    const input = normalizeDisasterConsentTextInput({ title: text(formData, 'title'), body: text(formData, 'body') });
+    const store = await getCaseFlowStore();
+    const version = await store.publishDisasterConsentText(user, input);
+    revalidatePath('/admin/disaster-consent');
+    revalidatePath('/admin/stock-ledger');
+    revalidatePath('/mypage', 'layout');
+    return { ok: true, message: `承諾書の文面を第${version}版として登録しました。引渡し済みのお客様のマイページに表示されます。` };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function saveStockLedgerEntryAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/stock-ledger');
+  try {
+    const input = normalizeStockLedgerEntryInput(
+      {
+        registration_status: text(formData, 'registration_status'),
+        operating_status: text(formData, 'operating_status'),
+        last_inspection_on: text(formData, 'last_inspection_on'),
+        immediate_available: text(formData, 'immediate_available') === 'on',
+        transportable: text(formData, 'transportable') === 'on',
+        supply_72h: text(formData, 'supply_72h') === 'on',
+        supply_7d: text(formData, 'supply_7d') === 'on',
+        location_prefecture: text(formData, 'location_prefecture'),
+        location_municipality: text(formData, 'location_municipality'),
+        note: text(formData, 'note'),
+      },
+      todayJst()
+    );
+    const store = await getCaseFlowStore();
+    await store.saveStockLedgerEntry(user, uuid(formData, 'unit_id'), input, intOrNull(formData, 'expected_lock_version'));
+    revalidatePath('/admin/stock-ledger');
+  } catch (e) {
+    redirect(`/admin/stock-ledger?error=${encodeURIComponent(errorMessage(e))}`);
+  }
+  redirect('/admin/stock-ledger?done=saved');
 }
 
 // ---------- 写真・書類 ----------

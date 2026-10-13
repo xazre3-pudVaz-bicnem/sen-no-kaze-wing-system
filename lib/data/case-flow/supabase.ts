@@ -6,19 +6,28 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { StoreError, type SessionUser } from '@/lib/data/store';
 import { isMissingNamedFunction, isMissingRelation } from '@/lib/data/schema-compat';
 import type {
+  AfterServiceRequest,
+  AfterServiceRequestInput,
+  AfterServiceUpdateInput,
   CaseAccess,
   CaseAppointment,
   CaseAppointmentInput,
   CaseFile,
   CaseFileInput,
+  CaseHandover,
   CaseNote,
   CaseNoteInput,
   CaseProgress,
+  CasePunchItem,
   CaseWorkflow,
   CaseProgressReport,
   CaseScheduleItem,
   DealerProfile,
   DealerProfileInput,
+  DisasterConsent,
+  DisasterConsentInput,
+  DisasterConsentText,
+  HandoverInspectionInput,
   ManufacturingOrder,
   ManufacturingOrderInput,
   ManufacturingOrderStatus,
@@ -26,6 +35,8 @@ import type {
   PaperContractInput,
   ProgressReportInput,
   ScheduleItemInput,
+  StockLedgerEntry,
+  StockLedgerEntryInput,
   UnitUpdateInput,
   QuoteChangeRequest,
   QuoteRequestPreferences,
@@ -33,7 +44,7 @@ import type {
   SiteSurvey,
   SiteSurveyInput,
 } from '@/lib/domain/case-flow';
-import type { BoardAppointment, BoardManufacturingOrder, CaseFlowStore } from './store';
+import type { BoardAfterServiceRequest, BoardAppointment, BoardManufacturingOrder, CaseFlowStore, StockLedgerRow } from './store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -445,6 +456,196 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
   }
   async setProgressReportVisibility(_actor: SessionUser, reportId: string, visible: boolean) {
     await this.rpc<void>('set_case_progress_report_visibility', { p_report_id: reportId, p_visible: visible });
+  }
+
+  /** 案件の見出し（見積番号とお客様名）。見積を読めない総代理店には、製造仕様の見積番号を使う */
+  private async caseLabels(db: Db, requestIds: string[]): Promise<Map<string, { label: string; quote_id: string | null }>> {
+    const labels = new Map<string, { label: string; quote_id: string | null }>();
+    if (requestIds.length === 0) return labels;
+    const [{ data: quotes }, { data: orders }] = await Promise.all([
+      db.from('quotes').select('id, quote_no, customer_name, quote_request_id, revision').in('quote_request_id', requestIds).order('revision', { ascending: false }),
+      db.from('manufacturing_orders').select('quote_request_id, spec_snapshot').in('quote_request_id', requestIds).neq('status', 'canceled'),
+    ]);
+    for (const quote of (quotes ?? []) as { id: string; quote_no: string; customer_name: string; quote_request_id: string }[]) {
+      if (!labels.has(quote.quote_request_id)) labels.set(quote.quote_request_id, { label: `${quote.quote_no} ${quote.customer_name} 様`, quote_id: quote.id });
+    }
+    for (const order of (orders ?? []) as { quote_request_id: string; spec_snapshot: { quote_no?: string } | null }[]) {
+      if (!labels.has(order.quote_request_id) && order.spec_snapshot?.quote_no) labels.set(order.quote_request_id, { label: order.spec_snapshot.quote_no, quote_id: null });
+    }
+    return labels;
+  }
+
+  // ---------- 完了確認・是正・引渡し ----------
+  async getHandover(_actor: SessionUser, requestId: string): Promise<CaseHandover | null> {
+    const db = await this.db();
+    const { data, error } = await db.from('case_handovers').select('*').eq('quote_request_id', requestId).maybeSingle();
+    if (error) {
+      if (missing(error)) return null;
+      fail(error);
+    }
+    return (data as CaseHandover | null) ?? null;
+  }
+  async listPunchItems(_actor: SessionUser, requestId: string): Promise<CasePunchItem[]> {
+    const db = await this.db();
+    const { data, error } = await db.from('case_punch_items').select('*').eq('quote_request_id', requestId).order('created_at');
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as CasePunchItem[];
+  }
+  async startHandoverInspection(_actor: SessionUser, requestId: string, input: HandoverInspectionInput, expectedLockVersion: number | null) {
+    return this.rpc<number>('start_handover_inspection', { p_request_id: requestId, p_inspection: input, p_expected_lock_version: expectedLockVersion });
+  }
+  async confirmHandover(_actor: SessionUser, requestId: string, result: 'ok' | 'issues', issues: string[], expectedLockVersion: number) {
+    return this.rpc<number>('confirm_handover', {
+      p_request_id: requestId,
+      p_result: result,
+      p_issues: result === 'issues' ? issues : null,
+      p_expected_lock_version: expectedLockVersion,
+    });
+  }
+  async addPunchItem(_actor: SessionUser, requestId: string, description: string, expectedLockVersion: number) {
+    return this.rpc<string>('add_punch_item', { p_request_id: requestId, p_description: description, p_expected_lock_version: expectedLockVersion });
+  }
+  async setPunchItemStatus(_actor: SessionUser, itemId: string, status: 'fixed' | 'verified', expectedLockVersion: number) {
+    return this.rpc<number>('set_punch_item_status', { p_item_id: itemId, p_status: status, p_expected_lock_version: expectedLockVersion });
+  }
+  async recordCompletionCertificate(_actor: SessionUser, requestId: string, fileId: string, signedOn: string, expectedLockVersion: number) {
+    return this.rpc<number>('record_completion_certificate', {
+      p_request_id: requestId,
+      p_file_id: fileId,
+      p_signed_on: signedOn,
+      p_expected_lock_version: expectedLockVersion,
+    });
+  }
+  async completeHandover(_actor: SessionUser, requestId: string, handedOverOn: string, expectedLockVersion: number) {
+    return this.rpc<number>('complete_handover', { p_request_id: requestId, p_handed_over_on: handedOverOn, p_expected_lock_version: expectedLockVersion });
+  }
+
+  // ---------- アフター ----------
+  async listAfterServiceRequests(_actor: SessionUser, requestId: string): Promise<AfterServiceRequest[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('after_service_requests')
+      .select('*')
+      .eq('quote_request_id', requestId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as AfterServiceRequest[];
+  }
+  async listAfterServiceBoard(_actor: SessionUser): Promise<BoardAfterServiceRequest[]> {
+    const db = await this.db();
+    const { data, error } = await db.from('after_service_requests').select('*').order('updated_at', { ascending: false }).limit(300);
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    const rows = (data ?? []) as AfterServiceRequest[];
+    const requestIds = [...new Set(rows.map((row) => row.quote_request_id))];
+    // 操作の選択肢を出すため、案件ごとの関わり方を DB の case_access で確かめる（判定の正本は更新の RPC）
+    const [labels, accessList] = await Promise.all([
+      this.caseLabels(db, requestIds),
+      Promise.all(requestIds.map(async (id) => [id, (await db.rpc('case_access', { p_request_id: id })).data as CaseAccess | null] as const)),
+    ]);
+    const accessOf = new Map(accessList);
+    return rows.map((row) => ({
+      ...row,
+      case_label: labels.get(row.quote_request_id)?.label ?? '案件',
+      case_quote_id: labels.get(row.quote_request_id)?.quote_id ?? null,
+      viewer_access: accessOf.get(row.quote_request_id) ?? null,
+    }));
+  }
+  async createAfterServiceRequest(_actor: SessionUser, requestId: string, input: AfterServiceRequestInput) {
+    return this.rpc<string>('create_after_service_request', { p_request_id: requestId, p_request: input });
+  }
+  async updateAfterServiceRequest(_actor: SessionUser, id: string, input: AfterServiceUpdateInput, expectedLockVersion: number) {
+    return this.rpc<number>('update_after_service_request', { p_id: id, p_update: input, p_expected_lock_version: expectedLockVersion });
+  }
+
+  // ---------- 災害時提供の意思 ----------
+  async listDisasterConsentTexts(_actor: SessionUser): Promise<DisasterConsentText[]> {
+    const db = await this.db();
+    const { data, error } = await db.from('disaster_consent_texts').select('id, version, title, body, published_at').order('version', { ascending: false });
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as DisasterConsentText[];
+  }
+  async publishDisasterConsentText(_actor: SessionUser, input: { title: string; body: string }) {
+    return this.rpc<number>('publish_disaster_consent_text', { p_title: input.title, p_body: input.body });
+  }
+  async listDisasterConsents(_actor: SessionUser, requestId: string): Promise<DisasterConsent[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('disaster_consents')
+      .select('*')
+      .eq('quote_request_id', requestId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as DisasterConsent[];
+  }
+  async setDisasterConsent(_actor: SessionUser, requestId: string, input: DisasterConsentInput) {
+    return this.rpc<string>('set_disaster_consent', {
+      p_request_id: requestId,
+      p_decision: input.decision,
+      p_conditions: input.conditions,
+      p_text_version: input.text_version,
+    });
+  }
+
+  // ---------- 全国ストック台帳 ----------
+  async listStockLedger(_actor: SessionUser): Promise<StockLedgerRow[]> {
+    const db = await this.db();
+    const { data: entryData, error } = await db.from('stock_ledger_entries').select('*');
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    const entries = (entryData ?? []) as StockLedgerEntry[];
+    // 引渡し済みの個体と、台帳に載っている個体（本部が状態を戻したものも含める）
+    const { data: handedOver, error: unitError } = await db
+      .from('manufacturing_units')
+      .select('*')
+      .eq('status', 'handed_over')
+      .order('handed_over_on', { ascending: false, nullsFirst: false })
+      .limit(500);
+    if (unitError) fail(unitError);
+    const units = (handedOver ?? []) as ManufacturingUnit[];
+    const missingIds = entries.map((e) => e.unit_id).filter((id) => !units.some((u) => u.id === id));
+    if (missingIds.length) {
+      const { data: extra } = await db.from('manufacturing_units').select('*').in('id', missingIds);
+      units.push(...((extra ?? []) as ManufacturingUnit[]));
+    }
+    const requestIds = [...new Set(units.map((u) => u.quote_request_id))];
+    const [labels, { data: consentData }] = await Promise.all([
+      this.caseLabels(db, requestIds),
+      requestIds.length
+        ? db.from('disaster_consents').select('*').in('quote_request_id', requestIds).order('created_at', { ascending: false }).order('id', { ascending: false })
+        : Promise.resolve({ data: [] as DisasterConsent[] }),
+    ]);
+    const latest = new Map<string, DisasterConsent>();
+    for (const consent of (consentData ?? []) as DisasterConsent[]) {
+      if (!latest.has(consent.quote_request_id)) latest.set(consent.quote_request_id, consent);
+    }
+    return units.map((unit) => ({
+      unit,
+      entry: entries.find((e) => e.unit_id === unit.id) ?? null,
+      latest_consent: latest.get(unit.quote_request_id) ?? null,
+      case_label: labels.get(unit.quote_request_id)?.label ?? '案件',
+      case_quote_id: labels.get(unit.quote_request_id)?.quote_id ?? null,
+    }));
+  }
+  async saveStockLedgerEntry(_actor: SessionUser, unitId: string, input: StockLedgerEntryInput, expectedLockVersion: number | null) {
+    return this.rpc<number>('save_stock_ledger_entry', { p_unit_id: unitId, p_entry: input, p_expected_lock_version: expectedLockVersion });
   }
 
   // ---------- 写真・書類 ----------

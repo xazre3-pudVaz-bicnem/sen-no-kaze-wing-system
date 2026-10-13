@@ -45,10 +45,11 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
 
   const lockedSections = [
     ['2', '商品の詳細', 'サイズ・仕様・商品説明・メーカー記載の特徴'],
-    ['3', '画像・資料', 'メイン画像・サブ画像・メーカー資料'],
-    ['4', 'お客様選択', '色・仕様など、お客様が選べる項目'],
-    ['5', '価格・対象モデル', '商品価格・対象モデル・公開条件'],
-    ['6', '登録前チェック', '重複・画像・価格・選択項目を確認'],
+    ['3', '商品画像', 'メイン画像・必要なサブ画像'],
+    ['4', 'メーカー資料', 'メーカー資料PDF（原則登録）'],
+    ['5', 'お客様選択', '色・仕様など、お客様が選べる項目'],
+    ['6', '価格・対象モデル', '商品価格・対象モデル・公開条件'],
+    ['7', '登録前チェック', '公開に必要な項目と確認事項を整理'],
   ];
 
   return (
@@ -66,14 +67,14 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          STEP 1で商品情報を上から順に入力し、STEP 2で登録内容と実際のお客様表示を確認してから登録します。
+          STEP 1で商品情報を入力し、STEP 2で実際のお客様表示を確認して登録します。
         </p>
         <p className="mt-2 text-xs leading-5 text-ink-soft">
-          最初に「1. 基本情報」を保存して下書きを作成すると、同じSTEP 1の続きとして2〜6の項目を入力できます。
+          最初に「1. 基本情報」を保存して下書きを作成すると、同じSTEP 1の続きとして2〜7を入力できます。
         </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
-            ['1', '商品情報', '商品・資料・選択項目・価格を入力'],
+            ['1', '商品情報', '商品・画像・資料・選択項目・価格を入力'],
             ['2', '登録内容確認', '登録内容と実際のお客様表示を確認'],
           ].map(([no, label, note], index) => (
             <li key={no} className={`rounded-xl border px-3 py-3 ${index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-white'}`}>
@@ -88,7 +89,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <section className="space-y-3" aria-label="STEP 1 商品情報">
         <div>
           <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
-          <p className="mt-1 text-sm text-muted">上から順に入力します。1. 基本情報を保存すると、2〜6を続けて入力できます。</p>
+          <p className="mt-1 text-sm text-muted">上から順に入力します。1. 基本情報を保存すると、2〜7を続けて入力できます。</p>
         </div>
 
         <div className="registration-create-sections flex flex-col gap-6">

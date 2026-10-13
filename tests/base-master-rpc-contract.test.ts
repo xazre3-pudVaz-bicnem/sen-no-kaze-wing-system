@@ -27,7 +27,8 @@ describe('本体マスターRPC契約', () => {
   });
 
   it('FormDataの主要UUIDをServer Actionでも検証する', () => {
-    expect(actions).toContain('base_model_id: z.uuid()');
+    // 作成フォームは機種・用途・サイズ（マトリクスの行）の UUID を検証し、商品モデルは行からサーバー側で決める
+    expect(actions).toContain("matrix_row_id: z.uuid('機種・用途・サイズを選択してください')");
     expect(actions).toContain('owner_organization_id: z.uuid()');
     expect(actions).toContain('revision_id: z.uuid()');
     expect(actions).toContain('master_id: z.uuid()');

@@ -34,6 +34,7 @@ export function buildStandardFloorplanSlots(bundle: CatalogBundle): StandardFloo
     categories: bundle.categories,
     dependencies: bundle.dependencies,
     conflicts: bundle.conflicts,
+    customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
   };
 
   return estimateTemplatesFor(bundle.model)

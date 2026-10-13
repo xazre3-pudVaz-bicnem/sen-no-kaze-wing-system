@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
+import { quoteLineAmount } from '@/lib/domain/quote-amount';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
@@ -60,10 +61,6 @@ function createRow(kind: EditableKind = 'installation'): WorkbenchRow {
     quantity: 1,
     image_url: null,
   };
-}
-
-function roundLikePostgres(value: number) {
-  return value < 0 ? -Math.round(-value) : Math.round(value);
 }
 
 function CompactField({
@@ -160,8 +157,9 @@ export function ManualQuoteWorkbench({
     }))
   );
 
+  // 明細額は DB と同じ trunc（新しい見積下書きは切り捨て）
   const subtotalRaw = rows.reduce(
-    (sum, row) => sum + roundLikePostgres(row.unit_price * row.quantity),
+    (sum, row) => sum + quoteLineAmount(row.unit_price, row.quantity),
     0
   );
   const taxExclContractAmount = Math.max(0, subtotalRaw + adjustment);
@@ -175,7 +173,7 @@ export function ManualQuoteWorkbench({
     quantity: row.quantity,
     unit: row.unit,
     unitPrice: row.unit_price,
-    amount: roundLikePostgres(row.unit_price * row.quantity),
+    amount: quoteLineAmount(row.unit_price, row.quantity),
     remark: row.remark || null,
     optionId: row.option_id,
     locked: !canEditBase && (row.kind === 'base' || row.kind === 'base_expense'),

@@ -48,6 +48,7 @@ export function buildSimulatorEntryState(
     categories: bundle.categories,
     dependencies: bundle.dependencies,
     conflicts: bundle.conflicts,
+    customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
   };
   const defaults = defaultSelection(ctx);
   const baselineIds = choice.template

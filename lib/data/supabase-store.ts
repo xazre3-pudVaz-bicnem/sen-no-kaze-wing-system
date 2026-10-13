@@ -32,6 +32,8 @@ import type {
   QuoteRequestStatus,
   ContactMessage,
   ContactStatus,
+  SpecMatrix,
+  MatrixRow,
 } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -69,6 +71,8 @@ import {
   type AccessibleCustomerListResult,
   type AccessibleCustomerDetail,
   type AccessibleCustomerDetailResult,
+  type MatrixRowCreateInput,
+  type MatrixRowUpdateInput,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
@@ -229,7 +233,8 @@ export class SupabaseStore implements DataStore {
       images: (images.data ?? []) as ProductImage[],
       categories: normalizeCategories(pub((categories.data ?? []) as OptionCategory[])),
       options: opts_,
-      dependencies: ((deps.data ?? []) as CatalogBundle['dependencies']).filter((d) => idSet.has(d.requires_option_id)),
+      // 依存ルールは依存元が候補に残る限り保持する（前提商品が無い場合は rules.ts が選択拒否・明示エラーにする）
+      dependencies: (deps.data ?? []) as CatalogBundle['dependencies'],
       conflicts: ((confs.data ?? []) as CatalogBundle['conflicts']).filter((c) => idSet.has(c.conflicts_with_option_id)),
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
@@ -285,6 +290,67 @@ export class SupabaseStore implements DataStore {
     const ins = await db.from('base_breakdown_items').insert(rows).select('*');
     if (ins.error) mapPgError(ins.error);
     return (ins.data ?? []) as BaseBreakdownItem[];
+  }
+
+  // ---------- 本体仕様マトリクス ----------
+  async getSpecMatrix(): Promise<SpecMatrix | null> {
+    const db = await this.db();
+    const [specs, sizes, items, rows, cells, categoryItems] = await Promise.all([
+      db.from('matrix_specs').select('code, label, sort_order, status').order('sort_order').order('code'),
+      db.from('matrix_sizes').select('code, width_mm, depth_mm, label, sort_order, status').order('sort_order').order('code'),
+      db.from('matrix_items').select('code, label, sort_order, status').order('sort_order').order('code'),
+      db.from('matrix_rows').select('id, base_model_id, spec_code, size_code, fire_selectable, status, lock_version').order('created_at').order('id'),
+      db.from('matrix_cells').select('matrix_row_id, matrix_item_code, selectable'),
+      db.from('option_category_matrix_items').select('category_id, matrix_item_code'),
+    ]);
+    for (const result of [specs, sizes, items, rows, cells, categoryItems]) {
+      if (!result.error) continue;
+      // migration 未適用の DB（現在の本番）では表が無い。画面側はマトリクス無しとして扱う
+      if (isMissingRelation(result.error)) return null;
+      mapPgError(result.error);
+    }
+    return {
+      specs: (specs.data ?? []) as SpecMatrix['specs'],
+      sizes: (sizes.data ?? []) as SpecMatrix['sizes'],
+      items: (items.data ?? []) as SpecMatrix['items'],
+      rows: (rows.data ?? []) as SpecMatrix['rows'],
+      cells: (cells.data ?? []) as SpecMatrix['cells'],
+      categoryItems: (categoryItems.data ?? []) as SpecMatrix['categoryItems'],
+    };
+  }
+
+  async updateMatrixRow(_actor: SessionUser, input: MatrixRowUpdateInput): Promise<MatrixRow> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('update_matrix_row', {
+      p_row_id: input.row_id,
+      p_fire_selectable: input.fire_selectable,
+      p_selectable_items: input.selectable_items,
+      p_expected_lock_version: input.expected_lock_version,
+    });
+    if (error) mapPgError(error);
+    return data as MatrixRow;
+  }
+  async createMatrixRow(_actor: SessionUser, input: MatrixRowCreateInput): Promise<MatrixRow> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_matrix_row', {
+      p_base_model_id: input.base_model_id,
+      p_spec_code: input.spec_code,
+      p_size_code: input.size_code,
+      p_fire_selectable: input.fire_selectable,
+      p_selectable_items: input.selectable_items,
+    });
+    if (error) mapPgError(error);
+    return data as MatrixRow;
+  }
+  async setMatrixRowStatus(_actor: SessionUser, rowId: string, status: 'active' | 'retired', expectedLockVersion: number): Promise<MatrixRow> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('set_matrix_row_status', {
+      p_row_id: rowId,
+      p_status: status,
+      p_expected_lock_version: expectedLockVersion,
+    });
+    if (error) mapPgError(error);
+    return data as MatrixRow;
   }
 
   // ---------- 標準見積テンプレート ----------

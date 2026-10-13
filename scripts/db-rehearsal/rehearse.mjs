@@ -52,7 +52,7 @@ try {
 const OUT = path.join(REPO, '.wing-local', 'db-rehearsal', opt.label);
 const DATA = path.join(REPO, '.wing-local', 'db-rehearsal', '.pgdata');
 fs.rmSync(OUT, { recursive: true, force: true });
-fs.rmSync(DATA, { recursive: true, force: true });
+fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
 fs.mkdirSync(OUT, { recursive: true });
 
 const log = (...a) => console.log(...a);
@@ -244,7 +244,8 @@ try {
   failed = true;
 } finally {
   await server.stop().catch(() => {});
-  fs.rmSync(DATA, { recursive: true, force: true });
+  // Windows では停止直後にデータディレクトリのファイルがまだ開かれていることがあるため、少し待って再試行する
+  fs.rmSync(DATA, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
 }
 
 report.finishedAt = new Date().toISOString();

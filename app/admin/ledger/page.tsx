@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
+import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-overlay-dismiss';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
@@ -83,6 +84,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
         }
       }
     `}</style>
+    <ProductLedgerOverlayDismiss />
     <FlashMessages sp={sp} />
     <ProductLedgerClient
       canEdit={editor}

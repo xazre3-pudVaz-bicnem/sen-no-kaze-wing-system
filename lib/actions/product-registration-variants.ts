@@ -84,14 +84,14 @@ export async function createVariantGroupWithFirstChoiceAction(
       revalidatePath(`/admin/options/${option.id}`);
       return {
         ok: false,
-        error: '選択項目は作成されましたが、最初の選択肢を保存できませんでした。表示された選択項目から選択肢を追加してください。',
+        error: '選択項目は作成されましたが、標準の選択肢を保存できませんでした。表示された選択項目から選択肢を追加してください。',
       };
     }
 
     revalidatePath(`/admin/options/${option.id}`);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
-    return { ok: true, message: '選択項目と最初の選択肢を追加しました。' };
+    return { ok: true, message: '選択項目と標準の選択肢を追加しました。' };
   } catch (error) {
     return initialError(error);
   }

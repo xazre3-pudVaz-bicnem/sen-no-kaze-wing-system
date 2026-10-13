@@ -420,7 +420,17 @@ export interface DataStore {
   saveQuoteDraft(id: string, input: QuoteDraftSaveInput, actor: SessionUser): Promise<number>;
   /** 非Web初回Draftをformal Revision 1として確定する */
   finalizeQuoteDraft(id: string, expectedLockVersion: number, actor: SessionUser): Promise<Quote>;
-  createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null): Promise<Quote>;
+  /**
+   * expectedLockVersion: 見積依頼の確認画面を表示した時点の Configuration の版。
+   * DB の版と一致しなければ（NULL を含む）見積を作らずに LOCKED で拒否する。
+   */
+  createQuoteFromConfiguration(
+    actor: SessionUser,
+    configurationId: string,
+    contact: QuoteContact,
+    message: string | null,
+    expectedLockVersion: number | null
+  ): Promise<Quote>;
   listQuotes(userId: string): Promise<Quote[]>;
   listQuotesByConfiguration(userId: string): Promise<Map<string, Quote>>;
   getQuote(id: string, actor: SessionUser): Promise<QuoteDetail | null>;

@@ -76,11 +76,11 @@ export async function requestQuoteAction(_prev: QuoteRequestState, formData: For
   if (!user) return { ok: false, error: '見積依頼にはログインが必要です。', values };
   const parsed = quoteRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error), values };
-  const { configuration_id, message, ...contact } = parsed.data;
+  const { configuration_id, message, expected_lock_version, ...contact } = parsed.data;
   const store = await getStore();
   let quoteId: string;
   try {
-    const quote = await store.createQuoteFromConfiguration(user, configuration_id, contact as QuoteContact, message);
+    const quote = await store.createQuoteFromConfiguration(user, configuration_id, contact as QuoteContact, message, expected_lock_version);
     quoteId = quote.id;
   } catch (e) {
     return { ok: false, error: fromStoreError(e).error, values };

@@ -95,6 +95,11 @@ export const quoteRequestSchema = z.object({
   address: trimmed(200).min(1, 'ご住所を入力してください'),
   site_address: optional(200),
   message: optional(2000),
+  /** 確認画面を表示した時点のプランの版（同時編集の検知）。版の列が無い DB の画面からは空で届く */
+  expected_lock_version: z.preprocess(
+    (value) => (value === undefined || value === null || value === '' ? null : Number(value)),
+    z.number().int().min(1).nullable()
+  ),
 });
 
 export const contactSchema = z.object({

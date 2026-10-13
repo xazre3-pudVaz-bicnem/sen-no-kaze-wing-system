@@ -9,6 +9,9 @@
 --       - 既存 Draft の保存: 読み込んだ時点の lock_version と一致しなければ拒否（NULL も拒否）。成功したら +1
 --   * 判定は、既存の「行を FOR UPDATE で lock → Draft 判定」の直後に置く。同時に届いた保存は行 lock で直列化され、
 --     後から来た保存は更新後の版を読むため、必ずどちらか一方だけが成功する
+--   * 見積依頼（create_quote_from_configuration）にも p_expected_lock_version を追加する（独立レビューの指摘）
+--       - 確認画面を表示した時点の版と一致しなければ（NULL を含む）、見積を作らずに LOCKED で拒否する
+--       - 判定は Configuration の FOR UPDATE と本人確認の直後。依頼では版を進めない
 --
 -- save_configuration_atomic の本体は 20260928100000 の定義から、上記の 3 箇所だけを変更している
 -- （引数の追加・版の判定・版の加算。テストで元定義と照合する）。
@@ -484,6 +487,77 @@ revoke execute on function public.save_configuration_atomic(uuid, uuid, text, uu
   from public, anon, authenticated, service_role;
 grant execute on function public.save_configuration_atomic(uuid, uuid, text, uuid[], text, text, text, uuid[], text, jsonb, text, text, boolean, integer) to authenticated;
 
+-- ---------- quote request RPC ----------
+-- 見積依頼（create_quote_from_configuration）でも、確認画面を表示した時点の版を p_expected_lock_version で受け取り、
+-- Configuration を FOR UPDATE で lock した直後（本人確認の直後）に DB の版と照合する。
+-- 一致しなければ（NULL を含む）見積を作らずに LOCKED で拒否する。保存と同時に届いた依頼は行 lock で直列化され、
+-- 保存が先に commit すれば依頼は進んだ版を読んで拒否される。依頼が先なら、保存は Draft ではなくなったプランとして拒否される。
+--
+-- 本体は 400 行近いため写し直さず、適用済みの定義（pg_get_functiondef）から 2 箇所だけを変える（引数の追加・版の判定）。
+-- 想定と違う定義なら何も変更せずに停止する。引数が増えるため旧 3 引数の関数を削除して作り直し、
+-- SECURITY DEFINER・search_path は元の定義を引き継ぐ。owner と EXECUTE は同じ内容で付け直し、後で検算する。
+-- 依頼で版は進めない（版はプランの内容の版。依頼後のプランは Draft ではなくなり、保存できない）。
+
+do $quote_request$
+declare
+  v_old_signature constant text := 'public.create_quote_from_configuration(uuid, jsonb, text)';
+  v_new_signature constant text := 'public.create_quote_from_configuration(uuid, jsonb, text, integer)';
+  v_args_old constant text := '(p_configuration_id uuid, p_contact jsonb, p_message text)';
+  v_args_new constant text := '(p_configuration_id uuid, p_contact jsonb, p_message text, p_expected_lock_version integer DEFAULT NULL::integer)';
+  v_anchor constant text :=
+    E'  if cfg.user_id <> v_uid then raise exception ''FORBIDDEN'' using errcode = ''42501''; end if;\n';
+  v_check constant text :=
+    E'  -- 確認画面を表示した時点の版と一致しなければ、見積を作らずに拒否する（版の指定が無い依頼も拒否）\n'
+    || E'  if cfg.lock_version is distinct from p_expected_lock_version then\n'
+    || E'    raise exception ''LOCKED: 他の画面でこのプランが更新されています。再読み込みして内容を確認してください'' using errcode = ''P0001'';\n'
+    || E'  end if;\n';
+  v_old_oid oid;
+  v_new_oid oid;
+  v_definition text;
+  v_expected text;
+  v_before record;
+  v_after record;
+begin
+  v_old_oid := to_regprocedure(v_old_signature);
+  if v_old_oid is null then
+    raise exception 'PRECONDITION: % is missing; review migration order', v_old_signature;
+  end if;
+  if to_regprocedure(v_new_signature) is not null then
+    raise exception 'PRECONDITION: % already exists', v_new_signature;
+  end if;
+
+  select p.prosecdef, p.proconfig into v_before from pg_catalog.pg_proc p where p.oid = v_old_oid;
+  v_definition := pg_catalog.pg_get_functiondef(v_old_oid);
+
+  if (length(v_definition) - length(replace(v_definition, v_args_old, ''))) / length(v_args_old) <> 1
+     or (length(v_definition) - length(replace(v_definition, v_anchor, ''))) / length(v_anchor) <> 1
+     or position('lock_version' in v_definition) > 0 then
+    raise exception 'PRECONDITION: % differs from the reviewed definition (arguments or owner check not unique)', v_old_signature;
+  end if;
+
+  v_expected := replace(replace(v_definition, v_args_old, v_args_new), v_anchor, v_anchor || v_check);
+
+  execute 'drop function public.create_quote_from_configuration(uuid, jsonb, text)';
+  execute v_expected;
+
+  v_new_oid := to_regprocedure(v_new_signature);
+  if v_new_oid is null or pg_catalog.pg_get_functiondef(v_new_oid) is distinct from v_expected then
+    raise exception 'POSTCONDITION: % was not created as expected', v_new_signature;
+  end if;
+
+  select p.prosecdef, p.proconfig into v_after from pg_catalog.pg_proc p where p.oid = v_new_oid;
+  if v_after.prosecdef is distinct from v_before.prosecdef or v_after.proconfig is distinct from v_before.proconfig then
+    raise exception 'POSTCONDITION: SECURITY DEFINER / search_path of % changed unexpectedly', v_new_signature;
+  end if;
+end;
+$quote_request$;
+
+alter function public.create_quote_from_configuration(uuid, jsonb, text, integer) owner to postgres;
+
+revoke execute on function public.create_quote_from_configuration(uuid, jsonb, text, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function public.create_quote_from_configuration(uuid, jsonb, text, integer) to authenticated;
+
 -- 保存は RPC だけで行う（20260928100000 で authenticated から外した直接書き込みを、anon にもそろえる）。
 -- lock_version を API ロールが直接進められないようにする。RLS でも拒否されるが、権限でも閉じる。
 revoke insert, update on public.configurations from anon;
@@ -530,5 +604,35 @@ begin
   end if;
 end;
 $postcondition$;
+
+do $quote_request_postcondition$
+declare
+  v_fn constant regprocedure := 'public.create_quote_from_configuration(uuid, jsonb, text, integer)'::regprocedure;
+begin
+  -- 版を確かめない旧オーバーロードを残さない
+  if (select count(*) from pg_catalog.pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'create_quote_from_configuration') <> 1 then
+    raise exception 'POSTCONDITION: exactly one create_quote_from_configuration must exist (no overload without lock version)';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.pg_proc p
+     where p.oid = v_fn
+       and (
+         pg_catalog.pg_get_userbyid(p.proowner) <> 'postgres'
+         or not p.prosecdef
+         or not ('search_path=""' = any(p.proconfig))
+       )
+  ) then
+    raise exception 'POSTCONDITION: create_quote_from_configuration must be a postgres-owned SECURITY DEFINER function with an empty search_path';
+  end if;
+
+  if has_function_privilege('anon', v_fn, 'execute')
+     or has_function_privilege('service_role', v_fn, 'execute')
+     or not has_function_privilege('authenticated', v_fn, 'execute') then
+    raise exception 'POSTCONDITION: create_quote_from_configuration must be executable by authenticated only';
+  end if;
+end;
+$quote_request_postcondition$;
 
 commit;

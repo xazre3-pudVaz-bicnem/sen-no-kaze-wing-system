@@ -49,6 +49,7 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
         <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_22rem]">
           <QuoteRequestForm
             configurationId={configuration.id}
+            lockVersion={configuration.lock_version ?? null}
             defaults={{
               full_name: profile?.full_name ?? '',
               company_name: profile?.company_name ?? '',

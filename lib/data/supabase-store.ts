@@ -714,13 +714,29 @@ export class SupabaseStore implements DataStore {
     return toQuote(quote as Record<string, unknown>);
   }
 
-  async createQuoteFromConfiguration(actor: SessionUser, configurationId: string, contact: QuoteContact, message: string | null) {
+  async createQuoteFromConfiguration(
+    actor: SessionUser,
+    configurationId: string,
+    contact: QuoteContact,
+    message: string | null,
+    expectedLockVersion: number | null
+  ) {
     const db = await this.db();
-    const { data, error } = await db.rpc('create_quote_from_configuration', {
+    let { data, error } = await db.rpc('create_quote_from_configuration', {
       p_configuration_id: configurationId,
       p_contact: contact,
       p_message: message,
+      p_expected_lock_version: expectedLockVersion,
     });
+    // Temporary deployment compatibility: 版の列も版を確かめる RPC も無い DB（確認画面が版を持たない）でだけ、
+    // 従来の 3 引数で呼ぶ。版を持つ画面からの依頼は、RPC が見つからなくても旧経路へ逃がさない。
+    if (error && expectedLockVersion === null && isMissingNamedFunction(error, 'create_quote_from_configuration')) {
+      ({ data, error } = await db.rpc('create_quote_from_configuration', {
+        p_configuration_id: configurationId,
+        p_contact: contact,
+        p_message: message,
+      }));
+    }
     if (error) mapPgError(error);
     const detail = await this.getQuote(data as string, actor);
     if (!detail) throw new StoreError('INTERNAL', '見積の取得に失敗しました');

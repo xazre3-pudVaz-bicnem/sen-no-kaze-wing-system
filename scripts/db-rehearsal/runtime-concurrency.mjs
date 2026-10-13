@@ -3,6 +3,8 @@
  *
  * 2 本の接続から同じ Draft を保存し、「読み込んだ時点の版と一致する保存だけが成功する」
  * 「同時に届いた保存は必ず片方だけ成功する」ことを、実際の行 lock とトランザクションで確かめる。
+ * 見積依頼も同じく、「確認画面を表示した時点の版と一致する依頼だけが見積を作る」
+ * 「保存と同時に届いた依頼・依頼と同時に届いた保存は、後から来た方が拒否される」ことを確かめる。
  *
  * 2 本の接続から見える必要があるため、試験データは commit して最後に削除する。
  * そのため接続先がこのマシン上（ループバック）の DB でなければ実行しない。本番では実行しない。
@@ -22,6 +24,12 @@ const SAVE = `
     p_spec_code => 'base', p_exterior_faces => '[]'::jsonb, p_site_prefecture => null, p_site_municipality => null,
     p_site_location_undecided => false, p_expected_lock_version => $3)`;
 
+// 見積依頼（確認画面を表示した時点の版を渡す）。保存と同じく FROM 句で 1 回だけ呼ぶ
+const REQUEST = `
+  select * from public.create_quote_from_configuration(
+    p_configuration_id => $1, p_contact => $2::jsonb, p_message => null, p_expected_lock_version => $3) as t(id)`;
+const CONTACT = JSON.stringify({ full_name: '同時編集A', company_name: null, email: 'lock-a@runtime.invalid', phone: '000-0000-0000', address: '検査用住所', site_address: null });
+
 /** API と同じロール・JWT でトランザクションを開始する */
 async function beginAs(client, sub) {
   await client.query('begin');
@@ -34,6 +42,19 @@ async function saveOnce(client, sub, id, name, expected) {
   await beginAs(client, sub);
   try {
     const row = (await client.query(SAVE, [id, name, expected])).rows[0];
+    await client.query('commit');
+    return { ok: true, row };
+  } catch (e) {
+    await client.query('rollback');
+    return { ok: false, error: `${e.code}: ${e.message}` };
+  }
+}
+
+/** 1 回の見積依頼を 1 トランザクションで行う。成功なら見積 ID、失敗ならエラー文字列を返す */
+async function requestOnce(client, sub, id, expected) {
+  await beginAs(client, sub);
+  try {
+    const row = (await client.query(REQUEST, [id, CONTACT, expected])).rows[0];
     await client.query('commit');
     return { ok: true, row };
   } catch (e) {
@@ -76,6 +97,9 @@ export async function runtimeConcurrency(config) {
   const cleanup = async () => {
     await admin.query('begin');
     await admin.query('set local session_replication_role = replica');
+    await admin.query(`delete from public.quote_items where quote_id in (select id from public.quotes where user_id in ('${USER}', '${OTHER}'))`);
+    await admin.query(`delete from public.quotes where user_id in ('${USER}', '${OTHER}')`);
+    await admin.query(`delete from public.quote_requests where user_id in ('${USER}', '${OTHER}')`);
     await admin.query(`delete from public.configuration_snapshots where configuration_id in (select id from public.configurations where user_id in ('${USER}', '${OTHER}'))`);
     await admin.query(`delete from public.configuration_items where configuration_id in (select id from public.configurations where user_id in ('${USER}', '${OTHER}'))`);
     await admin.query(`delete from public.configurations where user_id in ('${USER}', '${OTHER}')`);
@@ -151,6 +175,53 @@ export async function runtimeConcurrency(config) {
     }
     await b.query('rollback');
     check('L-11 本人でも版を直接書き換えられない（保存は RPC のみ）', 'true', direct === '42501' || direct === '0 行');
+
+    // 8. 見積依頼：確認画面を表示した時点の版と DB の版が一致しなければ、見積を作らずに拒否する
+    const quoteCount = async () =>
+      (await admin.query('select count(*)::int as n from public.quotes where configuration_id = $1', [id])).rows[0].n;
+    const staleRequest = await requestOnce(b, USER, id, 3);
+    check('L-12 古い版（3）のままの見積依頼は拒否される', 'true', !staleRequest.ok && /LOCKED: 他の画面でこのプランが更新されています/.test(staleRequest.error ?? ''));
+    const missingRequest = await requestOnce(b, USER, id, null);
+    check('L-13 版の指定が無い見積依頼は拒否される', 'true', !missingRequest.ok && /LOCKED/.test(missingRequest.error ?? ''));
+    const otherRequest = await requestOnce(b, OTHER, id, 4);
+    check('L-14 他人は版が一致していても見積依頼できない', 'true', !otherRequest.ok && /^42501/.test(otherRequest.error ?? ''));
+    check('L-15 拒否された見積依頼では、見積は作られずプランも Draft のまま', '0/draft/4',
+      `${await quoteCount()}/${(await admin.query('select status, lock_version from public.configurations where id = $1', [id])).rows.map((r) => `${r.status}/${r.lock_version}`)[0]}`);
+
+    // 9. 同時：保存（版 4）が commit される前に、同じ版を表示していた確認画面から見積依頼が届く
+    await beginAs(a, USER);
+    await a.query(SAVE, [id, '依頼直前の保存', 4]); // A は行 lock を持ったまま未 commit
+    await beginAs(b, USER);
+    let requestSettled = false;
+    const requestPromise = b.query(REQUEST, [id, CONTACT, 4]).then(
+      (r) => ({ ok: true, row: r.rows[0] }),
+      (e) => ({ ok: false, error: `${e.code}: ${e.message}` })
+    ).finally(() => { requestSettled = true; });
+    await sleep(400);
+    check('L-16 同時：見積依頼は、先の保存が終わるまで待たされる', 'true', !requestSettled);
+    await a.query('commit');
+    const requestResult = await requestPromise;
+    await b.query(requestResult.ok ? 'commit' : 'rollback');
+    check('L-17 同時：保存が commit された後、古い版の見積依頼は拒否され、見積は作られない', 'true/0',
+      `${!requestResult.ok && /LOCKED/.test(requestResult.error ?? '')}/${await quoteCount()}`);
+
+    // 10. 同時：見積依頼（最新の版 5）が commit される前に、同じ版で保存が届く
+    await beginAs(b, USER);
+    const requested = (await b.query(REQUEST, [id, CONTACT, 5])).rows[0]; // B は行 lock を持ったまま未 commit
+    await beginAs(a, USER);
+    let saveSettled = false;
+    const savePromise = a.query(SAVE, [id, '依頼中の保存', 5]).then(
+      (r) => ({ ok: true, row: r.rows[0] }),
+      (e) => ({ ok: false, error: `${e.code}: ${e.message}` })
+    ).finally(() => { saveSettled = true; });
+    await sleep(400);
+    check('L-18 同時：保存は、先の見積依頼が終わるまで待たされる', 'true', !saveSettled);
+    await b.query('commit');
+    const saveResult = await savePromise;
+    await a.query(saveResult.ok ? 'commit' : 'rollback');
+    check('L-19 同時：見積依頼が commit された後、保存は拒否される（Draft ではなくなった）', 'true', !saveResult.ok && /LOCKED/.test(saveResult.error ?? ''));
+    check('L-20 最新の版での見積依頼は成功し、見積は 1 件・プランは依頼済み（版は進めない）', `1/quote_requested/5/${requested?.id ? 'id' : 'none'}`,
+      `${await quoteCount()}/${(await admin.query('select status, lock_version from public.configurations where id = $1', [id])).rows.map((r) => `${r.status}/${r.lock_version}`)[0]}/${requested?.id ? 'id' : 'none'}`);
   } catch (e) {
     results.push({ step: 'L-x 同時編集の検査を完了できませんでした', expected: '完了', actual: e.message, ok: false });
   } finally {

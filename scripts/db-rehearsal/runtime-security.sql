@@ -114,6 +114,11 @@ declare
   opt_k constant uuid := '00000000-0000-4000-8000-000000000c12';
   v_se3_text text;
   v_se4_text text;
+  -- シミュレーターの標準見積（PR C2）の検査用
+  c_s constant uuid := '00000000-0000-4000-8000-00000000c0dd';
+  c_s2 constant uuid := '00000000-0000-4000-8000-00000000c0de';
+  r_s constant uuid := '00000000-0000-4000-8000-00000000e0de';
+  q_s constant uuid := '00000000-0000-4000-8000-00000000f0de';
 begin
   ---------------------------------------------------------------------------
   -- 試験データ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる）
@@ -760,6 +765,49 @@ begin
           perform pg_temp.expect_eq('16-11 未ログインの利用者・お客様は売価だけの取得経路を API から直接は呼べない（サーバー側だけ）', 'true/true',
             (pg_temp.run_as('anon', null, format($q$ select public.get_standard_estimate_sale_views(%L)::text $q$, v_model)) like 'ERROR 42501:%')::text || '/' ||
             (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_standard_estimate_sale_views(%L)::text $q$, v_model)) like 'ERROR 42501:%')::text);
+        end if;
+
+        -- 17. シミュレーターの標準見積（PR C2）：標準状態の商品が登録された公開中の標準見積で、保存済みの仕様と見積の明細を計算する。
+        --     本体は標準見積の売価、区分は「選んだ商品 − 標準状態の商品」の差額と経費率。使える標準見積が無ければこれまでの計算
+        if to_regprocedure('public.apply_standard_estimate_to_configuration(uuid)') is not null and v_se3_text is not null then
+          set local session_replication_role = replica;
+          insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+          values (c_s, u_cust_x, v_model, '標準見積の検査', 'draft', 'hotel', 'full'),
+                 (c_s2, u_cust_x, v_model, '標準見積の無い仕様の検査', 'draft', 'office', 'full');
+          insert into public.configuration_items (configuration_id, option_id, quantity) values (c_s, opt_a, 3);
+          set local session_replication_role = origin;
+
+          -- recalculate_configuration は保存処理（save_configuration_atomic）の中から呼ぶ内部の関数（API からは実行できない）。
+          -- 保存と同じく本人（JWT の sub）として、内部から呼ぶ
+          perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
+          perform public.recalculate_configuration(c_s);
+          perform public.recalculate_configuration(c_s2);
+          perform set_config('request.jwt.claims', '', true);
+          perform pg_temp.expect_eq('17-1 標準見積で計算する（本体は標準見積の売価、オプションは 3 個 − 標準状態 2 個の差額 12,000 円と経費 1,800 円）',
+            '467376/70106/12000/1800/0/551282/55128/606410',
+            coalesce((select c.base_price || '/' || c.base_expense || '/' || c.option_subtotal || '/' || c.option_expense || '/' ||
+                             c.adjustment || '/' || c.subtotal || '/' || c.tax || '/' || c.total
+                        from public.configurations c where c.id = c_s), '(なし)'));
+          -- これまでの計算：本体内訳の無いモデルは本体価格（前の検査で 1 円上げた値）
+          perform pg_temp.expect_eq('17-2 使える標準見積が無い仕様は、これまでの計算のまま（本体はモデルの本体価格）',
+            (select m.base_price::text from public.base_models m where m.id = v_model),
+            coalesce((select c.base_price::text from public.configurations c where c.id = c_s2), '(なし)'));
+
+          -- 見積の明細：本体・本体諸費用・オプションの変更差額・オプション諸費用。合計は税抜（調整前）と一致する
+          set local session_replication_role = replica;
+          insert into public.quote_requests (id, configuration_id, user_id, quote_id, status) values (r_s, c_s, u_cust_x, q_s, 'new');
+          insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, status, valid_until, customer_name, base_model_name,
+                                     base_price, option_subtotal, installation_subtotal, subtotal, tax_rate, tax, total)
+          values (q_s, 'RT-SE-1', r_s, c_s, u_cust_x, 'issued', now() + interval '30 days', '顧客X', '権限検査用モデル',
+                  467376, 12000, 0, 551282, 0.10, 55128, 606410);
+          set local session_replication_role = origin;
+          perform public.write_standard_estimate_quote_items(c_s, q_s);
+          perform pg_temp.expect_eq('17-3 見積の明細は標準見積から作り、合計は税抜（調整前）と一致する', '4/551282/12000',
+            (select count(*)::text || '/' || coalesce(sum(qi.amount), 0)::text || '/' ||
+                    coalesce(max(qi.amount) filter (where qi.name = '選択商品の変更差額'), 0)::text
+               from public.quote_items qi where qi.quote_id = q_s));
+          perform pg_temp.expect_denied('17-4 お客様は標準見積の明細を作る内部の関数を実行できない', '42501',
+            pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.write_standard_estimate_quote_items(%L, %L)::text $q$, c_s, q_s)));
         end if;
       end if;
     end if;

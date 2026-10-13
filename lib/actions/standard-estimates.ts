@@ -1,9 +1,10 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/session';
+import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 
@@ -115,6 +116,8 @@ export async function publishStandardEstimateRevisionAction(input: unknown): Pro
   if (error) return { ok: false, error: message(error) };
   revalidatePath(`/admin/standard-estimates/${parsed.data.revision_id}`);
   revalidatePath('/admin/standard-estimates');
+  // シミュレーターの価格（売価だけの標準見積）にすぐ反映する
+  updateTag(CATALOG_TAG);
   return { ok: true, message: '公開しました。' };
 }
 

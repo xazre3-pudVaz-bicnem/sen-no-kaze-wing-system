@@ -17,7 +17,9 @@ describe('商品台帳の一覧操作', () => {
     expect(client).toContain('data-testid="ledger-grid-view"');
   });
 
-  it('操作メニューは編集を常に出し、未使用の下書きだけ削除できる', () => {
+  it('操作メニューは見つけやすいボタンで、未使用の下書きだけ削除できる', () => {
+    expect(menu).toContain('<span>操作</span>');
+    expect(menu).toContain('border border-line bg-white');
     expect(menu).toContain('商品情報を編集');
     expect(menu).toContain("const isDraft = status === 'draft'");
     expect(menu).toContain('const canDelete = isDraft && configurationUsageCount === 0');
@@ -26,6 +28,19 @@ describe('商品台帳の一覧操作', () => {
     expect(menu).toContain('削除可否を確認できません');
     expect(menu).toContain('deleteDraftProductFromLedgerAction');
     expect(menu).toContain("event.stopPropagation()");
+  });
+
+  it('削除確認はブラウザconfirmではなく中央モーダルで商品名と不可逆性を示す', () => {
+    expect(menu).toContain("import { createPortal } from 'react-dom'");
+    expect(menu).toContain('role="dialog"');
+    expect(menu).toContain('aria-modal="true"');
+    expect(menu).toContain('fixed inset-0 z-[100] flex items-center justify-center');
+    expect(menu).toContain('下書きを削除しますか');
+    expect(menu).toContain('この操作は元に戻せません。');
+    expect(menu).toContain('キャンセル');
+    expect(menu).toContain('削除する');
+    expect(menu).not.toContain('window.confirm');
+    expect(menu).not.toContain('ConfirmSubmit');
   });
 
   it('一覧からの削除はサーバー側でも下書きだけに限定する', () => {

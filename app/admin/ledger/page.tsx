@@ -36,6 +36,52 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       [data-testid="ledger-table-view"] thead th:nth-child(4) { width: 18%; }
       [data-testid="ledger-table-view"] thead th:nth-child(5) { width: 12%; }
       [data-testid="ledger-table-view"] thead th:nth-child(6) { width: 6%; }
+
+      @media (max-width: 1279px) {
+        [data-testid="ledger-product-detail-pane"] {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          display: flex;
+          height: 100dvh;
+          max-height: 100dvh;
+          min-height: 0;
+          flex-direction: column;
+          overflow: hidden;
+          border: 0;
+          border-radius: 0;
+          padding-left: max(0px, calc(100vw - 46rem));
+          background: rgb(0 0 0 / 0.35);
+          box-shadow: none;
+          overscroll-behavior: contain;
+        }
+
+        [data-testid="ledger-product-detail-pane"] > header,
+        [data-testid="ledger-product-detail-pane"] > [role="tablist"],
+        [data-testid="ledger-product-detail-pane"] > div:last-child {
+          border-left: 1px solid rgb(95 82 68 / 0.16);
+        }
+
+        [data-testid="ledger-product-detail-pane"] > div:last-child {
+          min-height: 0;
+          flex: 1;
+          overflow-y: auto;
+          background: rgb(249 247 241 / 0.98);
+          overscroll-behavior: contain;
+        }
+      }
+
+      @media (max-width: 639px) {
+        [data-testid="ledger-product-detail-pane"] {
+          padding-left: 0;
+        }
+
+        [data-testid="ledger-product-detail-pane"] > header,
+        [data-testid="ledger-product-detail-pane"] > [role="tablist"],
+        [data-testid="ledger-product-detail-pane"] > div:last-child {
+          border-left: 0;
+        }
+      }
     `}</style>
     <FlashMessages sp={sp} />
     <ProductLedgerClient

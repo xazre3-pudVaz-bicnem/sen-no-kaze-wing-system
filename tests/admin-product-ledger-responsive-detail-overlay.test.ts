@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/ledger/page.tsx'), 'utf8');
 const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
+const dismiss = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-overlay-dismiss.tsx'), 'utf8');
 
 describe('商品台帳の商品詳細レスポンシブ表示', () => {
   it('1280px未満では一覧下へ押し出さず画面上の詳細オーバーレイとして表示する', () => {
@@ -28,5 +29,16 @@ describe('商品台帳の商品詳細レスポンシブ表示', () => {
     expect(client).toContain('前の商品');
     expect(client).toContain('次の商品');
     expect(client).toContain('商品情報を編集');
+  });
+
+  it('狭い画面では半透明の枠外を押すと詳細を閉じ、詳細内クリックや広幅PCでは閉じない', () => {
+    expect(page).toContain("import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-overlay-dismiss'");
+    expect(page).toContain('<ProductLedgerOverlayDismiss />');
+    expect(dismiss).toContain("window.matchMedia('(min-width: 1280px)').matches");
+    expect(dismiss).toContain("target.closest<HTMLElement>('[data-testid=\"ledger-product-detail-pane\"]')");
+    expect(dismiss).toContain('if (!pane || target !== pane) return;');
+    expect(dismiss).toContain("button[aria-label=\"商品詳細を閉じる\"]");
+    expect(dismiss).toContain("document.addEventListener('pointerdown', handlePointerDown)");
+    expect(dismiss).toContain("document.removeEventListener('pointerdown', handlePointerDown)");
   });
 });

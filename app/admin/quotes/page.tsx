@@ -193,6 +193,14 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
         <p className="mt-0.5 text-xs text-ink-soft">
           Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。
         </p>
+        <p className="mt-1 flex flex-wrap gap-3 text-xs" data-testid="case-flow-links">
+          <Link href="/admin/appointments" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            予約ボード（日程）
+          </Link>
+          <Link href="/admin/dealers" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            代理店の紹介ページ
+          </Link>
+        </p>
       </div>
       {canCreateQuote && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">

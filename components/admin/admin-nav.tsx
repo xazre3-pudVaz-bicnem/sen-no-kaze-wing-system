@@ -19,6 +19,9 @@ const sections: NavSection[] = [
       '/admin/configurations',
       '/admin/notifications',
       '/admin/contacts',
+      // 案件の進行（予約ボード・代理店の紹介ページ）
+      '/admin/appointments',
+      '/admin/dealers',
     ],
     exclude: ['/admin/quotes/new', '/admin/quotes/drafts', '/admin/quotes/standard-drafts'],
   },

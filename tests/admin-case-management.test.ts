@@ -240,7 +240,9 @@ describe('Admin case management UI', () => {
     expect(detail).toContain("import { CaseWorkspace } from '@/components/admin/case-workspace-complete'");
     expect(detail).toContain('<CaseWorkspace');
     expect(completeWorkspace).toContain("import { CaseWorkspace as BaseCaseWorkspace } from '@/components/admin/case-workspace'");
-    expect(completeWorkspace).toContain('<BaseCaseWorkspace {...props} />');
+    // 案件の進行の操作結果（flash）だけを除いて、もとの案件画面へそのまま渡す
+    expect(completeWorkspace).toContain('const { flash, ...baseProps } = props;');
+    expect(completeWorkspace).toContain('<BaseCaseWorkspace {...baseProps} />');
     expect(workspace).toContain('data-testid="case-workspace"');
     expect(workspace).toContain('data-testid="case-workspace-header"');
     expect(workspace).toContain('<h2 className="min-w-0 text-base font-semibold text-white sm:text-lg">{caseTitle}</h2>');
@@ -409,7 +411,8 @@ describe('Admin case management UI', () => {
     expect(workspace).not.toContain('正式状態が未実装の項目');
     expect(workspace).toContain('案件受付・現地メモ');
     expect(workspace).toContain('data-testid="case-tab-site"');
-    expect(workspace).toContain('現地確認の完了記録は現在準備中です');
+    // 現地確認の正式な記録は、下の「現地確認の記録」（case-flow）で行う。この欄は参考表示
+    expect(workspace).toContain('現地確認の記録は、下の「現地確認の記録」で行います');
     expect(workspace).toContain('候補情報が埋まっていても「現地確認完了」にはなりません。');
     expect(workspace).toContain('施工金額を見積へ反映');
     expect(workspace).toContain('data-testid="case-site-condition-candidates"');

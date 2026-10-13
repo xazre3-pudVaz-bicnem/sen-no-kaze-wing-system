@@ -18,9 +18,15 @@ import { Alert, Badge, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { QuoteTable } from '@/components/mypage/quote-table';
 
-export default async function QuoteDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ requested?: string }> }) {
+export default async function QuoteDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ requested?: string; preferences?: string }>;
+}) {
   const { id } = await params;
-  const { requested } = await searchParams;
+  const { requested, preferences } = await searchParams;
   const user = await requireUser(`/mypage/quotes/${id}`);
   const store = await getStore();
   const detail = await store.getQuote(id, user);
@@ -44,6 +50,18 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
           <Alert tone="success" title="見積依頼を受け付けました" className="mt-4">
             工場生産分（本体・オプション）の概算見積書（PDF）を発行しました。別途工事（運送・現地工事）は設置場所の条件を確認のうえ、代理店よりお見積りします。
           </Alert>
+        )}
+        {preferences === 'failed' && (
+          <Alert tone="warn" className="mt-4">
+            打合せのご希望（日程・代理店）を保存できませんでした。お手数ですが、担当からのご連絡の際にお伝えください。
+          </Alert>
+        )}
+        {request && (
+          <p className="mt-4 text-sm">
+            <Link href={`/mypage/cases/${request.id}`} className="font-semibold underline-offset-4 hover:underline" data-testid="customer-case-link">
+              ご依頼の進み具合（受付・日程・現地確認）を見る →
+            </Link>
+          </p>
         )}
         <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
           <div>

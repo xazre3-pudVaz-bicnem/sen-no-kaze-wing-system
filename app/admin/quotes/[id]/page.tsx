@@ -31,6 +31,7 @@ export default async function AdminQuoteDetailPage({
         from={sp.from}
         edit={sp.edit}
         settings={sp.settings}
+        flash={{ done: sp.done, error: sp.error }}
       />
     </div>
   );

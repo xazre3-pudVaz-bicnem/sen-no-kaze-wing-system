@@ -80,7 +80,7 @@ export async function createVariantGroupWithFirstChoiceAction(
     await store.upsertVariantGroup({ ...group.data, id: groupId });
     try {
       await store.upsertVariantChoice({ ...choice.data, id: choiceId });
-    } catch (error) {
+    } catch {
       revalidatePath(`/admin/options/${option.id}`);
       return {
         ok: false,

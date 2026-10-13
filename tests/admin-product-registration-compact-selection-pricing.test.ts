@@ -10,8 +10,16 @@ const enhancer = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-registration-ui-enhancer.tsx'),
   'utf8'
 );
+const adminLayout = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/layout.tsx'),
+  'utf8'
+);
+const registrationCss = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/product-registration-refinements.css'),
+  'utf8'
+);
 
-describe('商品登録のお客様選択・価格対象モデルの簡潔UI', () => {
+describe('商品登録のお客様選択・価格UI', () => {
   it('お客様選択は1つの入口から部位ごとの項目を追加し、最初の選択肢へ続ける', () => {
     expect(variants).not.toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
     expect(variants).toContain('＋ 選択項目を追加');
@@ -23,20 +31,13 @@ describe('商品登録のお客様選択・価格対象モデルの簡潔UI', ()
     expect(variants).toContain('標準の選択肢にする');
   });
 
-  it('対象モデルは全モデル共通とモデル指定を明示し、元の保存フィールドへ同期する', () => {
-    expect(enhancer).toContain("select[name=\"base_model_id\"]");
-    expect(enhancer).toContain("createChoice('全モデル共通', 'all')");
-    expect(enhancer).toContain("createChoice('モデルを指定', 'specific')");
-    expect(enhancer).toContain("setNativeSelectValue(original, '')");
-    expect(enhancer).toContain('モデルを選択してください');
-  });
-
-  it('価格・公開状態の補足を短くし、下書きは読み取り表示へ変える', () => {
-    expect(enhancer).toContain('価格と対象モデルを設定します。公開はSTEP 2で行います。');
+  it('STEP1の価格欄では対象モデルと公開状態を前面に出さず、価格だけを表示する', () => {
+    expect(adminLayout).toContain("import './product-registration-refinements.css';");
+    expect(registrationCss).toContain("content: '6. 価格' !important;");
+    expect(registrationCss).toContain("content: '商品価格を設定します。公開はSTEP 2で行います。';");
+    expect(registrationCss).toContain("#sales-settings [data-testid='option-normal-settings']");
+    expect(registrationCss).toContain('display: none !important;');
     expect(enhancer).toContain('0円のまま下書き保存できます。公開時に0円でよいか確認します。');
-    expect(enhancer).toContain("input[name=\"status\"][value=\"draft\"]");
-    expect(enhancer).toContain("badge.textContent = '下書き'");
-    expect(enhancer).toContain('公開はSTEP 2の確認画面から行います。');
   });
 
   it('DOM補助処理自身の変更でMutationObserverが再帰し続けない', () => {

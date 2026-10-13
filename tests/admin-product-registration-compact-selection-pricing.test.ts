@@ -37,4 +37,10 @@ describe('商品登録のお客様選択・価格対象モデルの簡潔UI', ()
     expect(enhancer).toContain("badge.textContent = '下書き'");
     expect(enhancer).toContain('公開はSTEP 2の確認画面から行います。');
   });
+
+  it('DOM補助処理自身の変更でMutationObserverが再帰し続けない', () => {
+    expect(enhancer).toContain('function setTextIfChanged');
+    expect(enhancer).toContain("if (element.textContent !== value) element.textContent = value");
+    expect(enhancer).toContain('observer.disconnect();\n      enhance();\n      observer.observe(document.body, { childList: true, subtree: true });');
+  });
 });

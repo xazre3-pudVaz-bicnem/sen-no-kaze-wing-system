@@ -7,6 +7,7 @@
  *     （数量 0・率計算の経費・集計・案件見積側・分類表 ×・重複／旧価格の行は登録しない）
  *   - 業務分類「Base Master」→ 本体マスターの明細、「標準見積／内外装」「標準見積／オプション」→ 標準見積の明細
  *   - 単価は原価として登録する（2026-10-13 決定：案 A。率は初期値の販売費率 100%・経費率 15%・掛率 150%）
+ *     ただし型番のない設備機器は「商品確定待ち」として価格未確定（POR）で登録し、Excel の単価を原価として確定しない（同日の先方回答）
  *   - 経費は明細にせず、Revision の経費率から DB が再計算する。Excel の 1000 円単位の値引き調整は持ち込まない
  *   - 0 円の内訳はそのまま登録し、bundle の金額を配賦しない
  *   - 登録名が空の行は、直前の明細名と補助表記をつないだ名前にする（例「・サッシ / 勝手口ドア」）
@@ -31,6 +32,22 @@ const ESTIMATE_SECTION: Record<string, 'interior_exterior' | 'option'> = {
   '標準見積／オプション': 'option',
 };
 
+/**
+ * 型番のない設備機器は「商品確定待ち」として価格未確定（POR）で登録する（2026-10-13 先方回答）。
+ *   - メーカー・型番が入っていて商品が確定しているものは、Excel の単価を原価として登録する
+ *   - 取付・造作・養生・工事など、商品ではなく工事の行は、Excel の単価を原価として登録する
+ *   - 内外装・本体の行（工事・材料）は対象外（Excel の単価を原価として登録する）
+ * 商品を確定して商品台帳へ登録したあと、次の Revision で正式な原価と標準状態の商品を設定する。
+ */
+const MODEL_NUMBER = /[A-Z]{2,}-[A-Z0-9]+(?:-[A-Z0-9]+)+/;
+const WORK_LINE = /取付|造作|養生|制作|工事|施工|配線|配管/;
+export const PENDING_PRODUCT_REMARK =
+  '商品確定待ち：メーカー・型番が未確定のため価格未確定。商品を確定して商品台帳へ登録したあと、正式な原価と標準状態の商品を設定する。';
+
+export function isPendingProduct(sectionCode: 'interior_exterior' | 'option', name: string): boolean {
+  return sectionCode === 'option' && !MODEL_NUMBER.test(name) && !WORK_LINE.test(name);
+}
+
 export const INITIAL_RATES = {
   salesFeeRate: RATE_RULES.salesFeeRate.initial,
   expenseRate: RATE_RULES.expenseRate.initial,
@@ -53,9 +70,12 @@ export interface PlanEstimateLine {
   name: string;
   quantity: number;
   unit: string | null;
-  price_mode: 'auto';
-  cost_unit_price: number;
+  /** 商品確定待ちの設備機器は por（価格未確定。原価は持たない） */
+  price_mode: 'auto' | 'por';
+  cost_unit_price: number | null;
   remark: string | null;
+  /** 商品確定待ちの行の Excel の単価（記録用。DB へは登録しない） */
+  reference_unit_price?: number;
   source_row: number;
 }
 
@@ -170,16 +190,23 @@ export function buildRegistrationPlan(sheets: Sheet[]): RegistrationPlan {
       if (!lastItem) issues.push(`${where}: 本体の項目（区分の見出し）がありません`);
       combo.base_lines.push({ section: lastItem || '本体', name, quantity, unit, unit_price: unitPrice, source_row: rowNo });
     } else if (ESTIMATE_SECTION[category]) {
+      const sectionCode = ESTIMATE_SECTION[category];
+      const pending = isPendingProduct(sectionCode, name);
       combo.estimate_lines.push({
-        section_code: ESTIMATE_SECTION[category],
+        section_code: sectionCode,
         group_label: lastItem || null,
         name,
         quantity,
         unit,
-        price_mode: 'auto',
-        cost_unit_price: unitPrice,
+        price_mode: pending ? 'por' : 'auto',
+        cost_unit_price: pending ? null : unitPrice,
         // 仮設定の行は、見直しが必要なことを備考に残す（統合版 §11-2）
-        remark: action.includes('仮設定') ? text(at('U')) || '仮設定：Wing標準値に合わせて設定。実績確認後に見直す。' : null,
+        remark: pending
+          ? PENDING_PRODUCT_REMARK
+          : action.includes('仮設定')
+            ? text(at('U')) || '仮設定：Wing標準値に合わせて設定。実績確認後に見直す。'
+            : null,
+        ...(pending ? { reference_unit_price: unitPrice } : {}),
         source_row: rowNo,
       });
     } else {
@@ -194,7 +221,7 @@ export function buildRegistrationPlan(sheets: Sheet[]): RegistrationPlan {
       sectionMoney(
         combo.estimate_lines
           .filter((line) => line.section_code === code)
-          .map((line) => lineMoney({ mode: 'auto', quantity: String(line.quantity), costUnitPrice: line.cost_unit_price }, rates)),
+          .map((line) => lineMoney({ mode: line.price_mode, quantity: String(line.quantity), costUnitPrice: line.cost_unit_price }, rates)),
         'rate',
         rates
       );

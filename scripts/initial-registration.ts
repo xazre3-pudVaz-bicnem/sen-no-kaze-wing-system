@@ -228,7 +228,8 @@ fs.writeFileSync(PLAN_OUT, JSON.stringify(plan, null, 1));
 console.log(`初期登録の計画（率：販売費率 ${Number(plan.rates.salesFeeRate) * 100}%・経費率 ${Number(plan.rates.expenseRate) * 100}%・掛率 ${Number(plan.rates.markupRate) * 100}%）`);
 for (const combo of plan.combos) {
   console.log(
-    `  ${combo.label.padEnd(30)} 本体 ${String(combo.base_lines.length).padStart(2)} 行・標準見積 ${String(combo.estimate_lines.length).padStart(2)} 行  ` +
+    `  ${combo.label.padEnd(30)} 本体 ${String(combo.base_lines.length).padStart(2)} 行・標準見積 ${String(combo.estimate_lines.length).padStart(2)} 行` +
+      `（商品確定待ち ${String(combo.estimate_lines.filter((line) => line.price_mode === 'por').length).padStart(2)} 行）  ` +
       `税抜 ${combo.expected.subtotal.toLocaleString('ja-JP')} 円・税込 ${combo.expected.total.toLocaleString('ja-JP')} 円`
   );
 }

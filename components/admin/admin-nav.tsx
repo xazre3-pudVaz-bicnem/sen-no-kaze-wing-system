@@ -46,6 +46,7 @@ const sections: NavSection[] = [
     match: [
       '/admin/quote-management',
       '/admin/base-masters',
+      '/admin/matrix',
       '/admin/estimate-templates',
       '/admin/base-breakdown',
       '/admin/quotes/new',

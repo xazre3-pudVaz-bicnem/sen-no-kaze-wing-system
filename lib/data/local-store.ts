@@ -33,6 +33,7 @@ import type {
   ContactMessage,
   ContactStatus,
   SpecMatrix,
+  MatrixRow,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
@@ -88,6 +89,8 @@ import {
   type AccessibleCustomerListResult,
   type AccessibleCustomerDetailResult,
   type AccessibleCustomerQuote,
+  type MatrixRowCreateInput,
+  type MatrixRowUpdateInput,
 } from './store';
 
 const nowIso = () => new Date().toISOString();
@@ -218,6 +221,70 @@ export class LocalStore implements DataStore {
   // ---------- 本体仕様マトリクス ----------
   async getSpecMatrix(): Promise<SpecMatrix | null> {
     return this.read((db) => JSON.parse(JSON.stringify(db.matrix)) as SpecMatrix);
+  }
+  // SQL（20261013160000）と同じ判定。ローカル検証モードには本体マスターが無いため、防火の本体の確認は省く
+  private assertMatrixItems(db: LocalDb, items: string[]) {
+    const unknown = items.filter((code) => !db.matrix.items.some((item) => item.code === code && item.status === 'active'));
+    if (unknown.length) throw new StoreError('VALIDATION', `有効な項目ではありません（${unknown.join(', ')}）`);
+  }
+  private writeMatrixCells(db: LocalDb, rowId: string, items: string[]) {
+    for (const item of db.matrix.items.filter((candidate) => candidate.status === 'active')) {
+      const cell = db.matrix.cells.find((candidate) => candidate.matrix_row_id === rowId && candidate.matrix_item_code === item.code);
+      if (cell) cell.selectable = items.includes(item.code);
+      else db.matrix.cells.push({ matrix_row_id: rowId, matrix_item_code: item.code, selectable: items.includes(item.code) });
+    }
+  }
+  async updateMatrixRow(actor: SessionUser, input: MatrixRowUpdateInput): Promise<MatrixRow> {
+    return this.mutate((db) => {
+      if (!hasRoleAtLeast(actor.role, 'admin')) throw new StoreError('FORBIDDEN', '本体仕様マトリクスを変更できるのは本部だけです');
+      this.assertMatrixItems(db, input.selectable_items);
+      const row = db.matrix.rows.find((candidate) => candidate.id === input.row_id);
+      if (!row) throw new StoreError('NOT_FOUND', 'データが見つかりません');
+      if (row.lock_version !== input.expected_lock_version) {
+        throw new StoreError('LOCKED', '他の画面でこの行が更新されています。再読み込みして内容を確認してください');
+      }
+      this.writeMatrixCells(db, row.id, input.selectable_items);
+      row.fire_selectable = input.fire_selectable;
+      row.lock_version += 1;
+      return { ...row };
+    });
+  }
+  async createMatrixRow(actor: SessionUser, input: MatrixRowCreateInput): Promise<MatrixRow> {
+    return this.mutate((db) => {
+      if (!hasRoleAtLeast(actor.role, 'admin')) throw new StoreError('FORBIDDEN', '本体仕様マトリクスを変更できるのは本部だけです');
+      if (!db.models.some((model) => model.id === input.base_model_id)) throw new StoreError('VALIDATION', '機種が見つかりません');
+      if (!db.matrix.specs.some((spec) => spec.code === input.spec_code && spec.status === 'active')) throw new StoreError('VALIDATION', '有効な仕様ではありません');
+      if (!db.matrix.sizes.some((size) => size.code === input.size_code && size.status === 'active')) throw new StoreError('VALIDATION', '有効なサイズではありません');
+      this.assertMatrixItems(db, input.selectable_items);
+      if (db.matrix.rows.some((row) => row.base_model_id === input.base_model_id && row.spec_code === input.spec_code && row.size_code === input.size_code)) {
+        throw new StoreError('LOCKED', '同じ機種・仕様・サイズの行がすでにあります（停止中なら再開してください）');
+      }
+      const row: MatrixRow = {
+        id: randomUUID(),
+        base_model_id: input.base_model_id,
+        spec_code: input.spec_code,
+        size_code: input.size_code,
+        fire_selectable: input.fire_selectable,
+        status: 'active',
+        lock_version: 1,
+      };
+      db.matrix.rows.push(row);
+      this.writeMatrixCells(db, row.id, input.selectable_items);
+      return { ...row };
+    });
+  }
+  async setMatrixRowStatus(actor: SessionUser, rowId: string, status: 'active' | 'retired', expectedLockVersion: number): Promise<MatrixRow> {
+    return this.mutate((db) => {
+      if (!hasRoleAtLeast(actor.role, 'admin')) throw new StoreError('FORBIDDEN', '本体仕様マトリクスを変更できるのは本部だけです');
+      const row = db.matrix.rows.find((candidate) => candidate.id === rowId);
+      if (!row) throw new StoreError('NOT_FOUND', 'データが見つかりません');
+      if (row.lock_version !== expectedLockVersion) {
+        throw new StoreError('LOCKED', '他の画面でこの行が更新されています。再読み込みして内容を確認してください');
+      }
+      row.status = status;
+      row.lock_version += 1;
+      return { ...row };
+    });
   }
 
   // ---------- 標準見積テンプレート ----------

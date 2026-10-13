@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
+import { ProductLedgerScrollRestore } from '@/components/admin/product-ledger-scroll-restore';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
@@ -29,6 +30,15 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     notice={<><span className="font-semibold text-ink">商品台帳：</span> 商品そのものを登録する場所です。商品を「本体用」「オプション用」などに固定せず、見積書の各区分で「手入力」または「商品台帳から選択」して使います。</>}
     actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new?return_to=%2Fadmin%2Fledger" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
   >
+    <style>{`
+      [data-testid="ledger-table-view"] thead th:nth-child(1) { width: 35%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(2) { width: 14%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(3) { width: 15%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(4) { width: 18%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(5) { width: 12%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(6) { width: 6%; }
+    `}</style>
+    <ProductLedgerScrollRestore />
     <FlashMessages sp={sp} />
     <ProductLedgerClient
       canEdit={editor}

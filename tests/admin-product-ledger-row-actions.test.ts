@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
 const menu = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-actions-menu.tsx'), 'utf8');
-const scrollRestore = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-scroll-restore.tsx'), 'utf8');
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/ledger/page.tsx'), 'utf8');
 const action = fs.readFileSync(path.resolve(process.cwd(), 'lib/actions/product-ledger.ts'), 'utf8');
 
@@ -55,13 +54,11 @@ describe('商品台帳の一覧操作', () => {
     expect(menu).not.toContain('ConfirmSubmit');
   });
 
-  it('削除前のスクロール位置を保存し、一覧再表示後に同じ位置へ戻す', () => {
-    expect(menu).toContain("window.sessionStorage.setItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY, String(window.scrollY))");
-    expect(scrollRestore).toContain("export const PRODUCT_LEDGER_SCROLL_STORAGE_KEY = 'product-ledger-scroll-y-after-action'");
-    expect(scrollRestore).toContain('window.sessionStorage.getItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY)');
-    expect(scrollRestore).toContain('window.sessionStorage.removeItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY)');
-    expect(scrollRestore).toContain("window.scrollTo({ top, behavior: 'auto' })");
-    expect(page).toContain('<ProductLedgerScrollRestore />');
+  it('削除後の位置は独自保存・強制スクロールを行わず従来の画面遷移に任せる', () => {
+    expect(menu).not.toContain('sessionStorage');
+    expect(menu).not.toContain('PRODUCT_LEDGER_SCROLL_STORAGE_KEY');
+    expect(page).not.toContain('ProductLedgerScrollRestore');
+    expect(fs.existsSync(path.resolve(process.cwd(), 'components/admin/product-ledger-scroll-restore.tsx'))).toBe(false);
   });
 
   it('一覧からの削除はサーバー側でも下書きだけに限定する', () => {

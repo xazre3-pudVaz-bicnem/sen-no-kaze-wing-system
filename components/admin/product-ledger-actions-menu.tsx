@@ -88,12 +88,11 @@ export function ProductLedgerActionsMenu({
         }}
       >
         <summary
-          className="inline-flex h-8 min-w-[3.75rem] cursor-pointer list-none items-center justify-center gap-0.5 rounded-md border border-line bg-white px-2 text-[0.7rem] font-semibold text-ink-soft shadow-sm hover:border-brown/40 hover:bg-sand hover:text-ink [&::-webkit-details-marker]:hidden"
+          className="inline-flex size-9 cursor-pointer list-none items-center justify-center rounded-lg border border-line bg-white text-ink-soft shadow-sm transition hover:border-brown/50 hover:bg-sand hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown/40 focus-visible:ring-offset-1 [&::-webkit-details-marker]:hidden"
           aria-label={`${optionName}のその他の操作`}
           title="その他の操作"
         >
-          <span>操作</span>
-          <EllipsisVertical className="size-4" aria-hidden="true" />
+          <EllipsisVertical className="size-5" strokeWidth={2.25} aria-hidden="true" />
         </summary>
         <div className="absolute right-0 top-full z-50 mt-1 w-60 rounded-lg border border-line bg-white p-1.5 text-left text-xs font-normal shadow-lg">
           <Link
@@ -120,7 +119,7 @@ export function ProductLedgerActionsMenu({
 
           {isDraft && configurationUsageCount !== null && configurationUsageCount > 0 && (
             <p className="rounded-md px-2.5 py-2 leading-5 text-muted" aria-disabled="true">
-              削除できません（構成で使用中 {configurationUsageCount}件）
+              削除できません（保存プラン {configurationUsageCount}件）
             </p>
           )}
 

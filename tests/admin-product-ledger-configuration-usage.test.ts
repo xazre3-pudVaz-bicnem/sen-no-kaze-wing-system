@@ -23,18 +23,20 @@ describe('商品台帳の保存済み構成利用状況', () => {
     expect(ledgerPage).toContain('configurationUsageCounts={configurationUsageCounts}');
   });
 
-  it('一覧と詳細に未使用または構成で使用中の件数を表示する', () => {
-    expect(ledgerClient).toContain("configurationUsageCount > 0 ? `構成で使用 ${configurationUsageCount}件` : '未使用'");
+  it('一覧と詳細は利用者向けに保存プラン件数として表示する', () => {
+    expect(ledgerClient).toContain("configurationUsageCount > 0 ? `保存プラン ${configurationUsageCount}件` : '未使用'");
+    expect(ledgerClient).toContain('whitespace-nowrap text-[0.68rem]');
     expect(ledgerClient).toContain('configurationUsageCounts[selected.id] ?? 0');
-    expect(ledgerClient).toContain('label="保存済み構成"');
+    expect(ledgerClient).toContain('label="保存プラン"');
+    expect(ledgerClient).toContain('ここで「保存プラン」として数えるのは、configuration_items');
     expect(ledgerClient).toContain('標準見積・発行済み見積・Snapshotの履歴判定は含みません。');
   });
 
   it('完全削除の導線は未使用の下書きだけに表示する', () => {
     expect(ledgerClient).toContain("selected.status === 'draft' && selectedConfigurationUsageCount === 0");
     expect(ledgerClient).toContain('完全削除可能');
-    expect(ledgerClient).toContain('一覧の「その他の操作」から直接削除できます。');
-    expect(ledgerClient).toContain('保存済み構成で使用されているため、この下書きは完全削除できません。');
+    expect(ledgerClient).toContain('一覧右端の「⋮」から直接削除できます。');
+    expect(ledgerClient).toContain('保存プランで使用されているため、この下書きは完全削除できません。');
     expect(ledgerClient).toContain('登録済み商品は完全削除の対象にしません。');
   });
 

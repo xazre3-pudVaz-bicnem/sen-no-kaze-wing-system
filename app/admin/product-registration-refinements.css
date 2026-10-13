@@ -19,3 +19,11 @@
 .registration-step1-sections #sales-settings [data-testid='option-normal-settings'] {
   display: none !important;
 }
+
+/* お客様選択は、選択項目名と最初の選択肢を同時に入力する新UIへ置き換える。 */
+.registration-step1-sections
+  #customer-selection
+  [data-registration-combined-create='true']
+  > :not([data-combined-create-root='true']) {
+  display: none !important;
+}

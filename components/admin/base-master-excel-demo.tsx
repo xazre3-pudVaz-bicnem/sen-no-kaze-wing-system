@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { formatBaseMasterRevision } from '@/lib/domain/base-master-ui';
 import { formatYen } from '@/lib/domain/pricing';
 
 type SampleRevisionStatus = 'published' | 'draft' | 'historical';
@@ -73,8 +74,8 @@ const SAMPLE_BASE_MASTERS: SampleBaseMaster[] = [
     totalCost: 1654620,
     history: [
       { revision: 3, status: 'published', label: '現在の公開版' },
-      { revision: 2, status: 'historical', label: '過去Revision' },
-      { revision: 1, status: 'historical', label: '過去Revision' },
+      { revision: 2, status: 'historical', label: '過去の公開版' },
+      { revision: 1, status: 'historical', label: '過去の公開版' },
     ],
     lines: [
       { id: 'w-h-1', section: '1．金物', name: '伸縮脚・ジャッキ金物', quantity: 12, unit: '本', unitCost: 18200, note: '本体支持用' },
@@ -97,7 +98,7 @@ const SAMPLE_BASE_MASTERS: SampleBaseMaster[] = [
     totalCost: 1811060,
     history: [
       { revision: 2, status: 'published', label: '現在の公開版' },
-      { revision: 1, status: 'historical', label: '過去Revision' },
+      { revision: 1, status: 'historical', label: '過去の公開版' },
     ],
     lines: [
       { id: 'w-r-1', section: '1．金物', name: '伸縮脚・ジャッキ金物', quantity: 12, unit: '本', unitCost: 18200, note: '本体支持用' },
@@ -136,7 +137,7 @@ const SAMPLE_BASE_MASTERS: SampleBaseMaster[] = [
     revision: 1,
     status: 'historical',
     totalCost: 1539600,
-    history: [{ revision: 1, status: 'historical', label: '過去Revision' }],
+    history: [{ revision: 1, status: 'historical', label: '過去の公開版' }],
     lines: [
       { id: 'w-o-1', section: '1．金物', name: '伸縮脚・本体金物', quantity: 1, unit: '式', unitCost: 278400, note: '' },
       { id: 'w-o-2', section: '2．木材・構造材', name: '構造材・プレカット材', quantity: 1, unit: '式', unitCost: 536000, note: '' },
@@ -320,7 +321,7 @@ const cloneMatrixRows = (rows: MatrixRow[]) => rows.map((row) => ({
 const statusLabel = (status: SampleRevisionStatus) => {
   if (status === 'published') return '公開中';
   if (status === 'draft') return '下書き';
-  return '過去Revision';
+  return '過去の公開版';
 };
 
 const statusClass = (status: SampleRevisionStatus) => {
@@ -337,6 +338,8 @@ export function BaseMasterExcelDemo() {
   const [matrixRows, setMatrixRows] = useState<MatrixRow[]>(() => cloneMatrixRows(INITIAL_MATRIX_ROWS));
   const [isMatrixEditing, setIsMatrixEditing] = useState(false);
   const [matrixNotice, setMatrixNotice] = useState<string | null>(null);
+  const [matrixQuery, setMatrixQuery] = useState('');
+  const [matrixModelFilter, setMatrixModelFilter] = useState('');
 
   const selected = SAMPLE_BASE_MASTERS.find((master) => master.id === selectedId) ?? SAMPLE_BASE_MASTERS[0];
 
@@ -349,6 +352,23 @@ export function BaseMasterExcelDemo() {
     }
     return groups;
   }, [selected]);
+
+  const matrixModelOptions = useMemo(
+    () => Array.from(new Set(matrixRows.map((row) => row.model))),
+    [matrixRows]
+  );
+
+  const visibleMatrixRows = useMemo(() => {
+    const query = matrixQuery.trim().toLocaleLowerCase('ja-JP');
+    return matrixRows.filter((row) => {
+      if (matrixModelFilter && row.model !== matrixModelFilter) return false;
+      if (!query) return true;
+      return [row.model, row.purpose, row.size]
+        .join(' ')
+        .toLocaleLowerCase('ja-JP')
+        .includes(query);
+    });
+  }, [matrixModelFilter, matrixQuery, matrixRows]);
 
   const toggleMatrixItem = (rowId: string, item: MatrixItem) => {
     if (!isMatrixEditing) return;
@@ -383,7 +403,7 @@ export function BaseMasterExcelDemo() {
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
         <div className="font-semibold">画面確認用サンプル</div>
         <p className="mt-1 text-xs leading-5 text-blue-900">
-          以下はローカル仮データです。DBへの保存・公開・Revision操作は行いません。本体マスターの基準原価と構造明細だけを表示し、売価・粗利・販売費・経費・掛率は扱いません。
+          以下はローカル仮データです。DBへの保存・公開・版操作は行いません。本体マスターの基準原価と構造明細だけを表示し、売価・粗利・販売費・経費・掛率は扱いません。
         </p>
       </div>
 
@@ -393,12 +413,12 @@ export function BaseMasterExcelDemo() {
             <div>
               <p className="text-xs font-semibold tracking-wide text-slate-500">BASE MASTER</p>
               <h2 className="mt-1 text-lg font-semibold text-slate-900">1. 構成一覧</h2>
-              <p className="mt-1 text-xs text-slate-500">本体 × 用途・基本仕様 × サイズ × 防火仕様ごとの登録状況とRevision状態を確認します。</p>
+              <p className="mt-1 text-xs text-slate-500">本体 → 用途・基本仕様 → バリエーション（サイズ・防火仕様） → 版の順に登録状況を確認します。</p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
-              <span className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass('published')}`}>Published</span>
-              <span className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass('draft')}`}>Draft</span>
-              <span className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass('historical')}`}>過去Revision</span>
+              <span className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass('published')}`}>公開中</span>
+              <span className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass('draft')}`}>下書き</span>
+              <span className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass('historical')}`}>過去の公開版</span>
             </div>
           </div>
         </div>
@@ -410,8 +430,8 @@ export function BaseMasterExcelDemo() {
                 <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">本体</th>
                 <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">用途・基本仕様</th>
                 <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">サイズ</th>
-                <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">防火</th>
-                <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">Revision</th>
+                <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">防火仕様</th>
+                <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">版</th>
                 <th className="border-b border-slate-300 px-3 py-2 text-left font-semibold">状態</th>
                 <th className="border-b border-slate-300 px-3 py-2 text-right font-semibold">基準原価</th>
               </tr>
@@ -438,7 +458,7 @@ export function BaseMasterExcelDemo() {
                     <td className="px-3 py-2">{master.purpose}</td>
                     <td className="px-3 py-2 tabular-nums">{master.size}</td>
                     <td className="px-3 py-2">{fireLabel(master.fireSpec)}</td>
-                    <td className="px-3 py-2 font-medium">Rev.{master.revision}</td>
+                    <td className="px-3 py-2 font-medium">{formatBaseMasterRevision(master.revision)}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusClass(master.status)}`}>
                         {statusLabel(master.status)}
@@ -451,17 +471,17 @@ export function BaseMasterExcelDemo() {
             </tbody>
           </table>
         </div>
-        <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">行を選択すると、下のBase Master詳細が切り替わります。</div>
+        <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">行を選択すると、下の本体マスター詳細が切り替わります。</div>
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
-          <p className="text-xs font-semibold tracking-wide text-slate-500">SELECTED REVISION</p>
+          <p className="text-xs font-semibold tracking-wide text-slate-500">選択中の版</p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-900">2. Base Master詳細</h2>
+            <h2 className="text-lg font-semibold text-slate-900">2. 本体マスター詳細</h2>
             <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(selected.status)}`}>{statusLabel(selected.status)}</span>
           </div>
-          <p className="mt-1 text-xs text-slate-500">Standard Estimateと近い密度のExcel風表示で、構造・製造の基準原価だけを確認します。</p>
+          <p className="mt-1 text-xs text-slate-500">標準見積と近い密度のExcel風表示で、構造・製造の基準原価だけを確認します。</p>
         </div>
 
         <div className="grid gap-px border-b border-slate-200 bg-slate-200 text-sm sm:grid-cols-2 lg:grid-cols-6">
@@ -470,7 +490,7 @@ export function BaseMasterExcelDemo() {
             ['用途・基本仕様', selected.purpose],
             ['サイズ', selected.size],
             ['防火仕様', fireLabel(selected.fireSpec)],
-            ['Revision', `Rev.${selected.revision}`],
+            ['版', formatBaseMasterRevision(selected.revision)],
             ['状態', statusLabel(selected.status)],
           ].map(([label, value]) => (
             <div key={label} className="bg-white px-3 py-2">
@@ -481,10 +501,10 @@ export function BaseMasterExcelDemo() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs">
-          <span className="font-semibold text-slate-600">Revision履歴</span>
+          <span className="font-semibold text-slate-600">版履歴</span>
           {selected.history.map((history) => (
             <span key={`${selected.id}-${history.revision}`} className={`rounded-full border px-2.5 py-1 font-semibold ${statusClass(history.status)}`}>
-              Rev.{history.revision}・{history.label}
+              {formatBaseMasterRevision(history.revision)}・{history.label}
             </span>
           ))}
           <span className="ml-auto text-slate-500">表示のみ・操作未接続</span>
@@ -511,7 +531,7 @@ export function BaseMasterExcelDemo() {
               <tr className="bg-slate-100 font-semibold text-slate-900">
                 <td colSpan={4} className="border-t border-slate-400 px-3 py-2 text-right">基準原価合計</td>
                 <td className="border-t border-l border-slate-400 px-2 py-2 text-right tabular-nums">{formatYen(selected.totalCost)}</td>
-                <td className="border-t border-l border-slate-400 px-2 py-2 text-xs text-slate-500">売価・粗利等はStandard Estimate側</td>
+                <td className="border-t border-l border-slate-400 px-2 py-2 text-xs text-slate-500">売価・粗利等は標準見積側</td>
               </tr>
             </tfoot>
           </table>
@@ -539,7 +559,7 @@ export function BaseMasterExcelDemo() {
               <p className="text-xs font-semibold tracking-wide text-slate-500">SPECIFICATION MATRIX</p>
               <h2 className="mt-1 text-lg font-semibold text-slate-900">3. 仕様マトリクス</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                Base MasterのRevision一覧とは別の確認表です。本体 × 用途・基本仕様 × サイズに対し、Standard Estimate側で各仕様項目を選択可能とするかを○／×で確認します。Matrix Itemと商品Categoryは別概念です。
+                本体マスターの版一覧とは別の確認表です。本体 × 用途・基本仕様 × サイズに対し、標準見積側で各仕様項目を選択可能とするかを○／×で確認します。15項目のうち給湯器は独立項目です。
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -580,10 +600,49 @@ export function BaseMasterExcelDemo() {
           画面確認用サンプル。変更はDBへ保存されません。
         </div>
 
+        <div className="grid gap-3 border-b border-slate-200 bg-white px-4 py-3 md:grid-cols-[minmax(16rem,1fr)_14rem_auto] md:items-end">
+          <label className="space-y-1">
+            <span className="block text-xs font-semibold text-slate-600">検索</span>
+            <input
+              type="search"
+              value={matrixQuery}
+              onChange={(event) => setMatrixQuery(event.target.value)}
+              placeholder="本体・用途・サイズ"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs font-semibold text-slate-600">本体</span>
+            <select
+              value={matrixModelFilter}
+              onChange={(event) => setMatrixModelFilter(event.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15"
+            >
+              <option value="">すべて</option>
+              {matrixModelOptions.map((model) => (
+                <option key={model} value={model}>{model}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMatrixQuery('');
+                setMatrixModelFilter('');
+              }}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              クリア
+            </button>
+            <span className="text-xs text-slate-500">{visibleMatrixRows.length}行／全{matrixRows.length}行</span>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-600">
-          <span>初期seed：6行 × 15 Matrix Item = 90 selectableセル</span>
+          <span>15項目</span>
           <span>非防火：全行利用可</span>
-          <span>防火：各行の fire_selectable を表示</span>
+          <span>防火：行ごとの利用可否を表示</span>
           <span className="ml-auto font-medium text-emerald-700">○ 選択可</span>
           <span className="font-medium text-slate-500">× 対象外</span>
         </div>
@@ -607,7 +666,7 @@ export function BaseMasterExcelDemo() {
               </tr>
             </thead>
             <tbody>
-              {matrixRows.map((row) => (
+              {visibleMatrixRows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-200 bg-white">
                   <td className="border-r border-slate-200 px-2 py-2 font-semibold text-slate-900">{row.model}</td>
                   <td className="border-r border-slate-200 px-2 py-2">{row.purpose}</td>
@@ -642,11 +701,16 @@ export function BaseMasterExcelDemo() {
                   })}
                 </tr>
               ))}
+              {visibleMatrixRows.length === 0 && (
+                <tr>
+                  <td colSpan={5 + MATRIX_ITEMS.length} className="px-4 py-8 text-center text-sm text-slate-500">条件に一致する行はありません。</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs leading-5 text-slate-500">
-          ○／×はMatrix Itemの選択可否を表します。防火は15項目を複製せず、各Matrix Rowの別条件として表示しています。編集・保存は画面内mockのみで、DB・Revision・Published状態には影響しません。
+          ○／×は15項目の選択可否を表します。防火は15項目を複製せず、各行の別条件として表示しています。編集・保存は画面内モックのみで、DB・版・公開状態には影響しません。
         </div>
       </section>
     </div>

@@ -1,5 +1,6 @@
 import { Phone } from 'lucide-react';
 import { contact } from '@/data/site-content';
+import { MULTI_MODEL_CONTACT_TOPIC } from '@/data/contact-topics';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { COMPANY } from '@/lib/site';
 import { Breadcrumbs, Container, JsonLd } from '@/components/ui';
@@ -12,7 +13,15 @@ export const metadata = buildMetadata({
   path: '/contact',
 });
 
-export default function ContactPage() {
+type ContactPageProps = {
+  searchParams: Promise<{ topic?: string | string[] }>;
+};
+
+export default async function ContactPage({ searchParams }: ContactPageProps) {
+  const params = await searchParams;
+  const requestedTopic = Array.isArray(params.topic) ? params.topic[0] : params.topic;
+  const initialTopic = requestedTopic === 'multi-model' ? MULTI_MODEL_CONTACT_TOPIC : undefined;
+
   return (
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: 'お問い合わせ', path: '/contact' }])} />
@@ -50,7 +59,7 @@ export default function ContactPage() {
               ))}
             </dl>
           </aside>
-          <ContactForm />
+          <ContactForm initialTopic={initialTopic} />
         </div>
       </Container>
     </>

@@ -53,7 +53,7 @@ export function FoldingTechSection() {
                 alt="折畳み屋根面、ドア、設備、木板外壁、折畳み時平面図をまとめた図"
                 fill
                 sizes="(min-width: 1024px) 30vw, (min-width: 640px) 60vw, 100vw"
-                unoptimized
+                quality={90}
                 className="object-contain"
               />
             </div>
@@ -66,7 +66,7 @@ export function FoldingTechSection() {
               alt="クレーンで吊り上げた折畳みコンテナと展開後平面図"
               fill
               sizes="(min-width: 1024px) 45vw, 100vw"
-              unoptimized
+              quality={90}
               className="object-contain"
             />
           </Reveal>

@@ -66,6 +66,24 @@ declare
   r_y constant uuid := '00000000-0000-4000-8000-00000000e00b';
   q_x constant uuid := '00000000-0000-4000-8000-00000000f00a';
   q_y constant uuid := '00000000-0000-4000-8000-00000000f00b';
+  -- respond_to_quote の検査用（顧客Xの確定見積と、同じ依頼の旧版）
+  c_f constant uuid := '00000000-0000-4000-8000-00000000c00c';
+  r_f constant uuid := '00000000-0000-4000-8000-00000000e00c';
+  q_f constant uuid := '00000000-0000-4000-8000-00000000f00c';
+  q_x_old constant uuid := '00000000-0000-4000-8000-00000000f00d';
+  q_y2 constant uuid := '00000000-0000-4000-8000-00000000f00e';
+  -- 担当未割当の見積と、旧形式で承諾済みの見積（第2版＝確定見積／第1版＝概算）
+  c_u constant uuid := '00000000-0000-4000-8000-00000000c0aa';
+  r_u constant uuid := '00000000-0000-4000-8000-00000000e0aa';
+  q_u constant uuid := '00000000-0000-4000-8000-00000000f0aa';
+  c_l2 constant uuid := '00000000-0000-4000-8000-00000000c0bb';
+  r_l2 constant uuid := '00000000-0000-4000-8000-00000000e0bb';
+  q_l1 constant uuid := '00000000-0000-4000-8000-00000000f0b1';
+  q_l2 constant uuid := '00000000-0000-4000-8000-00000000f0b2';
+  q_l3 constant uuid := '00000000-0000-4000-8000-00000000f0b3';
+  c_l1 constant uuid := '00000000-0000-4000-8000-00000000c0cc';
+  r_l1 constant uuid := '00000000-0000-4000-8000-00000000e0cc';
+  q_lp constant uuid := '00000000-0000-4000-8000-00000000f0c1';
   v_model uuid;
   v_notifications_before bigint;
   v_audit_before bigint;
@@ -213,6 +231,123 @@ begin
   perform pg_temp.run_as('authenticated', u_admin, $q$ update public.base_models set base_price = base_price + 1 where slug = 'runtime-check' returning 'updated' $q$);
   perform pg_temp.expect_eq('5-2 本部の価格変更で監査ログが作られる（trigger → write_audit）', 'true',
     ((select count(*) from public.audit_logs) > v_audit_before)::text);
+
+  ---------------------------------------------------------------------------
+  -- 6. respond_to_quote（お客様の承諾・辞退）の権限境界
+  ---------------------------------------------------------------------------
+  -- 顧客Xの確定見積（最新版）と、顧客Xの依頼 r_x に残る旧版（最新版は q_x）を追加する
+  set local session_replication_role = replica;
+  insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+  values (c_f, u_cust_x, v_model, '顧客Xの確定見積案件', 'quoted', 'office', 'full');
+  insert into public.quote_requests (id, configuration_id, user_id, quote_id, status)
+  values (r_f, c_f, u_cust_x, q_f, 'sent');
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, quote_kind)
+  values
+    (q_f, 'RT-0003', r_f, c_f, u_cust_x, u_dealer1, 'issued', now() + interval '30 days', '顧客X', '権限検査用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal'),
+    (q_x_old, 'RT-0004', r_x, c_x, u_cust_x, u_dealer1, 'issued', now() + interval '30 days', '顧客X', '権限検査用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, null);
+  -- 顧客Yの依頼は、旧形式（quote_kind なし）のまま第2版が最新になった状態にする
+  update public.quotes set status = 'superseded' where id = q_y;
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, revision, parent_quote_id)
+  values (q_y2, 'RT-0005', r_y, c_y, u_cust_y, u_master, 'issued', now() + interval '30 days', '顧客Y', '権限検査用モデル', 1000000, 0, 200000, 1200000, 0.10, 120000, 1320000, 2, q_y);
+  update public.quote_requests set quote_id = q_y2 where id = r_y;
+  set local session_replication_role = origin;
+
+  perform pg_temp.expect_denied('6-1 未ログインは見積へ回答できない', '42501',
+    pg_temp.run_as('anon', null, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-2 sub の無いトークンでは回答できない', '42501',
+    pg_temp.run_as('authenticated', null, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-3 他人の見積には回答できない', '42501',
+    pg_temp.run_as('authenticated', u_cust_y, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-4 担当代理店は顧客の代わりに回答できない', '42501',
+    pg_temp.run_as('authenticated', u_dealer1, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-5 本部も顧客の代わりに回答できない', '42501',
+    pg_temp.run_as('authenticated', u_admin, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-6 回答の値が不正なら拒否する', 'P0001',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.respond_to_quote(%L, 'approved')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-7 概算見積（確定見積の発行前）は承諾できない', 'P0001',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.respond_to_quote(%L, 'accepted')).status $q$, q_x)));
+  perform pg_temp.expect_denied('6-8 最新の版ではない見積には回答できない', 'P0001',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x_old)));
+  perform pg_temp.expect_eq('6-9 拒否された操作では見積の状態が変わっていない', 'issued,issued,issued',
+    (select string_agg(status, ',' order by quote_no) from public.quotes where id in (q_x, q_x_old, q_f)));
+  perform pg_temp.expect_eq('6-10 本人は確定見積（最新版）を承諾できる', 'accepted',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.respond_to_quote(%L, 'accepted')).status $q$, q_f)));
+  perform pg_temp.expect_eq('6-11 承諾するとプランが closed になる', 'closed',
+    (select status from public.configurations where id = c_f));
+  perform pg_temp.expect_denied('6-12 回答済みの見積へは再回答できない', 'P0001',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_f)));
+  perform pg_temp.expect_eq('6-13 旧形式でも、親を持つ改訂版（確定見積）は承諾できる', 'accepted',
+    pg_temp.run_as('authenticated', u_cust_y, format($q$ select (public.respond_to_quote(%L, 'accepted')).status $q$, q_y2)));
+  perform pg_temp.expect_eq('6-14 概算見積の辞退は本人ならできる', 'declined',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.respond_to_quote(%L, 'declined')).status $q$, q_x)));
+
+  ---------------------------------------------------------------------------
+  -- 7. 担当未割当の見積と、旧形式（quote_kind なし）の見積（NULL で判定が素通りしないこと）
+  ---------------------------------------------------------------------------
+  set local session_replication_role = replica;
+  insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+  values (c_u, u_cust_x, v_model, '担当未割当の案件', 'quote_requested', 'office', 'full'),
+         (c_l2, u_cust_x, v_model, '旧形式・第2版を承諾済み', 'closed', 'office', 'full'),
+         (c_l1, u_cust_x, v_model, '旧形式・第1版を承諾済み', 'closed', 'office', 'full');
+  insert into public.quote_requests (id, configuration_id, user_id, quote_id, status)
+  values (r_u, c_u, u_cust_x, q_u, 'new'), (r_l2, c_l2, u_cust_x, q_l2, 'sent'), (r_l1, c_l1, u_cust_x, q_lp, 'sent');
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, revision, parent_quote_id)
+  values
+    -- 担当未割当（dealer_id が NULL）。新しい Web 見積依頼は、本部が担当を決めるまでこの状態
+    (q_u,  'RT-0100', r_u,  c_u,  u_cust_x, null,      'issued',     now() + interval '30 days', '顧客X', '権限検査用モデル', 1000000, 0, 0,      1000000, 0.10, 100000, 1100000, 1, null),
+    -- 旧形式：第1版 → 第2版（確定見積）を承諾済み
+    (q_l1, 'RT-0201', r_l2, c_l2, u_cust_x, u_dealer1, 'superseded', now() + interval '30 days', '顧客X', '権限検査用モデル', 1000000, 0, 0,      1000000, 0.10, 100000, 1100000, 1, null),
+    (q_l2, 'RT-0202', r_l2, c_l2, u_cust_x, u_dealer1, 'accepted',   now() + interval '30 days', '顧客X', '権限検査用モデル', 1000000, 0, 300000, 1300000, 0.10, 130000, 1430000, 2, q_l1),
+    -- 旧形式：第1版（概算）を承諾済み。概算→確定の互換処理の本来の対象
+    (q_lp, 'RT-0203', r_l1, c_l1, u_cust_x, u_dealer1, 'accepted',   now() + interval '30 days', '顧客X', '権限検査用モデル', 1000000, 0, 0,      1000000, 0.10, 100000, 1100000, 1, null);
+  insert into public.quote_items (quote_id, kind, name, unit_price, quantity, amount, sort_order)
+  values (q_u, 'base', '本体', 1000000, 1, 1000000, 1),
+         (q_l2, 'base', '本体', 1000000, 1, 1000000, 1), (q_l2, 'installation', '基礎工事', 300000, 1, 300000, 2),
+         (q_lp, 'base', '本体', 1000000, 1, 1000000, 1);
+  set local session_replication_role = origin;
+
+  perform pg_temp.expect_denied('7-1 担当外の代理店は、担当未割当の見積のプランを読めない', '42501',
+    pg_temp.run_as('authenticated', u_dealer2, format($q$ select left(t::text, 80) from public.get_case_plan_configuration(%L) t $q$, q_u)));
+  perform pg_temp.expect_denied('7-2 担当外の総代理店も、担当未割当の見積のプランを読めない', '42501',
+    pg_temp.run_as('authenticated', u_master, format($q$ select left(t::text, 80) from public.get_case_plan_configuration(%L) t $q$, q_u)));
+  perform pg_temp.expect_denied('7-3 担当外の代理店は、担当未割当の見積を改訂できない', '42501',
+    pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.create_quote_revision(%L, '[{"kind":"installation","name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_u)));
+  perform pg_temp.expect_denied('7-4 担当外の総代理店も、担当未割当の見積を改訂できない', '42501',
+    pg_temp.run_as('authenticated', u_master, format($q$ select public.create_quote_revision(%L, '[{"kind":"installation","name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_u)));
+  perform pg_temp.expect_denied('7-5 担当外の代理店は、担当未割当の見積の互換状態を問い合わせできない', '42501',
+    pg_temp.run_as('authenticated', u_dealer2, format($q$ select t::text from public.get_legacy_accepted_formalization_state(%L) t $q$, q_u)));
+  perform pg_temp.expect_eq('7-6 担当未割当の見積は改訂されていない（版は 1 つのまま）', '1',
+    (select count(*)::text from public.quotes where quote_request_id = r_u));
+  perform pg_temp.expect_eq('7-7 本部は担当未割当の見積のプランを読める', 'true',
+    (pg_temp.run_as('authenticated', u_admin, format($q$ select left(t::text, 80) from public.get_case_plan_configuration(%L) t $q$, q_u)) not like 'ERROR %')::text);
+
+  perform pg_temp.expect_denied('7-8 旧形式で承諾済みの改訂版（確定見積）には、概算→確定の互換処理を実行できない', 'P0001',
+    pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_l2)));
+  perform pg_temp.expect_eq('7-9 拒否された互換処理で、承諾済みの見積と版数は変わっていない', 'RT-0201:superseded,RT-0202:accepted',
+    (select string_agg(quote_no || ':' || status, ',' order by quote_no) from public.quotes where quote_request_id = r_l2));
+
+  -- legacy 改訂版を historical にした場合も preliminary 互換候補へ戻らないことを確認する。
+  set local session_replication_role = replica;
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, revision, parent_quote_id, quote_kind)
+  values (q_l3, 'RT-0202-3', r_l2, c_l2, u_cust_x, u_dealer1, 'issued', now() + interval '30 days',
+          '顧客X', '権限検査用モデル', 1000000, 0, 300000, 1300000, 0.10, 130000, 1430000, 3, q_l2, 'formal');
+  update public.quote_requests set quote_id = q_l3 where id = r_l2;
+  set local session_replication_role = origin;
+  perform pg_temp.expect_eq('7-10 旧形式の改訂版がhistoricalでも、互換状態はineligible', 'ineligible',
+    pg_temp.run_as('authenticated', u_dealer1, format($q$ select state from public.get_legacy_accepted_formalization_state(%L) $q$, q_l2)));
+
+  perform pg_temp.expect_eq('7-11 旧形式で承諾済みの第1版（概算）には、担当代理店が互換処理を実行できる', 'true',
+    (pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_lp)) not like 'ERROR %')::text);
+  perform pg_temp.expect_eq('7-12 互換処理後も、承諾済みの概算見積（親）は変わらず、確定見積が 1 つ発行される', 'RT-0203:accepted:,RT-0203-2:issued:formal',
+    (select string_agg(quote_no || ':' || status || ':' || coalesce(quote_kind, ''), ',' order by quote_no) from public.quotes where quote_request_id = r_l1));
 end
 $test$;
 

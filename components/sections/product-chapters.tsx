@@ -84,8 +84,8 @@ export function ProductChapters({
                   ))}
                 </dl>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Link href={`/simulator/${model.slug}`} className={cn('btn', dark ? 'bg-white text-ink hover:bg-ivory' : 'btn-primary')}>
-                    この商品で見積を作る
+                  <Link href={`/plans#model-${model.slug}`} className={cn('btn', dark ? 'bg-white text-ink hover:bg-ivory' : 'btn-primary')}>
+                    仕様・間取りを見る
                     <ArrowRight className="size-4" aria-hidden="true" />
                   </Link>
                   <Link href={`/products/${model.slug}`} className={cn('btn', dark ? 'border border-white/50 text-white hover:bg-white/10' : 'btn-secondary')}>

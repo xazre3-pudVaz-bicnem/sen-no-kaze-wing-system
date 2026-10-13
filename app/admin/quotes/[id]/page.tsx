@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
-import { CaseWorkspace } from '@/components/admin/case-workspace';
+import { CaseWorkspace } from '@/components/admin/case-workspace-complete';
 import { ROLE_LABELS } from '@/lib/domain/types';
 
 export default async function AdminQuoteDetailPage({

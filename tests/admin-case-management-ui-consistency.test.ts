@@ -22,9 +22,10 @@ describe('案件管理UIの業務意味と一覧表示', () => {
     expect(page).toContain('地域は設置予定地で判定します。未登録案件は地域絞り込みの対象外です。');
   });
 
-  it('6列案件一覧は狭い画面で横スクロールし、sticky headerを維持する', () => {
+  it('6列案件一覧は狭い画面で横スクロールし、sticky headerと先頭列を維持する', () => {
     expect((page.match(/className="overflow-x-auto" data-testid="case-list-scroll"/g) ?? []).length).toBe(2);
-    expect((page.match(/min-w-\[58rem\] table-fixed text-\[0\.69rem\]/g) ?? []).length).toBe(2);
+    expect((page.match(/min-w-\[72rem\] table-fixed text-\[0\.69rem\]/g) ?? []).length).toBe(2);
     expect((page.match(/<thead className="sticky top-0 z-10/g) ?? []).length).toBe(2);
+    expect((page.match(/sticky left-0 z-20/g) ?? []).length).toBe(2);
   });
 });

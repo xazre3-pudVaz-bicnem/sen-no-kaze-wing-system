@@ -9,7 +9,7 @@ const menu = fs.readFileSync(path.join(root, 'components/admin/case-list-column-
 describe('案件一覧のExcel風列ソート・絞り込み', () => {
   it('フェーズ・商品モデル・見積額・担当の列メニューを表示する', () => {
     expect(page).toContain("import { CaseListColumnMenu } from '@/components/admin/case-list-column-menu'");
-    for (const label of ['現在フェーズ', '商品モデル', '見積額', '担当組織／担当者']) {
+    for (const label of ['現在フェーズ', '商品モデル', '見積額', '担当代理店']) {
       expect(page).toContain(`label=\"${label}\"`);
     }
     expect(menu).toContain('並び替え');

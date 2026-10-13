@@ -74,7 +74,7 @@ function enhanceStep2() {
     exactTextElement(registration, 'h3', '登録前の最終チェック');
   setTextIfChanged(heading, '登録前の最終チェック');
 
-  const intro = heading?.parentElement?.querySelector<HTMLElement>('p');
+  const intro = heading?.parentElement?.querySelector<HTMLElement>('p') ?? null;
   setTextIfChanged(
     intro,
     'メイン画像・価格・お客様選択をここで最終確認し、問題がなければ登録してください。'

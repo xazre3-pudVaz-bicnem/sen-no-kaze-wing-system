@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List, Search, X } from 'lucide-react';
 import { ProductDetail } from '@/components/simulator/product-detail';
+import { ProductLedgerActionsMenu } from '@/components/admin/product-ledger-actions-menu';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Badge, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
@@ -158,17 +159,26 @@ function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: s
   );
 }
 
-function ProductStatus({ status, configurationUsageCount }: { status: ProductOption['status']; configurationUsageCount: number | null }) {
+function ProductStatus({ option, canEdit, configurationUsageCount }: { option: ProductOption; canEdit: boolean; configurationUsageCount: number | null }) {
   return (
-    <div className="flex flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db" data-product-handling-status-slot="pending-db">
-      <Badge tone={status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(status)}</Badge>
-      {configurationUsageCount !== null && (
-        <span className="text-[0.68rem] font-medium text-muted">
-          {configurationUsageCount > 0 ? `構成で使用 ${configurationUsageCount}件` : '未使用'}
-        </span>
-      )}
-      {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
-      {/* お客様選択可 / 取扱停止 / 本部判断で停止 / 廃番は、正式な判定データ接続後に必要なものだけ追加表示する。 */}
+    <div className="flex items-start gap-1.5" data-simulator-standard-usage-slot="pending-db" data-product-handling-status-slot="pending-db">
+      <div className="flex min-w-0 flex-col items-start gap-1">
+        <Badge tone={option.status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(option.status)}</Badge>
+        {configurationUsageCount !== null && (
+          <span className="text-[0.68rem] font-medium text-muted">
+            {configurationUsageCount > 0 ? `構成で使用 ${configurationUsageCount}件` : '未使用'}
+          </span>
+        )}
+        {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
+        {/* お客様選択可 / 取扱停止 / 本部判断で停止 / 廃番は、正式な判定データ接続後に必要なものだけ追加表示する。 */}
+      </div>
+      <ProductLedgerActionsMenu
+        optionId={option.id}
+        optionName={option.name}
+        status={option.status}
+        canEdit={canEdit}
+        configurationUsageCount={configurationUsageCount}
+      />
     </div>
   );
 }
@@ -437,7 +447,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       </td>
                       <td className="px-2.5 py-1.5 text-xs font-medium text-ink-soft">{itemCategory?.name ?? dash}</td>
                       <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>
-                      <td className="px-2.5 py-1.5"><ProductStatus status={o.status} configurationUsageCount={usageCountFor(o.id)} /></td>
+                      <td className="px-2.5 py-1.5"><ProductStatus option={o} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></td>
                       <td className="px-2.5 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
                     </tr>;
                   })}
@@ -448,8 +458,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
             <div className="space-y-2 p-3 md:hidden">
               {pageOptions.map((o) => {
                 const itemCategory = categoryMap.get(o.category_id);
-                return <article key={o.id} className="relative overflow-hidden rounded-xl border border-line bg-white" data-testid={'ledger-mobile-option-' + o.code}>
-                  <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
+                return <article key={o.id} className="relative overflow-visible rounded-xl border border-line bg-white" data-testid={'ledger-mobile-option-' + o.code}>
+                  <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
                     <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">
                       {o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}
@@ -457,7 +467,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                     <div className="min-w-0 flex-1 pr-6">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
-                        <ProductStatus status={o.status} configurationUsageCount={usageCountFor(o.id)} />
+                        <ProductStatus option={o} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} />
                       </div>
                       <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3>
                       <p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
@@ -479,7 +489,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 const itemCategory = categoryMap.get(o.category_id);
                 const targetModel = o.base_model_id ? modelMap.get(o.base_model_id)?.name ?? '特定モデル' : '全モデル';
                 return (
-                  <article key={o.id} className={'group relative overflow-hidden rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line')} data-testid={'ledger-option-' + o.code}>
+                  <article key={o.id} className={'group relative overflow-visible rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line')} data-testid={'ledger-option-' + o.code}>
                     <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}>
                       <span className="sr-only">{o.name}の商品詳細を表示</span>
                     </button>
@@ -490,7 +500,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
-                          <ProductStatus status={o.status} configurationUsageCount={usageCountFor(o.id)} />
+                          <ProductStatus option={o} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} />
                         </div>
                         <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3>
                         <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
@@ -664,8 +674,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                   {canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && (
                     <div className="mt-3 rounded-lg border border-line bg-white p-3">
                       <p className="text-sm font-semibold text-ink">完全削除可能</p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存済み構成から参照されていません。商品編集画面から完全削除できます。</p>
-                      <Link href={`/admin/options/${selected.id}?return_to=%2Fadmin%2Fledger`} className="btn-secondary btn-sm mt-2 inline-flex">商品情報を編集して削除</Link>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存済み構成から参照されていません。一覧の「その他の操作」から直接削除できます。</p>
                     </div>
                   )}
                   {canEdit && selected.status === 'draft' && selectedConfigurationUsageCount !== null && selectedConfigurationUsageCount > 0 && (

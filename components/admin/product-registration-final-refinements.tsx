@@ -247,9 +247,14 @@ function VariantCreatePortal({
   const [pending, setPending] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [standardChoiceName, setStandardChoiceName] = useState('');
-  const [activeSuggestions, setActiveSuggestions] = useState<'group' | 'choice' | null>(null);
+  const [additionalChoices, setAdditionalChoices] = useState<string[]>([]);
+  const [activeSuggestions, setActiveSuggestions] = useState<'group' | 'standard' | number | null>(null);
   const categoryName = normalizeCategoryLabel(categoryLabel);
   const suggestions = suggestionsForCategory(categoryLabel);
+
+  const updateAdditionalChoice = (index: number, value: string) => {
+    setAdditionalChoices((rows) => rows.map((row, rowIndex) => (rowIndex === index ? value : row)));
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -262,10 +267,14 @@ function VariantCreatePortal({
     setPending(false);
     setState(result);
 
-    if (!result.ok) return;
+    if (!result.ok) {
+      router.refresh();
+      return;
+    }
     form.reset();
     setGroupName('');
     setStandardChoiceName('');
+    setAdditionalChoices([]);
     setActiveSuggestions(null);
     setOpen(false);
     router.refresh();
@@ -284,6 +293,9 @@ function VariantCreatePortal({
           className="btn-secondary btn-sm"
           onClick={() => {
             setState(initialState);
+            setGroupName('');
+            setStandardChoiceName('');
+            setAdditionalChoices([]);
             setActiveSuggestions(null);
             setOpen(true);
           }}
@@ -336,7 +348,7 @@ function VariantCreatePortal({
                     values={suggestions.groups}
                     onSelect={(value) => {
                       setGroupName(value);
-                      setActiveSuggestions('choice');
+                      setActiveSuggestions('standard');
                     }}
                   />
                 )}
@@ -353,12 +365,12 @@ function VariantCreatePortal({
                   name="first_choice_name"
                   value={standardChoiceName}
                   onChange={(event) => setStandardChoiceName(event.target.value)}
-                  onFocus={() => setActiveSuggestions('choice')}
+                  onFocus={() => setActiveSuggestions('standard')}
                   placeholder="例：マルキーナグレー"
                   autoComplete="off"
                   required
                 />
-                {activeSuggestions === 'choice' && (
+                {activeSuggestions === 'standard' && (
                   <SuggestionButtons
                     title="標準の選択肢の候補"
                     values={suggestions.choices}
@@ -367,6 +379,75 @@ function VariantCreatePortal({
                 )}
               </Field>
             </div>
+
+            <div className="rounded-xl border border-line bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">その他の選択肢 <span className="font-normal text-muted">任意</span></p>
+                  <p className="mt-1 text-xs text-muted">色違い・柄違いなど、お客様が選べる候補を続けて登録できます。</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  disabled={pending}
+                  onClick={() => {
+                    setAdditionalChoices((rows) => [...rows, '']);
+                    setActiveSuggestions(null);
+                  }}
+                >
+                  ＋ 選択肢を追加
+                </button>
+              </div>
+
+              {additionalChoices.length === 0 ? (
+                <p className="mt-3 text-xs text-muted">標準以外の選択肢がある場合だけ追加してください。</p>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {additionalChoices.map((value, index) => (
+                    <div key={`additional-choice-${index}`} className="rounded-lg border border-line bg-ivory/20 p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Field
+                            label={`選択肢 ${index + 1}`}
+                            htmlFor={`registration-additional-choice-${index}`}
+                            errors={state.fieldErrors?.additional_choice_name}
+                          >
+                            <Input
+                              id={`registration-additional-choice-${index}`}
+                              name="additional_choice_name"
+                              value={value}
+                              onChange={(event) => updateAdditionalChoice(index, event.target.value)}
+                              onFocus={() => setActiveSuggestions(index)}
+                              placeholder="例：ホワイト／グレー／ブラック"
+                              autoComplete="off"
+                            />
+                            {activeSuggestions === index && (
+                              <SuggestionButtons
+                                title="選択肢の候補"
+                                values={suggestions.choices}
+                                onSelect={(nextValue) => updateAdditionalChoice(index, nextValue)}
+                              />
+                            )}
+                          </Field>
+                        </div>
+                        <button
+                          type="button"
+                          className="mt-7 shrink-0 text-xs text-muted underline underline-offset-4"
+                          disabled={pending}
+                          onClick={() => {
+                            setAdditionalChoices((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
+                            setActiveSuggestions(null);
+                          }}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <p className="text-xs text-muted">
               候補は入力補助です。実際の商品で選べる名称はメーカー資料を優先してください。選択肢ごとの画像は登録しません。
             </p>

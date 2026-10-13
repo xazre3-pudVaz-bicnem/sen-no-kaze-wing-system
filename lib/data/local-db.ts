@@ -114,7 +114,7 @@ export function emptyDb(): LocalDb {
     variantGroups: clone(seedCatalog.variantGroups),
     variantChoices: clone(seedCatalog.variantChoices),
     baseBreakdownItems: clone(seedCatalog.baseBreakdownItems),
-    matrix: buildSeedMatrix(seedCatalog.models),
+    matrix: buildSeedMatrix(seedCatalog.models, seedCatalog.categories),
     estimateTemplates: [],
     estimateTemplateSections: [],
     estimateTemplateLines: [],

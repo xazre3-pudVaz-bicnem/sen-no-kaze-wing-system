@@ -481,6 +481,11 @@ export interface CatalogBundle {
   variantChoices: OptionVariantChoice[];
   /** 本体内訳マスター（全仕様分。spec_code で絞って使う） */
   baseBreakdowns: BaseBreakdownItem[];
+  /**
+   * 本体分類表の選択 / ×（DB の本体仕様マトリクスから組み立てたもの）。
+   * マトリクスの表が無い DB（migration 未適用）では null・未設定で、カテゴリーを制限しない。
+   */
+  customerCategoryMatrix?: import('./customer-category-applicability').CustomerCategoryMatrix | null;
 }
 
 export type ConfigurationStatus = 'draft' | 'quote_requested' | 'quoted' | 'closed';

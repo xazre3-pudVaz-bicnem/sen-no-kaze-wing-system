@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from '@/lib/data/local-store';
 import { findMatrixRow, isFireSelectable, isMatrixItemSelectable } from '@/lib/domain/spec-matrix';
 import type { SpecMatrix } from '@/lib/domain/types';
-import { MATRIX_ITEM_SEED, MATRIX_ROW_SEED, MATRIX_SIZE_SEED, MATRIX_SPEC_SEED, buildSeedMatrix } from '@/lib/seed/matrix';
+import { MATRIX_CATEGORY_ITEM_SEED, MATRIX_ITEM_SEED, MATRIX_ROW_SEED, MATRIX_SIZE_SEED, MATRIX_SPEC_SEED, buildSeedMatrix } from '@/lib/seed/matrix';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').split('\r').join('');
@@ -190,7 +190,11 @@ describe.sequential('本体仕様マトリクス: ローカル検証モード', 
     expect(matrix.items).toHaveLength(15);
     expect(matrix.rows).toHaveLength(6);
     expect(matrix.cells).toHaveLength(90);
-    expect(matrix.categoryItems).toEqual([]);
+    // Category → Item はローカルにあるカテゴリーの分だけ（PR B の確定対応）
+    const categories = (await store.getCatalogBundle(models[0].id, { includeDraft: true }))!.categories;
+    const localMapped = MATRIX_CATEGORY_ITEM_SEED.filter(([code]) => categories.some((category) => category.code === code));
+    expect(matrix.categoryItems).toHaveLength(localMapped.length);
+    expect(localMapped.length).toBeGreaterThan(0);
     const flat = models.find((model) => model.slug === 'flat')!;
     expect(isFireSelectable(matrix, { base_model_id: flat.id, spec_code: 'office', size_code: '2100x4550' })).toBe(false);
     for (const row of matrix.rows) expect(row.id).toMatch(/^[0-9a-f-]{36}$/);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
@@ -36,14 +36,25 @@ function VariantCreatePortal({ target, optionId }: { target: HTMLElement; option
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState(createVariantGroupWithFirstChoiceAction, initialState);
+  const [state, setState] = useState<ProductVariantCreateState>(initialState);
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    if (!state.ok) return;
-    formRef.current?.reset();
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (pending) return;
+
+    const form = event.currentTarget;
+    setPending(true);
+    setState(initialState);
+    const result = await createVariantGroupWithFirstChoiceAction(initialState, new FormData(form));
+    setPending(false);
+    setState(result);
+
+    if (!result.ok) return;
+    form.reset();
     setOpen(false);
     router.refresh();
-  }, [router, state.ok]);
+  };
 
   return createPortal(
     <div className="space-y-3" data-combined-create-root="true">
@@ -53,7 +64,14 @@ function VariantCreatePortal({ target, optionId }: { target: HTMLElement; option
       </div>
 
       {!open ? (
-        <button type="button" className="btn-secondary btn-sm" onClick={() => setOpen(true)}>
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          onClick={() => {
+            setState(initialState);
+            setOpen(true);
+          }}
+        >
           ＋ 選択項目を追加
         </button>
       ) : (
@@ -73,7 +91,7 @@ function VariantCreatePortal({ target, optionId }: { target: HTMLElement; option
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
 
-          <form ref={formRef} action={action} className="space-y-4" noValidate>
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4" noValidate>
             <input type="hidden" name="option_id" value={optionId} />
             <div className="grid gap-4 sm:grid-cols-2">
               <Field

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
 const menu = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-actions-menu.tsx'), 'utf8');
+const scrollRestore = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-scroll-restore.tsx'), 'utf8');
+const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/ledger/page.tsx'), 'utf8');
 const action = fs.readFileSync(path.resolve(process.cwd(), 'lib/actions/product-ledger.ts'), 'utf8');
 
 describe('商品台帳の一覧操作', () => {
@@ -15,6 +17,15 @@ describe('商品台帳の一覧操作', () => {
     expect(client).toContain('<ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} />');
     expect(client).toContain('ledger-mobile-option-');
     expect(client).toContain('data-testid="ledger-grid-view"');
+  });
+
+  it('商品価格を左へ寄せる列幅にして、状態・更新日・操作へ必要な幅を配分する', () => {
+    expect(page).toContain('thead th:nth-child(1) { width: 35%; }');
+    expect(page).toContain('thead th:nth-child(2) { width: 14%; }');
+    expect(page).toContain('thead th:nth-child(3) { width: 15%; }');
+    expect(page).toContain('thead th:nth-child(4) { width: 18%; }');
+    expect(page).toContain('thead th:nth-child(5) { width: 12%; }');
+    expect(page).toContain('thead th:nth-child(6) { width: 6%; }');
   });
 
   it('操作メニューは文字なしの見やすい三点ボタンで、未使用の下書きだけ削除できる', () => {
@@ -42,6 +53,15 @@ describe('商品台帳の一覧操作', () => {
     expect(menu).toContain('削除する');
     expect(menu).not.toContain('window.confirm');
     expect(menu).not.toContain('ConfirmSubmit');
+  });
+
+  it('削除前のスクロール位置を保存し、一覧再表示後に同じ位置へ戻す', () => {
+    expect(menu).toContain("window.sessionStorage.setItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY, String(window.scrollY))");
+    expect(scrollRestore).toContain("export const PRODUCT_LEDGER_SCROLL_STORAGE_KEY = 'product-ledger-scroll-y-after-action'");
+    expect(scrollRestore).toContain('window.sessionStorage.getItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY)');
+    expect(scrollRestore).toContain('window.sessionStorage.removeItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY)');
+    expect(scrollRestore).toContain("window.scrollTo({ top, behavior: 'auto' })");
+    expect(page).toContain('<ProductLedgerScrollRestore />');
   });
 
   it('一覧からの削除はサーバー側でも下書きだけに限定する', () => {

@@ -28,18 +28,31 @@ const registrationCss = fs.readFileSync(
 );
 
 describe('商品登録のお客様選択・価格UI', () => {
-  it('お客様選択は選択項目名と最初の選択肢を同時入力し、選択肢画像は要求しない', () => {
+  it('お客様選択は選択項目名と標準の選択肢を同時入力し、選択肢画像は要求しない', () => {
     expect(variants).not.toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
     expect(finalRefinements).toContain('＋ 選択項目を追加');
     expect(finalRefinements).toContain('選択項目名');
-    expect(finalRefinements).toContain('最初の選択肢');
-    expect(finalRefinements).toContain('例：床／カウンター／アクセントパネル／浴槽');
+    expect(finalRefinements).toContain('標準の選択肢');
+    expect(finalRefinements).not.toContain('label="最初の選択肢"');
+    expect(finalRefinements).toContain('メーカー資料の正式名称を優先してください。');
     expect(finalRefinements).toContain('選択肢ごとの画像は登録しません。');
     expect(finalRefinements).not.toContain('name="image_file"');
     expect(variantCreateAction).toContain("kind: 'standard'");
     expect(variantCreateAction).toContain("name: formData.get('first_choice_name')");
+    expect(variantCreateAction).toContain('選択項目と標準の選択肢を追加しました。');
     expect(variantCreateAction).toContain('upsertVariantGroup');
     expect(variantCreateAction).toContain('upsertVariantChoice');
+  });
+
+  it('カテゴリーに応じて選択項目名と標準選択肢の候補を表示し、自由入力も残す', () => {
+    expect(finalRefinements).toContain('CATEGORY_SUGGESTIONS');
+    expect(finalRefinements).toContain("groups: ['床', 'カウンター', 'アクセントパネル', '周辺パネル', '浴槽', '水栓']");
+    expect(finalRefinements).toContain("groups: ['色', '柄', '張り方', '仕上げ']");
+    expect(finalRefinements).toContain("groups: ['デザイン', '色', 'ハンドル', 'ガラス']");
+    expect(finalRefinements).toContain('selectedOptions[0]?.textContent?.trim()');
+    expect(finalRefinements).toContain("setActiveSuggestions('group')");
+    expect(finalRefinements).toContain("setActiveSuggestions('choice')");
+    expect(finalRefinements).toContain('候補外も自由入力できます。');
   });
 
   it('メイン画像と追加画像の実際の余白を測り、同じカードに見える位置まで詰める', () => {

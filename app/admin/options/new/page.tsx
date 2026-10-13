@@ -110,7 +110,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
           />
 
           {lockedSections.map(([no, label, note]) => (
-            <section key={no} className="card border-dashed bg-sand/10 p-5 opacity-70 sm:p-6" aria-disabled="true">
+            <section key={no} className="card border-dashed bg-sand/10 p-5 opacity-70 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold">{no}. {label}</h2>

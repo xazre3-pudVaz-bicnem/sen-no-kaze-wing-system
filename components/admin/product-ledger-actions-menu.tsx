@@ -58,7 +58,9 @@ export function ProductLedgerActionsMenu({
       className="group relative pointer-events-auto"
       data-product-ledger-actions
       onClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+      }}
     >
       <summary
         className="inline-flex size-7 cursor-pointer list-none items-center justify-center rounded-md text-muted hover:bg-sand hover:text-ink [&::-webkit-details-marker]:hidden"

@@ -26,6 +26,7 @@ import type {
   Quote,
   QuoteDocument,
   CaseDocument,
+  ElectronicContract,
   QuoteItem,
   QuoteRequest,
   EstimateTemplate,
@@ -69,6 +70,8 @@ export interface LocalDb {
   quoteItems: QuoteItem[];
   quoteDocuments: QuoteDocument[];
   caseDocuments: CaseDocument[];
+  /** 電子契約（GMOサイン）。署名済み PDF は filesDir() 配下の contracts/ に置く */
+  contracts: ElectronicContract[];
   quoteSequences: Record<string, number>;
   /** 商品管理番号の採番高水位。削除済み番号も再利用しない。 */
   productNoSequence: number;
@@ -126,6 +129,7 @@ export function emptyDb(): LocalDb {
     quoteItems: [],
     quoteDocuments: [],
     caseDocuments: [],
+    contracts: [],
     quoteSequences: {},
     productNoSequence: 0,
     resetTokens: [],

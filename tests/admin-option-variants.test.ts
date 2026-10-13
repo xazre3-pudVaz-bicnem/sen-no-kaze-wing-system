@@ -65,12 +65,13 @@ describe('管理画面の色・仕様管理', () => {
     expect(variantChoiceSchema.safeParse({ ...base, extra_price: -1 }).success).toBe(false);
   });
 
-  it('商品編集画面から分かりやすい色・仕様管理へ接続する', () => {
+  it('商品編集画面から分かりやすいお客様選択管理へ接続する', () => {
     expect(editPage).toContain('OptionVariantManager');
     expect(editPage).toContain('store.getOptionVariants(id)');
-    expect(manager).toContain('お客様が選べる色・仕様');
-    expect(manager).toContain('＋ 色・仕様を追加');
-    expect(manager).toContain('何を選びますか？');
+    expect(manager).toContain('お客様選択');
+    expect(manager).toContain('＋ 選択項目を追加');
+    expect(manager).toContain('選択項目名');
+    expect(manager).toContain('最初の選択肢を追加');
     expect(manager).toContain('追加金額（税別・円）');
     expect(manager).toContain('標準の選択肢にする');
     expect(manager).toContain('表示条件（必要な場合だけ）');
@@ -86,10 +87,11 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
-  it('色・仕様の画像プレビューは小さい固定サムネイルにする', () => {
-    expect(manager).toContain('w-28 max-w-full');
-    expect(manager).toContain('sm:grid-cols-[minmax(0,1fr)_7rem]');
-    expect(manager).toContain('sizes="112px"');
+  it('選択肢画像の登録UIを表示せず既存画像URLは保持する', () => {
+    expect(manager).not.toContain('name="image_file"');
+    expect(manager).toContain('name="image_url"');
+    expect(manager).toContain("choice?.image_url ?? ''");
+    expect(manager).not.toContain('SmartImage');
   });
 
   it('技術コードを内部生成・既存保持し、複数標準もサーバー側で防ぐ', () => {

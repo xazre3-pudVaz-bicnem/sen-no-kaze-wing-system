@@ -308,6 +308,11 @@ export default async function BaseMastersPage({
         </tbody>
       </Table>
 
+      <p className="text-sm text-muted">
+        機種・用途・サイズの行と、項目ごとの選択可否・防火の可否は
+        <Link href="/admin/matrix" className="mx-1 underline underline-offset-4">本体仕様マトリクス</Link>
+        で管理します。
+      </p>
       {editableOrganizations.length > 0 ? (
         matrixRowOptions.length > 0 ? (
           <BaseMasterCreateForm matrixRows={matrixRowOptions} organizations={editableOrganizations} />

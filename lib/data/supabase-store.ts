@@ -32,6 +32,7 @@ import type {
   ContactMessage,
   ContactStatus,
   SpecMatrix,
+  MatrixRow,
 } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -69,6 +70,8 @@ import {
   type AccessibleCustomerListResult,
   type AccessibleCustomerDetail,
   type AccessibleCustomerDetailResult,
+  type MatrixRowCreateInput,
+  type MatrixRowUpdateInput,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
@@ -313,6 +316,40 @@ export class SupabaseStore implements DataStore {
       cells: (cells.data ?? []) as SpecMatrix['cells'],
       categoryItems: (categoryItems.data ?? []) as SpecMatrix['categoryItems'],
     };
+  }
+
+  async updateMatrixRow(_actor: SessionUser, input: MatrixRowUpdateInput): Promise<MatrixRow> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('update_matrix_row', {
+      p_row_id: input.row_id,
+      p_fire_selectable: input.fire_selectable,
+      p_selectable_items: input.selectable_items,
+      p_expected_lock_version: input.expected_lock_version,
+    });
+    if (error) mapPgError(error);
+    return data as MatrixRow;
+  }
+  async createMatrixRow(_actor: SessionUser, input: MatrixRowCreateInput): Promise<MatrixRow> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('create_matrix_row', {
+      p_base_model_id: input.base_model_id,
+      p_spec_code: input.spec_code,
+      p_size_code: input.size_code,
+      p_fire_selectable: input.fire_selectable,
+      p_selectable_items: input.selectable_items,
+    });
+    if (error) mapPgError(error);
+    return data as MatrixRow;
+  }
+  async setMatrixRowStatus(_actor: SessionUser, rowId: string, status: 'active' | 'retired', expectedLockVersion: number): Promise<MatrixRow> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('set_matrix_row_status', {
+      p_row_id: rowId,
+      p_status: status,
+      p_expected_lock_version: expectedLockVersion,
+    });
+    if (error) mapPgError(error);
+    return data as MatrixRow;
   }
 
   // ---------- 標準見積テンプレート ----------

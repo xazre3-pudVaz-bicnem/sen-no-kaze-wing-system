@@ -455,6 +455,31 @@ begin
         pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_base_master_draft(%L, %L, '検査 顧客', 'non_fire', null, %L)::text $q$, v_model, o_hq, mr_fire)));
       perform pg_temp.expect_eq('11-8 作られた本体はすべて行を持ち、identity が重複していない', '2/2',
         (select count(*)::text || '/' || count(distinct (matrix_row_id, fire_spec_code))::text from public.base_masters where owner_organization_id = o_hq));
+
+      -- 13. マトリクスの変更は本部だけ・版の一致・有効な項目だけ。防火の本体がある行は防火不可にできない
+      if to_regprocedure('public.update_matrix_row(uuid, boolean, text[], integer)') is not null then
+        perform pg_temp.expect_denied('13-1 お客様はマトリクスを変更できない', '42501',
+          pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.update_matrix_row(%L, false, '{}'::text[], 1)).id::text $q$, mr_nofire)));
+        perform pg_temp.run_as('authenticated', u_admin,
+          format($q$ select (public.update_matrix_row(%L, false, array['roof-exterior', 'sash'], 1)).id::text $q$, mr_nofire));
+        perform pg_temp.expect_eq('13-2 本部は版が一致すれば変更でき、版が進み、選択できる項目が置き換わる', '2/roof-exterior,sash',
+          (select r.lock_version::text || '/' || string_agg(c.matrix_item_code, ',' order by c.matrix_item_code)
+             from public.matrix_rows r join public.matrix_cells c on c.matrix_row_id = r.id and c.selectable
+            where r.id = mr_nofire group by r.lock_version));
+        perform pg_temp.expect_denied('13-3 古い版のままの変更は拒否される', 'P0001',
+          pg_temp.run_as('authenticated', u_admin, format($q$ select (public.update_matrix_row(%L, false, '{}'::text[], 1)).id::text $q$, mr_nofire)));
+        perform pg_temp.expect_denied('13-4 有効でない項目（防火など）は選択できる項目にできない', 'P0001',
+          pg_temp.run_as('authenticated', u_admin, format($q$ select (public.update_matrix_row(%L, false, array['fireproof'], 2)).id::text $q$, mr_nofire)));
+        perform pg_temp.expect_denied('13-5 防火の本体がある行は、防火不可へ変更できない', 'P0001',
+          pg_temp.run_as('authenticated', u_admin, format($q$ select (public.update_matrix_row(%L, false, '{}'::text[], 1)).id::text $q$, mr_fire)));
+        perform pg_temp.expect_denied('13-6 同じ機種・仕様・サイズの行は追加できない', 'P0001',
+          pg_temp.run_as('authenticated', u_admin, format($q$ select (public.create_matrix_row(%L, 'office', '2100x4550', false, '{}'::text[])).id::text $q$, v_model)));
+        perform pg_temp.run_as('authenticated', u_admin,
+          format($q$ select (public.set_matrix_row_status(%L, 'retired', 2)).id::text $q$, mr_nofire));
+        perform pg_temp.expect_eq('13-7 本部は行を停止でき、変更は監査ログに残る', 'retired/2',
+          (select r.status || '/' || (select count(*)::text from public.audit_logs a where a.entity = 'matrix_rows' and a.entity_id = mr_nofire)
+             from public.matrix_rows r where r.id = mr_nofire));
+      end if;
     end if;
 
     perform pg_temp.expect_eq('9-9 防火を選べない行は Flat 事務所だけ（機種がある DB）',

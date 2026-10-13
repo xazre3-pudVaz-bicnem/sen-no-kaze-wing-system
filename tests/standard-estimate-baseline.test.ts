@@ -85,8 +85,12 @@ describe('標準状態の商品（PR C1）：画面', () => {
   it('登録は本部だけで、価格・区分は DB に決めさせる（画面からは商品・数量・選択肢だけを送る）', () => {
     expect(actions).toContain("rpc('set_standard_estimate_baseline'");
     expect(actions).not.toMatch(/\.from\('standard_estimate_revision_baseline_(items|variants)'\)[\s\S]{0,120}\.(insert|update|delete|upsert)\(/);
-    expect(editor).toContain('variant_choice_ids');
-    expect(editor).not.toContain('unit_price_snapshot:');
+    // 保存で送るのは商品・数量・選択肢だけ（価格は DB が商品台帳から決める）
+    const save = editor.slice(editor.indexOf('const save = () =>'), editor.indexOf('return (', editor.indexOf('const save = () =>')));
+    expect(save).toContain('option_id: row.option_id');
+    expect(save).toContain('quantity: row.quantity');
+    expect(save).toContain('variant_choice_ids');
+    expect(save).not.toMatch(/price/i);
   });
 
   it('公開済みは読み取り専用で、保存後は DB の内容で作り直す', () => {

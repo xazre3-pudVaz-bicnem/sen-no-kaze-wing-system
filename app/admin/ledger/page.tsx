@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
+import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
@@ -9,13 +10,18 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
-  const [options, categories, models] = await Promise.all([store.listOptions(), store.listCategories(), store.listModels({ includeDraft: true })]);
+  const editor = canEditCatalog(actor.role);
+  const [options, categories, models, configurationUsageCounts] = await Promise.all([
+    store.listOptions(),
+    store.listCategories(),
+    store.listModels({ includeDraft: true }),
+    editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
+  ]);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
   const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
   const rows = await Promise.all(catalogOptions.map(async (option) => [option.id, await store.getOptionVariants(option.id)] as const));
   const selected = typeof sp.product === 'string' && catalogOptions.some((option) => option.id === sp.product) ? sp.product : undefined;
-  const editor = canEditCatalog(actor.role);
 
   return <AdminPage
     title="商品台帳"
@@ -24,6 +30,14 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new?return_to=%2Fadmin%2Fledger" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
   >
     <FlashMessages sp={sp} />
-    <ProductLedgerClient canEdit={editor} categories={catalogCategories} options={catalogOptions} models={models} variantsByOptionId={Object.fromEntries(rows)} initiallySelectedId={selected} />
+    <ProductLedgerClient
+      canEdit={editor}
+      categories={catalogCategories}
+      options={catalogOptions}
+      models={models}
+      variantsByOptionId={Object.fromEntries(rows)}
+      configurationUsageCounts={configurationUsageCounts}
+      initiallySelectedId={selected}
+    />
   </AdminPage>;
 }

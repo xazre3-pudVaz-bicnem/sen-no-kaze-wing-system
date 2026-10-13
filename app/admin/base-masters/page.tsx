@@ -52,6 +52,23 @@ export default async function BaseMastersPage({
   const sp = await searchParams;
   const store = await getStore();
   const models = await store.listModels({ includeDraft: true });
+  // 本体マスターの identity は組織 × 機種・用途・サイズ（本体仕様マトリクスの行）× 防火
+  const specMatrix = await store.getSpecMatrix();
+  const matrixRowOptions = (specMatrix?.rows ?? [])
+    .filter((row) => row.status === 'active')
+    .map((row) => {
+      const model = models.find((candidate) => candidate.id === row.base_model_id);
+      const spec = specMatrix?.specs.find((candidate) => candidate.code === row.spec_code);
+      const size = specMatrix?.sizes.find((candidate) => candidate.code === row.size_code);
+      return {
+        id: row.id,
+        label: `${model?.name ?? '不明な機種'} / ${spec?.label ?? row.spec_code} / ${size?.label ?? row.size_code}`,
+        fireSelectable: row.fire_selectable,
+        active: spec?.status === 'active' && size?.status === 'active' && Boolean(model),
+      };
+    })
+    .filter((row) => row.active)
+    .map(({ active: _active, ...row }) => row);
   const showQuoteManagementTabs = user.role === 'admin';
 
   if (isLocalMode()) {
@@ -292,10 +309,11 @@ export default async function BaseMastersPage({
       </Table>
 
       {editableOrganizations.length > 0 ? (
-        <BaseMasterCreateForm
-          models={models.map((model) => ({ id: model.id, name: model.name }))}
-          organizations={editableOrganizations}
-        />
+        matrixRowOptions.length > 0 ? (
+          <BaseMasterCreateForm matrixRows={matrixRowOptions} organizations={editableOrganizations} />
+        ) : (
+          <Alert tone="warn">本体仕様マトリクスの有効な行がありません。マトリクスを登録してから本体を作成してください。</Alert>
+        )
       ) : (
         <Alert tone="warn">本体を作成できる組織所属がありません。組織・所属設定を確認してください。</Alert>
       )}

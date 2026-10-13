@@ -42,8 +42,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
     );
   }
 
-  const stepOneSections = [
-    ['1', '基本情報', 'カテゴリー・メーカー・商品名・型番・サイズ'],
+  const lockedSections = [
     ['2', '商品の詳細', '商品説明・メーカー記載の特徴'],
     ['3', '画像・資料', 'メイン画像・サブ画像・メーカー資料'],
     ['4', 'お客様選択', '色・仕様など、お客様が選べる項目'],
@@ -59,17 +58,17 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       <BackLink href={returnTo ?? '/admin/options'} label={returnLabel} />
       {returnTo && !returnToLedger && (
         <Alert tone="info">
-          見積テンプレートの商品追加から移動しています。まず基本情報を入力して「次へ：画像・資料」へ進み、STEP 2で登録内容を確認して「この内容で登録」した後に元の見積テンプレートへ戻って商品を追加します。
+          見積テンプレートの商品追加から移動しています。まず「1. 基本情報」を保存し、続けて同じSTEP 1の画面で商品情報を入力します。STEP 2で登録内容を確認して「この内容で登録」した後に元の見積テンプレートへ戻って商品を追加します。
         </Alert>
       )}
 
       <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
         <h2 className="font-semibold">商品登録の2ステップ</h2>
         <p className="mt-1 text-xs text-muted">
-          最初は基本情報だけ入力します。「次へ：画像・資料」で商品を作成し、そのままSTEP 1の画像・資料・お客様選択・価格設定へ進みます。最後にSTEP 2で登録内容とお客様表示を確認し、「この内容で登録」します。
+          STEP 1で商品情報を上から順に入力し、STEP 2で登録内容と実際のお客様表示を確認してから登録します。
         </p>
         <p className="mt-2 text-xs leading-5 text-ink-soft">
-          STEP 1は1つの入力画面です。最初に基本情報を保存して下書きを作成すると、同じSTEP 1の続きとして残りの項目を入力できます。
+          最初に「1. 基本情報」を保存して下書きを作成すると、同じSTEP 1の続きとして2〜6の項目を入力できます。
         </p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {[
@@ -85,45 +84,45 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         </ol>
       </section>
 
-      <section className="card p-4 sm:p-5" aria-label="STEP 1 商品情報の流れ" data-testid="option-registration-step1-outline">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">STEP 1 商品情報</h2>
-            <p className="mt-1 text-xs text-muted">上から順に入力します。基本情報を保存すると、残りの項目を続けて入力できます。</p>
-          </div>
-          <span className="rounded-full bg-ivory px-3 py-1 text-xs font-semibold text-brown">現在：1 基本情報</span>
+      <section className="space-y-3" aria-label="STEP 1 商品情報">
+        <div>
+          <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
+          <p className="mt-1 text-sm text-muted">上から順に入力します。1. 基本情報を保存すると、2〜6を続けて入力できます。</p>
         </div>
-        <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {stepOneSections.map(([no, label, note], index) => (
-            <li
-              key={no}
-              className={`rounded-xl border px-3 py-3 ${
-                index === 0 ? 'border-brown bg-ivory/70' : 'border-line bg-sand/20 text-muted'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-brown">{no}</span>
-                {index > 0 && <span className="text-[0.65rem] font-semibold">基本情報保存後</span>}
-              </div>
-              <span className="mt-1 block text-sm font-semibold text-ink">{label}</span>
-              <span className="mt-1 block text-[0.7rem] leading-5">{note}</span>
-              {index > 0 && <span className="mt-2 block text-[0.65rem]">基本情報を保存すると入力できます</span>}
-            </li>
-          ))}
-        </ol>
-      </section>
 
-      <OptionForm
-        option={null}
-        categories={categories}
-        models={models}
-        allOptions={options}
-        dependencies={[]}
-        conflicts={[]}
-        defaultCategoryId={defaultCategoryId}
-        mode="create"
-        returnTo={returnTo}
-      />
+        <div className="registration-create-sections flex flex-col gap-6">
+          <style>{`
+            .registration-create-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
+            .registration-create-sections #product-identify [data-testid="admin-submit"] { font-size: 0; }
+            .registration-create-sections #product-identify [data-testid="admin-submit"]::after { content: '基本情報を保存して続ける'; font-size: 0.875rem; }
+          `}</style>
+
+          <OptionForm
+            option={null}
+            categories={categories}
+            models={models}
+            allOptions={options}
+            dependencies={[]}
+            conflicts={[]}
+            defaultCategoryId={defaultCategoryId}
+            mode="create"
+            returnTo={returnTo}
+          />
+
+          {lockedSections.map(([no, label, note]) => (
+            <section key={no} className="card border-dashed bg-sand/10 p-5 opacity-70 sm:p-6" aria-disabled="true">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">{no}. {label}</h2>
+                  <p className="mt-1 text-sm text-muted">{note}</p>
+                </div>
+                <span className="rounded-full bg-ivory px-3 py-1 text-xs font-semibold text-muted">基本情報保存後</span>
+              </div>
+              <p className="mt-4 text-xs text-muted">1. 基本情報を保存すると、このまま同じSTEP 1の続きとして入力できます。</p>
+            </section>
+          ))}
+        </div>
+      </section>
     </AdminPage>
   );
 }

@@ -12,13 +12,14 @@ const enhancer = fs.readFileSync(
 );
 
 describe('商品登録のお客様選択・価格対象モデルの簡潔UI', () => {
-  it('お客様選択はよく使う項目から始め、選択肢の詳細を折り畳む', () => {
-    expect(variants).toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
-    expect(variants).toContain('＋ その他');
-    expect(variants).toContain('お客様が選ぶ内容');
+  it('お客様選択は1つの入口から部位ごとの項目を追加し、最初の選択肢へ続ける', () => {
+    expect(variants).not.toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
+    expect(variants).toContain('＋ 選択項目を追加');
+    expect(variants).toContain('選択項目名');
+    expect(variants).toContain('例：床／カウンター／アクセントパネル／浴槽');
     expect(variants).toContain('選択肢名');
-    expect(variants).toContain('＋ 選択肢を追加');
-    expect(variants).toContain('画像・表示などの詳細設定');
+    expect(variants).toContain('最初の選択肢を追加');
+    expect(variants).toContain('表示などの詳細設定');
     expect(variants).toContain('標準の選択肢にする');
   });
 

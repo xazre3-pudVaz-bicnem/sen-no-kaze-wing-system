@@ -98,7 +98,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('name="return_to" value={returnTo}');
     expect(media).toContain('4. メーカー資料');
     expect(media).toContain('原則登録');
-    expect(variants).toContain('お客様が選べる色・仕様');
+    expect(variants).toContain('お客様選択');
+    expect(variants).toContain('＋ 選択項目を追加');
   });
 
   it('登録前チェックを公開に必要な項目と確認事項へ分ける', () => {
@@ -333,15 +334,17 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
   });
 
-  it('お客様選択は色・仕様を直感的に登録し、選択肢ごとに価格と表示をまとめて管理する', () => {
-    expect(variants).toContain('お客様が選べる色・仕様');
-    expect(variants).toContain('＋ 色・仕様を追加');
-    expect(variants).toContain('何を選びますか？');
-    expect(variants).toContain('文字カードで表示');
+  it('お客様選択は部位ごとの項目と選択肢を文字中心に登録し、価格と表示を管理する', () => {
+    expect(variants).toContain('お客様選択');
+    expect(variants).toContain('＋ 選択項目を追加');
+    expect(variants).toContain('選択項目名');
+    expect(variants).toContain('最初の選択肢を追加');
+    expect(variants).toContain('選択肢名');
     expect(variants).toContain('name="extra_price"');
     expect(variants).toContain('標準の選択肢にする');
     expect(variants).toContain('お客様に表示する');
-    expect(variants).toContain('詳細設定');
+    expect(variants).toContain('表示などの詳細設定');
+    expect(variants).not.toContain('name="image_file"');
     expect(variants).not.toContain('色・仕様ごとの追加金額');
     expect(variants).not.toContain('ChoicePriceEditor');
     expect(editPage).not.toContain('OptionVariantPricing');

@@ -12,10 +12,8 @@ import {
   type ProductOption,
 } from '@/lib/domain/types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
-import { SmartImage } from '@/components/ui/smart-image';
 
 const initial: AdminFormState = { ok: false };
-const QUICK_GROUPS = ['カラー', '柄', 'サイズ'] as const;
 
 function ActionStatus({ state }: { state: AdminFormState }) {
   if (state.error) return <Alert tone="danger">{state.error}</Alert>;
@@ -38,13 +36,11 @@ function GroupFields({
   group,
   groups,
   choices,
-  initialName = '',
 }: {
   optionId: string;
   group: OptionVariantGroup | null;
   groups: OptionVariantGroup[];
   choices: OptionVariantChoice[];
-  initialName?: string;
 }) {
   const [state, action, pending] = useActionState(saveVariantGroupAction, initial);
   const [parentCode, setParentCode] = useState(group?.depends_on_group_code ?? '');
@@ -62,17 +58,17 @@ function GroupFields({
       <ActionStatus state={state} />
 
       <Field
-        label="お客様が選ぶ内容"
+        label="選択項目名"
         htmlFor={`variant-group-name-${group?.id ?? 'new'}`}
-        hint="例：カラー／扉色／浴槽色／水栓仕様"
+        hint="例：床／カウンター／アクセントパネル／浴槽"
         required
         errors={e.name}
       >
         <Input
           id={`variant-group-name-${group?.id ?? 'new'}`}
           name="name"
-          defaultValue={group?.name ?? initialName}
-          placeholder="例：カラー"
+          defaultValue={group?.name ?? ''}
+          placeholder="例：アクセントパネル"
           required
         />
       </Field>
@@ -197,6 +193,7 @@ function ChoiceEditor({
       <input type="hidden" name="option_id" value={optionId} />
       <input type="hidden" name="group_id" value={group.id} />
       <input type="hidden" name="status" value={customerVisible ? 'published' : 'draft'} />
+      <input type="hidden" name="image_url" value={choice?.image_url ?? ''} />
       <ActionStatus state={state} />
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
@@ -229,45 +226,18 @@ function ChoiceEditor({
       />
 
       <details className="rounded-xl border border-line bg-ivory/30 p-4">
-        <summary className="cursor-pointer text-sm font-semibold">画像・表示などの詳細設定</summary>
+        <summary className="cursor-pointer text-sm font-semibold">表示などの詳細設定</summary>
         <p className="mt-2 text-xs text-muted">
-          画像、別途見積、表示順などが必要な場合だけ設定します。画像がない場合は文字カードで表示します。
+          お客様表示、別途見積、表示順などを調整するときだけ使用します。
         </p>
         <div className="mt-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_7rem] sm:items-start">
-            <div className="space-y-4">
-              <Field label="画像" htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} hint="任意。色見本・柄・仕様が分かる画像を登録できます">
-                <Input
-                  id={`variant-choice-image-${choice?.id ?? group.id}`}
-                  name="image_file"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/avif"
-                  className="py-2"
-                />
-                <input type="hidden" name="image_url" value={choice?.image_url ?? ''} />
-              </Field>
-
-              <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl border border-line bg-white px-4 py-3">
-                <Checkbox
-                  checked={customerVisible}
-                  onChange={(event) => setCustomerVisible(event.target.checked)}
-                  label="お客様に表示する"
-                />
-                <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
-              </div>
-            </div>
-
-            <div className="w-28 max-w-full justify-self-start rounded-lg border border-line bg-sand/40 p-2 sm:justify-self-end">
-              {choice?.image_url ? (
-                <div className="relative aspect-square overflow-hidden rounded-md bg-white">
-                  <SmartImage src={choice.image_url} alt={choice.name} fill sizes="112px" className="object-contain" />
-                </div>
-              ) : (
-                <div className="flex aspect-square items-center justify-center rounded-md border border-dashed border-line bg-white px-2 text-center text-xs text-muted">
-                  <span>画像なし<br />文字カードで表示</span>
-                </div>
-              )}
-            </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl border border-line bg-white px-4 py-3">
+            <Checkbox
+              checked={customerVisible}
+              onChange={(event) => setCustomerVisible(event.target.checked)}
+              label="お客様に表示する"
+            />
+            <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -339,54 +309,40 @@ export function OptionVariantManager({
   groups: OptionVariantGroup[];
   choices: OptionVariantChoice[];
 }) {
-  const [newGroupPreset, setNewGroupPreset] = useState<string | null>(null);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
-  const usedGroupNames = new Set(orderedGroups.map((group) => group.name));
 
   return (
     <section id="customer-selection" className="space-y-5 scroll-mt-6">
       <div>
-        <h2 className="text-xl font-semibold">お客様が選べる色・仕様</h2>
+        <h2 className="text-xl font-semibold">お客様選択</h2>
         <p className="mt-1 text-sm text-muted">
-          お客様が選ぶ色・柄・サイズなどがある場合だけ設定します。
+          お客様が選べる部位・色・仕様などがある場合だけ設定します。
         </p>
       </div>
 
-      <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="＋ 色・仕様を追加">
-        <p className="text-sm font-semibold">お客様は何を選びますか？</p>
-        <p className="mt-1 text-xs text-muted">よく使う項目はボタンから始められます。</p>
+      <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="選択項目を追加">
+        <p className="text-sm font-semibold">選択項目を追加</p>
+        <p className="mt-1 text-xs text-muted">例：床、カウンター、アクセントパネル、浴槽など</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {QUICK_GROUPS.map((name) => (
-            <button
-              key={name}
-              type="button"
-              className="btn-secondary btn-sm"
-              disabled={usedGroupNames.has(name)}
-              onClick={() => setNewGroupPreset(name)}
-            >
-              ＋ {name}
-            </button>
-          ))}
-          <button type="button" className="btn-secondary btn-sm" onClick={() => setNewGroupPreset('')}>
-            ＋ その他
+          <button type="button" className="btn-secondary btn-sm" onClick={() => setNewGroupOpen(true)}>
+            ＋ 選択項目を追加
           </button>
         </div>
 
-        {newGroupPreset !== null && (
+        {newGroupOpen && (
           <div className="mt-4 rounded-xl border border-dashed border-line bg-ivory/20 p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <p className="text-sm font-semibold">選択項目を追加</p>
-              <button type="button" className="text-xs text-muted underline underline-offset-4" onClick={() => setNewGroupPreset(null)}>
+              <button type="button" className="text-xs text-muted underline underline-offset-4" onClick={() => setNewGroupOpen(false)}>
                 閉じる
               </button>
             </div>
             <GroupFields
-              key={newGroupPreset || 'other'}
               optionId={option.id}
               group={null}
               groups={groups}
               choices={choices}
-              initialName={newGroupPreset}
             />
           </div>
         )}
@@ -394,7 +350,7 @@ export function OptionVariantManager({
 
       {orderedGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-white px-5 py-5 text-sm text-muted">
-          お客様が選ぶ項目はまだありません。必要な場合だけ上のボタンから追加してください。
+          お客様が選ぶ項目はまだありません。必要な場合だけ上の「選択項目を追加」から登録してください。
         </div>
       ) : (
         <div className="space-y-4">
@@ -402,6 +358,7 @@ export function OptionVariantManager({
             const groupChoices = choices
               .filter((choice) => choice.group_id === group.id)
               .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
+            const firstChoice = groupChoices.length === 0;
             return (
               <article key={group.id} className="card space-y-4 p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -417,24 +374,20 @@ export function OptionVariantManager({
                 </div>
 
                 <div className="space-y-2">
-                  {groupChoices.length > 0 ? (
-                    groupChoices.map((choice) => (
-                      <ChoiceEditor
-                        key={choice.id}
-                        optionId={option.id}
-                        group={group}
-                        choice={choice}
-                        choiceCount={groupChoices.length}
-                      />
-                    ))
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-line bg-ivory/20 px-4 py-3 text-sm text-muted">
-                      選択肢はまだありません。
-                    </p>
-                  )}
+                  {groupChoices.map((choice) => (
+                    <ChoiceEditor
+                      key={choice.id}
+                      optionId={option.id}
+                      group={group}
+                      choice={choice}
+                      choiceCount={groupChoices.length}
+                    />
+                  ))}
 
-                  <details className="rounded-xl border border-dashed border-line bg-ivory/20">
-                    <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">＋ 選択肢を追加</summary>
+                  <details className="rounded-xl border border-dashed border-line bg-ivory/20" open={firstChoice}>
+                    <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
+                      {firstChoice ? '最初の選択肢を追加' : '＋ 選択肢を追加'}
+                    </summary>
                     <div className="border-t border-line p-4">
                       <ChoiceEditor
                         optionId={option.id}

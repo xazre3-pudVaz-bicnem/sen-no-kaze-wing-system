@@ -32,6 +32,9 @@ begin
   if to_regprocedure('public.customer_category_selectable(text, text, text)') is null then
     raise exception 'PRECONDITION: matrix-driven customer categories (20261013130000) must be applied first';
   end if;
+  if to_regprocedure('public.estimate_section_for_option(text, boolean)') is null then
+    raise exception 'PRECONDITION: estimate section classifier (20260911050000) is missing';
+  end if;
   if to_regprocedure('public.set_standard_estimate_baseline(uuid, jsonb, integer)') is not null then
     raise exception 'PRECONDITION: set_standard_estimate_baseline already exists; review before applying';
   end if;
@@ -39,25 +42,7 @@ end;
 $preflight$;
 
 -- ---------- 内部の関数（API からは実行させない） ----------
-
--- 商品の区分。シミュレーターの分け方（lib/domain/standard-estimate-pricing.ts の INTERIOR_EXTERIOR_CATEGORY_CODES）と同じ
-create function public.standard_estimate_option_section(p_option_id uuid)
-returns text
-language sql
-stable
-security definer
-set search_path = ''
-as $option_section$
-  select case
-           when o.is_installation or c.code = 'free-product' then 'sitework'
-           when c.code in ('floor', 'flooring', 'wall-ceiling', 'interior-door', 'exterior-wall', 'roof', 'sash',
-                           'entrance-door', 'service-door', 'carpentry') then 'interior_exterior'
-           else 'option'
-         end
-    from public.options o
-    join public.option_categories c on c.id = o.category_id
-   where o.id = p_option_id;
-$option_section$;
+-- 商品の区分は、シミュレーター・旧来の見積依頼と同じ public.estimate_section_for_option（20260911050000）で決める。
 
 -- 標準状態の商品を別の Revision へ写す（次の Revision の作成で使う）
 create function public.copy_standard_estimate_baseline(p_from_revision_id uuid, p_to_revision_id uuid)
@@ -144,7 +129,7 @@ begin
          category_name_snapshot = c.name,
          unit_price_snapshot = case when o.price_on_request then 0 else o.price end,
          price_on_request_snapshot = o.price_on_request,
-         section_code = public.standard_estimate_option_section(o.id),
+         section_code = public.estimate_section_for_option(c.code, o.is_installation),
          selection_target_code = c.code
     from public.options o
     join public.option_categories c on c.id = o.category_id
@@ -259,7 +244,7 @@ begin
       unit_price_snapshot, price_on_request_snapshot, sort_order
     )
     values (
-      rev.id, o.id, c.id, public.standard_estimate_option_section(o.id), c.code, v_qty,
+      rev.id, o.id, c.id, public.estimate_section_for_option(c.code, o.is_installation), c.code, v_qty,
       o.code, o.name, c.code, c.name,
       case when o.price_on_request then 0 else o.price end, o.price_on_request, v_index
     )
@@ -506,13 +491,11 @@ $patch_publish$;
 
 -- ---------- owner / EXECUTE ----------
 
-alter function public.standard_estimate_option_section(uuid) owner to postgres;
 alter function public.copy_standard_estimate_baseline(uuid, uuid) owner to postgres;
 alter function public.refresh_standard_estimate_baseline(uuid) owner to postgres;
 alter function public.set_standard_estimate_baseline(uuid, jsonb, integer) owner to postgres;
 alter function public.get_standard_estimate_sale_views(uuid) owner to postgres;
 
-revoke all on function public.standard_estimate_option_section(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.copy_standard_estimate_baseline(uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.refresh_standard_estimate_baseline(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.set_standard_estimate_baseline(uuid, jsonb, integer) from public, anon, authenticated, service_role;
@@ -539,7 +522,6 @@ begin
     raise exception 'POSTCONDITION: % must be executable by anon and authenticated', v_fn;
   end if;
   foreach v_fn in array array[
-    'public.standard_estimate_option_section(uuid)'::regprocedure,
     'public.copy_standard_estimate_baseline(uuid, uuid)'::regprocedure,
     'public.refresh_standard_estimate_baseline(uuid)'::regprocedure
   ]

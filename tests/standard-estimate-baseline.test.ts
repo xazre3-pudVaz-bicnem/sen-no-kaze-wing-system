@@ -15,12 +15,15 @@ function fn(name: string) {
 }
 
 describe('標準状態の商品（PR C1）：DB の取り決め', () => {
-  it('区分の分け方はシミュレーターと同じ（内外装のカテゴリーの一覧が一致する）', () => {
-    const section = fn('standard_estimate_option_section');
-    const list = /c\.code in \(([^)]*)\)/.exec(section)?.[1] ?? '';
+  it('区分は、シミュレーターと同じ分け方の既存の関数（estimate_section_for_option）で DB が決める', () => {
+    const legacy = read('supabase/migrations/20260911050000_standard_estimate_simulator.sql');
+    const start = legacy.indexOf('create or replace function public.estimate_section_for_option(');
+    const section = legacy.slice(start, legacy.indexOf('$$;', start));
+    const list = /p_category_code in \(([^)]*)\)/.exec(section)?.[1] ?? '';
     const codes = [...list.matchAll(/'([a-z-]+)'/g)].map((m) => m[1]).sort();
     expect(codes).toEqual([...INTERIOR_EXTERIOR_CATEGORY_CODES].sort());
-    expect(section).toContain("when o.is_installation or c.code = 'free-product' then 'sitework'");
+    expect(section).toContain("when p_is_installation or p_category_code = 'free-product' then 'sitework'");
+    expect(migration.match(/public\.estimate_section_for_option\(c\.code, o\.is_installation\)/g)).toHaveLength(2);
   });
 
   it('登録は本部だけ・下書きだけ・版の一致が必要で、権限は状態の判定より前に確認する', () => {
@@ -67,7 +70,7 @@ describe('標準状態の商品（PR C1）：DB の取り決め', () => {
   });
 
   it('内部の関数は API から実行させない', () => {
-    for (const internal of ['standard_estimate_option_section', 'copy_standard_estimate_baseline', 'refresh_standard_estimate_baseline']) {
+    for (const internal of ['copy_standard_estimate_baseline', 'refresh_standard_estimate_baseline']) {
       expect(migration).toContain(`revoke all on function public.${internal}(`);
       expect(migration).not.toMatch(new RegExp(`grant execute on function public\\.${internal}\\(`));
     }

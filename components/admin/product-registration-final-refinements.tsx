@@ -301,19 +301,21 @@ function VariantCreatePortal({
         <p className="mt-1 text-xs text-muted">カテゴリーに合う候補から選ぶか、そのまま自由入力できます。</p>
       </div>
 
-      {!open ? (
-        <button
-          type="button"
-          className="btn-secondary btn-sm"
-          onClick={() => {
-            setState(initialState);
-            resetChoiceForm();
-            setOpen(true);
-          }}
-        >
-          ＋ 選択項目を追加
-        </button>
-      ) : (
+      <button
+        type="button"
+        className="btn-secondary btn-sm"
+        aria-expanded={open}
+        disabled={open}
+        onClick={() => {
+          setState(initialState);
+          resetChoiceForm();
+          setOpen(true);
+        }}
+      >
+        ＋ 選択項目を追加
+      </button>
+
+      {open && (
         <div className="rounded-xl border border-dashed border-line bg-ivory/20 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>

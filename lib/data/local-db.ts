@@ -31,9 +31,11 @@ import type {
   EstimateTemplate,
   EstimateTemplateSection,
   EstimateTemplateLine,
+  SpecMatrix,
 } from '@/lib/domain/types';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
+import { buildSeedMatrix } from '@/lib/seed/matrix';
 
 /**
  * ローカル検証モードの JSON データベース。
@@ -75,6 +77,8 @@ export interface LocalDb {
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   baseBreakdownItems: BaseBreakdownItem[];
+  /** 本体仕様マトリクス（初期値は lib/seed/matrix.ts。DB の migration の確定 seed と同じ内容） */
+  matrix: SpecMatrix;
   estimateTemplates: EstimateTemplate[];
   estimateTemplateSections: EstimateTemplateSection[];
   estimateTemplateLines: EstimateTemplateLine[];
@@ -110,6 +114,7 @@ export function emptyDb(): LocalDb {
     variantGroups: clone(seedCatalog.variantGroups),
     variantChoices: clone(seedCatalog.variantChoices),
     baseBreakdownItems: clone(seedCatalog.baseBreakdownItems),
+    matrix: buildSeedMatrix(seedCatalog.models),
     estimateTemplates: [],
     estimateTemplateSections: [],
     estimateTemplateLines: [],

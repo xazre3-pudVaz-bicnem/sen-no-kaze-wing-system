@@ -371,6 +371,33 @@ begin
     pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_x)));
   perform pg_temp.expect_eq('8-8 拒否された互換処理では見積が増えていない', v_quotes_before::text,
     (select count(*)::text from public.quotes where quote_no like 'RT-%'));
+
+  ---------------------------------------------------------------------------
+  -- 9. 本体仕様マトリクス：誰でも読めるが、API ロールからは書き換えられない（変更は管理画面の RPC だけ）
+  ---------------------------------------------------------------------------
+  if to_regclass('public.matrix_rows') is not null then
+    perform pg_temp.expect_eq('9-1 未ログインでも Matrix Item（15 項目）を読める', '15',
+      pg_temp.run_as('anon', null, $q$ select count(*)::text from public.matrix_items where status = 'active' $q$));
+    perform pg_temp.expect_eq('9-2 未ログインでも Matrix Row を読める（機種がある DB では確定 seed の 6 行）',
+      (case when exists (select 1 from public.base_models where slug in ('wing-01', 'box', 'flat')) then '6' else '0' end),
+      pg_temp.run_as('anon', null, $q$ select count(*)::text from public.matrix_rows $q$));
+    perform pg_temp.expect_denied('9-3 未ログインは Matrix Row を追加できない', '42501',
+      pg_temp.run_as('anon', null, format($q$ insert into public.matrix_rows (base_model_id, spec_code, size_code, fire_selectable) values (%L, 'hotel', '3640x4550', true) returning 'inserted' $q$, v_model)));
+    perform pg_temp.expect_denied('9-4 お客様は選択可否を書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, $q$ update public.matrix_cells set selectable = true returning 'updated' $q$));
+    perform pg_temp.expect_denied('9-5 本部でも表を直接は書き換えられない（変更は RPC だけ）', '42501',
+      pg_temp.run_as('authenticated', u_admin, $q$ update public.matrix_rows set fire_selectable = true returning 'updated' $q$));
+    perform pg_temp.expect_denied('9-6 本部でも Matrix Item を直接は追加できない', '42501',
+      pg_temp.run_as('authenticated', u_admin, $q$ insert into public.matrix_items (code, label) values ('fireproof', '防火') returning 'inserted' $q$));
+    perform pg_temp.expect_denied('9-7 代理店は Category→Item の対応を追加できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, $q$ insert into public.option_category_matrix_items (category_id, matrix_item_code) select id, 'other' from public.option_categories limit 1 returning 'inserted' $q$));
+    perform pg_temp.expect_eq('9-8 Category→Item の対応は PR A では登録されていない', '0',
+      (select count(*)::text from public.option_category_matrix_items));
+    perform pg_temp.expect_eq('9-9 防火を選べない行は Flat 事務所だけ（機種がある DB）',
+      (case when exists (select 1 from public.base_models where slug = 'flat') then 'flat/office/2100x4550' else '' end),
+      (select coalesce(string_agg(m.slug || '/' || r.spec_code || '/' || r.size_code, ','), '')
+         from public.matrix_rows r join public.base_models m on m.id = r.base_model_id where not r.fire_selectable));
+  end if;
 end
 $test$;
 

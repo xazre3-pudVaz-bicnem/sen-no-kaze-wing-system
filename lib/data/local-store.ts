@@ -32,6 +32,7 @@ import type {
   QuoteRequest,
   ContactMessage,
   ContactStatus,
+  SpecMatrix,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
@@ -208,6 +209,11 @@ export class LocalStore implements DataStore {
       });
       return rows;
     });
+  }
+
+  // ---------- 本体仕様マトリクス ----------
+  async getSpecMatrix(): Promise<SpecMatrix | null> {
+    return this.read((db) => JSON.parse(JSON.stringify(db.matrix)) as SpecMatrix);
   }
 
   // ---------- 標準見積テンプレート ----------

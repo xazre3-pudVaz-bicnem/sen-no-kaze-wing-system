@@ -194,6 +194,68 @@ export interface BaseBreakdownItem {
 }
 
 
+/**
+ * 本体仕様マトリクス（機種 × 仕様 × サイズ → 項目ごとの選択可否）。DB が正本。
+ * lib/seed/matrix.ts はローカル検証モードの初期データ専用。
+ */
+export type MatrixStatus = 'active' | 'retired';
+
+export interface MatrixSpec {
+  code: string;
+  label: string;
+  sort_order: number;
+  status: MatrixStatus;
+}
+
+export interface MatrixSize {
+  /** 「幅x奥行」（mm） */
+  code: string;
+  width_mm: number;
+  depth_mm: number;
+  label: string;
+  sort_order: number;
+  status: MatrixStatus;
+}
+
+export interface MatrixItem {
+  code: string;
+  label: string;
+  sort_order: number;
+  status: MatrixStatus;
+}
+
+export interface MatrixRow {
+  id: string;
+  base_model_id: string;
+  spec_code: string;
+  size_code: string;
+  /** false の行では防火の本体を選べない */
+  fire_selectable: boolean;
+  status: MatrixStatus;
+  lock_version: number;
+}
+
+export interface MatrixCell {
+  matrix_row_id: string;
+  matrix_item_code: string;
+  selectable: boolean;
+}
+
+/** 商品カテゴリー → Matrix Item（1 カテゴリー = 1 項目） */
+export interface OptionCategoryMatrixItem {
+  category_id: string;
+  matrix_item_code: string;
+}
+
+export interface SpecMatrix {
+  specs: MatrixSpec[];
+  sizes: MatrixSize[];
+  items: MatrixItem[];
+  rows: MatrixRow[];
+  cells: MatrixCell[];
+  categoryItems: OptionCategoryMatrixItem[];
+}
+
 /** 標準見積Excelの4分類。base の明細本体は base_breakdown_items に保持し、二重登録しない。 */
 export type EstimateSectionCode = 'base' | 'interior_exterior' | 'option' | 'sitework';
 

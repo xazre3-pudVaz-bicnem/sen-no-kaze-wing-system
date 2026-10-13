@@ -73,10 +73,13 @@ export default async function EditOptionPage({
     if (group.status !== 'published') return false;
     return !variants.choices.some((choice) => choice.group_id === group.id && choice.status === 'published');
   });
-  const registrationCheckIssues = [
+  const registrationBlockingIssues = [
+    ...(!option.image_url ? ['メイン画像を登録してください'] : []),
+  ];
+  const registrationWarnings = [
     ...(duplicateCandidates.length > 0 ? ['既存商品に重複候補があります'] : []),
-    ...(!option.image_url ? ['メイン画像が未登録です'] : []),
-    ...(!option.price_on_request && option.price === 0 ? ['商品価格が0円です'] : []),
+    ...(!option.manufacturer_document_url ? ['メーカー資料PDFが未登録です（原則登録）'] : []),
+    ...(!option.price_on_request && option.price === 0 ? ['商品価格が0円です。正式な0円の場合はSTEP 2で確認が必要です'] : []),
     ...incompleteVisibleGroups.map((group) => `「${group.name}」にお客様へ表示する選択肢がありません`),
   ];
 
@@ -132,17 +135,12 @@ export default async function EditOptionPage({
       <OptionRegistrationSaveBoundary>
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
-        {sp.created && (
-          <Alert tone="success">
-            1. 基本情報を保存しました。続けて2〜6を同じSTEP 1の画面で入力してください。
-          </Alert>
-        )}
 
         <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="font-semibold">商品登録の流れ</h2>
-              <p className="mt-1 text-xs text-muted">STEP 1は1つの入力画面です。商品情報を上から順に入力し、STEP 2で実際のお客様表示を確認します。</p>
+              <p className="mt-1 text-xs text-muted">STEP 1で商品情報を入力し、STEP 2でお客様表示を確認して登録します。</p>
             </div>
             <p className="text-xs font-semibold text-brown">現在：STEP {step === 'preview' ? 2 : 1}</p>
           </div>
@@ -192,7 +190,7 @@ export default async function EditOptionPage({
             <div>
               <h2 className="text-xl font-semibold">STEP 1 商品情報</h2>
               <p className="mt-1 text-sm text-muted">
-                1. 基本情報から6. 登録前チェックまで、この画面で上から順に入力します。下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。
+                上から順に入力してください。変更内容は、STEP 2へ進むときや画像・資料を登録する前に自動保存されます。
               </p>
             </div>
 
@@ -206,11 +204,11 @@ export default async function EditOptionPage({
                 .registration-step1-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
                 .registration-step1-sections #product-details > div:first-child > p:first-child::before { content: '2. '; }
                 .registration-step1-sections #product-main-media > div:first-child > p:first-child { font-size: 0; }
-                .registration-step1-sections #product-main-media > div:first-child > p:first-child::after { content: '3. 画像・資料'; font-size: 1.125rem; line-height: 1.75rem; }
+                .registration-step1-sections #product-main-media > div:first-child > p:first-child::after { content: '3. 商品画像'; font-size: 1.125rem; line-height: 1.75rem; }
                 .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2 { font-size: 0; }
-                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2::after { content: '4. お客様選択'; font-size: 1.25rem; line-height: 1.75rem; }
+                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2::after { content: '5. お客様選択'; font-size: 1.25rem; line-height: 1.75rem; }
                 .registration-step1-sections #sales-settings > div:first-child > p:first-child { font-size: 0; }
-                .registration-step1-sections #sales-settings > div:first-child > p:first-child::after { content: '5. 価格・対象モデル'; font-size: 1.125rem; line-height: 1.75rem; }
+                .registration-step1-sections #sales-settings > div:first-child > p:first-child::after { content: '6. 価格・対象モデル'; font-size: 1.125rem; line-height: 1.75rem; }
               `}</style>
 
               <OptionForm
@@ -223,6 +221,12 @@ export default async function EditOptionPage({
                 conflicts={confs}
                 returnTo={returnTo}
               />
+
+              {sp.created && (
+                <div id="basic-info-saved" className="w-full" style={{ order: 15 }}>
+                  <Alert tone="success">✓ 1. 基本情報を保存しました。</Alert>
+                </div>
+              )}
 
               <div style={{ order: 35 }}>
                 <OptionMediaManager option={option} />
@@ -237,23 +241,45 @@ export default async function EditOptionPage({
               <section className="card space-y-4 p-4 sm:p-5" data-testid="option-registration-check" style={{ order: 60 }}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold">6. 登録前チェック</h3>
-                    <p className="mt-1 text-xs text-muted">
-                      現在保存されている下書き内容を確認しています。未保存の変更はSTEP 2へ進むときに先に自動保存されます。
-                    </p>
+                    <h3 className="text-lg font-semibold">7. 登録前チェック</h3>
+                    <p className="mt-1 text-xs text-muted">公開に必要な項目と、公開前に確認してほしい項目を分けて表示します。</p>
                   </div>
-                  <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${registrationCheckIssues.length > 0 ? 'bg-[#fff1cf] text-[#7c5a18]' : 'bg-[#eaf6f1] text-[#245a48]'}`}>
-                    {registrationCheckIssues.length > 0 ? `要確認：${registrationCheckIssues.length}件` : '基本チェックOK'}
+                  <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${
+                    registrationBlockingIssues.length > 0
+                      ? 'bg-[#fdecec] text-[#8b2e2e]'
+                      : registrationWarnings.length > 0
+                        ? 'bg-[#fff1cf] text-[#7c5a18]'
+                        : 'bg-[#eaf6f1] text-[#245a48]'
+                  }`}>
+                    {registrationBlockingIssues.length > 0
+                      ? `公開に必要：${registrationBlockingIssues.length}件`
+                      : registrationWarnings.length > 0
+                        ? `確認：${registrationWarnings.length}件`
+                        : '基本チェックOK'}
                   </span>
                 </div>
 
-                {registrationCheckIssues.length > 0 ? (
-                  <ul className="space-y-1 rounded-xl border border-[#ead6a7] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-ink-soft">
-                    {registrationCheckIssues.map((issue) => <li key={issue}>・{issue}</li>)}
-                  </ul>
-                ) : (
+                {registrationBlockingIssues.length > 0 && (
+                  <div className="rounded-xl border border-[#e7b9b9] bg-[#fff4f4] px-4 py-3 text-xs leading-5 text-ink-soft">
+                    <p className="font-semibold text-[#8b2e2e]">公開に必要</p>
+                    <ul className="mt-1 space-y-1">
+                      {registrationBlockingIssues.map((issue) => <li key={issue}>・{issue}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {registrationWarnings.length > 0 && (
+                  <div className="rounded-xl border border-[#ead6a7] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-ink-soft">
+                    <p className="font-semibold text-[#7c5a18]">確認してください</p>
+                    <ul className="mt-1 space-y-1">
+                      {registrationWarnings.map((issue) => <li key={issue}>・{issue}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {registrationBlockingIssues.length === 0 && registrationWarnings.length === 0 && (
                   <p className="rounded-xl border border-line bg-ivory/30 px-4 py-3 text-xs leading-5 text-muted">
-                    重複候補・メイン画像・商品価格・お客様選択の基本項目に、現在の保存内容では要確認事項はありません。
+                    現在の保存内容に、公開前の要確認事項はありません。
                   </p>
                 )}
 

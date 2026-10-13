@@ -29,6 +29,7 @@ import type {
   QuoteContact,
   QuoteDocument,
   CaseDocument,
+  ElectronicContract,
   QuoteRequest,
   ContactMessage,
   ContactStatus,
@@ -1506,6 +1507,126 @@ export class LocalStore implements DataStore {
       db.quoteDocuments = db.quoteDocuments.filter((d) => d.quote_id !== quoteId);
       db.quoteDocuments.push(doc);
       return doc;
+    });
+  }
+
+  // ---------- 電子契約（GMOサイン）。SQL（20261013150000）と同じ判定 ----------
+  async listElectronicContracts(quoteRequestId: string, actor: SessionUser): Promise<ElectronicContract[]> {
+    return this.read((db) =>
+      db.contracts
+        .filter((c) => c.quote_request_id === quoteRequestId && (c.user_id === actor.id || hasRoleAtLeast(actor.role, 'admin')))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((c) => ({ ...c }))
+    );
+  }
+  async beginElectronicContract(actor: SessionUser, quoteId: string, signerName: string, signerEmail: string): Promise<string> {
+    return this.mutate((db) => {
+      // 権限は状態の判定より前に確認する（本部だけ）
+      if (!hasRoleAtLeast(actor.role, 'admin')) throw new StoreError('FORBIDDEN', '電子契約を送信できるのは本部だけです');
+      const name = signerName.trim();
+      const email = signerEmail.trim().toLowerCase();
+      if (!name || name.length > 100) throw new StoreError('VALIDATION', '署名者の氏名を入力してください');
+      if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        throw new StoreError('VALIDATION', '署名者のメールアドレスの形式が正しくありません');
+      }
+      const quote = db.quotes.find((q) => q.id === quoteId);
+      if (!quote) throw new StoreError('NOT_FOUND', 'データが見つかりません');
+      const request = db.quoteRequests.find((r) => r.id === quote.quote_request_id);
+      if (!request) throw new StoreError('NOT_FOUND', 'データが見つかりません');
+      if (!quote.user_id) throw new StoreError('LOCKED', 'お客様アカウントのある案件だけ電子契約を送信できます');
+      if (quote.status !== 'accepted') throw new StoreError('LOCKED', 'お客様が承諾した見積だけ契約書を送信できます');
+      if (request.quote_id !== quote.id) throw new StoreError('LOCKED', 'この見積は案件の現在の版ではありません');
+      if (db.contracts.some((c) => c.quote_request_id === request.id && ['sending', 'sent', 'signed'].includes(c.status))) {
+        throw new StoreError('LOCKED', 'この案件には送信中または締結済みの契約があります');
+      }
+      const now = nowIso();
+      const contract: ElectronicContract = {
+        id: randomUUID(),
+        quote_request_id: request.id,
+        quote_id: quote.id,
+        user_id: quote.user_id,
+        provider: 'gmosign',
+        status: 'sending',
+        signer_name: name,
+        signer_email: email,
+        contract_total: quote.total,
+        envelope_xid: null,
+        provider_document_id: null,
+        signed_file_path: null,
+        failure_reason: null,
+        sent_at: null,
+        signed_at: null,
+        canceled_at: null,
+        created_at: now,
+        updated_at: now,
+      };
+      db.contracts.push(contract);
+      return contract.id;
+    });
+  }
+  private mutateContract(actor: SessionUser | null, contractId: string, apply: (contract: ElectronicContract) => void) {
+    return this.mutate((db) => {
+      if (actor && !hasRoleAtLeast(actor.role, 'admin')) throw new StoreError('FORBIDDEN', '権限がありません');
+      const contract = db.contracts.find((c) => c.id === contractId);
+      if (!contract) throw new StoreError('NOT_FOUND', 'データが見つかりません');
+      apply(contract);
+      contract.updated_at = nowIso();
+    });
+  }
+  async recordElectronicContractSent(actor: SessionUser, contractId: string, envelopeXid: string, documentId: string | null) {
+    if (!envelopeXid.trim()) throw new StoreError('VALIDATION', '送信の識別子がありません');
+    await this.mutateContract(actor, contractId, (contract) => {
+      if (contract.status !== 'sending') throw new StoreError('LOCKED', '送信処理中の契約ではありません');
+      contract.status = 'sent';
+      contract.envelope_xid = envelopeXid.trim();
+      contract.provider_document_id = documentId?.trim() || null;
+      contract.sent_at = nowIso();
+      contract.failure_reason = null;
+    });
+  }
+  async recordElectronicContractFailed(actor: SessionUser, contractId: string, reason: string) {
+    await this.mutateContract(actor, contractId, (contract) => {
+      if (contract.status !== 'sending') throw new StoreError('LOCKED', '送信処理中の契約ではありません');
+      contract.status = 'failed';
+      contract.failure_reason = (reason.trim() || '送信に失敗しました').slice(0, 1000);
+    });
+  }
+  async cancelElectronicContract(actor: SessionUser, contractId: string, reason: string | null) {
+    await this.mutateContract(actor, contractId, (contract) => {
+      if (contract.status !== 'sending' && contract.status !== 'sent') {
+        throw new StoreError('LOCKED', '締結済み・取り消し済みの契約は取り消せません');
+      }
+      contract.status = 'canceled';
+      contract.canceled_at = nowIso();
+      contract.failure_reason = reason?.trim().slice(0, 1000) || null;
+    });
+  }
+  async completeElectronicContract(envelopeXid: string, documentId: string | null, pdf: Uint8Array): Promise<string | null> {
+    return this.mutate((db) => {
+      const contract = db.contracts.find((c) => c.envelope_xid === envelopeXid.trim());
+      if (!contract) return null;
+      if (contract.status === 'signed') return contract.id;
+      if (contract.status !== 'sent') throw new StoreError('LOCKED', '署名待ちの契約ではありません');
+      const rel = path.posix.join('contracts', contract.id, 'signed.pdf');
+      const abs = path.join(filesDir(), rel);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, pdf);
+      contract.status = 'signed';
+      contract.signed_at = nowIso();
+      contract.signed_file_path = rel;
+      contract.provider_document_id = documentId?.trim() || contract.provider_document_id;
+      contract.updated_at = nowIso();
+      return contract.id;
+    });
+  }
+  async getSignedContractPdf(contractId: string, actor: SessionUser) {
+    return this.read((db) => {
+      const contract = db.contracts.find((c) => c.id === contractId);
+      if (!contract || (contract.user_id !== actor.id && !hasRoleAtLeast(actor.role, 'admin'))) return null;
+      if (contract.status !== 'signed' || !contract.signed_file_path) return null;
+      const abs = path.join(filesDir(), contract.signed_file_path);
+      if (!fs.existsSync(abs)) return null;
+      return { bytes: new Uint8Array(fs.readFileSync(abs)), contract: { ...contract } };
     });
   }
 

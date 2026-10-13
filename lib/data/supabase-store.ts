@@ -24,6 +24,7 @@ import type {
   QuoteContact,
   QuoteDocument,
   CaseDocument,
+  ElectronicContract,
   QuoteItem,
   QuoteDraft,
   QuoteDraftItem,
@@ -932,6 +933,84 @@ export class SupabaseStore implements DataStore {
       .single();
     if (error) mapPgError(error);
     return data as QuoteDocument;
+  }
+
+  // ---------- 電子契約（GMOサイン） ----------
+  async listElectronicContracts(quoteRequestId: string, _actor: SessionUser): Promise<ElectronicContract[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('contracts')
+      .select('*')
+      .eq('quote_request_id', quoteRequestId)
+      .order('created_at', { ascending: false });
+    if (error) {
+      // migration 未適用の DB（現在の本番）では表が無い。電子契約なしとして扱う
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as ElectronicContract[];
+  }
+  async beginElectronicContract(_actor: SessionUser, quoteId: string, signerName: string, signerEmail: string): Promise<string> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('begin_electronic_contract', {
+      p_quote_id: quoteId,
+      p_signer_name: signerName,
+      p_signer_email: signerEmail,
+    });
+    if (error) mapPgError(error);
+    return data as string;
+  }
+  async recordElectronicContractSent(_actor: SessionUser, contractId: string, envelopeXid: string, documentId: string | null) {
+    const db = await this.db();
+    const { error } = await db.rpc('record_electronic_contract_sent', {
+      p_contract_id: contractId,
+      p_envelope_xid: envelopeXid,
+      p_document_id: documentId,
+    });
+    if (error) mapPgError(error);
+  }
+  async recordElectronicContractFailed(_actor: SessionUser, contractId: string, reason: string) {
+    const db = await this.db();
+    const { error } = await db.rpc('record_electronic_contract_failed', { p_contract_id: contractId, p_reason: reason });
+    if (error) mapPgError(error);
+  }
+  async cancelElectronicContract(_actor: SessionUser, contractId: string, reason: string | null) {
+    const db = await this.db();
+    const { error } = await db.rpc('cancel_electronic_contract', { p_contract_id: contractId, p_reason: reason });
+    if (error) mapPgError(error);
+  }
+  async completeElectronicContract(envelopeXid: string, documentId: string | null, pdf: Uint8Array): Promise<string | null> {
+    // GMOサインの通知はログインした利用者を持たないため、ここだけ service role を使う（呼ぶのは通知の受付だけ）
+    const admin = createAdminClient();
+    const { data: contract, error } = await admin.from('contracts').select('id, status').eq('envelope_xid', envelopeXid).maybeSingle();
+    if (error) mapPgError(error);
+    if (!contract) return null;
+    if ((contract as { status: string }).status === 'signed') return (contract as { id: string }).id;
+    const storagePath = `contracts/${(contract as { id: string }).id}/signed.pdf`;
+    const up = await admin.storage.from('contract-documents').upload(storagePath, pdf, { contentType: 'application/pdf', upsert: true });
+    if (up.error) throw new StoreError('INTERNAL', up.error.message);
+    const { data: id, error: rpcError } = await admin.rpc('record_electronic_contract_signed', {
+      p_envelope_xid: envelopeXid,
+      p_document_id: documentId,
+      p_file_path: storagePath,
+    });
+    if (rpcError) mapPgError(rpcError);
+    return id as string;
+  }
+  async getSignedContractPdf(contractId: string, _actor: SessionUser) {
+    // 見えるかどうかは利用者のセッション（RLS）で判定し、見える締結済みの契約だけ service role で取り出す
+    const db = await this.db();
+    const { data, error } = await db.from('contracts').select('*').eq('id', contractId).maybeSingle();
+    if (error) {
+      if (isMissingRelation(error)) return null;
+      mapPgError(error);
+    }
+    const contract = data as ElectronicContract | null;
+    if (!contract || contract.status !== 'signed' || !contract.signed_file_path) return null;
+    const admin = createAdminClient();
+    const { data: blob, error: dlError } = await admin.storage.from('contract-documents').download(contract.signed_file_path);
+    if (dlError || !blob) return null;
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), contract };
   }
 
   // ---------- 管理 ----------

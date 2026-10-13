@@ -710,6 +710,34 @@ export interface CaseDocument {
   sort_order: number;
 }
 
+/**
+ * 電子契約（GMOサイン）。承諾済み確定見積から送信した契約書と署名状態。
+ * sending（送信処理中）→ sent（お客様の署名待ち）→ signed（締結済み）、sending → failed、sending・sent → canceled
+ */
+export type ElectronicContractStatus = 'sending' | 'sent' | 'signed' | 'canceled' | 'failed';
+
+export interface ElectronicContract {
+  id: string;
+  quote_request_id: string;
+  quote_id: string;
+  user_id: string;
+  provider: 'gmosign';
+  status: ElectronicContractStatus;
+  signer_name: string;
+  signer_email: string;
+  /** 送信時点の承諾済み見積の税込合計（スナップショット） */
+  contract_total: number;
+  envelope_xid: string | null;
+  provider_document_id: string | null;
+  signed_file_path: string | null;
+  failure_reason: string | null;
+  sent_at: string | null;
+  signed_at: string | null;
+  canceled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /* ---------- 計算結果（クライアント／サーバー共通） ---------- */
 
 export interface PricingLine {

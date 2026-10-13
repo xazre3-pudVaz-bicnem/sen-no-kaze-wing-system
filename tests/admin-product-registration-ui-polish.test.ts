@@ -10,18 +10,23 @@ const newPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'),
   'utf8'
 );
+const editPage = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'),
+  'utf8'
+);
 const saveBoundary = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-registration-save-boundary.tsx'),
   'utf8'
 );
 
 describe('商品登録 UI polish', () => {
-  it('カテゴリーはグループ見出しを1回だけ表示するselectへ変換する', () => {
+  it('カテゴリーはグループ見出しを1回だけ表示し、文字をコンパクトにする', () => {
     expect(enhancer).toContain("document.createElement('optgroup')");
     expect(enhancer).toContain('GROUP_LABEL_PATTERN');
     expect(enhancer).toContain("match?.[2]?.trim()");
     expect(enhancer).toContain("select[name=\"category_id\"]");
     expect(enhancer).toContain("original.dispatchEvent(new Event('change', { bubbles: true }))");
+    expect(enhancer).toContain("element.style.fontSize = '14px'");
   });
 
   it('新規登録ではサイズ・仕様を基本情報から隠し、2. 商品の詳細として案内する', () => {
@@ -30,11 +35,20 @@ describe('商品登録 UI polish', () => {
     expect(enhancer).toContain("document.getElementById('size_note-create')");
   });
 
-  it('基本情報保存後は2. 商品の詳細へ余白を確保して自動スクロールする', () => {
+  it('基本情報保存後は保存完了表示を見せてから2. 商品の詳細へ続ける', () => {
     expect(saveBoundary).toContain('<OptionRegistrationUiEnhancer scrollAfterCreate />');
     expect(enhancer).toContain("params.get('created')");
-    expect(enhancer).toContain("document.getElementById('product-details')");
+    expect(enhancer).toContain("document.getElementById('basic-info-saved') ?? document.getElementById('product-details')");
     expect(enhancer).toContain("target.style.scrollMarginTop = '96px'");
     expect(enhancer).toContain("target.scrollIntoView({ behavior: 'smooth', block: 'start' })");
+    expect(editPage).toContain('id="basic-info-saved"');
+    expect(editPage).toContain('✓ 1. 基本情報を保存しました。');
+  });
+
+  it('長いSTEP1でも保存状態が常時わかる', () => {
+    expect(saveBoundary).toContain('option-registration-save-status');
+    expect(saveBoundary).toContain('未保存の変更があります');
+    expect(saveBoundary).toContain('✓ 保存済み');
+    expect(saveBoundary).toContain('保存中…');
   });
 });

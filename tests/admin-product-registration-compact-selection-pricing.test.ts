@@ -10,6 +10,14 @@ const enhancer = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-registration-ui-enhancer.tsx'),
   'utf8'
 );
+const finalRefinements = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/product-registration-final-refinements.tsx'),
+  'utf8'
+);
+const variantCreateAction = fs.readFileSync(
+  path.resolve(process.cwd(), 'lib/actions/product-registration-variants.ts'),
+  'utf8'
+);
 const adminLayout = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/layout.tsx'),
   'utf8'
@@ -20,19 +28,31 @@ const registrationCss = fs.readFileSync(
 );
 
 describe('商品登録のお客様選択・価格UI', () => {
-  it('お客様選択は1つの入口から部位ごとの項目を追加し、最初の選択肢へ続ける', () => {
+  it('お客様選択は選択項目名と最初の選択肢を同時入力し、選択肢画像は要求しない', () => {
     expect(variants).not.toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
-    expect(variants).toContain('＋ 選択項目を追加');
-    expect(variants).toContain('選択項目名');
-    expect(variants).toContain('例：床／カウンター／アクセントパネル／浴槽');
-    expect(variants).toContain('選択肢名');
-    expect(variants).toContain('最初の選択肢を追加');
-    expect(variants).toContain('表示などの詳細設定');
-    expect(variants).toContain('標準の選択肢にする');
+    expect(finalRefinements).toContain('＋ 選択項目を追加');
+    expect(finalRefinements).toContain('選択項目名');
+    expect(finalRefinements).toContain('最初の選択肢');
+    expect(finalRefinements).toContain('例：床／カウンター／アクセントパネル／浴槽');
+    expect(finalRefinements).toContain('選択肢ごとの画像は登録しません。');
+    expect(finalRefinements).not.toContain('name="image_file"');
+    expect(variantCreateAction).toContain("kind: 'standard'");
+    expect(variantCreateAction).toContain("name: formData.get('first_choice_name')");
+    expect(variantCreateAction).toContain('upsertVariantGroup');
+    expect(variantCreateAction).toContain('upsertVariantChoice');
+  });
+
+  it('メイン画像と追加画像の実際の余白を測り、同じカードに見える位置まで詰める', () => {
+    expect(finalRefinements).toContain("'.registration-step1-sections #product-main-media'");
+    expect(finalRefinements).toContain("'.registration-step1-sections #product-sub-images'");
+    expect(finalRefinements).toContain('extra.getBoundingClientRect().top - main.getBoundingClientRect().bottom');
+    expect(finalRefinements).toContain('currentMargin - gap');
+    expect(finalRefinements).toContain("main.style.borderBottomWidth = '0px'");
   });
 
   it('STEP1の価格欄では対象モデルと公開状態を前面に出さず、価格だけを表示する', () => {
     expect(adminLayout).toContain("import './product-registration-refinements.css';");
+    expect(adminLayout).toContain('ProductRegistrationFinalRefinements');
     expect(registrationCss).toContain("content: '6. 価格' !important;");
     expect(registrationCss).toContain("content: '商品価格を設定します。公開はSTEP 2で行います。';");
     expect(registrationCss).toContain("#sales-settings [data-testid='option-normal-settings']");

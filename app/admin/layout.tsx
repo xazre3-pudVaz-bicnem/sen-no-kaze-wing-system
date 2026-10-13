@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { requireStaff, requireUser } from '@/lib/auth/session';
 import { AdminShell } from '@/components/admin/admin-shell';
+import { ProductRegistrationFinalRefinements } from '@/components/admin/product-registration-final-refinements';
 import './product-registration-refinements.css';
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       companyName={user.company_name}
       migrationOnly={migrationOnly}
     >
+      <ProductRegistrationFinalRefinements />
       {children}
     </AdminShell>
   );

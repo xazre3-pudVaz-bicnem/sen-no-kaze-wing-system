@@ -16,15 +16,16 @@ describe('商品登録 STEP 1 の1画面構成', () => {
     expect(newPage).not.toContain('option-registration-step1-outline');
     expect(editPage).not.toContain('option-registration-step1-progress');
 
-    for (const label of [
-      '2. 商品の詳細',
-      '3. 画像・資料',
-      '4. お客様選択',
-      '5. 価格・対象モデル',
-      '6. 登録前チェック',
+    for (const entry of [
+      "['2', '商品の詳細'",
+      "['3', '画像・資料'",
+      "['4', 'お客様選択'",
+      "['5', '価格・対象モデル'",
+      "['6', '登録前チェック'",
     ]) {
-      expect(newPage).toContain(label);
+      expect(newPage).toContain(entry);
     }
+    expect(newPage).toContain('{no}. {label}');
 
     expect(newPage).toContain("content: '1. '");
     expect(editPage).toContain("content: '1. '");

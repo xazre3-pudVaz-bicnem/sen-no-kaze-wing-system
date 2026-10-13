@@ -20,10 +20,76 @@
   display: none !important;
 }
 
-/* お客様選択は、選択項目名と最初の選択肢を同時に入力する新UIへ置き換える。 */
+/* 価格欄は外側の「6. 価格」だけを見出しとして使い、内側の二重枠・二重見出しをなくす。 */
+.registration-step1-sections #sales-settings > div:nth-of-type(2) {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.registration-step1-sections #sales-settings > div:nth-of-type(2) > p:first-child {
+  display: none !important;
+}
+
+.registration-step1-sections #sales-settings > div:nth-of-type(2) > div:first-of-type {
+  margin-top: 0 !important;
+}
+
+/* 登録担当者には内部の「0円扱い」を見せず、業務上の意味だけを表示する。 */
+.registration-step1-sections
+  #sales-settings
+  label:has(input[name='price_on_request']) {
+  font-size: 0 !important;
+}
+
+.registration-step1-sections
+  #sales-settings
+  label:has(input[name='price_on_request'])::after {
+  content: '価格は別途見積';
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* 高度な条件設定は通常作業から分離し、用途が分かる名称にする。 */
+.registration-step1-sections #sales-settings > details > summary {
+  font-size: 0 !important;
+}
+
+.registration-step1-sections #sales-settings > details > summary::before {
+  content: 'シミュレーター表示・選択条件';
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.registration-step1-sections #sales-settings > details > summary > span {
+  font-size: 0.75rem !important;
+}
+
+/* お客様選択は、選択項目名と選択肢を同時に入力する新UIへ置き換える。
+   展開フォームは「＋ 選択項目を追加」ボタンの直下に通常フローで表示する。 */
 .registration-step1-sections
   #customer-selection
   [data-registration-combined-create='true']
   > :not([data-combined-create-root='true']) {
   display: none !important;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true'] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 保存済みデータを守る理由は、登録担当者に必要な操作だけ短く案内する。 */
+.registration-step1-sections #customer-selection > p.text-xs.text-muted {
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+.registration-step1-sections #customer-selection > p.text-xs.text-muted::after {
+  content: '使用中の項目は削除せず、「お客様に表示する」をOFFにして管理します。';
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
 }

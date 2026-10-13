@@ -43,20 +43,28 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
   const bypassFormRef = useRef<HTMLFormElement | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [hasSaveHandler, setHasSaveHandler] = useState(false);
 
   const registerSaveHandler = useCallback((handler: SaveHandler) => {
     saveHandlerRef.current = handler;
+    setHasSaveHandler(true);
     return () => {
-      if (saveHandlerRef.current === handler) saveHandlerRef.current = null;
+      if (saveHandlerRef.current === handler) {
+        saveHandlerRef.current = null;
+        setHasSaveHandler(false);
+      }
     };
   }, []);
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true;
+    setDirty(true);
   }, []);
 
   const markClean = useCallback(() => {
     dirtyRef.current = false;
+    setDirty(false);
   }, []);
 
   const saveIfDirty = useCallback(async () => {
@@ -67,7 +75,10 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     setSaving(true);
     const promise = saveHandlerRef.current()
       .then((ok) => {
-        if (ok) dirtyRef.current = false;
+        if (ok) {
+          dirtyRef.current = false;
+          setDirty(false);
+        }
         return ok;
       })
       .finally(() => {
@@ -133,6 +144,22 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
       value={{ registerSaveHandler, markDirty, markClean, saveIfDirty, saving }}
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
+      {hasSaveHandler && (
+        <div
+          data-testid="option-registration-save-status"
+          className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold shadow-sm ${
+            saving
+              ? 'border-line bg-white text-ink-soft'
+              : dirty
+                ? 'border-[#d9a441] bg-[#fff8e8] text-[#7c5a18]'
+                : 'border-[#b7d1c2] bg-[#f0f7f3] text-[#245a48]'
+          }`}
+          aria-live="polite"
+        >
+          {saving && <Spinner />}
+          {saving ? '保存中…' : dirty ? '未保存の変更があります' : '✓ 保存済み'}
+        </div>
+      )}
       <div onClickCapture={handleClickCapture} onSubmitCapture={handleSubmitCapture}>{children}</div>
     </OptionRegistrationSaveContext.Provider>
   );

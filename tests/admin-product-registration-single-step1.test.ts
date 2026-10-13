@@ -21,21 +21,28 @@ describe('商品登録 STEP1 の1画面導線', () => {
     '登録前チェック',
   ];
 
-  it('新規登録画面でSTEP1全体の入力順を先に示す', () => {
+  it('新規登録画面でSTEP1の実セクションを同じ画面に並べる', () => {
     expect(newPage).toContain('STEP 1の商品情報を1画面で入力し');
-    expect(newPage).toContain('data-testid="option-registration-step1-outline"');
-    expect(newPage).toContain('STEP 1は1つの入力画面です');
-    expect(newPage).toContain('基本情報を保存すると入力できます');
+    expect(newPage).not.toContain('data-testid="option-registration-step1-outline"');
+    expect(newPage).toContain('lockedSections');
+    expect(newPage).toContain('基本情報保存後');
+    expect(newPage).toContain("content: '1. '");
+    expect(newPage).toContain("content: '基本情報を保存して続ける'");
     for (const label of sections) expect(newPage).toContain(label);
   });
 
-  it('基本情報保存後も同じSTEP1の続きとして表示する', () => {
+  it('基本情報保存後も同じSTEP1で実入力欄を1から6の順に表示する', () => {
     expect(editPage).toContain('title="商品を追加"');
-    expect(editPage).toContain('同じSTEP 1の続きとして入力できます');
-    expect(editPage).toContain('data-testid="option-registration-step1-progress"');
-    expect(editPage).toContain('基本情報は保存済みです');
-    expect(editPage).toContain('下書き保存済み');
+    expect(editPage).toContain('続けて2〜6を同じSTEP 1の画面で入力してください');
+    expect(editPage).not.toContain('data-testid="option-registration-step1-progress"');
+    expect(editPage).toContain('registration-step1-sections');
     expect(editPage).toContain('mode="all"');
+    expect(editPage).toContain("content: '1. '");
+    expect(editPage).toContain("content: '2. '");
+    expect(editPage).toContain("content: '3. 画像・資料'");
+    expect(editPage).toContain("content: '4. お客様選択'");
+    expect(editPage).toContain("content: '5. 価格・対象モデル'");
+    expect(editPage).toContain('6. 登録前チェック');
     for (const label of sections) expect(editPage).toContain(label);
   });
 

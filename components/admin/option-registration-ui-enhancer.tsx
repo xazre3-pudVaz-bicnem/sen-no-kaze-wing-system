@@ -15,6 +15,11 @@ function directGridChild(element: HTMLElement): HTMLElement | null {
   return current;
 }
 
+function applyCompactCategoryTypography(element: HTMLOptionElement | HTMLOptGroupElement | HTMLSelectElement) {
+  element.style.fontSize = '14px';
+  element.style.lineHeight = '1.4';
+}
+
 function createGroupedCategorySelect(original: HTMLSelectElement) {
   if (original.dataset[GROUPED_SELECT_MARKER] === 'true') return;
 
@@ -34,6 +39,7 @@ function createGroupedCategorySelect(original: HTMLSelectElement) {
   grouped.className = original.className;
   grouped.setAttribute('aria-label', original.getAttribute('aria-label') || 'カテゴリー');
   grouped.dataset.registrationCategoryGrouped = 'true';
+  applyCompactCategoryTypography(grouped);
 
   const placeholderRows = rows.filter((row) => !row.group && !row.value);
   for (const row of placeholderRows) {
@@ -41,6 +47,7 @@ function createGroupedCategorySelect(original: HTMLSelectElement) {
     option.value = row.value;
     option.textContent = row.label;
     option.disabled = row.disabled;
+    applyCompactCategoryTypography(option);
     grouped.appendChild(option);
   }
 
@@ -64,11 +71,13 @@ function createGroupedCategorySelect(original: HTMLSelectElement) {
   for (const groupLabel of groupOrder) {
     const optgroup = document.createElement('optgroup');
     optgroup.label = groupLabel;
+    applyCompactCategoryTypography(optgroup);
     for (const row of groups.get(groupLabel) ?? []) {
       const option = document.createElement('option');
       option.value = row.value;
       option.textContent = row.label;
       option.disabled = row.disabled;
+      applyCompactCategoryTypography(option);
       optgroup.appendChild(option);
     }
     grouped.appendChild(optgroup);
@@ -77,11 +86,13 @@ function createGroupedCategorySelect(original: HTMLSelectElement) {
   if (ungrouped.length > 0) {
     const optgroup = document.createElement('optgroup');
     optgroup.label = 'その他';
+    applyCompactCategoryTypography(optgroup);
     for (const row of ungrouped) {
       const option = document.createElement('option');
       option.value = row.value;
       option.textContent = row.label;
       option.disabled = row.disabled;
+      applyCompactCategoryTypography(option);
       optgroup.appendChild(option);
     }
     grouped.appendChild(optgroup);
@@ -153,7 +164,7 @@ export function OptionRegistrationUiEnhancer({
     scrolledRef.current = true;
 
     const timer = window.setTimeout(() => {
-      const target = document.getElementById('product-details');
+      const target = document.getElementById('basic-info-saved') ?? document.getElementById('product-details');
       if (!target) return;
       target.style.scrollMarginTop = '96px';
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });

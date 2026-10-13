@@ -87,6 +87,7 @@ declare
   v_model uuid;
   v_notifications_before bigint;
   v_audit_before bigint;
+  v_quotes_before bigint;
 begin
   ---------------------------------------------------------------------------
   -- 試験データ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる）
@@ -348,6 +349,28 @@ begin
     (pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_lp)) not like 'ERROR %')::text);
   perform pg_temp.expect_eq('7-12 互換処理後も、承諾済みの概算見積（親）は変わらず、確定見積が 1 つ発行される', 'RT-0203:accepted:,RT-0203-2:issued:formal',
     (select string_agg(quote_no || ':' || status || ':' || coalesce(quote_kind, ''), ',' order by quote_no) from public.quotes where quote_request_id = r_l1));
+
+  ---------------------------------------------------------------------------
+  -- 8. 概算→確定の互換処理は、権限のない利用者に案件の状態を返さない（権限確認が状態判定より先）
+  ---------------------------------------------------------------------------
+  v_quotes_before := (select count(*) from public.quotes where quote_no like 'RT-%');
+
+  perform pg_temp.expect_denied('8-1 担当外の代理店には、互換処理済みの概算見積でも権限の拒否だけを返す', '42501',
+    pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_lp)));
+  perform pg_temp.expect_denied('8-2 担当外の代理店には、辞退済みの見積でも権限の拒否だけを返す', '42501',
+    pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_x)));
+  perform pg_temp.expect_denied('8-3 担当外の代理店には、担当未割当の見積でも権限の拒否だけを返す', '42501',
+    pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_u)));
+  perform pg_temp.expect_denied('8-4 担当外の総代理店には、承諾済みの改訂版でも権限の拒否だけを返す', '42501',
+    pg_temp.run_as('authenticated', u_master, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_l2)));
+  perform pg_temp.expect_denied('8-5 お客様本人にも、承諾済みの確定見積で権限の拒否だけを返す', '42501',
+    pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_f)));
+  perform pg_temp.expect_denied('8-6 担当代理店には、従来どおり状態に応じた判定を返す（互換処理済みは LOCKED）', 'P0001',
+    pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_lp)));
+  perform pg_temp.expect_denied('8-7 本部には、従来どおり状態に応じた判定を返す（辞退済みは LOCKED）', 'P0001',
+    pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[{"name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, 'x')::text $q$, q_x)));
+  perform pg_temp.expect_eq('8-8 拒否された互換処理では見積が増えていない', v_quotes_before::text,
+    (select count(*)::text from public.quotes where quote_no like 'RT-%'));
 end
 $test$;
 

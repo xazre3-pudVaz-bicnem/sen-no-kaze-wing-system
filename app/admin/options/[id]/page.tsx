@@ -4,6 +4,7 @@ import { deleteOptionAction, publishOptionAction } from '@/lib/actions/admin';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
+import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import { Alert } from '@/components/ui';
 import { OptionForm } from '@/components/admin/forms';
@@ -57,6 +58,7 @@ export default async function EditOptionPage({
       : categories.filter(
           (row) => row.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE && row.code !== FREE_PRODUCT_CATEGORY_CODE
         );
+  const registrationDisplayCategories = productRegistrationCategoryDisplay(registrationCategories);
   const canEditThisOption = canEditCatalog(actor.role) || (category?.code === FREE_PRODUCT_CATEGORY_CODE && option.owner_id === actor.id);
   const catalogEditor = canEditCatalog(actor.role);
   const needsZeroPriceConfirmation = requiresZeroPriceConfirmation(option);
@@ -101,7 +103,7 @@ export default async function EditOptionPage({
           <RegisteredOptionEditFlow
             key={option.updated_at}
             option={option}
-            categories={registrationCategories}
+            categories={registrationDisplayCategories}
             models={models}
             dependencies={deps}
             conflicts={confs}
@@ -228,7 +230,7 @@ export default async function EditOptionPage({
             <OptionForm
               mode="all"
               option={option}
-              categories={registrationCategories}
+              categories={registrationDisplayCategories}
               models={models}
               allOptions={options}
               dependencies={deps}

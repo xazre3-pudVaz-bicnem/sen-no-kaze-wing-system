@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 const GROUPED_SELECT_MARKER = 'registrationGroupedSelect';
 const GROUPED_SELECT_SUFFIX = '-grouped';
@@ -103,7 +102,9 @@ function createGroupedCategorySelect(original: HTMLSelectElement) {
   grouped.addEventListener('change', syncToOriginal);
   original.addEventListener('change', syncFromOriginal);
 
-  const label = original.id ? document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(original.id)}"]`) : null;
+  const label = original.id
+    ? document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(original.id)}"]`)
+    : null;
   if (label) label.htmlFor = grouped.id;
 
   original.dataset[GROUPED_SELECT_MARKER] = 'true';
@@ -131,7 +132,6 @@ export function OptionRegistrationUiEnhancer({
   hideCreateSize?: boolean;
   scrollAfterCreate?: boolean;
 }) {
-  const searchParams = useSearchParams();
   const scrolledRef = useRef(false);
 
   useEffect(() => {
@@ -147,7 +147,9 @@ export function OptionRegistrationUiEnhancer({
   }, [hideCreateSize]);
 
   useEffect(() => {
-    if (!scrollAfterCreate || !searchParams.get('created') || scrolledRef.current) return;
+    if (!scrollAfterCreate || scrolledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('created')) return;
     scrolledRef.current = true;
 
     const timer = window.setTimeout(() => {
@@ -158,7 +160,7 @@ export function OptionRegistrationUiEnhancer({
     }, 80);
 
     return () => window.clearTimeout(timer);
-  }, [scrollAfterCreate, searchParams]);
+  }, [scrollAfterCreate]);
 
   return null;
 }

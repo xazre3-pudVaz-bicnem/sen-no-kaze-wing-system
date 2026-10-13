@@ -10,7 +10,8 @@
 --   全国ストック台帳（本部だけ）：引渡し済みの個体の登録状態・稼働状況・即時提供・輸送・72 時間／7 日の供給可否を本部が判定する。
 --   台帳に登録できるのは、お客様の最新の意思が承諾か条件付き承諾の個体だけ。不承諾にしたら登録を止める。
 --   災害時パートナーの管理・供給指揮システムとの連携は仕様が未定のため扱わない。
--- 既存の表は変更しない。delete_case_file だけ、承諾書として記録した写しを消せないように置き換える。
+-- 既存の表は変更しない。置き換える関数は 2 つ：delete_case_file（承諾書として記録した写しを消せないようにする）と、
+-- get_case_progress（契約が締結済みか・引渡しの状態を足す。契約の表は本部とお客様しか読めないため、担当代理店の画面の判定に使う）。
 
 begin;
 
@@ -929,6 +930,50 @@ begin
 end;
 $$;
 
+-- ---------- お客様向けの進み具合（契約の締結と引渡しの状態を足す。社内の情報は返さない） ----------
+
+create or replace function public.get_case_progress(p_request_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_access text := public.case_access(p_request_id);
+  w public.case_workflows;
+  s public.site_surveys;
+  o public.manufacturing_orders;
+  h public.case_handovers;
+  v_primary_name text;
+begin
+  if v_access is null then
+    return null;
+  end if;
+  select * into w from public.case_workflows where quote_request_id = p_request_id;
+  select * into s from public.site_surveys where quote_request_id = p_request_id;
+  select * into o from public.manufacturing_orders where quote_request_id = p_request_id and status <> 'canceled';
+  select * into h from public.case_handovers where quote_request_id = p_request_id;
+  if w.primary_staff_id is not null then
+    select p.full_name into v_primary_name from public.profiles p where p.id = w.primary_staff_id;
+  end if;
+  return jsonb_build_object(
+    'acknowledged_at', w.acknowledged_at,
+    'primary_staff_name', v_primary_name,
+    'site_survey_status', coalesce(s.status, 'none'),
+    'site_survey_completed_at', s.completed_at,
+    -- 製造：状態と棟数・出荷済み・設置済みの数だけ（仕様のスナップショット・供給手配のメモは返さない）
+    'manufacturing_status', coalesce(case when o.status = 'draft' then null else o.status end, 'none'),
+    'unit_count', o.unit_count,
+    'units_shipped', (select count(*) from public.manufacturing_units u where u.order_id = o.id and u.status in ('shipped', 'installed', 'handed_over')),
+    'units_installed', (select count(*) from public.manufacturing_units u where u.order_id = o.id and u.status in ('installed', 'handed_over')),
+    -- 契約は締結済みかどうかだけ（契約の中身は本部とお客様だけが読める）。担当代理店・製造の担当の画面の判定に使う
+    'contract_signed', exists (select 1 from public.contracts c where c.quote_request_id = p_request_id and c.status = 'signed'),
+    'handover_status', coalesce(h.status, 'none')
+  );
+end;
+$$;
+
 -- ---------- owner / EXECUTE ----------
 
 do $acl$
@@ -947,7 +992,8 @@ begin
     'public.publish_disaster_consent_text(text, text)'::regprocedure,
     'public.set_disaster_consent(uuid, text, text, integer)'::regprocedure,
     'public.save_stock_ledger_entry(uuid, jsonb, integer)'::regprocedure,
-    'public.delete_case_file(uuid)'::regprocedure
+    'public.delete_case_file(uuid)'::regprocedure,
+    'public.get_case_progress(uuid)'::regprocedure
   ]
   loop
     execute format('alter function %s owner to postgres', v_fn);
@@ -985,7 +1031,7 @@ begin
        and p.proname in ('start_handover_inspection', 'confirm_handover', 'add_punch_item', 'set_punch_item_status',
                          'record_completion_certificate', 'complete_handover', 'create_after_service_request',
                          'update_after_service_request', 'publish_disaster_consent_text', 'set_disaster_consent',
-                         'save_stock_ledger_entry', 'delete_case_file')
+                         'save_stock_ledger_entry', 'delete_case_file', 'get_case_progress')
   loop
     v_count := v_count + 1;
     if has_function_privilege('anon', v_fn.fn, 'EXECUTE') or has_function_privilege('service_role', v_fn.fn, 'EXECUTE')
@@ -996,8 +1042,8 @@ begin
       raise exception 'POSTCONDITION: % must be SECURITY DEFINER with an empty search_path, owned by postgres', v_fn.fn;
     end if;
   end loop;
-  if v_count <> 12 then
-    raise exception 'POSTCONDITION: expected 12 functions, found %', v_count;
+  if v_count <> 13 then
+    raise exception 'POSTCONDITION: expected 13 functions, found %', v_count;
   end if;
 end;
 $postcondition$;

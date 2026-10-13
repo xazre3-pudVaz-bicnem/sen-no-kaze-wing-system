@@ -231,6 +231,10 @@ export interface CaseProgress {
   unit_count?: number | null;
   units_shipped?: number;
   units_installed?: number;
+  /** 契約が締結済みか（20261013237000 以降）。契約の中身は本部とお客様だけが読めるため、担当代理店の画面はこれで判定する */
+  contract_signed?: boolean;
+  /** 完了確認・引渡しの状態（20261013237000 以降）。始めていなければ none */
+  handover_status?: HandoverStatus | 'none';
 }
 
 // ---------- 日程（フェーズ6・予約ボード） ----------

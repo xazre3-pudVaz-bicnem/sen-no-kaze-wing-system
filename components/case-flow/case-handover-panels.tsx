@@ -66,16 +66,17 @@ export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: s
   const canOperate = access === 'admin' || access === 'staff';
   const today = todayJst();
 
-  const [handover, punchItems, afterService, files, contracts, order] = await Promise.all([
+  const [handover, punchItems, afterService, files, progress, order] = await Promise.all([
     caseFlow.getHandover(actor, requestId),
     caseFlow.listPunchItems(actor, requestId),
     caseFlow.listAfterServiceRequests(actor, requestId),
     caseFlow.listCaseFiles(actor, requestId),
-    store.listElectronicContracts(requestId, actor),
+    caseFlow.getCaseProgress(actor, requestId),
     caseFlow.getManufacturingOrder(actor, requestId),
   ]);
   const units = order ? await caseFlow.listManufacturingUnits(actor, order.id) : [];
-  const hasSignedContract = contracts.some((c) => c.status === 'signed');
+  // 契約の表は本部とお客様しか読めないため、進み具合の「締結済み」で判定する（判定の正本は DB）
+  const hasSignedContract = Boolean(progress?.contract_signed);
   const handedOver = handover?.status === 'handed_over';
   const openPunch = punchItems.filter((item) => item.status !== 'verified');
   const notInstalled = units.filter((unit) => unit.status !== 'installed' && unit.status !== 'handed_over');

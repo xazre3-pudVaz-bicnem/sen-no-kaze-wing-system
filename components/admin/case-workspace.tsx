@@ -230,7 +230,8 @@ export async function CaseWorkspace({
     caseFlow.listAfterServiceRequests(actor, quote.quote_request_id),
     store.listElectronicContracts(quote.quote_request_id, actor),
   ]);
-  const flowSigned = flowContracts.some((contract) => contract.status === 'signed');
+  // 契約の表は本部とお客様しか読めないため、担当代理店は進み具合の「締結済み」で判定する
+  const flowSigned = Boolean(flowProgress?.contract_signed) || flowContracts.some((contract) => contract.status === 'signed');
   const flowManufacturing = flowProgress?.manufacturing_status ?? 'none';
   const flowHandedOver = flowHandover?.status === 'handed_over';
   const flowOpenAfterService = flowAfterService.filter((row) => row.status !== 'resolved').length;

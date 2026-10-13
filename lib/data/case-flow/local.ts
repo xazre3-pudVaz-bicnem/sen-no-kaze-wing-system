@@ -398,6 +398,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         unit_count: order?.unit_count ?? null,
         units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
         units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+        // 契約は締結済みかどうかだけ（契約の中身は本部とお客様だけ）。DB の get_case_progress と同じ
+        contract_signed: db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed'),
+        handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
       };
     });
   }

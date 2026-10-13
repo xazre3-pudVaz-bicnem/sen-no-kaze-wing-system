@@ -142,6 +142,8 @@ describe('完了確認・是正・引渡し・アフター・災害時提供（�
     await expect(store.completeHandover(dealer, ids.request, '2000-01-01', v3)).rejects.toMatchObject({ code: 'VALIDATION' });
     expect(await store.completeHandover(dealer, ids.request, today, v3)).toBe(v3 + 1);
     expect((await store.listManufacturingUnits(dealer, orderId)).map((u) => [u.status, u.handed_over_on])).toEqual([['handed_over', today]]);
+    // 担当代理店は契約の中身を読めないが、進み具合で締結済みかは分かる（画面の判定に使う）
+    expect(await store.getCaseProgress(dealer, ids.request)).toMatchObject({ contract_signed: true, handover_status: 'handed_over' });
     expect(loadDb().notifications.some((n) => n.kind === 'handover_completed' && n.recipient_id === ids.customer)).toBe(true);
     // 引渡しの後は、是正事項・完成確認のやり直し・回答はできない（不具合はアフターで受ける）
     await expect(store.addPunchItem(dealer, ids.request, '追加の是正', v3 + 1)).rejects.toMatchObject({ code: 'LOCKED' });
@@ -278,6 +280,13 @@ describe('フェーズ14〜15 の DB（20261013237000）', () => {
     expect(del).toContain("(public.case_access(f.quote_request_id) = 'customer' and not f.customer_visible)");
     expect(del).toContain('工事完了承諾書として記録した写しは削除できません');
     expect(del.indexOf('NOT_FOUND')).toBeLessThan(del.indexOf('FORBIDDEN'));
+  });
+
+  it('お客様向けの進み具合は「契約が締結済みか」と引渡しの状態だけを足す（契約の中身は返さない）', () => {
+    const progress = migration.slice(migration.indexOf('create or replace function public.get_case_progress'), migration.indexOf('$$;', migration.indexOf('create or replace function public.get_case_progress')));
+    expect(progress).toContain("'contract_signed', exists (select 1 from public.contracts c where c.quote_request_id = p_request_id and c.status = 'signed')");
+    expect(progress).toContain("'handover_status', coalesce(h.status, 'none')");
+    expect(progress).not.toMatch(/contract_total|signer_|signed_file_path|spec_snapshot|supply_note/);
   });
 
   it('画面からの操作は SECURITY DEFINER の RPC で、権限は状態の判定・書き込みより前に確認する', () => {

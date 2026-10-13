@@ -1321,6 +1321,10 @@ begin
       pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered"}'::jsonb, 2)::text $q$, v_unit_text)));
     perform pg_temp.expect_denied('22-42 意思の表は直接書き込めない（RPC だけ）', '42501',
       pg_temp.run_as('authenticated', u_cust_x, format($q$ insert into public.disaster_consents (quote_request_id, user_id, text_id, decision) select %L, %L, id, 'accepted' from public.disaster_consent_texts limit 1 returning 'inserted' $q$, r_pc, u_cust_x)));
+    perform pg_temp.expect_eq('22-43 担当代理店は契約の中身を読めないが、進み具合で締結済みかは分かる。お客様には引渡しの状態が返る', '0/true/handed_over',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.contracts where quote_request_id = %L $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.get_case_progress(%L) ->> 'contract_signed' $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L) ->> 'handover_status' $q$, r_pc)));
   end if;
 end
 $test$;

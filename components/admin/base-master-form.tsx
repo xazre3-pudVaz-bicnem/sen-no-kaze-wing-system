@@ -36,10 +36,11 @@ export function BaseMasterPendingButton({
 }
 
 export function BaseMasterCreateForm({
-  models,
+  matrixRows,
   organizations,
 }: {
-  models: { id: string; name: string }[];
+  /** 本体仕様マトリクスの有効な行（機種・用途・サイズ）。防火を選べない行は fireSelectable = false */
+  matrixRows: { id: string; label: string; fireSelectable: boolean }[];
   organizations: { id: string; name: string }[];
 }) {
   const [state, action, pending] = useActionState(createBaseMasterDraftAction, initial);
@@ -55,10 +56,19 @@ export function BaseMasterCreateForm({
       </div>
       <BaseMasterActionStatus state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="商品モデル" htmlFor="base_model_id" required errors={e.base_model_id}>
-          <Select id="base_model_id" name="base_model_id" required defaultValue={models[0]?.id ?? ''}>
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>{model.name}</option>
+        <Field
+          label="機種・用途・サイズ"
+          htmlFor="matrix_row_id"
+          required
+          hint="本体仕様マトリクスの行から選びます。防火不可の行では防火の本体を作成できません。"
+          errors={e.matrix_row_id}
+        >
+          <Select id="matrix_row_id" name="matrix_row_id" required defaultValue={matrixRows[0]?.id ?? ''}>
+            {matrixRows.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.label}
+                {row.fireSelectable ? '' : '（防火不可）'}
+              </option>
             ))}
           </Select>
         </Field>

@@ -88,6 +88,11 @@ declare
   v_notifications_before bigint;
   v_audit_before bigint;
   v_quotes_before bigint;
+  -- 本体マスターの identity（組織 × 機種・用途・サイズ × 防火）の検査用
+  o_hq constant uuid := '00000000-0000-4000-8000-000000000d01';
+  m_other constant uuid := '00000000-0000-4000-8000-00000000b002';
+  mr_nofire constant uuid := '00000000-0000-4000-8000-000000000e01';
+  mr_fire constant uuid := '00000000-0000-4000-8000-000000000e02';
 begin
   ---------------------------------------------------------------------------
   -- 試験データ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる）
@@ -423,10 +428,40 @@ begin
         public.customer_category_selectable('flat', 'office', 'insulation')::text);
     end if;
 
+    -- 11. 本体マスターの identity：組織 × 機種・用途・サイズ（マトリクスの行）× 防火
+    if to_regprocedure('public.create_base_master_draft(uuid, uuid, text, text, uuid, uuid)') is not null then
+      set local session_replication_role = replica;
+      insert into public.base_models (id, slug, name, base_price, status)
+      values (m_other, 'runtime-check-other', '権限検査用モデル2', 1000000, 'published') on conflict (slug) do nothing;
+      insert into public.organizations (id, code, name, organization_type) values (o_hq, 'RT-HQ', '検査用本部', 'headquarters');
+      insert into public.organization_memberships (organization_id, profile_id, member_role) values (o_hq, u_admin, 'editor');
+      insert into public.matrix_rows (id, base_model_id, spec_code, size_code, fire_selectable)
+      values (mr_nofire, v_model, 'office', '2100x4550', false), (mr_fire, v_model, 'hotel', '3640x4550', true);
+      set local session_replication_role = origin;
+
+      perform pg_temp.expect_denied('11-1 防火を選べない行では、防火の本体を作れない', 'P0001',
+        pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_base_master_draft(%L, %L, '検査 防火', 'fire', null, %L)::text $q$, v_model, o_hq, mr_nofire)));
+      perform pg_temp.expect_denied('11-2 行と商品モデルが違う本体は作れない', 'P0001',
+        pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_base_master_draft(%L, %L, '検査 不一致', 'non_fire', null, %L)::text $q$, m_other, o_hq, mr_nofire)));
+      perform pg_temp.expect_denied('11-3 行（機種・用途・サイズ）の指定が無い本体は作れない', 'P0001',
+        pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_base_master_draft(%L, %L, '検査 行なし', 'non_fire', null, null)::text $q$, v_model, o_hq)));
+      perform pg_temp.expect_eq('11-4 防火を選べる行では、防火の本体を作れる', 'true',
+        (pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_base_master_draft(%L, %L, '検査 防火', 'fire', null, %L)::text $q$, v_model, o_hq, mr_fire)) not like 'ERROR %')::text);
+      perform pg_temp.expect_denied('11-5 同じ組織 × 行 × 防火の本体は 2 つ作れない', '23505',
+        pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_base_master_draft(%L, %L, '検査 防火2', 'fire', null, %L)::text $q$, v_model, o_hq, mr_fire)));
+      perform pg_temp.expect_eq('11-6 防火を選べない行でも、非防火の本体は作れる', 'true',
+        (pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_base_master_draft(%L, %L, '検査 非防火', 'non_fire', null, %L)::text $q$, v_model, o_hq, mr_nofire)) not like 'ERROR %')::text);
+      perform pg_temp.expect_denied('11-7 所属の無いお客様は本体を作れない', '42501',
+        pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_base_master_draft(%L, %L, '検査 顧客', 'non_fire', null, %L)::text $q$, v_model, o_hq, mr_fire)));
+      perform pg_temp.expect_eq('11-8 作られた本体はすべて行を持ち、identity が重複していない', '2/2',
+        (select count(*)::text || '/' || count(distinct (matrix_row_id, fire_spec_code))::text from public.base_masters where owner_organization_id = o_hq));
+    end if;
+
     perform pg_temp.expect_eq('9-9 防火を選べない行は Flat 事務所だけ（機種がある DB）',
       (case when exists (select 1 from public.base_models where slug = 'flat') then 'flat/office/2100x4550' else '' end),
       (select coalesce(string_agg(m.slug || '/' || r.spec_code || '/' || r.size_code, ','), '')
-         from public.matrix_rows r join public.base_models m on m.id = r.base_model_id where not r.fire_selectable));
+         from public.matrix_rows r join public.base_models m on m.id = r.base_model_id
+        where not r.fire_selectable and m.slug not like 'runtime-check%'));
   end if;
 end
 $test$;

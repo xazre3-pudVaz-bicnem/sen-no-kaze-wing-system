@@ -15,6 +15,11 @@ const control = fs.readFileSync(
   'utf8'
 );
 const layout = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/layout.tsx'), 'utf8');
+const dbCheck = fs.readFileSync(path.resolve(process.cwd(), 'scripts/db-rehearsal/check.mjs'), 'utf8');
+const runtimeSql = fs.readFileSync(
+  path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-delete.sql'),
+  'utf8'
+);
 
 describe('登録済み未使用商品の安全削除', () => {
   it('DB RPCが認証・商品編集権限・published限定を強制する', () => {
@@ -49,12 +54,13 @@ describe('登録済み未使用商品の安全削除', () => {
   it('JSON/配列参照の確認中は対象テーブルの書込み競合を防ぐ', () => {
     expect(migration).toContain('lock table');
     expect(migration).toContain('in share mode;');
+    expect(migration).toContain('public.configuration_items');
     expect(migration).toContain('public.configuration_snapshots');
     expect(migration).toContain('public.estimate_templates');
     expect(migration).toContain('public.quote_internal_snapshots');
   });
 
-  it('publishedの直接DELETEを閉じ、RPC実行権限をauthenticatedに限定する', () => {
+  it('publishedの通常RLS DELETEを閉じ、RPC実行権限をauthenticatedに限定する', () => {
     expect(migration).toContain('as restrictive');
     expect(migration).toContain("using (status = 'draft');");
     expect(migration).toContain('revoke all on function public.delete_unused_published_option(uuid) from public;');
@@ -73,5 +79,16 @@ describe('登録済み未使用商品の安全削除', () => {
     expect(control).toContain('登録済み商品の削除（未使用のみ）');
     expect(control).toContain('この商品を削除');
     expect(layout).toContain('<PublishedOptionDeleteControl enabled={canEditCatalog(user.role)} />');
+  });
+
+  it('DB Rehearsalで権限・未使用削除・使用中拒否・published直DELETE拒否・draft削除維持を実動作確認する', () => {
+    expect(dbCheck).toContain('runtimeUnusedPublishedOptionDelete');
+    expect(runtimeSql).toContain('anonはRPCを実行できない');
+    expect(runtimeSql).toContain('dealerはRPCで削除できない');
+    expect(runtimeSql).toContain('adminは未使用publishedを削除できる');
+    expect(runtimeSql).toContain('商品ルールで使用中ならRPCは削除を拒否する');
+    expect(runtimeSql).toContain('published直接DELETEはRLSで0行');
+    expect(runtimeSql).toContain('既存のdraft直接DELETEは維持する');
+    expect(runtimeSql).toContain('rollback;');
   });
 });

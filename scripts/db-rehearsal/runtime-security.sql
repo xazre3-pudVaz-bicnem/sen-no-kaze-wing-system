@@ -777,14 +777,20 @@ begin
           insert into public.configuration_items (configuration_id, option_id, quantity) values (c_s, opt_a, 3);
           set local session_replication_role = origin;
 
-          perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.recalculate_configuration(%L)).id::text $q$, c_s));
+          -- recalculate_configuration は保存処理（save_configuration_atomic）の中から呼ぶ内部の関数（API からは実行できない）。
+          -- 保存と同じく本人（JWT の sub）として、内部から呼ぶ
+          perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
+          perform public.recalculate_configuration(c_s);
+          perform public.recalculate_configuration(c_s2);
+          perform set_config('request.jwt.claims', '', true);
           perform pg_temp.expect_eq('17-1 標準見積で計算する（本体は標準見積の売価、オプションは 3 個 − 標準状態 2 個の差額 12,000 円と経費 1,800 円）',
             '467376/70106/12000/1800/0/551282/55128/606410',
             coalesce((select c.base_price || '/' || c.base_expense || '/' || c.option_subtotal || '/' || c.option_expense || '/' ||
                              c.adjustment || '/' || c.subtotal || '/' || c.tax || '/' || c.total
                         from public.configurations c where c.id = c_s), '(なし)'));
-          perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select (public.recalculate_configuration(%L)).id::text $q$, c_s2));
-          perform pg_temp.expect_eq('17-2 使える標準見積が無い仕様は、これまでの計算のまま', '1000000',
+          -- これまでの計算：本体内訳の無いモデルは本体価格（前の検査で 1 円上げた値）
+          perform pg_temp.expect_eq('17-2 使える標準見積が無い仕様は、これまでの計算のまま（本体はモデルの本体価格）',
+            (select m.base_price::text from public.base_models m where m.id = v_model),
             coalesce((select c.base_price::text from public.configurations c where c.id = c_s2), '(なし)'));
 
           -- 見積の明細：本体・本体諸費用・オプションの変更差額・オプション諸費用。合計は税抜（調整前）と一致する

@@ -6,7 +6,10 @@
 -- 未適用 migration の「データ前提で停止する条件」と、最終完全版 12 章の確認項目のうち、
 -- 適用前のスキーマで判定できるものをまとめている。値が stop に該当したら、その場で直さず報告する。
 --
--- 本体分類表（11 パターン × 15 業務項目）は、20261006183000 の関数と同じ内容を CTE に展開している。
+-- 本体分類表は、確定の仕様マトリクス 6 行（lib/seed/matrix.ts・20261013110000 の seed）と、
+-- 20261013130000 の customer_category_selectable の互換（本体のみ・BOX hotel-single）を CTE に展開している。
+-- 6 行に無い仕様は、どの業務項目も選べない（fail closed。20261013130000 と同じ）。
+-- 旧 #389 の 20261006183000 / 20261006230000 は、PR B で 20261013120000〜20261013123000 へ移植済み（2026-10-13 更新）。
 
 with
 business_item(category_code, item) as (
@@ -21,21 +24,18 @@ business_item(category_code, item) as (
 ),
 matrix(model_slug, spec_code, items) as (
   values
-    ('wing-01', 'base', array['roof-exterior','entrance-door','sash']::text[]),
+    -- 確定の 6 行
     ('wing-01', 'hotel', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
     ('wing-01', 'residence', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
-    ('wing-01', 'room', array['roof-exterior','interior','interior-door','closet','bed','furnishings','other']::text[]),
     ('wing-01', 'office', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']::text[]),
-    ('box', 'base', array['roof-exterior','entrance-door','sash']::text[]),
     ('box', 'hotel', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
-    ('box', 'residence', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
-    ('box', 'room', array['roof-exterior','interior','interior-door','closet','bed','furnishings','other']::text[]),
-    ('box', 'office', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','toilet','boiler','furnishings','other']::text[]),
-    ('box', 'hotel-single', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[]),
     ('box', 'water-kit', array['roof-exterior','interior','entrance-door','sash','bath','kitchen','washbasin','toilet','boiler']::text[]),
-    ('box', 'storage', array['roof-exterior','interior','entrance-door','sash']::text[]),
+    ('flat', 'office', array['roof-exterior','interior','entrance-door','sash']::text[]),
+    -- 互換：本体のみは屋根・外壁／玄関ドア／サッシだけ。BOX の hotel-single は BOX ホテル仕様の行で判定する
+    ('wing-01', 'base', array['roof-exterior','entrance-door','sash']::text[]),
+    ('box', 'base', array['roof-exterior','entrance-door','sash']::text[]),
     ('flat', 'base', array['roof-exterior','entrance-door','sash']::text[]),
-    ('flat', 'office', array['roof-exterior','interior','entrance-door','sash']::text[])
+    ('box', 'hotel-single', array['roof-exterior','interior','entrance-door','sash','bath','washbasin','toilet','boiler','entrance-storage','interior-door','bed','furnishings','other']::text[])
 ),
 -- 保存済みプランの明細を、モデル・仕様・カテゴリー・商品の適合つきで展開する（仕様 NULL は判定対象外）
 cfg_item as (
@@ -82,8 +82,15 @@ select jsonb_build_object(
          and coalesce(nullif(cfg.spec_code, ''), b.presets -> 0 ->> 'code', '') not in ('hotel', 'residence', 'office'))
   ),
 
-  -- 20261006183000（本体分類表 corrective）の precondition
-  'stop_20261006183000', jsonb_build_object(
+  -- 20261013110000（仕様マトリクスの seed）の precondition：seed の行が参照する機種がそろっていること
+  'stop_20261013110000', jsonb_build_object(
+    'missing_base_models_for_matrix', (
+      select coalesce(jsonb_agg(s), '[]'::jsonb) from unnest(array['wing-01','box','flat']::text[]) s
+       where not exists (select 1 from public.base_models b where b.slug = s))
+  ),
+
+  -- 20261013120000（本体分類表 corrective。旧 #389 の 20261006183000）の precondition
+  'stop_20261013120000', jsonb_build_object(
     'missing_or_unpublished_required_categories', (
       select coalesce(jsonb_agg(c), '[]'::jsonb) from unnest(array['exterior-wall','sash','interior-door','furniture']::text[]) c
        where not exists (select 1 from public.option_categories oc where oc.code = c and oc.status = 'published')),
@@ -117,6 +124,26 @@ select jsonb_build_object(
         from public.option_categories where code in ('service-door', 'entrance-storage', 'closet', 'bed'))
   ),
 
+  -- 20261013130000（カテゴリー → 業務項目の対応）の precondition：対応表の 24 カテゴリーがそろうこと
+  -- roof / entrance-door（20260924085700 / 20260924092000）と service-door / entrance-storage / closet / bed（20261013120000）は未適用の migration が作る
+  'stop_20261013130000', jsonb_build_object(
+    'missing_mapped_categories', (
+      select coalesce(jsonb_agg(bi.category_code order by bi.category_code), '[]'::jsonb)
+        from business_item bi
+       where bi.category_code not in ('roof', 'entrance-door', 'service-door', 'entrance-storage', 'closet', 'bed')
+         and not exists (select 1 from public.option_categories c where c.code = bi.category_code))
+  ),
+
+  -- 確定の 6 行（と互換）に無い仕様の保存済みプラン（件数のみ。適用は止めないが、下書きは次の保存でマトリクスの判定を受ける）
+  'configurations_outside_confirmed_rows', (
+    select coalesce(jsonb_object_agg(k, n), '{}'::jsonb) from (
+      select cfg.status || ' / ' || m.slug || ' / ' || cfg.spec_code as k, count(*) as n
+        from public.configurations cfg
+        join public.base_models m on m.id = cfg.base_model_id
+       where cfg.spec_code is not null
+         and not exists (select 1 from matrix x where x.model_slug = m.slug and x.spec_code = cfg.spec_code)
+       group by 1) s),
+
   -- 分類表で × になる商品・仕様不適合の商品を含むプラン（件数のみ）
   'matrix_violations', jsonb_build_object(
     'draft_configurations', (select count(distinct configuration_id) from cfg_item where status = 'draft' and not (category_ok and product_ok)),
@@ -129,7 +156,7 @@ select jsonb_build_object(
                 from cfg_item where not (category_ok and product_ok) group by 1, 2, 3, 4, 5, 6) v)
   ),
 
-  -- 必須カテゴリーと分類表の × の衝突（20261006230000 で保存不能を解消する対象）
+  -- 必須カテゴリーと分類表の × の衝突（20261013122000（旧 #389 の 20261006230000）で保存不能を解消する対象）
   'required_vs_matrix', (
     select coalesce(jsonb_agg(jsonb_build_object('model', r.model_slug, 'spec', r.spec_code, 'category', c.code) order by r.model_slug, r.spec_code, c.code), '[]'::jsonb)
       from rows_ r

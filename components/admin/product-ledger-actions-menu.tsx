@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EllipsisVertical, Trash2 } from 'lucide-react';
+import { PRODUCT_LEDGER_SCROLL_STORAGE_KEY } from '@/components/admin/product-ledger-scroll-restore';
 import { deleteDraftProductFromLedgerAction } from '@/lib/actions/product-ledger';
 import type { ProductOption } from '@/lib/domain/types';
 
@@ -160,7 +161,13 @@ export function ProductLedgerActionsMenu({
               </div>
             </div>
 
-            <form action={deleteDraftProductFromLedgerAction} className="mt-6 flex justify-end gap-2">
+            <form
+              action={deleteDraftProductFromLedgerAction}
+              className="mt-6 flex justify-end gap-2"
+              onSubmit={() => {
+                window.sessionStorage.setItem(PRODUCT_LEDGER_SCROLL_STORAGE_KEY, String(window.scrollY));
+              }}
+            >
               <input type="hidden" name="id" value={optionId} />
               <button
                 ref={cancelButtonRef}

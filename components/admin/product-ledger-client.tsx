@@ -17,6 +17,7 @@ type Props = {
   options: ProductOption[];
   models: BaseModel[];
   variantsByOptionId: Record<string, { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] }>;
+  configurationUsageCounts: Record<string, number> | null;
   initiallySelectedId?: string;
 };
 
@@ -157,17 +158,22 @@ function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: s
   );
 }
 
-function ProductStatus({ status }: { status: ProductOption['status'] }) {
+function ProductStatus({ status, configurationUsageCount }: { status: ProductOption['status']; configurationUsageCount: number | null }) {
   return (
     <div className="flex flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db" data-product-handling-status-slot="pending-db">
       <Badge tone={status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(status)}</Badge>
+      {configurationUsageCount !== null && (
+        <span className="text-[0.68rem] font-medium text-muted">
+          {configurationUsageCount > 0 ? `構成で使用 ${configurationUsageCount}件` : '未使用'}
+        </span>
+      )}
       {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
       {/* お客様選択可 / 取扱停止 / 本部判断で停止 / 廃番は、正式な判定データ接続後に必要なものだけ追加表示する。 */}
     </div>
   );
 }
 
-export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, initiallySelectedId }: Props) {
+export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, configurationUsageCounts, initiallySelectedId }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
@@ -221,6 +227,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   useEffect(() => setSelectedId((id) => selectedOptionAfterFilter(id, filtered.map((o) => o.id))), [filtered]);
   const selected = filtered.find((o) => o.id === selectedId);
   const category = selected && categoryMap.get(selected.category_id);
+  const selectedConfigurationUsageCount = selected
+    ? configurationUsageCounts === null
+      ? null
+      : configurationUsageCounts[selected.id] ?? 0
+    : null;
   const variants = selected ? variantsByOptionId[selected.id] ?? EMPTY_VARIANTS : EMPTY_VARIANTS;
   const preview = useMemo(() => {
     const groups = variants.groups.filter((group) => group.status === 'published');
@@ -274,6 +285,8 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const firstShown = filtered.length ? pageStart + 1 : 0;
   const lastShown = Math.min(pageStart + pageSize, filtered.length);
   const selectedIndex = selected ? filtered.findIndex((option) => option.id === selected.id) : -1;
+
+  const usageCountFor = (id: string) => configurationUsageCounts === null ? null : configurationUsageCounts[id] ?? 0;
 
   const selectAt = (index: number) => {
     const option = filtered[index];
@@ -424,7 +437,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       </td>
                       <td className="px-2.5 py-1.5 text-xs font-medium text-ink-soft">{itemCategory?.name ?? dash}</td>
                       <td className="px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-ink">{productPrice(o)}</td>
-                      <td className="px-2.5 py-1.5"><ProductStatus status={o.status} /></td>
+                      <td className="px-2.5 py-1.5"><ProductStatus status={o.status} configurationUsageCount={usageCountFor(o.id)} /></td>
                       <td className="px-2.5 py-1.5 text-xs whitespace-nowrap text-muted">{date(o.updated_at)}</td>
                     </tr>;
                   })}
@@ -444,7 +457,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                     <div className="min-w-0 flex-1 pr-6">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
-                        <ProductStatus status={o.status} />
+                        <ProductStatus status={o.status} configurationUsageCount={usageCountFor(o.id)} />
                       </div>
                       <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3>
                       <p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
@@ -477,7 +490,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span>
-                          <ProductStatus status={o.status} />
+                          <ProductStatus status={o.status} configurationUsageCount={usageCountFor(o.id)} />
                         </div>
                         <h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3>
                         <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p>
@@ -635,7 +648,33 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
               <details className="card">
                 <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">利用状況 <ChevronDown className="size-4" /></summary>
-                <p className="border-t border-line px-4 py-3 text-sm text-muted">標準見積の使用先は、この画面で取得できる既存データにはありません。</p>
+                <div className="border-t border-line px-4 py-3">
+                  {selectedConfigurationUsageCount === null ? (
+                    <p className="text-sm text-muted">保存済み構成での利用件数は、本部の商品編集権限があるユーザーだけ確認できます。</p>
+                  ) : (
+                    <dl>
+                      <Row
+                        label="保存済み構成"
+                        value={selectedConfigurationUsageCount > 0 ? `構成で使用 ${selectedConfigurationUsageCount}件` : '未使用'}
+                      />
+                    </dl>
+                  )}
+                  <p className="mt-2 text-xs leading-relaxed text-muted">ここで判定するのは configuration_items から商品IDを直接参照している保存済み構成だけです。標準見積・発行済み見積・Snapshotの履歴判定は含みません。</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted">標準見積の使用先は、この画面で取得できる既存データにはありません。</p>
+                  {canEdit && selected.status === 'draft' && selectedConfigurationUsageCount === 0 && (
+                    <div className="mt-3 rounded-lg border border-line bg-white p-3">
+                      <p className="text-sm font-semibold text-ink">完全削除可能</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted">この下書きは保存済み構成から参照されていません。商品編集画面から完全削除できます。</p>
+                      <Link href={`/admin/options/${selected.id}?return_to=%2Fadmin%2Fledger`} className="btn-secondary btn-sm mt-2 inline-flex">商品情報を編集して削除</Link>
+                    </div>
+                  )}
+                  {canEdit && selected.status === 'draft' && selectedConfigurationUsageCount !== null && selectedConfigurationUsageCount > 0 && (
+                    <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">保存済み構成で使用されているため、この下書きは完全削除できません。</p>
+                  )}
+                  {selected.status === 'published' && (
+                    <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み商品は完全削除の対象にしません。取扱停止は正式な保存項目を接続する別工程で扱います。</p>
+                  )}
+                </div>
               </details>
               <details className="card" data-product-origin-slot="pending-db">
                 <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">登録・権限情報 <ChevronDown className="size-4" /></summary>

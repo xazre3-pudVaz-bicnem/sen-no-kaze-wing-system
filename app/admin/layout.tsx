@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { requireStaff, requireUser } from '@/lib/auth/session';
 import { AdminShell } from '@/components/admin/admin-shell';
+import './product-registration-refinements.css';
 
 export const metadata: Metadata = {
   title: { default: '千の風プロジェクト 管理画面', template: '%s｜千の風プロジェクト 管理画面' },

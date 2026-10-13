@@ -25,7 +25,8 @@ describe('商品登録 UI polish', () => {
     expect(enhancer).toContain('GROUP_LABEL_PATTERN');
     expect(enhancer).toContain("match?.[2]?.trim()");
     expect(enhancer).toContain("select[name=\"category_id\"]");
-    expect(enhancer).toContain("original.dispatchEvent(new Event('change', { bubbles: true }))");
+    expect(enhancer).toContain('setNativeSelectValue');
+    expect(enhancer).toContain("dispatchEvent(new Event('change', { bubbles: true }))");
     expect(enhancer).toContain("element.style.fontSize = '14px'");
   });
 
@@ -50,5 +51,26 @@ describe('商品登録 UI polish', () => {
     expect(saveBoundary).toContain('未保存の変更があります');
     expect(saveBoundary).toContain('✓ 保存済み');
     expect(saveBoundary).toContain('保存中…');
+  });
+
+  it('カテゴリー別の大きな入力目安は商品登録画面で隠す', () => {
+    expect(enhancer).toContain('[data-testid="category-registration-guidance"]');
+    expect(enhancer).toContain("guidance.style.display = 'none'");
+  });
+
+  it('メイン画像と追加画像を1つの画像ブロックとして見せる', () => {
+    expect(enhancer).toContain("document.getElementById('product-main-media')");
+    expect(enhancer).toContain("document.getElementById('product-sub-images')");
+    expect(enhancer).toContain("registrationWrapper.style.marginTop = '-1.5rem'");
+    expect(enhancer).toContain("setLeadingTextIfChanged(heading, '追加画像')");
+    expect(enhancer).toContain("setTextIfChanged(uploadLabel, '追加画像')");
+    expect(enhancer).toContain("row.textContent?.trim() === 'サブ画像はまだ登録されていません。'");
+  });
+
+  it('お客様選択は部位ごとの選択項目を1つの入口から追加する', () => {
+    expect(enhancer).toContain("setTextIfChanged(addButton, '＋ 選択項目を追加')");
+    expect(enhancer).toContain("setTextIfChanged(label, '選択項目名')");
+    expect(enhancer).toContain('例：床／カウンター／アクセントパネル／浴槽');
+    expect(enhancer).toContain("buttons.slice(0, -1).forEach");
   });
 });

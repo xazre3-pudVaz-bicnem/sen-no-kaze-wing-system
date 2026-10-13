@@ -1,0 +1,29 @@
+/* 商品登録 STEP 1 の価格欄は、価格入力だけを前面に出す。
+   対象モデル・公開状態の保存フィールドは既存互換のため残し、UIだけ非表示にする。 */
+.registration-step1-sections #sales-settings > div:first-child > p:first-child::after {
+  content: '6. 価格' !important;
+}
+
+.registration-step1-sections #sales-settings > div:first-child > p:nth-child(2) {
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+.registration-step1-sections #sales-settings > div:first-child > p:nth-child(2)::after {
+  content: '商品価格を設定します。公開はSTEP 2で行います。';
+  display: block;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.registration-step1-sections #sales-settings [data-testid='option-normal-settings'] {
+  display: none !important;
+}
+
+/* お客様選択は、選択項目名と最初の選択肢を同時に入力する新UIへ置き換える。 */
+.registration-step1-sections
+  #customer-selection
+  [data-registration-combined-create='true']
+  > :not([data-combined-create-root='true']) {
+  display: none !important;
+}

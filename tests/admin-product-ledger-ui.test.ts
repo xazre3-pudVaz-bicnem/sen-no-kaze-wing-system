@@ -80,18 +80,19 @@ describe('商品台帳の入口', () => {
     expect(ledger).toContain('models={models}');
   });
 
-  it('一覧は商品・カテゴリー・価格・状態・更新日の5列構成にし、行全体から詳細を開く', () => {
+  it('一覧は商品・カテゴリー・価格・状態・更新日・操作の6列構成にし、行全体から詳細を開く', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain('<th className="w-[40%] px-2.5 py-1.5">');
+    expect(client).toContain('<th className="w-[37%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="商品"');
-    expect(client).toContain('<th className="w-[16%] px-2.5 py-1.5">');
+    expect(client).toContain('<th className="w-[18%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="カテゴリー"');
     expect(client).toContain('<th className="w-[17%] px-2.5 py-1.5 text-right">');
     expect(client).toContain('<SortHeader label="商品価格（税別）"');
-    expect(client).toContain('<th className="w-[15%] px-2.5 py-1.5">');
+    expect(client).toContain('<th className="w-[14%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="状態"');
-    expect(client).toContain('<th className="w-[12%] px-2.5 py-1.5">');
+    expect(client).toContain('<th className="w-[9%] px-2.5 py-1.5">');
     expect(client).toContain('<SortHeader label="更新日"');
+    expect(client).toContain('<th className="w-[5%] px-1.5 py-1.5 text-center"><span className="sr-only">操作</span></th>');
     expect(client).not.toContain('>メーカー・型番</th>');
     expect(client).not.toContain('>操作</th>');
     expect(client).toContain('{itemCategory?.name ?? dash}');

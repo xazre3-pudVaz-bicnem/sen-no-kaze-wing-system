@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
+import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-overlay-dismiss';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
@@ -29,6 +30,61 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     notice={<><span className="font-semibold text-ink">商品台帳：</span> 商品そのものを登録する場所です。商品を「本体用」「オプション用」などに固定せず、見積書の各区分で「手入力」または「商品台帳から選択」して使います。</>}
     actions={<>{editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}{editor && <Link href="/admin/options/new?return_to=%2Fadmin%2Fledger" className="btn-primary btn-sm">＋ 商品を登録</Link>}</>}
   >
+    <style>{`
+      [data-testid="ledger-table-view"] thead th:nth-child(1) { width: 35%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(2) { width: 14%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(3) { width: 15%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(4) { width: 18%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(5) { width: 12%; }
+      [data-testid="ledger-table-view"] thead th:nth-child(6) { width: 6%; }
+
+      @media (max-width: 1279px) {
+        [data-testid="ledger-product-detail-pane"] {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          display: flex;
+          height: 100dvh;
+          max-height: 100dvh;
+          min-height: 0;
+          flex-direction: column;
+          overflow: hidden;
+          border: 0;
+          border-radius: 0;
+          padding-left: max(0px, calc(100vw - 46rem));
+          background: rgb(0 0 0 / 0.35);
+          box-shadow: none;
+          overscroll-behavior: contain;
+        }
+
+        [data-testid="ledger-product-detail-pane"] > header,
+        [data-testid="ledger-product-detail-pane"] > [role="tablist"],
+        [data-testid="ledger-product-detail-pane"] > div:last-child {
+          border-left: 1px solid rgb(95 82 68 / 0.16);
+        }
+
+        [data-testid="ledger-product-detail-pane"] > div:last-child {
+          min-height: 0;
+          flex: 1;
+          overflow-y: auto;
+          background: rgb(249 247 241 / 0.98);
+          overscroll-behavior: contain;
+        }
+      }
+
+      @media (max-width: 639px) {
+        [data-testid="ledger-product-detail-pane"] {
+          padding-left: 0;
+        }
+
+        [data-testid="ledger-product-detail-pane"] > header,
+        [data-testid="ledger-product-detail-pane"] > [role="tablist"],
+        [data-testid="ledger-product-detail-pane"] > div:last-child {
+          border-left: 0;
+        }
+      }
+    `}</style>
+    <ProductLedgerOverlayDismiss />
     <FlashMessages sp={sp} />
     <ProductLedgerClient
       canEdit={editor}

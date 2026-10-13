@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { requireStaff, requireUser } from '@/lib/auth/session';
 import { AdminShell } from '@/components/admin/admin-shell';
+import { ProductRegistrationFinalRefinements } from '@/components/admin/product-registration-final-refinements';
+import { ProductRegistrationStep2Refinements } from '@/components/admin/product-registration-step2-refinements';
+import './product-registration-refinements.css';
 
 export const metadata: Metadata = {
   title: { default: '千の風プロジェクト 管理画面', template: '%s｜千の風プロジェクト 管理画面' },
@@ -23,6 +26,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       companyName={user.company_name}
       migrationOnly={migrationOnly}
     >
+      <ProductRegistrationFinalRefinements />
+      <ProductRegistrationStep2Refinements />
       {children}
     </AdminShell>
   );

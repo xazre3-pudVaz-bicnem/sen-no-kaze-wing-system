@@ -33,7 +33,7 @@ describe('商品台帳の保存済み構成利用状況', () => {
   it('完全削除の導線は未使用の下書きだけに表示する', () => {
     expect(ledgerClient).toContain("selected.status === 'draft' && selectedConfigurationUsageCount === 0");
     expect(ledgerClient).toContain('完全削除可能');
-    expect(ledgerClient).toContain('商品情報を編集して削除');
+    expect(ledgerClient).toContain('一覧の「その他の操作」から直接削除できます。');
     expect(ledgerClient).toContain('保存済み構成で使用されているため、この下書きは完全削除できません。');
     expect(ledgerClient).toContain('登録済み商品は完全削除の対象にしません。');
   });

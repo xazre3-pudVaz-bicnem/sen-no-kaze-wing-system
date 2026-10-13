@@ -1,5 +1,5 @@
 -- 登録済み商品は、見積・仕様・履歴・標準見積・商品ルール等で一度も使われていない場合だけ削除できる。
--- 下書き商品の既存削除フローは維持し、published の直接 DELETE は RLS で閉じて本 RPC に限定する。
+-- 下書き商品の既存削除フローは維持し、通常のauthenticated RLS経由ではpublishedを直接DELETEできないようにする。
 
 create or replace function public.delete_unused_published_option(p_option_id uuid)
 returns void
@@ -22,8 +22,10 @@ begin
 
   -- UUID/FKでは表現されていない配列・JSON参照とのTOCTOUを避けるため、
   -- 参照確認中だけ該当テーブルの書込みを止める。削除はまれな管理操作なので短時間のSHARE lockとする。
+  -- configuration_items は variant_choice_ids が配列でFKでは守られないため、ここで明示的にlockする。
   lock table
     public.base_models,
+    public.configuration_items,
     public.configurations,
     public.configuration_snapshots,
     public.estimate_templates,
@@ -180,7 +182,7 @@ revoke all on function public.delete_unused_published_option(uuid) from authenti
 revoke all on function public.delete_unused_published_option(uuid) from service_role;
 grant execute on function public.delete_unused_published_option(uuid) to authenticated;
 
--- 通常のRLS経由DELETEはdraftだけ許可する。publishedは上のSECURITY DEFINER RPCだけが削除経路。
+-- 通常のauthenticated RLS経由DELETEはdraftだけ許可する。publishedは安全削除RPCを利用する。
 drop policy if exists options_published_delete_via_safe_rpc_only on public.options;
 create policy options_published_delete_via_safe_rpc_only
 on public.options

@@ -66,7 +66,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('mode="all"');
     expect(editPage).not.toContain('mode="product"');
     expect(editPage).not.toContain('mode="pricing"');
-    expect(editPage).toContain('下書きの商品情報は、STEP 2へ進むときや画像・資料など別の登録操作の前に自動保存されます。');
+    expect(editPage).toContain('変更内容は、STEP 2へ進むときや画像・資料を登録する前に自動保存されます。');
     expect(editPage).toContain('STEP 2 登録内容確認へ');
     expect(editPage).toContain('data-testid="option-registration-info"');
     expect(editPage).toContain('data-testid="option-customer-preview"');
@@ -96,21 +96,24 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(adminActions).toContain("returnUrl.searchParams.set('created_option', id)");
     expect(editPage).toContain('returnTo={returnTo}');
     expect(editPage).toContain('name="return_to" value={returnTo}');
-    expect(media).toContain('サブ画像・メーカー資料');
+    expect(media).toContain('4. メーカー資料');
+    expect(media).toContain('原則登録');
     expect(variants).toContain('お客様が選べる色・仕様');
   });
 
-  it('登録前チェックで保存済み内容の基本チェック結果を表示する', () => {
-    expect(editPage).toContain('6. 登録前チェック');
+  it('登録前チェックを公開に必要な項目と確認事項へ分ける', () => {
+    expect(editPage).toContain('7. 登録前チェック');
     expect(editPage).toContain('option-registration-check');
-    expect(editPage).toContain('registrationCheckIssues');
+    expect(editPage).toContain('registrationBlockingIssues');
+    expect(editPage).toContain('registrationWarnings');
     expect(editPage).toContain('基本チェックOK');
-    expect(editPage).toContain('要確認：');
+    expect(editPage).toContain('公開に必要：');
+    expect(editPage).toContain('確認：');
     expect(editPage).toContain('既存商品に重複候補があります');
-    expect(editPage).toContain('メイン画像が未登録です');
+    expect(editPage).toContain('メイン画像を登録してください');
+    expect(editPage).toContain('メーカー資料PDFが未登録です（原則登録）');
     expect(editPage).toContain('商品価格が0円です');
     expect(editPage).toContain('お客様へ表示する選択肢がありません');
-    expect(editPage).toContain('未保存の変更はSTEP 2へ進むときに先に自動保存されます。');
   });
 
   it('下書き商品の保存ボタンをなくし、STEP2移動と別操作の前に未保存内容を保存する', () => {
@@ -127,6 +130,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(saveBoundary).toContain("target.closest('a[href]')");
     expect(saveBoundary).toContain('form.requestSubmit');
     expect(saveBoundary).toContain('saveIfDirty');
+    expect(saveBoundary).toContain('option-registration-save-status');
     expect(adminActions).toContain('savedImageUrl?: string');
     expect(adminActions).toContain("savedImageUrl: image_url");
   });
@@ -143,7 +147,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('name="price" value="0"');
     expect(forms).toContain('name="selection_type" value="radio"');
     expect(adminActions).toContain("?step=info&created=1");
-    expect(editPage).toContain('1. 基本情報を保存しました。続けて2〜6を同じSTEP 1の画面で入力してください。');
+    expect(editPage).toContain('✓ 1. 基本情報を保存しました。');
+    expect(editPage).toContain('id="basic-info-saved"');
     expect(editPage).not.toContain('aria-label="商品情報の入力順"');
   });
 
@@ -158,8 +163,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('publishOptionAction');
     expect(editPage).toContain('現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。');
     expect(editPage).toContain('この内容で登録');
-    expect(newPage).toContain('STEP 1で商品情報を上から順に入力し、STEP 2で登録内容と実際のお客様表示を確認してから登録します。');
-    expect(newPage).toContain('最初に「1. 基本情報」を保存して下書きを作成すると、同じSTEP 1の続きとして2〜6の項目を入力できます。');
+    expect(newPage).toContain('STEP 1で商品情報を入力し、STEP 2で実際のお客様表示を確認して登録します。');
+    expect(newPage).toContain('最初に「1. 基本情報」を保存して下書きを作成すると、同じSTEP 1の続きとして2〜7を入力できます。');
     expect(forms).toContain("option?.status === 'published'");
     expect(forms).toContain('下書き商品の公開はSTEP 2のお客様表示を確認してから行います。');
     expect(forms).toContain('下書きへ戻す');
@@ -305,24 +310,25 @@ describe('商品登録管理画面の業務フロー', () => {
     }
   });
 
-  it('商品情報画面にメイン画像・サブ画像・メーカーPDFをまとめる', () => {
+  it('商品画像とメーカー資料を同じSTEP1で役割別に管理する', () => {
     expect(forms).toContain('メイン画像');
-    expect(media).toContain('サブ画像・メーカー資料');
-    expect(media).toContain('メイン画像＋必要なサブ画像');
-    expect(media).toContain('PDF内の複数ページはそのまま利用できます');
-    expect(media).toContain('登録済みPDFを確認');
+    expect(media).toContain('サブ画像');
+    expect(media).toContain('4. メーカー資料');
+    expect(media).toContain('原則1商品につき1PDFを登録します');
+    expect(media).toContain('メーカー資料PDF 登録済み');
+    expect(media).toContain('現在の資料を確認');
     expect(media).not.toContain('<details id="product-media"');
   });
 
   it('サブ画像は複数選択で自動保存し、メーカーPDFも選択時に自動保存する', () => {
     expect(media).toContain('multiple');
-    expect(media).toContain('複数選択可・1枚10MBまで。選択すると自動で保存します。');
+    expect(media).toContain('複数選択可・1枚10MBまで。選択すると自動保存します。');
     expect(media).toContain('handleSubImages');
     expect(media).toContain("formData.set('file', file)");
     expect(media).toContain("formData.set('sort_order', String(images.length + index))");
     expect(media).toContain('saveIfDirty');
     expect(media).toContain('handleManufacturerDocument');
-    expect(media).toContain('ファイルを選択すると自動で保存します。');
+    expect(media).toContain('ファイルを選択すると自動保存します。');
     expect(media).not.toContain('>サブ画像を追加</PendingButton>');
     expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
   });

@@ -10,7 +10,7 @@ as $$
 declare
   v_option_code text;
   v_option_status text;
-  v_used_message constant text := 'VALIDATION: この商品は保存済み仕様・見積・標準見積・履歴・商品ルールで使用されているため削除できません。削除せず非公開で管理してください。';
+  v_used_message constant text := 'VALIDATION: この商品は保存済み仕様・見積・標準見積・履歴・商品ルールで使用されているため削除できません。既存データを保護するため登録済みのまま残してください。';
 begin
   if auth.uid() is null then
     raise exception using message = 'UNAUTHENTICATED: ログインが必要です';
@@ -67,8 +67,8 @@ begin
     from public.configurations c
     cross join lateral jsonb_array_elements(
       case when jsonb_typeof(c.exterior_faces) = 'array' then c.exterior_faces else '[]'::jsonb end
-    ) face
-    where face ->> 'option_id' = p_option_id::text
+    ) as face(value)
+    where face.value ->> 'option_id' = p_option_id::text
   ) then
     raise exception using message = v_used_message;
   end if;
@@ -82,8 +82,8 @@ begin
         when jsonb_typeof(cs.snapshot -> 'lines') = 'array' then cs.snapshot -> 'lines'
         else '[]'::jsonb
       end
-    ) line
-    where line ->> 'option_id' = p_option_id::text
+    ) as snapshot_line(value)
+    where snapshot_line.value ->> 'option_id' = p_option_id::text
   ) then
     raise exception using message = v_used_message;
   end if;
@@ -127,8 +127,8 @@ begin
     from public.quote_internal_snapshots qis
     cross join lateral jsonb_array_elements(
       case when jsonb_typeof(qis.lines) = 'array' then qis.lines else '[]'::jsonb end
-    ) line
-    where line ->> 'option_id' = p_option_id::text
+    ) as quote_line(value)
+    where quote_line.value ->> 'option_id' = p_option_id::text
   ) then
     raise exception using message = v_used_message;
   end if;
@@ -152,14 +152,14 @@ begin
     from public.base_models bm
     cross join lateral jsonb_array_elements(
       case when jsonb_typeof(bm.presets) = 'array' then bm.presets else '[]'::jsonb end
-    ) preset
+    ) as preset(value)
     cross join lateral jsonb_array_elements_text(
       case
-        when jsonb_typeof(preset -> 'option_codes') = 'array' then preset -> 'option_codes'
+        when jsonb_typeof(preset.value -> 'option_codes') = 'array' then preset.value -> 'option_codes'
         else '[]'::jsonb
       end
-    ) preset_option_code
-    where preset_option_code = v_option_code
+    ) as preset_option(code)
+    where preset_option.code = v_option_code
   ) then
     raise exception using message = v_used_message;
   end if;

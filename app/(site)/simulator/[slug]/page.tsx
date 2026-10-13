@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
+import { getStandardEstimateSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
@@ -40,7 +41,11 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   // Excelから取り込んだ標準見積をシミュレーターへ渡す。
   // 未登録・未マイグレーション環境では空配列になり、従来計算へ安全にフォールバックする。
   const store = await getStore();
-  const templateHeaders = await store.listEstimateTemplates(model.id);
+  const [templateHeaders, saleViews] = await Promise.all([
+    store.listEstimateTemplates(model.id),
+    // 新しい標準見積（売価だけ）。標準状態の商品が登録された公開中のものがあれば、こちらを価格の正本にする
+    getStandardEstimateSaleViews(model.id),
+  ]);
   const estimateTemplates = (
     await Promise.all(templateHeaders.map((row) => store.getEstimateTemplateBundle(model.id, row.spec_code)))
   ).filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -120,6 +125,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
         <SimulatorApp
           bundle={bundle}
           estimateTemplates={estimateTemplates}
+          saleViews={saleViews}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}
           initial={initial}

@@ -58,6 +58,7 @@ export function CasePlanBoard({
       categories: bundle.categories,
       dependencies: bundle.dependencies,
       conflicts: bundle.conflicts,
+      customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
     }),
     [bundle]
   );

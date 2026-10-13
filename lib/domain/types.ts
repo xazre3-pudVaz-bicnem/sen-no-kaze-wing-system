@@ -194,6 +194,68 @@ export interface BaseBreakdownItem {
 }
 
 
+/**
+ * 本体仕様マトリクス（機種 × 仕様 × サイズ → 項目ごとの選択可否）。DB が正本。
+ * lib/seed/matrix.ts はローカル検証モードの初期データ専用。
+ */
+export type MatrixStatus = 'active' | 'retired';
+
+export interface MatrixSpec {
+  code: string;
+  label: string;
+  sort_order: number;
+  status: MatrixStatus;
+}
+
+export interface MatrixSize {
+  /** 「幅x奥行」（mm） */
+  code: string;
+  width_mm: number;
+  depth_mm: number;
+  label: string;
+  sort_order: number;
+  status: MatrixStatus;
+}
+
+export interface MatrixItem {
+  code: string;
+  label: string;
+  sort_order: number;
+  status: MatrixStatus;
+}
+
+export interface MatrixRow {
+  id: string;
+  base_model_id: string;
+  spec_code: string;
+  size_code: string;
+  /** false の行では防火の本体を選べない */
+  fire_selectable: boolean;
+  status: MatrixStatus;
+  lock_version: number;
+}
+
+export interface MatrixCell {
+  matrix_row_id: string;
+  matrix_item_code: string;
+  selectable: boolean;
+}
+
+/** 商品カテゴリー → Matrix Item（1 カテゴリー = 1 項目） */
+export interface OptionCategoryMatrixItem {
+  category_id: string;
+  matrix_item_code: string;
+}
+
+export interface SpecMatrix {
+  specs: MatrixSpec[];
+  sizes: MatrixSize[];
+  items: MatrixItem[];
+  rows: MatrixRow[];
+  cells: MatrixCell[];
+  categoryItems: OptionCategoryMatrixItem[];
+}
+
 /** 標準見積Excelの4分類。base の明細本体は base_breakdown_items に保持し、二重登録しない。 */
 export type EstimateSectionCode = 'base' | 'interior_exterior' | 'option' | 'sitework';
 
@@ -419,6 +481,11 @@ export interface CatalogBundle {
   variantChoices: OptionVariantChoice[];
   /** 本体内訳マスター（全仕様分。spec_code で絞って使う） */
   baseBreakdowns: BaseBreakdownItem[];
+  /**
+   * 本体分類表の選択 / ×（DB の本体仕様マトリクスから組み立てたもの）。
+   * マトリクスの表が無い DB（migration 未適用）では null・未設定で、カテゴリーを制限しない。
+   */
+  customerCategoryMatrix?: import('./customer-category-applicability').CustomerCategoryMatrix | null;
 }
 
 export type ConfigurationStatus = 'draft' | 'quote_requested' | 'quoted' | 'closed';
@@ -641,7 +708,13 @@ export interface QuoteDraft {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  /** 作り方。standard_estimate は公開中の標準見積から作成した見積（専用の編集画面で、率・原価から DB が金額を計算する） */
+  source_kind?: QuoteDraftSourceKind;
+  /** 作成時に写した標準見積 Revision（第 2 版以降も直前の発行版から引き継ぐ） */
+  standard_estimate_revision_id?: string | null;
 }
+
+export type QuoteDraftSourceKind = 'manual' | 'standard_estimate';
 
 export interface QuoteDraftItem {
   id: string;
@@ -660,6 +733,8 @@ export interface QuoteDraftItem {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** 価格の決め方（manual=売価を入力、auto=原価 × 掛率、por=価格未確定。por は単価・金額とも未確定で発行できない） */
+  price_mode?: 'manual' | 'auto' | 'por';
 }
 
 export type ContactStatus = 'new' | 'handled';

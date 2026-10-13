@@ -7,6 +7,7 @@ import {
   type QuoteDraftFormState,
 } from '@/lib/actions/admin';
 import type { QuoteDraftDetail, QuoteDraftSaveItem } from '@/lib/data/store';
+import { quoteLineAmount } from '@/lib/domain/quote-amount';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
@@ -26,8 +27,6 @@ import {
 } from '@/components/admin/quote-authoring-ui';
 
 const initialState: QuoteDraftFormState = { ok: false };
-
-const roundLikePostgres = (value: number) => value < 0 ? -Math.round(-value) : Math.round(value);
 
 const KINDS = ([
   'base',
@@ -131,13 +130,8 @@ export function QuoteDraftEditor({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [dirty]);
 
-  const amountForRow = (row: EditorRow) => {
-    const source = detail.items.find((item) => item.line_key === row.line_key);
-    if (source && source.unit_price === row.unit_price && source.quantity === row.quantity) {
-      return source.amount;
-    }
-    return roundLikePostgres(row.unit_price * row.quantity);
-  };
+  // 新しい下書き・版の明細額は DB と同じ trunc で計算し直す（直前の版の旧 round の金額は引き継がない）
+  const amountForRow = (row: EditorRow) => quoteLineAmount(row.unit_price, row.quantity);
 
   const subtotalRaw = rows.reduce((sum, row) => sum + amountForRow(row), 0);
   const subtotal = Math.max(0, subtotalRaw + adjustment);

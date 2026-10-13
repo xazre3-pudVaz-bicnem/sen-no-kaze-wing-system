@@ -182,7 +182,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(manualWorkbench).not.toContain('name="sales_expense_rate"');
     expect(manualWorkbench).not.toContain('name="expense_rate"');
     expect(manualWorkbench).not.toContain('name="markup_rate"');
-    expect(manualWorkbench).toContain('roundLikePostgres');
+    expect(manualWorkbench).toContain('quoteLineAmount(row.unit_price, row.quantity)');
     expect(draftEditor).toContain('detail.draft.tax_rate');
   });
 

@@ -20,7 +20,7 @@ const sections: NavSection[] = [
       '/admin/notifications',
       '/admin/contacts',
     ],
-    exclude: ['/admin/quotes/new', '/admin/quotes/drafts'],
+    exclude: ['/admin/quotes/new', '/admin/quotes/drafts', '/admin/quotes/standard-drafts'],
   },
   {
     href: '/admin/customer-management',
@@ -46,10 +46,13 @@ const sections: NavSection[] = [
     match: [
       '/admin/quote-management',
       '/admin/base-masters',
+      '/admin/matrix',
+      '/admin/standard-estimates',
       '/admin/estimate-templates',
       '/admin/base-breakdown',
       '/admin/quotes/new',
       '/admin/quotes/drafts',
+      '/admin/quotes/standard-drafts',
     ],
     need: 'admin',
   },

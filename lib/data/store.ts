@@ -35,6 +35,8 @@ import type {
   EstimateTemplateBundle,
   EstimateTemplateLine,
   EstimateTemplateSection,
+  SpecMatrix,
+  MatrixRow,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 
@@ -282,6 +284,22 @@ export interface QuoteDraftDetail {
   baseRevisions: QuoteDraftBaseRevisionChoice[];
 }
 
+export interface MatrixRowUpdateInput {
+  row_id: string;
+  fire_selectable: boolean;
+  /** 選択できる項目のコード。列挙していない有効な項目は選択不可になる */
+  selectable_items: string[];
+  expected_lock_version: number;
+}
+
+export interface MatrixRowCreateInput {
+  base_model_id: string;
+  spec_code: string;
+  size_code: string;
+  fire_selectable: boolean;
+  selectable_items: string[];
+}
+
 export interface QuoteDetail {
   quote: Quote;
   items: QuoteItem[];
@@ -479,6 +497,14 @@ export interface DataStore {
   ): Promise<BaseBreakdownItem[]>;
 
   // ---- 標準見積テンプレート（Excelが価格の正本） ----
+  /** 本体仕様マトリクス（誰でも読める公開情報）。表が無い DB（migration 未適用）では null */
+  getSpecMatrix(): Promise<SpecMatrix | null>;
+  /** 本部：行の防火可否と項目ごとの選択可否を保存する（読み込んだ時点の版と一致しなければ LOCKED） */
+  updateMatrixRow(actor: SessionUser, input: MatrixRowUpdateInput): Promise<MatrixRow>;
+  /** 本部：既存の仕様・サイズで行を追加する */
+  createMatrixRow(actor: SessionUser, input: MatrixRowCreateInput): Promise<MatrixRow>;
+  /** 本部：行を停止（retired）・再開（active）する */
+  setMatrixRowStatus(actor: SessionUser, rowId: string, status: 'active' | 'retired', expectedLockVersion: number): Promise<MatrixRow>;
   listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]>;
   getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null>;
   /** 解析・検算済みの標準見積を一括置換する。base 明細も同じ transaction で更新する。 */

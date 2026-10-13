@@ -15,7 +15,8 @@ export interface BaseMasterActionState {
 }
 
 const createSchema = z.object({
-  base_model_id: z.uuid(),
+  /** 本体仕様マトリクスの行（機種・用途・サイズ）。商品モデルは行からサーバー側で決める */
+  matrix_row_id: z.uuid('機種・用途・サイズを選択してください'),
   owner_organization_id: z.uuid(),
   name: z.string().trim().min(1, '本体名を入力してください').max(120),
   fire_spec_code: z.enum(['non_fire', 'fire']),
@@ -73,7 +74,7 @@ export async function createBaseMasterDraftAction(
   if (unavailable) return unavailable;
 
   const parsed = createSchema.safeParse({
-    base_model_id: formData.get('base_model_id'),
+    matrix_row_id: formData.get('matrix_row_id'),
     owner_organization_id: formData.get('owner_organization_id'),
     name: formData.get('name'),
     fire_spec_code: formData.get('fire_spec_code'),
@@ -81,8 +82,18 @@ export async function createBaseMasterDraftAction(
   if (!parsed.success) return { ok: false, fieldErrors: collectErrors(parsed.error) };
 
   const supabase = await createClient();
+  const { data: matrixRow, error: matrixError } = await supabase
+    .from('matrix_rows')
+    .select('base_model_id')
+    .eq('id', parsed.data.matrix_row_id)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (matrixError) return dbFail(matrixError);
+  if (!matrixRow) return { ok: false, fieldErrors: { matrix_row_id: ['有効な機種・用途・サイズを選択してください'] } };
+
   const { data: revisionId, error } = await supabase.rpc('create_base_master_draft', {
-    p_base_model_id: parsed.data.base_model_id,
+    p_base_model_id: matrixRow.base_model_id,
+    p_matrix_row_id: parsed.data.matrix_row_id,
     p_owner_organization_id: parsed.data.owner_organization_id,
     p_name: parsed.data.name,
     p_fire_spec_code: parsed.data.fire_spec_code,

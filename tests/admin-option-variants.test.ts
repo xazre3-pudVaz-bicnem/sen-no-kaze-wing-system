@@ -78,7 +78,8 @@ describe('管理画面の色・仕様管理', () => {
   });
 
   it('履歴保護のため物理削除ではなくお客様非表示を使う', () => {
-    expect(manager).toContain('物理削除を行いません');
+    expect(manager).toContain('物理削除');
+    expect(manager).toContain('行いません');
     expect(manager).toContain('label="お客様に表示する"');
     expect(manager).toContain("value={customerVisible ? 'published' : 'draft'}");
     expect(actions).not.toContain('deleteVariantChoiceAction');

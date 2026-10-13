@@ -5,7 +5,7 @@
  * その後の管理画面での変更。ここはローカル検証モードの空 DB を作るときだけ使う。
  * 内容は migration の確定 seed と一致させる（tests/matrix-identity-foundation.test.ts で照合）。
  */
-import type { BaseModel, MatrixCell, MatrixItem, MatrixRow, MatrixSize, MatrixSpec, SpecMatrix } from '@/lib/domain/types';
+import type { BaseModel, MatrixCell, MatrixItem, MatrixRow, MatrixSize, MatrixSpec, OptionCategory, SpecMatrix } from '@/lib/domain/types';
 
 export const MATRIX_SPEC_SEED: MatrixSpec[] = [
   { code: 'hotel', label: 'ホテル仕様', sort_order: 10, status: 'active' },
@@ -89,8 +89,26 @@ export const MATRIX_ROW_SEED: Array<{
   },
 ];
 
-/** ローカル検証モードの空 DB 用に、機種 ID を解決したマトリクスを作る（機種が無い行は作らない） */
-export function buildSeedMatrix(models: Pick<BaseModel, 'id' | 'slug'>[]): SpecMatrix {
+/**
+ * Category → Matrix Item の確定対応（PR B の migration `20261013130000` と同じ 24 カテゴリー）。
+ * 対応の無いカテゴリー（防火・断熱・別途工事・自由商品など）はマトリクスで制限しない。
+ */
+export const MATRIX_CATEGORY_ITEM_SEED: ReadonlyArray<readonly [categoryCode: string, itemCode: string]> = [
+  ['roof', 'roof-exterior'], ['exterior-wall', 'roof-exterior'],
+  ['floor', 'interior'], ['wall-ceiling', 'interior'], ['carpentry', 'interior'],
+  ['entrance-door', 'entrance-door'],
+  ['sash', 'sash'], ['service-door', 'sash'],
+  ['ub', 'bath'], ['kitchen', 'kitchen'], ['washbasin', 'washbasin'], ['toilet', 'toilet'], ['boiler', 'boiler'],
+  ['entrance-storage', 'entrance-storage'], ['interior-door', 'interior-door'], ['closet', 'closet'], ['bed', 'bed'],
+  ['furniture', 'furnishings'], ['appliances', 'furnishings'], ['office-supplies', 'furnishings'],
+  ['aircon', 'other'], ['lighting', 'other'], ['smartlock', 'other'], ['exterior-parts', 'other'],
+];
+
+/** ローカル検証モードの空 DB 用に、機種 ID・カテゴリー ID を解決したマトリクスを作る（無い機種・カテゴリーは作らない） */
+export function buildSeedMatrix(
+  models: Pick<BaseModel, 'id' | 'slug'>[],
+  categories: Pick<OptionCategory, 'id' | 'code'>[] = []
+): SpecMatrix {
   const rows: MatrixRow[] = [];
   const cells: MatrixCell[] = [];
   for (const [index, seed] of MATRIX_ROW_SEED.entries()) {
@@ -117,6 +135,9 @@ export function buildSeedMatrix(models: Pick<BaseModel, 'id' | 'slug'>[]): SpecM
     items: MATRIX_ITEM_SEED.map((row) => ({ ...row })),
     rows,
     cells,
-    categoryItems: [],
+    categoryItems: MATRIX_CATEGORY_ITEM_SEED.flatMap(([categoryCode, itemCode]) => {
+      const category = categories.find((candidate) => candidate.code === categoryCode);
+      return category ? [{ category_id: category.id, matrix_item_code: itemCode }] : [];
+    }),
   };
 }

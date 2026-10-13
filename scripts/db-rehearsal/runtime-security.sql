@@ -391,8 +391,38 @@ begin
       pg_temp.run_as('authenticated', u_admin, $q$ insert into public.matrix_items (code, label) values ('fireproof', '防火') returning 'inserted' $q$));
     perform pg_temp.expect_denied('9-7 代理店は Category→Item の対応を追加できない', '42501',
       pg_temp.run_as('authenticated', u_dealer1, $q$ insert into public.option_category_matrix_items (category_id, matrix_item_code) select id, 'other' from public.option_categories limit 1 returning 'inserted' $q$));
-    perform pg_temp.expect_eq('9-8 Category→Item の対応は PR A では登録されていない', '0',
+    perform pg_temp.expect_eq('9-8 Category→Item の対応は確定 24 カテゴリーだけ（商品が無い空の DB では登録しない）',
+      (case when exists (select 1 from public.options) then '24' else '0' end),
       (select count(*)::text from public.option_category_matrix_items));
+    perform pg_temp.expect_denied('9-10 お客様は本体分類表の判定関数を直接実行できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, $q$ select public.customer_category_selectable('wing-01', 'hotel', 'kitchen')::text $q$));
+
+    -- 10. 本体分類表の選択 / × は DB のマトリクスから判定する（管理画面での変更がそのまま効く）
+    if exists (select 1 from public.option_category_matrix_items) and exists (select 1 from public.matrix_rows) then
+      perform pg_temp.expect_eq('10-1 Wing ホテル仕様ではキッチンを選べない（確定 seed）', 'false',
+        public.customer_category_selectable('wing-01', 'hotel', 'kitchen')::text);
+      update public.matrix_cells c set selectable = true
+        from public.matrix_rows r join public.base_models m on m.id = r.base_model_id
+       where c.matrix_row_id = r.id and m.slug = 'wing-01' and r.spec_code = 'hotel' and c.matrix_item_code = 'kitchen';
+      perform pg_temp.expect_eq('10-2 セルを「選択」に変えると、同じ判定がすぐに選べるへ変わる（データ駆動）', 'true',
+        public.customer_category_selectable('wing-01', 'hotel', 'kitchen')::text);
+      update public.matrix_rows r set status = 'retired'
+        from public.base_models m where m.id = r.base_model_id and m.slug = 'wing-01' and r.spec_code = 'hotel';
+      perform pg_temp.expect_eq('10-3 行を retired にすると、その仕様では対象カテゴリーを選べない（fail closed）', 'false',
+        public.customer_category_selectable('wing-01', 'hotel', 'kitchen')::text);
+      perform pg_temp.expect_eq('10-4 互換：BOX hotel-single は BOX ホテル仕様と同じ（キッチン不可・ベッド可）', 'false,true',
+        public.customer_category_selectable('box', 'hotel-single', 'kitchen')::text || ',' ||
+        public.customer_category_selectable('box', 'hotel-single', 'bed')::text);
+      perform pg_temp.expect_eq('10-5 互換：本体のみは屋根・外壁／玄関ドア／サッシだけ', 'true,true,false',
+        public.customer_category_selectable('flat', 'base', 'exterior-wall')::text || ',' ||
+        public.customer_category_selectable('flat', 'base', 'sash')::text || ',' ||
+        public.customer_category_selectable('flat', 'base', 'ub')::text);
+      perform pg_temp.expect_eq('10-6 確定 6 行に無い仕様（Wing room）では対象カテゴリーを選べない', 'false',
+        public.customer_category_selectable('wing-01', 'room', 'bed')::text);
+      perform pg_temp.expect_eq('10-7 マトリクスの対象外カテゴリー（断熱）は制限しない', 'true',
+        public.customer_category_selectable('flat', 'office', 'insulation')::text);
+    end if;
+
     perform pg_temp.expect_eq('9-9 防火を選べない行は Flat 事務所だけ（機種がある DB）',
       (case when exists (select 1 from public.base_models where slug = 'flat') then 'flat/office/2100x4550' else '' end),
       (select coalesce(string_agg(m.slug || '/' || r.spec_code || '/' || r.size_code, ','), '')

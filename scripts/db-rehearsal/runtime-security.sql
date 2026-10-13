@@ -96,6 +96,17 @@ declare
   v_bmr_text text;
   v_se_text text;
   v_se_next_text text;
+  -- 標準見積から作成した見積（PR H）の検査用
+  o_dealer constant uuid := '00000000-0000-4000-8000-000000000d02';
+  r_old constant uuid := '00000000-0000-4000-8000-00000000e0dd';
+  q_old constant uuid := '00000000-0000-4000-8000-00000000f0dd';
+  v_tmp text;
+  v_sq_text text;
+  v_sq_base_key text;
+  v_sq_quote_text text;
+  v_sq_rev2_text text;
+  v_old_rev2_text text;
+  v_manual_text text;
 begin
   ---------------------------------------------------------------------------
   -- 試験データ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる）
@@ -538,6 +549,132 @@ begin
         perform pg_temp.expect_eq('14-12 内部原価（標準見積）はお客様・代理店には見えない', '0/0',
           pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.standard_estimate_revisions $q$) || '/' ||
           pg_temp.run_as('authenticated', u_dealer1, $q$ select count(*)::text from public.standard_estimate_revisions $q$));
+
+        -- 15. 標準見積 → 見積（PR H）：作成・編集・発行は本部だけ。POR は発行できず、内部原価は本部だけ。
+        --     第 2 版は直前の発行版を引き継ぎ、最新の標準見積へは追従しない。新しい下書き・版の金額は trunc
+        if to_regprocedure('public.create_standard_quote_case(text, jsonb, text, uuid)') is not null then
+          perform pg_temp.expect_denied('15-1 お客様は標準見積から見積を作れない', '42501',
+            pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_standard_quote_case('検査案件', '{"full_name":"検査 太郎"}'::jsonb, null, %L)::text $q$, v_se_text)));
+          perform pg_temp.expect_denied('15-2 代理店も標準見積から見積を作れない（現在は本部だけ）', '42501',
+            pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_standard_quote_case('検査案件', '{"full_name":"検査 太郎"}'::jsonb, null, %L)::text $q$, v_se_text)));
+          v_sq_text := pg_temp.run_as('authenticated', u_admin,
+            format($q$ select public.create_standard_quote_case('検査案件', '{"full_name":"検査 太郎"}'::jsonb, null, %L)::text $q$, v_se_text));
+          perform pg_temp.expect_eq('15-3 公開中の標準見積から見積下書きを作れ、合計は標準見積と同じ（経費は率から計算し直し、POR は合計に含めない）',
+            'standard_estimate/true/1/482000/530200/5/1',
+            coalesce((select d.source_kind || '/' || (d.standard_estimate_revision_id::text = v_se_text)::text || '/' || d.lock_version || '/' ||
+                             d.subtotal || '/' || d.total || '/' ||
+                             (select count(*) from public.quote_draft_items i where i.draft_id = d.id)::text || '/' ||
+                             (select count(*) from public.quote_draft_items i
+                               where i.draft_id = d.id and i.price_mode = 'por' and i.unit_price is null and i.amount is null)::text
+                        from public.quote_drafts d where d.id::text = v_sq_text), v_sq_text));
+          perform pg_temp.expect_eq('15-4 本部は RPC で率・内部原価を読め、内部原価は標準見積と同じ', '321813/1.5000',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select (public.get_standard_quote_draft(%L) -> 'internals' ->> 'cost_total') || '/' ||
+                                                                       (public.get_standard_quote_draft(%L) -> 'internals' ->> 'markup_rate') $q$, v_sq_text, v_sq_text)));
+          perform pg_temp.expect_denied('15-5 代理店は見積下書きの率・内部原価を読めない', '42501',
+            pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.get_standard_quote_draft(%L)::text $q$, v_sq_text)));
+          perform pg_temp.expect_blocked('15-6 お客様は明細の内部原価の表を直接読めない',
+            pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.quote_draft_item_costs $q$));
+          perform pg_temp.expect_denied('15-7 価格未確定（POR）の明細が残っている見積は発行できない', 'P0001',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select public.finalize_quote_draft(%L, 1)::text $q$, v_sq_text)));
+          perform pg_temp.expect_denied('15-8 手入力の保存処理では、標準見積から作成した見積を保存できない', 'P0001',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_quote_draft(%L, 1, null, '[]'::jsonb, 0, null, null, null)::text $q$, v_sq_text)));
+
+          -- POR を売価入力で確定し、別途工事（2.5 m × 2,001 円）を足して保存する。本体の行へ送った原価（1 円）は使われない
+          v_sq_base_key := (select i.line_key::text from public.quote_draft_items i where i.draft_id::text = v_sq_text and i.kind = 'base');
+          v_tmp := pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_standard_quote_draft(%L, 1, 1.07, 0.15, 1.5,
+              '{"base":"rate","interior_exterior":"rate","option":"rate","sitework":"none"}'::jsonb,
+              jsonb_build_array(
+                jsonb_build_object('line_key', %L, 'section_code', 'base', 'name', '伸縮脚', 'quantity', 12, 'unit', '本', 'price_mode', 'auto', 'cost_unit_price', 1),
+                '{"section_code":"option","name":"洗面器","quantity":1,"price_mode":"auto","cost_unit_price":46150}'::jsonb,
+                '{"section_code":"option","name":"未定の備品","quantity":1,"price_mode":"manual","cost_unit_price":500,"unit_price":900}'::jsonb,
+                '{"section_code":"sitework","name":"据付","quantity":2.5,"unit":"m","price_mode":"manual","cost_unit_price":999,"unit_price":2001}'::jsonb),
+              -756, '端数調整', null)::text $q$, v_sq_text, v_sq_base_key));
+          perform pg_temp.expect_eq('15-9 本部は保存でき、DB が trunc で計算し直す（本体の原価は本体マスターから）', '2/488000/536800/324885',
+            v_tmp || '/' || coalesce((select d.subtotal || '/' || d.total || '/' || n.cost_total
+                                        from public.quote_drafts d join public.quote_draft_internals n on n.draft_id = d.id
+                                       where d.id::text = v_sq_text), '(なし)'));
+          perform pg_temp.expect_denied('15-10 古い版のままの保存は拒否される', 'P0001',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_standard_quote_draft(%L, 1, 1.07, 0.15, 1.5, '{}'::jsonb, '[]'::jsonb, 0, null, null)::text $q$, v_sq_text)));
+
+          v_sq_quote_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.finalize_quote_draft(%L, 2)::text $q$, v_sq_text));
+          perform pg_temp.expect_eq('15-11 価格を確定すると発行でき、内部原価・率・粗利が snapshot に残る（明細 6 行、別途工事は trunc で 5,002 円）',
+            '536800/6/5002/324885/163115/true',
+            coalesce((select q.total || '/' || (select count(*) from public.quote_items qi where qi.quote_id = q.id)::text || '/' ||
+                             (select qi.amount from public.quote_items qi where qi.quote_id = q.id and qi.name = '据付')::text || '/' ||
+                             s.cost_total || '/' || s.gross_profit || '/' || (s.standard_estimate_revision_id::text = v_se_text)::text
+                        from public.quotes q join public.quote_internal_snapshots s on s.quote_id = q.id
+                       where q.id::text = v_sq_quote_text), v_sq_quote_text));
+          perform pg_temp.expect_eq('15-12 発行済み見積の内部原価は、お客様・代理店には見えない', '0/0',
+            pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.quote_internal_snapshots $q$) || '/' ||
+            pg_temp.run_as('authenticated', u_dealer1, $q$ select count(*)::text from public.quote_internal_snapshots $q$));
+          perform pg_temp.expect_eq('15-13 本部は発行済み見積の内部原価を読める', '1',
+            pg_temp.run_as('authenticated', u_admin, format($q$ select count(*)::text from public.quote_internal_snapshots where quote_id = %L $q$, v_sq_quote_text)));
+
+          -- 標準見積の次の版（掛率 200%）を公開しても、見積の第 2 版は追従しない
+          perform pg_temp.run_as('authenticated', u_admin, format($q$ select (public.save_standard_estimate_draft(%L, 1.07, 0.15, 2.0, 0, null,
+            '{"base":"rate","interior_exterior":"rate","option":"rate","sitework":"none"}'::jsonb, '[]'::jsonb, 1)).id::text $q$, v_se_next_text));
+          perform pg_temp.run_as('authenticated', u_admin, format($q$ select (public.publish_standard_estimate_revision(%L, 2)).id::text $q$, v_se_next_text));
+
+          set local session_replication_role = replica;
+          update public.quotes set dealer_id = u_dealer1 where id::text = v_sq_quote_text;
+          set local session_replication_role = origin;
+          perform pg_temp.expect_denied('15-14 担当の代理店でも、標準見積から作成した見積の改訂は作れない（現在は本部だけ）', '42501',
+            pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_quote_revision_draft(%L)::text $q$, v_sq_quote_text)));
+          set local session_replication_role = replica;
+          update public.quotes set dealer_id = null where id::text = v_sq_quote_text;
+          set local session_replication_role = origin;
+
+          v_sq_rev2_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_quote_revision_draft(%L)::text $q$, v_sq_quote_text));
+          perform pg_temp.expect_eq('15-15 第 2 版の下書きは直前の発行版の率・明細・元の標準見積を引き継ぎ、最新の標準見積（掛率 200%）へは追従しない',
+            'standard_estimate/true/1.5000/2/324885',
+            coalesce((select d.source_kind || '/' || (d.standard_estimate_revision_id::text = v_se_text)::text || '/' || n.markup_rate || '/' ||
+                             (select count(*) from public.quote_draft_items i where i.draft_id = d.id and i.price_mode = 'manual')::text || '/' || n.cost_total
+                        from public.quote_drafts d join public.quote_draft_internals n on n.draft_id = d.id
+                       where d.id::text = v_sq_rev2_text), v_sq_rev2_text));
+          v_tmp := pg_temp.run_as('authenticated', u_admin, format($q$ select public.finalize_quote_revision_draft(%L, 0)::text $q$, v_sq_rev2_text));
+          perform pg_temp.expect_eq('15-16 第 2 版も発行でき、内部原価・率は直前の版と同じ snapshot になる', '2/536800/1.5000/324885',
+            coalesce((select q.revision || '/' || q.total || '/' || s.markup_rate || '/' || s.cost_total
+                        from public.quotes q join public.quote_internal_snapshots s on s.quote_id = q.id
+                       where q.id::text = v_tmp), v_tmp));
+
+          -- 旧 round で発行した手入力の版（2.5 m × 2,001 円 = 5,003 円）から第 2 版を作ると、trunc で 5,002 円に計算し直す
+          set local session_replication_role = replica;
+          insert into public.quote_requests (id, configuration_id, user_id, quote_id, status, contact, created_by)
+          values (r_old, null, null, q_old, 'reviewing', '{"full_name":"旧形式 検査"}'::jsonb, u_admin);
+          insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, status, valid_until, customer_name,
+                                     base_model_name, base_price, option_subtotal, installation_subtotal, subtotal, tax_rate, tax, total,
+                                     revision, quote_kind, base_model_id, base_master_revision_id, spec_code, created_by)
+          values (q_old, 'RT-OLD-1', r_old, null, null, 'issued', now() + interval '30 days', '旧形式 検査',
+                  '権限検査用モデル', 0, 0, 5003, 5003, 0.10, 500, 5503,
+                  1, 'formal', v_model, v_bmr_text::uuid, 'office', u_admin);
+          insert into public.quote_items (quote_id, line_key, kind, name, unit_price, quantity, amount, sort_order)
+          values (q_old, gen_random_uuid(), 'installation', '据付（旧 round）', 2001, 2.5, 5003, 1);
+          set local session_replication_role = origin;
+          v_old_rev2_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_quote_revision_draft(%L)::text $q$, q_old));
+          perform pg_temp.expect_eq('15-17 旧 round で発行した版から作る第 2 版は trunc で計算し直す（発行済みの版は 5,003 円のまま）', '5002/5002/5003',
+            coalesce((select (select i.amount from public.quote_draft_items i where i.draft_id = d.id)::text || '/' || d.subtotal_raw || '/' ||
+                             (select qi.amount from public.quote_items qi where qi.quote_id = q_old)::text
+                        from public.quote_drafts d where d.id::text = v_old_rev2_text), v_old_rev2_text));
+
+          -- 手入力の新しい下書きも trunc
+          set local session_replication_role = replica;
+          update public.base_models set presets = '[{"code":"office","label":"事務所"}]'::jsonb where id = v_model;
+          set local session_replication_role = origin;
+          v_manual_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.create_manual_quote_draft_with_items(
+              '検査 手入力', '{"full_name":"手入力 検査"}'::jsonb, null, %L, 'office', 'full', null,
+              '[{"kind":"installation","name":"据付","quantity":2.5,"unit":"m","unit_price":2001}]'::jsonb, 0, null)::text $q$, v_model));
+          perform pg_temp.expect_eq('15-18 手入力の見積も、新しい下書きの金額は trunc（2.5 m × 2,001 円 = 5,002 円）', '5002',
+            coalesce((select i.amount::text from public.quote_draft_items i where i.draft_id::text = v_manual_text), v_manual_text));
+
+          -- 標準見積の閲覧は本部だけ（代理店組織の所属者でも、原価・率を含む標準見積は読めない）
+          set local session_replication_role = replica;
+          insert into public.organizations (id, code, name, organization_type) values (o_dealer, 'RT-DEALER', '検査用代理店', 'dealer');
+          insert into public.organization_memberships (organization_id, profile_id, member_role) values (o_dealer, u_dealer2, 'editor');
+          set local session_replication_role = origin;
+          perform pg_temp.expect_eq('15-19 代理店組織の所属者でも、標準見積（原価・率を含む）は読めない', '0/0',
+            pg_temp.run_as('authenticated', u_dealer2, $q$ select count(*)::text from public.standard_estimate_revisions $q$) || '/' ||
+            pg_temp.run_as('authenticated', u_dealer2, $q$ select count(*)::text from public.standard_estimate_revision_lines $q$));
+        end if;
       end if;
     end if;
 

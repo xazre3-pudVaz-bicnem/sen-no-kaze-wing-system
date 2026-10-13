@@ -195,13 +195,22 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
         </p>
       </div>
       {canCreateQuote && (
-        <Link
-          href="/admin/quotes/new?return_to=%2Fadmin%2Fquotes"
-          className="inline-flex shrink-0 items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
-          data-testid="new-quote-link"
-        >
-          ＋見積書を作成
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Link
+            href="/admin/quotes/standard-drafts/new"
+            className="inline-flex items-center rounded-lg border border-[#2f6b4f] bg-white px-4 py-2.5 text-sm font-semibold text-[#2f6b4f] shadow-sm hover:bg-[#f5faf7]"
+            data-testid="new-standard-quote-link"
+          >
+            標準見積から作成
+          </Link>
+          <Link
+            href="/admin/quotes/new?return_to=%2Fadmin%2Fquotes"
+            className="inline-flex items-center rounded-lg bg-[#2f6b4f] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#285d45]"
+            data-testid="new-quote-link"
+          >
+            ＋見積書を作成
+          </Link>
+        </div>
       )}
     </div>
   );

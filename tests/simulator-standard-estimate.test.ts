@@ -166,5 +166,8 @@ describe('シミュレーターの標準見積（PR C2）：画面', () => {
     expect(data).toContain("rpc('get_standard_estimate_sale_views'");
     expect(data).toContain("isMissingNamedFunction(error, 'get_standard_estimate_sale_views')");
     expect(data).toContain('if (isLocalMode()) return [];');
+    // 売価だけの取得経路はサーバー側（service role）だけが呼べる。ブラウザへは結果だけを渡す
+    expect(data).toContain("import 'server-only';");
+    expect(data).toContain('createAdminClient()');
   });
 });

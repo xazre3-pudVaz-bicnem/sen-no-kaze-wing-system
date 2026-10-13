@@ -127,6 +127,9 @@ declare
   q_cr_old constant uuid := '00000000-0000-4000-8000-00000000f0f3';
   v_cf_change text;
   v_cf_paper text;
+  -- 案件の進行（フェーズ11〜13）の検査用
+  v_mo_text text;
+  v_unit_text text;
   -- 案件の進行（フェーズ4〜7）の検査用
   v_cf_appt text;
   v_cf_file_cust text;
@@ -1107,6 +1110,77 @@ begin
                 ~ '^[0-9a-f-]{36}$' then 'uuid' else 'error' end);
     perform pg_temp.expect_denied('20-15 電子契約の取り消し（cancel_electronic_contract）では書面の契約を取り消せない', 'P0001',
       pg_temp.run_as('authenticated', u_admin, format($q$ select public.cancel_electronic_contract((select id from public.contracts where quote_id = %L and status = 'signed'), 'x')::text $q$, q_pc)));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 21. 製造依頼と個体（フェーズ11）・工程表（12）・施工の記録（13）
+  --     20 で書面の契約を記録した案件（r_pc。担当は代理店1）を使う。総代理店は本部が指定したときだけ製造の担当
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.create_manufacturing_order(uuid, jsonb)') is not null
+     and exists (select 1 from public.contracts c where c.quote_request_id = r_pc and c.status = 'signed') then
+    perform pg_temp.expect_denied('21-1 お客様・関係の無い代理店は製造依頼を作れない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":2}'::jsonb)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('21-2 関係の無い代理店は製造依頼を作れない', '42501',
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":2}'::jsonb)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('21-3 棟数が数字でなければ、分かる形で拒否する', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":"x"}'::jsonb)::text $q$, r_pc)));
+    v_mo_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":2,"spec_note":"標準仕様"}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.expect_eq('21-4 担当代理店は締結済みの案件の製造依頼を作れ、棟数分の個体ができる（番号は発行しない）', 'draft/2/0',
+      coalesce((select o.status from public.manufacturing_orders o where o.id::text = v_mo_text), '(なし)') || '/' ||
+      (select count(*)::text from public.manufacturing_units u where u.order_id::text = v_mo_text) || '/' ||
+      (select count(*)::text from public.manufacturing_units u where u.order_id::text = v_mo_text and u.unit_no is not null));
+    perform pg_temp.expect_denied('21-5 製造の担当が決まるまで送れない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.send_manufacturing_order(%L, 1)::text $q$, v_mo_text)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.set_case_manufacturer(%L, %L)::text $q$, r_pc, u_master));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.send_manufacturing_order(%L, 1)::text $q$, v_mo_text));
+    perform pg_temp.expect_eq('21-6 送ると総代理店へ届き、製造仕様は品名・数量だけ（価格を写さない）', 'sent/true/false/true',
+      coalesce((select o.status from public.manufacturing_orders o where o.id::text = v_mo_text), '(なし)') || '/' ||
+      exists (select 1 from public.manufacturing_orders o where o.id::text = v_mo_text and o.manufacturer_id = u_master)::text || '/' ||
+      exists (select 1 from public.manufacturing_orders o where o.id::text = v_mo_text and o.spec_snapshot::text ~ '(unit_price|amount|total)')::text || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_master and n.kind = 'manufacturing_order_sent')::text);
+    perform pg_temp.expect_denied('21-7 担当代理店は受領できない（総代理店）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_manufacturing_order_status(%L, 'received', 2, null)::text $q$, v_mo_text)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.set_manufacturing_order_status(%L, 'received', 2, null)::text $q$, v_mo_text));
+    perform pg_temp.expect_eq('21-8 総代理店が受領する。お客様は製造依頼・個体を読めない', 'received/0/0',
+      coalesce((select o.status from public.manufacturing_orders o where o.id::text = v_mo_text), '(なし)') || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.manufacturing_orders where id::text = %L $q$, v_mo_text)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.manufacturing_units where order_id::text = %L $q$, v_mo_text)));
+
+    -- 個体
+    v_unit_text := (select u.id::text from public.manufacturing_units u where u.order_id::text = v_mo_text and u.seq = 1);
+    perform pg_temp.expect_denied('21-9 担当代理店は製造・出荷を記録できない（総代理店）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_manufacturing_unit(%L, '{"status":"shipped"}'::jsonb, 1)::text $q$, v_unit_text)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.update_manufacturing_unit(%L, '{"status":"shipped","shipped_on":"2026-10-20"}'::jsonb, 1)::text $q$, v_unit_text));
+    perform pg_temp.expect_denied('21-10 総代理店は設置を記録できない（担当代理店）', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_manufacturing_unit(%L, '{"status":"installed"}'::jsonb, 2)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('21-11 個体の状態は前へだけ進められる（本部以外）', 'P0001',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_manufacturing_unit(%L, '{"status":"in_production"}'::jsonb, 2)::text $q$, v_unit_text)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_manufacturing_unit(%L, '{"status":"installed"}'::jsonb, 2)::text $q$, v_unit_text));
+    perform pg_temp.expect_eq('21-12 総代理店が出荷、担当代理店が設置を記録できる', 'installed/2026-10-20',
+      (select u.status || '/' || u.shipped_on::text from public.manufacturing_units u where u.id::text = v_unit_text));
+
+    -- 工程表
+    perform pg_temp.expect_denied('21-13 総代理店は基礎工事などの現場の工程を作れない', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.save_case_schedule_item(%L, null, '{"category":"foundation","title":"基礎工事"}'::jsonb, null)::text $q$, r_pc)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.save_case_schedule_item(%L, null, '{"category":"manufacturing","title":"製造","customer_visible":true}'::jsonb, null)::text $q$, r_pc));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_case_schedule_item(%L, null, '{"category":"foundation","title":"基礎工事","customer_visible":true}'::jsonb, null)::text $q$, r_pc));
+    perform pg_temp.expect_eq('21-14 お客様には「お客様に表示」の工程だけ見える（総代理店は表示を決められない）。関係の無い代理店には見えない', '基礎工事/0',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select string_agg(title, ',' order by title) from public.case_schedule_items where quote_request_id = %L $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.case_schedule_items where quote_request_id = %L $q$, r_pc)));
+
+    -- 施工の記録
+    perform pg_temp.expect_denied('21-15 総代理店は完了の記録を書けない（進み具合と技術支援だけ）', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.add_case_progress_report(%L, '{"kind":"completion","title":"x"}'::jsonb)::text $q$, r_pc)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.add_case_progress_report(%L, '{"kind":"support","title":"技術支援","customer_visible":true}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.add_case_progress_report(%L, '{"kind":"completion","title":"設置が完了しました","customer_visible":true}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.expect_eq('21-16 お客様には「お客様に表示」の記録だけ見え、表示にした記録はお客様へ知らせる', '設置が完了しました/true',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select string_agg(title, ',') from public.case_progress_reports where quote_request_id = %L $q$, r_pc)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'case_progress_reported')::text);
+    perform pg_temp.expect_eq('21-17 お客様向けの進み具合は製造の状態と台数だけ（製造仕様・供給手配のメモは返さない）', 'received/true',
+      (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L) ->> 'manufacturing_status' $q$, r_pc))) || '/' ||
+      (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L)::text $q$, r_pc)) !~ '(spec_snapshot|supply_note|spec_note)')::text);
+    perform pg_temp.expect_denied('21-18 製造依頼の表は直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ update public.manufacturing_orders set status = 'completed' where id::text = %L returning 'updated' $q$, v_mo_text)));
   end if;
 end
 $test$;

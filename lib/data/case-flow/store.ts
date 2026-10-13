@@ -11,9 +11,18 @@ import type {
   CaseNoteInput,
   CaseProgress,
   CaseWorkflow,
+  CaseProgressReport,
+  CaseScheduleItem,
   DealerProfile,
   DealerProfileInput,
+  ManufacturingOrder,
+  ManufacturingOrderInput,
+  ManufacturingOrderStatus,
+  ManufacturingUnit,
   PaperContractInput,
+  ProgressReportInput,
+  ScheduleItemInput,
+  UnitUpdateInput,
   QuoteChangeRequest,
   QuoteRequestPreferences,
   QuoteRequestPreferencesInput,
@@ -23,6 +32,15 @@ import type {
 
 /** 予約ボードの 1 行（案件の見出し付き） */
 export type BoardAppointment = CaseAppointment & { case_label: string; quote_id: string | null };
+
+/** 製造の一覧の 1 行（案件の見出しと個体の進み具合付き） */
+export type BoardManufacturingOrder = ManufacturingOrder & {
+  case_label: string;
+  case_quote_id: string | null;
+  units_total: number;
+  units_shipped: number;
+  units_installed: number;
+};
 
 /**
  * 案件の進行（フローチャート第4版 フェーズ4〜7）のデータアクセス。
@@ -83,6 +101,28 @@ export interface CaseFlowStore {
   recordPaperContract(actor: SessionUser, quoteId: string, input: PaperContractInput, pdf: Uint8Array): Promise<string>;
   /** 本部：誤って記録した書面の契約を、理由を残して無効にする */
   voidPaperContract(actor: SessionUser, contractId: string, reason: string): Promise<void>;
+
+  // ---- 製造依頼と個体（フェーズ11） ----
+  /** 案件の有効な製造依頼（取り消したものは除く） */
+  getManufacturingOrder(actor: SessionUser, requestId: string): Promise<ManufacturingOrder | null>;
+  listManufacturingUnits(actor: SessionUser, orderId: string): Promise<ManufacturingUnit[]>;
+  /** 本部：全国の製造の進み具合。総代理店：届いた製造依頼。代理店：担当の案件 */
+  listManufacturingBoard(actor: SessionUser): Promise<BoardManufacturingOrder[]>;
+  createManufacturingOrder(actor: SessionUser, requestId: string, input: ManufacturingOrderInput): Promise<string>;
+  updateManufacturingOrder(actor: SessionUser, orderId: string, input: ManufacturingOrderInput, expectedLockVersion: number): Promise<number>;
+  sendManufacturingOrder(actor: SessionUser, orderId: string, expectedLockVersion: number): Promise<number>;
+  setManufacturingOrderStatus(actor: SessionUser, orderId: string, status: ManufacturingOrderStatus, expectedLockVersion: number, reason: string | null): Promise<number>;
+  updateManufacturingUnit(actor: SessionUser, unitId: string, input: UnitUpdateInput, expectedLockVersion: number): Promise<number>;
+
+  // ---- 工程表（フェーズ12） ----
+  listScheduleItems(actor: SessionUser, requestId: string): Promise<CaseScheduleItem[]>;
+  saveScheduleItem(actor: SessionUser, requestId: string, itemId: string | null, input: ScheduleItemInput, expectedLockVersion: number | null): Promise<{ id: string; lock_version: number }>;
+  deleteScheduleItem(actor: SessionUser, itemId: string): Promise<void>;
+
+  // ---- 施工の記録（フェーズ13） ----
+  listProgressReports(actor: SessionUser, requestId: string): Promise<CaseProgressReport[]>;
+  addProgressReport(actor: SessionUser, requestId: string, input: ProgressReportInput): Promise<string>;
+  setProgressReportVisibility(actor: SessionUser, reportId: string, visible: boolean): Promise<void>;
 
   // ---- 写真・書類 ----
   listCaseFiles(actor: SessionUser, requestId: string): Promise<CaseFile[]>;

@@ -226,6 +226,11 @@ export interface CaseProgress {
   primary_staff_name: string | null;
   site_survey_status: 'none' | 'draft' | 'completed';
   site_survey_completed_at: string | null;
+  /** 製造（20261013234000 以降）。送る前・依頼が無いときは none */
+  manufacturing_status?: Exclude<ManufacturingOrderStatus, 'draft'> | 'none';
+  unit_count?: number | null;
+  units_shipped?: number;
+  units_installed?: number;
 }
 
 // ---------- 日程（フェーズ6・予約ボード） ----------
@@ -510,6 +515,307 @@ export function normalizePaperContractInput(raw: Record<string, unknown>, today:
   min.setUTCDate(min.getUTCDate() - 3650);
   if ((signedOn as string) > today || (signedOn as string) < min.toISOString().slice(0, 10)) fail('締結日を正しく入力してください');
   return { signer_name: name as string, signer_email: email, signed_on: signedOn as string };
+}
+
+// ---------- 製造依頼と個体（フェーズ11） ----------
+
+export type ManufacturingOrderStatus = 'draft' | 'sent' | 'received' | 'in_production' | 'shipped' | 'completed' | 'canceled';
+export const MANUFACTURING_ORDER_STATUS_LABELS: Record<ManufacturingOrderStatus, string> = {
+  draft: '作成中（未送信）',
+  sent: '依頼済み（受領待ち）',
+  received: '受領済み',
+  in_production: '製造中',
+  shipped: '出荷済み',
+  completed: '完了',
+  canceled: '取り消し',
+};
+
+export interface ManufacturingSpecSnapshot {
+  quote_no: string;
+  revision: number | null;
+  base_model_name: string;
+  spec_code: string | null;
+  finish_level: string | null;
+  items: { kind: string; name: string; quantity: number | string; unit: string | null }[];
+}
+
+export interface ManufacturingOrder {
+  id: string;
+  quote_request_id: string;
+  contract_id: string;
+  quote_id: string;
+  manufacturer_id: string | null;
+  status: ManufacturingOrderStatus;
+  unit_count: number;
+  requested_delivery_on: string | null;
+  spec_note: string | null;
+  spec_snapshot: ManufacturingSpecSnapshot | null;
+  supply_note: string | null;
+  /** 注文番号（採番の形式が先方の確認待ちのため、まだ発行しない） */
+  order_no: string | null;
+  sent_at: string | null;
+  received_at: string | null;
+  completed_at: string | null;
+  canceled_at: string | null;
+  cancel_reason: string | null;
+  lock_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturingOrderInput {
+  unit_count: number;
+  requested_delivery_on: string | null;
+  spec_note: string | null;
+  supply_note: string | null;
+}
+
+export const UNIT_STATUSES = ['planned', 'in_production', 'inspected', 'shipped', 'installed', 'handed_over'] as const;
+export type UnitStatus = (typeof UNIT_STATUSES)[number];
+export const UNIT_STATUS_LABELS: Record<UnitStatus, string> = {
+  planned: '製造前',
+  in_production: '製造中',
+  inspected: '検査済み',
+  shipped: '出荷済み',
+  installed: '設置済み',
+  handed_over: '引渡し済み',
+};
+
+export interface ManufacturingUnit {
+  id: string;
+  order_id: string;
+  quote_request_id: string;
+  seq: number;
+  /** 個体番号（採番の形式が先方の確認待ちのため、まだ発行しない） */
+  unit_no: string | null;
+  status: UnitStatus;
+  produced_on: string | null;
+  inspected_on: string | null;
+  shipped_on: string | null;
+  installed_on: string | null;
+  handed_over_on: string | null;
+  note: string | null;
+  lock_version: number;
+  updated_at: string;
+}
+
+export interface UnitUpdateInput {
+  status: UnitStatus;
+  produced_on: string | null;
+  inspected_on: string | null;
+  shipped_on: string | null;
+  installed_on: string | null;
+  handed_over_on: string | null;
+  note: string | null;
+}
+
+const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+
+function cfDate(value: unknown, label: string): string | null {
+  const text = cfText(value, 10, label);
+  if (!text) return null;
+  if (!isDate(text)) fail(`${label}の形式が正しくありません`);
+  return text;
+}
+
+export function normalizeManufacturingOrderInput(raw: Record<string, unknown>, today: string): ManufacturingOrderInput {
+  const count = typeof raw.unit_count === 'number' ? raw.unit_count : Number(String(raw.unit_count ?? '').trim());
+  if (!Number.isInteger(count) || count < 1 || count > 50) fail('棟数は 1〜50 で入力してください');
+  const delivery = cfDate(raw.requested_delivery_on, '希望納期');
+  if (delivery) {
+    const last = new Date(`${today}T00:00:00Z`);
+    last.setUTCDate(last.getUTCDate() + 1095);
+    if (delivery < today || delivery > last.toISOString().slice(0, 10)) fail('希望納期は今日から 3 年以内の日付にしてください');
+  }
+  return {
+    unit_count: count,
+    requested_delivery_on: delivery,
+    spec_note: cfText(raw.spec_note, 4000, '製造仕様のメモ'),
+    supply_note: cfText(raw.supply_note, 2000, '基幹資材の供給手配'),
+  };
+}
+
+/** 個体の状態を変えられるか（DB の update_manufacturing_unit と同じ）。製造・検査・出荷は製造の担当、設置・引渡しは担当代理店。本部はすべて・戻すこともできる */
+export function canSetUnitStatus(access: CaseAccess, from: UnitStatus, to: UnitStatus): boolean {
+  if (access === 'customer') return false;
+  if (to !== from) {
+    if ((to === 'in_production' || to === 'inspected' || to === 'shipped') && access !== 'admin' && access !== 'manufacturer') return false;
+    if ((to === 'installed' || to === 'handed_over') && access !== 'admin' && access !== 'staff') return false;
+  }
+  if (UNIT_STATUSES.indexOf(to) < UNIT_STATUSES.indexOf(from) && access !== 'admin') return false;
+  return true;
+}
+
+export function normalizeUnitInput(raw: Record<string, unknown>, current: UnitStatus): UnitUpdateInput {
+  const status = (cfText(raw.status, 20, '個体の状態') ?? current) as UnitStatus;
+  if (!(UNIT_STATUSES as readonly string[]).includes(status)) fail('個体の状態が正しくありません');
+  return {
+    status,
+    produced_on: cfDate(raw.produced_on, '製造日'),
+    inspected_on: cfDate(raw.inspected_on, '検査日'),
+    shipped_on: cfDate(raw.shipped_on, '出荷日'),
+    installed_on: cfDate(raw.installed_on, '設置日'),
+    handed_over_on: cfDate(raw.handed_over_on, '引渡し日'),
+    note: cfText(raw.note, 1000, '個体のメモ'),
+  };
+}
+
+/** 製造依頼の状態の変更（DB の set_manufacturing_order_status と同じ） */
+export function canChangeOrderStatus(access: CaseAccess, from: ManufacturingOrderStatus, to: ManufacturingOrderStatus): boolean {
+  const role =
+    to === 'received' || to === 'in_production' || to === 'shipped'
+      ? access === 'admin' || access === 'manufacturer'
+      : to === 'completed'
+        ? access === 'admin' || access === 'staff'
+        : to === 'canceled'
+          ? access === 'admin'
+          : false;
+  if (!role) return false;
+  return (
+    (from === 'sent' && to === 'received') ||
+    (from === 'received' && to === 'in_production') ||
+    (from === 'in_production' && to === 'shipped') ||
+    (from === 'shipped' && to === 'completed') ||
+    (from !== 'completed' && from !== 'canceled' && to === 'canceled')
+  );
+}
+
+// ---------- 工程表（フェーズ12） ----------
+
+export const SCHEDULE_CATEGORIES = [
+  'manufacturing',
+  'inspection',
+  'shipping',
+  'delivery',
+  'foundation',
+  'installation',
+  'electrical',
+  'plumbing',
+  'equipment',
+  'handover',
+  'other',
+] as const;
+export type ScheduleCategory = (typeof SCHEDULE_CATEGORIES)[number];
+export const SCHEDULE_CATEGORY_LABELS: Record<ScheduleCategory, string> = {
+  manufacturing: '製造',
+  inspection: '品質検査',
+  shipping: '出荷',
+  delivery: '配送・搬入',
+  foundation: '基礎工事',
+  installation: '設置',
+  electrical: '電気工事',
+  plumbing: '給排水工事',
+  equipment: '設備',
+  handover: '引渡し',
+  other: 'その他',
+};
+/** 製造の担当（総代理店）が編集できる工程 */
+export const MANUFACTURER_SCHEDULE_CATEGORIES: ScheduleCategory[] = ['manufacturing', 'inspection', 'shipping'];
+
+export type ScheduleStatus = 'planned' | 'in_progress' | 'done' | 'delayed';
+export const SCHEDULE_STATUS_LABELS: Record<ScheduleStatus, string> = { planned: '予定', in_progress: '進行中', done: '完了', delayed: '遅れ' };
+
+export interface CaseScheduleItem {
+  id: string;
+  quote_request_id: string;
+  category: ScheduleCategory;
+  title: string;
+  planned_start: string | null;
+  planned_end: string | null;
+  actual_start: string | null;
+  actual_end: string | null;
+  status: ScheduleStatus;
+  customer_visible: boolean;
+  /** お客様に見せる項目では、お客様にも表示される */
+  note: string | null;
+  sort_order: number;
+  lock_version: number;
+  updated_at: string;
+}
+
+export interface ScheduleItemInput {
+  category: ScheduleCategory;
+  title: string;
+  planned_start: string | null;
+  planned_end: string | null;
+  actual_start: string | null;
+  actual_end: string | null;
+  status: ScheduleStatus;
+  customer_visible: boolean;
+  note: string | null;
+}
+
+export function normalizeScheduleItemInput(raw: Record<string, unknown>): ScheduleItemInput {
+  const category = cfText(raw.category, 20, '工程の種類');
+  if (!category || !(SCHEDULE_CATEGORIES as readonly string[]).includes(category)) fail('工程の種類が正しくありません');
+  const title = cfText(raw.title, 100, '工程名');
+  if (!title) fail('工程名を入力してください');
+  const status = cfText(raw.status, 20, '工程の状態') ?? 'planned';
+  if (!['planned', 'in_progress', 'done', 'delayed'].includes(status)) fail('工程の状態が正しくありません');
+  const input = {
+    category: category as ScheduleCategory,
+    title: title as string,
+    planned_start: cfDate(raw.planned_start, '予定の開始日'),
+    planned_end: cfDate(raw.planned_end, '予定の終了日'),
+    actual_start: cfDate(raw.actual_start, '実績の開始日'),
+    actual_end: cfDate(raw.actual_end, '実績の終了日'),
+    status: status as ScheduleStatus,
+    customer_visible: raw.customer_visible === true,
+    note: cfText(raw.note, 1000, 'メモ'),
+  };
+  if ((input.planned_start && input.planned_end && input.planned_end < input.planned_start) || (input.actual_start && input.actual_end && input.actual_end < input.actual_start)) {
+    fail('終了日は開始日以降にしてください');
+  }
+  return input;
+}
+
+// ---------- 施工の記録（フェーズ13） ----------
+
+export type ProgressKind = 'progress' | 'completion' | 'inspection' | 'support';
+export const PROGRESS_KIND_LABELS: Record<ProgressKind, string> = { progress: '進み具合', completion: '完了', inspection: '検査', support: '技術支援' };
+/** 製造の担当（総代理店）が書ける記録 */
+export const MANUFACTURER_PROGRESS_KINDS: ProgressKind[] = ['progress', 'support'];
+
+export interface CaseProgressReport {
+  id: string;
+  quote_request_id: string;
+  schedule_item_id: string | null;
+  kind: ProgressKind;
+  title: string;
+  body: string | null;
+  reported_on: string;
+  customer_visible: boolean;
+  created_by: string;
+  author_name: string;
+  created_at: string;
+}
+
+export interface ProgressReportInput {
+  kind: ProgressKind;
+  title: string;
+  body: string | null;
+  reported_on: string;
+  schedule_item_id: string | null;
+  customer_visible: boolean;
+}
+
+export function normalizeProgressReportInput(raw: Record<string, unknown>, today: string): ProgressReportInput {
+  const kind = cfText(raw.kind, 20, '記録の種類');
+  if (!kind || !['progress', 'completion', 'inspection', 'support'].includes(kind)) fail('記録の種類が正しくありません');
+  const title = cfText(raw.title, 100, '見出し');
+  if (!title) fail('見出しを入力してください');
+  const on = cfDate(raw.reported_on, '記録日') ?? today;
+  if (on > today) fail('記録日は今日以前の日付にしてください');
+  const item = cfText(raw.schedule_item_id, 36, '工程の指定');
+  if (item && !/^[0-9a-f-]{36}$/i.test(item)) fail('工程の指定が正しくありません');
+  return {
+    kind: kind as ProgressKind,
+    title: title as string,
+    body: cfText(raw.body, 4000, '内容'),
+    reported_on: on,
+    schedule_item_id: item,
+    customer_visible: raw.customer_visible === true,
+  };
 }
 
 // ---------- 案件の写真・書類 ----------

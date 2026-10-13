@@ -5,7 +5,14 @@ import { requireUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
 import { activeContract } from '@/lib/domain/electronic-contract';
-import { APPOINTMENT_PURPOSE_LABELS, MEETING_METHOD_LABELS, formatCandidate } from '@/lib/domain/case-flow';
+import {
+  APPOINTMENT_PURPOSE_LABELS,
+  MANUFACTURING_ORDER_STATUS_LABELS,
+  MEETING_METHOD_LABELS,
+  SCHEDULE_CATEGORY_LABELS,
+  SCHEDULE_STATUS_LABELS,
+  formatCandidate,
+} from '@/lib/domain/case-flow';
 import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
 import { formatDate } from '@/lib/utils';
 import { Badge, Container, Section } from '@/components/ui';
@@ -27,12 +34,15 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
   if (access !== 'customer') notFound();
 
   const store = await getStore();
-  const [progress, appointments, files, quotes, contracts] = await Promise.all([
+  const [progress, appointments, files, quotes, contracts, scheduleItems, reports] = await Promise.all([
     caseFlow.getCaseProgress(user, id),
     caseFlow.listCaseAppointments(user, id),
     caseFlow.listCaseFiles(user, id),
     store.listQuotes(user.id),
     store.listElectronicContracts(id, user),
+    // お客様には、担当が「お客様に表示」にした工程・記録だけが返る（RLS）
+    caseFlow.listScheduleItems(user, id),
+    caseFlow.listProgressReports(user, id),
   ]);
   const caseQuotes = quotes.filter((q) => q.quote_request_id === id).sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0));
   const latest = caseQuotes[0] ?? null;
@@ -59,7 +69,24 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
     },
     { key: 'formal', label: '正式見積', done: Boolean(formal), detail: formal ? `第${formal.revision}版` : null },
     { key: 'contract', label: 'ご契約', done: contract?.status === 'signed', detail: contract?.signed_at ? formatDate(contract.signed_at) : null },
+    {
+      key: 'manufacturing',
+      label: '製造',
+      done: progress?.manufacturing_status === 'shipped' || progress?.manufacturing_status === 'completed',
+      detail:
+        progress?.manufacturing_status && progress.manufacturing_status !== 'none'
+          ? `${MANUFACTURING_ORDER_STATUS_LABELS[progress.manufacturing_status]}${progress.unit_count ? `（${progress.unit_count}棟中 出荷 ${progress.units_shipped ?? 0}）` : ''}`
+          : null,
+    },
+    {
+      key: 'installation',
+      label: '設置・施工',
+      done: Boolean(progress?.unit_count) && (progress?.units_installed ?? 0) >= (progress?.unit_count ?? 0),
+      detail: progress?.unit_count ? `${progress.units_installed ?? 0} / ${progress.unit_count} 棟 設置済み` : null,
+    },
   ];
+  const progressFiles = files.filter((file) => file.context === 'progress');
+  const otherFiles = files.filter((file) => file.context !== 'progress');
 
   return (
     <Section className="py-10 sm:py-14">
@@ -76,7 +103,7 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
           </p>
         </div>
 
-        <ol className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6" data-testid="customer-case-steps">
+        <ol className="grid gap-2 sm:grid-cols-4 lg:grid-cols-8" data-testid="customer-case-steps">
           {steps.map((step) => (
             <li key={step.key} className={`rounded-lg border p-3 text-sm ${step.done ? 'border-[#cfe3d6] bg-[#f3faf5]' : 'border-line bg-white'}`}>
               <p className="text-xs text-muted">{step.done ? '完了' : 'これから'}</p>
@@ -120,10 +147,51 @@ export default async function CustomerCasePage({ params }: { params: Promise<{ i
             ))}
         </section>
 
+        {scheduleItems.length > 0 && (
+          <section className="card space-y-3 p-5" data-testid="customer-case-schedule">
+            <h2 className="text-lg font-semibold">工程表</h2>
+            <ul className="divide-y divide-line text-sm">
+              {scheduleItems.map((item) => (
+                <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span>
+                    <span className="mr-2 text-xs text-muted">{SCHEDULE_CATEGORY_LABELS[item.category]}</span>
+                    {item.title}
+                    {item.note && <span className="ml-2 text-xs text-ink-soft">{item.note}</span>}
+                  </span>
+                  <span className="text-xs text-ink-soft">
+                    {item.actual_end
+                      ? `${item.actual_end} 完了`
+                      : item.planned_start
+                        ? `予定 ${item.planned_start}${item.planned_end && item.planned_end !== item.planned_start ? `〜${item.planned_end}` : ''}`
+                        : '日程調整中'}
+                    <Badge tone={item.status === 'done' ? 'success' : item.status === 'delayed' ? 'warn' : 'neutral'} className="ml-2">
+                      {SCHEDULE_STATUS_LABELS[item.status]}
+                    </Badge>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {reports.length > 0 && (
+          <section className="card space-y-4 p-5" data-testid="customer-case-progress">
+            <h2 className="text-lg font-semibold">施工の様子</h2>
+            {reports.map((report) => (
+              <article key={report.id} className="space-y-2 border-t border-line pt-3 first:border-t-0 first:pt-0">
+                <p className="text-xs text-muted">{report.reported_on}</p>
+                <h3 className="font-semibold">{report.title}</h3>
+                {report.body && <p className="whitespace-pre-wrap text-sm text-ink-soft">{report.body}</p>}
+                <CaseFileList files={progressFiles.filter((file) => file.context_id === report.id)} actor={user} quoteId={null} requestId={id} back={`/mypage/cases/${id}`} />
+              </article>
+            ))}
+          </section>
+        )}
+
         <section className="card space-y-3 p-5" data-testid="customer-case-files">
           <h2 className="text-lg font-semibold">写真・資料</h2>
           <p className="text-xs text-muted">担当がお客様向けに共有した写真・資料と、お客様が登録した資料です。</p>
-          <CaseFileList files={files} actor={user} quoteId={null} requestId={id} back={`/mypage/cases/${id}`} />
+          <CaseFileList files={otherFiles} actor={user} quoteId={null} requestId={id} back={`/mypage/cases/${id}`} />
           <details className="rounded-lg bg-[#f7f8f8] p-3">
             <summary className="cursor-pointer text-sm">設置予定地の写真・図面を担当へ送る</summary>
             <div className="mt-2">

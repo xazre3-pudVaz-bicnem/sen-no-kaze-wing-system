@@ -2,8 +2,12 @@ import type {
   CaseAppointment,
   CaseFile,
   CaseNote,
+  CaseProgressReport,
+  CaseScheduleItem,
   CaseWorkflow,
   DealerProfile,
+  ManufacturingOrder,
+  ManufacturingUnit,
   QuoteChangeRequest,
   QuoteRequestPreferences,
   SiteSurvey,
@@ -20,8 +24,26 @@ export interface LocalCaseFlowTables {
   files: CaseFile[];
   /** 見積の修正依頼（20261013230000） */
   changeRequests?: QuoteChangeRequest[];
+  /** 製造依頼・個体・工程表・施工の記録（20261013234000） */
+  orders?: ManufacturingOrder[];
+  units?: ManufacturingUnit[];
+  scheduleItems?: CaseScheduleItem[];
+  progressReports?: CaseProgressReport[];
 }
 
 export function emptyCaseFlowTables(): LocalCaseFlowTables {
-  return { dealerProfiles: [], preferences: [], workflows: [], appointments: [], siteSurveys: [], notes: [], files: [], changeRequests: [] };
+  return {
+    dealerProfiles: [],
+    preferences: [],
+    workflows: [],
+    appointments: [],
+    siteSurveys: [],
+    notes: [],
+    files: [],
+    changeRequests: [],
+    orders: [],
+    units: [],
+    scheduleItems: [],
+    progressReports: [],
+  };
 }

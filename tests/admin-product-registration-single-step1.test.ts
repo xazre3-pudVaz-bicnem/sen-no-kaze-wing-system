@@ -43,7 +43,9 @@ describe('商品登録 STEP1 の1画面導線', () => {
     expect(editPage).toContain("content: '4. お客様選択'");
     expect(editPage).toContain("content: '5. 価格・対象モデル'");
     expect(editPage).toContain('6. 登録前チェック');
-    for (const label of sections) expect(editPage).toContain(label);
+    expect(editPage).toContain('<OptionMediaManager option={option} />');
+    expect(editPage).toContain('<OptionVariantManager option={option}');
+    expect(editPage).toContain('STEP 2 登録内容確認へ');
   });
 
   it('最終確認だけはSTEP2として別画面に残す', () => {

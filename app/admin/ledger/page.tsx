@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
-import { ProductLedgerScrollRestore } from '@/components/admin/product-ledger-scroll-restore';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
@@ -38,7 +37,6 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       [data-testid="ledger-table-view"] thead th:nth-child(5) { width: 12%; }
       [data-testid="ledger-table-view"] thead th:nth-child(6) { width: 6%; }
     `}</style>
-    <ProductLedgerScrollRestore />
     <FlashMessages sp={sp} />
     <ProductLedgerClient
       canEdit={editor}

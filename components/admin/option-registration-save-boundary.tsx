@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui';
+import { OptionRegistrationUiEnhancer } from '@/components/admin/option-registration-ui-enhancer';
 
 type SaveHandler = () => Promise<boolean>;
 
@@ -131,6 +132,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     <OptionRegistrationSaveContext.Provider
       value={{ registerSaveHandler, markDirty, markClean, saveIfDirty, saving }}
     >
+      <OptionRegistrationUiEnhancer scrollAfterCreate />
       <div onClickCapture={handleClickCapture} onSubmitCapture={handleSubmitCapture}>{children}</div>
     </OptionRegistrationSaveContext.Provider>
   );

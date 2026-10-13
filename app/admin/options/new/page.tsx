@@ -5,6 +5,7 @@ import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registr
 import { Alert } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
+import { OptionRegistrationUiEnhancer } from '@/components/admin/option-registration-ui-enhancer';
 
 export default async function NewOptionPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
@@ -43,7 +44,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   }
 
   const lockedSections = [
-    ['2', '商品の詳細', '商品説明・メーカー記載の特徴'],
+    ['2', '商品の詳細', 'サイズ・仕様・商品説明・メーカー記載の特徴'],
     ['3', '画像・資料', 'メイン画像・サブ画像・メーカー資料'],
     ['4', 'お客様選択', '色・仕様など、お客様が選べる項目'],
     ['5', '価格・対象モデル', '商品価格・対象モデル・公開条件'],
@@ -93,9 +94,11 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
         <div className="registration-create-sections flex flex-col gap-6">
           <style>{`
             .registration-create-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
+            .registration-create-sections #product-identify .grid > *:has(#size_note-create) { display: none; }
             .registration-create-sections #product-identify [data-testid="admin-submit"] { font-size: 0; }
             .registration-create-sections #product-identify [data-testid="admin-submit"]::after { content: '基本情報を保存して続ける'; font-size: 0.875rem; }
           `}</style>
+          <OptionRegistrationUiEnhancer hideCreateSize />
 
           <OptionForm
             option={null}

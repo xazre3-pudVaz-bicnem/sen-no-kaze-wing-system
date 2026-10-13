@@ -1,0 +1,40 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const enhancer = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-registration-ui-enhancer.tsx'),
+  'utf8'
+);
+const newPage = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'),
+  'utf8'
+);
+const saveBoundary = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-registration-save-boundary.tsx'),
+  'utf8'
+);
+
+describe('商品登録 UI polish', () => {
+  it('カテゴリーはグループ見出しを1回だけ表示するselectへ変換する', () => {
+    expect(enhancer).toContain("document.createElement('optgroup')");
+    expect(enhancer).toContain('GROUP_LABEL_PATTERN');
+    expect(enhancer).toContain("match?.[2]?.trim()");
+    expect(enhancer).toContain("select[name=\"category_id\"]");
+    expect(enhancer).toContain("original.dispatchEvent(new Event('change', { bubbles: true }))");
+  });
+
+  it('新規登録ではサイズ・仕様を基本情報から隠し、2. 商品の詳細として案内する', () => {
+    expect(newPage).toContain('<OptionRegistrationUiEnhancer hideCreateSize />');
+    expect(newPage).toContain("['2', '商品の詳細', 'サイズ・仕様・商品説明・メーカー記載の特徴']");
+    expect(enhancer).toContain("document.getElementById('size_note-create')");
+  });
+
+  it('基本情報保存後は2. 商品の詳細へ余白を確保して自動スクロールする', () => {
+    expect(saveBoundary).toContain('<OptionRegistrationUiEnhancer scrollAfterCreate />');
+    expect(enhancer).toContain("params.get('created')");
+    expect(enhancer).toContain("document.getElementById('product-details')");
+    expect(enhancer).toContain("target.style.scrollMarginTop = '96px'");
+    expect(enhancer).toContain("target.scrollIntoView({ behavior: 'smooth', block: 'start' })");
+  });
+});

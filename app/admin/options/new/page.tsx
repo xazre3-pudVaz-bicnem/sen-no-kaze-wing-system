@@ -1,6 +1,7 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
+import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { Alert } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { OptionForm } from '@/components/admin/forms';
@@ -19,7 +20,9 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const freeCategory = registrationCategories.find((c) => c.code === FREE_PRODUCT_CATEGORY_CODE);
   const requestedFreeCategory = Boolean(sp.category && sp.category === freeCategory?.id);
   const freeRegistrationBlocked = requestedFreeCategory || !catalogEditor;
-  const categories = registrationCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE);
+  const categories = productRegistrationCategoryDisplay(
+    registrationCategories.filter((c) => c.code !== FREE_PRODUCT_CATEGORY_CODE)
+  );
   const defaultCategoryId = requestedFreeCategory ? undefined : sp.category;
   const returnTo = typeof sp.return_to === 'string' && sp.return_to.startsWith('/admin/') ? sp.return_to : undefined;
   const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;

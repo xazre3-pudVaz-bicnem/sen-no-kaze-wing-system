@@ -47,6 +47,7 @@ const sections: NavSection[] = [
       '/admin/quote-management',
       '/admin/base-masters',
       '/admin/matrix',
+      '/admin/standard-estimates',
       '/admin/estimate-templates',
       '/admin/base-breakdown',
       '/admin/quotes/new',

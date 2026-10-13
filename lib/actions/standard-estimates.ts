@@ -1,0 +1,136 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { z } from 'zod';
+import { requireAdmin } from '@/lib/auth/session';
+import { isLocalMode } from '@/lib/data/store';
+import { createClient } from '@/lib/supabase/server';
+
+/**
+ * 標準見積の管理画面（PR F）。DB の RPC（PR E）を呼ぶだけで、金額はすべて DB が計算する。
+ * 本体マスターと同じく Supabase 接続環境だけで使う（ローカル検証モードでは案内だけ）。
+ */
+
+export type StandardEstimateActionResult =
+  | { ok: true; message: string; lockVersion?: number }
+  | { ok: false; error: string };
+
+const rate = z.union([z.string(), z.number()]).transform((value) => String(value).trim()).pipe(z.string().regex(/^\d+(\.\d{1,4})?$/, '率の形式が正しくありません'));
+
+const lineSchema = z.object({
+  line_key: z.uuid().nullable(),
+  section_code: z.enum(['interior_exterior', 'option', 'sitework']),
+  group_label: z.string().trim().max(120).nullable(),
+  name: z.string().trim().min(1, '品名を入力してください').max(120),
+  quantity: z.union([z.string(), z.number()]).transform((value) => String(value).trim()),
+  unit: z.string().trim().max(12).nullable(),
+  price_mode: z.enum(['auto', 'manual', 'por']),
+  cost_unit_price: z.number().int().min(0).nullable(),
+  unit_price: z.number().int().min(0).nullable(),
+  remark: z.string().trim().max(200).nullable(),
+});
+
+const saveSchema = z.object({
+  revision_id: z.uuid(),
+  expected_lock_version: z.number().int().min(1),
+  sales_fee_rate: rate,
+  expense_rate: rate,
+  markup_rate: rate,
+  adjustment: z.number().int(),
+  adjustment_reason: z.string().trim().max(200),
+  section_methods: z.object({
+    base: z.enum(['rate', 'none']),
+    interior_exterior: z.enum(['rate', 'none']),
+    option: z.enum(['rate', 'none']),
+    sitework: z.enum(['rate', 'none']),
+  }),
+  lines: z.array(lineSchema).max(300),
+});
+
+function message(error: { message?: string } | null | undefined): string {
+  const raw = error?.message ?? '処理に失敗しました。時間をおいて再度お試しください。';
+  return raw.replace(/^(VALIDATION|FORBIDDEN|LOCKED|NOT_FOUND):\s*/i, '');
+}
+
+function localUnavailable(): StandardEstimateActionResult | null {
+  return isLocalMode() ? { ok: false, error: '標準見積の管理はSupabase接続環境で利用できます。' } : null;
+}
+
+/** 公開中の本体 Revision を基準に、標準見積の下書きを作る */
+export async function createStandardEstimateDraftAction(formData: FormData): Promise<void> {
+  await requireAdmin('/admin/standard-estimates');
+  if (isLocalMode()) redirect('/admin/standard-estimates?error=local');
+  const baseRevisionId = z.uuid().safeParse(formData.get('base_master_revision_id'));
+  if (!baseRevisionId.success) redirect('/admin/standard-estimates?error=invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('create_standard_estimate_draft', { p_base_master_revision_id: baseRevisionId.data });
+  if (error || !data) redirect(`/admin/standard-estimates?error=${encodeURIComponent(message(error))}`);
+  revalidatePath('/admin/standard-estimates');
+  redirect(`/admin/standard-estimates/${data as string}?created=1`);
+}
+
+/** 下書きを保存する（率・調整額・区分の経費の方法・明細）。DB が全額を計算し直す */
+export async function saveStandardEstimateDraftAction(input: unknown): Promise<StandardEstimateActionResult> {
+  await requireAdmin('/admin/standard-estimates');
+  const unavailable = localUnavailable();
+  if (unavailable) return unavailable;
+  const parsed = saveSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' };
+  const value = parsed.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('save_standard_estimate_draft', {
+    p_revision_id: value.revision_id,
+    p_sales_fee_rate: value.sales_fee_rate,
+    p_expense_rate: value.expense_rate,
+    p_markup_rate: value.markup_rate,
+    p_adjustment: value.adjustment,
+    p_adjustment_reason: value.adjustment_reason || null,
+    p_section_methods: value.section_methods,
+    p_lines: value.lines.map((line) => ({
+      ...line,
+      cost_unit_price: line.price_mode === 'por' ? null : line.cost_unit_price,
+      unit_price: line.price_mode === 'manual' ? line.unit_price : null,
+    })),
+    p_expected_lock_version: value.expected_lock_version,
+  });
+  if (error) return { ok: false, error: message(error) };
+  revalidatePath(`/admin/standard-estimates/${value.revision_id}`);
+  revalidatePath('/admin/standard-estimates');
+  return { ok: true, message: '保存しました。金額は DB で計算し直しています。', lockVersion: (data as { lock_version?: number } | null)?.lock_version };
+}
+
+/** 下書きを公開する（前の公開版は置き換え済みになる） */
+export async function publishStandardEstimateRevisionAction(input: unknown): Promise<StandardEstimateActionResult> {
+  await requireAdmin('/admin/standard-estimates');
+  const unavailable = localUnavailable();
+  if (unavailable) return unavailable;
+  const parsed = z.object({ revision_id: z.uuid(), expected_lock_version: z.number().int().min(1) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: '入力内容を確認してください' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('publish_standard_estimate_revision', {
+    p_revision_id: parsed.data.revision_id,
+    p_expected_lock_version: parsed.data.expected_lock_version,
+  });
+  if (error) return { ok: false, error: message(error) };
+  revalidatePath(`/admin/standard-estimates/${parsed.data.revision_id}`);
+  revalidatePath('/admin/standard-estimates');
+  return { ok: true, message: '公開しました。' };
+}
+
+/** 公開版の率・明細を写して次の Revision の下書きを作る */
+export async function startNextStandardEstimateRevisionAction(formData: FormData): Promise<void> {
+  await requireAdmin('/admin/standard-estimates');
+  if (isLocalMode()) redirect('/admin/standard-estimates?error=local');
+  const masterId = z.uuid().safeParse(formData.get('master_id'));
+  const baseRevisionId = z.uuid().nullable().safeParse(formData.get('base_master_revision_id') || null);
+  if (!masterId.success || !baseRevisionId.success) redirect('/admin/standard-estimates?error=invalid');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('start_next_standard_estimate_revision', {
+    p_master_id: masterId.data,
+    p_base_master_revision_id: baseRevisionId.data,
+  });
+  if (error || !data) redirect(`/admin/standard-estimates?error=${encodeURIComponent(message(error))}`);
+  revalidatePath('/admin/standard-estimates');
+  redirect(`/admin/standard-estimates/${data as string}?created=1`);
+}

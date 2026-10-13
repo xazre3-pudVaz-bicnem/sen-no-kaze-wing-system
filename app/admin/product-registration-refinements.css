@@ -93,3 +93,146 @@
   font-size: 0.75rem;
   line-height: 1.25rem;
 }
+
+/* 商品登録は、枠を増やすより入力場所と説明の文字差で読みやすくする。 */
+.registration-step1-sections {
+  gap: 1.25rem !important;
+}
+
+.registration-step1-sections .card {
+  border-radius: 0.875rem;
+}
+
+.registration-step1-sections .text-sm {
+  font-size: 0.9375rem !important;
+  line-height: 1.55 !important;
+}
+
+.registration-step1-sections .text-xs {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}
+
+.registration-step1-sections .label,
+.registration-step1-sections label:not(:has(input[type='checkbox'])) {
+  font-size: 0.875rem;
+}
+
+.registration-step1-sections input:not([type='hidden']):not([type='checkbox']):not([type='radio']),
+.registration-step1-sections textarea,
+.registration-step1-sections select {
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
+}
+
+.registration-step1-sections #product-identify > div:first-child > p:first-child::before,
+.registration-step1-sections #product-details > div:first-child > p:first-child::before {
+  font-size: 1.125rem;
+}
+
+.registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2::after,
+.registration-step1-sections #product-main-media > div:first-child > p:first-child::after,
+.registration-step1-sections #sales-settings > div:first-child > p:first-child::after {
+  font-size: 1.125rem !important;
+  line-height: 1.55rem !important;
+}
+
+/* 選択肢は「見出し → 入力済みの選択肢 → 追加」の順にする。
+   外側の二重枠は使わず、各選択肢カードだけを枠として残す。 */
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > * {
+  margin-top: 0 !important;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > div.rounded-xl.border.border-line.bg-white.p-4 {
+  display: contents;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > div.rounded-xl.border.border-line.bg-white.p-4
+  > div:first-child {
+  display: contents !important;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > div.rounded-xl.border.border-line.bg-white.p-4
+  > div:first-child
+  > div:first-child {
+  order: 10;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > div.rounded-xl.border.border-line.bg-white.p-4
+  > div.mt-4.space-y-3 {
+  order: 20;
+  margin-top: 0 !important;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > div.rounded-xl.border.border-line.bg-white.p-4
+  > div:first-child
+  > button[type='button'] {
+  order: 30;
+  justify-self: start;
+  align-self: flex-start;
+  margin-top: -0.25rem !important;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > p.text-xs.text-muted {
+  order: 40;
+}
+
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  form > button[type='submit'] {
+  order: 50;
+  min-height: 2.75rem;
+  margin-left: auto !important;
+  padding-inline: 1.25rem;
+  font-size: 0.9375rem;
+}
+
+/* 候補は補助情報なので、入力カードより弱い枠にする。 */
+.registration-step1-sections
+  #customer-selection
+  [data-combined-create-root='true']
+  .rounded-lg.border.border-line.bg-white.p-3 {
+  border-color: var(--color-sand-dark);
+  background: var(--color-paper);
+}
+
+@media (max-width: 639px) {
+  .registration-step1-sections
+    #customer-selection
+    [data-combined-create-root='true']
+    form > button[type='submit'] {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+}

@@ -25,6 +25,12 @@ import {
   type StandardEstimatePricingResult,
 } from '@/lib/domain/standard-estimate-pricing';
 import {
+  computeSaleViewPricing,
+  isFireProofSelected,
+  pickSaleView,
+  type StandardEstimateSaleView,
+} from '@/lib/domain/standard-estimate-sale-view';
+import {
   makeDefaultExteriorFaces,
   normalizeExteriorFaces,
   type ExteriorFaceCode,
@@ -78,6 +84,11 @@ interface Props {
   bundle: CatalogBundle;
   /** Excelから取り込んだ標準見積。存在するときはこちらを価格・仕様選択の正本にする。 */
   estimateTemplates: EstimateTemplateBundle[];
+  /**
+   * 新しい標準見積（売価だけ。PR C2）。標準状態の商品が登録された公開中の標準見積が
+   * 機種・用途・防火で 1 件に決まるときは、こちらを価格の正本にする（無ければ従来の計算）。
+   */
+  saleViews?: StandardEstimateSaleView[];
   /** 本体切り替え用（タイトル横のセレクト。先方指示「ここで本体を変える」） */
   models: { slug: string; name: string }[];
   /** 立面図（モデル共通の図面。現状は Wing のみ） */
@@ -126,7 +137,7 @@ function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[]
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
 }
 
-export function SimulatorApp({ bundle, estimateTemplates, models, elevations, initial, loadError, resume, user }: Props) {
+export function SimulatorApp({ bundle, estimateTemplates, saleViews = [], models, elevations, initial, loadError, resume, user }: Props) {
   const router = useRouter();
   const { model } = bundle;
   const displayModelName = model.name === 'フラット' ? 'Flat' : model.name;
@@ -529,25 +540,36 @@ export function SimulatorApp({ bundle, estimateTemplates, models, elevations, in
   const scopedOptions = useMemo(() => specOptions.filter((o) => scopedCategoryIds.has(o.category_id)), [specOptions, scopedCategoryIds]);
 
   // ---- 計算・画像解決 ----
-  /** 標準見積があればExcelを基準価格にし、商品変更分だけ差額反映する。 */
+  /**
+   * 新しい標準見積（標準状態の商品が登録された公開中のもの）が機種・用途・防火で 1 件に決まれば、それを基準価格にする。
+   * 防火仕様を選んでいて防火の標準見積があれば防火の標準見積、無ければ非防火の標準見積（防火は別途見積のまま）。
+   */
+  const fireSelected = isFireProofSelected(bundle, selected);
+  const activeSaleView = useMemo(
+    () => pickSaleView(saleViews, model.slug, specCode, fireSelected),
+    [fireSelected, model.slug, saleViews, specCode]
+  );
+  /** 新しい標準見積が無ければ、Excelの標準見積（旧）を基準価格にし、商品変更分だけ差額反映する。 */
   const standardEstimatePricing = useMemo<StandardEstimatePricingResult | null>(
     () =>
-      activeEstimateTemplate
-        ? computeStandardEstimatePricing(
-            bundle,
-            activeEstimateTemplate,
-            selected,
-            variantIds,
-            exteriorFaces,
-            finishLevel
-          )
-        : null,
-    [activeEstimateTemplate, bundle, exteriorFaces, finishLevel, selected, variantIds]
+      activeSaleView
+        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces)
+        : activeEstimateTemplate
+          ? computeStandardEstimatePricing(
+              bundle,
+              activeEstimateTemplate,
+              selected,
+              variantIds,
+              exteriorFaces,
+              finishLevel
+            )
+          : null,
+    [activeEstimateTemplate, activeSaleView, bundle, exteriorFaces, finishLevel, selected, variantIds]
   );
   /** 標準見積未登録の仕様だけ従来計算へフォールバックする。 */
   const baseOverride = useMemo(
-    () => (activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
-    [activeEstimateTemplate, bundle, specCode]
+    () => (activeSaleView || activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
+    [activeEstimateTemplate, activeSaleView, bundle, specCode]
   );
   const pricing = useMemo(
     () =>

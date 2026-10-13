@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { requireStaff, requireUser } from '@/lib/auth/session';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { ProductRegistrationFinalRefinements } from '@/components/admin/product-registration-final-refinements';
+import { ProductRegistrationFormPlacementFix } from '@/components/admin/product-registration-form-placement-fix';
 import { ProductRegistrationStep2Refinements } from '@/components/admin/product-registration-step2-refinements';
 import './product-registration-refinements.css';
 
@@ -27,6 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       migrationOnly={migrationOnly}
     >
       <ProductRegistrationFinalRefinements />
+      <ProductRegistrationFormPlacementFix />
       <ProductRegistrationStep2Refinements />
       {children}
     </AdminShell>

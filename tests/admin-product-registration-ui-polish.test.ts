@@ -25,7 +25,8 @@ describe('商品登録 UI polish', () => {
     expect(enhancer).toContain('GROUP_LABEL_PATTERN');
     expect(enhancer).toContain("match?.[2]?.trim()");
     expect(enhancer).toContain("select[name=\"category_id\"]");
-    expect(enhancer).toContain("original.dispatchEvent(new Event('change', { bubbles: true }))");
+    expect(enhancer).toContain('setNativeSelectValue');
+    expect(enhancer).toContain("dispatchEvent(new Event('change', { bubbles: true }))");
     expect(enhancer).toContain("element.style.fontSize = '14px'");
   });
 

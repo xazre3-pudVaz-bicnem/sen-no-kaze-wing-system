@@ -121,6 +121,11 @@ export default async function StandardEstimatesPage({ searchParams }: { searchPa
                         公開版を見る
                       </Link>
                     )}
+                    {published && (
+                      <Link href={`/admin/quotes/standard-drafts/new?revision=${published.id}`} className="underline-offset-4 hover:underline">
+                        見積書を作成
+                      </Link>
+                    )}
                   </div>
                 </Td>
               </tr>

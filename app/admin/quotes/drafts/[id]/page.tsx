@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
 import { canEditCatalog, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
@@ -40,6 +40,22 @@ export default async function AdminQuoteDraftPage({
     throw error;
   }
   if (!detail) notFound();
+
+  // 標準見積から作成した見積は、率・原価から DB が金額を計算する専用の画面で編集する（現在は本部だけ）
+  if (detail.draft.source_kind === 'standard_estimate') {
+    if (actor.role === 'admin') {
+      redirect(`/admin/quotes/standard-drafts/${id}${sp.revisionDraft ? '?revisionDraft=1' : ''}`);
+    }
+    return (
+      <div className="mx-auto w-full max-w-[96rem] space-y-2">
+        <QuoteManagementTabs active="case" />
+        <Link href={returnHref} className="text-sm text-ink-soft underline-offset-4 hover:underline">
+          ← {returnLabel}へ戻る
+        </Link>
+        <Alert tone="info">この見積は標準見積から作成したため、現在は本部だけが編集・発行できます。</Alert>
+      </div>
+    );
+  }
 
   const parentQuoteDetail = detail.draft.parent_quote_id
     ? await store.getQuote(detail.draft.parent_quote_id, actor)

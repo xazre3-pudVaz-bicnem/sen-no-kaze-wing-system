@@ -708,7 +708,13 @@ export interface QuoteDraft {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  /** 作り方。standard_estimate は公開中の標準見積から作成した見積（専用の編集画面で、率・原価から DB が金額を計算する） */
+  source_kind?: QuoteDraftSourceKind;
+  /** 作成時に写した標準見積 Revision（第 2 版以降も直前の発行版から引き継ぐ） */
+  standard_estimate_revision_id?: string | null;
 }
+
+export type QuoteDraftSourceKind = 'manual' | 'standard_estimate';
 
 export interface QuoteDraftItem {
   id: string;
@@ -727,6 +733,8 @@ export interface QuoteDraftItem {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** 価格の決め方（manual=売価を入力、auto=原価 × 掛率、por=価格未確定。por は単価・金額とも未確定で発行できない） */
+  price_mode?: 'manual' | 'auto' | 'por';
 }
 
 export type ContactStatus = 'new' | 'handled';

@@ -246,14 +246,31 @@ function VariantCreatePortal({
   const [state, setState] = useState<ProductVariantCreateState>(initialState);
   const [pending, setPending] = useState(false);
   const [groupName, setGroupName] = useState('');
-  const [standardChoiceName, setStandardChoiceName] = useState('');
-  const [additionalChoices, setAdditionalChoices] = useState<string[]>([]);
-  const [activeSuggestions, setActiveSuggestions] = useState<'group' | 'standard' | number | null>(null);
+  const [choiceNames, setChoiceNames] = useState<string[]>(['']);
+  const [standardIndex, setStandardIndex] = useState(0);
+  const [activeSuggestions, setActiveSuggestions] = useState<'group' | number | null>(null);
   const categoryName = normalizeCategoryLabel(categoryLabel);
   const suggestions = suggestionsForCategory(categoryLabel);
 
-  const updateAdditionalChoice = (index: number, value: string) => {
-    setAdditionalChoices((rows) => rows.map((row, rowIndex) => (rowIndex === index ? value : row)));
+  const resetChoiceForm = () => {
+    setGroupName('');
+    setChoiceNames(['']);
+    setStandardIndex(0);
+    setActiveSuggestions(null);
+  };
+
+  const updateChoice = (index: number, value: string) => {
+    setChoiceNames((rows) => rows.map((row, rowIndex) => (rowIndex === index ? value : row)));
+  };
+
+  const removeChoice = (index: number) => {
+    if (choiceNames.length <= 1) return;
+    setChoiceNames((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
+    setStandardIndex((current) => {
+      if (current === index) return 0;
+      return current > index ? current - 1 : current;
+    });
+    setActiveSuggestions(null);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -272,10 +289,7 @@ function VariantCreatePortal({
       return;
     }
     form.reset();
-    setGroupName('');
-    setStandardChoiceName('');
-    setAdditionalChoices([]);
-    setActiveSuggestions(null);
+    resetChoiceForm();
     setOpen(false);
     router.refresh();
   };
@@ -293,10 +307,7 @@ function VariantCreatePortal({
           className="btn-secondary btn-sm"
           onClick={() => {
             setState(initialState);
-            setGroupName('');
-            setStandardChoiceName('');
-            setAdditionalChoices([]);
-            setActiveSuggestions(null);
+            resetChoiceForm();
             setOpen(true);
           }}
         >
@@ -324,128 +335,124 @@ function VariantCreatePortal({
 
           <form ref={formRef} onSubmit={handleSubmit} className="space-y-4" noValidate>
             <input type="hidden" name="option_id" value={optionId} />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="選択項目名"
-                htmlFor="registration-variant-group-name"
-                hint="入力欄をクリックすると、カテゴリー別の候補を表示します。候補外も自由入力できます。"
+            <input type="hidden" name="first_choice_name" value={choiceNames[standardIndex] ?? ''} />
+            {choiceNames.map((value, index) =>
+              index === standardIndex ? null : (
+                <input key={`additional-choice-hidden-${index}`} type="hidden" name="additional_choice_name" value={value} />
+              )
+            )}
+
+            <Field
+              label="選択項目名"
+              htmlFor="registration-variant-group-name"
+              hint="例：床／周辺パネル／アクセントパネル／浴槽。候補外も自由入力できます。"
+              required
+              errors={state.fieldErrors?.name}
+            >
+              <Input
+                id="registration-variant-group-name"
+                name="name"
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+                onFocus={() => setActiveSuggestions('group')}
+                placeholder="例：周辺パネル"
+                autoComplete="off"
                 required
-                errors={state.fieldErrors?.name}
-              >
-                <Input
-                  id="registration-variant-group-name"
-                  name="name"
-                  value={groupName}
-                  onChange={(event) => setGroupName(event.target.value)}
-                  onFocus={() => setActiveSuggestions('group')}
-                  placeholder="例：アクセントパネル"
-                  autoComplete="off"
-                  required
+              />
+              {activeSuggestions === 'group' && (
+                <SuggestionButtons
+                  title="選択項目名の候補"
+                  values={suggestions.groups}
+                  onSelect={(value) => {
+                    setGroupName(value);
+                    setActiveSuggestions(0);
+                  }}
                 />
-                {activeSuggestions === 'group' && (
-                  <SuggestionButtons
-                    title="選択項目名の候補"
-                    values={suggestions.groups}
-                    onSelect={(value) => {
-                      setGroupName(value);
-                      setActiveSuggestions('standard');
-                    }}
-                  />
-                )}
-              </Field>
-              <Field
-                label="標準の選択肢"
-                htmlFor="registration-first-choice-name"
-                hint="この商品で標準採用する選択肢です。メーカー資料の正式名称を優先してください。"
-                required
-                errors={state.fieldErrors?.first_choice_name}
-              >
-                <Input
-                  id="registration-first-choice-name"
-                  name="first_choice_name"
-                  value={standardChoiceName}
-                  onChange={(event) => setStandardChoiceName(event.target.value)}
-                  onFocus={() => setActiveSuggestions('standard')}
-                  placeholder="例：マルキーナグレー"
-                  autoComplete="off"
-                  required
-                />
-                {activeSuggestions === 'standard' && (
-                  <SuggestionButtons
-                    title="標準の選択肢の候補"
-                    values={suggestions.choices}
-                    onSelect={setStandardChoiceName}
-                  />
-                )}
-              </Field>
-            </div>
+              )}
+            </Field>
 
             <div className="rounded-xl border border-line bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold">その他の選択肢 <span className="font-normal text-muted">任意</span></p>
-                  <p className="mt-1 text-xs text-muted">色違い・柄違いなど、お客様が選べる候補を続けて登録できます。</p>
+                  <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span></p>
+                  <p className="mt-1 text-xs text-muted">お客様が選べる候補をまとめて入力し、その中から標準にするものを1つ選びます。</p>
                 </div>
                 <button
                   type="button"
                   className="btn-secondary btn-sm"
                   disabled={pending}
                   onClick={() => {
-                    setAdditionalChoices((rows) => [...rows, '']);
-                    setActiveSuggestions(null);
+                    setChoiceNames((rows) => [...rows, '']);
+                    setActiveSuggestions(choiceNames.length);
                   }}
                 >
                   ＋ 選択肢を追加
                 </button>
               </div>
 
-              {additionalChoices.length === 0 ? (
-                <p className="mt-3 text-xs text-muted">標準以外の選択肢がある場合だけ追加してください。</p>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {additionalChoices.map((value, index) => (
-                    <div key={`additional-choice-${index}`} className="rounded-lg border border-line bg-ivory/20 p-3">
-                      <div className="flex items-start gap-2">
+              <div className="mt-4 space-y-3">
+                {choiceNames.map((value, index) => {
+                  const isStandard = standardIndex === index;
+                  return (
+                    <div
+                      key={`choice-${index}`}
+                      className={`rounded-lg border p-3 ${isStandard ? 'border-brown bg-ivory/40' : 'border-line bg-white'}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <label className="mt-7 flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-soft">
+                          <input
+                            type="radio"
+                            name="standard_choice_index"
+                            value={index}
+                            checked={isStandard}
+                            onChange={() => setStandardIndex(index)}
+                          />
+                          標準
+                        </label>
                         <div className="min-w-0 flex-1">
                           <Field
                             label={`選択肢 ${index + 1}`}
-                            htmlFor={`registration-additional-choice-${index}`}
-                            errors={state.fieldErrors?.additional_choice_name}
+                            htmlFor={`registration-choice-${index}`}
+                            required={isStandard}
+                            errors={
+                              isStandard
+                                ? state.fieldErrors?.first_choice_name
+                                : state.fieldErrors?.additional_choice_name
+                            }
                           >
                             <Input
-                              id={`registration-additional-choice-${index}`}
-                              name="additional_choice_name"
+                              id={`registration-choice-${index}`}
                               value={value}
-                              onChange={(event) => updateAdditionalChoice(index, event.target.value)}
+                              onChange={(event) => updateChoice(index, event.target.value)}
                               onFocus={() => setActiveSuggestions(index)}
                               placeholder="例：ホワイト／グレー／ブラック"
                               autoComplete="off"
+                              required={isStandard}
                             />
                             {activeSuggestions === index && (
                               <SuggestionButtons
                                 title="選択肢の候補"
                                 values={suggestions.choices}
-                                onSelect={(nextValue) => updateAdditionalChoice(index, nextValue)}
+                                onSelect={(nextValue) => updateChoice(index, nextValue)}
                               />
                             )}
                           </Field>
                         </div>
-                        <button
-                          type="button"
-                          className="mt-7 shrink-0 text-xs text-muted underline underline-offset-4"
-                          disabled={pending}
-                          onClick={() => {
-                            setAdditionalChoices((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
-                            setActiveSuggestions(null);
-                          }}
-                        >
-                          削除
-                        </button>
+                        {choiceNames.length > 1 && (
+                          <button
+                            type="button"
+                            className="mt-7 shrink-0 text-xs text-muted underline underline-offset-4"
+                            disabled={pending}
+                            onClick={() => removeChoice(index)}
+                          >
+                            削除
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
 
             <p className="text-xs text-muted">

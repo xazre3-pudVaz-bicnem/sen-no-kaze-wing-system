@@ -21,6 +21,7 @@ import type {
   QuoteContact,
   QuoteDocument,
   CaseDocument,
+  ElectronicContract,
   QuoteItem,
   QuoteItemKind,
   QuoteDraft,
@@ -520,6 +521,23 @@ export interface DataStore {
   // ---- 見積書PDF ----
   getQuoteDocumentFile(quoteId: string): Promise<{ bytes: Uint8Array; document: QuoteDocument } | null>;
   saveQuoteDocument(quoteId: string, bytes: Uint8Array, fileName: string): Promise<QuoteDocument>;
+
+  // ---- 電子契約（GMOサイン） ----
+  /** 案件の電子契約の履歴（新しい順）。お客様は自分の案件、本部はすべて（RLS） */
+  listElectronicContracts(quoteRequestId: string, actor: SessionUser): Promise<ElectronicContract[]>;
+  /** 本部が承諾済みの現在の見積から送信を開始する（状態 sending）。送信先の GMOサインを呼ぶ前に必ず通す */
+  beginElectronicContract(actor: SessionUser, quoteId: string, signerName: string, signerEmail: string): Promise<string>;
+  recordElectronicContractSent(actor: SessionUser, contractId: string, envelopeXid: string, documentId: string | null): Promise<void>;
+  recordElectronicContractFailed(actor: SessionUser, contractId: string, reason: string): Promise<void>;
+  cancelElectronicContract(actor: SessionUser, contractId: string, reason: string | null): Promise<void>;
+  /**
+   * 署名完了の記録（GMOサインの通知を受けたサーバーだけが呼ぶ）。
+   * 署名済み PDF をこちらの資格情報で取得した後に、非公開の保存先へ置いてから状態を signed にする。
+   * 封筒が見つからなければ null（関係の無い通知は無視する）
+   */
+  completeElectronicContract(envelopeXid: string, documentId: string | null, pdf: Uint8Array): Promise<string | null>;
+  /** 署名済み PDF。見られるのは契約のお客様と本部だけ（見えない契約・未締結は null） */
+  getSignedContractPdf(contractId: string, actor: SessionUser): Promise<{ bytes: Uint8Array; contract: ElectronicContract } | null>;
 
   // ---- 管理: マスター編集 ----
   upsertModel(input: ModelInput): Promise<BaseModel>;

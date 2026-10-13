@@ -11,6 +11,7 @@ import {
   isQuoteDeclineEligible,
 } from '@/lib/domain/quote-lifecycle';
 import { respondToQuoteAction } from '@/lib/actions/configurations';
+import { activeContract } from '@/lib/domain/electronic-contract';
 import { COMPANY } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge, Container, Section } from '@/components/ui';
@@ -32,6 +33,8 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
   const isFormallyAccepted = acceptedQuoteCaseState === 'formal_current';
   const isPreliminaryAccepted = acceptedQuoteCaseState === 'preliminary';
   const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';
+  // 電子契約（GMOサイン）。お客様には自分の案件の契約だけが見える（RLS）
+  const contract = request ? activeContract(await store.listElectronicContracts(request.id, user)) : null;
 
   return (
     <Section className="py-10 sm:py-14">
@@ -122,10 +125,23 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
             この概算見積はご確認用です。現地条件と施工金額を反映した確定見積の発行後に、承諾または辞退をご回答いただけます。
           </Alert>
         )}
-        {isFormallyAccepted && (
+        {isFormallyAccepted && !contract && (
           <Alert tone="success" className="mt-6">
             この見積で進めるご回答をいただきました。担当よりご連絡いたします。
           </Alert>
+        )}
+        {contract && contract.quote_id === quote.id && (contract.status === 'sent' || contract.status === 'sending') && (
+          <Alert tone="info" className="mt-6" data-testid="contract-awaiting-signature">
+            契約書をお送りしました。GMOサイン（電子契約サービス）からのメール（宛先：{contract.signer_email}）のご案内に沿って、内容をご確認のうえ署名してください。
+          </Alert>
+        )}
+        {contract && contract.quote_id === quote.id && contract.status === 'signed' && (
+          <div className="card mt-6 flex flex-wrap items-center justify-between gap-4 p-5" data-testid="contract-signed">
+            <p className="text-sm text-ink-soft">契約書の署名が完了しました。締結済みの契約書はこちらからご確認いただけます。</p>
+            <a href={`/api/contracts/${contract.id}/signed`} target="_blank" rel="noreferrer" className="btn-primary btn-sm">
+              契約書（PDF）を開く
+            </a>
+          </div>
         )}
         {isPreliminaryAccepted && (
           <Alert tone="warn" className="mt-6">

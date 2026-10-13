@@ -1,4 +1,5 @@
 import { CaseWorkspace as BaseCaseWorkspace } from '@/components/admin/case-workspace';
+import { ElectronicContractPanel } from '@/components/admin/electronic-contract-panel';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -213,7 +214,9 @@ export async function CaseWorkspace(props: CaseWorkspaceProps) {
     <>
       <BaseCaseWorkspace {...props} />
       {quoteReference && activeTab === 'documents' && (
-        <div className="mt-2">
+        <div className="mt-2 space-y-2">
+          {/* 電子契約（GMOサイン）は正式な保存・判定を行う。下の契約変更履歴はモックのまま */}
+          <ElectronicContractPanel quoteId={props.quoteId} actor={props.actor} />
           <ContractHistoryMock
             quoteNo={quoteReference.quoteNo}
             revision={quoteReference.revision}

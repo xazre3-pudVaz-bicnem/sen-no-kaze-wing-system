@@ -119,6 +119,9 @@ declare
   c_s2 constant uuid := '00000000-0000-4000-8000-00000000c0de';
   r_s constant uuid := '00000000-0000-4000-8000-00000000e0de';
   q_s constant uuid := '00000000-0000-4000-8000-00000000f0de';
+  v_contract_text text;
+  v_signed_first text;
+  v_signed_second text;
 begin
   ---------------------------------------------------------------------------
   -- 試験データ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる）
@@ -817,6 +820,54 @@ begin
       (select coalesce(string_agg(m.slug || '/' || r.spec_code || '/' || r.size_code, ','), '')
          from public.matrix_rows r join public.base_models m on m.id = r.base_model_id
         where not r.fire_selectable and m.slug not like 'runtime-check%'));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 12. 電子契約（GMOサイン）：送信は本部だけ・承諾済みの現在の見積だけ。署名完了はサーバー（service_role）だけ
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.begin_electronic_contract(uuid, text, text)') is not null then
+    perform pg_temp.expect_denied('12-1 お客様は契約書の送信を開始できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.begin_electronic_contract(%L, '顧客X', 'x@runtime.invalid')::text $q$, q_f)));
+    perform pg_temp.expect_denied('12-2 代理店も契約書の送信を開始できない（本部だけ）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.begin_electronic_contract(%L, '顧客X', 'x@runtime.invalid')::text $q$, q_f)));
+    perform pg_temp.expect_denied('12-3 承諾されていない見積では開始できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.begin_electronic_contract(%L, '顧客X', 'x@runtime.invalid')::text $q$, q_u)));
+    perform pg_temp.expect_denied('12-4 案件の現在の版ではない見積では開始できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.begin_electronic_contract(%L, '顧客X', 'x@runtime.invalid')::text $q$, q_l2)));
+    perform pg_temp.expect_denied('12-5 署名者のメールアドレスの形式が正しくなければ開始できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.begin_electronic_contract(%L, '顧客X', 'not-an-email')::text $q$, q_f)));
+
+    v_contract_text := pg_temp.run_as('authenticated', u_admin,
+      format($q$ select public.begin_electronic_contract(%L, '顧客X', 'X@Runtime.Invalid')::text $q$, q_f));
+    perform pg_temp.expect_eq('12-6 本部は承諾済みの現在の見積から開始できる（契約金額は見積の税込合計）', '1100000/sending/x@runtime.invalid',
+      (select contract_total::text || '/' || status || '/' || signer_email from public.contracts where id::text = v_contract_text));
+    perform pg_temp.expect_denied('12-7 同じ案件で 2 つ目の契約は開始できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.begin_electronic_contract(%L, '顧客X', 'x@runtime.invalid')::text $q$, q_f)));
+    perform pg_temp.expect_eq('12-8 お客様本人は自分の契約を読める', '1',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.contracts where quote_id = %L $q$, q_f)));
+    perform pg_temp.expect_eq('12-9 他のお客様・代理店は読めない', '0/0',
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select count(*)::text from public.contracts where quote_id = %L $q$, q_f)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.contracts where quote_id = %L $q$, q_f)));
+    perform pg_temp.expect_denied('12-10 お客様は契約の状態を直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ update public.contracts set status = 'signed' where quote_id = %L returning 'updated' $q$, q_f)));
+    -- 書き込みの呼び出しと結果の確認は別の文にする（同じ文の中の読み取りは文の開始時点の状態を見るため）
+    perform pg_temp.run_as('authenticated', u_admin,
+      format($q$ select public.record_electronic_contract_sent(%L, 'rt-envelope-1', 'rt-document-1')::text $q$, v_contract_text));
+    perform pg_temp.expect_eq('12-11 本部は送信済みを記録できる', 'sent/rt-envelope-1',
+      (select status || '/' || envelope_xid from public.contracts where id::text = v_contract_text));
+    perform pg_temp.expect_denied('12-12 署名完了は本部の利用者からも記録できない（サーバーだけ）', '42501',
+      pg_temp.run_as('authenticated', u_admin, $q$ select public.record_electronic_contract_signed('rt-envelope-1', 'rt-document-1', 'contracts/x/signed.pdf')::text $q$));
+    v_signed_first := pg_temp.run_as('service_role', null,
+      $q$ select public.record_electronic_contract_signed('rt-envelope-1', 'rt-document-1', 'contracts/x/signed.pdf')::text $q$);
+    v_signed_second := pg_temp.run_as('service_role', null,
+      $q$ select public.record_electronic_contract_signed('rt-envelope-1', 'rt-document-1', 'contracts/x/signed.pdf')::text $q$);
+    perform pg_temp.expect_eq('12-13 サーバー（service_role）は署名完了を記録でき、同じ通知の再送でも結果は変わらない', 'true/signed',
+      ((v_signed_first = v_contract_text and v_signed_second = v_contract_text)::text
+       || '/' || (select status from public.contracts where id::text = v_contract_text)));
+    perform pg_temp.expect_denied('12-14 締結済みの契約は取り消せない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.cancel_electronic_contract(%L, 'x')::text $q$, v_contract_text)));
+    perform pg_temp.expect_eq('12-15 契約の送信・署名で見積（金額・状態）は変わらない', 'accepted/1100000',
+      (select status || '/' || total::text from public.quotes where id = q_f));
   end if;
 end
 $test$;

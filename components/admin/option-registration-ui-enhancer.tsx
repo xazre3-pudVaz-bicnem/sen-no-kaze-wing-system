@@ -24,6 +24,10 @@ function setNativeSelectValue(select: HTMLSelectElement, value: string) {
   select.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function setTextIfChanged(element: HTMLElement, value: string) {
+  if (element.textContent !== value) element.textContent = value;
+}
+
 function applyCompactCategoryTypography(element: HTMLOptionElement | HTMLOptGroupElement | HTMLSelectElement) {
   element.style.fontSize = '14px';
   element.style.lineHeight = '1.4';
@@ -220,7 +224,7 @@ function enhanceSalesSettings() {
   if (!section) return;
 
   const intro = section.querySelector<HTMLElement>(':scope > div:first-child > p:nth-child(2)');
-  if (intro) intro.textContent = '価格と対象モデルを設定します。公開はSTEP 2で行います。';
+  if (intro) setTextIfChanged(intro, '価格と対象モデルを設定します。公開はSTEP 2で行います。');
 
   const priceInput = section.querySelector<HTMLInputElement>('input[name="price"]');
   if (priceInput) {
@@ -228,7 +232,7 @@ function enhanceSalesSettings() {
     const hint = wrapper
       ? Array.from(wrapper.querySelectorAll('p')).find((row) => row.textContent?.includes('価格未確認なら0円'))
       : null;
-    if (hint) hint.textContent = '0円のまま下書き保存できます。公開時に0円でよいか確認します。';
+    if (hint) setTextIfChanged(hint, '0円のまま下書き保存できます。公開時に0円でよいか確認します。');
   }
 
   const normalSettings = section.querySelector<HTMLElement>('[data-testid="option-normal-settings"]');
@@ -249,7 +253,7 @@ function enhanceSalesSettings() {
       badge.textContent = '下書き';
       inputLike.insertAdjacentElement('beforebegin', badge);
       const hint = Array.from(wrapper.querySelectorAll('p')).find((row) => row !== wrapper.querySelector('.label'));
-      if (hint && hint.textContent?.includes('STEP 2')) hint.textContent = '公開はSTEP 2の確認画面から行います。';
+      if (hint && hint.textContent?.includes('STEP 2')) setTextIfChanged(hint, '公開はSTEP 2の確認画面から行います。');
       draftStatus.dataset[DRAFT_STATUS_MARKER] = 'true';
     }
   }
@@ -272,14 +276,18 @@ export function OptionRegistrationUiEnhancer({
   const scrolledRef = useRef(false);
 
   useEffect(() => {
-    enhanceCategorySelects();
-    enhanceSalesSettings();
-    if (hideCreateSize) hideCreateSizeField();
-
-    const observer = new MutationObserver(() => {
+    const enhance = () => {
       enhanceCategorySelects();
       enhanceSalesSettings();
       if (hideCreateSize) hideCreateSizeField();
+    };
+
+    enhance();
+
+    const observer = new MutationObserver(() => {
+      observer.disconnect();
+      enhance();
+      observer.observe(document.body, { childList: true, subtree: true });
     });
     observer.observe(document.body, { childList: true, subtree: true });
     return () => observer.disconnect();

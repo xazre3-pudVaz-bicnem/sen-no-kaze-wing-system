@@ -10,7 +10,13 @@ test.describe('コラム', () => {
     const links = page.locator('main a[href^="/column/"]');
     expect(await links.count()).toBeGreaterThanOrEqual(3);
 
-    await page.getByRole('link', { name: /木造コンテナWingを検討する前に/ }).first().click();
+    // 一覧は新しい順で、記事が増えると古い記事は次のページへ送られる
+    const target = page.getByRole('link', { name: /木造コンテナWingを検討する前に/ });
+    while (!(await target.first().isVisible())) {
+      await page.locator('main a[rel="next"]').click();
+      await expect(page).toHaveURL(/\/column\/page\/\d+$/);
+    }
+    await target.first().click();
     await expect(page).toHaveURL(/\/column\/wing-check-before-considering$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('木造コンテナWingを検討する前に');
 

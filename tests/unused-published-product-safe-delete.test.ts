@@ -187,7 +187,7 @@ describe('登録済み未使用商品の安全削除', () => {
 
   it('DB Rehearsalでvariant_choice_idsへのstale write raceも実動作確認する', () => {
     expect(dbCheck).toContain('runtimeUnusedPublishedOptionArrayRace({ connectionString: url })');
-    expect(arrayRaceMjs).toContain('variant_choice_ids書込みはsafe-delete中に待機する');
+    expect(arrayRaceMjs).toContain('variant_choice_ids書込みはsafe-deleteの後ろで待機する');
     expect(arrayRaceMjs).toContain("'ShareLock'");
     expect(arrayRaceMjs).toContain("'RowExclusiveLock'");
     expect(arrayRaceMjs).toContain("writeResult.code === 'P0001'");

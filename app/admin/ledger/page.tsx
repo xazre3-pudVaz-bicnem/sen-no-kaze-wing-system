@@ -8,6 +8,21 @@ import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
+const LEDGER_DISPLAY_GROUPS = [
+  { code: 'performance', name: '性能・仕様', sort: 1, categories: ['fireproof', 'insulation', 'insulation-floor', 'insulation-wall', 'insulation-ceiling'] },
+  { code: 'exterior', name: '外まわり', sort: 2, categories: ['roof', 'exterior-wall', 'exterior-parts'] },
+  { code: 'openings', name: '窓・ドア', sort: 3, categories: ['entrance-door', 'sash', 'service-door', 'smartlock'] },
+  { code: 'interior', name: '室内', sort: 4, categories: ['floor', 'wall-ceiling', 'carpentry', 'interior-door'] },
+  { code: 'equipment', name: '水回り・設備', sort: 5, categories: ['ub', 'kitchen', 'washbasin', 'toilet', 'boiler', 'aircon'] },
+  { code: 'electrical', name: '電気・照明', sort: 6, categories: ['lighting'] },
+  { code: 'furniture', name: '家具・収納', sort: 7, categories: ['entrance-storage', 'closet', 'bed', 'furniture', 'appliances', 'office-supplies'] },
+  { code: 'sitework', name: '別途工事', sort: 8, categories: ['sitework'] },
+] as const;
+
+const ledgerDisplayGroupByCategoryCode = new Map(
+  LEDGER_DISPLAY_GROUPS.flatMap((group) => group.categories.map((categoryCode) => [categoryCode, group] as const))
+);
+
 export default async function AdminLedgerPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
   const sp = await searchParams;
@@ -20,6 +35,15 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
   ]);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
+  const ledgerCategories = catalogCategories.map((category) => {
+    const displayGroup = ledgerDisplayGroupByCategoryCode.get(category.code as (typeof LEDGER_DISPLAY_GROUPS)[number]['categories'][number]);
+    return {
+      ...category,
+      group_code: displayGroup?.code ?? 'other',
+      group_name: displayGroup?.name ?? 'その他',
+      group_sort: displayGroup?.sort ?? 9,
+    };
+  });
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
   const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
   const [rows, hqStandardCosts] = await Promise.all([
@@ -92,7 +116,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     <FlashMessages sp={sp} />
     <ProductLedgerClient
       canEdit={editor}
-      categories={catalogCategories}
+      categories={ledgerCategories}
       options={catalogOptions}
       models={models}
       variantsByOptionId={Object.fromEntries(rows)}

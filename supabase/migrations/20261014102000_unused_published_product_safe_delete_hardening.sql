@@ -102,4 +102,24 @@ $$;
 
 alter function public.delete_unused_published_option(uuid) owner to postgres;
 revoke all on function public.delete_unused_published_option(uuid) from public, anon, authenticated, service_role;
+-- hardeningが最後まで成功した時点で初めて公開する。
 grant execute on function public.delete_unused_published_option(uuid) to authenticated;
+
+-- 最終状態の公開境界をmigration自身で検証する。
+do $postcondition$
+begin
+  if has_function_privilege('public', 'public.delete_unused_published_option(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.delete_unused_published_option(uuid)', 'EXECUTE')
+     or not has_function_privilege('authenticated', 'public.delete_unused_published_option(uuid)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.delete_unused_published_option(uuid)', 'EXECUTE') then
+    raise exception 'POSTCONDITION: hardened safe-delete RPC must be executable by authenticated only';
+  end if;
+
+  if has_function_privilege('public', 'public.delete_unused_published_option_internal(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.delete_unused_published_option_internal(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.delete_unused_published_option_internal(uuid)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.delete_unused_published_option_internal(uuid)', 'EXECUTE') then
+    raise exception 'POSTCONDITION: internal safe-delete implementation must not be executable by application roles';
+  end if;
+end;
+$postcondition$;

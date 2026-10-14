@@ -86,6 +86,38 @@ export function defaultVariantIdsFor(
   return pruneHiddenVariantChoices(mine, variantChoices, out);
 }
 
+/**
+ * 保存しておいた選択肢（色・仕様など）を、今の商品台帳と今選んでいる商品に合わせて整える。
+ * 商品や選択肢が台帳から外れた後に、保存したプラン・一時保存・ブラウザの下書きを開き直すときに使う。
+ * - 台帳に無い選択肢と、選んでいない商品の選択肢は外す
+ *   （残したまま保存すると DB 側の検証が「選択できないバリエーション」として拒否し、利用者には外す手段が無い）
+ * - 選択肢が決まっていない項目は、商品を選び直したときと同じく標準（無ければ先頭）で補う
+ * - 表示条件を満たさない項目の選択肢は外す
+ */
+export function reconcileVariantChoices(
+  variantGroups: OptionVariantGroup[],
+  variantChoices: OptionVariantChoice[],
+  selectedOptionIds: string[],
+  savedChoiceIds: string[]
+): string[] {
+  const selectedOptions = new Set(selectedOptionIds);
+  const selectableGroupIds = new Set(variantGroups.filter((g) => selectedOptions.has(g.option_id)).map((g) => g.id));
+  const groupIdByChoice = new Map(variantChoices.map((c) => [c.id, c.group_id]));
+  const kept = pruneHiddenVariantChoices(
+    variantGroups,
+    variantChoices,
+    savedChoiceIds.filter((id) => {
+      const groupId = groupIdByChoice.get(id);
+      return Boolean(groupId && selectableGroupIds.has(groupId));
+    })
+  );
+  const decidedGroupIds = new Set(kept.map((id) => groupIdByChoice.get(id)));
+  const fallback = defaultVariantIdsFor(variantGroups, variantChoices, selectedOptionIds).filter(
+    (id) => !decidedGroupIds.has(groupIdByChoice.get(id))
+  );
+  return pruneHiddenVariantChoices(variantGroups, variantChoices, [...kept, ...fallback]);
+}
+
 /** 現在の仕様の本体内訳（見積書・シミュレーターの本体明細表示に使う） */
 export function baseBreakdownFor(bundle: Pick<CatalogBundle, 'baseBreakdowns'>, specCode: string | null) {
   return (bundle.baseBreakdowns ?? []).filter((b) => b.spec_code === (specCode ?? ''));

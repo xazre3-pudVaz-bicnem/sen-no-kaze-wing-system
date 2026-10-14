@@ -212,10 +212,9 @@ test.describe('顧客フロー', () => {
     await saveBaseOnlyAndRequestQuote(page, 'box');
   });
 
-  // Wing の本体のみは、床・壁・天井の断熱が必須なのに、本体のみでは壁・天井の断熱商品を選べないため保存できない
-  // （本番の validate_configuration_items も同じ判定）。本体のみに断熱を含めるかの先方確認と、
-  // 必須判定の是正が済んだら fixme を外す
-  test.fixme('本体のみの構成を保存して見積依頼できる（Wing）', async ({ page }) => {
+  // 断熱は本体の構造・製造に必要な直接原価で、お客様が選ぶ必須項目ではない（先方確認 2026-10-14）。
+  // 断熱を選べない Wing の本体のみも、そのまま保存・見積依頼できる
+  test('本体のみの構成を保存して見積依頼できる（Wing）', async ({ page }) => {
     await saveBaseOnlyAndRequestQuote(page, 'wing-01');
   });
   test('防火仕様は上部の選択で切り替え、金額は別途見積（本部が確認）の案内が出る', async ({ page }) => {

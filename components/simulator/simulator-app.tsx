@@ -8,7 +8,7 @@ import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-conf
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
-import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
+import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices, reconcileVariantChoices } from '@/lib/domain/preset';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -237,11 +237,16 @@ export function SimulatorApp({
     pruneToScope(initialRuleCtx, eligibleInitialIds, initialLevel),
     initialBaselineIds
   );
-  const initialVariants = pruneHiddenVariantChoices(
-    bundle.variantGroups,
-    bundle.variantChoices,
-    initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
-  );
+  // 編集できるプラン（保存した下書き・一時保存）は、台帳から外れた選択肢を外し、標準の選択肢で補って開く。
+  // 見積依頼済みなどの読み取り専用の履歴は、保存された内容のまま表示する
+  const initialVariants =
+    initial && !preserveReadOnlyHistoricalSelection
+      ? reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initial.variant_choice_ids)
+      : pruneHiddenVariantChoices(
+          bundle.variantGroups,
+          bundle.variantChoices,
+          initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
+        );
   const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options
     .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
@@ -411,32 +416,11 @@ export function SimulatorApp({
             restoredSelection = pruneToScope(restoredCtx, standardIds, restoredLevel);
           }
 
-          const selectedGroupIds = new Set(
-            bundle.variantGroups
-              .filter((group) => restoredSelection.includes(group.option_id))
-              .map((group) => group.id)
-          );
-          const restoredVariantIds = pruneHiddenVariantChoices(
+          const normalizedVariantIds = reconcileVariantChoices(
             bundle.variantGroups,
             bundle.variantChoices,
-            (draft.variantIds ?? []).filter((choiceId) => {
-              const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
-              return Boolean(groupId && selectedGroupIds.has(groupId));
-            })
-          );
-          const restoredVariantGroupIds = new Set(
-            restoredVariantIds
-              .map((choiceId) => bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id)
-              .filter((groupId): groupId is string => Boolean(groupId))
-          );
-          const fallbackVariantIds = defaultVariantIds(bundle, restoredSelection).filter((choiceId) => {
-            const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
-            return !groupId || !restoredVariantGroupIds.has(groupId);
-          });
-          const normalizedVariantIds = pruneHiddenVariantChoices(
-            bundle.variantGroups,
-            bundle.variantChoices,
-            [...restoredVariantIds, ...fallbackVariantIds]
+            restoredSelection,
+            draft.variantIds ?? []
           );
           const restoredExteriorOptions = restoredCtx.options
             .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')

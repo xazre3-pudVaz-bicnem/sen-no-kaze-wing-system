@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, isLocalMode, StoreError } from '@/lib/data/store';
+import { getStore, isDemoFallback, isLocalMode, StoreError } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 
 const DELETE_NOT_AVAILABLE = '登録済み商品の削除機能はDB反映待ちです。反映完了後にもう一度お試しください。';
@@ -36,9 +36,11 @@ export async function deleteUnusedPublishedOptionAction(formData: FormData): Pro
 
   let errorMessage: string | null = null;
 
-  if (isLocalMode()) {
-    // ローカル検証モードは本番DBのRevision/Snapshotテーブルを持たない。
-    // LocalStore側の参照ガードを通し、E2Eで同じ画面フローを確認できるようにする。
+  if (isDemoFallback()) {
+    // Supabase環境変数の欠落を「ローカル検証モード」とみなして破壊的操作を成功させない。
+    // 明示的 WING_LOCAL_MODE=1 のときだけLocalStore削除を許可する。
+    errorMessage = DELETE_NOT_AVAILABLE;
+  } else if (isLocalMode()) {
     try {
       await store.deleteOption(id);
     } catch (error) {

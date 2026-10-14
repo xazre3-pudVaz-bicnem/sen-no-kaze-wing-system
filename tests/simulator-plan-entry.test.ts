@@ -8,12 +8,14 @@ const entryHelper = fs.readFileSync(path.join(root, 'lib/domain/simulator-entry.
 
 describe('平面図からシミュレーターへの仕様指定導線', () => {
   it('spec queryを受け取り、保存済みConfigurationがない場合だけ新規初期状態へ使う', () => {
-    expect(simulatorPage).toContain("type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string }>");
-    expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec, preview }]');
+    // plan は、ログインなしの一時保存（URL）から開くとき（フェーズ2）
+    expect(simulatorPage).toContain("type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string; plan?: string }>");
+    expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec, preview, plan }]');
     expect(simulatorPage).toContain('if (c) {');
     expect(simulatorPage).toContain('} else if (spec) {');
     expect(simulatorPage).toContain('buildSimulatorEntryState(bundle, estimateTemplates, spec)');
     expect(simulatorPage.indexOf('if (c) {')).toBeLessThan(simulatorPage.indexOf('} else if (spec) {'));
+    expect(simulatorPage.indexOf('if (c) {')).toBeLessThan(simulatorPage.indexOf('} else if (plan) {'));
   });
 
   it('仕様指定は既存の標準構成ロジックを再利用し、未知のspecは無視する', () => {

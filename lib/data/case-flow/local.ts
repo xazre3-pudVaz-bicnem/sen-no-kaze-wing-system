@@ -1,5 +1,5 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { StoreError, type SessionUser } from '@/lib/data/store';
@@ -7,6 +7,12 @@ import { filesDir, loadDb, saveDb, type LocalDb } from '@/lib/data/local-db';
 import { ROLE_RANK, type AppNotification } from '@/lib/domain/types';
 import {
   CASE_FILE_TYPES,
+  GUEST_PLAN_DAYS,
+  GUEST_PLAN_TOKEN,
+  type GuestPlan,
+  type GuestPlanInput,
+  type SiteProfile,
+  type SiteProfileInput,
   MANUFACTURER_PROGRESS_KINDS,
   MANUFACTURER_SCHEDULE_CATEGORIES,
   canChangeAppointmentStatus,
@@ -150,6 +156,20 @@ function hasOpenPunchItems(db: LocalDb, requestId: string): boolean {
 
 function isHandedOver(db: LocalDb, requestId: string): boolean {
   return (tables(db).handovers ?? []).some((h) => h.quote_request_id === requestId && h.status === 'handed_over');
+}
+
+const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+
+/** プランの土地の情報への関わり方（DB の configuration_site_profile_access と同じ） */
+function siteProfileAccessOf(db: LocalDb, actor: SessionUser, configurationId: string): 'owner' | 'admin' | 'staff' | null {
+  const configuration = db.configurations.find((c) => c.id === configurationId);
+  if (!configuration) return null;
+  if (configuration.user_id === actor.id) return 'owner';
+  if (rank(actor) >= 3) return 'admin';
+  const related = db.quoteRequests.some(
+    (r) => r.configuration_id === configurationId && ['staff', 'manufacturer'].includes(accessOf(db, actor, r.id) ?? '')
+  );
+  return related ? 'staff' : null;
 }
 
 /** お客様の意思の履歴（新しい順。先頭が今の意思）。行は足すだけなので、後に足した行ほど新しい */
@@ -1553,6 +1573,72 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       }
       Object.assign(current, input, { judged_by: actor.id, judged_at: nowIso(), lock_version: current.lock_version + 1, updated_at: nowIso() });
       return current.lock_version;
+    });
+  }
+
+  // ---------- 一時保存（20261014100000 と同じ判定） ----------
+  async createGuestPlan(baseModelId: string, plan: GuestPlanInput) {
+    return this.mutate((db) => {
+      if (!db.models.some((m) => m.id === baseModelId && m.status === 'published')) throw invalid('商品が見つかりません');
+      const t = tables(db);
+      const now = Date.now();
+      // 期限切れの行を消し、混み合い対策（1 分あたりの作成数・有効な一時保存の総数）を確かめる
+      t.guestPlans = (t.guestPlans ?? []).filter((g) => Date.parse(g.expires_at) > now);
+      if (t.guestPlans.filter((g) => Date.parse(g.created_at) > now - 60_000).length >= 60 || t.guestPlans.length >= 100_000) {
+        throw locked('一時保存が混み合っています。少し時間をおいてからお試しください');
+      }
+      const token = randomBytes(24).toString('base64url');
+      const expires_at = new Date(now + GUEST_PLAN_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      t.guestPlans.push({ token_hash: sha256(token), base_model_id: baseModelId, plan, created_at: new Date(now).toISOString(), expires_at });
+      return { token, expires_at };
+    });
+  }
+  async getGuestPlan(token: string): Promise<GuestPlan | null> {
+    if (!GUEST_PLAN_TOKEN.test(token)) return null;
+    return this.read((db) => {
+      const row = (tables(db).guestPlans ?? []).find((g) => g.token_hash === sha256(token) && Date.parse(g.expires_at) > Date.now());
+      return row ? { base_model_id: row.base_model_id, plan: structuredClone(row.plan), expires_at: row.expires_at } : null;
+    });
+  }
+
+  // ---------- 設置予定地・土地 ----------
+  async getSiteProfile(actor: SessionUser, configurationId: string) {
+    return this.read((db) => {
+      if (!siteProfileAccessOf(db, actor, configurationId)) return null;
+      const row = (tables(db).siteProfiles ?? []).find((p) => p.configuration_id === configurationId);
+      return row ? { ...row } : null;
+    });
+  }
+  async saveSiteProfile(actor: SessionUser, configurationId: string, input: SiteProfileInput, expectedLockVersion: number | null) {
+    return this.mutate((db) => {
+      const access = siteProfileAccessOf(db, actor, configurationId);
+      if (access !== 'owner' && access !== 'admin') throw forbidden('土地の情報を変更できるのは、お客様ご本人と本部だけです');
+      const t = tables(db);
+      t.siteProfiles ??= [];
+      const current = t.siteProfiles.find((p) => p.configuration_id === configurationId);
+      if ((current?.lock_version ?? null) !== expectedLockVersion) throw locked('他の画面で土地の情報が更新されています。再読み込みしてください');
+      // 土地の有無に合わない項目は持たない（DB の制約と同じ）
+      const owned = input.land_status === 'owned';
+      const row: SiteProfile = {
+        configuration_id: configurationId,
+        land_status: input.land_status,
+        site_address: owned ? input.site_address : null,
+        area_sqm: owned ? input.area_sqm : null,
+        land_category: owned ? input.land_category : null,
+        road_access: owned ? input.road_access : null,
+        electricity: owned ? input.electricity : null,
+        water: owned ? input.water : null,
+        drainage: owned ? input.drainage : null,
+        desired_area: owned ? null : input.desired_area,
+        intended_use: owned ? null : input.intended_use,
+        land_budget: owned ? null : input.land_budget,
+        note: input.note,
+        lock_version: (current?.lock_version ?? 0) + 1,
+        updated_at: nowIso(),
+      };
+      if (current) Object.assign(current, row);
+      else t.siteProfiles.push(row);
+      return row.lock_version;
     });
   }
 

@@ -1111,6 +1111,211 @@ export function canRegisterStock(latestDecision: DisasterDecision | null): boole
   return latestDecision === 'accepted' || latestDecision === 'conditional';
 }
 
+// ---------- 一時保存（フェーズ2：ログインなし） ----------
+
+/** 一時保存の有効期間（日）。DB の guest_plans.expires_at の既定と同じ */
+export const GUEST_PLAN_DAYS = 30;
+/** 一時保存の URL の鍵（24 バイトの base64url） */
+export const GUEST_PLAN_TOKEN = /^[A-Za-z0-9_-]{32}$/;
+
+export type GuestPlanFace = 'front' | 'right' | 'back' | 'left';
+
+/** 一時保存する仕様の選択（価格・お客様の情報は持たない）。DB の create_guest_plan と同じ形 */
+export interface GuestPlanInput {
+  name: string;
+  option_ids: string[];
+  variant_choice_ids: string[];
+  exterior_faces: { face_code: GuestPlanFace; option_id: string; variant_choice_ids: string[] }[];
+  finish_level: 'shell' | 'equipment' | 'full';
+  spec_code: string | null;
+  site_prefecture: string | null;
+  site_municipality: string | null;
+  site_location_undecided: boolean;
+}
+
+export interface GuestPlan {
+  base_model_id: string;
+  plan: GuestPlanInput;
+  expires_at: string;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function uuidList(value: unknown, max: number, label: string): string[] {
+  if (value === null || value === undefined) return [];
+  if (!Array.isArray(value) || value.length > max) fail(`${label}の形式が正しくありません`);
+  const out: string[] = [];
+  for (const item of value as unknown[]) {
+    const id = typeof item === 'string' ? item.toLowerCase() : '';
+    if (!UUID_PATTERN.test(id)) fail(`${label}の形式が正しくありません`);
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+export function normalizeGuestPlanInput(raw: Record<string, unknown>): GuestPlanInput {
+  const facesRaw = raw.exterior_faces ?? [];
+  if (!Array.isArray(facesRaw) || facesRaw.length > 4) fail('外壁の選択の形式が正しくありません');
+  const exterior_faces = (facesRaw as Array<Record<string, unknown>>).map((face) => {
+    const code = typeof face?.face_code === 'string' ? face.face_code : '';
+    if (!['front', 'right', 'back', 'left'].includes(code)) fail('外壁の選択の形式が正しくありません');
+    const [optionId] = uuidList([face?.option_id], 1, '外壁の選択');
+    return { face_code: code as GuestPlanFace, option_id: optionId, variant_choice_ids: uuidList(face?.variant_choice_ids, 20, '外壁の選択') };
+  });
+  const finish = typeof raw.finish_level === 'string' ? raw.finish_level : 'full';
+  if (!['shell', 'equipment', 'full'].includes(finish)) fail('仕上げの形式が正しくありません');
+  const spec = cfText(raw.spec_code, 40, '仕様');
+  if (spec && !/^[a-z0-9_-]+$/.test(spec)) fail('仕様の形式が正しくありません');
+  return {
+    name: cfText(raw.name, 60, 'プランの名前') ?? '',
+    option_ids: uuidList(raw.option_ids, 300, '選んだ商品'),
+    variant_choice_ids: uuidList(raw.variant_choice_ids, 300, '選んだ色・柄'),
+    exterior_faces,
+    finish_level: finish as GuestPlanInput['finish_level'],
+    spec_code: spec,
+    site_prefecture: cfText(raw.site_prefecture, 10, '設置予定地（都道府県）'),
+    site_municipality: cfText(raw.site_municipality, 60, '設置予定地（市区町村）'),
+    site_location_undecided: raw.site_location_undecided === true,
+  };
+}
+
+// ---------- 設置予定地・土地（フェーズ3） ----------
+
+export type LandStatus = 'owned' | 'none' | 'undecided';
+export const LAND_STATUS_LABELS: Record<LandStatus, string> = { owned: '土地あり', none: '土地なし（これから探す）', undecided: '未定' };
+
+export type LandCategory = 'residential' | 'farmland' | 'forest' | 'miscellaneous' | 'other' | 'unknown';
+export const LAND_CATEGORY_LABELS: Record<LandCategory, string> = {
+  residential: '宅地',
+  farmland: '田・畑（農地）',
+  forest: '山林',
+  miscellaneous: '雑種地',
+  other: 'その他',
+  unknown: '分からない',
+};
+
+export type RoadAccess = 'wide' | 'narrow' | 'none' | 'unknown';
+export const ROAD_ACCESS_LABELS: Record<RoadAccess, string> = {
+  wide: '幅 4m 以上の道路に接している',
+  narrow: '幅 4m 未満の道路に接している',
+  none: '道路に接していない',
+  unknown: '分からない',
+};
+
+export type UtilityStatus = 'available' | 'unavailable' | 'unknown';
+export const UTILITY_STATUS_LABELS: Record<UtilityStatus, string> = { available: '引込みあり', unavailable: 'なし', unknown: '分からない' };
+export const SITE_UTILITY_FIELDS = [
+  { key: 'electricity', label: '電気' },
+  { key: 'water', label: '上水道' },
+  { key: 'drainage', label: '排水（下水・浄化槽）' },
+] as const;
+
+export type IntendedUse = 'residence' | 'villa' | 'office' | 'lodging' | 'store' | 'warehouse' | 'other';
+export const INTENDED_USE_LABELS: Record<IntendedUse, string> = {
+  residence: '住まい',
+  villa: '別荘・セカンドハウス',
+  office: '事務所',
+  lodging: '宿泊施設（ホテル・民泊）',
+  store: '店舗',
+  warehouse: '倉庫・作業場',
+  other: 'その他',
+};
+
+export type LandBudget = 'under_3m' | '3m_5m' | '5m_10m' | '10m_20m' | 'over_20m' | 'undecided';
+export const LAND_BUDGET_LABELS: Record<LandBudget, string> = {
+  under_3m: '300万円未満',
+  '3m_5m': '300〜500万円',
+  '5m_10m': '500〜1,000万円',
+  '10m_20m': '1,000〜2,000万円',
+  over_20m: '2,000万円以上',
+  undecided: '未定',
+};
+
+/** 保存したプランごとの設置予定地・土地（お客様の申告）。DB の configuration_site_profiles と同じ */
+export interface SiteProfile {
+  configuration_id: string;
+  land_status: LandStatus;
+  site_address: string | null;
+  area_sqm: number | null;
+  land_category: LandCategory | null;
+  road_access: RoadAccess | null;
+  electricity: UtilityStatus | null;
+  water: UtilityStatus | null;
+  drainage: UtilityStatus | null;
+  desired_area: string | null;
+  intended_use: IntendedUse | null;
+  land_budget: LandBudget | null;
+  note: string | null;
+  lock_version: number;
+  updated_at: string;
+}
+
+export type SiteProfileInput = Omit<SiteProfile, 'configuration_id' | 'lock_version' | 'updated_at'>;
+
+function pick<T extends string>(value: unknown, labels: Record<T, string>, label: string): T | null {
+  const text = cfText(value, 20, label);
+  if (!text) return null;
+  if (!(text in labels)) fail(`${label}の選択が正しくありません`);
+  return text as T;
+}
+
+/** 全角の数字・カンマを直してから、㎡の数値にする（小数は 2 桁まで） */
+function areaOf(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const text = String(value)
+    .trim()
+    .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+    .replace(/．/g, '.')
+    .replace(/[,，]/g, '');
+  if (!text) return null;
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(text)) fail('敷地面積は数字（㎡・小数は 2 桁まで）で入力してください');
+  const area = Number(text);
+  if (area <= 0 || area > 1_000_000) fail('敷地面積を正しく入力してください');
+  return area;
+}
+
+/** 土地の有無で入力する項目が変わる：土地あり → 設置予定地、土地なし・未定 → 希望地域・用途・予算。DB の save_configuration_site_profile と同じ */
+export function normalizeSiteProfileInput(raw: Record<string, unknown>): SiteProfileInput {
+  const status = pick(raw.land_status, LAND_STATUS_LABELS, '土地の有無');
+  if (!status) fail('土地の有無を選んでください');
+  const owned = status === 'owned';
+  return {
+    land_status: status as LandStatus,
+    site_address: owned ? cfText(raw.site_address, 200, '設置予定地') : null,
+    area_sqm: owned ? areaOf(raw.area_sqm) : null,
+    land_category: owned ? pick(raw.land_category, LAND_CATEGORY_LABELS, '地目') : null,
+    road_access: owned ? pick(raw.road_access, ROAD_ACCESS_LABELS, '前面道路') : null,
+    electricity: owned ? pick(raw.electricity, UTILITY_STATUS_LABELS, '電気') : null,
+    water: owned ? pick(raw.water, UTILITY_STATUS_LABELS, '上水道') : null,
+    drainage: owned ? pick(raw.drainage, UTILITY_STATUS_LABELS, '排水') : null,
+    desired_area: owned ? null : cfText(raw.desired_area, 200, '希望地域'),
+    intended_use: owned ? null : pick(raw.intended_use, INTENDED_USE_LABELS, '希望用途'),
+    land_budget: owned ? null : pick(raw.land_budget, LAND_BUDGET_LABELS, '土地のご予算'),
+    note: cfText(raw.note, 1000, '土地についてのメモ'),
+  };
+}
+
+/** 画面に出す要約（担当の案件画面・お客様の画面で同じ表示にする） */
+export function siteProfileSummary(profile: Pick<SiteProfile, Exclude<keyof SiteProfile, 'configuration_id' | 'lock_version' | 'updated_at'>>): { label: string; value: string }[] {
+  const rows: { label: string; value: string }[] = [{ label: '土地', value: LAND_STATUS_LABELS[profile.land_status] }];
+  const add = (label: string, value: string | null | undefined) => {
+    if (value) rows.push({ label, value });
+  };
+  if (profile.land_status === 'owned') {
+    add('設置予定地', profile.site_address);
+    add('敷地面積', profile.area_sqm !== null ? `約 ${profile.area_sqm.toLocaleString('ja-JP')}㎡（約 ${Math.round(profile.area_sqm / 3.30578).toLocaleString('ja-JP')}坪）` : null);
+    add('地目', profile.land_category ? LAND_CATEGORY_LABELS[profile.land_category] : null);
+    add('前面道路', profile.road_access ? ROAD_ACCESS_LABELS[profile.road_access] : null);
+    for (const { key, label } of SITE_UTILITY_FIELDS) add(label, profile[key] ? UTILITY_STATUS_LABELS[profile[key] as UtilityStatus] : null);
+  } else {
+    add('希望地域', profile.desired_area);
+    add('希望用途', profile.intended_use ? INTENDED_USE_LABELS[profile.intended_use] : null);
+    add('土地のご予算', profile.land_budget ? LAND_BUDGET_LABELS[profile.land_budget] : null);
+  }
+  add('メモ', profile.note);
+  return rows;
+}
+
 // ---------- 案件の写真・書類 ----------
 
 export type CaseFileContext ='site_survey' | 'progress' | 'handover' | 'punch' | 'after_service' | 'contract' | 'document';

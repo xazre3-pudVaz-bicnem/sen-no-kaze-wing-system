@@ -23,7 +23,11 @@ import type {
   DisasterConsent,
   DisasterConsentInput,
   DisasterConsentText,
+  GuestPlan,
+  GuestPlanInput,
   HandoverInspectionInput,
+  SiteProfile,
+  SiteProfileInput,
   ManufacturingOrder,
   ManufacturingOrderInput,
   ManufacturingOrderStatus,
@@ -180,6 +184,18 @@ export interface CaseFlowStore {
   // ---- 全国ストック台帳（フェーズ15・本部だけ） ----
   listStockLedger(actor: SessionUser): Promise<StockLedgerRow[]>;
   saveStockLedgerEntry(actor: SessionUser, unitId: string, input: StockLedgerEntryInput, expectedLockVersion: number | null): Promise<number>;
+
+  // ---- 一時保存（フェーズ2：ログインなし。サーバーだけが呼ぶ） ----
+  /** 仕様の選択を一時保存し、URL の鍵と有効期限を返す。DB には鍵のハッシュだけを残す */
+  createGuestPlan(baseModelId: string, plan: GuestPlanInput): Promise<{ token: string; expires_at: string }>;
+  /** URL の鍵から一時保存を開く（期限切れ・見つからなければ null） */
+  getGuestPlan(token: string): Promise<GuestPlan | null>;
+
+  // ---- 設置予定地・土地（フェーズ3） ----
+  /** お客様本人・本部・そのプランの案件の担当代理店と製造の担当だけ（見えなければ null） */
+  getSiteProfile(actor: SessionUser, configurationId: string): Promise<SiteProfile | null>;
+  /** お客様本人と本部だけ。保存した版を返す */
+  saveSiteProfile(actor: SessionUser, configurationId: string, input: SiteProfileInput, expectedLockVersion: number | null): Promise<number>;
 
   // ---- 写真・書類 ----
   listCaseFiles(actor: SessionUser, requestId: string): Promise<CaseFile[]>;

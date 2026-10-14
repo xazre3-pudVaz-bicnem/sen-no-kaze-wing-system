@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { getCaseFlowStore } from '@/lib/data/case-flow/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
 import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
@@ -13,7 +14,7 @@ import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
 
 type Params = Promise<{ slug: string }>;
-type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string }>;
+type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string; plan?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
@@ -27,7 +28,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function SimulatorPage({ params, searchParams }: { params: Params; searchParams: Search }) {
-  const [{ slug }, { c, resume, spec, preview }] = await Promise.all([params, searchParams]);
+  const [{ slug }, { c, resume, spec, preview, plan }] = await Promise.all([params, searchParams]);
 
   // 公開カタログと認証確認は互いに依存しないため並列取得する。
   // カタログは1回だけ取得し、bundle とモデル一覧を同じ結果から組み立てる。
@@ -73,6 +74,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
 
   let initial: SimulatorInitial | null = null;
   let loadError: string | null = null;
+  let guestPlanExpiresAt: string | null = null;
   if (c) {
     if (!user) {
       loadError = '保存した仕様を開くにはログインが必要です。';
@@ -96,6 +98,34 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           lock_version: found.configuration.lock_version ?? null,
         };
       }
+    }
+  } else if (plan) {
+    // ログインなしの一時保存（フェーズ2）。保存したのは仕様の選択だけで、金額はここで計算し直す。
+    // 選んだ商品が台帳から外れていても、シミュレーターが今の台帳に合わせて整える
+    const guest = await (await getCaseFlowStore()).getGuestPlan(plan);
+    if (!guest) {
+      loadError = '一時保存の URL が見つからないか、有効期限（保存から 30 日）が切れています。';
+    } else if (guest.base_model_id !== model.id) {
+      const other = allModels.find((m) => m.id === guest.base_model_id);
+      if (other) redirect(`/simulator/${other.slug}?plan=${encodeURIComponent(plan)}`);
+      loadError = '一時保存したプランの商品が見つかりません。';
+    } else {
+      initial = {
+        // 未保存の新規下書き（保存するとマイページの新しいプランになる）
+        id: null as never,
+        name: guest.plan.name || `${model.name === 'フラット' ? 'Flat' : model.name} の仕様`,
+        option_ids: guest.plan.option_ids,
+        variant_choice_ids: guest.plan.variant_choice_ids,
+        exterior_faces: guest.plan.exterior_faces,
+        status: 'draft',
+        finish_level: guest.plan.finish_level,
+        spec_code: guest.plan.spec_code,
+        site_prefecture: guest.plan.site_prefecture,
+        site_municipality: guest.plan.site_municipality,
+        site_location_undecided: guest.plan.site_location_undecided,
+        lock_version: null,
+      };
+      guestPlanExpiresAt = guest.expires_at;
     }
   } else if (spec) {
     // /plans の平面図から入った場合は、該当仕様の標準構成を選択済みで開始する。
@@ -137,6 +167,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           loadError={loadError}
           resume={resume === '1'}
           user={user ? { id: user.id, name: user.full_name || user.email } : null}
+          guestPlanExpiresAt={guestPlanExpiresAt}
         />
       </SimulatorCaseImagesProvider>
     </>

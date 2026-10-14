@@ -11,7 +11,9 @@ import type {
   DealerProfile,
   DisasterConsent,
   DisasterConsentText,
+  GuestPlanInput,
   ManufacturingOrder,
+  SiteProfile,
   ManufacturingUnit,
   QuoteChangeRequest,
   QuoteRequestPreferences,
@@ -42,6 +44,18 @@ export interface LocalCaseFlowTables {
   consentTexts?: DisasterConsentText[];
   consents?: DisasterConsent[];
   stockLedger?: StockLedgerEntry[];
+  /** ログインなしの一時保存・プランごとの設置予定地と土地（20261014100000） */
+  guestPlans?: LocalGuestPlan[];
+  siteProfiles?: SiteProfile[];
+}
+
+/** 一時保存（URL の鍵はハッシュだけを持つ） */
+export interface LocalGuestPlan {
+  token_hash: string;
+  base_model_id: string;
+  plan: GuestPlanInput;
+  created_at: string;
+  expires_at: string;
 }
 
 export function emptyCaseFlowTables(): LocalCaseFlowTables {
@@ -64,5 +78,7 @@ export function emptyCaseFlowTables(): LocalCaseFlowTables {
     consentTexts: [],
     consents: [],
     stockLedger: [],
+    guestPlans: [],
+    siteProfiles: [],
   };
 }

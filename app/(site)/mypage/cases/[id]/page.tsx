@@ -14,6 +14,7 @@ import {
   SCHEDULE_CATEGORY_LABELS,
   SCHEDULE_STATUS_LABELS,
   formatCandidate,
+  siteProfileSummary,
   type AfterServiceStatus,
   type HandoverStatus,
   type PunchItemStatus,
@@ -121,6 +122,8 @@ export default async function CustomerCasePage({ params, searchParams }: { param
   const consentText = consentTexts[0] ?? null;
   const currentConsent = consents[0] ?? null;
   const back = `/mypage/cases/${id}`;
+  // 設置予定地・土地（フェーズ3。プランに紐づく）
+  const siteProfile = latest.configuration_id ? await caseFlow.getSiteProfile(user, latest.configuration_id) : null;
 
   return (
     <Section className="py-10 sm:py-14">
@@ -149,6 +152,29 @@ export default async function CustomerCasePage({ params, searchParams }: { param
             </li>
           ))}
         </ol>
+
+        {latest.configuration_id && (
+          <section className="card space-y-3 p-5" data-testid="customer-case-site-profile">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">設置予定地・土地</h2>
+              <Link href={`/mypage/configurations/${latest.configuration_id}/land`} className="text-sm underline-offset-4 hover:underline">
+                {siteProfile ? '変更する' : '入力する'}
+              </Link>
+            </div>
+            {siteProfile ? (
+              <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[9rem_1fr]">
+                {siteProfileSummary(siteProfile).map((row) => (
+                  <div key={row.label} className="contents">
+                    <dt className="text-xs text-muted">{row.label}</dt>
+                    <dd className="whitespace-pre-wrap">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-sm text-muted">土地の有無や設置予定地を教えていただくと、担当が現地確認の準備をしやすくなります。</p>
+            )}
+          </section>
+        )}
 
         <section className="card space-y-3 p-5" data-testid="customer-case-appointments">
           <h2 className="text-lg font-semibold">打合せ・現地調査の日程</h2>

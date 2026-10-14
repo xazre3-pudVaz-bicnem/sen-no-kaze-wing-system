@@ -48,7 +48,7 @@ export async function deleteUnusedPublishedOptionAction(formData: FormData): Pro
     }
   } else {
     const db = await createClient();
-    const { error } = await db.rpc('delete_unused_published_option', { p_option_id: id });
+    const { error } = await db.rpc('delete_unused_published_option_serialized', { p_option_id: id });
     if (error) {
       if (error.code === 'PGRST202') errorMessage = DELETE_NOT_AVAILABLE;
       else errorMessage = safeMessage(error.message || '削除処理に失敗しました。');

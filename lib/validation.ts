@@ -187,7 +187,7 @@ export const optionSchema = z.object({
   model_no: optional(80).nullable(),
   size_note: optional(120).nullable(),
   list_price: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).max(100_000_000).nullable()),
-  highlight: optional(40).nullable(),
+  highlight: optional(80).nullable(),
 });
 
 export const variantGroupSchema = z.object({

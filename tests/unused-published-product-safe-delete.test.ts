@@ -20,14 +20,19 @@ const runtimeSql = fs.readFileSync(
   path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-delete.sql'),
   'utf8'
 );
+const runtimeMjs = fs.readFileSync(
+  path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-delete.mjs'),
+  'utf8'
+);
 
 describe('登録済み未使用商品の安全削除', () => {
-  it('DB RPCが認証・商品編集権限・published限定を強制する', () => {
+  it('DB RPCが認証・商品編集権限・published限定・短いlock timeoutを強制する', () => {
     expect(migration).toContain('security definer');
     expect(migration).toContain('auth.uid() is null');
     expect(migration).toContain('public.can_edit_catalog()');
     expect(migration).toContain("v_option_status <> 'published'");
     expect(migration).toContain('for update');
+    expect(migration).toContain("set lock_timeout = '2s'");
   });
 
   it('保存済み仕様・見積・標準見積・履歴・商品ルール・Presetを参照確認する', () => {
@@ -51,28 +56,50 @@ describe('登録済み未使用商品の安全削除', () => {
     expect(migration).toContain("preset.value -> 'option_codes'");
   });
 
-  it('JSON/配列参照の確認中は対象テーブルの書込み競合を防ぐ', () => {
+  it('JSON/配列参照とvariant所属変更の確認中は対象テーブルの書込み競合を防ぐ', () => {
     expect(migration).toContain('lock table');
     expect(migration).toContain('in share mode;');
-    expect(migration).toContain('public.configuration_items');
-    expect(migration).toContain('public.configuration_snapshots');
-    expect(migration).toContain('public.estimate_templates');
-    expect(migration).toContain('public.quote_internal_snapshots');
+    for (const table of [
+      'public.configuration_items',
+      'public.configuration_snapshots',
+      'public.estimate_templates',
+      'public.quote_internal_snapshots',
+      'public.option_variant_groups',
+      'public.option_variant_choices',
+    ]) {
+      expect(migration).toContain(table);
+    }
   });
 
-  it('publishedの通常RLS DELETEを閉じ、RPC実行権限をauthenticatedに限定する', () => {
+  it('非FK参照は保存時にも存在検証し、DELETE後のstale writeをfail-closedにする', () => {
+    expect(migration).toContain('validate_base_model_preset_option_refs');
+    expect(migration).toContain('base_models_preset_option_refs_validate');
+    expect(migration).toContain('validate_estimate_template_baseline_option_refs');
+    expect(migration).toContain('estimate_templates_baseline_option_refs_validate');
+    expect(migration).toContain('validate_configuration_snapshot_option_refs');
+    expect(migration).toContain('configuration_snapshots_option_refs_validate');
+    expect(migration).toContain('validate_quote_internal_snapshot_option_refs');
+    expect(migration).toContain('quote_internal_snapshots_option_refs_validate');
+    expect(migration).toContain('安全確認ができないため削除を停止しました');
+  });
+
+  it('publishedの通常DELETEを閉じ、service_roleのRLS迂回とapplication TRUNCATEも遮断する', () => {
     expect(migration).toContain('as restrictive');
     expect(migration).toContain("using (status = 'draft');");
     expect(migration).toContain('revoke all on function public.delete_unused_published_option(uuid) from public;');
     expect(migration).toContain('revoke all on function public.delete_unused_published_option(uuid) from service_role;');
     expect(migration).toContain('grant execute on function public.delete_unused_published_option(uuid) to authenticated;');
+    expect(migration).toContain('revoke delete on table public.options from service_role;');
+    expect(migration).toContain('revoke truncate on table public.options from anon, authenticated, service_role;');
   });
 
-  it('Server Actionも商品編集権限を要求し、本番では安全削除RPCだけを呼ぶ', () => {
+  it('Server Actionも商品編集権限を要求し、本番・demo fallbackではfail-closedする', () => {
     expect(action).toContain('await requireCatalogEditor();');
     expect(action).toContain("option.status !== 'published'");
     expect(action).toContain("db.rpc('delete_unused_published_option'");
     expect(action).toContain("error.code === 'PGRST202'");
+    expect(action).toContain('isDemoFallback()');
+    expect(action).toContain('else if (isLocalMode())');
   });
 
   it('登録済み商品の削除UIは商品編集権限がある場合だけ有効化される', () => {
@@ -81,14 +108,34 @@ describe('登録済み未使用商品の安全削除', () => {
     expect(layout).toContain('<PublishedOptionDeleteControl enabled={canEditCatalog(user.role)} />');
   });
 
-  it('DB Rehearsalで権限・未使用削除・使用中拒否・published直DELETE拒否・draft削除維持を実動作確認する', () => {
-    expect(dbCheck).toContain('runtimeUnusedPublishedOptionDelete');
-    expect(runtimeSql).toContain('anonはRPCを実行できない');
-    expect(runtimeSql).toContain('dealerはRPCで削除できない');
-    expect(runtimeSql).toContain('adminは未使用publishedを削除できる');
-    expect(runtimeSql).toContain('商品ルールで使用中ならRPCは削除を拒否する');
-    expect(runtimeSql).toContain('published直接DELETEはRLSで0行');
-    expect(runtimeSql).toContain('既存のdraft直接DELETEは維持する');
+  it('DB Rehearsalで主要な使用済み経路・ACL・fail-closedを実動作確認する', () => {
+    expect(dbCheck).toContain('runtimeUnusedPublishedOptionDelete(client, { connectionString: url })');
+    for (const marker of [
+      'anonはRPCを実行できない',
+      'dealerはRPCで削除できない',
+      'adminは未使用publishedを削除できる',
+      '商品ルールで使用中なら削除を拒否する',
+      'Configuration直参照なら削除を拒否する',
+      'variant_choice_ids参照なら削除を拒否する',
+      'Configuration Snapshot参照なら削除を拒否する',
+      'Quote参照なら削除を拒否する',
+      'Standard Estimate Revision参照なら削除を拒否する',
+      'Preset code参照なら削除を拒否する',
+      'service_roleのpublished直接DELETEはtable ACLで拒否する',
+      '既存のdraft直接DELETEは維持する',
+      'JSON形式異常があれば安全確認不能として削除を停止する',
+    ]) {
+      expect(runtimeSql).toContain(marker);
+    }
     expect(runtimeSql).toContain('rollback;');
+  });
+
+  it('DB Rehearsalでvariant所属変更raceとlock timeoutを2接続以上で実動作確認する', () => {
+    expect(runtimeMjs).toContain('variant所属変更race');
+    expect(runtimeMjs).toContain("'ShareLock'");
+    expect(runtimeMjs).toContain("'RowExclusiveLock'");
+    expect(runtimeMjs).toContain("moveResult.code === '23503'");
+    expect(runtimeMjs).toContain("timeoutResult.code === '55P03'");
+    expect(runtimeMjs).toContain("new pg.Client({ connectionString })");
   });
 });

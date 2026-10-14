@@ -1,6 +1,6 @@
 -- audit_logs は管理者向け監査記録として RLS で保護しているが、旧 API grant により
 -- anon / authenticated に SELECT 以外のテーブル権限も残っていた。
--- TRUNCATE は RLS の対象外なので、ブラウザ向けロールの不要権限を明示的に閉じる。
+-- TRUNCATE / MAINTAIN は RLS の対象外なので、ブラウザ向けロールの不要権限を明示的に閉じる。
 --
 -- service_role は既存のサーバー側処理との互換のため、この corrective では変更しない。
 -- public schema 全体の default privileges も本 migration の責務外とし、今後の機密テーブルは
@@ -25,7 +25,8 @@ begin
      or has_table_privilege('anon', 'public.audit_logs', 'DELETE')
      or has_table_privilege('anon', 'public.audit_logs', 'TRUNCATE')
      or has_table_privilege('anon', 'public.audit_logs', 'REFERENCES')
-     or has_table_privilege('anon', 'public.audit_logs', 'TRIGGER') then
+     or has_table_privilege('anon', 'public.audit_logs', 'TRIGGER')
+     or has_table_privilege('anon', 'public.audit_logs', 'MAINTAIN') then
     raise exception 'POSTCONDITION: anon retains audit_logs table privileges';
   end if;
 
@@ -38,7 +39,8 @@ begin
      or has_table_privilege('authenticated', 'public.audit_logs', 'DELETE')
      or has_table_privilege('authenticated', 'public.audit_logs', 'TRUNCATE')
      or has_table_privilege('authenticated', 'public.audit_logs', 'REFERENCES')
-     or has_table_privilege('authenticated', 'public.audit_logs', 'TRIGGER') then
+     or has_table_privilege('authenticated', 'public.audit_logs', 'TRIGGER')
+     or has_table_privilege('authenticated', 'public.audit_logs', 'MAINTAIN') then
     raise exception 'POSTCONDITION: authenticated retains audit_logs non-SELECT privileges';
   end if;
 

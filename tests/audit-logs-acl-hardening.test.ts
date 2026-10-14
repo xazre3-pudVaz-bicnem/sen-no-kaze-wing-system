@@ -19,12 +19,12 @@ describe('audit_logs ACL hardening', () => {
     expect(migration).toContain('revoke all on table public.audit_logs from authenticated;');
     expect(migration).toContain('grant select on table public.audit_logs to authenticated;');
 
-    expect(sqlOnly).not.toMatch(/grant\s+(insert|update|delete|truncate|references|trigger|all)\s+on\s+table\s+public\.audit_logs\s+to\s+(anon|authenticated)/i);
+    expect(sqlOnly).not.toMatch(/grant\s+(insert|update|delete|truncate|references|trigger|maintain|all)\s+on\s+table\s+public\.audit_logs\s+to\s+(anon|authenticated)/i);
   });
 
-  it('checks TRUNCATE and the other non-RLS table privileges in the postcondition', () => {
+  it('checks TRUNCATE, MAINTAIN and the other non-RLS table privileges in the postcondition', () => {
     for (const role of ['anon', 'authenticated']) {
-      for (const privilege of ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) {
+      for (const privilege of ['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER', 'MAINTAIN']) {
         expect(migration).toContain(`has_table_privilege('${role}', 'public.audit_logs', '${privilege}')`);
       }
     }

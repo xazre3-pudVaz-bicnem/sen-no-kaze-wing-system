@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   path.resolve(process.cwd(), 'supabase/migrations/20261014090000_unused_published_product_safe_delete.sql'),
   'utf8'
 );
+const hardeningMigration = fs.readFileSync(
+  path.resolve(process.cwd(), 'supabase/migrations/20261014091000_unused_published_product_safe_delete_hardening.sql'),
+  'utf8'
+);
 const action = fs.readFileSync(
   path.resolve(process.cwd(), 'lib/actions/unused-published-product-delete.ts'),
   'utf8'
@@ -28,6 +32,10 @@ const arrayRaceMjs = fs.readFileSync(
   path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-array-race.mjs'),
   'utf8'
 );
+const writerOrderMjs = fs.readFileSync(
+  path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-writer-order.mjs'),
+  'utf8'
+);
 
 describe('登録済み未使用商品の安全削除', () => {
   it('DB RPCが認証・商品編集権限・published限定・短いlock timeoutを強制する', () => {
@@ -37,6 +45,8 @@ describe('登録済み未使用商品の安全削除', () => {
     expect(migration).toContain("v_option_status <> 'published'");
     expect(migration).toContain('for update');
     expect(migration).toContain("set lock_timeout = '2s'");
+    expect(hardeningMigration).toContain('security definer');
+    expect(hardeningMigration).toContain("set lock_timeout = '2s'");
   });
 
   it('保存済み仕様・見積・標準見積・履歴・商品ルール・Presetを参照確認する', () => {
@@ -96,12 +106,35 @@ describe('登録済み未使用商品の安全削除', () => {
     }
   });
 
+  it('Presetの技術キーoptions.codeをimmutableにし、legacy dangling codeもfail-closedにする', () => {
+    expect(hardeningMigration).toContain('create or replace function public.prevent_option_code_update()');
+    expect(hardeningMigration).toContain('before update of code on public.options');
+    expect(hardeningMigration).toContain('new.code is distinct from old.code');
+    expect(hardeningMigration).toContain('本体Presetに存在しない商品codeが含まれています');
+    expect(hardeningMigration).toContain('left join public.options o on o.code = preset_option.code');
+  });
+
+  it('公開RPCは旧実装をinternal化し、Option行→既存writer順でserializationする', () => {
+    expect(hardeningMigration).toContain('rename to delete_unused_published_option_internal');
+    expect(hardeningMigration).toContain('revoke all on function public.delete_unused_published_option_internal(uuid)');
+    expect(hardeningMigration).toContain('where o.id = p_option_id\n  for update;');
+    const configurations = hardeningMigration.indexOf('lock table public.configurations in share mode;');
+    const items = hardeningMigration.indexOf('lock table public.configuration_items in share mode;');
+    const snapshots = hardeningMigration.indexOf('lock table public.configuration_snapshots in share mode;');
+    const groups = hardeningMigration.indexOf('lock table public.option_variant_groups in share mode;');
+    const choices = hardeningMigration.indexOf('lock table public.option_variant_choices in share mode;');
+    expect(configurations).toBeGreaterThan(-1);
+    expect(configurations).toBeLessThan(items);
+    expect(items).toBeLessThan(snapshots);
+    expect(groups).toBeLessThan(choices);
+    expect(hardeningMigration).toContain('perform public.delete_unused_published_option_internal(p_option_id);');
+  });
+
   it('publishedの通常DELETEを閉じ、service_roleのRLS迂回とapplication TRUNCATEも遮断する', () => {
     expect(migration).toContain('as restrictive');
     expect(migration).toContain("using (status = 'draft');");
-    expect(migration).toContain('revoke all on function public.delete_unused_published_option(uuid) from public;');
-    expect(migration).toContain('revoke all on function public.delete_unused_published_option(uuid) from service_role;');
-    expect(migration).toContain('grant execute on function public.delete_unused_published_option(uuid) to authenticated;');
+    expect(hardeningMigration).toContain('revoke all on function public.delete_unused_published_option_internal(uuid) from public, anon, authenticated, service_role;');
+    expect(hardeningMigration).toContain('grant execute on function public.delete_unused_published_option(uuid) to authenticated;');
     expect(migration).toContain('revoke delete on table public.options from service_role;');
     expect(migration).toContain('revoke truncate on table public.options from anon, authenticated, service_role;');
   });
@@ -159,5 +192,16 @@ describe('登録済み未使用商品の安全削除', () => {
     expect(arrayRaceMjs).toContain("'RowExclusiveLock'");
     expect(arrayRaceMjs).toContain("writeResult.code === 'P0001'");
     expect(arrayRaceMjs).toContain('削除後にdangling Choice UUIDは残らない');
+  });
+
+  it('DB Rehearsalでoptions.codeと既存writerのdeadlock回避を実RPCで確認する', () => {
+    expect(dbCheck).toContain('runtimeUnusedPublishedOptionWriterOrder({ connectionString: url })');
+    expect(writerOrderMjs).toContain('options.codeの既存行変更をDBで拒否する');
+    expect(writerOrderMjs).toContain('save_configuration_atomic');
+    expect(writerOrderMjs).toContain('apply_catalog_import');
+    expect(writerOrderMjs).toContain("saveResult.code !== '40P01'");
+    expect(writerOrderMjs).toContain("importResult.code !== '40P01'");
+    expect(writerOrderMjs).toContain('safe-deleteはconfigurations待ちの間configuration_itemsを保持しない');
+    expect(writerOrderMjs).toContain('safe-deleteはOption行待ち中にvariant SHAREを保持しない');
   });
 });

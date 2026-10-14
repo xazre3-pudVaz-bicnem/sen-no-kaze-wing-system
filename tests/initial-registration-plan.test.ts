@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { INITIAL_RATES, MAPPING_SHEET, buildRegistrationPlan } from '../scripts/initial-registration/plan.ts';
+import { INITIAL_RATES, MAPPING_SHEET, PENDING_PRODUCT_REMARK, buildRegistrationPlan, isPendingProduct } from '../scripts/initial-registration/plan.ts';
 import { readXlsx, type CellValue, type Sheet } from '../scripts/lib/read-xlsx.ts';
 import { baseLineMoney, lineMoney, revisionMoney, sectionMoney } from '@/lib/domain/standard-estimate-money';
 
@@ -34,6 +34,12 @@ describe('初期登録の計画：確定資料の規則', () => {
       { ...combo, J: '・下駄箱', L: '・下駄箱', M: 1, O: 30000, P: 30000, Q: '標準見積／オプション', T: '標準見積へ登録しない（分類表×）' },
       // 仮設定は備考に残す
       { ...combo, I: '３．本体電気配線工事', J: '・電気配線', L: '・電気配線', M: 2, N: '人', O: 30000, P: 60000, Q: '標準見積／オプション', T: '初期Revisionへ登録（仮設定）', U: '仮設定：Wing標準値に合わせて設定。BOX実績確認後に見直す。' },
+      // 重複・旧価格の行は登録せず、正式採用の行だけを登録する（「初期Revisionへ登録しない…」も同じ文字で始まる）
+      { ...combo, I: '４．設備機器', J: '・洗面器AB-CD12-34', L: '・洗面器AB-CD12-34', M: 1, N: '台', O: 1000, P: 1000, Q: '標準見積／オプション', T: '初期Revisionへ登録しない（重複・旧価格）' },
+      { ...combo, J: '・洗面器AB-CD12-34', L: '・洗面器AB-CD12-34', M: 1, N: '台', O: 1200, P: 1200, Q: '標準見積／オプション', T: '初期Revisionへ登録（1,200円を正式採用）' },
+      // 型番のない設備機器は商品確定待ち（価格未確定）。取付などの工事の行は原価のまま
+      { ...combo, J: '・エアコン', L: '・エアコン', M: 1, N: '台', O: 2000, P: 2000, Q: '標準見積／オプション', T: '初期Revisionへ登録' },
+      { ...combo, I: '５．その他の設備', J: '・エアコン取付', L: '・エアコン取付', M: 1, N: '式', O: 500, P: 500, Q: '標準見積／オプション', T: '初期Revisionへ登録' },
       // 参考シート（初期対象ではない）は登録しない
       { ...combo, A: 'ウィング【本体】', G: 'Base Master参考', I: '１．金物関係費用', L: '・参考', M: 1, O: 1, P: 1, Q: 'Base Master', T: '初期Revisionへ登録' },
     ])
@@ -53,14 +59,31 @@ describe('初期登録の計画：確定資料の規則', () => {
       ['interior_exterior', '・サッシ / 勝手口ドア', 180000],
       ['interior_exterior', '・屋根ガルバニュウム鋼板', 0],
       ['option', '・電気配線', 30000],
+      ['option', '・洗面器AB-CD12-34', 1200],
+      ['option', '・エアコン', null],
+      ['option', '・エアコン取付', 500],
     ]);
   });
 
   it('単価は原価（案 A）として auto で登録し、仮設定の行は備考に残す', () => {
     expect(INITIAL_RATES).toEqual({ salesFeeRate: '1.0000', expenseRate: '0.1500', markupRate: '1.5000', taxRate: '0.10' });
-    expect(only.estimate_lines.every((line) => line.price_mode === 'auto')).toBe(true);
+    expect(only.estimate_lines.filter((line) => line.price_mode !== 'auto').map((line) => line.name)).toEqual(['・エアコン']);
     expect(only.estimate_lines.find((line) => line.name === '・電気配線')?.remark).toBe('仮設定：Wing標準値に合わせて設定。BOX実績確認後に見直す。');
     expect(only.estimate_lines.find((line) => line.name === '・屋根ガルバニュウム鋼板')?.remark).toBeNull();
+  });
+
+  it('型番のない設備機器は商品確定待ち：価格未確定で登録し、Excel の単価を原価として確定しない', () => {
+    const pending = only.estimate_lines.find((line) => line.name === '・エアコン');
+    expect(pending).toMatchObject({ price_mode: 'por', cost_unit_price: null, remark: PENDING_PRODUCT_REMARK, reference_unit_price: 2000 });
+    expect(isPendingProduct('option', '・3点ユニットバス1216')).toBe(true);
+    expect(isPendingProduct('option', '・ガス給湯器16号')).toBe(true);
+    // メーカー・型番があるもの、工事の行、内外装の行は原価として登録する
+    expect(isPendingProduct('option', '・洗面器KB-PR012-03-G141')).toBe(false);
+    expect(isPendingProduct('option', '・混合水栓KB-TP006-01-G141')).toBe(false);
+    expect(isPendingProduct('option', '・設備取付関係')).toBe(false);
+    expect(isPendingProduct('option', '・室内造作（建具取付まで）')).toBe(false);
+    expect(isPendingProduct('option', '３．各種養生（床養生マット、壁ビニールシート等）')).toBe(false);
+    expect(isPendingProduct('interior_exterior', '・サッシ / 玄関ドア')).toBe(false);
   });
 
   it('計画の金額は、DB と同じ式（画面の試算）で計算している', () => {
@@ -71,7 +94,17 @@ describe('初期登録の計画：確定資料の規則', () => {
       'rate',
       rates
     );
-    const option = sectionMoney([lineMoney({ mode: 'auto', quantity: '2', costUnitPrice: 30000 }, rates)], 'rate', rates);
+    const option = sectionMoney(
+      [
+        lineMoney({ mode: 'auto', quantity: '2', costUnitPrice: 30000 }, rates),
+        lineMoney({ mode: 'auto', quantity: '1', costUnitPrice: 1200 }, rates),
+        // 価格未確定の行は合計に入れない
+        lineMoney({ mode: 'por', quantity: '1', costUnitPrice: null }, rates),
+        lineMoney({ mode: 'auto', quantity: '1', costUnitPrice: 500 }, rates),
+      ],
+      'rate',
+      rates
+    );
     const money = revisionMoney([base, interior, option, sectionMoney([], 'none', rates)], 0, rates);
     expect(only.expected).toEqual({
       base_cost_line_subtotal: base.costLineSubtotal,
@@ -112,5 +145,18 @@ describe.skipIf(!fs.existsSync(xlsx))('初期登録の計画：確定資料（�
       'wing-01/residence/3640x4550/fire',
       'wing-01/residence/3640x4550/non_fire',
     ]);
+  });
+
+  it('初期登録アクションに「しない」とある行は 1 行も登録しない', () => {
+    const sheets = readXlsx(xlsx);
+    const mapping = sheets.find((s) => s.name === MAPPING_SHEET);
+    const skipped = new Set(
+      Object.entries(mapping?.rows ?? {})
+        .filter(([, cells]) => String(cells.T ?? '').includes('しない'))
+        .map(([row]) => Number(row))
+    );
+    expect(skipped.size).toBeGreaterThan(0);
+    const registered = buildRegistrationPlan(sheets).combos.flatMap((c) => [...c.base_lines, ...c.estimate_lines]);
+    expect(registered.filter((line) => skipped.has(line.source_row))).toEqual([]);
   });
 });

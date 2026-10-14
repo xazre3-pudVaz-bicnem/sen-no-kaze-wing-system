@@ -345,6 +345,9 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                           <Link href={`/simulator/${slug}?c=${configuration.id}`} className="btn-ghost btn-sm">
                             プランを見る
                           </Link>
+                          <Link href={`/mypage/configurations/${configuration.id}/land`} className="btn-ghost btn-sm">
+                            設置予定地・土地
+                          </Link>
                           {quote && (
                             <a
                               href={`/api/quotes/${quote.id}/pdf`}
@@ -447,6 +450,13 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                         </form>
                         <DeleteConfigurationButton id={configuration.id} name={configuration.name} />
                       </div>
+                      <Link
+                        href={`/mypage/configurations/${configuration.id}/land`}
+                        className="mt-3 text-center text-xs text-ink-soft underline underline-offset-4 hover:text-ink"
+                        data-testid="land-link"
+                      >
+                        設置予定地・土地の情報を入力する
+                      </Link>
                     </div>
                   </li>
                 );

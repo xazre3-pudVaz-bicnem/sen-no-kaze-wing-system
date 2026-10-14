@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth/session';
 import { StoreError, type SessionUser } from '@/lib/data/store';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { siteProfileInputFromForm } from '@/lib/data/case-flow/site-profile-from-form';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import {
   CASE_FILE_MAX_BYTES,
@@ -831,6 +832,25 @@ export async function saveStockLedgerEntryAction(formData: FormData): Promise<vo
     redirect(`/admin/stock-ledger?error=${encodeURIComponent(errorMessage(e))}`);
   }
   redirect('/admin/stock-ledger?done=saved');
+}
+
+// ---------- 設置予定地・土地（フェーズ3） ----------
+
+export async function saveSiteProfileAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/mypage');
+  try {
+    const configurationId = uuid(formData, 'configuration_id');
+    const input = siteProfileInputFromForm(formData);
+    if (!input) throw new CaseFlowValidationError('土地の有無を選んでください');
+    const store = await getCaseFlowStore();
+    await store.saveSiteProfile(user, configurationId, input, intOrNull(formData, 'expected_lock_version'));
+    revalidatePath(`/mypage/configurations/${configurationId}/land`);
+    revalidatePath(`/mypage/configurations/${configurationId}/request-quote`);
+    revalidatePath('/mypage', 'layout');
+    return { ok: true, message: '設置予定地・土地の情報を保存しました。見積を依頼すると、担当の代理店にも伝わります。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
 }
 
 // ---------- 写真・書類 ----------

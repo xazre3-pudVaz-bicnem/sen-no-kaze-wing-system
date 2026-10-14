@@ -237,14 +237,82 @@ test.describe('顧客フロー', () => {
     await expect(page.getByTestId('contact-form')).toBeVisible();
   });
 
+  test('2-1. 未ログインで一時保存し、別の端末（別のブラウザ）で URL から続きを開ける', async ({ page, browser }) => {
+    await openFreshSimulator(page);
+    await page.getByTestId('site-prefecture-select').selectOption('石川県');
+    const total = await readTotal(page);
+    const equipment = (await page.getByTestId('equip-exterior-parts').textContent()) ?? '';
+    await page.getByTestId('save-button').click();
+    await page.getByTestId('guest-save-temporary').click();
+    const url = await page.getByTestId('guest-plan-url').inputValue();
+    expect(url).toMatch(/\/simulator\/wing-01\?plan=[A-Za-z0-9_-]{32}$/);
+
+    // 別の端末：ログインしていない・この端末の選択（localStorage）も無い
+    const other = await browser.newContext();
+    try {
+      const phone = await other.newPage();
+      await phone.goto(url);
+      await waitForSimulator(phone);
+      await expect(phone.getByTestId('guest-plan-notice')).toBeVisible();
+      await expect(phone.getByTestId('site-prefecture-select')).toHaveValue('石川県');
+      await expect(phone.getByTestId('equip-exterior-parts')).toHaveText(equipment);
+      expect(await readTotal(phone)).toBe(total);
+      // 鍵が違う・期限切れの URL は開けない
+      await phone.goto(url.replace(/plan=.*/, 'plan=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'));
+      await waitForSimulator(phone);
+      await expect(phone.getByText('一時保存の URL が見つからないか')).toBeVisible();
+    } finally {
+      await other.close();
+    }
+  });
+
+  test('3-1. 保存したプランに土地の情報を入力でき、見積依頼の画面に引き継がれる（土地あり → 土地なしに変えて依頼）', async ({ page }) => {
+    const customer = uniqueEmail('land');
+    await register(page, customer, '/simulator/wing-01');
+    await openFreshSimulator(page);
+    await page.getByTestId('save-button').click();
+    await page.getByTestId('config-name-input').fill('土地を入力するプラン');
+    await page.getByTestId('save-confirm').click();
+    await page.waitForURL(/\?c=[0-9a-f-]{36}/);
+    const configId = new URL(page.url()).searchParams.get('c')!;
+
+    // マイページの保存プランから「設置予定地・土地」へ。土地あり → 設置予定地を入力
+    await page.goto('/mypage');
+    await page.getByTestId('land-link').click();
+    await expect(page).toHaveURL(new RegExp(`/mypage/configurations/${configId}/land`));
+    await page.getByTestId('land-status-owned').check();
+    await page.locator('#land-address').fill('石川県七尾市○○1-2');
+    await page.locator('#land-area').fill('200');
+    await page.locator('#land-road').selectOption('wide');
+    await page.getByTestId('site-profile-save').click();
+    await expect(page.getByText('設置予定地・土地の情報を保存しました')).toBeVisible();
+
+    // 見積依頼の画面に引き継がれる。土地なしに変え、希望地域・予算を入れて依頼する
+    await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await expect(page.locator('#site_address')).toHaveValue('石川県七尾市○○1-2');
+    await expect(page.getByTestId('land-status-owned')).toBeChecked();
+    await page.getByTestId('land-status-none').check();
+    await page.locator('#request-land-desired-area').fill('能登の海沿い');
+    await page.locator('#request-land-budget').selectOption('3m_5m');
+    await page.getByTestId('submit-quote-request').click();
+    await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
+
+    // 依頼の後も、本人は土地の情報を見て変えられる（土地なし：住所・面積は残らない）
+    await page.goto(`/mypage/configurations/${configId}/land`);
+    await expect(page.getByTestId('land-status-none')).toBeChecked();
+    await expect(page.locator('#land-desired-area')).toHaveValue('能登の海沿い');
+    await logout(page);
+  });
+
   test('6-10. ログイン前の選択保持 → 保存 → 再ログイン編集 → 複製 → 見積依頼 → PDF', async ({ page, request }) => {
     const email = uniqueEmail('flow');
     await openFreshSimulator(page);
 
-    // ウッドデッキを足してから保存 → 未ログインなのでログインへ
+    // ウッドデッキを足してから保存 → 未ログインなので保存の方法を選び、マイページに保存（ログイン）へ
     await pickOption(page, 'equip-exterior-parts', ['wood-deck']);
     const totalBefore = await readTotal(page);
     await page.getByTestId('save-button').click();
+    await page.getByTestId('guest-save-login').click();
     await expect(page).toHaveURL(/\/login\?next=/);
 
     // 新規登録 → シミュレーターへ戻り、選択が残ったまま保存ダイアログが開く

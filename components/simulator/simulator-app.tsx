@@ -59,6 +59,7 @@ import { PreviewStage } from './preview-stage';
 import { OptionPickerDialog } from './option-picker-dialog';
 import { ExteriorWallFacesDialog } from './exterior-wall-faces-dialog';
 import { SaveDialog } from './save-dialog';
+import { GuestSaveDialog } from './guest-save-dialog';
 import { SiteLocationPicker } from './site-location-picker';
 import { Toasts, type Toast } from './toasts';
 import { cn } from '@/lib/utils';
@@ -102,6 +103,8 @@ interface Props {
   loadError: string | null;
   resume: boolean;
   user: { id: string; name: string } | null;
+  /** ログインなしの一時保存（URL）から開いたときの有効期限 */
+  guestPlanExpiresAt?: string | null;
 }
 
 interface Draft {
@@ -153,6 +156,7 @@ export function SimulatorApp({
   loadError,
   resume,
   user,
+  guestPlanExpiresAt = null,
 }: Props) {
   const router = useRouter();
   const { model } = bundle;
@@ -300,6 +304,8 @@ export function SimulatorApp({
   const [dirty, setDirty] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dialog, setDialog] = useState<null | 'save' | 'quote'>(null);
+  /** 未ログインの「見積を保存する」：マイページに保存（ログイン）か、ログインなしの一時保存（URL）かを選ぶ */
+  const [guestSave, setGuestSave] = useState(false);
   const [saving, startSaving] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const resumed = useRef(false);
@@ -937,7 +943,10 @@ export function SimulatorApp({
       pushToast('本部プレビュー中は保存できません（新しい価格の確認用です）', 'warn');
       return;
     }
-    if (!user) return requireLogin('save');
+    if (!user) {
+      setGuestSave(true);
+      return;
+    }
     setDialog('save');
   };
   const handleQuoteClick = () => {
@@ -1165,11 +1174,10 @@ export function SimulatorApp({
                 </div>
                 {!user && (
                   <p className="mt-1 text-right text-[0.7rem] leading-snug text-muted/80">
-                    保存には{' '}
                     <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
                       ログイン
-                    </Link>{' '}
-                    が必要です（選択内容は保持されます）
+                    </Link>
+                    するとマイページに保存できます。ログインせずに一時保存（URL）もできます
                   </p>
                 )}
               </div>
@@ -1188,15 +1196,26 @@ export function SimulatorApp({
         </div>
 
         {pricingPreview && (
-          <Alert tone="info" className="mt-4" data-testid="pricing-preview-banner">
-            本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
-            プレビュー中は保存・見積依頼はできません。
-          </Alert>
+          <div className="mt-4" data-testid="pricing-preview-banner">
+            <Alert tone="info">
+              本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
+              プレビュー中は保存・見積依頼はできません。
+            </Alert>
+          </div>
         )}
         {loadError && (
           <Alert tone="warn" className="mt-4">
             {loadError}
           </Alert>
+        )}
+        {guestPlanExpiresAt && !configId && (
+          <div className="mt-4" data-testid="guest-plan-notice">
+            <Alert tone="info">
+              一時保存したプランを開きました（
+              {new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'long', day: 'numeric' }).format(new Date(guestPlanExpiresAt))}
+              まで有効）。金額は今の価格で計算し直しています。会員登録すると、マイページにずっと保存できます。
+            </Alert>
+          </div>
         )}
         {readOnly && (
           <Alert tone="info" className="mt-4">
@@ -1340,6 +1359,28 @@ export function SimulatorApp({
             setSaveError(null);
           }}
           onSubmit={(n) => doSave(n, dialog === 'quote' ? 'quote' : 'stay')}
+        />
+      )}
+      {guestSave && (
+        <GuestSaveDialog
+          modelSlug={model.slug}
+          baseModelId={model.id}
+          plan={{
+            name,
+            option_ids: selected,
+            variant_choice_ids: variantIds,
+            exterior_faces: exteriorFaces,
+            finish_level: finishLevel,
+            spec_code: specCode,
+            site_prefecture: sitePrefecture,
+            site_municipality: siteMunicipality,
+            site_location_undecided: siteLocationUndecided,
+          }}
+          onLogin={() => {
+            setGuestSave(false);
+            requireLogin('save');
+          }}
+          onClose={() => setGuestSave(false)}
         />
       )}
       <Toasts toasts={toasts} onDismiss={(tid) => setToasts((t) => t.filter((x) => x.id !== tid))} />

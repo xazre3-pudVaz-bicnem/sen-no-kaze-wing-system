@@ -18,6 +18,7 @@ import {
   SLOT_PERIOD_LABELS,
   TECH_VERDICT_LABELS,
   formatCandidate,
+  siteProfileSummary,
   type CaseAccess,
   type CaseFile,
   type CaseFileContext,
@@ -119,6 +120,9 @@ export async function CaseSitePanels({
   const isAdmin = access === 'admin';
   const canOperate = access === 'admin' || access === 'staff';
 
+  // お客様が入力した設置予定地・土地（フェーズ3。プランに紐づく）
+  const configurationId = detail.request?.configuration_id ?? null;
+  const siteProfile = configurationId ? await caseFlow.getSiteProfile(actor, configurationId) : null;
   const [workflow, preferences, appointments, survey, notes, files, profiles] = await Promise.all([
     caseFlow.getCaseWorkflow(actor, requestId),
     caseFlow.getQuoteRequestPreferences(actor, requestId),
@@ -326,6 +330,25 @@ export async function CaseSitePanels({
           </details>
         </Section>
       )}
+
+      <Section
+        title="お客様が入力した設置予定地・土地"
+        testId="case-site-profile-panel"
+        badge={<span className="text-[0.65rem] text-muted">お客様の申告（現地確認の前の参考）</span>}
+      >
+        {siteProfile ? (
+          <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[9rem_1fr]">
+            {siteProfileSummary(siteProfile).map((row) => (
+              <div key={row.label} className="contents">
+                <dt className="text-xs text-muted">{row.label}</dt>
+                <dd className="whitespace-pre-wrap">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-xs text-muted">お客様はまだ土地の情報を入力していません（マイページか見積依頼の画面で入力できます）。</p>
+        )}
+      </Section>
 
       <Section
         title="現地確認の記録"

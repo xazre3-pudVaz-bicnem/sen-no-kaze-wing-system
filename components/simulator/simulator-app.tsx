@@ -89,6 +89,11 @@ interface Props {
    * 機種・用途・防火で 1 件に決まるときは、こちらを価格の正本にする（無ければ従来の計算）。
    */
   saleViews?: StandardEstimateSaleView[];
+  /**
+   * 本部のプレビュー（サイトの新価格へ切り替える前の確認用）。新しい標準見積の価格で表示するだけで、
+   * 保存・見積依頼はできない（DB 側はスイッチが入るまでこれまでの計算のため、保存すると金額が食い違う）。
+   */
+  pricingPreview?: boolean;
   /** 本体切り替え用（タイトル横のセレクト。先方指示「ここで本体を変える」） */
   models: { slug: string; name: string }[];
   /** 立面図（モデル共通の図面。現状は Wing のみ） */
@@ -137,7 +142,18 @@ function defaultVariantIds(bundle: CatalogBundle, optionIds: string[]): string[]
   return defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
 }
 
-export function SimulatorApp({ bundle, estimateTemplates, saleViews = [], models, elevations, initial, loadError, resume, user }: Props) {
+export function SimulatorApp({
+  bundle,
+  estimateTemplates,
+  saleViews = [],
+  pricingPreview = false,
+  models,
+  elevations,
+  initial,
+  loadError,
+  resume,
+  user,
+}: Props) {
   const router = useRouter();
   const { model } = bundle;
   const displayModelName = model.name === 'フラット' ? 'Flat' : model.name;
@@ -872,6 +888,8 @@ export function SimulatorApp({ bundle, estimateTemplates, saleViews = [], models
   };
 
   const doSave = (saveName: string, then: 'stay' | 'quote') => {
+    // 本部プレビューは確認用。保存すると DB（これまでの計算）と金額が食い違うため保存しない
+    if (pricingPreview) return;
     setSaveError(null);
     startSaving(async () => {
       const result = await saveConfigurationWithExteriorAction({
@@ -915,10 +933,18 @@ export function SimulatorApp({ bundle, estimateTemplates, saleViews = [], models
   };
 
   const handleSaveClick = () => {
+    if (pricingPreview) {
+      pushToast('本部プレビュー中は保存できません（新しい価格の確認用です）', 'warn');
+      return;
+    }
     if (!user) return requireLogin('save');
     setDialog('save');
   };
   const handleQuoteClick = () => {
+    if (pricingPreview) {
+      pushToast('本部プレビュー中は見積依頼できません（新しい価格の確認用です）', 'warn');
+      return;
+    }
     if (validationIssues.length) {
       pushToast(validationIssues[0].message, 'warn');
       return;
@@ -1161,6 +1187,12 @@ export function SimulatorApp({ bundle, estimateTemplates, saleViews = [], models
           )}
         </div>
 
+        {pricingPreview && (
+          <Alert tone="info" className="mt-4" data-testid="pricing-preview-banner">
+            本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
+            プレビュー中は保存・見積依頼はできません。
+          </Alert>
+        )}
         {loadError && (
           <Alert tone="warn" className="mt-4">
             {loadError}

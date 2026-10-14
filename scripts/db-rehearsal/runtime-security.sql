@@ -114,6 +114,8 @@ declare
   opt_k constant uuid := '00000000-0000-4000-8000-000000000c12';
   v_se3_text text;
   v_se4_text text;
+  -- サイトの新価格への切り替えスイッチの検査用
+  v_switch_text text;
   -- シミュレーターの標準見積（PR C2）の検査用
   c_s constant uuid := '00000000-0000-4000-8000-00000000c0dd';
   c_s2 constant uuid := '00000000-0000-4000-8000-00000000c0de';
@@ -780,6 +782,28 @@ begin
           insert into public.configuration_items (configuration_id, option_id, quantity) values (c_s, opt_a, 3);
           set local session_replication_role = origin;
 
+          -- 18. サイトの新価格への切り替えスイッチ（20261013210000）：切れている間は、標準状態の商品があってもこれまでの計算。
+          --     切り替えは本部だけ。以降の 17 の検査は、本部がスイッチを入れた状態で行い、最後に戻す
+          if to_regprocedure('public.simulator_standard_pricing_enabled()') is not null then
+            perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
+            perform public.recalculate_configuration(c_s);
+            perform set_config('request.jwt.claims', '', true);
+            perform pg_temp.expect_eq('18-1 スイッチが切れている間は、標準状態の商品があってもこれまでの計算（本体はモデルの本体価格）',
+              (select m.base_price::text from public.base_models m where m.id = v_model),
+              coalesce((select c.base_price::text from public.configurations c where c.id = c_s), '(なし)'));
+            perform pg_temp.expect_denied('18-2 お客様はシミュレーターの価格を切り替えられない', '42501',
+              pg_temp.run_as('authenticated', u_cust_x, $q$ select public.set_simulator_standard_pricing(true)::text $q$));
+            perform pg_temp.expect_denied('18-3 未ログインの利用者はスイッチの状態を読めない', '42501',
+              pg_temp.run_as('anon', null, $q$ select public.simulator_standard_pricing_enabled()::text $q$));
+            perform pg_temp.expect_blocked('18-4 お客様は設定の表を直接読めない',
+              pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.app_settings $q$));
+            -- 切り替えと監査ログの確認は別の文にする（同じ文の中からは、その文の中で書いた行が見えない）
+            v_switch_text := pg_temp.run_as('authenticated', u_admin, $q$ select public.set_simulator_standard_pricing(true)::text $q$);
+            perform pg_temp.expect_eq('18-5 本部はシミュレーターの価格を切り替えられ、監査ログに残る', 'true/true',
+              v_switch_text || '/' ||
+              exists (select 1 from public.audit_logs a where a.entity = 'app_settings' and a.summary like '%新しい標準見積に切り替え%')::text);
+          end if;
+
           -- recalculate_configuration は保存処理（save_configuration_atomic）の中から呼ぶ内部の関数（API からは実行できない）。
           -- 保存と同じく本人（JWT の sub）として、内部から呼ぶ
           perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
@@ -811,6 +835,16 @@ begin
                from public.quote_items qi where qi.quote_id = q_s));
           perform pg_temp.expect_denied('17-4 お客様は標準見積の明細を作る内部の関数を実行できない', '42501',
             pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.write_standard_estimate_quote_items(%L, %L)::text $q$, c_s, q_s)));
+
+          if to_regprocedure('public.simulator_standard_pricing_enabled()') is not null then
+            perform pg_temp.run_as('authenticated', u_admin, $q$ select public.set_simulator_standard_pricing(false)::text $q$);
+            perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
+            perform public.recalculate_configuration(c_s);
+            perform set_config('request.jwt.claims', '', true);
+            perform pg_temp.expect_eq('18-6 スイッチを戻すと、これまでの計算に戻る',
+              (select m.base_price::text from public.base_models m where m.id = v_model),
+              coalesce((select c.base_price::text from public.configurations c where c.id = c_s), '(なし)'));
+          end if;
         end if;
       end if;
     end if;

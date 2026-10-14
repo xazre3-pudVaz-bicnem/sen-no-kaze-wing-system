@@ -3,11 +3,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = fs.readFileSync(
-  path.resolve(process.cwd(), 'supabase/migrations/20261014090000_unused_published_product_safe_delete.sql'),
+  path.resolve(process.cwd(), 'supabase/migrations/20261014110000_unused_published_product_safe_delete.sql'),
   'utf8'
 );
 const hardeningMigration = fs.readFileSync(
-  path.resolve(process.cwd(), 'supabase/migrations/20261014091000_unused_published_product_safe_delete_hardening.sql'),
+  path.resolve(process.cwd(), 'supabase/migrations/20261014111000_unused_published_product_safe_delete_hardening.sql'),
   'utf8'
 );
 const action = fs.readFileSync(

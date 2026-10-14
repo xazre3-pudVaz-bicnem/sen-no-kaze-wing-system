@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useActionState, useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addOptionImageAction,
@@ -36,33 +36,40 @@ function PendingButton({ pending, children }: { pending: boolean; children: Reac
 function OptionImageEditor({ optionId, image }: { optionId: string; image: OptionImage }) {
   const [state, action, pending] = useActionState(updateOptionImageAction, initial);
   return (
-    <li className="card overflow-hidden">
-      <div className="relative aspect-[4/3] bg-sand">
-        <SmartImage src={image.url} alt={image.alt} fill sizes="(min-width: 1024px) 16rem, 45vw" className="object-contain" />
+    <li className="overflow-hidden rounded-xl border border-line bg-white">
+      <div className="relative h-32 bg-sand sm:h-36">
+        <SmartImage src={image.url} alt={image.alt} fill sizes="160px" className="object-contain" />
       </div>
-      <div className="space-y-3 p-3">
+      <div className="space-y-2 p-3">
         <ActionStatus state={state} />
-        <form action={action} className="space-y-3">
-          <input type="hidden" name="id" value={image.id} />
-          <input type="hidden" name="option_id" value={optionId} />
-          <input type="hidden" name="alt" value={image.alt} />
-          <Field label="画像の説明" htmlFor={`caption-${image.id}`} errors={state.fieldErrors?.caption}>
-            <Input id={`caption-${image.id}`} name="caption" defaultValue={image.caption ?? ''} placeholder="例：水栓側／収納部分" />
-          </Field>
-          <Field label="表示順" htmlFor={`sort-${image.id}`} errors={state.fieldErrors?.sort_order}>
-            <Input id={`sort-${image.id}`} name="sort_order" type="number" min={0} defaultValue={image.sort_order} />
-          </Field>
-          <div className="flex flex-wrap gap-2">
-            <PendingButton pending={pending}>表示設定を更新</PendingButton>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-ink">{image.caption?.trim() || '追加画像'}</p>
+            <p className="mt-0.5 text-[0.7rem] text-muted">表示順 {image.sort_order}</p>
           </div>
-        </form>
-        <form action={deleteOptionImageAction}>
-          <input type="hidden" name="id" value={image.id} />
-          <input type="hidden" name="option_id" value={optionId} />
-          <button type="submit" className="text-xs text-danger underline underline-offset-4 hover:no-underline">
-            このサブ画像を削除
-          </button>
-        </form>
+          <form action={deleteOptionImageAction}>
+            <input type="hidden" name="id" value={image.id} />
+            <input type="hidden" name="option_id" value={optionId} />
+            <button type="submit" className="shrink-0 text-xs text-danger underline underline-offset-4 hover:no-underline">
+              削除
+            </button>
+          </form>
+        </div>
+        <details className="rounded-lg border border-line bg-ivory/35 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-semibold text-ink-soft">表示設定</summary>
+          <form action={action} className="mt-3 space-y-3">
+            <input type="hidden" name="id" value={image.id} />
+            <input type="hidden" name="option_id" value={optionId} />
+            <input type="hidden" name="alt" value={image.alt} />
+            <Field label="画像の説明" htmlFor={`caption-${image.id}`} errors={state.fieldErrors?.caption}>
+              <Input id={`caption-${image.id}`} name="caption" defaultValue={image.caption ?? ''} placeholder="例：水栓側／収納部分" />
+            </Field>
+            <Field label="表示順" htmlFor={`sort-${image.id}`} errors={state.fieldErrors?.sort_order}>
+              <Input id={`sort-${image.id}`} name="sort_order" type="number" min={0} defaultValue={image.sort_order} />
+            </Field>
+            <PendingButton pending={pending}>表示設定を更新</PendingButton>
+          </form>
+        </details>
       </div>
     </li>
   );
@@ -76,6 +83,117 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [docState, setDocState] = useState<AdminFormState>(initial);
   const [imagePending, setImagePending] = useState(false);
   const [docPending, setDocPending] = useState(false);
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    const section = document.getElementById('product-main-media');
+    const fileInput = section?.querySelector<HTMLInputElement>('input[name="image_file"]');
+    const urlInput = section?.querySelector<HTMLInputElement>('input[name="image_url"]');
+    if (!section || !fileInput || !urlInput) return;
+
+    const grid = fileInput.closest('.grid');
+    if (!(grid instanceof HTMLElement)) return;
+
+    const preview = document.createElement('div');
+    preview.dataset.mainImageSelectionPreview = 'true';
+    preview.className = 'mt-4 flex flex-wrap items-start gap-3';
+
+    const frame = document.createElement('div');
+    frame.className = 'flex h-40 w-56 items-center justify-center overflow-hidden rounded-lg border border-line bg-white';
+
+    const image = document.createElement('img');
+    image.alt = 'メイン画像プレビュー';
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.className = 'max-h-full max-w-full object-contain';
+
+    const empty = document.createElement('p');
+    empty.className = 'px-3 text-center text-xs text-muted';
+    empty.textContent = 'メイン画像はまだ登録されていません。';
+
+    const controls = document.createElement('div');
+    controls.className = 'space-y-2 pt-1';
+
+    const label = document.createElement('p');
+    label.className = 'text-xs font-semibold text-ink';
+    label.textContent = 'メイン画像プレビュー';
+
+    const note = document.createElement('p');
+    note.className = 'max-w-64 text-xs leading-5 text-muted';
+    note.textContent = '選択した画像を確認できます。間違えた場合は保存前に選択を解除できます。';
+
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.className = 'text-xs text-brown underline underline-offset-4 hover:no-underline';
+    clearButton.textContent = '選択を解除';
+    clearButton.hidden = true;
+
+    frame.append(empty, image);
+    controls.append(label, note, clearButton);
+    preview.append(frame, controls);
+    grid.insertAdjacentElement('beforebegin', preview);
+
+    let objectUrl: string | null = null;
+
+    const revokeObjectUrl = () => {
+      if (!objectUrl) return;
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    };
+
+    const renderPreview = (url: string, isLocalSelection: boolean) => {
+      const normalized = url.trim();
+      image.hidden = !normalized;
+      empty.hidden = Boolean(normalized);
+      clearButton.hidden = !isLocalSelection;
+      if (normalized) image.src = normalized;
+      else image.removeAttribute('src');
+    };
+
+    const handleFileChange = () => {
+      revokeObjectUrl();
+      const file = fileInput.files?.[0];
+      if (file) {
+        objectUrl = URL.createObjectURL(file);
+        renderPreview(objectUrl, true);
+      } else {
+        renderPreview(urlInput.value, false);
+      }
+    };
+
+    const handleUrlInput = () => {
+      if (!fileInput.files?.length) renderPreview(urlInput.value, false);
+    };
+
+    const handleClearSelection = () => {
+      fileInput.value = '';
+      revokeObjectUrl();
+      renderPreview(urlInput.value, false);
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    fileInput.addEventListener('change', handleFileChange);
+    urlInput.addEventListener('input', handleUrlInput);
+    clearButton.addEventListener('click', handleClearSelection);
+    renderPreview(urlInput.value || option.image_url || '', false);
+
+    return () => {
+      revokeObjectUrl();
+      fileInput.removeEventListener('change', handleFileChange);
+      urlInput.removeEventListener('input', handleUrlInput);
+      clearButton.removeEventListener('click', handleClearSelection);
+      preview.remove();
+    };
+  }, [option.id, option.image_url]);
+
+  useEffect(() => {
+    if (!pdfPreviewOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPdfPreviewOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pdfPreviewOpen]);
 
   const handleSubImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -174,7 +292,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         </div>
 
         {images.length > 0 ? (
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
             {images.map((image) => (
               <OptionImageEditor key={image.id} optionId={option.id} image={image} />
             ))}
@@ -191,7 +309,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             <Field
               label="サブ画像ファイル"
               htmlFor="option-sub-image"
-              hint="複数選択可・1枚10MBまで。選択すると自動保存します。"
+              hint="複数選択可・1枚10MBまで。選択すると自動保存します。間違えた場合は登録後すぐ削除できます。"
               errors={imageState.fieldErrors?.file}
             >
               <Input
@@ -243,14 +361,13 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ivory/50 px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-ink">メーカー資料PDF 登録済み</p>
-              <a
-                href={option.manufacturer_document_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1 inline-block text-xs text-brown underline underline-offset-4"
+              <button
+                type="button"
+                onClick={() => setPdfPreviewOpen(true)}
+                className="mt-1 text-xs text-brown underline underline-offset-4 hover:no-underline"
               >
-                現在の資料を確認
-              </a>
+                資料を確認
+              </button>
             </div>
             <form action={deleteOptionManufacturerDocumentAction}>
               <input type="hidden" name="option_id" value={option.id} />
@@ -289,6 +406,49 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           </p>
         )}
       </section>
+
+      {pdfPreviewOpen && option.manufacturer_document_url && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="メーカー資料PDFプレビュー"
+          data-testid="manufacturer-document-modal"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPdfPreviewOpen(false);
+          }}
+        >
+          <div className="flex h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <p className="font-semibold text-ink">メーカー資料PDF</p>
+              <div className="flex items-center gap-3">
+                <a
+                  href={option.manufacturer_document_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-brown underline underline-offset-4 hover:no-underline"
+                >
+                  別タブで開く
+                </a>
+                <button
+                  type="button"
+                  aria-label="PDFプレビューを閉じる"
+                  onClick={() => setPdfPreviewOpen(false)}
+                  className="rounded-md border border-line px-2.5 py-1 text-sm font-semibold text-ink hover:bg-ivory"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={option.manufacturer_document_url}
+              title="メーカー資料PDF"
+              className="min-h-0 flex-1 bg-white"
+              loading="lazy"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

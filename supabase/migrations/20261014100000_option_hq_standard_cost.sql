@@ -107,6 +107,7 @@ declare
   v_current public.option_hq_standard_costs%rowtype;
   v_next public.option_hq_standard_costs%rowtype;
   v_actor_email text;
+  v_has_current boolean := false;
 begin
   if v_actor is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -148,12 +149,13 @@ begin
   from public.option_hq_standard_costs c
   where c.option_id = p_option_id
   for update;
+  v_has_current := found;
 
   select p.email into v_actor_email
   from public.profiles p
   where p.id = v_actor;
 
-  if not found then
+  if not v_has_current then
     if p_expected_lock_version <> 0 then
       raise exception using errcode = 'P0001', message = 'CONFLICT: 本部商品基準原価が他の担当者によって変更されています。再読み込みしてください';
     end if;

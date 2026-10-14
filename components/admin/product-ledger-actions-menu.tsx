@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EllipsisVertical, Trash2 } from 'lucide-react';
 import { deleteDraftProductFromLedgerAction } from '@/lib/actions/product-ledger';
+import { deleteUnusedPublishedOptionAction } from '@/lib/actions/unused-published-product-delete';
 import type { ProductOption } from '@/lib/domain/types';
 
 type Props = {
@@ -73,7 +74,9 @@ export function ProductLedgerActionsMenu({
   if (!canEdit) return null;
 
   const isDraft = status === 'draft';
-  const canDelete = isDraft && configurationUsageCount === 0;
+  const isPublished = status === 'published';
+  const canDeleteDraft = isDraft && configurationUsageCount === 0;
+  const deleteAction = isDraft ? deleteDraftProductFromLedgerAction : deleteUnusedPublishedOptionAction;
   const editHref = `/admin/options/${optionId}?return_to=%2Fadmin%2Fledger`;
 
   return (
@@ -102,9 +105,9 @@ export function ProductLedgerActionsMenu({
             商品情報を編集
           </Link>
 
-          {isDraft && <div className="my-1 border-t border-line" />}
+          {(isDraft || isPublished) && <div className="my-1 border-t border-line" />}
 
-          {canDelete && (
+          {canDeleteDraft && (
             <button
               type="button"
               className="flex w-full items-center rounded-md px-2.5 py-2 text-left text-danger hover:bg-red-50"
@@ -114,6 +117,19 @@ export function ProductLedgerActionsMenu({
               }}
             >
               下書きを削除
+            </button>
+          )}
+
+          {isPublished && (
+            <button
+              type="button"
+              className="flex w-full items-center rounded-md px-2.5 py-2 text-left text-danger hover:bg-red-50"
+              onClick={() => {
+                detailsRef.current?.removeAttribute('open');
+                setDeleteDialogOpen(true);
+              }}
+            >
+              この商品を削除（未使用のみ）
             </button>
           )}
 
@@ -152,16 +168,19 @@ export function ProductLedgerActionsMenu({
               </span>
               <div className="min-w-0">
                 <h2 id={`delete-product-title-${optionId}`} className="text-lg font-semibold text-ink">
-                  下書きを削除しますか
+                  {isDraft ? '下書きを削除しますか' : '登録済み商品を削除しますか'}
                 </h2>
                 <p id={`delete-product-description-${optionId}`} className="mt-2 text-sm leading-6 text-ink-soft">
-                  「{optionName}」を完全に削除します。この操作は元に戻せません。
+                  {isDraft
+                    ? <>「{optionName}」を完全に削除します。この操作は元に戻せません。</>
+                    : <>「{optionName}」が保存済み仕様・見積・標準見積・履歴・商品ルールなどで一度も使われていない場合だけ完全に削除します。使用済みの場合は削除されません。この操作は元に戻せません。</>}
                 </p>
               </div>
             </div>
 
-            <form action={deleteDraftProductFromLedgerAction} className="mt-6 flex justify-end gap-2">
+            <form action={deleteAction} className="mt-6 flex justify-end gap-2">
               <input type="hidden" name="id" value={optionId} />
+              {isPublished && <input type="hidden" name="return_to" value="/admin/ledger" />}
               <button
                 ref={cancelButtonRef}
                 type="button"

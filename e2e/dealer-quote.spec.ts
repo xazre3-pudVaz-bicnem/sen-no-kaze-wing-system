@@ -2,25 +2,32 @@ import { expect, test } from '@playwright/test';
 import {
   ADMIN_EMAIL as ADMIN,
   DEALER_EMAIL as DEALER,
-  ensureDealerFreeProduct,
+  addInstallationRow,
+  assignDealer,
+  ensureAccount,
+  issueRevision,
   logout,
+  openRevisionEditor,
   requestQuoteAsCustomer,
+  revisionRowNumber,
+  revisionTotal,
   signInOrRegister as signIn,
   uniqueEmail,
   yen,
 } from './helpers';
 
 test.describe('代理店による確定見積（改訂版）', () => {
-  test('割り当て → 案件見積の編集 → 第2版の発行。第1版の金額は変わらない', async ({ page }) => {
-    // 代理店のフリー商品を用意しておく
-    await ensureDealerFreeProduct(page);
-    await logout(page);
+  // 代理店アカウントが無いと割り当てができないため、各テストの前に用意しておく
+  test.beforeEach(async ({ page }) => {
+    await ensureAccount(page, DEALER, '代理店 担当');
+  });
 
+  test('割り当て → 案件見積の編集 → 第2版の発行。第1版の金額は変わらない', async ({ page }) => {
     // --- 顧客が概算見積を発行 ---
     const customer = uniqueEmail('rev');
     const { quoteId: firstQuoteId, total: estimate } = await requestQuoteAsCustomer(page, customer, '確定見積のテスト');
     const firstNo = (await page.getByTestId('quote-no').textContent())!.trim();
-    await expect(page.getByTestId('quote-revision')).toContainText('第1版・概算見積');
+    await expect(page.getByTestId('quote-revision')).toContainText('第1版・現地確認前');
     await expect(page.getByTestId('quote-respond')).toBeVisible();
     await expect(page.getByTestId('accept-quote')).toBeHidden();
     await expect(page.getByTestId('decline-quote')).toBeVisible();
@@ -29,44 +36,33 @@ test.describe('代理店による確定見積（改訂版）', () => {
 
     // --- 管理者が代理店を割り当てる ---
     await signIn(page, ADMIN, '/admin', '管理者');
-    await page.goto(`/admin/quotes/${firstQuoteId}`);
-    await expect(page.getByTestId('assign-dealer-form')).toBeVisible();
-    const dealerOption = page.getByTestId('dealer-select').locator('option', { hasText: DEALER });
-    await page.getByTestId('dealer-select').selectOption((await dealerOption.getAttribute('value'))!);
-    await page.getByTestId('assign-dealer-form').getByRole('button', { name: '割り当てる' }).click();
-    await expect(page.getByText('担当代理店を割り当てました')).toBeVisible();
+    await assignDealer(page, firstQuoteId);
     await logout(page);
 
-    // --- 代理店が案件見積を編集して第2版を発行 ---
+    // --- 代理店が担当案件を開き、案件見積を編集して第2版を発行 ---
     await signIn(page, DEALER, '/admin', '代理店 担当');
     await page.goto('/admin/quotes');
-    // 他のテストの見積も並ぶので、対象の見積番号の行だけを見る
+    // 他のテストの案件も並ぶので、対象の見積番号の行だけを見る
     const row = page.getByTestId('dealer-quote-row').filter({ hasText: firstNo });
     await expect(row).toHaveCount(1);
-    await row.getByRole('link', { name: '見積を編集' }).click();
-    await expect(page).toHaveURL(new RegExp(firstQuoteId));
+    await row.getByRole('link').first().click();
+    await expect(page).toHaveURL(new RegExp(`case=${firstQuoteId}`));
+    await page.getByTestId('legacy-quote-edit-entry').click();
+    await expect(page).toHaveURL(new RegExp(`/admin/quotes/${firstQuoteId}/edit`));
 
     const form = page.getByTestId('dealer-revision-form');
     await expect(form).toBeVisible();
-    // 代理店は本体を閲覧のみ。オプション・別途等は案件ごとに編集できる。
-    await expect(page.getByTestId('add-base')).toBeHidden();
-    await expect(page.getByTestId('add-option')).toBeVisible();
-    await expect(page.getByTestId('quote-table')).toContainText('本体一式');
-    await expect(form.locator('select option[value="base"]')).toHaveCount(0);
-    // 追加の別途工事とフリー商品
-    await page.getByTestId('add-installation').click();
-    const rows = await form.locator('tbody tr').count();
-    await form.locator(`input[name="items.${rows - 1}.name"]`).fill('傾斜地の追加基礎工事');
-    await form.locator(`input[name="items.${rows - 1}.unit_price"]`).fill('200000');
-    await page.getByTestId('add-free-dealer-bed').click();
+    // 本体は参照のみ（入力できない）。通常は別途工事（施工金額）だけを編集する
+    await expect(form.getByLabel('品名 1', { exact: true })).toBeDisabled();
+    await expect(form.getByLabel('売価 1', { exact: true })).toBeDisabled();
+    // 現地確認後に決まった別途工事と、お客様への申し送りを入れる
+    await addInstallationRow(form, '傾斜地の追加基礎工事', 200_000);
     await page.locator('#dealer_note').fill('搬入路が狭いため小型クレーンを使用します。');
 
-    const preview = yen(await page.getByTestId('revision-total').textContent());
+    const preview = await revisionTotal(form);
     expect(preview).toBeGreaterThan(estimate);
 
-    await form.getByRole('button', { name: /第2版として発行する/ }).click();
-    await page.waitForURL(/revised=1/);
-    const secondQuoteId = page.url().match(/quotes\/([0-9a-f-]{36})/)![1];
+    const secondQuoteId = await issueRevision(page, form);
     expect(secondQuoteId).not.toBe(firstQuoteId);
     expect(yen(await page.getByTestId('admin-quote-total').textContent())).toBe(preview);
 
@@ -79,9 +75,9 @@ test.describe('代理店による確定見積（改訂版）', () => {
     // --- 顧客側 ---
     await signIn(page, customer, '/mypage', 'テスト 太郎');
     await page.goto(`/mypage/quotes/${secondQuoteId}`);
-    await expect(page.getByTestId('quote-revision')).toContainText('第2版・確定見積');
+    await expect(page.getByTestId('quote-revision')).toContainText('第2版・現地条件と施工金額を反映済み');
     await expect(page.getByTestId('dealer-note')).toContainText('小型クレーン');
-    await expect(page.getByTestId('quote-free-products')).toContainText('フリー商品');
+    await expect(page.getByTestId('quote-table')).toContainText('傾斜地の追加基礎工事');
     // エンドユーザーには本体の明細は出ない（計のみ）
     await expect(page.getByTestId('quote-table')).not.toContainText('金物関係費用');
     await expect(page.getByTestId('quote-table')).toContainText('本体一式');
@@ -111,60 +107,44 @@ test.describe('代理店による確定見積（改訂版）', () => {
 });
 
 test.describe('案件見積の直接編集（エクセル表）', () => {
-  test('本部は本体まで編集でき、代理店は本体閲覧のみでオプション・別途等を編集できる', async ({ page }) => {
+  test('本体は参照のみ。内外装・オプションは「見積内容を変更」に切り替えたときだけ編集できる', async ({ page }) => {
     const customer = uniqueEmail('grid');
-    const { quoteId, total } = await requestQuoteAsCustomer(page, customer, '本体編集のテスト');
+    const { quoteId, total } = await requestQuoteAsCustomer(page, customer, '見積内容の変更のテスト');
     await logout(page);
 
-    // --- 本部：本体の単価を直して第2版を出す ---
+    // --- 本部：お客様が選んだオプションの単価を直して第2版を出す ---
     await signIn(page, ADMIN, '/admin', '管理者');
-    await page.goto(`/admin/quotes/${quoteId}`);
-    const form = page.getByTestId('dealer-revision-form');
-    await expect(form).toBeVisible();
-    // 区分を選べる＝本体まで編集できる
-    await expect(page.getByTestId('add-base')).toBeVisible();
-    await expect(page.getByTestId('add-option')).toBeVisible();
+    const form = await openRevisionEditor(page, quoteId);
+    // 本体は本部でも参照のみ（正式な本体の選択は別の工程で扱う）
+    await expect(form.getByLabel('品名 1', { exact: true })).toBeDisabled();
+    await expect(form.getByLabel('売価 1', { exact: true })).toBeDisabled();
 
-    // 1 行目は本体の内訳の先頭行（分類表見積書）。単価を 0 円にして、単位と備考も入れる
-    const first = form.locator('tbody tr').first();
-    await expect(first.getByRole('combobox')).toHaveValue('base');
-    await first.locator('input[name="items.0.unit_price"]').fill('0');
-    await first.locator('input[name="items.0.unit"]').fill('式');
-    await first.locator('input[name="items.0.remark"]').fill('本部調整');
+    // 通常入力のあいだは、お客様が選んだ内外装・オプションは変えられない
+    const aircon = await revisionRowNumber(form, 'エアコン');
+    const airconPrice = form.getByLabel(`売価 ${aircon}`, { exact: true });
+    const airconRemark = form.getByLabel(`備考 ${aircon}`, { exact: true });
+    await expect(airconPrice).toBeDisabled();
+    // 明細を足せるのも別途だけ（区分は 本体 → 内外装工事 → オプション → 別途 の順に並ぶ）
+    const addRow = form.getByRole('button', { name: '＋自由明細' });
+    await expect(addRow.nth(2)).toBeDisabled();
+    await expect(addRow.nth(3)).toBeEnabled();
 
-    const preview = yen(await page.getByTestId('revision-total').textContent());
-    expect(preview).toBeLessThan(total);
+    // 「見積内容を変更」に切り替えると、内外装・オプションも単価・備考を直せて、明細を足せる
+    await page.getByTestId('toggle-scope-change').click();
+    await expect(form).toContainText('Webでお客様が選択した内容を変更します');
+    await expect(addRow.nth(2)).toBeEnabled();
+    await expect(airconPrice).toBeEnabled();
+    await airconPrice.fill(String(Number(await airconPrice.inputValue()) + 30_000));
+    await airconRemark.fill('本部調整');
 
-    await form.getByRole('button', { name: /第2版として発行する/ }).click();
-    await page.waitForURL(/revised=1/);
+    const preview = await revisionTotal(form);
+    expect(preview).toBeGreaterThan(total);
+
+    await issueRevision(page, form);
     expect(yen(await page.getByTestId('admin-quote-total').textContent())).toBe(preview);
-    // 単位と備考が見積書に残る。管理画面では本体の明細（サッシ等）が見える
+    // 備考が見積書に残る。管理画面では本体の明細（サッシ等）が見える
     await expect(page.getByTestId('quote-table')).toContainText('本部調整');
     await expect(page.getByTestId('quote-table')).toContainText('サッシ木製建具工事');
-    await logout(page);
-
-    // --- 代理店：担当案件でも本体は閲覧のみ。オプション・別途等は編集できる ---
-    await ensureDealerFreeProduct(page);
-    await logout(page);
-    const c2 = uniqueEmail('grid-dealer');
-    const { quoteId: q2 } = await requestQuoteAsCustomer(page, c2, '代理店の範囲');
-    await logout(page);
-    await signIn(page, ADMIN, '/admin', '管理者');
-    await page.goto(`/admin/quotes/${q2}`);
-    const opt = page.getByTestId('dealer-select').locator('option', { hasText: DEALER });
-    await page.getByTestId('dealer-select').selectOption((await opt.getAttribute('value'))!);
-    await page.getByTestId('assign-dealer-form').getByRole('button', { name: '割り当てる' }).click();
-    await expect(page.getByText('担当代理店を割り当てました')).toBeVisible();
-    await logout(page);
-
-    await signIn(page, DEALER, '/admin', '代理店 担当');
-    await page.goto(`/admin/quotes/${q2}`);
-    await expect(page.getByTestId('dealer-revision-form')).toBeVisible();
-    await expect(page.getByTestId('add-base')).toBeHidden();
-    await expect(page.getByTestId('add-option')).toBeVisible();
-    await expect(page.getByTestId('quote-table')).toContainText('本体一式');
-    // 代理店の区分選択には本体を出さない
-    await expect(page.getByTestId('dealer-revision-form').locator('select option[value="base"]')).toHaveCount(0);
     await logout(page);
   });
 });

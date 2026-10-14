@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export const PASSWORD = 'Wing-Test1!';
 
@@ -71,35 +71,47 @@ export async function waitForSimulator(page: Page) {
   await expect(page.getByTestId('simulator')).toHaveAttribute('data-hydrated', 'true');
 }
 
-/** 標準設備及び仕上げ表のタイルに出ている追加価格（"+¥570,000" → 570000、標準なら 0） */
+/** 標準設備及び仕上げ表のタイルに出ている差額（"+¥570,000" → 570000、"-¥60,000" → -60000、標準なら 0） */
 export async function tilePrice(page: Page, catCode: string): Promise<number> {
-  const text = (await page.getByTestId(`equip-${catCode}`).textContent()) ?? '';
-  const m = text.match(/\+[^\d]*([\d,]+)/);
-  return m ? Number(m[1].replace(/,/g, '')) : 0;
+  const label = page.getByTestId(`equip-price-${catCode}`);
+  if (!(await label.isVisible())) return 0;
+  const text = (await label.textContent()) ?? '';
+  const amount = yen(text);
+  return /[-−]/.test(text) ? -amount : amount;
 }
 
-/** 商品選択ポップアップを開く（設備表タイル／平面図ホットスポット／見積書の行のいずれからでも） */
+/** 商品選択ポップアップ（商品一覧）を開く（設備表タイル／見積書の行のいずれからでも） */
 export async function openPicker(page: Page, testId: string) {
   const trigger = page.getByTestId(testId);
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   await expect(page.getByTestId('option-picker')).toBeVisible();
-  // 1つ選ぶカテゴリーで選択済みのときは選択中の商品だけが出るので、一覧に展開してから操作する
-  const expand = page.getByTestId('picker-expand');
-  if (await expand.isVisible().catch(() => false)) await expand.click();
 }
 
-/** ポップアップで商品を選び直して「変更する」で確定する */
+/** 商品一覧のカードから商品詳細を開く */
+export async function openProductDetail(page: Page, code: string) {
+  await page.getByTestId(`product-card-open-${code}`).click();
+  await expect(page.getByTestId('product-detail')).toBeVisible();
+}
+
+/** 商品詳細の「選択から外す」（選択中の商品で、外せるときだけ出る） */
+export function removeButton(page: Page) {
+  return page.getByTestId('product-detail-footer').getByRole('button', { name: '選択から外す' });
+}
+
+/**
+ * 商品を 1 つずつ選び直す。選択中の商品は「選択から外す」、未選択の商品は「この内容に変更する」で確定する。
+ * 確定するとポップアップが閉じるので、商品ごとに開き直す
+ */
 export async function pickOption(page: Page, openTestId: string, codes: string[]) {
-  await openPicker(page, openTestId);
   for (const code of codes) {
-    // 商品を選ぶと「選択中の商品だけ」の表示に切り替わるため、続けて操作する前に一覧へ戻す
-    const expand = page.getByTestId('picker-expand');
-    if (await expand.isVisible().catch(() => false)) await expand.click();
-    await page.getByTestId(`pick-${code}`).click();
+    await openPicker(page, openTestId);
+    await openProductDetail(page, code);
+    const remove = removeButton(page);
+    if (await remove.isVisible()) await remove.click();
+    else await page.getByTestId('product-detail-apply').click();
+    await expect(page.getByTestId('option-picker')).toBeHidden();
   }
-  await page.getByTestId('picker-apply').click();
-  await expect(page.getByTestId('option-picker')).toBeHidden();
 }
 
 /** 見積書（2-1 明細）の行 */
@@ -135,21 +147,8 @@ export async function signInOrRegister(page: Page, email: string, next: string, 
   if (!ok) await register(page, email, next, name);
 }
 
-/** 代理店のフリー商品「代理店オリジナルベッド」を用意する（既にあれば何もしない） */
-export async function ensureDealerFreeProduct(page: Page, code = 'dealer-bed', name = '代理店オリジナルベッド', price = 100_000) {
-  await signInOrRegister(page, DEALER_EMAIL, '/admin', '代理店 担当');
-  await page.goto('/admin/free-products');
-  if (await page.getByTestId(`free-product-${code}`).isVisible().catch(() => false)) return;
-  await page.getByRole('link', { name: 'フリー商品を追加' }).click();
-  await page.getByTestId('option-name').fill(name);
-  await page.locator('#code').fill(code);
-  await page.getByTestId('option-price').fill(String(price));
-  await page.getByTestId('admin-submit').click();
-  await expect(page.getByText('保存しました')).toBeVisible();
-}
-
-/** 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す */
-export async function requestQuoteAsCustomer(page: Page, email: string, configName: string) {
+/** 顧客として保存 → 見積依頼までを済ませ、発行された見積 ID を返す（siteAddress を渡すと設置予定地に入れる） */
+export async function requestQuoteAsCustomer(page: Page, email: string, configName: string, siteAddress?: string) {
   await register(page, email, '/simulator/wing-01');
   await openFreshSimulator(page);
   const total = await readTotal(page);
@@ -160,9 +159,76 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
   const configId = new URL(page.url()).searchParams.get('c')!;
   await page.goto(`/mypage/configurations/${configId}/request-quote`);
   await expect(page.getByTestId('quote-request-form')).toBeVisible();
+  if (siteAddress) await page.locator('#site_address').fill(siteAddress);
   await page.getByTestId('submit-quote-request').click();
   await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
   return { quoteId: page.url().match(/quotes\/([0-9a-f-]{36})/)![1], total, configId };
+}
+
+/**
+ * 登録済みの商品の価格を変える（編集 → 変更内容を確認 → この変更を反映）。
+ * 商品の編集画面を開いた状態で呼ぶ
+ */
+export async function applyRegisteredOptionPrice(page: Page, price: number) {
+  await page.locator('#registered-price').fill(String(price));
+  await page.getByRole('button', { name: '変更内容を確認' }).click();
+  await expect(page.getByTestId('registered-option-change-review')).toContainText('商品価格（税別）');
+  await page.getByRole('button', { name: 'この変更を反映' }).click();
+  // 反映が済むと、最新の登録内容を読み直して編集画面へ戻る
+  await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();
+  await expect(page.locator('#registered-price')).toHaveValue(String(price));
+}
+
+/** 本部として案件を開き、担当代理店を割り当てる（「次にやること」の「担当代理店を選ぶ」から） */
+export async function assignDealer(page: Page, quoteId: string, dealerEmail = DEALER_EMAIL) {
+  await page.goto(`/admin/quotes/${quoteId}`);
+  await page.getByTestId('case-next-action-link').click();
+  const form = page.getByTestId('assign-dealer-form');
+  const select = form.getByTestId('dealer-select');
+  const option = select.locator('option', { hasText: dealerEmail });
+  await select.selectOption((await option.getAttribute('value'))!);
+  await form.getByRole('button', { name: '割り当てる' }).click();
+  // 割り当てると案件概要の「担当」に入り、変更はその横の「変更」から行う形になる
+  await expect(page.getByTestId('case-dealer-change')).toBeVisible();
+}
+
+/** 案件の「見積を編集」から、次の版の編集画面（エクセル形式の表）を開く */
+export async function openRevisionEditor(page: Page, quoteId: string): Promise<Locator> {
+  await page.goto(`/admin/quotes/${quoteId}`);
+  await page.getByTestId('legacy-quote-edit-entry').click();
+  await expect(page).toHaveURL(new RegExp(`/admin/quotes/${quoteId}/edit`));
+  const form = page.getByTestId('dealer-revision-form');
+  await expect(form).toBeVisible();
+  return form;
+}
+
+/** 編集画面の表で、品名からその行の番号（# 列）を調べる */
+export async function revisionRowNumber(form: Locator, name: string): Promise<number> {
+  const index = await form
+    .locator('input[data-quote-grid-col="name"]')
+    .evaluateAll((els, n) => els.findIndex((el) => (el as HTMLInputElement).value.includes(n)), name);
+  expect(index, `見積の表に「${name}」の行がありません`).toBeGreaterThanOrEqual(0);
+  return index + 1;
+}
+
+/** 編集画面で別途工事（現地確認後に決まる施工金額）の行を足す。「別途」は表の最後の区分 */
+export async function addInstallationRow(form: Locator, name: string, unitPrice: number) {
+  await form.getByRole('button', { name: '＋自由明細' }).last().click();
+  await form.locator('input[data-quote-grid-col="name"]').last().fill(name);
+  await form.locator('input[data-quote-grid-col="sale"]').last().fill(String(unitPrice));
+}
+
+/** 編集画面の「編集中」の合計（税込） */
+export async function revisionTotal(form: Locator): Promise<number> {
+  const text = (await form.getByTestId('revision-sticky-summary').textContent()) ?? '';
+  return yen(text.match(/編集中\s*([^差]+)/)?.[1] ?? '');
+}
+
+/** 編集中の内容を次の版として発行し、新しい版の見積 ID を返す（発行後は案件の画面へ戻る） */
+export async function issueRevision(page: Page, form: Locator): Promise<string> {
+  await form.getByRole('button', { name: /版を発行/ }).click();
+  await page.waitForURL(/revised=1/);
+  return new URL(page.url()).searchParams.get('case')!;
 }
 
 /** 指定のアカウントを（未登録なら作って）用意し、ログアウトした状態に戻す */

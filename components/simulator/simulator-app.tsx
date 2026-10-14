@@ -781,6 +781,7 @@ export function SimulatorApp({
     // 解除を先に行う。依存されている項目（例: 洗面器 ← 混合水栓）は依存元を外すまで解除できないため、
     // 進捗がなくなるまで繰り返し、最後まで残ったものだけ理由を通知する。
     let pending = inCategory.filter((oid) => cur.includes(oid) && !nextInCategory.includes(oid));
+    const removalNotices = new Map<string, string>();
     while (pending.length) {
       const rest: string[] = [];
       let progressed = false;
@@ -796,7 +797,7 @@ export function SimulatorApp({
       if (!progressed) {
         for (const oid of rest) {
           const r = toggleOption(activeSpecCtx, cur, oid);
-          if (r.notices[0]) notices.push(r.notices[0]);
+          if (r.notices[0]) removalNotices.set(oid, r.notices[0]);
         }
         break;
       }
@@ -811,6 +812,10 @@ export function SimulatorApp({
         cur = r.next;
         notices.push(...r.notices);
       }
+    }
+    // 1 つだけ選べる項目（防火仕様など）は、選び直しで入れ替わる。解除できなかった項目でも、入れ替えで外れたものは通知しない
+    for (const [oid, notice] of removalNotices) {
+      if (cur.includes(oid)) notices.push(notice);
     }
 
     setSelected(cur);

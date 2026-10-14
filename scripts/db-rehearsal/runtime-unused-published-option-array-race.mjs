@@ -90,8 +90,6 @@ async function setup(client, ids) {
        values ($1::uuid, $2::uuid, 'array-race-choice', '配列race choice', 'published')`,
       [ids.choice, ids.group]
     );
-    // Draft親を実在させ、既存のconfiguration_items draft-parent guardではなく
-    // 今回追加したvariant参照validationがstale writeを拒否することを検証する。
     await client.query(
       `insert into public.configurations (id, user_id, base_model_id, name, status, exterior_faces)
        values ($1::uuid, $2::uuid, $3::uuid, '配列race検査Configuration', 'draft', '[]'::jsonb)`,
@@ -136,29 +134,35 @@ export async function runtimeUnusedPublishedOptionArrayRace({ connectionString }
   const observer = new pg.Client({ connectionString });
   const results = [];
 
-  for (const client of [setupClient, blocker, deleter, writer, observer]) await client.connect();
+  for (const client of [setupClient, blocker, deleter, writer, observer]) {
+    await client.connect();
+    await client.query("set statement_timeout = '8s'");
+  }
 
   try {
     await setup(setupClient, ids);
 
-    // safe-deleteを対象options行で待たせ、SHARE lock取得後にvariant_choice_idsへstale UUIDを書こうとする。
+    // New canonical order locks the target Option first. Block the non-FK table
+    // instead, then queue safe-delete before the stale writer. After release,
+    // safe-delete gets SHARE first, deletes the Option/Choice, and the writer's
+    // validation trigger must reject the now-dangling UUID.
     await blocker.query('begin');
-    await blocker.query('select 1 from public.options where id = $1::uuid for update', [ids.target]);
+    await blocker.query('lock table public.configuration_items in access exclusive mode');
 
     const deleterPid = Number((await deleter.query('select pg_backend_pid() as pid')).rows[0].pid);
     const deletePromise = deleteAsAdmin(deleter, ids.admin, ids.target);
-    const deleterHasShare = await waitForRelationLock(
+    const deleterWaitsForShare = await waitForRelationLock(
       observer,
       deleterPid,
       'public.configuration_items',
       'ShareLock',
-      true
+      false
     );
     results.push({
-      step: 'unused-delete array race 1-1 safe-deleteはconfiguration_itemsのSHARE lockを取得する',
+      step: 'unused-delete array race 1-1 safe-deleteはOption行確保後にconfiguration_itemsのSHARE lockを待つ',
       expected: 'true',
-      actual: String(deleterHasShare),
-      ok: deleterHasShare,
+      actual: String(deleterWaitsForShare),
+      ok: deleterWaitsForShare,
     });
 
     await writer.query('begin');
@@ -182,7 +186,7 @@ export async function runtimeUnusedPublishedOptionArrayRace({ connectionString }
       false
     );
     results.push({
-      step: 'unused-delete array race 1-2 variant_choice_ids書込みはsafe-delete中に待機する',
+      step: 'unused-delete array race 1-2 variant_choice_ids書込みはsafe-deleteの後ろで待機する',
       expected: 'true',
       actual: String(writerWaits),
       ok: writerWaits,

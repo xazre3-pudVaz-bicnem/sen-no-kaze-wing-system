@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { deleteOptionAction, publishOptionAction } from '@/lib/actions/admin';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { getOptionHqStandardCostAccess } from '@/lib/data/option-hq-standard-cost';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
@@ -10,6 +11,7 @@ import { Alert } from '@/components/ui';
 import { OptionForm } from '@/components/admin/forms';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
+import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-cost-card';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { RegisteredOptionEditFlow } from '@/components/admin/registered-option-edit-flow';
@@ -44,11 +46,12 @@ export default async function EditOptionPage({
   const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
   const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
 
-  const [categories, models, options, variants] = await Promise.all([
+  const [categories, models, options, variants, hqCostAccess] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
     store.getOptionVariants(id),
+    getOptionHqStandardCostAccess(id),
   ]);
   const category = categories.find((row) => row.id === option.category_id);
   const registrationCategories = category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE
@@ -102,6 +105,13 @@ export default async function EditOptionPage({
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
+        {hqCostAccess.available && hqCostAccess.canView && (
+          <OptionHqStandardCostCard
+            optionId={id}
+            canManage={hqCostAccess.canManage}
+            cost={hqCostAccess.cost}
+          />
+        )}
         {canEditThisOption ? (
           <RegisteredOptionEditFlow
             key={option.updated_at}
@@ -235,6 +245,16 @@ export default async function EditOptionPage({
               {catalogEditor && (
                 <div className="registration-customer-selection" style={{ order: 40 }}>
                   <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
+                </div>
+              )}
+
+              {hqCostAccess.available && hqCostAccess.canView && (
+                <div style={{ order: 55 }} data-testid="option-registration-hq-cost">
+                  <OptionHqStandardCostCard
+                    optionId={id}
+                    canManage={hqCostAccess.canManage}
+                    cost={hqCostAccess.cost}
+                  />
                 </div>
               )}
 

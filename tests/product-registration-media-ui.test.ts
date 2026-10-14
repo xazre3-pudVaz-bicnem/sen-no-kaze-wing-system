@@ -5,7 +5,7 @@ const source = readFileSync('components/admin/option-media-manager.tsx', 'utf8')
 
 describe('商品登録の画像・PDF確認UI', () => {
   it('メイン画像は軽量プレビューし、保存前の選択だけ解除できる', () => {
-    expect(source).toContain("data.mainImageSelectionPreview = 'true'");
+    expect(source).toContain("dataset.mainImageSelectionPreview = 'true'");
     expect(source).toContain("image.loading = 'lazy'");
     expect(source).toContain("clearButton.textContent = '選択を解除'");
     expect(source).toContain("fileInput.value = ''");

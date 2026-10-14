@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { saveQuoteRequestPreferencesFromForm } from '@/lib/data/case-flow/preferences-from-form';
+import { saveSiteProfileFromForm } from '@/lib/data/case-flow/site-profile-from-form';
 import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
@@ -78,6 +79,14 @@ export async function requestQuoteAction(_prev: QuoteRequestState, formData: For
   const parsed = quoteRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error), values };
   const { configuration_id, message, expected_lock_version, ...contact } = parsed.data;
+  // 設置予定地・土地（フェーズ3・任意）。見積依頼を送る前に保存し、形が違うときは送る前に知らせる
+  const land = await saveSiteProfileFromForm(user, configuration_id, formData);
+  if (land.error) return { ok: false, error: `設置予定地・土地：${land.error}`, values };
+  if (land.version !== null) values.site_profile_lock_version = String(land.version);
+  // 土地なし・未定で設置予定地が空なら、希望地域を見積の設置場所の欄に写す（担当の一覧で分かるように）
+  if (land.input && land.input.land_status !== 'owned' && !contact.site_address && land.input.desired_area) {
+    contact.site_address = `（希望地域）${land.input.desired_area}`.slice(0, 200);
+  }
   const store = await getStore();
   let quoteId: string;
   let requestId: string;

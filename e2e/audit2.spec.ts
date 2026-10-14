@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import {
   ADMIN_EMAIL as ADMIN,
   DEALER_EMAIL as DEALER,
+  addInstallationRow,
+  assignDealer,
   ensureAccount,
   logout,
   openFreshSimulator,
@@ -159,24 +161,22 @@ test.describe('深掘りの点検', () => {
     await logout(page);
 
     await signIn(page, ADMIN, '/admin', '管理者');
-    await page.goto(`/admin/quotes/${quoteId}`);
-    const opt = page.getByTestId('dealer-select').locator('option', { hasText: DEALER });
-    await page.getByTestId('dealer-select').selectOption((await opt.getAttribute('value'))!);
-    await page.getByTestId('assign-dealer-form').getByRole('button', { name: '割り当てる' }).click();
-    await expect(page.getByText('担当代理店を割り当てました')).toBeVisible();
+    await assignDealer(page, quoteId);
     await logout(page);
 
     await signIn(page, DEALER, '/admin', '代理店 担当');
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/admin/quotes/${quoteId}`);
+    // 案件の「見積を編集」から開く、次の版の編集画面（表は横スクロールの枠に収める）
+    await page.goto(`/admin/quotes/${quoteId}/edit`);
     const form = page.getByTestId('dealer-revision-form');
-    if (!(await form.isVisible())) note('SP：代理店の入力フォームが出ない');
+    await expect(form).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) note(`SP：代理店の入力画面に横スクロール ${overflow}px`);
-    const input = form.locator('input[name="items.0.unit_price"]');
+    await addInstallationRow(form, 'SP 点検', 1000);
+    const input = form.locator('input[data-quote-grid-col="sale"]').last();
     await input.scrollIntoViewIfNeeded();
     const ib = await input.boundingBox();
-    if (ib && ib.width < 40) note(`SP：単価の入力欄が狭すぎる（${Math.round(ib.width)}px）`);
+    if (ib && ib.width < 40) note(`SP：売価の入力欄が狭すぎる（${Math.round(ib.width)}px）`);
     await logout(page);
   });
 

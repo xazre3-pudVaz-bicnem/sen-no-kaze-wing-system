@@ -137,6 +137,9 @@ declare
   v_cert_text text;
   v_after_text text;
   v_unit2_text text;
+  -- お客様のフェーズ2〜3（一時保存・土地）の検査用
+  v_guest_hash constant text := repeat('ab', 32);
+  v_land_text text;
   -- 案件の進行（フェーズ4〜7）の検査用
   v_cf_appt text;
   v_cf_file_cust text;
@@ -1325,6 +1328,57 @@ begin
       pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.contracts where quote_request_id = %L $q$, r_pc)) || '/' ||
       pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.get_case_progress(%L) ->> 'contract_signed' $q$, r_pc)) || '/' ||
       pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L) ->> 'handover_status' $q$, r_pc)));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 23. お客様のフェーズ2（ログインなしの一時保存）・フェーズ3（設置予定地・土地）
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.create_guest_plan(text, uuid, jsonb)') is not null then
+    perform pg_temp.expect_denied('23-1 未ログインは一時保存の RPC を呼べない（サーバーだけ）', '42501',
+      pg_temp.run_as('anon', null, format($q$ select public.create_guest_plan(%L, %L, '{}'::jsonb)::text $q$, v_guest_hash, v_model)));
+    perform pg_temp.expect_denied('23-2 ログインした利用者も一時保存の RPC を直接は呼べない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_guest_plan(%L)::text $q$, v_guest_hash)));
+    perform pg_temp.expect_blocked('23-3 未ログインは一時保存の表を読めない',
+      pg_temp.run_as('anon', null, $q$ select count(*)::text from public.guest_plans $q$));
+    perform pg_temp.expect_denied('23-4 形の違う一時保存は断る（商品は UUID だけ）', 'P0001',
+      pg_temp.run_as('service_role', null, format($q$ select public.create_guest_plan(%L, %L, '{"option_ids":["x"]}'::jsonb)::text $q$, v_guest_hash, v_model)));
+    perform pg_temp.expect_denied('23-5 価格の項目は持てない', 'P0001',
+      pg_temp.run_as('service_role', null, format($q$ select public.create_guest_plan(%L, %L, '{"total":1}'::jsonb)::text $q$, v_guest_hash, v_model)));
+    perform pg_temp.expect_denied('23-6 無い商品の一時保存は断る', 'P0001',
+      pg_temp.run_as('service_role', null, format($q$ select public.create_guest_plan(%L, gen_random_uuid(), '{}'::jsonb)::text $q$, v_guest_hash)));
+    perform pg_temp.run_as('service_role', null, format($q$ select public.create_guest_plan(%L, %L, '{"name":"海辺のプラン","option_ids":[],"spec_code":"residence"}'::jsonb)::text $q$, v_guest_hash, v_model));
+    perform pg_temp.expect_eq('23-7 サーバーは一時保存を作れ、鍵のハッシュで 30 日間開ける', '海辺のプラン/30',
+      pg_temp.run_as('service_role', null, format($q$ select public.get_guest_plan(%L) -> 'plan' ->> 'name' $q$, v_guest_hash)) || '/' ||
+      (select extract(day from g.expires_at - g.created_at)::text from public.guest_plans g where g.token_hash = v_guest_hash));
+    update public.guest_plans set created_at = now() - interval '31 days', expires_at = now() - interval '1 day' where token_hash = v_guest_hash;
+    perform pg_temp.expect_eq('23-8 期限切れの一時保存は開けない', '(null)',
+      pg_temp.run_as('service_role', null, format($q$ select public.get_guest_plan(%L)::text $q$, v_guest_hash)));
+
+    -- 設置予定地・土地（顧客Xのプラン c_x は、代理店1が担当の案件 r_x）
+    perform pg_temp.expect_denied('23-9 未ログインは土地の情報を保存できない', '42501',
+      pg_temp.run_as('anon', null, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"owned"}'::jsonb, null)::text $q$, c_x)));
+    perform pg_temp.expect_denied('23-10 他のお客様は保存できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"owned"}'::jsonb, null)::text $q$, c_x)));
+    perform pg_temp.expect_denied('23-11 担当代理店は保存できない（現地確認の記録に書く）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"owned"}'::jsonb, null)::text $q$, c_x)));
+    perform pg_temp.expect_denied('23-12 面積は数字だけ', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"owned","area_sqm":"100坪"}'::jsonb, null)::text $q$, c_x)));
+    v_land_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"owned","site_address":"石川県七尾市","area_sqm":"200.5","road_access":"wide"}'::jsonb, null)::text $q$, c_x));
+    perform pg_temp.expect_eq('23-13 お客様本人は保存でき、読めるのは本人・本部・案件の担当代理店だけ', '1/1/1/1/0/0',
+      v_land_text || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.configuration_site_profiles where configuration_id = %L $q$, c_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_admin, format($q$ select count(*)::text from public.configuration_site_profiles where configuration_id = %L $q$, c_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.configuration_site_profiles where configuration_id = %L $q$, c_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.configuration_site_profiles where configuration_id = %L $q$, c_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select count(*)::text from public.configuration_site_profiles where configuration_id = %L $q$, c_x)));
+    perform pg_temp.expect_denied('23-14 古い版のままの保存は断る', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"none"}'::jsonb, null)::text $q$, c_x)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_configuration_site_profile(%L, '{"land_status":"none","site_address":"消える","area_sqm":"10","desired_area":"能登の海沿い","land_budget":"3m_5m"}'::jsonb, 1)::text $q$, c_x));
+    perform pg_temp.expect_eq('23-15 本部も保存でき、土地の有無に合わない項目は残らない', 'none///能登の海沿い/3m_5m/2',
+      (select p.land_status || '/' || coalesce(p.site_address, '') || '/' || coalesce(p.area_sqm::text, '') || '/' || p.desired_area || '/' || p.land_budget || '/' || p.lock_version
+         from public.configuration_site_profiles p where p.configuration_id = c_x));
+    perform pg_temp.expect_denied('23-16 土地の情報の表は直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ update public.configuration_site_profiles set land_status = 'owned' where configuration_id = %L returning 'updated' $q$, c_x)));
   end if;
 end
 $test$;

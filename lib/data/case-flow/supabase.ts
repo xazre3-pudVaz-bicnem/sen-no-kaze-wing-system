@@ -1,5 +1,5 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -27,7 +27,11 @@ import type {
   DisasterConsent,
   DisasterConsentInput,
   DisasterConsentText,
+  GuestPlan,
+  GuestPlanInput,
   HandoverInspectionInput,
+  SiteProfile,
+  SiteProfileInput,
   ManufacturingOrder,
   ManufacturingOrderInput,
   ManufacturingOrderStatus,
@@ -44,6 +48,7 @@ import type {
   SiteSurvey,
   SiteSurveyInput,
 } from '@/lib/domain/case-flow';
+import { GUEST_PLAN_TOKEN } from '@/lib/domain/case-flow';
 import type { BoardAfterServiceRequest, BoardAppointment, BoardManufacturingOrder, CaseFlowStore, StockLedgerRow } from './store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,6 +56,8 @@ type Db = SupabaseClient<any, 'public', any>;
 
 const CASE_FILES_BUCKET = 'case-files';
 const CONTRACT_DOCUMENTS_BUCKET = 'contract-documents';
+
+const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
 /** DB のエラーを画面向けの StoreError にする（lib/data/supabase-store.ts の mapPgError と同じ規則） */
 function fail(e: { code?: string; message?: string } | null): never {
@@ -646,6 +653,46 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
   }
   async saveStockLedgerEntry(_actor: SessionUser, unitId: string, input: StockLedgerEntryInput, expectedLockVersion: number | null) {
     return this.rpc<number>('save_stock_ledger_entry', { p_unit_id: unitId, p_entry: input, p_expected_lock_version: expectedLockVersion });
+  }
+
+  // ---------- 一時保存（ログインなし） ----------
+  async createGuestPlan(baseModelId: string, plan: GuestPlanInput) {
+    // 鍵はサーバーで作り、DB にはハッシュだけを渡す（RPC はサーバー＝service_role だけが呼べる）
+    const token = randomBytes(24).toString('base64url');
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('create_guest_plan', { p_token_hash: sha256(token), p_base_model_id: baseModelId, p_plan: plan });
+    if (error) fail(error);
+    return { token, expires_at: data as string };
+  }
+  async getGuestPlan(token: string): Promise<GuestPlan | null> {
+    if (!GUEST_PLAN_TOKEN.test(token)) return null;
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('get_guest_plan', { p_token_hash: sha256(token) });
+    if (error) {
+      if (missing(error, 'get_guest_plan')) return null;
+      fail(error);
+    }
+    return (data as GuestPlan | null) ?? null;
+  }
+
+  // ---------- 設置予定地・土地 ----------
+  async getSiteProfile(_actor: SessionUser, configurationId: string): Promise<SiteProfile | null> {
+    const db = await this.db();
+    const { data, error } = await db.from('configuration_site_profiles').select('*').eq('configuration_id', configurationId).maybeSingle();
+    if (error) {
+      if (missing(error)) return null;
+      fail(error);
+    }
+    if (!data) return null;
+    const row = data as SiteProfile & { area_sqm: number | string | null };
+    return { ...row, area_sqm: row.area_sqm === null ? null : Number(row.area_sqm) };
+  }
+  async saveSiteProfile(_actor: SessionUser, configurationId: string, input: SiteProfileInput, expectedLockVersion: number | null) {
+    return this.rpc<number>('save_configuration_site_profile', {
+      p_configuration_id: configurationId,
+      p_profile: input,
+      p_expected_lock_version: expectedLockVersion,
+    });
   }
 
   // ---------- 写真・書類 ----------

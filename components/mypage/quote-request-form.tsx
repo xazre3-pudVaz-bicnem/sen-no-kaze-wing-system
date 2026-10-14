@@ -3,8 +3,9 @@
 import { useActionState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { requestQuoteAction, type QuoteRequestState } from '@/lib/actions/configurations';
-import { MEETING_METHODS, MEETING_METHOD_LABELS, SLOT_PERIODS, SLOT_PERIOD_LABELS } from '@/lib/domain/case-flow';
+import { MEETING_METHODS, MEETING_METHOD_LABELS, SLOT_PERIODS, SLOT_PERIOD_LABELS, type SiteProfile } from '@/lib/domain/case-flow';
 import { Alert, Button, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
+import { SiteProfileFields } from '@/components/case-flow/site-profile-fields';
 
 interface Props {
   configurationId: string;
@@ -14,14 +15,26 @@ interface Props {
   dealers?: { id: string; name: string }[];
   /** 打合せの希望日の下限（日本時間の今日） */
   today?: string;
-  defaults: { full_name: string; company_name: string; email: string; phone: string; address: string };
+  /** マイページで入力済みの設置予定地・土地（フェーズ3） */
+  siteProfile?: SiteProfile | null;
+  /** シミュレーターで選んだ地域（希望地域の初期値） */
+  siteArea?: string;
+  defaults: {
+    full_name: string;
+    company_name: string;
+    email: string;
+    phone: string;
+    address: string;
+    site_address?: string;
+    site_profile_lock_version?: string;
+  };
 }
 
 const initial: QuoteRequestState = { ok: false };
 
 const CONFIGURATION_CONFLICT_MESSAGE = '他の画面でこのプランが更新されています';
 
-export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], today, defaults }: Props) {
+export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], today, siteProfile = null, siteArea, defaults }: Props) {
   const [state, action, pending] = useActionState(requestQuoteAction, initial);
   const v: Record<string, string | undefined> = { ...defaults, ...(state.values ?? {}) };
   const isConflict = Boolean(state.error?.includes(CONFIGURATION_CONFLICT_MESSAGE));
@@ -29,6 +42,7 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
     <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form">
       <input type="hidden" name="configuration_id" value={configurationId} />
       <input type="hidden" name="expected_lock_version" value={lockVersion ?? ''} />
+      <input type="hidden" name="site_profile_lock_version" value={v.site_profile_lock_version ?? ''} />
       {isConflict ? (
         <Alert tone="warn">
           <div data-testid="quote-request-conflict-message">
@@ -70,9 +84,13 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
       <Field label="ご住所" htmlFor="address" required errors={state.fieldErrors?.address}>
         <Input id="address" name="address" defaultValue={v.address} autoComplete="street-address" required />
       </Field>
-      <Field label="設置予定地" htmlFor="site_address" hint="分かる範囲で構いません（例：石川県七尾市○○ 海沿いの傾斜地）" errors={state.fieldErrors?.site_address}>
+      <Field label="設置予定地" htmlFor="site_address" hint="分かる範囲で構いません。土地をお持ちなら住所・地番まで（例：石川県七尾市○○ 海沿いの傾斜地）" errors={state.fieldErrors?.site_address}>
         <Input id="site_address" name="site_address" defaultValue={v.site_address} />
       </Field>
+      <fieldset className="space-y-4 rounded-lg border border-line p-4" data-testid="quote-request-site-profile">
+        <legend className="px-1 text-sm font-semibold">土地について（任意）</legend>
+        <SiteProfileFields profile={siteProfile} values={state.values} includeAddress={false} defaultDesiredArea={siteArea} idPrefix="request-land" />
+      </fieldset>
       <Field label="ご要望・ご質問" htmlFor="message" errors={state.fieldErrors?.message}>
         <Textarea id="message" name="message" defaultValue={v.message} placeholder="搬入路の状況、希望時期、確認申請の要否など" />
       </Field>

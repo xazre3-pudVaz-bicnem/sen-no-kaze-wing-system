@@ -8,7 +8,7 @@ import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-conf
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
-import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices } from '@/lib/domain/preset';
+import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices, reconcileVariantChoices } from '@/lib/domain/preset';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -59,6 +59,7 @@ import { PreviewStage } from './preview-stage';
 import { OptionPickerDialog } from './option-picker-dialog';
 import { ExteriorWallFacesDialog } from './exterior-wall-faces-dialog';
 import { SaveDialog } from './save-dialog';
+import { GuestSaveDialog } from './guest-save-dialog';
 import { SiteLocationPicker } from './site-location-picker';
 import { Toasts, type Toast } from './toasts';
 import { cn } from '@/lib/utils';
@@ -102,6 +103,8 @@ interface Props {
   loadError: string | null;
   resume: boolean;
   user: { id: string; name: string } | null;
+  /** ログインなしの一時保存（URL）から開いたときの有効期限 */
+  guestPlanExpiresAt?: string | null;
 }
 
 interface Draft {
@@ -153,6 +156,7 @@ export function SimulatorApp({
   loadError,
   resume,
   user,
+  guestPlanExpiresAt = null,
 }: Props) {
   const router = useRouter();
   const { model } = bundle;
@@ -233,11 +237,16 @@ export function SimulatorApp({
     pruneToScope(initialRuleCtx, eligibleInitialIds, initialLevel),
     initialBaselineIds
   );
-  const initialVariants = pruneHiddenVariantChoices(
-    bundle.variantGroups,
-    bundle.variantChoices,
-    initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
-  );
+  // 編集できるプラン（保存した下書き・一時保存）は、台帳から外れた選択肢を外し、標準の選択肢で補って開く。
+  // 見積依頼済みなどの読み取り専用の履歴は、保存された内容のまま表示する
+  const initialVariants =
+    initial && !preserveReadOnlyHistoricalSelection
+      ? reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initial.variant_choice_ids)
+      : pruneHiddenVariantChoices(
+          bundle.variantGroups,
+          bundle.variantChoices,
+          initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
+        );
   const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options
     .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
@@ -300,6 +309,8 @@ export function SimulatorApp({
   const [dirty, setDirty] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dialog, setDialog] = useState<null | 'save' | 'quote'>(null);
+  /** 未ログインの「見積を保存する」：マイページに保存（ログイン）か、ログインなしの一時保存（URL）かを選ぶ */
+  const [guestSave, setGuestSave] = useState(false);
   const [saving, startSaving] = useTransition();
   const [saveError, setSaveError] = useState<string | null>(null);
   const resumed = useRef(false);
@@ -405,32 +416,11 @@ export function SimulatorApp({
             restoredSelection = pruneToScope(restoredCtx, standardIds, restoredLevel);
           }
 
-          const selectedGroupIds = new Set(
-            bundle.variantGroups
-              .filter((group) => restoredSelection.includes(group.option_id))
-              .map((group) => group.id)
-          );
-          const restoredVariantIds = pruneHiddenVariantChoices(
+          const normalizedVariantIds = reconcileVariantChoices(
             bundle.variantGroups,
             bundle.variantChoices,
-            (draft.variantIds ?? []).filter((choiceId) => {
-              const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
-              return Boolean(groupId && selectedGroupIds.has(groupId));
-            })
-          );
-          const restoredVariantGroupIds = new Set(
-            restoredVariantIds
-              .map((choiceId) => bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id)
-              .filter((groupId): groupId is string => Boolean(groupId))
-          );
-          const fallbackVariantIds = defaultVariantIds(bundle, restoredSelection).filter((choiceId) => {
-            const groupId = bundle.variantChoices.find((choice) => choice.id === choiceId)?.group_id;
-            return !groupId || !restoredVariantGroupIds.has(groupId);
-          });
-          const normalizedVariantIds = pruneHiddenVariantChoices(
-            bundle.variantGroups,
-            bundle.variantChoices,
-            [...restoredVariantIds, ...fallbackVariantIds]
+            restoredSelection,
+            draft.variantIds ?? []
           );
           const restoredExteriorOptions = restoredCtx.options
             .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')
@@ -775,6 +765,7 @@ export function SimulatorApp({
     // 解除を先に行う。依存されている項目（例: 洗面器 ← 混合水栓）は依存元を外すまで解除できないため、
     // 進捗がなくなるまで繰り返し、最後まで残ったものだけ理由を通知する。
     let pending = inCategory.filter((oid) => cur.includes(oid) && !nextInCategory.includes(oid));
+    const removalNotices = new Map<string, string>();
     while (pending.length) {
       const rest: string[] = [];
       let progressed = false;
@@ -790,7 +781,7 @@ export function SimulatorApp({
       if (!progressed) {
         for (const oid of rest) {
           const r = toggleOption(activeSpecCtx, cur, oid);
-          if (r.notices[0]) notices.push(r.notices[0]);
+          if (r.notices[0]) removalNotices.set(oid, r.notices[0]);
         }
         break;
       }
@@ -805,6 +796,10 @@ export function SimulatorApp({
         cur = r.next;
         notices.push(...r.notices);
       }
+    }
+    // 1 つだけ選べる項目（防火仕様など）は、選び直しで入れ替わる。解除できなかった項目でも、入れ替えで外れたものは通知しない
+    for (const [oid, notice] of removalNotices) {
+      if (cur.includes(oid)) notices.push(notice);
     }
 
     setSelected(cur);
@@ -937,7 +932,10 @@ export function SimulatorApp({
       pushToast('本部プレビュー中は保存できません（新しい価格の確認用です）', 'warn');
       return;
     }
-    if (!user) return requireLogin('save');
+    if (!user) {
+      setGuestSave(true);
+      return;
+    }
     setDialog('save');
   };
   const handleQuoteClick = () => {
@@ -1165,11 +1163,10 @@ export function SimulatorApp({
                 </div>
                 {!user && (
                   <p className="mt-1 text-right text-[0.7rem] leading-snug text-muted/80">
-                    保存には{' '}
                     <Link href={`/login?next=${encodeURIComponent(`/simulator/${model.slug}?resume=1`)}`} className="underline underline-offset-4">
                       ログイン
-                    </Link>{' '}
-                    が必要です（選択内容は保持されます）
+                    </Link>
+                    するとマイページに保存できます。ログインせずに一時保存（URL）もできます
                   </p>
                 )}
               </div>
@@ -1188,15 +1185,26 @@ export function SimulatorApp({
         </div>
 
         {pricingPreview && (
-          <Alert tone="info" className="mt-4" data-testid="pricing-preview-banner">
-            本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
-            プレビュー中は保存・見積依頼はできません。
-          </Alert>
+          <div className="mt-4" data-testid="pricing-preview-banner">
+            <Alert tone="info">
+              本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
+              プレビュー中は保存・見積依頼はできません。
+            </Alert>
+          </div>
         )}
         {loadError && (
           <Alert tone="warn" className="mt-4">
             {loadError}
           </Alert>
+        )}
+        {guestPlanExpiresAt && !configId && (
+          <div className="mt-4" data-testid="guest-plan-notice">
+            <Alert tone="info">
+              一時保存したプランを開きました（
+              {new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'long', day: 'numeric' }).format(new Date(guestPlanExpiresAt))}
+              まで有効）。金額は今の価格で計算し直しています。会員登録すると、マイページにずっと保存できます。
+            </Alert>
+          </div>
         )}
         {readOnly && (
           <Alert tone="info" className="mt-4">
@@ -1340,6 +1348,28 @@ export function SimulatorApp({
             setSaveError(null);
           }}
           onSubmit={(n) => doSave(n, dialog === 'quote' ? 'quote' : 'stay')}
+        />
+      )}
+      {guestSave && (
+        <GuestSaveDialog
+          modelSlug={model.slug}
+          baseModelId={model.id}
+          plan={{
+            name,
+            option_ids: selected,
+            variant_choice_ids: variantIds,
+            exterior_faces: exteriorFaces,
+            finish_level: finishLevel,
+            spec_code: specCode,
+            site_prefecture: sitePrefecture,
+            site_municipality: siteMunicipality,
+            site_location_undecided: siteLocationUndecided,
+          }}
+          onLogin={() => {
+            setGuestSave(false);
+            requireLogin('save');
+          }}
+          onClose={() => setGuestSave(false)}
         />
       )}
       <Toasts toasts={toasts} onDismiss={(tid) => setToasts((t) => t.filter((x) => x.id !== tid))} />

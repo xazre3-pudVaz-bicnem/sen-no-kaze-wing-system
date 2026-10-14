@@ -14,6 +14,9 @@ import pg from 'pg';
 import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
 import { runtimeConcurrency } from './runtime-concurrency.mjs';
 import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.mjs';
+import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
+import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
+import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -36,6 +39,9 @@ try {
     await client.query("set statement_timeout = '5s'");
     await client.query("set lock_timeout = '2s'");
     runtime = await runtimeSecurity(client);
+    runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionDelete(client, { connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionArrayRace({ connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionWriterOrder({ connectionString: url }));
     // 同時編集（optimistic locking）は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionHqStandardCost(client, { connectionString: url }));

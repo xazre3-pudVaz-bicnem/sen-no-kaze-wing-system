@@ -19,6 +19,7 @@ type Props = {
   models: BaseModel[];
   variantsByOptionId: Record<string, { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] }>;
   configurationUsageCounts: Record<string, number> | null;
+  hqStandardCosts: Record<string, number> | null;
   initiallySelectedId?: string;
 };
 
@@ -174,7 +175,7 @@ function ProductStatus({ option, configurationUsageCount }: { option: ProductOpt
   );
 }
 
-export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, configurationUsageCounts, initiallySelectedId }: Props) {
+export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
@@ -672,7 +673,20 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
               <div className="card p-4">
                 <h3 className="font-semibold">自社の仕入・発注情報</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">現在この商品詳細で取得できる正式な仕入先・発注コード・仕入原価・発注単位の保存項目はありません。未登録値を推測せず、取得可能になるまでは表示しません。</p>
+                <dl className="mt-2">
+                  {hqStandardCosts !== null && (
+                    <Row
+                      label="本部商品基準原価（税別）"
+                      value={Object.prototype.hasOwnProperty.call(hqStandardCosts, selected.id) ? formatYen(hqStandardCosts[selected.id]) : '未設定'}
+                    />
+                  )}
+                  <Row label="仕入先" value={<PendingDbValue />}/>
+                  <Row label="発注コード" value={<PendingDbValue />}/>
+                  <Row label="発注単位" value={<PendingDbValue />}/>
+                </dl>
+                {hqStandardCosts !== null && (
+                  <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">本部商品基準原価は、本部が現在の基準値として管理する税別原価です。実仕入価格・案件実原価・発行済み見積の原価ではありません。</p>
+                )}
               </div>
 
               <details className="card">

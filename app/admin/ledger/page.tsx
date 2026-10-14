@@ -4,6 +4,7 @@ import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-o
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
+import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
@@ -21,7 +22,10 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));
   const catalogOptions = options.filter((option) => catalogCategoryIds.has(option.category_id));
-  const rows = await Promise.all(catalogOptions.map(async (option) => [option.id, await store.getOptionVariants(option.id)] as const));
+  const [rows, hqStandardCosts] = await Promise.all([
+    Promise.all(catalogOptions.map(async (option) => [option.id, await store.getOptionVariants(option.id)] as const)),
+    getOptionHqStandardCostMap(catalogOptions.map((option) => option.id)),
+  ]);
   const selected = typeof sp.product === 'string' && catalogOptions.some((option) => option.id === sp.product) ? sp.product : undefined;
 
   return <AdminPage
@@ -93,6 +97,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       models={models}
       variantsByOptionId={Object.fromEntries(rows)}
       configurationUsageCounts={configurationUsageCounts}
+      hqStandardCosts={hqStandardCosts}
       initiallySelectedId={selected}
     />
   </AdminPage>;

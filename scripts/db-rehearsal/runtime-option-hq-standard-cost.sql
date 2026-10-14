@@ -187,6 +187,12 @@ begin
 
   perform pg_temp.hq_expect_denied('基準原価がある商品は通常DELETEをFK RESTRICTで止める', '23503',
     pg_temp.hq_try_super(format('delete from public.options where id=%L returning id::text', opt_pub)));
+  -- 未使用の登録済み商品の安全な削除（20261014101000／102000）の RPC でも、基準原価は消さずに止まる
+  perform pg_temp.hq_expect_denied('基準原価がある商品は安全な商品削除のRPCでも削除できない', '23503',
+    pg_temp.hq_run_as('authenticated', u_admin, format('select public.delete_unused_published_option(%L)::text', opt_pub)));
+  perform pg_temp.hq_expect_eq('安全な商品削除のRPCで止まった後も商品と基準原価が残る', '1/90000',
+    (select count(*)::text from public.options where id = opt_pub) || '/' ||
+    coalesce((select c.standard_cost::text from public.option_hq_standard_costs c where c.option_id = opt_pub), '(なし)'));
 end;
 $test$;
 

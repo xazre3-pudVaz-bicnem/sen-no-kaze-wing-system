@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { isMissingFunction, isMissingRelation } from '@/lib/data/schema-compat';
+import { isLocalMode } from '@/lib/data/store';
 
 export type OptionHqStandardCost = {
   option_id: string;
@@ -31,6 +32,9 @@ function throwDbError(error: Exclude<DbError, null>): never {
  * 権限判定はDB helperを正本とし、クライアント側role推測では代用しない。
  */
 export async function getOptionHqStandardCostAccess(optionId: string): Promise<OptionHqStandardCostAccess> {
+  // ローカル検証モード（開発・E2E）は本部の原価を持たない。接続先の無い Supabase へも問い合わせない
+  if (isLocalMode()) return { available: false, canView: false, canManage: false, cost: null };
+
   const db = await createClient();
   const [viewResult, manageResult] = await Promise.all([
     db.rpc('can_view_option_hq_standard_cost'),
@@ -68,6 +72,7 @@ export async function getOptionHqStandardCostAccess(optionId: string): Promise<O
 
 /** 商品台帳向け。本部閲覧権限が無ければ値も項目名もclientへ渡さない。 */
 export async function getOptionHqStandardCostMap(optionIds: string[]): Promise<Record<string, number> | null> {
+  if (isLocalMode()) return null;
   if (optionIds.length === 0) return {};
 
   const db = await createClient();

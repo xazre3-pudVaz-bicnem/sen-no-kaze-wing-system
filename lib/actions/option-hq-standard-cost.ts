@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireStaff } from '@/lib/auth/session';
 import { isMissingFunction } from '@/lib/data/schema-compat';
+import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 
 export type OptionHqStandardCostActionState = {
@@ -43,6 +44,8 @@ export async function saveOptionHqStandardCostAction(
   formData: FormData
 ): Promise<OptionHqStandardCostActionState> {
   await requireStaff();
+  // ローカル検証モード（開発・E2E）は本部の原価を持たない（画面にも出さない）
+  if (isLocalMode()) return { ok: false, error: '本部商品基準原価はローカル検証モードでは扱いません。' };
 
   const optionId = String(formData.get('option_id') ?? '').trim();
   const rawCost = String(formData.get('standard_cost') ?? '').trim();

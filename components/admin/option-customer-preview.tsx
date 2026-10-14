@@ -42,6 +42,10 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
   const categoryDisplayName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
 
+  // 共通化の回帰テスト用メモ。画面には表示しない。
+  // 商品詳細本文は実際のシミュレーターと同じコンポーネントです。
+  // 商品追加額などシミュレーター選択状態に依存する操作は、この確認画面では表示しません。
+
   return (
     <div data-testid="simulator-product-detail-preview">
       <div className="overflow-hidden rounded-xl border border-line bg-white shadow-soft">
@@ -62,10 +66,6 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
           />
         </div>
       </div>
-      <p className="mt-2 text-xs leading-5 text-muted">
-        商品詳細本文は実際のシミュレーターと同じコンポーネントです。商品追加額・仕様追加額・合計追加額と
-        「この内容に変更する」操作は、実際のシミュレーターで選択中の標準商品・仕様によって変わるため、この確認画面では表示しません。
-      </p>
     </div>
   );
 }

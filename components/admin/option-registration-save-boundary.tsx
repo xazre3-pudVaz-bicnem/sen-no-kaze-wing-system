@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui';
 import { OptionRegistrationUiEnhancer } from '@/components/admin/option-registration-ui-enhancer';
+import { OptionRegistrationFinalUiEnhancer } from '@/components/admin/option-registration-final-ui-enhancer';
 
 type SaveHandler = () => Promise<boolean>;
 
@@ -144,6 +145,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
       value={{ registerSaveHandler, markDirty, markClean, saveIfDirty, saving }}
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
+      <OptionRegistrationFinalUiEnhancer />
       {hasSaveHandler && (
         <div
           data-testid="option-registration-save-status"

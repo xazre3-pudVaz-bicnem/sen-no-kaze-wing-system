@@ -22,12 +22,14 @@ create trigger options_code_immutable
 before update of code on public.options
 for each row execute function public.prevent_option_code_update();
 
--- The first safe-delete RPC remains as an internal implementation only.
--- It contains the complete reference checks; authenticated callers must use
--- the serialized wrapper below so that normal writers cannot deadlock against it.
-revoke all on function public.delete_unused_published_option(uuid) from public, anon, authenticated, service_role;
+-- Keep the complete reference-check implementation, but make it internal only.
+-- The public RPC name is recreated below as the serialization wrapper so all
+-- existing callers automatically use the canonical lock order.
+alter function public.delete_unused_published_option(uuid)
+  rename to delete_unused_published_option_internal;
+revoke all on function public.delete_unused_published_option_internal(uuid) from public, anon, authenticated, service_role;
 
-create or replace function public.delete_unused_published_option_serialized(p_option_id uuid)
+create or replace function public.delete_unused_published_option(p_option_id uuid)
 returns void
 language plpgsql
 security definer
@@ -94,10 +96,10 @@ begin
 
   -- The internal implementation re-acquires locks already held by this
   -- transaction, then performs the full reference checks and DELETE atomically.
-  perform public.delete_unused_published_option(p_option_id);
+  perform public.delete_unused_published_option_internal(p_option_id);
 end;
 $$;
 
-alter function public.delete_unused_published_option_serialized(uuid) owner to postgres;
-revoke all on function public.delete_unused_published_option_serialized(uuid) from public, anon, authenticated, service_role;
-grant execute on function public.delete_unused_published_option_serialized(uuid) to authenticated;
+alter function public.delete_unused_published_option(uuid) owner to postgres;
+revoke all on function public.delete_unused_published_option(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.delete_unused_published_option(uuid) to authenticated;

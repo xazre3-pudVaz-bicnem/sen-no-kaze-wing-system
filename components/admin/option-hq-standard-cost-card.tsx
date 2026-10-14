@@ -56,9 +56,10 @@ export function OptionHqStandardCostCard({ optionId, canManage, cost }: Props) {
           <input type="hidden" name="option_id" value={optionId} />
           <input type="hidden" name="expected_lock_version" value={currentVersion} />
 
-          <Field label="本部商品基準原価（税別・円）" required>
+          <Field label="本部商品基準原価（税別・円）" htmlFor="hq-standard-cost" required>
             <Input
               key={`${optionId}:${currentVersion}:${currentCost ?? 'unset'}`}
+              id="hq-standard-cost"
               name="standard_cost"
               type="number"
               min={0}
@@ -71,9 +72,10 @@ export function OptionHqStandardCostCard({ optionId, canManage, cost }: Props) {
             />
           </Field>
 
-          <Field label="変更理由" required hint="初回設定・変更ともに必須です（1〜500文字）。">
+          <Field label="変更理由" htmlFor="hq-standard-cost-reason" required hint="初回設定・変更ともに必須です（1〜500文字）。">
             <Textarea
               key={`reason:${optionId}:${currentVersion}`}
+              id="hq-standard-cost-reason"
               name="change_reason"
               minLength={1}
               maxLength={500}

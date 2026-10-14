@@ -9,14 +9,13 @@ import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
 const LEDGER_DISPLAY_GROUPS = [
-  { code: 'performance', name: '性能・仕様', sort: 1, categories: ['fireproof', 'insulation', 'insulation-floor', 'insulation-wall', 'insulation-ceiling'] },
-  { code: 'exterior', name: '外まわり', sort: 2, categories: ['roof', 'exterior-wall', 'exterior-parts'] },
-  { code: 'openings', name: '窓・ドア', sort: 3, categories: ['entrance-door', 'sash', 'service-door', 'smartlock'] },
-  { code: 'interior', name: '室内', sort: 4, categories: ['floor', 'wall-ceiling', 'carpentry', 'interior-door'] },
-  { code: 'equipment', name: '水回り・設備', sort: 5, categories: ['ub', 'kitchen', 'washbasin', 'toilet', 'boiler', 'aircon'] },
-  { code: 'electrical', name: '電気・照明', sort: 6, categories: ['lighting'] },
-  { code: 'furniture', name: '家具・収納', sort: 7, categories: ['entrance-storage', 'closet', 'bed', 'furniture', 'appliances', 'office-supplies'] },
-  { code: 'sitework', name: '別途工事', sort: 8, categories: ['sitework'] },
+  { code: 'exterior', name: '外まわり', sort: 1, categories: ['roof', 'exterior-wall', 'exterior-parts'] },
+  { code: 'openings', name: '窓・ドア', sort: 2, categories: ['entrance-door', 'sash', 'service-door', 'smartlock'] },
+  { code: 'interior', name: '室内', sort: 3, categories: ['floor', 'wall-ceiling', 'carpentry', 'interior-door'] },
+  { code: 'equipment', name: '水回り・設備', sort: 4, categories: ['ub', 'kitchen', 'washbasin', 'toilet', 'boiler', 'aircon'] },
+  { code: 'electrical', name: '電気・照明', sort: 5, categories: ['lighting'] },
+  { code: 'furniture', name: '家具・収納', sort: 6, categories: ['entrance-storage', 'closet', 'bed', 'furniture', 'appliances', 'office-supplies'] },
+  { code: 'sitework', name: '別途工事', sort: 7, categories: ['sitework'] },
 ] as const;
 
 const ledgerDisplayGroupByCategoryCode = new Map(
@@ -41,7 +40,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       ...category,
       group_code: displayGroup?.code ?? 'other',
       group_name: displayGroup?.name ?? 'その他',
-      group_sort: displayGroup?.sort ?? 9,
+      group_sort: displayGroup?.sort ?? 8,
     };
   });
   const catalogCategoryIds = new Set(catalogCategories.map((category) => category.id));

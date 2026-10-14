@@ -82,6 +82,8 @@ declare
   opt_service constant uuid := '00000000-0000-4000-8000-00000000d11c';
   opt_malformed constant uuid := '00000000-0000-4000-8000-00000000d11d';
   opt_postdelete constant uuid := '00000000-0000-4000-8000-00000000d11e';
+  opt_face constant uuid := '00000000-0000-4000-8000-00000000d11f';
+  cfg_face_id constant uuid := '00000000-0000-4000-8000-00000000d163';
   variant_group constant uuid := '00000000-0000-4000-8000-00000000d140';
   variant_choice constant uuid := '00000000-0000-4000-8000-00000000d141';
   base_model_id constant uuid := '00000000-0000-4000-8000-00000000d150';
@@ -125,7 +127,19 @@ begin
     (opt_preset, category_id, 'runtime-delete-preset', 'Preset使用済み商品', 'published', 'PRD-999991'),
     (opt_service, category_id, 'runtime-delete-service', 'service_role直接DELETE検査商品', 'published', 'PRD-999992'),
     (opt_malformed, category_id, 'runtime-delete-malformed', '形式異常時停止検査商品', 'published', 'PRD-999993'),
-    (opt_postdelete, category_id, 'runtime-delete-postdelete', '削除後参照復活防止商品', 'published', 'PRD-999994');
+    (opt_postdelete, category_id, 'runtime-delete-postdelete', '削除後参照復活防止商品', 'published', 'PRD-999994'),
+    (opt_face, category_id, 'runtime-delete-face', '外壁4面だけで使用中の商品', 'published', 'PRD-999995');
+
+  -- 外壁4面（configurations.exterior_faces の JSON）の側面だけで使われている商品。FK では守られない
+  insert into public.configurations (id, user_id, base_model_id, name, status, exterior_faces)
+  values (
+    cfg_face_id,
+    u_admin,
+    base_model_id,
+    '外壁4面検査',
+    'draft',
+    jsonb_build_array(jsonb_build_object('face_code', 'right', 'option_id', opt_face::text, 'variant_choice_ids', '[]'::jsonb))
+  );
 
   insert into public.option_dependencies (option_id, requires_option_id, message)
   values (opt_used, opt_peer, '安全削除の使用済み判定用');
@@ -293,6 +307,58 @@ begin
       u_admin,
       format($q$with d as (delete from public.options where id = %L::uuid returning 1) select count(*)::text from d$q$, opt_draft::text)
     )
+  );
+
+  -- published → draft に戻してから下書きとして削除しても、参照確認を迂回できない（先方確認 2026-10-14）
+  perform pg_temp.expect_eq(
+    'unused-delete 3-6 Preset使用中の商品もdraftへ戻すことはできる',
+    '1',
+    pg_temp.run_as(
+      'authenticated',
+      u_admin,
+      format($q$with u as (update public.options set status = 'draft' where id = %L::uuid returning 1) select count(*)::text from u$q$, opt_preset::text)
+    )
+  );
+  perform pg_temp.expect_contains(
+    'unused-delete 3-7 draftへ戻したPreset使用中の商品も直接DELETEで削除できない',
+    'ERROR P0001: VALIDATION:',
+    pg_temp.run_as(
+      'authenticated',
+      u_admin,
+      format($q$with d as (delete from public.options where id = %L::uuid returning 1) select count(*)::text from d$q$, opt_preset::text)
+    )
+  );
+  perform pg_temp.expect_eq(
+    'unused-delete 3-8 外壁4面だけで使用中の商品もdraftへ戻すことはできる',
+    '1',
+    pg_temp.run_as(
+      'authenticated',
+      u_admin,
+      format($q$with u as (update public.options set status = 'draft' where id = %L::uuid returning 1) select count(*)::text from u$q$, opt_face::text)
+    )
+  );
+  perform pg_temp.expect_contains(
+    'unused-delete 3-9 draftへ戻した外壁4面使用中の商品も直接DELETEで削除できない',
+    'ERROR P0001: VALIDATION:',
+    pg_temp.run_as(
+      'authenticated',
+      u_admin,
+      format($q$with d as (delete from public.options where id = %L::uuid returning 1) select count(*)::text from d$q$, opt_face::text)
+    )
+  );
+  perform pg_temp.expect_eq(
+    'unused-delete 3-10 どちらの商品も残り、Presetに消えたcodeは残らない',
+    '2 0',
+    (select count(*)::text from public.options where id = any(array[opt_preset, opt_face]))
+      || ' '
+      || (
+        select count(*)::text
+        from public.base_models bm
+        cross join lateral jsonb_array_elements(bm.presets) preset(value)
+        cross join lateral jsonb_array_elements_text(coalesce(preset.value -> 'option_codes', '[]'::jsonb)) preset_option(code)
+        left join public.options o on o.code = preset_option.code
+        where bm.slug = 'runtime-unused-delete-model' and o.id is null
+      )
   );
 
   -- DELETE後に待機していたPreset書込みが消えたcodeを復活させないことを、保存時validationでも確認する。

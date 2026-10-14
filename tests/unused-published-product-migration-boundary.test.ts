@@ -27,17 +27,19 @@ describe('safe-delete migrationの途中状態', () => {
     }
   });
 
-  it('102000が成功した最後にcanonical wrapperだけauthenticatedへ公開する', () => {
+  it('102000が成功した最後に、削除トリガーを付けたうえでRPCだけauthenticatedへ公開する', () => {
     const grant = 'grant execute on function public.delete_unused_published_option(uuid) to authenticated;';
     expect(hardening).toContain(grant);
+    expect(hardening.indexOf(grant)).toBeGreaterThan(hardening.indexOf('before delete on public.options'));
     expect(hardening.indexOf(grant)).toBeGreaterThan(
-      hardening.indexOf('perform public.delete_unused_published_option_internal(p_option_id);')
+      hardening.indexOf('create or replace function public.delete_unused_published_option(p_option_id uuid)')
     );
     expect(hardening).toContain(
       'POSTCONDITION: hardened safe-delete RPC must be executable by authenticated only'
     );
     expect(hardening).toContain(
-      'POSTCONDITION: internal safe-delete implementation must not be executable by application roles'
+      'POSTCONDITION: delete guard functions must not be executable by application roles'
     );
+    expect(hardening).toContain('POSTCONDITION: options delete reference guard trigger is missing');
   });
 });

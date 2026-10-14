@@ -15,4 +15,10 @@ describe('登録済み未使用商品の削除エラー表示', () => {
     expect(action).not.toContain('constraint_name');
     expect(action).not.toContain('option_hq_standard_costs');
   });
+
+  it('保存などと重なったときは、rawのlock timeout・deadlockではなく再試行できる案内を出す', () => {
+    expect(action).toContain("error.code === '55P03' || error.code === '40P01'");
+    expect(action).toContain('現在ほかの処理で使用中のため削除できません。少し時間をおいて再度お試しください。');
+    expect(action).toContain('VALIDATION|FORBIDDEN|NOT_FOUND|UNAUTHENTICATED|LOCKED');
+  });
 });

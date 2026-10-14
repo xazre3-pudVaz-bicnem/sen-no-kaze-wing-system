@@ -1,6 +1,7 @@
 import pg from 'pg';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const BUSY_MESSAGE = '現在ほかの処理で使用中のため削除できません';
 
 async function waitForRelationLock(client, pid, relation, mode, granted, timeoutMs = 1500) {
   const started = Date.now();
@@ -14,6 +15,20 @@ async function waitForRelationLock(client, pid, relation, mode, granted, timeout
     );
     if (res.rows[0]?.ok) return true;
     await delay(25);
+  }
+  return false;
+}
+
+/** safe-deleteが表のlockを待たず、間をおいてやり直している（pg_sleep中）ことを確かめる */
+async function waitForRetrySleep(client, pid, timeoutMs = 1500) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const res = await client.query(
+      "select exists (select 1 from pg_stat_activity where pid = $1 and wait_event = 'PgSleep') as ok",
+      [pid]
+    );
+    if (res.rows[0]?.ok) return true;
+    await delay(20);
   }
   return false;
 }
@@ -38,7 +53,8 @@ async function safeDelete(client, adminId, optionId) {
   }
 }
 
-async function saveConfiguration(client, ids) {
+/** optionIds を入れて保存する。入れる商品のカテゴリーは full なので、注文範囲も full にする */
+async function saveConfiguration(client, ids, optionIds, expectedLockVersion) {
   await beginAsAdmin(client, ids.admin);
   try {
     await client.query(
@@ -46,19 +62,19 @@ async function saveConfiguration(client, ids) {
         p_configuration_id => $1::uuid,
         p_base_model_id => $2::uuid,
         p_name => 'safe-delete lock order writer',
-        p_option_ids => '{}'::uuid[],
+        p_option_ids => $3::uuid[],
         p_preview_image_url => null,
         p_notes => null,
-        p_finish_level => 'shell',
+        p_finish_level => 'full',
         p_variant_choice_ids => '{}'::uuid[],
         p_spec_code => 'base',
         p_exterior_faces => '[]'::jsonb,
         p_site_prefecture => null,
         p_site_municipality => null,
         p_site_location_undecided => false,
-        p_expected_lock_version => 1
+        p_expected_lock_version => $4
       )`,
-      [ids.configuration, ids.model]
+      [ids.configuration, ids.model, optionIds, expectedLockVersion]
     );
     await client.query('commit');
     return { ok: true, code: null };
@@ -115,6 +131,8 @@ async function insertTarget(client, ids) {
   );
 }
 
+const describe = (result) => (result.ok ? 'success' : `${result.code ?? 'error'} ${result.message ?? ''}`.trim());
+
 export async function runtimeUnusedPublishedOptionWriterOrder({ connectionString }) {
   if (!connectionString) {
     return { ok: false, results: [{ step: 'unused-delete writer order', expected: 'connectionString', actual: 'missing', ok: false }] };
@@ -170,6 +188,29 @@ export async function runtimeUnusedPublishedOptionWriterOrder({ connectionString
     }
   };
 
+  const currentLockVersion = async () =>
+    Number((await setup.query('select lock_version from public.configurations where id = $1::uuid', [ids.configuration])).rows[0].lock_version);
+
+  /**
+   * 保存が「configurations を更新した後、configuration_items の書込み待ち」で止まっている間に safe-delete を走らせる。
+   * holdMs 後に保存を再開させ、両方の結果を返す。
+   */
+  const saveWhileDeleting = async (optionIds, holdMs) => {
+    await configBlocker.query('begin');
+    await configBlocker.query('lock table public.configuration_items in share mode');
+    const writerPid = Number((await configWriter.query('select pg_backend_pid() as pid')).rows[0].pid);
+    const deleterPid = Number((await configDeleter.query('select pg_backend_pid() as pid')).rows[0].pid);
+    const savePromise = saveConfiguration(configWriter, ids, optionIds, await currentLockVersion());
+    const writerWaitsItems = await waitForRelationLock(observer, writerPid, 'public.configuration_items', 'RowExclusiveLock', false);
+    const deletePromise = safeDelete(configDeleter, ids.admin, ids.target);
+    const deleteRetries = await waitForRetrySleep(observer, deleterPid);
+    const deleteHoldsItems = await waitForRelationLock(observer, deleterPid, 'public.configuration_items', 'ShareLock', true, 150);
+    await delay(holdMs);
+    await configBlocker.query('commit');
+    const [save, del] = await Promise.all([savePromise, deletePromise]);
+    return { writerWaitsItems, deleteRetries, deleteHoldsItems, save, del };
+  };
+
   try {
     requiredCategoryIds = (await setup.query('select id from public.option_categories where is_required')).rows.map((r) => r.id);
     await cleanup();
@@ -202,7 +243,7 @@ export async function runtimeUnusedPublishedOptionWriterOrder({ connectionString
     await insertTarget(setup, ids);
     await setup.query(
       `insert into public.configurations (id, user_id, base_model_id, name, status, finish_level, spec_code, lock_version)
-       values ($1::uuid, $2::uuid, $3::uuid, 'writer order config', 'draft', 'shell', 'base', 1)`,
+       values ($1::uuid, $2::uuid, $3::uuid, 'writer order config', 'draft', 'full', 'base', 1)`,
       [ids.configuration, ids.admin, ids.model]
     );
     await setup.query('commit');
@@ -224,38 +265,28 @@ export async function runtimeUnusedPublishedOptionWriterOrder({ connectionString
       ok: !codeUpdate.ok && codeUpdate.code === 'P0001',
     });
 
-    await configBlocker.query('begin');
-    await configBlocker.query('lock table public.configuration_items in share mode');
-    const configWriterPid = Number((await configWriter.query('select pg_backend_pid() as pid')).rows[0].pid);
-    const savePromise = saveConfiguration(configWriter, ids);
-    const writerWaitsItems = await waitForRelationLock(observer, configWriterPid, 'public.configuration_items', 'RowExclusiveLock', false);
+    // 1. 対象商品を含まない保存の最中に削除する：保存を待ってから削除が通る
+    const unrelated = await saveWhileDeleting([], 300);
     results.push({
       step: 'unused-delete writer order 1-1 save_configuration_atomicがconfiguration_items待ちになる',
-      expected: 'true', actual: String(writerWaitsItems), ok: writerWaitsItems,
+      expected: 'true', actual: String(unrelated.writerWaitsItems), ok: unrelated.writerWaitsItems,
     });
-
-    const configDeletePid = Number((await configDeleter.query('select pg_backend_pid() as pid')).rows[0].pid);
-    const deleteDuringSave = safeDelete(configDeleter, ids.admin, ids.target);
-    const deleteWaitsConfigurations = await waitForRelationLock(observer, configDeletePid, 'public.configurations', 'ShareLock', false);
-    const deleteAlreadyHoldsItems = await waitForRelationLock(observer, configDeletePid, 'public.configuration_items', 'ShareLock', true, 250);
     results.push({
-      step: 'unused-delete writer order 1-2 safe-deleteはconfigurations待ちの間configuration_itemsを保持しない',
-      expected: 'wait-config=true hold-items=false',
-      actual: `wait-config=${deleteWaitsConfigurations} hold-items=${deleteAlreadyHoldsItems}`,
-      ok: deleteWaitsConfigurations && !deleteAlreadyHoldsItems,
+      step: 'unused-delete writer order 1-2 safe-deleteは保存中の表を待たず、lockを持たずにやり直す',
+      expected: 'retry=true hold-items=false',
+      actual: `retry=${unrelated.deleteRetries} hold-items=${unrelated.deleteHoldsItems}`,
+      ok: unrelated.deleteRetries && !unrelated.deleteHoldsItems,
     });
-
-    await configBlocker.query('commit');
-    const [saveResult, deleteSaveResult] = await Promise.all([savePromise, deleteDuringSave]);
     results.push({
       step: 'unused-delete writer order 1-3 save_configuration_atomicとsafe-deleteはdeadlockせず完了する',
       expected: 'save=success delete=success',
-      actual: `save=${saveResult.ok ? 'success' : saveResult.code} delete=${deleteSaveResult.ok ? 'success' : deleteSaveResult.code}`,
-      ok: saveResult.ok && deleteSaveResult.ok && saveResult.code !== '40P01' && deleteSaveResult.code !== '40P01',
+      actual: `save=${describe(unrelated.save)} delete=${describe(unrelated.del)}`,
+      ok: unrelated.save.ok && unrelated.del.ok && unrelated.save.code !== '40P01' && unrelated.del.code !== '40P01',
     });
 
     await insertTarget(setup, ids);
 
+    // 2. 取込（Option行 → variant表の順にlock）の最中に削除する：Option行だけを待ち、variant表は持たない
     await importBlocker.query('begin');
     await importBlocker.query('lock table public.option_variant_groups in share mode');
     const importerPid = Number((await importer.query('select pg_backend_pid() as pid')).rows[0].pid);
@@ -281,8 +312,45 @@ export async function runtimeUnusedPublishedOptionWriterOrder({ connectionString
     results.push({
       step: 'unused-delete writer order 2-3 apply_catalog_importとsafe-deleteはdeadlockせず完了する',
       expected: 'import=success delete=success',
-      actual: `import=${importResult.ok ? 'success' : importResult.code} delete=${deleteImportResult.ok ? 'success' : deleteImportResult.code}`,
+      actual: `import=${describe(importResult)} delete=${describe(deleteImportResult)}`,
       ok: importResult.ok && deleteImportResult.ok && importResult.code !== '40P01' && deleteImportResult.code !== '40P01',
+    });
+
+    await insertTarget(setup, ids);
+
+    // 3. 削除しようとしている商品そのものを含む保存の最中に削除する（先方確認 2026-10-14）：
+    //    保存を壊さず、削除側が「使用中」で安全に中断する。rawの40P01・55P03は返さない
+    const including = await saveWhileDeleting([ids.target], 300);
+    const afterIncluding = (
+      await setup.query(
+        `select exists(select 1 from public.options where id = $1::uuid) as target_exists,
+                exists(select 1 from public.configuration_items where configuration_id = $2::uuid and option_id = $1::uuid) as referenced`,
+        [ids.target, ids.configuration]
+      )
+    ).rows[0];
+    results.push({
+      step: 'unused-delete writer order 3-1 削除対象を含む保存の最中でも、safe-deleteは表を待たずにやり直す',
+      expected: 'retry=true hold-items=false',
+      actual: `retry=${including.deleteRetries} hold-items=${including.deleteHoldsItems}`,
+      ok: including.deleteRetries && !including.deleteHoldsItems,
+    });
+    results.push({
+      step: 'unused-delete writer order 3-2 保存は成功し、safe-deleteは使用中として中断する（40P01を返さない）',
+      expected: `save=success delete=P0001 ${BUSY_MESSAGE}`,
+      actual: `save=${describe(including.save)} delete=${describe(including.del)}`,
+      ok:
+        including.save.ok &&
+        !including.del.ok &&
+        including.del.code === 'P0001' &&
+        String(including.del.message ?? '').includes(BUSY_MESSAGE) &&
+        including.save.code !== '40P01' &&
+        including.del.code !== '40P01',
+    });
+    results.push({
+      step: 'unused-delete writer order 3-3 商品は誤削除されず、保存したプランから参照されたまま残る',
+      expected: 'target=true referenced=true',
+      actual: `target=${afterIncluding.target_exists} referenced=${afterIncluding.referenced}`,
+      ok: afterIncluding.target_exists === true && afterIncluding.referenced === true,
     });
   } catch (error) {
     results.push({

@@ -9,9 +9,11 @@ import { createClient } from '@/lib/supabase/server';
 
 const DELETE_NOT_AVAILABLE = '登録済み商品の削除機能はDB反映待ちです。反映完了後にもう一度お試しください。';
 const DELETE_BLOCKED_BY_MANAGEMENT_DATA = 'この商品には削除できない管理情報があります。登録済みのまま残してください。';
+// 保存などと重なったとき。DB は待ち続けずに中断して LOCKED を返す。raw の lock timeout / deadlock も同じ文言にする
+const DELETE_BUSY = '現在ほかの処理で使用中のため削除できません。少し時間をおいて再度お試しください。';
 
 function safeMessage(message: string) {
-  return message.replace(/^(VALIDATION|FORBIDDEN|NOT_FOUND|UNAUTHENTICATED):\s*/, '').trim();
+  return message.replace(/^(VALIDATION|FORBIDDEN|NOT_FOUND|UNAUTHENTICATED|LOCKED):\s*/, '').trim();
 }
 
 function optionPath(id: string, error: string) {
@@ -55,6 +57,7 @@ export async function deleteUnusedPublishedOptionAction(formData: FormData): Pro
       // 後続の本部商品基準原価など、商品に従属する管理情報がFK RESTRICTで削除を止めても
       // constraint / table / 内部データの存在をブラウザへ漏らさない。
       else if (error.code === '23503') errorMessage = DELETE_BLOCKED_BY_MANAGEMENT_DATA;
+      else if (error.code === '55P03' || error.code === '40P01') errorMessage = DELETE_BUSY;
       else errorMessage = safeMessage(error.message || '削除処理に失敗しました。');
     }
   }

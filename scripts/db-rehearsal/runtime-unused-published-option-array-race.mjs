@@ -18,6 +18,20 @@ async function waitForRelationLock(client, pid, relation, mode, granted, timeout
   return false;
 }
 
+/** safe-deleteが表のlockを待たず、間をおいてやり直している（pg_sleep中）ことを確かめる */
+async function waitForRetrySleep(client, pid, timeoutMs = 1500) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const res = await client.query(
+      "select exists (select 1 from pg_stat_activity where pid = $1 and wait_event = 'PgSleep') as ok",
+      [pid]
+    );
+    if (res.rows[0]?.ok) return true;
+    await delay(20);
+  }
+  return false;
+}
+
 async function deleteAsAdmin(client, adminId, optionId) {
   await client.query('begin');
   try {
@@ -142,27 +156,29 @@ export async function runtimeUnusedPublishedOptionArrayRace({ connectionString }
   try {
     await setup(setupClient, ids);
 
-    // New canonical order locks the target Option first. Block the non-FK table
-    // instead, then queue safe-delete before the stale writer. After release,
-    // safe-delete gets SHARE first, deletes the Option/Choice, and the writer's
-    // validation trigger must reject the now-dangling UUID.
+    // safe-deleteは対象Option行を確保した後、参照を持つ表のSHARE lockを待たずに取りにいき、
+    // 取れなければ間をおいてやり直す。非FK参照の表を止めてsafe-deleteをやり直し中にし、
+    // stale writerを表の解放待ちに並べる。どちらが先に通っても、writerの保存時validationが
+    // 削除対象商品のchoice UUIDを拒否し、dangling参照は残らない。
     await blocker.query('begin');
     await blocker.query('lock table public.configuration_items in access exclusive mode');
 
     const deleterPid = Number((await deleter.query('select pg_backend_pid() as pid')).rows[0].pid);
     const deletePromise = deleteAsAdmin(deleter, ids.admin, ids.target);
+    const deleterRetries = await waitForRetrySleep(observer, deleterPid);
     const deleterWaitsForShare = await waitForRelationLock(
       observer,
       deleterPid,
       'public.configuration_items',
       'ShareLock',
-      false
+      false,
+      200
     );
     results.push({
-      step: 'unused-delete array race 1-1 safe-deleteはOption行確保後にconfiguration_itemsのSHARE lockを待つ',
-      expected: 'true',
-      actual: String(deleterWaitsForShare),
-      ok: deleterWaitsForShare,
+      step: 'unused-delete array race 1-1 safe-deleteはconfiguration_itemsのlockを待たず、間をおいてやり直す',
+      expected: 'retry=true wait=false',
+      actual: `retry=${deleterRetries} wait=${deleterWaitsForShare}`,
+      ok: deleterRetries && !deleterWaitsForShare,
     });
 
     await writer.query('begin');
@@ -186,7 +202,7 @@ export async function runtimeUnusedPublishedOptionArrayRace({ connectionString }
       false
     );
     results.push({
-      step: 'unused-delete array race 1-2 variant_choice_ids書込みはsafe-deleteの後ろで待機する',
+      step: 'unused-delete array race 1-2 variant_choice_ids書込みは表の解放を待つ',
       expected: 'true',
       actual: String(writerWaits),
       ok: writerWaits,

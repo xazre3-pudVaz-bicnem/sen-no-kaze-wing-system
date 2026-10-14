@@ -15,16 +15,25 @@ import type {
   CaseNoteInput,
   CaseProgress,
   CaseWorkflow,
+  CaseProgressReport,
+  CaseScheduleItem,
   DealerProfile,
   DealerProfileInput,
+  ManufacturingOrder,
+  ManufacturingOrderInput,
+  ManufacturingOrderStatus,
+  ManufacturingUnit,
   PaperContractInput,
+  ProgressReportInput,
+  ScheduleItemInput,
+  UnitUpdateInput,
   QuoteChangeRequest,
   QuoteRequestPreferences,
   QuoteRequestPreferencesInput,
   SiteSurvey,
   SiteSurveyInput,
 } from '@/lib/domain/case-flow';
-import type { BoardAppointment, CaseFlowStore } from './store';
+import type { BoardAppointment, BoardManufacturingOrder, CaseFlowStore } from './store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -306,6 +315,136 @@ export class SupabaseCaseFlowStore implements CaseFlowStore {
   }
   async voidPaperContract(_actor: SessionUser, contractId: string, reason: string) {
     await this.rpc<void>('void_paper_contract', { p_contract_id: contractId, p_reason: reason });
+  }
+
+  // ---------- 製造依頼と個体 ----------
+  async getManufacturingOrder(_actor: SessionUser, requestId: string): Promise<ManufacturingOrder | null> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('manufacturing_orders')
+      .select('*')
+      .eq('quote_request_id', requestId)
+      .neq('status', 'canceled')
+      .maybeSingle();
+    if (error) {
+      if (missing(error)) return null;
+      fail(error);
+    }
+    return (data as ManufacturingOrder | null) ?? null;
+  }
+  async listManufacturingUnits(_actor: SessionUser, orderId: string): Promise<ManufacturingUnit[]> {
+    const db = await this.db();
+    const { data, error } = await db.from('manufacturing_units').select('*').eq('order_id', orderId).order('seq');
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as ManufacturingUnit[];
+  }
+  async listManufacturingBoard(_actor: SessionUser): Promise<BoardManufacturingOrder[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('manufacturing_orders')
+      .select('*')
+      .neq('status', 'canceled')
+      .order('updated_at', { ascending: false })
+      .limit(300);
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    const orders = (data ?? []) as ManufacturingOrder[];
+    if (orders.length === 0) return [];
+    const [{ data: units }, { data: quotes }] = await Promise.all([
+      db.from('manufacturing_units').select('order_id, status').in('order_id', orders.map((o) => o.id)),
+      db.from('quotes').select('id, quote_no, customer_name, quote_request_id, revision').in('quote_request_id', orders.map((o) => o.quote_request_id)).order('revision', { ascending: false }),
+    ]);
+    const labels = new Map<string, { label: string; quote_id: string }>();
+    for (const quote of (quotes ?? []) as { id: string; quote_no: string; customer_name: string; quote_request_id: string }[]) {
+      if (!labels.has(quote.quote_request_id)) labels.set(quote.quote_request_id, { label: `${quote.quote_no} ${quote.customer_name} 様`, quote_id: quote.id });
+    }
+    const unitRows = (units ?? []) as { order_id: string; status: string }[];
+    return orders.map((order) => {
+      const mine = unitRows.filter((u) => u.order_id === order.id);
+      return {
+        ...order,
+        // 総代理店は見積（お客様名）を読めないことがあるため、そのときは製造仕様の見積番号を見出しにする
+        case_label: labels.get(order.quote_request_id)?.label ?? order.spec_snapshot?.quote_no ?? '案件',
+        case_quote_id: labels.get(order.quote_request_id)?.quote_id ?? null,
+        units_total: mine.length,
+        units_shipped: mine.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
+        units_installed: mine.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+      };
+    });
+  }
+  async createManufacturingOrder(_actor: SessionUser, requestId: string, input: ManufacturingOrderInput) {
+    return this.rpc<string>('create_manufacturing_order', { p_request_id: requestId, p_order: input });
+  }
+  async updateManufacturingOrder(_actor: SessionUser, orderId: string, input: ManufacturingOrderInput, expectedLockVersion: number) {
+    return this.rpc<number>('update_manufacturing_order', { p_order_id: orderId, p_order: input, p_expected_lock_version: expectedLockVersion });
+  }
+  async sendManufacturingOrder(_actor: SessionUser, orderId: string, expectedLockVersion: number) {
+    return this.rpc<number>('send_manufacturing_order', { p_order_id: orderId, p_expected_lock_version: expectedLockVersion });
+  }
+  async setManufacturingOrderStatus(_actor: SessionUser, orderId: string, status: ManufacturingOrderStatus, expectedLockVersion: number, reason: string | null) {
+    return this.rpc<number>('set_manufacturing_order_status', {
+      p_order_id: orderId,
+      p_status: status,
+      p_expected_lock_version: expectedLockVersion,
+      p_reason: reason,
+    });
+  }
+  async updateManufacturingUnit(_actor: SessionUser, unitId: string, input: UnitUpdateInput, expectedLockVersion: number) {
+    return this.rpc<number>('update_manufacturing_unit', { p_unit_id: unitId, p_unit: input, p_expected_lock_version: expectedLockVersion });
+  }
+
+  // ---------- 工程表 ----------
+  async listScheduleItems(_actor: SessionUser, requestId: string): Promise<CaseScheduleItem[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('case_schedule_items')
+      .select('*')
+      .eq('quote_request_id', requestId)
+      .order('sort_order')
+      .order('planned_start', { ascending: true, nullsFirst: false });
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as CaseScheduleItem[];
+  }
+  async saveScheduleItem(_actor: SessionUser, requestId: string, itemId: string | null, input: ScheduleItemInput, expectedLockVersion: number | null) {
+    return this.rpc<{ id: string; lock_version: number }>('save_case_schedule_item', {
+      p_request_id: requestId,
+      p_item_id: itemId,
+      p_item: input,
+      p_expected_lock_version: expectedLockVersion,
+    });
+  }
+  async deleteScheduleItem(_actor: SessionUser, itemId: string) {
+    await this.rpc<void>('delete_case_schedule_item', { p_item_id: itemId });
+  }
+
+  // ---------- 施工の記録 ----------
+  async listProgressReports(_actor: SessionUser, requestId: string): Promise<CaseProgressReport[]> {
+    const db = await this.db();
+    const { data, error } = await db
+      .from('case_progress_reports')
+      .select('*')
+      .eq('quote_request_id', requestId)
+      .order('reported_on', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) {
+      if (missing(error)) return [];
+      fail(error);
+    }
+    return (data ?? []) as CaseProgressReport[];
+  }
+  async addProgressReport(_actor: SessionUser, requestId: string, input: ProgressReportInput) {
+    return this.rpc<string>('add_case_progress_report', { p_request_id: requestId, p_report: input });
+  }
+  async setProgressReportVisibility(_actor: SessionUser, reportId: string, visible: boolean) {
+    await this.rpc<void>('set_case_progress_report_visibility', { p_report_id: reportId, p_visible: visible });
   }
 
   // ---------- 写真・書類 ----------

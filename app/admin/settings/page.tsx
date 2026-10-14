@@ -83,6 +83,11 @@ export default async function AdminSettingsPage() {
                 title="予約ボード"
                 body="打合せ・現地調査・引渡しなどの日程を、案件をまたいで確認します。"
               />
+              <AvailableCard
+                href="/admin/manufacturing"
+                title="製造の進み具合"
+                body="全国の製造依頼と、個体の出荷・設置の進み具合を確認します。"
+              />
             </div>
           </section>
 

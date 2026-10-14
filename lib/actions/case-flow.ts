@@ -10,7 +10,12 @@ import {
   CASE_FILE_MAX_BYTES,
   CaseFlowValidationError,
   normalizeChangeRequestMessage,
+  normalizeManufacturingOrderInput,
   normalizePaperContractInput,
+  normalizeProgressReportInput,
+  normalizeScheduleItemInput,
+  normalizeUnitInput,
+  type UnitStatus,
   normalizeAppointmentInput,
   normalizeCaseFileInput,
   normalizeCaseNoteInput,
@@ -408,6 +413,197 @@ export async function voidPaperContractAction(formData: FormData): Promise<void>
     redirect(`/admin/quotes/${quoteId}?tab=documents&error=${encodeURIComponent(errorMessage(e))}`);
   }
   redirect(`/admin/quotes/${quoteId}?tab=documents&done=paper_void`);
+}
+
+// ---------- 製造依頼と個体（フェーズ11） ----------
+
+const todayJst = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
+
+function productionBack(quoteId: string, query: string) {
+  return quoteId ? `/admin/quotes/${quoteId}?tab=production&${query}` : `/admin/manufacturing?${query}`;
+}
+
+export async function saveManufacturingOrderAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/admin/quotes');
+  try {
+    const input = normalizeManufacturingOrderInput(
+      {
+        unit_count: text(formData, 'unit_count'),
+        requested_delivery_on: text(formData, 'requested_delivery_on'),
+        spec_note: text(formData, 'spec_note'),
+        supply_note: text(formData, 'supply_note'),
+      },
+      todayJst()
+    );
+    const store = await getCaseFlowStore();
+    const orderId = optionalUuid(formData, 'order_id');
+    if (orderId) {
+      await store.updateManufacturingOrder(user, orderId, input, intOrNull(formData, 'expected_lock_version') ?? 0);
+    } else {
+      await store.createManufacturingOrder(user, uuid(formData, 'request_id'), input);
+    }
+    revalidateCase(text(formData, 'quote_id') || null, text(formData, 'request_id') || null);
+    revalidatePath('/admin/manufacturing');
+    return { ok: true, message: orderId ? '製造依頼を保存しました。' : '製造依頼を作りました。内容を確認して、総代理店へ送ってください。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function sendManufacturingOrderAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const store = await getCaseFlowStore();
+    await store.sendManufacturingOrder(user, uuid(formData, 'order_id'), intOrNull(formData, 'expected_lock_version') ?? 0);
+    await flushNotificationsSafely();
+    revalidateCase(quoteId || null, text(formData, 'request_id') || null);
+    revalidatePath('/admin/manufacturing');
+  } catch (e) {
+    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(productionBack(quoteId, 'done=order_sent'));
+}
+
+export async function setManufacturingOrderStatusAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/manufacturing');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const status = text(formData, 'status');
+    if (!['received', 'in_production', 'shipped', 'completed', 'canceled'].includes(status)) throw new CaseFlowValidationError('状態の指定が正しくありません');
+    const store = await getCaseFlowStore();
+    await store.setManufacturingOrderStatus(
+      user,
+      uuid(formData, 'order_id'),
+      status as 'received' | 'in_production' | 'shipped' | 'completed' | 'canceled',
+      intOrNull(formData, 'expected_lock_version') ?? 0,
+      text(formData, 'reason') || null
+    );
+    await flushNotificationsSafely();
+    revalidateCase(quoteId || null, text(formData, 'request_id') || null);
+    revalidatePath('/admin/manufacturing');
+  } catch (e) {
+    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(productionBack(quoteId, 'done=order_status'));
+}
+
+export async function updateManufacturingUnitAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/manufacturing');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const store = await getCaseFlowStore();
+    const current = text(formData, 'current_status') as UnitStatus;
+    const status = text(formData, 'status');
+    // 画面は「状態」と「その状態になった日」だけを送る。日付は状態ごとの欄へ振り分ける
+    const dateKey: Record<string, string> = {
+      in_production: 'produced_on',
+      inspected: 'inspected_on',
+      shipped: 'shipped_on',
+      installed: 'installed_on',
+      handed_over: 'handed_over_on',
+    };
+    const statusDate = text(formData, 'status_date');
+    const input = normalizeUnitInput(
+      {
+        status,
+        produced_on: text(formData, 'produced_on'),
+        inspected_on: text(formData, 'inspected_on'),
+        shipped_on: text(formData, 'shipped_on'),
+        installed_on: text(formData, 'installed_on'),
+        handed_over_on: text(formData, 'handed_over_on'),
+        ...(statusDate && dateKey[status] ? { [dateKey[status]]: statusDate } : {}),
+        note: text(formData, 'note'),
+      },
+      current
+    );
+    await store.updateManufacturingUnit(user, uuid(formData, 'unit_id'), input, intOrNull(formData, 'expected_lock_version') ?? 0);
+    revalidateCase(quoteId || null, text(formData, 'request_id') || null);
+    revalidatePath('/admin/manufacturing');
+  } catch (e) {
+    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(productionBack(quoteId, 'done=unit'));
+}
+
+// ---------- 工程表（フェーズ12） ----------
+
+export async function saveScheduleItemAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/admin/quotes');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const input = normalizeScheduleItemInput({
+      category: text(formData, 'category'),
+      title: text(formData, 'title'),
+      planned_start: text(formData, 'planned_start'),
+      planned_end: text(formData, 'planned_end'),
+      actual_start: text(formData, 'actual_start'),
+      actual_end: text(formData, 'actual_end'),
+      status: text(formData, 'status'),
+      customer_visible: text(formData, 'customer_visible') === 'on',
+      note: text(formData, 'note'),
+    });
+    const store = await getCaseFlowStore();
+    await store.saveScheduleItem(user, requestId, optionalUuid(formData, 'item_id'), input, intOrNull(formData, 'expected_lock_version'));
+    await flushNotificationsSafely();
+    revalidateCase(text(formData, 'quote_id') || null, requestId);
+    return { ok: true, message: '工程表を保存しました。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function deleteScheduleItemAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const store = await getCaseFlowStore();
+    await store.deleteScheduleItem(user, uuid(formData, 'item_id'));
+    revalidateCase(quoteId || null, text(formData, 'request_id') || null);
+  } catch (e) {
+    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(productionBack(quoteId, 'done=schedule_deleted'));
+}
+
+// ---------- 施工の記録（フェーズ13） ----------
+
+export async function addProgressReportAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/admin/quotes');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const input = normalizeProgressReportInput(
+      {
+        kind: text(formData, 'kind'),
+        title: text(formData, 'title'),
+        body: text(formData, 'body'),
+        reported_on: text(formData, 'reported_on'),
+        schedule_item_id: text(formData, 'schedule_item_id'),
+        customer_visible: text(formData, 'customer_visible') === 'on',
+      },
+      todayJst()
+    );
+    const store = await getCaseFlowStore();
+    await store.addProgressReport(user, requestId, input);
+    await flushNotificationsSafely();
+    revalidateCase(text(formData, 'quote_id') || null, requestId);
+    return { ok: true, message: '記録しました。写真は記録の下から登録できます。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function setProgressReportVisibilityAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const store = await getCaseFlowStore();
+    await store.setProgressReportVisibility(user, uuid(formData, 'report_id'), text(formData, 'visible') === 'true');
+    revalidateCase(quoteId || null, text(formData, 'request_id') || null);
+  } catch (e) {
+    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+  }
+  redirect(productionBack(quoteId, 'done=report_visibility'));
 }
 
 // ---------- 写真・書類 ----------

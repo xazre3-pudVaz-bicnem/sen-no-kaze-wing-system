@@ -7,8 +7,21 @@ import { filesDir, loadDb, saveDb, type LocalDb } from '@/lib/data/local-db';
 import { ROLE_RANK, type AppNotification } from '@/lib/domain/types';
 import {
   CASE_FILE_TYPES,
+  MANUFACTURER_PROGRESS_KINDS,
+  MANUFACTURER_SCHEDULE_CATEGORIES,
   canChangeAppointmentStatus,
+  canChangeOrderStatus,
   canRegisterCaseFile,
+  canSetUnitStatus,
+  type CaseProgressReport,
+  type CaseScheduleItem,
+  type ManufacturingOrder,
+  type ManufacturingOrderInput,
+  type ManufacturingOrderStatus,
+  type ManufacturingUnit,
+  type ProgressReportInput,
+  type ScheduleItemInput,
+  type UnitUpdateInput,
   type CaseAccess,
   type CaseAppointment,
   type CaseAppointmentInput,
@@ -26,7 +39,7 @@ import {
   type SiteSurveyInput,
 } from '@/lib/domain/case-flow';
 import { emptyCaseFlowTables, type LocalCaseFlowTables } from './local-tables';
-import type { BoardAppointment, CaseFlowStore } from './store';
+import type { BoardAppointment, BoardManufacturingOrder, CaseFlowStore } from './store';
 
 /**
  * ローカル検証モードの案件の進行。DB（20261013220000）の RPC・RLS と同じ判定を行う（開発・E2E 用。本番では使わない）。
@@ -79,6 +92,25 @@ function notify(
     email_error: null,
     created_at: nowIso(),
   });
+}
+
+function newUnit(order: ManufacturingOrder, seq: number): ManufacturingUnit {
+  return {
+    id: randomUUID(),
+    order_id: order.id,
+    quote_request_id: order.quote_request_id,
+    seq,
+    unit_no: null,
+    status: 'planned',
+    produced_on: null,
+    inspected_on: null,
+    shipped_on: null,
+    installed_on: null,
+    handed_over_on: null,
+    note: null,
+    lock_version: 1,
+    updated_at: nowIso(),
+  };
 }
 
 function caseDealerId(db: LocalDb, requestId: string): string | null {
@@ -316,11 +348,18 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
       const survey = t.siteSurveys.find((s) => s.quote_request_id === requestId);
       const primary = workflow?.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id) : null;
+      const order = (t.orders ?? []).find((o) => o.quote_request_id === requestId && o.status !== 'canceled');
+      const units = order ? (t.units ?? []).filter((u) => u.order_id === order.id) : [];
       return {
         acknowledged_at: workflow?.acknowledged_at ?? null,
         primary_staff_name: primary?.full_name ?? null,
         site_survey_status: survey?.status ?? 'none',
         site_survey_completed_at: survey?.completed_at ?? null,
+        // 製造：状態と棟数・出荷済み・設置済みの数だけ（DB の get_case_progress と同じ）
+        manufacturing_status: !order || order.status === 'draft' ? 'none' : (order.status as Exclude<ManufacturingOrderStatus, 'draft' | 'canceled'>),
+        unit_count: order?.unit_count ?? null,
+        units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
+        units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
       };
     });
   }
@@ -681,6 +720,324 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       contract.canceled_at = nowIso();
       contract.failure_reason = text;
       contract.updated_at = nowIso();
+    });
+  }
+
+  // ---------- 製造依頼と個体（20261013234000 と同じ判定） ----------
+  private orderOf(db: LocalDb, orderId: string) {
+    const order = (tables(db).orders ?? []).find((o) => o.id === orderId);
+    if (!order) throw notFound();
+    return order;
+  }
+  async getManufacturingOrder(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access || access === 'customer') return null;
+      const order = (tables(db).orders ?? []).find((o) => o.quote_request_id === requestId && o.status !== 'canceled');
+      return order ? { ...order } : null;
+    });
+  }
+  async listManufacturingUnits(actor: SessionUser, orderId: string) {
+    return this.read((db) => {
+      const order = (tables(db).orders ?? []).find((o) => o.id === orderId);
+      if (!order) return [];
+      const access = accessOf(db, actor, order.quote_request_id);
+      if (!access || access === 'customer') return [];
+      return (tables(db).units ?? []).filter((u) => u.order_id === orderId).sort((a, b) => a.seq - b.seq).map((u) => ({ ...u }));
+    });
+  }
+  async listManufacturingBoard(actor: SessionUser): Promise<BoardManufacturingOrder[]> {
+    return this.read((db) => {
+      const t = tables(db);
+      return (t.orders ?? [])
+        .filter((o) => o.status !== 'canceled' && ['admin', 'staff', 'manufacturer'].includes(accessOf(db, actor, o.quote_request_id) ?? ''))
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .map((o) => {
+          const units = (t.units ?? []).filter((u) => u.order_id === o.id);
+          const quote = db.quotes.filter((q) => q.quote_request_id === o.quote_request_id).sort((x, y) => (y.revision ?? 0) - (x.revision ?? 0))[0];
+          return {
+            ...o,
+            case_label: quote ? `${quote.quote_no} ${quote.customer_name} 様` : (o.spec_snapshot?.quote_no ?? '案件'),
+            case_quote_id: quote?.id ?? null,
+            units_total: units.length,
+            units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
+            units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+          };
+        });
+    });
+  }
+  async createManufacturingOrder(actor: SessionUser, requestId: string, input: ManufacturingOrderInput) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('製造依頼を作れるのは本部と担当代理店だけです');
+      const contract = db.contracts
+        .filter((c) => c.quote_request_id === requestId && c.status === 'signed')
+        .sort((a, b) => (b.signed_at ?? '').localeCompare(a.signed_at ?? ''))[0];
+      if (!contract) throw locked('契約が締結されてから製造依頼を作れます');
+      const t = tables(db);
+      t.orders ??= [];
+      t.units ??= [];
+      if (t.orders.some((o) => o.quote_request_id === requestId && o.status !== 'canceled')) throw locked('この案件には製造依頼があります');
+      const now = nowIso();
+      const order: ManufacturingOrder = {
+        id: randomUUID(),
+        quote_request_id: requestId,
+        contract_id: contract.id,
+        quote_id: contract.quote_id,
+        manufacturer_id: null,
+        status: 'draft',
+        unit_count: input.unit_count,
+        requested_delivery_on: input.requested_delivery_on,
+        spec_note: input.spec_note,
+        spec_snapshot: null,
+        supply_note: null,
+        order_no: null,
+        sent_at: null,
+        received_at: null,
+        completed_at: null,
+        canceled_at: null,
+        cancel_reason: null,
+        lock_version: 1,
+        created_at: now,
+        updated_at: now,
+      };
+      t.orders.push(order);
+      for (let seq = 1; seq <= input.unit_count; seq++) t.units.push(newUnit(order, seq));
+      return order.id;
+    });
+  }
+  async updateManufacturingOrder(actor: SessionUser, orderId: string, input: ManufacturingOrderInput, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const order = this.orderOf(db, orderId);
+      const access = accessOf(db, actor, order.quote_request_id);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('製造依頼を変更できるのは本部と担当代理店だけです');
+      if (order.lock_version !== expectedLockVersion) throw locked('他の画面で製造依頼が更新されています。再読み込みしてください');
+      if (order.status === 'canceled') throw locked('取り消した製造依頼は変更できません');
+      const t = tables(db);
+      if (order.status === 'draft') {
+        if (input.unit_count !== order.unit_count) {
+          t.units = (t.units ?? []).filter((u) => u.order_id !== order.id);
+          for (let seq = 1; seq <= input.unit_count; seq++) t.units.push(newUnit(order, seq));
+        }
+        order.unit_count = input.unit_count;
+        order.requested_delivery_on = input.requested_delivery_on;
+        order.spec_note = input.spec_note;
+        if (access === 'admin') order.supply_note = input.supply_note;
+      } else {
+        if (access !== 'admin') throw locked('送った製造依頼は変更できません（本部の供給手配のメモだけ変更できます）');
+        order.supply_note = input.supply_note;
+      }
+      order.lock_version += 1;
+      order.updated_at = nowIso();
+      return order.lock_version;
+    });
+  }
+  async sendManufacturingOrder(actor: SessionUser, orderId: string, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const order = this.orderOf(db, orderId);
+      const access = accessOf(db, actor, order.quote_request_id);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('製造依頼を送れるのは本部と担当代理店だけです');
+      if (order.lock_version !== expectedLockVersion) throw locked('他の画面で製造依頼が更新されています。再読み込みしてください');
+      if (order.status !== 'draft') throw locked('この製造依頼はすでに送っています');
+      const manufacturer = tables(db).workflows.find((w) => w.quote_request_id === order.quote_request_id)?.manufacturer_id ?? null;
+      if (!manufacturer) throw locked('先に本部が技術検討・製造の担当（総代理店）を決めてください');
+      const quote = db.quotes.find((q) => q.id === order.quote_id);
+      order.spec_snapshot = {
+        quote_no: quote?.quote_no ?? '',
+        revision: quote?.revision ?? null,
+        base_model_name: quote?.base_model_name ?? '',
+        spec_code: quote?.spec_code ?? null,
+        finish_level: quote?.finish_level ?? null,
+        // 品名・数量だけ。価格は写さない
+        items: db.quoteItems
+          .filter((i) => i.quote_id === order.quote_id)
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          .map((i) => ({ kind: i.kind, name: i.name, quantity: i.quantity, unit: (i as { unit?: string | null }).unit ?? null })),
+      };
+      order.status = 'sent';
+      order.manufacturer_id = manufacturer;
+      order.sent_at = nowIso();
+      order.lock_version += 1;
+      order.updated_at = nowIso();
+      notify(db, { recipient_id: manufacturer, audience: 'dealer', kind: 'manufacturing_order_sent', title: '製造依頼が届きました', body: '製造仕様・棟数・希望納期を確認し、受領してください。', link: '/admin/manufacturing' });
+      notify(db, { recipient_id: null, audience: 'admin', kind: 'manufacturing_order_sent', title: '製造依頼を総代理店へ送りました', body: '案件の「製造・施工」タブで状況を確認できます。', link: '/admin/manufacturing' });
+      return order.lock_version;
+    });
+  }
+  async setManufacturingOrderStatus(actor: SessionUser, orderId: string, status: ManufacturingOrderStatus, expectedLockVersion: number, reason: string | null) {
+    return this.mutate((db) => {
+      const order = this.orderOf(db, orderId);
+      const access = accessOf(db, actor, order.quote_request_id);
+      const allowedRole =
+        access !== null &&
+        (status === 'received' || status === 'in_production' || status === 'shipped'
+          ? access === 'admin' || access === 'manufacturer'
+          : status === 'completed'
+            ? access === 'admin' || access === 'staff'
+            : status === 'canceled'
+              ? access === 'admin'
+              : false);
+      if (!allowedRole) throw forbidden('この製造依頼をその状態にする権限がありません');
+      if (order.lock_version !== expectedLockVersion) throw locked('他の画面で製造依頼が更新されています。再読み込みしてください');
+      if (!canChangeOrderStatus(access as CaseAccess, order.status, status)) throw locked('この製造依頼はその状態に変更できません');
+      if (status === 'canceled' && !reason?.trim()) throw invalid('取り消す理由を入力してください');
+      order.status = status;
+      if (status === 'received') order.received_at = nowIso();
+      if (status === 'completed') order.completed_at = nowIso();
+      if (status === 'canceled') {
+        order.canceled_at = nowIso();
+        order.cancel_reason = (reason ?? '').trim().slice(0, 1000);
+      }
+      order.lock_version += 1;
+      order.updated_at = nowIso();
+      if (status === 'received' || status === 'shipped') {
+        const title = status === 'received' ? '総代理店が製造依頼を受領しました' : '製造した個体を出荷しました';
+        notify(db, { recipient_id: null, audience: 'admin', kind: `manufacturing_order_${status}`, title, body: '案件の「製造・施工」タブで状況を確認できます。', link: '/admin/manufacturing' });
+        const dealerId = caseDealerId(db, order.quote_request_id);
+        if (dealerId) notify(db, { recipient_id: dealerId, audience: 'dealer', kind: `manufacturing_order_${status}`, title, body: '案件の「製造・施工」タブで状況を確認できます。', link: '/admin/manufacturing' });
+      }
+      return order.lock_version;
+    });
+  }
+  async updateManufacturingUnit(actor: SessionUser, unitId: string, input: UnitUpdateInput, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const unit = (tables(db).units ?? []).find((u) => u.id === unitId);
+      if (!unit) throw notFound();
+      const access = accessOf(db, actor, unit.quote_request_id);
+      if (!access || access === 'customer') throw forbidden('個体の状態を記録できるのは本部・担当代理店・製造の担当だけです');
+      const forwardOnlyRoleOk =
+        input.status === unit.status ||
+        ((input.status === 'in_production' || input.status === 'inspected' || input.status === 'shipped')
+          ? access === 'admin' || access === 'manufacturer'
+          : input.status === 'installed' || input.status === 'handed_over'
+            ? access === 'admin' || access === 'staff'
+            : true);
+      if (!forwardOnlyRoleOk) throw forbidden('この状態を記録する権限がありません');
+      if (unit.lock_version !== expectedLockVersion) throw locked('他の画面で個体の状態が更新されています。再読み込みしてください');
+      const order = this.orderOf(db, unit.order_id);
+      if (order.status === 'draft' || order.status === 'canceled') throw locked('送っていない（または取り消した）製造依頼の個体は記録できません');
+      if (!canSetUnitStatus(access, unit.status, input.status)) throw locked('個体の状態は前へだけ進められます（戻すときは本部へご連絡ください）');
+      unit.status = input.status;
+      unit.produced_on = input.produced_on ?? unit.produced_on;
+      unit.inspected_on = input.inspected_on ?? unit.inspected_on;
+      unit.shipped_on = input.shipped_on ?? unit.shipped_on;
+      unit.installed_on = input.installed_on ?? unit.installed_on;
+      unit.handed_over_on = input.handed_over_on ?? unit.handed_over_on;
+      unit.note = input.note;
+      unit.lock_version += 1;
+      unit.updated_at = nowIso();
+      return unit.lock_version;
+    });
+  }
+
+  // ---------- 工程表 ----------
+  async listScheduleItems(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access) return [];
+      return (tables(db).scheduleItems ?? [])
+        .filter((i) => i.quote_request_id === requestId && (access !== 'customer' || i.customer_visible))
+        .sort((a, b) => a.sort_order - b.sort_order || (a.planned_start ?? '9999').localeCompare(b.planned_start ?? '9999'))
+        .map((i) => ({ ...i }));
+    });
+  }
+  async saveScheduleItem(actor: SessionUser, requestId: string, itemId: string | null, input: ScheduleItemInput, expectedLockVersion: number | null) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access || access === 'customer') throw forbidden('工程表を編集できるのは本部・担当代理店・製造の担当だけです');
+      if (access === 'manufacturer' && !MANUFACTURER_SCHEDULE_CATEGORIES.includes(input.category)) {
+        throw forbidden('製造の担当が編集できるのは、製造・品質検査・出荷の工程だけです');
+      }
+      const t = tables(db);
+      t.scheduleItems ??= [];
+      const canSetVisible = access === 'admin' || access === 'staff';
+      let becameVisible = false;
+      let row: CaseScheduleItem;
+      if (!itemId) {
+        const sort = Math.max(-1, ...t.scheduleItems.filter((i) => i.quote_request_id === requestId).map((i) => i.sort_order)) + 1;
+        row = { id: randomUUID(), quote_request_id: requestId, ...input, customer_visible: canSetVisible ? input.customer_visible : false, sort_order: sort, lock_version: 1, updated_at: nowIso() };
+        t.scheduleItems.push(row);
+        becameVisible = row.customer_visible;
+      } else {
+        const current = t.scheduleItems.find((i) => i.id === itemId);
+        if (!current || current.quote_request_id !== requestId) throw notFound();
+        if (access === 'manufacturer' && !MANUFACTURER_SCHEDULE_CATEGORIES.includes(current.category)) {
+          throw forbidden('製造の担当が編集できるのは、製造・品質検査・出荷の工程だけです');
+        }
+        if (current.lock_version !== expectedLockVersion) throw locked('他の画面で工程表が更新されています。再読み込みしてください');
+        becameVisible = canSetVisible && input.customer_visible && !current.customer_visible;
+        Object.assign(current, input, { customer_visible: canSetVisible ? input.customer_visible : current.customer_visible, lock_version: current.lock_version + 1, updated_at: nowIso() });
+        row = current;
+      }
+      if (becameVisible) {
+        const request = db.quoteRequests.find((r) => r.id === requestId);
+        if (request?.user_id) notify(db, { recipient_id: request.user_id, audience: 'customer', kind: 'case_schedule_updated', title: '工程表を更新しました', body: 'マイページの「ご依頼の進み具合」で、製造・施工の予定をご確認いただけます。', link: `/mypage/cases/${requestId}` });
+      }
+      return { id: row.id, lock_version: row.lock_version };
+    });
+  }
+  async deleteScheduleItem(actor: SessionUser, itemId: string) {
+    this.mutate((db) => {
+      const t = tables(db);
+      const item = (t.scheduleItems ?? []).find((i) => i.id === itemId);
+      const access = item ? accessOf(db, actor, item.quote_request_id) : null;
+      if (!item || !access || access === 'customer') throw notFound();
+      if (access === 'manufacturer' && !MANUFACTURER_SCHEDULE_CATEGORIES.includes(item.category)) {
+        throw forbidden('製造の担当が削除できるのは、製造・品質検査・出荷の工程だけです');
+      }
+      t.scheduleItems = (t.scheduleItems ?? []).filter((i) => i.id !== itemId);
+    });
+  }
+
+  // ---------- 施工の記録 ----------
+  async listProgressReports(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access) return [];
+      return (tables(db).progressReports ?? [])
+        .filter((r) => r.quote_request_id === requestId && (access !== 'customer' || r.customer_visible))
+        .sort((a, b) => b.reported_on.localeCompare(a.reported_on) || b.created_at.localeCompare(a.created_at))
+        .map((r) => ({ ...r }));
+    });
+  }
+  async addProgressReport(actor: SessionUser, requestId: string, input: ProgressReportInput) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access || access === 'customer') throw forbidden('施工の記録を書けるのは本部・担当代理店・製造の担当だけです');
+      if (access === 'manufacturer' && !MANUFACTURER_PROGRESS_KINDS.includes(input.kind)) {
+        throw forbidden('製造の担当が書けるのは、進み具合と技術支援の記録だけです');
+      }
+      const t = tables(db);
+      if (input.schedule_item_id && !(t.scheduleItems ?? []).some((i) => i.id === input.schedule_item_id && i.quote_request_id === requestId)) {
+        throw invalid('工程の指定が正しくありません');
+      }
+      t.progressReports ??= [];
+      const visible = (access === 'admin' || access === 'staff') && input.customer_visible;
+      const name = db.profiles.find((p) => p.id === actor.id)?.full_name?.trim();
+      const report: CaseProgressReport = {
+        id: randomUUID(),
+        quote_request_id: requestId,
+        ...input,
+        customer_visible: visible,
+        created_by: actor.id,
+        author_name: (name || (access === 'admin' ? '本部' : access === 'manufacturer' ? '総代理店' : '担当代理店')).slice(0, 100),
+        created_at: nowIso(),
+      };
+      t.progressReports.push(report);
+      if (visible) {
+        const request = db.quoteRequests.find((r) => r.id === requestId);
+        if (request?.user_id) notify(db, { recipient_id: request.user_id, audience: 'customer', kind: 'case_progress_reported', title: '施工の様子を更新しました', body: input.title, link: `/mypage/cases/${requestId}` });
+      }
+      return report.id;
+    });
+  }
+  async setProgressReportVisibility(actor: SessionUser, reportId: string, visible: boolean) {
+    this.mutate((db) => {
+      const report = (tables(db).progressReports ?? []).find((r) => r.id === reportId);
+      if (!report) throw notFound();
+      const access = accessOf(db, actor, report.quote_request_id);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('お客様へ見せるかを決められるのは本部と担当代理店だけです');
+      report.customer_visible = visible;
     });
   }
 

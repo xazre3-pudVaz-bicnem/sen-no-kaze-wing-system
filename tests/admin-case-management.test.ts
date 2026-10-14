@@ -449,12 +449,9 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('受注・契約メモ');
     expect(workspace).toContain('現在の見積書PDF');
     expect(workspace).toContain('原本保管は準備中');
-    expect(workspace).toContain('製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を記録する機能は現在準備中です。');
-    expect(workspace).toContain("['製造指示', '準備中']");
-    expect(workspace).toContain("['対象見積版', '準備中']");
-    expect(workspace).toContain("['個体ID', '未発行']");
-    expect(workspace).toContain("['製造進捗', '準備中']");
-    expect(workspace).toContain("['施工進捗', '準備中']");
+    // 製造依頼・個体・工程表・施工の記録は、下の欄（case-flow の CaseProductionPanels）で正式に記録する
+    expect(workspace).toContain('製造依頼・個体（製造・検査・出荷・設置・引渡し）・工程表・施工の記録と写真は、下の「製造依頼と個体」「工程表」「施工の記録・写真」で記録します。');
+    expect(workspace).toContain('注文番号・個体番号は採番の形式の確定待ちです。');
     expect(workspace).toContain('保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を記録する機能は現在準備中です。');
     expect(workspace).toContain("['保証状態', '準備中']");
     expect(workspace).toContain("['点検予定・履歴', '準備中']");

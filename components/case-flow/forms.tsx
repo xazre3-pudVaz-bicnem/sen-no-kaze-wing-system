@@ -3,7 +3,10 @@
 import { useActionState } from 'react';
 import {
   addCaseNoteAction,
+  addProgressReportAction,
   confirmAppointmentAction,
+  saveManufacturingOrderAction,
+  saveScheduleItemAction,
   proposeAppointmentAction,
   recordPaperContractAction,
   requestAppointmentChangeAction,
@@ -24,8 +27,15 @@ import {
   SITE_LAND_FIELDS,
   SITE_LEGAL_FIELDS,
   TECH_VERDICT_LABELS,
+  PROGRESS_KIND_LABELS,
+  SCHEDULE_CATEGORY_LABELS,
+  SCHEDULE_STATUS_LABELS,
   formatCandidate,
   type AppointmentCandidate,
+  type CaseScheduleItem,
+  type ManufacturingOrder,
+  type ProgressKind,
+  type ScheduleCategory,
   type CaseFileContext,
   type CaseNoteKind,
   type DealerProfile,
@@ -373,6 +383,195 @@ export function PaperContractForm({
       <Button type="submit" variant="secondary" size="sm" disabled={pending}>
         {pending && <Spinner />}
         書面の契約を記録する
+      </Button>
+    </form>
+  );
+}
+
+// ---------- 製造依頼（フェーズ11） ----------
+
+export function ManufacturingOrderForm({
+  quoteId,
+  requestId,
+  order,
+  canEditSupply,
+  today,
+}: {
+  quoteId: string;
+  requestId: string;
+  order: ManufacturingOrder | null;
+  /** 本部だけ：基幹資材の供給手配のメモ */
+  canEditSupply: boolean;
+  today: string;
+}) {
+  const [state, action, pending] = useActionState(saveManufacturingOrderAction, initial);
+  const draft = !order || order.status === 'draft';
+  return (
+    <form action={action} className="space-y-3" data-testid="manufacturing-order-form">
+      <input type="hidden" name="quote_id" value={quoteId} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <input type="hidden" name="order_id" value={order?.id ?? ''} />
+      <input type="hidden" name="expected_lock_version" value={order?.lock_version ?? ''} />
+      {!draft && <input type="hidden" name="unit_count" value={order?.unit_count ?? 1} />}
+      <Result state={state} />
+      {draft && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="棟数" htmlFor={`unit-count-${requestId}`}>
+            <Input id={`unit-count-${requestId}`} name="unit_count" type="number" min={1} max={50} defaultValue={order?.unit_count ?? 1} required />
+          </Field>
+          <Field label="希望納期" htmlFor={`delivery-${requestId}`}>
+            <Input id={`delivery-${requestId}`} name="requested_delivery_on" type="date" min={today} defaultValue={order?.requested_delivery_on ?? ''} />
+          </Field>
+        </div>
+      )}
+      {draft && (
+        <Field label="製造仕様のメモ（図面・仕様・数量・納期の確定内容）" htmlFor={`spec-note-${requestId}`}>
+          <Textarea id={`spec-note-${requestId}`} name="spec_note" rows={3} defaultValue={order?.spec_note ?? ''} maxLength={4000} />
+        </Field>
+      )}
+      {canEditSupply && (
+        <Field label="基幹資材の供給手配（本部のメモ）" htmlFor={`supply-note-${requestId}`}>
+          <Textarea id={`supply-note-${requestId}`} name="supply_note" rows={2} defaultValue={order?.supply_note ?? ''} maxLength={2000} />
+        </Field>
+      )}
+      {(draft || canEditSupply) && (
+        <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+          {pending && <Spinner />}
+          {order ? '製造依頼を保存' : '製造依頼を作る'}
+        </Button>
+      )}
+    </form>
+  );
+}
+
+// ---------- 工程表（フェーズ12） ----------
+
+export function ScheduleItemForm({
+  quoteId,
+  requestId,
+  item,
+  categories,
+  canSetVisible,
+}: {
+  quoteId: string;
+  requestId: string;
+  item: CaseScheduleItem | null;
+  categories: ScheduleCategory[];
+  canSetVisible: boolean;
+}) {
+  const [state, action, pending] = useActionState(saveScheduleItemAction, initial);
+  const key = item?.id ?? `new-${requestId}`;
+  return (
+    <form action={action} className="space-y-2" data-testid={item ? 'schedule-item-edit-form' : 'schedule-item-form'}>
+      <input type="hidden" name="quote_id" value={quoteId} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <input type="hidden" name="item_id" value={item?.id ?? ''} />
+      <input type="hidden" name="expected_lock_version" value={item?.lock_version ?? ''} />
+      <Result state={state} />
+      <div className="grid gap-2 sm:grid-cols-[10rem_1fr_9rem]">
+        <Select name="category" defaultValue={item?.category ?? categories[0]} aria-label="工程の種類">
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {SCHEDULE_CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </Select>
+        <Input name="title" defaultValue={item?.title ?? ''} placeholder="工程名（例：基礎工事）" required maxLength={100} aria-label="工程名" />
+        <Select name="status" defaultValue={item?.status ?? 'planned'} aria-label="工程の状態">
+          {(Object.keys(SCHEDULE_STATUS_LABELS) as (keyof typeof SCHEDULE_STATUS_LABELS)[]).map((status) => (
+            <option key={status} value={status}>
+              {SCHEDULE_STATUS_LABELS[status]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label className="text-[0.65rem] text-muted">
+          予定の開始
+          <Input type="date" name="planned_start" defaultValue={item?.planned_start ?? ''} />
+        </label>
+        <label className="text-[0.65rem] text-muted">
+          予定の終了
+          <Input type="date" name="planned_end" defaultValue={item?.planned_end ?? ''} />
+        </label>
+        <label className="text-[0.65rem] text-muted">
+          実績の開始
+          <Input type="date" name="actual_start" defaultValue={item?.actual_start ?? ''} />
+        </label>
+        <label className="text-[0.65rem] text-muted">
+          実績の終了
+          <Input type="date" name="actual_end" defaultValue={item?.actual_end ?? ''} />
+        </label>
+      </div>
+      <Input name="note" defaultValue={item?.note ?? ''} placeholder="メモ（お客様に見せる項目では、お客様にも表示されます）" maxLength={1000} aria-label="メモ" />
+      {canSetVisible && (
+        <label className="flex items-center gap-2 text-xs text-ink-soft">
+          <input type="checkbox" name="customer_visible" defaultChecked={item?.customer_visible ?? false} />
+          お客様のマイページの工程表に表示する
+        </label>
+      )}
+      <Button type="submit" variant="secondary" size="sm" disabled={pending} data-key={key}>
+        {pending && <Spinner />}
+        {item ? '保存' : '工程を追加'}
+      </Button>
+    </form>
+  );
+}
+
+// ---------- 施工の記録（フェーズ13） ----------
+
+export function ProgressReportForm({
+  quoteId,
+  requestId,
+  kinds,
+  scheduleItems,
+  canSetVisible,
+  today,
+}: {
+  quoteId: string;
+  requestId: string;
+  kinds: ProgressKind[];
+  scheduleItems: { id: string; label: string }[];
+  canSetVisible: boolean;
+  today: string;
+}) {
+  const [state, action, pending] = useActionState(addProgressReportAction, initial);
+  return (
+    <form action={action} className="space-y-2" data-testid="progress-report-form">
+      <input type="hidden" name="quote_id" value={quoteId} />
+      <input type="hidden" name="request_id" value={requestId} />
+      <Result state={state} />
+      <div className="grid gap-2 sm:grid-cols-[9rem_1fr_10rem]">
+        <Select name="kind" defaultValue={kinds[0]} aria-label="記録の種類">
+          {kinds.map((kind) => (
+            <option key={kind} value={kind}>
+              {PROGRESS_KIND_LABELS[kind]}
+            </option>
+          ))}
+        </Select>
+        <Input name="title" placeholder="見出し（例：基礎工事が完了しました）" required maxLength={100} aria-label="見出し" />
+        <Input name="reported_on" type="date" max={today} defaultValue={today} aria-label="記録日" />
+      </div>
+      {scheduleItems.length > 0 && (
+        <Select name="schedule_item_id" defaultValue="" aria-label="工程">
+          <option value="">工程を指定しない</option>
+          {scheduleItems.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </Select>
+      )}
+      <Textarea name="body" rows={3} maxLength={4000} placeholder="内容（搬入・設置・基礎・給排水・電気の進み具合、検査の結果など）" aria-label="内容" />
+      {canSetVisible && (
+        <label className="flex items-center gap-2 text-xs text-ink-soft">
+          <input type="checkbox" name="customer_visible" />
+          お客様のマイページの「施工の様子」に表示する
+        </label>
+      )}
+      <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+        {pending && <Spinner />}
+        記録する
       </Button>
     </form>
   );

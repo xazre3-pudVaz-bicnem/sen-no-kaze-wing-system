@@ -1238,26 +1238,12 @@ export async function CaseWorkspace({
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-production-future">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold">正式な工程管理</h3>
-              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">準備中</span>
+              <span className="rounded-full bg-sand px-2 py-0.5 text-[0.65rem] font-semibold text-muted">下の欄で記録</span>
             </div>
             <p className="mt-2 text-sm leading-6 text-ink-soft">
-              製造開始日、製造完了日、製造個体番号、搬入予定日、施工予定日、担当組織・担当者、各工程の進捗を記録する機能は現在準備中です。
-              見積に項目があることを、製造済み・搬入済み・施工済みとは扱いません。
+              製造依頼・個体（製造・検査・出荷・設置・引渡し）・工程表・施工の記録と写真は、下の「製造依頼と個体」「工程表」「施工の記録・写真」で記録します。
+              見積に項目があることを、製造済み・搬入済み・施工済みとは扱いません。注文番号・個体番号は採番の形式の確定待ちです。
             </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              {[
-                ['製造指示', '準備中'],
-                ['対象見積版', '準備中'],
-                ['個体ID', '未発行'],
-                ['製造進捗', '準備中'],
-                ['施工進捗', '準備中'],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
-                  <p className="text-xs font-semibold text-muted">{label}</p>
-                  <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
-                </div>
-              ))}
-            </div>
           </section>
         </section>
       )}

@@ -200,6 +200,9 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
           <Link href="/admin/dealers" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
             代理店の紹介ページ
           </Link>
+          <Link href="/admin/manufacturing" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            製造の進み具合
+          </Link>
         </p>
       </div>
       {canCreateQuote && (

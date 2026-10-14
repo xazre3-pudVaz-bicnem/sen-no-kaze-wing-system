@@ -24,6 +24,10 @@ const runtimeMjs = fs.readFileSync(
   path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-delete.mjs'),
   'utf8'
 );
+const arrayRaceMjs = fs.readFileSync(
+  path.resolve(process.cwd(), 'scripts/db-rehearsal/runtime-unused-published-option-array-race.mjs'),
+  'utf8'
+);
 
 describe('登録済み未使用商品の安全削除', () => {
   it('DB RPCが認証・商品編集権限・published限定・短いlock timeoutを強制する', () => {
@@ -63,6 +67,7 @@ describe('登録済み未使用商品の安全削除', () => {
       'public.configuration_items',
       'public.configuration_snapshots',
       'public.estimate_templates',
+      'public.legacy_migration_financial_snapshots',
       'public.quote_internal_snapshots',
       'public.option_variant_groups',
       'public.option_variant_choices',
@@ -72,15 +77,23 @@ describe('登録済み未使用商品の安全削除', () => {
   });
 
   it('非FK参照は保存時にも存在検証し、DELETE後のstale writeをfail-closedにする', () => {
-    expect(migration).toContain('validate_base_model_preset_option_refs');
-    expect(migration).toContain('base_models_preset_option_refs_validate');
-    expect(migration).toContain('validate_estimate_template_baseline_option_refs');
-    expect(migration).toContain('estimate_templates_baseline_option_refs_validate');
-    expect(migration).toContain('validate_configuration_snapshot_option_refs');
-    expect(migration).toContain('configuration_snapshots_option_refs_validate');
-    expect(migration).toContain('validate_quote_internal_snapshot_option_refs');
-    expect(migration).toContain('quote_internal_snapshots_option_refs_validate');
-    expect(migration).toContain('安全確認ができないため削除を停止しました');
+    for (const marker of [
+      'validate_base_model_preset_option_refs',
+      'base_models_preset_option_refs_validate',
+      'validate_estimate_template_baseline_option_refs',
+      'estimate_templates_baseline_option_refs_validate',
+      'validate_configuration_item_variant_refs',
+      'configuration_items_variant_refs_validate',
+      'validate_configuration_snapshot_option_refs',
+      'configuration_snapshots_option_refs_validate',
+      'validate_quote_internal_snapshot_option_refs',
+      'quote_internal_snapshots_option_refs_validate',
+      'validate_legacy_migration_snapshot_option_refs',
+      'legacy_migration_snapshot_option_refs_validate',
+      '安全確認ができないため削除を停止しました',
+    ]) {
+      expect(migration).toContain(marker);
+    }
   });
 
   it('publishedの通常DELETEを閉じ、service_roleのRLS迂回とapplication TRUNCATEも遮断する', () => {
@@ -137,5 +150,14 @@ describe('登録済み未使用商品の安全削除', () => {
     expect(runtimeMjs).toContain("moveResult.code === '23503'");
     expect(runtimeMjs).toContain("timeoutResult.code === '55P03'");
     expect(runtimeMjs).toContain("new pg.Client({ connectionString })");
+  });
+
+  it('DB Rehearsalでvariant_choice_idsへのstale write raceも実動作確認する', () => {
+    expect(dbCheck).toContain('runtimeUnusedPublishedOptionArrayRace({ connectionString: url })');
+    expect(arrayRaceMjs).toContain('variant_choice_ids書込みはsafe-delete中に待機する');
+    expect(arrayRaceMjs).toContain("'ShareLock'");
+    expect(arrayRaceMjs).toContain("'RowExclusiveLock'");
+    expect(arrayRaceMjs).toContain("writeResult.code === 'P0001'");
+    expect(arrayRaceMjs).toContain('削除後にdangling Choice UUIDは残らない');
   });
 });

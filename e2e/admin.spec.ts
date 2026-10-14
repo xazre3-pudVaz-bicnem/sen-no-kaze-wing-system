@@ -1,9 +1,29 @@
-import { expect, test } from '@playwright/test';
-import { login, logout, near, openFreshSimulator, pickOption, readTotal, register, uniqueEmail, withExpenseAndTax } from './helpers';
+import { expect, test, type Page } from '@playwright/test';
+import {
+  applyRegisteredOptionPrice,
+  login,
+  logout,
+  near,
+  openFreshSimulator,
+  pickOption,
+  readTotal,
+  register,
+  uniqueEmail,
+  withExpenseAndTax,
+} from './helpers';
 
 const ADMIN_EMAIL = 'admin@example.com'; // playwright.config の WING_LOCAL_ADMIN_EMAILS
 const UB_ID = '30000000-0000-4000-8000-000000000001'; // ユニットバス 1216
 const MODEL_ID = '10000000-0000-4000-8000-000000000001';
+const COMPLETION_IMAGES = `/admin/preview-rules?model=${MODEL_ID}&section=completion`;
+
+/** シミュレーター画像の「画像の不足チェック」に出ている件数（Wing） */
+async function missingPreviewCount(page: Page): Promise<number> {
+  await page.goto(COMPLETION_IMAGES);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('シミュレーター画像');
+  const text = (await page.locator('main').textContent()) ?? '';
+  return Number(text.match(/システム上の画像不足候補：(\d+)件/)?.[1] ?? 0);
+}
 
 test.describe('管理者フロー', () => {
   test('11-12. 管理者が価格と画像を変更でき、発行済み見積の金額は変わらない', async ({ page }) => {
@@ -38,29 +58,26 @@ test.describe('管理者フロー', () => {
     if (!loggedIn) {
       await register(page, ADMIN_EMAIL, '/admin', '管理者');
     }
+    // 管理画面の入口は案件管理
     await page.goto('/admin');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ダッシュボード');
-    await expect(page.getByText(/プレビュー画像が不足している組み合わせ/)).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('案件管理');
 
-    // 価格変更: ユニットバス +20,000
+    // 価格変更: ユニットバス +20,000（登録済みの商品は、変更内容を確認してから反映する）
     await page.goto(`/admin/options/${UB_ID}`);
-    await expect(page.getByTestId('option-name')).toHaveValue('ユニットバス 1216（浴槽付）');
-    const originalPrice = Number(await page.getByTestId('option-price').inputValue());
-    await page.getByTestId('option-price').fill(String(originalPrice + 20_000));
-    await page.getByTestId('admin-submit').click();
-    await expect(page.getByText('保存しました')).toBeVisible();
+    await expect(page.locator('#registered-name')).toHaveValue('ユニットバス 1216（浴槽付）');
+    const originalPrice = Number(await page.locator('#registered-price').inputValue());
+    await applyRegisteredOptionPrice(page, originalPrice + 20_000);
 
     // 画像変更: シャワー＋洗面（未登録の組み合わせ）の水まわり画像を登録 → 不足件数が減る
-    await page.goto('/admin/preview-rules');
-    const missingBefore = await page.getByTestId('missing-combos').first().locator('li').count();
+    const missingBefore = await missingPreviewCount(page);
+    expect(missingBefore).toBeGreaterThan(0);
     await page.goto(`/admin/preview-rules/new?model=${MODEL_ID}&view=water&keys=shower,washbasin`);
-    await page.getByTestId('preview-rule-url').fill('/images/interior/washroom.webp');
     await page.locator('#pr-alt').fill('テスト用：シャワー＋洗面器の水まわり');
+    await page.getByText('詳細設定', { exact: true }).click();
+    await page.getByTestId('preview-rule-url').fill('/images/interior/washroom.webp');
     await page.getByTestId('admin-submit').click();
     await expect(page.getByText('保存しました')).toBeVisible();
-    await page.goto('/admin/preview-rules');
-    const missingAfter = await page.getByTestId('missing-combos').first().locator('li').count();
-    expect(missingAfter).toBe(missingBefore - 1);
+    expect(await missingPreviewCount(page)).toBe(missingBefore - 1);
 
     // 発行済み見積は変わらない（管理画面・PDF）
     await page.goto(`/admin/quotes/${quoteId}`);
@@ -87,13 +104,12 @@ test.describe('管理者フロー', () => {
     // 後始末: 価格を元に戻し、テスト用の画像ルールを削除
     await logout(page);
     await login(page, ADMIN_EMAIL, `/admin/options/${UB_ID}`);
-    await page.getByTestId('option-price').fill(String(originalPrice));
-    await page.getByTestId('admin-submit').click();
-    await expect(page.getByText('保存しました')).toBeVisible();
+    await applyRegisteredOptionPrice(page, originalPrice);
     page.on('dialog', (d) => d.accept());
-    await page.goto('/admin/preview-rules');
+    await page.goto(COMPLETION_IMAGES);
     const testCard = page.getByTestId('preview-rule-card').filter({ has: page.locator('img[alt*="テスト用"]') }).first();
-    await testCard.getByRole('button', { name: '削除' }).click();
+    await testCard.getByText('詳細・その他の操作').click();
+    await testCard.getByRole('button', { name: 'この画像を削除' }).click();
     await expect(page).toHaveURL(/deleted=1/);
   });
 });

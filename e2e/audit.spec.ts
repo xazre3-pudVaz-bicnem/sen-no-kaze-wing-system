@@ -2,8 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   ADMIN_EMAIL as ADMIN,
   DEALER_EMAIL as DEALER,
-  ensureAccount,
-  ensureDealerFreeProduct,
   logout,
   register,
   requestQuoteAsCustomer,
@@ -178,8 +176,7 @@ test.describe('全画面の点検', () => {
   test('管理画面（代理店）', async ({ browser }) => {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
-    await ensureAccount(page, DEALER, '代理店 担当');
-    await ensureDealerFreeProduct(page);
+    await signIn(page, DEALER, '/admin', '代理店 担当');
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       for (const p of ['/admin', '/admin/notifications', '/admin/ledger', '/admin/free-products', '/admin/quotes', '/admin/manual']) {

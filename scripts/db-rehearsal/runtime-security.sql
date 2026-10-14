@@ -130,6 +130,13 @@ declare
   -- 案件の進行（フェーズ11〜13）の検査用
   v_mo_text text;
   v_unit_text text;
+  -- 案件の進行（フェーズ14〜15）の検査用
+  v_ho_text text;
+  v_punch_text text;
+  v_doc_text text;
+  v_cert_text text;
+  v_after_text text;
+  v_unit2_text text;
   -- 案件の進行（フェーズ4〜7）の検査用
   v_cf_appt text;
   v_cf_file_cust text;
@@ -1181,6 +1188,143 @@ begin
       (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L)::text $q$, r_pc)) !~ '(spec_snapshot|supply_note|spec_note)')::text);
     perform pg_temp.expect_denied('21-18 製造依頼の表は直接書き換えられない', '42501',
       pg_temp.run_as('authenticated', u_dealer1, format($q$ update public.manufacturing_orders set status = 'completed' where id::text = %L returning 'updated' $q$, v_mo_text)));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 22. 完了確認・是正・引渡し（フェーズ14）、アフター・災害時提供の意思・全国ストック台帳（フェーズ15）
+  --     21 で 1 棟目を設置済みにした案件（r_pc。担当は代理店1、製造の担当は総代理店）を使う
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.start_handover_inspection(uuid, jsonb, integer)') is not null and v_unit_text is not null then
+    v_unit2_text := (select u.id::text from public.manufacturing_units u where u.order_id::text = v_mo_text and u.seq = 2);
+    perform pg_temp.expect_denied('22-1 お客様は完成確認を始められない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text), null)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-2 関係の無い代理店は完成確認を始められない', '42501',
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text), null)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-3 契約が無い案件は完成確認を始められない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text), null)::text $q$, r_cr)));
+    v_ho_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text, 'inspection_summary', '外装・設備の動作を確認'), null)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-4 担当代理店が完成確認を始めると、お客様へ確認をお願いする', '1/inspecting/pending/true',
+      v_ho_text || '/' || coalesce((select h.status || '/' || h.customer_confirmation from public.case_handovers h where h.quote_request_id = r_pc), '(なし)') || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'handover_inspection')::text);
+    perform pg_temp.expect_denied('22-5 担当代理店はお客様の代わりに回答できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.confirm_handover(%L, 'ok', null, 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-6 気になる点は 1〜20 件', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'issues', '[]'::jsonb, 1)::text $q$, r_pc)));
+    v_ho_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'issues', '["玄関ドアの閉まりが固い"]'::jsonb, 1)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-7 お客様の指摘は是正事項になり、担当へ知らせる', '2/correcting/issues/1/true',
+      v_ho_text || '/' || coalesce((select h.status || '/' || h.customer_confirmation from public.case_handovers h where h.quote_request_id = r_pc), '(なし)') || '/' ||
+      (select count(*)::text from public.case_punch_items p where p.quote_request_id = r_pc and p.raised_by_customer and p.status = 'open') || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'handover_confirmed')::text);
+    perform pg_temp.expect_denied('22-8 是正の確認が済むまで「問題なし」にできない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'ok', null, 2)::text $q$, r_pc)));
+    v_punch_text := (select p.id::text from public.case_punch_items p where p.quote_request_id = r_pc limit 1);
+    perform pg_temp.expect_denied('22-9 お客様は是正済みにできない（担当）', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_punch_item_status(%L, 'fixed', 1)::text $q$, v_punch_text)));
+    perform pg_temp.expect_denied('22-10 製造の担当は是正の確認ができない', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.set_punch_item_status(%L, 'verified', 1)::text $q$, v_punch_text)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_punch_item_status(%L, 'fixed', 1)::text $q$, v_punch_text));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_punch_item_status(%L, 'verified', 2)::text $q$, v_punch_text));
+    v_ho_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'ok', null, 2)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-11 担当が是正し、お客様が確認してから「問題なし」にできる', 'verified/true/3/ready/mypage',
+      (select p.status from public.case_punch_items p where p.id::text = v_punch_text) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'punch_item_fixed')::text || '/' ||
+      v_ho_text || '/' || coalesce((select h.status || '/' || h.customer_confirmed_via from public.case_handovers h where h.quote_request_id = r_pc), '(なし)'));
+
+    -- 工事完了承諾書（写し）と引渡し
+    v_doc_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.register_case_file(%L, '{"context":"document","file_name":"d.pdf","content_type":"application/pdf","size_bytes":10}'::jsonb) ->> 'id' $q$, r_pc));
+    perform pg_temp.expect_denied('22-12 承諾書には「完了確認・引渡し」の資料だけを使える', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.record_completion_certificate(%L, %L, current_date, 3)::text $q$, r_pc, v_doc_text)));
+    v_cert_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.register_case_file(%L, '{"context":"handover","file_name":"c.pdf","content_type":"application/pdf","size_bytes":10}'::jsonb) ->> 'id' $q$, r_pc));
+    perform pg_temp.expect_denied('22-13 お客様は承諾書を記録できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.record_completion_certificate(%L, %L, current_date, 3)::text $q$, r_pc, v_cert_text)));
+    perform pg_temp.expect_denied('22-14 承諾書の記録の前は引渡し完了にできない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.complete_handover(%L, current_date, 3)::text $q$, r_pc)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.record_completion_certificate(%L, %L, current_date, 3)::text $q$, r_pc, v_cert_text));
+    perform pg_temp.expect_denied('22-15 承諾書として記録した写しは、本部でも削除できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.delete_case_file(%L)::text $q$, v_cert_text)));
+    perform pg_temp.expect_denied('22-16 引渡し日は今日以前', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.complete_handover(%L, current_date + 1, 4)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-17 お客様は引渡し完了にできない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.complete_handover(%L, current_date, 4)::text $q$, r_pc)));
+    v_ho_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.complete_handover(%L, current_date, 4)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-18 引渡し完了で、設置済みの個体だけ引渡し済みになり、お客様へ知らせる', '5/handed_over/handed_over/planned/true',
+      v_ho_text || '/' || coalesce((select h.status from public.case_handovers h where h.quote_request_id = r_pc), '(なし)') || '/' ||
+      (select u.status from public.manufacturing_units u where u.id::text = v_unit_text) || '/' ||
+      (select u.status from public.manufacturing_units u where u.id::text = v_unit2_text) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'handover_completed')::text);
+    perform pg_temp.expect_denied('22-19 引渡しの後は是正事項を足せない（不具合はアフターで受ける）', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.add_punch_item(%L, 'x', 5)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-20 完了確認の表は直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ update public.case_handovers set status = 'inspecting' where quote_request_id = %L returning 'updated' $q$, r_pc)));
+
+    -- アフター
+    perform pg_temp.expect_denied('22-21 引渡しの前はアフターを依頼できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_after_service_request(%L, '{"kind":"repair","title":"x"}'::jsonb)::text $q$, r_cr)));
+    perform pg_temp.expect_denied('22-22 製造の担当はアフターを登録できない', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.create_after_service_request(%L, '{"kind":"repair","title":"x"}'::jsonb)::text $q$, r_pc)));
+    v_after_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_after_service_request(%L, '{"kind":"repair","title":"窓の鍵がかかりにくい"}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-23 お客様が依頼すると担当へ知らせる。製造の担当には回されるまで見えない', '0/1/true',
+      pg_temp.run_as('authenticated', u_master, format($q$ select count(*)::text from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'after_service_requested')::text);
+    perform pg_temp.expect_denied('22-24 回されていないアフターは、製造の担当には存在も分からない', 'P0002',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_after_service_request(%L, '{"status":"resolved"}'::jsonb, 1)::text $q$, v_after_text)));
+    perform pg_temp.expect_denied('22-25 お客様はアフターの状態を変えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.update_after_service_request(%L, '{"status":"resolved"}'::jsonb, 1)::text $q$, v_after_text)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_after_service_request(%L, '{"status":"escalated","response":"製造元で確認します"}'::jsonb, 1)::text $q$, v_after_text));
+    perform pg_temp.expect_eq('22-26 担当代理店が製造の担当へ回すと、製造の担当に見え、知らせる', 'escalated/1/true',
+      (select a.status from public.after_service_requests a where a.id::text = v_after_text) || '/' ||
+      pg_temp.run_as('authenticated', u_master, format($q$ select count(*)::text from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_master and n.kind = 'after_service_escalated')::text);
+    perform pg_temp.expect_denied('22-27 製造の担当は回答と完了だけ（対応中に戻せない）', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_after_service_request(%L, '{"status":"in_progress"}'::jsonb, 2)::text $q$, v_after_text)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.update_after_service_request(%L, '{"status":"resolved","response":"部品を交換しました"}'::jsonb, 2)::text $q$, v_after_text));
+    perform pg_temp.expect_eq('22-28 製造の担当が完了にすると、お客様に回答が見え、知らせる', 'resolved/部品を交換しました/true',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select status || '/' || response from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'after_service_resolved')::text);
+    perform pg_temp.expect_denied('22-29 完了したアフターは戻せない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_after_service_request(%L, '{"status":"open"}'::jsonb, 3)::text $q$, v_after_text)));
+
+    -- 災害時提供の意思・全国ストック台帳
+    perform pg_temp.expect_denied('22-30 承諾書の文面が無い間は、意思を設定できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'accepted', null, 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-31 承諾書の文面を登録できるのは本部だけ', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, $q$ select public.publish_disaster_consent_text('承諾書', '本文')::text $q$));
+    v_ho_text := pg_temp.run_as('authenticated', u_admin, $q$ select public.publish_disaster_consent_text('災害時提供の承諾書', '（検査用の文面）')::text $q$);
+    perform pg_temp.expect_eq('22-32 本部が文面を第 1 版として登録し、監査ログに残る', '1/true',
+      v_ho_text || '/' || exists (select 1 from public.audit_logs a where a.entity = 'disaster_consent_texts')::text);
+    perform pg_temp.expect_denied('22-33 担当代理店はお客様の代わりに意思を設定できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_disaster_consent(%L, 'accepted', null, 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-34 読んだ文面が最新の版でなければ設定できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'accepted', null, 2)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-35 条件付き承諾には条件が要る', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'conditional', ' ', 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-36 お客様の承諾が無い個体は台帳に「登録中」として載せられない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered"}'::jsonb, null)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('22-37 全国ストック台帳を編集できるのは本部だけ', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"suspended"}'::jsonb, null)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('22-38 引渡し済みでない個体は台帳に載せられない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"suspended"}'::jsonb, null)::text $q$, v_unit2_text)));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'conditional', '連絡がついてから', 1)::text $q$, r_pc));
+    v_ho_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered","supply_72h":true}'::jsonb, null)::text $q$, v_unit_text));
+    perform pg_temp.expect_eq('22-39 条件付き承諾の個体は本部が登録でき、台帳は本部だけ・意思は製造の担当に見えない', '1/registered/0/0/conditional',
+      v_ho_text || '/' || coalesce((select e.registration_status from public.stock_ledger_entries e where e.unit_id::text = v_unit_text), '(なし)') || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, $q$ select count(*)::text from public.stock_ledger_entries $q$) || '/' ||
+      pg_temp.run_as('authenticated', u_master, format($q$ select count(*)::text from public.disaster_consents where quote_request_id = %L $q$, r_pc)) || '/' ||
+      (select c.decision from public.disaster_consents c where c.quote_request_id = r_pc order by c.created_at desc, c.id desc limit 1));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'declined', '無視される', 1)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-40 不承諾にすると台帳の登録が止まり、意思の履歴は残る', 'suspended/declined//2',
+      coalesce((select e.registration_status from public.stock_ledger_entries e where e.unit_id::text = v_unit_text), '(なし)') || '/' ||
+      (select c.decision || '/' || coalesce(c.conditions, '') from public.disaster_consents c where c.quote_request_id = r_pc order by c.created_at desc, c.id desc limit 1) || '/' ||
+      (select count(*)::text from public.disaster_consents c where c.quote_request_id = r_pc));
+    perform pg_temp.expect_denied('22-41 不承諾の個体は「登録中」に戻せない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered"}'::jsonb, 2)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('22-42 意思の表は直接書き込めない（RPC だけ）', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ insert into public.disaster_consents (quote_request_id, user_id, text_id, decision) select %L, %L, id, 'accepted' from public.disaster_consent_texts limit 1 returning 'inserted' $q$, r_pc, u_cust_x)));
+    perform pg_temp.expect_eq('22-43 担当代理店は契約の中身を読めないが、進み具合で締結済みかは分かる。お客様には引渡しの状態が返る', '0/true/handed_over',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.contracts where quote_request_id = %L $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.get_case_progress(%L) ->> 'contract_signed' $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L) ->> 'handover_status' $q$, r_pc)));
   end if;
 end
 $test$;

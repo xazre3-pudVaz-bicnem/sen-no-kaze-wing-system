@@ -72,16 +72,18 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
   const canOperate = access === 'admin' || access === 'staff';
   const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
 
-  const [order, workflow, contracts, scheduleItems, reports, files] = await Promise.all([
+  const [order, workflow, contracts, progress, scheduleItems, reports, files] = await Promise.all([
     caseFlow.getManufacturingOrder(actor, requestId),
     caseFlow.getCaseWorkflow(actor, requestId),
     store.listElectronicContracts(requestId, actor),
+    caseFlow.getCaseProgress(actor, requestId),
     caseFlow.listScheduleItems(actor, requestId),
     caseFlow.listProgressReports(actor, requestId),
     caseFlow.listCaseFiles(actor, requestId),
   ]);
   const units = order ? await caseFlow.listManufacturingUnits(actor, order.id) : [];
-  const hasSignedContract = contracts.some((c) => c.status === 'signed');
+  // 契約の表は本部とお客様しか読めないため、担当代理店は進み具合の「締結済み」で判定する
+  const hasSignedContract = Boolean(progress?.contract_signed) || contracts.some((c) => c.status === 'signed');
   const scheduleCategories: ScheduleCategory[] = access === 'manufacturer' ? MANUFACTURER_SCHEDULE_CATEGORIES : [...SCHEDULE_CATEGORIES];
   const reportKinds: ProgressKind[] = access === 'manufacturer' ? MANUFACTURER_PROGRESS_KINDS : ['progress', 'completion', 'inspection', 'support'];
   const back = `/admin/quotes/${quoteId}?tab=production`;

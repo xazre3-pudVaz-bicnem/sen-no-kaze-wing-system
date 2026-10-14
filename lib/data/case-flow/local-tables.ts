@@ -1,16 +1,22 @@
 import type {
+  AfterServiceRequest,
   CaseAppointment,
   CaseFile,
+  CaseHandover,
   CaseNote,
   CaseProgressReport,
+  CasePunchItem,
   CaseScheduleItem,
   CaseWorkflow,
   DealerProfile,
+  DisasterConsent,
+  DisasterConsentText,
   ManufacturingOrder,
   ManufacturingUnit,
   QuoteChangeRequest,
   QuoteRequestPreferences,
   SiteSurvey,
+  StockLedgerEntry,
 } from '@/lib/domain/case-flow';
 
 /** ローカル検証モードの JSON DB（.wing-local/db.json）の caseFlow。DB の 20261013220000 以降の表に対応する */
@@ -29,6 +35,13 @@ export interface LocalCaseFlowTables {
   units?: ManufacturingUnit[];
   scheduleItems?: CaseScheduleItem[];
   progressReports?: CaseProgressReport[];
+  /** 完了確認・是正・アフター・災害時提供の意思・全国ストック台帳（20261013237000） */
+  handovers?: CaseHandover[];
+  punchItems?: CasePunchItem[];
+  afterService?: AfterServiceRequest[];
+  consentTexts?: DisasterConsentText[];
+  consents?: DisasterConsent[];
+  stockLedger?: StockLedgerEntry[];
 }
 
 export function emptyCaseFlowTables(): LocalCaseFlowTables {
@@ -45,5 +58,11 @@ export function emptyCaseFlowTables(): LocalCaseFlowTables {
     units: [],
     scheduleItems: [],
     progressReports: [],
+    handovers: [],
+    punchItems: [],
+    afterService: [],
+    consentTexts: [],
+    consents: [],
+    stockLedger: [],
   };
 }

@@ -270,7 +270,8 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain("request?.case_name?.trim()");
     expect(workspace).toContain("casePlanConfiguration?.configuration.name?.trim()");
     expect(workspace).toContain('契約条件の確認');
-    expect(workspace).toContain("value: isFormalAccepted ? '記録機能は準備中' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '準備中'");
+    // 案件の流れの「契約」は、締結済みの契約（電子・書面）の記録から表示する
+    expect(workspace).toContain("value: flowSigned ? '締結済み' : isFormalAccepted ? '契約待ち' : isFormalAcceptedUnconfirmed ? '最新状態要確認' : '未契約'");
     expect(workspace).toContain('未集計');
     expect(workspace).toContain("caseStructureNote ?? '未登録'");
     expect(workspace).toContain('extractCaseUnitCount');
@@ -452,11 +453,10 @@ describe('Admin case management UI', () => {
     // 製造依頼・個体・工程表・施工の記録は、下の欄（case-flow の CaseProductionPanels）で正式に記録する
     expect(workspace).toContain('製造依頼・個体（製造・検査・出荷・設置・引渡し）・工程表・施工の記録と写真は、下の「製造依頼と個体」「工程表」「施工の記録・写真」で記録します。');
     expect(workspace).toContain('注文番号・個体番号は採番の形式の確定待ちです。');
-    expect(workspace).toContain('保証開始日・保証期限、点検予定・点検履歴、不具合・修理・問い合わせなどのアフター対応履歴を記録する機能は現在準備中です。');
-    expect(workspace).toContain("['保証状態', '準備中']");
-    expect(workspace).toContain("['点検予定・履歴', '準備中']");
-    expect(workspace).toContain("['不具合・修理履歴', '準備中']");
-    expect(workspace).toContain('現在は提供可否・供給可能棟数を判定しません。');
+    // 完成確認・是正・引渡し・アフターは、下の欄（case-flow の CaseHandoverPanels）で正式に記録する
+    expect(workspace).toContain('定期点検・問い合わせ・修理は、下の「アフター」で記録します');
+    expect(workspace).toContain('保証の期間・内容は先方の確認待ちのため、保証期限は表示しません。');
+    expect(workspace).toContain('案件の情報だけからは、提供可否・供給可能棟数を判定しません。');
   });
 
   it('shows disaster-supply prerequisites without inventing availability', () => {
@@ -466,16 +466,13 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('完成個体の在庫情報や現在地ではありません。');
     expect(workspace).toContain('供給可能棟数ではありません');
     expect(workspace).toContain('完成個体の現在地ではありません');
-    expect(workspace).toContain('提供意思は未登録');
+    expect(workspace).toContain('提供の意思は下の欄で確認');
     expect(workspace).toContain('data-testid="case-disaster-readiness"');
     expect(workspace).toContain('未登録を「提供不可」とは扱いません。');
-    expect(workspace).toContain("['災害時の提供意思', '準備中']");
-    expect(workspace).toContain("['完成個体', '準備中']");
-    expect(workspace).toContain("['現在地', '準備中']");
-    expect(workspace).toContain("['移動・運搬可否', '準備中']");
-    expect(workspace).toContain("['即時提供可否', '準備中']");
-    expect(workspace).toContain("['供給可能棟数', '準備中']");
+    // 意思はお客様がマイページで決め、供給可否は本部が全国ストック台帳で判定する（CaseDisasterPanel・/admin/stock-ledger）
+    expect(workspace).toContain('本部が「全国ストック台帳」で判定します。');
     expect(workspace).toContain('data-testid="case-disaster-future"');
+    expect(workspace).toContain('災害時パートナーの管理と、供給指揮システムとの連携は仕様が未定のため、まだ作っていません。');
     expect(workspace).toContain('現在の案件棟数や設置予定地だけから「供給可能」と判定しません。');
   });
 
@@ -485,18 +482,16 @@ describe('Admin case management UI', () => {
     expect(workspace).toContain('引渡し対象の前提');
     expect(workspace).toContain('既存情報からの参考表示');
     expect(workspace).toContain('引渡し確定情報ではありません。');
-    expect(workspace).toContain('第{quote.revision}版／引渡し用の確定は準備中');
+    expect(workspace).toContain('第{quote.revision}版／契約した版は「契約・資料」で確認');
     expect(workspace).toContain('data-testid="case-handover-readiness"');
-    expect(workspace).toContain('現在は完了確認・引渡しを記録する機能が準備中のため、未登録を「未完了」とは判定しません。');
-    expect(workspace).toContain("['完了確認', '準備中']");
-    expect(workspace).toContain("['引渡し日', '準備中']");
-    expect(workspace).toContain("['引渡し確認', '準備中']");
-    expect(workspace).toContain("['引渡し資料', '準備中']");
+    expect(workspace).toContain('記録が無い案件を「引渡し済み」とは扱いません。');
     expect(workspace).toContain('data-testid="case-aftercare-future"');
     expect(workspace).toContain('現在の見積承諾や案件メモを、引渡し済み・保証中・点検済みとは扱いません。');
-    expect(workspace).toContain("['保証状態', '準備中']");
-    expect(workspace).toContain("['点検予定・履歴', '準備中']");
-    expect(workspace).toContain("['不具合・修理履歴', '準備中']");
+    // 正式な欄（完成確認・是正・承諾書・引渡し・アフター）
+    const panels = fs.readFileSync(path.join(process.cwd(), 'components/case-flow/case-handover-panels.tsx'), 'utf8');
+    for (const label of ['完了確認・引渡し', '是正事項', '工事完了承諾書', '引渡しを完了する', 'アフター（定期点検・問い合わせ・修理）']) {
+      expect(panels).toContain(label);
+    }
   });
 
   it('shows production and installation scope only from existing quote data', () => {

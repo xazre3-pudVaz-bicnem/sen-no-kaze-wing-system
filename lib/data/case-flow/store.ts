@@ -2,19 +2,28 @@ import 'server-only';
 import type { SessionUser } from '@/lib/data/store';
 import { isLocalMode } from '@/lib/data/store';
 import type {
+  AfterServiceRequest,
+  AfterServiceRequestInput,
+  AfterServiceUpdateInput,
   CaseAccess,
   CaseAppointment,
   CaseAppointmentInput,
   CaseFile,
   CaseFileInput,
+  CaseHandover,
   CaseNote,
   CaseNoteInput,
   CaseProgress,
+  CasePunchItem,
   CaseWorkflow,
   CaseProgressReport,
   CaseScheduleItem,
   DealerProfile,
   DealerProfileInput,
+  DisasterConsent,
+  DisasterConsentInput,
+  DisasterConsentText,
+  HandoverInspectionInput,
   ManufacturingOrder,
   ManufacturingOrderInput,
   ManufacturingOrderStatus,
@@ -22,6 +31,8 @@ import type {
   PaperContractInput,
   ProgressReportInput,
   ScheduleItemInput,
+  StockLedgerEntry,
+  StockLedgerEntryInput,
   UnitUpdateInput,
   QuoteChangeRequest,
   QuoteRequestPreferences,
@@ -42,9 +53,21 @@ export type BoardManufacturingOrder = ManufacturingOrder & {
   units_installed: number;
 };
 
+/** アフターの一覧の 1 行（案件の見出しと、見ている人の関わり方付き） */
+export type BoardAfterServiceRequest = AfterServiceRequest & { case_label: string; case_quote_id: string | null; viewer_access: CaseAccess | null };
+
+/** 全国ストック台帳の 1 行（引渡し済みの個体・本部の判定・お客様の今の意思） */
+export interface StockLedgerRow {
+  unit: ManufacturingUnit;
+  entry: StockLedgerEntry | null;
+  latest_consent: DisasterConsent | null;
+  case_label: string;
+  case_quote_id: string | null;
+}
+
 /**
- * 案件の進行（フローチャート第4版 フェーズ4〜7）のデータアクセス。
- * - Supabase：読み取りは RLS（case_access）、書き込みは SECURITY DEFINER の RPC（20261013220000）
+ * 案件の進行（フローチャート第4版 フェーズ4〜15）のデータアクセス。
+ * - Supabase：読み取りは RLS（case_access）、書き込みは SECURITY DEFINER の RPC（20261013220000 以降）
  * - ローカル検証モード：同じ判定を JSON の DB で行う（開発・E2E 用）
  * 既存の DataStore（lib/data/store.ts）と同じく、両方を実装する。正本は DB の判定。
  */
@@ -123,6 +146,40 @@ export interface CaseFlowStore {
   listProgressReports(actor: SessionUser, requestId: string): Promise<CaseProgressReport[]>;
   addProgressReport(actor: SessionUser, requestId: string, input: ProgressReportInput): Promise<string>;
   setProgressReportVisibility(actor: SessionUser, reportId: string, visible: boolean): Promise<void>;
+
+  // ---- 完了確認・是正・引渡し（フェーズ14） ----
+  getHandover(actor: SessionUser, requestId: string): Promise<CaseHandover | null>;
+  listPunchItems(actor: SessionUser, requestId: string): Promise<CasePunchItem[]>;
+  /** 完成確認を始める（確認し直すときは、お客様の回答と承諾書の記録を待ちに戻す） */
+  startHandoverInspection(actor: SessionUser, requestId: string, input: HandoverInspectionInput, expectedLockVersion: number | null): Promise<number>;
+  /** お客様の回答（問題なし／気になる点。気になる点は是正事項になる） */
+  confirmHandover(actor: SessionUser, requestId: string, result: 'ok' | 'issues', issues: string[], expectedLockVersion: number): Promise<number>;
+  addPunchItem(actor: SessionUser, requestId: string, description: string, expectedLockVersion: number): Promise<string>;
+  setPunchItemStatus(actor: SessionUser, itemId: string, status: 'fixed' | 'verified', expectedLockVersion: number): Promise<number>;
+  /** 署名済みの工事完了承諾書（写し・「完了確認・引渡し」の資料）を記録する。お客様の確認（書面）として扱う */
+  recordCompletionCertificate(actor: SessionUser, requestId: string, fileId: string, signedOn: string, expectedLockVersion: number): Promise<number>;
+  /** 引渡し完了（設置済みの個体を引渡し済みにする） */
+  completeHandover(actor: SessionUser, requestId: string, handedOverOn: string, expectedLockVersion: number): Promise<number>;
+
+  // ---- アフター（フェーズ15） ----
+  listAfterServiceRequests(actor: SessionUser, requestId: string): Promise<AfterServiceRequest[]>;
+  /** 本部：すべて。担当代理店：担当の案件。総代理店：回されたもの */
+  listAfterServiceBoard(actor: SessionUser): Promise<BoardAfterServiceRequest[]>;
+  createAfterServiceRequest(actor: SessionUser, requestId: string, input: AfterServiceRequestInput): Promise<string>;
+  updateAfterServiceRequest(actor: SessionUser, id: string, input: AfterServiceUpdateInput, expectedLockVersion: number): Promise<number>;
+
+  // ---- 災害時提供の意思（フェーズ15） ----
+  /** 承諾書の文面（新しい版から） */
+  listDisasterConsentTexts(actor: SessionUser): Promise<DisasterConsentText[]>;
+  /** 本部：先方が決めた文面を新しい版として登録する。登録した版を返す */
+  publishDisasterConsentText(actor: SessionUser, input: { title: string; body: string }): Promise<number>;
+  /** 案件の意思の履歴（新しい順。先頭が今の意思） */
+  listDisasterConsents(actor: SessionUser, requestId: string): Promise<DisasterConsent[]>;
+  setDisasterConsent(actor: SessionUser, requestId: string, input: DisasterConsentInput): Promise<string>;
+
+  // ---- 全国ストック台帳（フェーズ15・本部だけ） ----
+  listStockLedger(actor: SessionUser): Promise<StockLedgerRow[]>;
+  saveStockLedgerEntry(actor: SessionUser, unitId: string, input: StockLedgerEntryInput, expectedLockVersion: number | null): Promise<number>;
 
   // ---- 写真・書類 ----
   listCaseFiles(actor: SessionUser, requestId: string): Promise<CaseFile[]>;

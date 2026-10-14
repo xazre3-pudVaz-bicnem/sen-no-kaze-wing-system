@@ -1,6 +1,6 @@
 /**
- * 案件の進行（フローチャート第4版 フェーズ4〜7）の型・表示名・入力の検査。
- * 入力の検査は DB（20261013220000_case_flow_intake_site.sql）の RPC と同じ規則にする（正本は DB）。
+ * 案件の進行（フローチャート第4版 フェーズ4〜15）の型・表示名・入力の検査。
+ * 入力の検査は DB（20261013220000_case_flow_intake_site.sql 以降）の RPC と同じ規則にする（正本は DB）。
  * ローカル検証モードの実装と、画面の入力チェックの両方から使う。
  */
 
@@ -231,6 +231,10 @@ export interface CaseProgress {
   unit_count?: number | null;
   units_shipped?: number;
   units_installed?: number;
+  /** 契約が締結済みか（20261013237000 以降）。契約の中身は本部とお客様だけが読めるため、担当代理店の画面はこれで判定する */
+  contract_signed?: boolean;
+  /** 完了確認・引渡しの状態（20261013237000 以降）。始めていなければ none */
+  handover_status?: HandoverStatus | 'none';
 }
 
 // ---------- 日程（フェーズ6・予約ボード） ----------
@@ -818,9 +822,298 @@ export function normalizeProgressReportInput(raw: Record<string, unknown>, today
   };
 }
 
+// ---------- 完了確認・是正・引渡し（フェーズ14） ----------
+
+export type HandoverStatus = 'inspecting' | 'correcting' | 'ready' | 'handed_over';
+export const HANDOVER_STATUS_LABELS: Record<HandoverStatus, string> = {
+  inspecting: '完成確認中（お客様の確認待ち）',
+  correcting: '是正中',
+  ready: '引渡しの準備完了',
+  handed_over: '引渡し済み',
+};
+
+export type CustomerConfirmation = 'pending' | 'ok' | 'issues';
+export const CUSTOMER_CONFIRMATION_LABELS: Record<CustomerConfirmation, string> = {
+  pending: '回答待ち',
+  ok: '問題なし',
+  issues: '気になる点あり',
+};
+
+export interface CaseHandover {
+  quote_request_id: string;
+  status: HandoverStatus;
+  inspection_on: string;
+  /** お客様にも表示される */
+  inspection_summary: string | null;
+  customer_confirmation: CustomerConfirmation;
+  /** mypage：お客様がマイページで回答／certificate：署名済みの承諾書を担当が記録 */
+  customer_confirmed_via: 'mypage' | 'certificate' | null;
+  customer_confirmed_at: string | null;
+  certificate_file_id: string | null;
+  certificate_signed_on: string | null;
+  handed_over_on: string | null;
+  lock_version: number;
+  updated_at: string;
+}
+
+export type PunchItemStatus = 'open' | 'fixed' | 'verified';
+export const PUNCH_ITEM_STATUS_LABELS: Record<PunchItemStatus, string> = {
+  open: '是正待ち',
+  fixed: '是正済み（確認待ち）',
+  verified: '確認済み',
+};
+
+export interface CasePunchItem {
+  id: string;
+  quote_request_id: string;
+  description: string;
+  raised_by_customer: boolean;
+  status: PunchItemStatus;
+  fixed_on: string | null;
+  verified_at: string | null;
+  lock_version: number;
+  created_at: string;
+}
+
+export interface HandoverInspectionInput {
+  inspection_on: string;
+  inspection_summary: string | null;
+}
+
+const shiftDate = (date: string, days: number) => {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/** today は日本時間の日付。DB の start_handover_inspection と同じ範囲（10 年前〜1 年後） */
+export function normalizeHandoverInspectionInput(raw: Record<string, unknown>, today: string): HandoverInspectionInput {
+  const on = cfDate(raw.inspection_on, '完成確認の日');
+  if (!on || on > shiftDate(today, 365) || on < shiftDate(today, -3650)) fail('完成確認の日を正しく入力してください');
+  return { inspection_on: on as string, inspection_summary: cfText(raw.inspection_summary, 2000, '完成確認の内容') };
+}
+
+/** お客様の「気になる点」。1 行に 1 つ（空の行は除く）。DB の confirm_handover と同じ 1〜20 件・1 件 1000 文字 */
+export function normalizeHandoverIssues(value: unknown): string[] {
+  const lines = (typeof value === 'string' ? value.split(/\r?\n/) : Array.isArray(value) ? value : [])
+    .map((line) => (typeof line === 'string' ? line.trim() : ''))
+    .filter(Boolean);
+  if (lines.length < 1 || lines.length > 20) fail('気になる点を 1〜20 件入力してください');
+  if (lines.some((line) => line.length > 1000)) fail('気になる点は 1 件 1000 文字以内で入力してください');
+  return lines;
+}
+
+export function normalizePunchDescription(value: unknown): string {
+  const text = cfText(value, 1000, '是正事項');
+  if (!text) fail('是正事項を 1000 文字以内で入力してください');
+  return text as string;
+}
+
+/** 是正事項の状態の変更（DB の set_punch_item_status と同じ）。是正は担当、是正の確認はお客様か担当 */
+export function canSetPunchItemStatus(access: CaseAccess, from: PunchItemStatus, to: PunchItemStatus): boolean {
+  if (to === 'fixed') return (access === 'admin' || access === 'staff') && from === 'open';
+  if (to === 'verified') return access !== 'manufacturer' && from === 'fixed';
+  return false;
+}
+
+/** 承諾書の署名日（今日以前・完成確認の日の 1 年前以降）。DB の record_completion_certificate と同じ */
+export function normalizeCertificateSignedOn(value: unknown, today: string, inspectionOn: string): string {
+  const on = cfDate(value, '承諾書の署名日');
+  if (!on || on > today || on < shiftDate(inspectionOn, -365)) fail('承諾書の署名日を正しく入力してください（今日以前）');
+  return on as string;
+}
+
+/** 引渡し日（完成確認の日〜今日）。DB の complete_handover と同じ */
+export function normalizeHandedOverOn(value: unknown, today: string, inspectionOn: string): string {
+  const on = cfDate(value, '引渡し日');
+  if (!on || on > today || on < inspectionOn) fail('引渡し日は完成確認の日から今日までの日付にしてください');
+  return on as string;
+}
+
+// ---------- アフター（フェーズ15） ----------
+
+export type AfterServiceKind = 'inspection' | 'inquiry' | 'repair';
+export const AFTER_SERVICE_KIND_LABELS: Record<AfterServiceKind, string> = { inspection: '定期点検', inquiry: '問い合わせ', repair: '修理' };
+
+export type AfterServiceStatus = 'open' | 'in_progress' | 'escalated' | 'resolved';
+export const AFTER_SERVICE_STATUS_LABELS: Record<AfterServiceStatus, string> = {
+  open: '受付',
+  in_progress: '対応中',
+  escalated: '製造の担当が対応中',
+  resolved: '完了',
+};
+
+export interface AfterServiceRequest {
+  id: string;
+  quote_request_id: string;
+  kind: AfterServiceKind;
+  title: string;
+  body: string | null;
+  status: AfterServiceStatus;
+  /** お客様への回答（お客様にも表示される） */
+  response: string | null;
+  requested_by: string;
+  requested_by_customer: boolean;
+  escalated_at: string | null;
+  resolved_at: string | null;
+  lock_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AfterServiceRequestInput {
+  kind: AfterServiceKind;
+  title: string;
+  body: string | null;
+}
+
+export function normalizeAfterServiceRequestInput(raw: Record<string, unknown>): AfterServiceRequestInput {
+  const kind = cfText(raw.kind, 20, 'ご依頼の種類');
+  if (!kind || !(kind in AFTER_SERVICE_KIND_LABELS)) fail('ご依頼の種類を選んでください');
+  const title = cfText(raw.title, 100, '件名');
+  if (!title) fail('件名を入力してください');
+  return { kind: kind as AfterServiceKind, title: title as string, body: cfText(raw.body, 4000, '内容') };
+}
+
+export interface AfterServiceUpdateInput {
+  status: AfterServiceStatus;
+  /** undefined：回答を変えない／null：回答を消す */
+  response?: string | null;
+}
+
+export function normalizeAfterServiceUpdateInput(raw: Record<string, unknown>, current: AfterServiceStatus): AfterServiceUpdateInput {
+  const status = (cfText(raw.status, 20, '状態') ?? current) as AfterServiceStatus;
+  if (!(status in AFTER_SERVICE_STATUS_LABELS)) fail('状態が正しくありません');
+  const input: AfterServiceUpdateInput = { status };
+  if ('response' in raw) input.response = cfText(raw.response, 2000, 'お客様への回答');
+  return input;
+}
+
+/** アフターを更新できるか（DB の update_after_service_request と同じ）。総代理店は回されたものの回答と完了だけ */
+export function canUpdateAfterService(access: CaseAccess, row: Pick<AfterServiceRequest, 'status' | 'escalated_at'>, to: AfterServiceStatus): boolean {
+  if (access === 'customer') return false;
+  if (access === 'manufacturer' && (!row.escalated_at || (to !== 'escalated' && to !== 'resolved'))) return false;
+  return !(row.status === 'resolved' && to !== 'resolved');
+}
+
+// ---------- 災害時提供の意思（フェーズ15） ----------
+
+export type DisasterDecision = 'accepted' | 'conditional' | 'declined';
+export const DISASTER_DECISION_LABELS: Record<DisasterDecision, string> = {
+  accepted: '承諾する',
+  conditional: '条件付きで承諾する',
+  declined: '承諾しない',
+};
+
+/** 承諾書の文面（先方が決めた文面を本部が登録する。登録されるまでお客様には表示しない） */
+export interface DisasterConsentText {
+  id: string;
+  version: number;
+  title: string;
+  body: string;
+  published_at: string;
+}
+
+export interface DisasterConsent {
+  id: string;
+  quote_request_id: string;
+  user_id: string;
+  text_id: string;
+  decision: DisasterDecision;
+  conditions: string | null;
+  created_at: string;
+}
+
+export interface DisasterConsentInput {
+  decision: DisasterDecision;
+  conditions: string | null;
+  /** 読んだ文面の版（最新の版と違えば DB が断る） */
+  text_version: number;
+}
+
+export function normalizeDisasterConsentInput(raw: Record<string, unknown>): DisasterConsentInput {
+  const decision = cfText(raw.decision, 20, '災害時提供の意思');
+  if (!decision || !(decision in DISASTER_DECISION_LABELS)) fail('承諾・条件付き承諾・不承諾のいずれかを選んでください');
+  const conditions = cfText(raw.conditions, 2000, '条件');
+  if (decision === 'conditional' && !conditions) fail('条件を入力してください');
+  const version = typeof raw.text_version === 'number' ? raw.text_version : Number(String(raw.text_version ?? '').trim());
+  if (!Number.isInteger(version) || version < 1) fail('承諾書の文面を読み込み直してください');
+  return { decision: decision as DisasterDecision, conditions: decision === 'conditional' ? conditions : null, text_version: version };
+}
+
+export function normalizeDisasterConsentTextInput(raw: Record<string, unknown>): { title: string; body: string } {
+  const title = cfText(raw.title, 100, '見出し');
+  if (!title) fail('見出しを 100 文字以内で入力してください');
+  const body = cfText(raw.body, 20000, '文面');
+  if (!body) fail('文面を 20000 文字以内で入力してください');
+  return { title: title as string, body: body as string };
+}
+
+// ---------- 全国ストック台帳（フェーズ15・本部だけ） ----------
+
+export type StockRegistrationStatus = 'registered' | 'suspended';
+export const STOCK_REGISTRATION_STATUS_LABELS: Record<StockRegistrationStatus, string> = { registered: '登録中', suspended: '登録停止' };
+
+export interface StockLedgerEntry {
+  unit_id: string;
+  quote_request_id: string;
+  registration_status: StockRegistrationStatus;
+  operating_status: string | null;
+  last_inspection_on: string | null;
+  immediate_available: boolean;
+  transportable: boolean;
+  supply_72h: boolean;
+  supply_7d: boolean;
+  location_prefecture: string | null;
+  location_municipality: string | null;
+  note: string | null;
+  judged_by: string | null;
+  judged_at: string;
+  lock_version: number;
+  updated_at: string;
+}
+
+export type StockLedgerEntryInput = Pick<
+  StockLedgerEntry,
+  | 'registration_status'
+  | 'operating_status'
+  | 'last_inspection_on'
+  | 'immediate_available'
+  | 'transportable'
+  | 'supply_72h'
+  | 'supply_7d'
+  | 'location_prefecture'
+  | 'location_municipality'
+  | 'note'
+>;
+
+export function normalizeStockLedgerEntryInput(raw: Record<string, unknown>, today: string): StockLedgerEntryInput {
+  const status = cfText(raw.registration_status, 20, '登録状態') ?? 'registered';
+  if (!(status in STOCK_REGISTRATION_STATUS_LABELS)) fail('登録状態が正しくありません');
+  const inspected = cfDate(raw.last_inspection_on, '最終点検日');
+  if (inspected && inspected > today) fail('最終点検日は今日以前の日付にしてください');
+  return {
+    registration_status: status as StockRegistrationStatus,
+    operating_status: cfText(raw.operating_status, 200, '稼働状況'),
+    last_inspection_on: inspected,
+    immediate_available: raw.immediate_available === true,
+    transportable: raw.transportable === true,
+    supply_72h: raw.supply_72h === true,
+    supply_7d: raw.supply_7d === true,
+    location_prefecture: cfText(raw.location_prefecture, 10, '所在地（都道府県）'),
+    location_municipality: cfText(raw.location_municipality, 60, '所在地（市区町村）'),
+    note: cfText(raw.note, 1000, 'メモ'),
+  };
+}
+
+/** 台帳に「登録中」として載せられるか。お客様の最新の意思が承諾か条件付き承諾のときだけ */
+export function canRegisterStock(latestDecision: DisasterDecision | null): boolean {
+  return latestDecision === 'accepted' || latestDecision === 'conditional';
+}
+
 // ---------- 案件の写真・書類 ----------
 
-export type CaseFileContext = 'site_survey' | 'progress' | 'handover' | 'punch' | 'after_service' | 'contract' | 'document';
+export type CaseFileContext ='site_survey' | 'progress' | 'handover' | 'punch' | 'after_service' | 'contract' | 'document';
 export const CASE_FILE_CONTEXT_LABELS: Record<CaseFileContext, string> = {
   site_survey: '現地確認',
   progress: '工程・施工',

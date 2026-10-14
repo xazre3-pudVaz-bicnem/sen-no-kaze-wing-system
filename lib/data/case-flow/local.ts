@@ -12,7 +12,18 @@ import {
   canChangeAppointmentStatus,
   canChangeOrderStatus,
   canRegisterCaseFile,
+  canRegisterStock,
   canSetUnitStatus,
+  type AfterServiceRequest,
+  type AfterServiceRequestInput,
+  type AfterServiceUpdateInput,
+  type CaseHandover,
+  type CasePunchItem,
+  type DisasterConsent,
+  type DisasterConsentInput,
+  type HandoverInspectionInput,
+  type StockLedgerEntry,
+  type StockLedgerEntryInput,
   type CaseProgressReport,
   type CaseScheduleItem,
   type ManufacturingOrder,
@@ -39,7 +50,7 @@ import {
   type SiteSurveyInput,
 } from '@/lib/domain/case-flow';
 import { emptyCaseFlowTables, type LocalCaseFlowTables } from './local-tables';
-import type { BoardAppointment, BoardManufacturingOrder, CaseFlowStore } from './store';
+import type { BoardAfterServiceRequest, BoardAppointment, BoardManufacturingOrder, CaseFlowStore, StockLedgerRow } from './store';
 
 /**
  * ローカル検証モードの案件の進行。DB（20261013220000）の RPC・RLS と同じ判定を行う（開発・E2E 用。本番では使わない）。
@@ -117,6 +128,33 @@ function caseDealerId(db: LocalDb, requestId: string): string | null {
   const request = db.quoteRequests.find((r) => r.id === requestId);
   const quote = request?.quote_id ? db.quotes.find((q) => q.id === request.quote_id) : null;
   return quote?.dealer_id ?? null;
+}
+
+/** 案件の見出し（見積番号とお客様名）。見積が無ければ製造仕様の見積番号 */
+function caseLabelOf(db: LocalDb, requestId: string): { label: string; quote_id: string | null } {
+  const quote = db.quotes.filter((q) => q.quote_request_id === requestId).sort((x, y) => (y.revision ?? 0) - (x.revision ?? 0))[0];
+  if (quote) return { label: `${quote.quote_no} ${quote.customer_name} 様`, quote_id: quote.id };
+  const order = (tables(db).orders ?? []).find((o) => o.quote_request_id === requestId && o.status !== 'canceled');
+  return { label: order?.spec_snapshot?.quote_no ?? '案件', quote_id: null };
+}
+
+const todayInJapan = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
+
+function customerOf(db: LocalDb, requestId: string): string | null {
+  return db.quoteRequests.find((r) => r.id === requestId)?.user_id ?? null;
+}
+
+function hasOpenPunchItems(db: LocalDb, requestId: string): boolean {
+  return (tables(db).punchItems ?? []).some((p) => p.quote_request_id === requestId && p.status !== 'verified');
+}
+
+function isHandedOver(db: LocalDb, requestId: string): boolean {
+  return (tables(db).handovers ?? []).some((h) => h.quote_request_id === requestId && h.status === 'handed_over');
+}
+
+/** お客様の意思の履歴（新しい順。先頭が今の意思）。行は足すだけなので、後に足した行ほど新しい */
+function consentsOf(db: LocalDb, requestId: string): DisasterConsent[] {
+  return (tables(db).consents ?? []).filter((c) => c.quote_request_id === requestId).reverse();
 }
 
 function workflowOf(db: LocalDb, requestId: string, actorId: string): CaseWorkflow {
@@ -360,6 +398,9 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         unit_count: order?.unit_count ?? null,
         units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
         units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+        // 契約は締結済みかどうかだけ（契約の中身は本部とお客様だけ）。DB の get_case_progress と同じ
+        contract_signed: db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed'),
+        handover_status: (t.handovers ?? []).find((h) => h.quote_request_id === requestId)?.status ?? 'none',
       };
     });
   }
@@ -1041,6 +1082,480 @@ export class LocalCaseFlowStore implements CaseFlowStore {
     });
   }
 
+  // ---------- 完了確認・是正・引渡し（20261013237000 と同じ判定） ----------
+  private handoverOf(db: LocalDb, requestId: string): CaseHandover | undefined {
+    return (tables(db).handovers ?? []).find((h) => h.quote_request_id === requestId);
+  }
+  async getHandover(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      if (!accessOf(db, actor, requestId)) return null;
+      const row = this.handoverOf(db, requestId);
+      return row ? { ...row } : null;
+    });
+  }
+  async listPunchItems(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      if (!accessOf(db, actor, requestId)) return [];
+      return (tables(db).punchItems ?? [])
+        .filter((p) => p.quote_request_id === requestId)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((p) => ({ ...p }));
+    });
+  }
+  async startHandoverInspection(actor: SessionUser, requestId: string, input: HandoverInspectionInput, expectedLockVersion: number | null) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('完成確認を始められるのは本部と担当代理店だけです');
+      if (!db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed')) throw locked('契約が締結されてから完成確認を始められます');
+      const t = tables(db);
+      t.handovers ??= [];
+      const current = this.handoverOf(db, requestId);
+      let version: number;
+      if (!current) {
+        if (expectedLockVersion !== null) throw locked('他の画面で完了確認が更新されています。再読み込みしてください');
+        t.handovers.push({
+          quote_request_id: requestId,
+          status: 'inspecting',
+          ...input,
+          customer_confirmation: 'pending',
+          customer_confirmed_via: null,
+          customer_confirmed_at: null,
+          certificate_file_id: null,
+          certificate_signed_on: null,
+          handed_over_on: null,
+          lock_version: 1,
+          updated_at: nowIso(),
+        });
+        version = 1;
+      } else {
+        if (current.lock_version !== expectedLockVersion) throw locked('他の画面で完了確認が更新されています。再読み込みしてください');
+        if (current.status === 'handed_over') throw locked('引渡し済みの案件です');
+        // 確認し直すときは、お客様の回答と承諾書の記録を待ちに戻す（是正中の指摘はそのまま残る）
+        Object.assign(current, input, {
+          status: hasOpenPunchItems(db, requestId) ? 'correcting' : 'inspecting',
+          customer_confirmation: 'pending',
+          customer_confirmed_via: null,
+          customer_confirmed_at: null,
+          certificate_file_id: null,
+          certificate_signed_on: null,
+          lock_version: current.lock_version + 1,
+          updated_at: nowIso(),
+        });
+        version = current.lock_version;
+      }
+      const customer = customerOf(db, requestId);
+      if (customer) {
+        notify(db, {
+          recipient_id: customer,
+          audience: 'customer',
+          kind: 'handover_inspection',
+          title: '完成内容のご確認をお願いします',
+          body: 'マイページの「ご依頼の進み具合」で完成内容をご確認のうえ、「問題なし」か「気になる点がある」をお知らせください。',
+          link: `/mypage/cases/${requestId}`,
+        });
+      }
+      return version;
+    });
+  }
+  async confirmHandover(actor: SessionUser, requestId: string, result: 'ok' | 'issues', issues: string[], expectedLockVersion: number) {
+    return this.mutate((db) => {
+      if (accessOf(db, actor, requestId) !== 'customer') throw forbidden('完成内容の確認はお客様が行います');
+      const current = this.handoverOf(db, requestId);
+      if (!current || current.status === 'handed_over' || (result === 'ok' && current.status === 'ready')) throw locked('今は完成内容の回答を受け付けていません');
+      if (current.lock_version !== expectedLockVersion) throw locked('完了確認が更新されています。再読み込みしてください');
+      const t = tables(db);
+      let title: string;
+      if (result === 'ok') {
+        if (hasOpenPunchItems(db, requestId)) throw locked('是正の確認が済んでいない点があります。先に是正の内容をご確認ください');
+        Object.assign(current, { customer_confirmation: 'ok', customer_confirmed_via: 'mypage', customer_confirmed_at: nowIso(), status: 'ready' });
+        title = 'お客様が完成内容を確認しました（問題なし）';
+      } else {
+        const lines = issues.map((line) => line.trim());
+        if (lines.length < 1 || lines.length > 20) throw invalid('気になる点を 1〜20 件入力してください');
+        if (lines.some((line) => !line || line.length > 1000)) throw invalid('気になる点は 1 件 1000 文字以内で入力してください');
+        t.punchItems ??= [];
+        for (const description of lines) {
+          t.punchItems.push({
+            id: randomUUID(),
+            quote_request_id: requestId,
+            description,
+            raised_by_customer: true,
+            status: 'open',
+            fixed_on: null,
+            verified_at: null,
+            lock_version: 1,
+            created_at: nowIso(),
+          });
+        }
+        // 承諾書の記録の後に指摘があったら、是正の後に記録し直す
+        Object.assign(current, {
+          customer_confirmation: 'issues',
+          customer_confirmed_via: 'mypage',
+          customer_confirmed_at: nowIso(),
+          status: 'correcting',
+          certificate_file_id: null,
+          certificate_signed_on: null,
+        });
+        title = `お客様から完成内容への指摘がありました（${lines.length} 件）`;
+      }
+      current.lock_version += 1;
+      current.updated_at = nowIso();
+      const link = `/admin/quotes?request=${requestId}`;
+      notify(db, { recipient_id: null, audience: 'admin', kind: 'handover_confirmed', title, body: '案件の「引渡し・アフター」タブで確認してください。', link });
+      const dealerId = caseDealerId(db, requestId);
+      if (dealerId) notify(db, { recipient_id: dealerId, audience: 'dealer', kind: 'handover_confirmed', title, body: '案件の「引渡し・アフター」タブで確認してください。', link });
+      return current.lock_version;
+    });
+  }
+  async addPunchItem(actor: SessionUser, requestId: string, description: string, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'staff') {
+        throw forbidden('是正事項を追加できるのは本部と担当代理店だけです（お客様は完成内容の確認から指摘できます）');
+      }
+      const text = description.trim();
+      if (!text || text.length > 1000) throw invalid('是正事項を 1000 文字以内で入力してください');
+      const current = this.handoverOf(db, requestId);
+      if (!current || current.status === 'handed_over') throw locked('完成確認を始めてから（引渡しの前に）是正事項を追加できます');
+      if (current.lock_version !== expectedLockVersion) throw locked('他の画面で完了確認が更新されています。再読み込みしてください');
+      const t = tables(db);
+      t.punchItems ??= [];
+      const item: CasePunchItem = {
+        id: randomUUID(),
+        quote_request_id: requestId,
+        description: text,
+        raised_by_customer: false,
+        status: 'open',
+        fixed_on: null,
+        verified_at: null,
+        lock_version: 1,
+        created_at: nowIso(),
+      };
+      t.punchItems.push(item);
+      // 確認済み（問題なし）の後に見つかったら、お客様の確認と承諾書の記録を待ちに戻す
+      if (current.customer_confirmation === 'ok') {
+        Object.assign(current, { customer_confirmation: 'pending', customer_confirmed_via: null, customer_confirmed_at: null });
+      }
+      Object.assign(current, { status: 'correcting', certificate_file_id: null, certificate_signed_on: null, lock_version: current.lock_version + 1, updated_at: nowIso() });
+      return item.id;
+    });
+  }
+  async setPunchItemStatus(actor: SessionUser, itemId: string, status: 'fixed' | 'verified', expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const item = (tables(db).punchItems ?? []).find((p) => p.id === itemId);
+      if (!item) throw notFound();
+      const access = accessOf(db, actor, item.quote_request_id);
+      if (
+        !access ||
+        (status !== 'fixed' && status !== 'verified') ||
+        (status === 'fixed' && access !== 'admin' && access !== 'staff') ||
+        (status === 'verified' && access === 'manufacturer')
+      ) {
+        throw forbidden('この是正事項をその状態にする権限がありません');
+      }
+      if (item.lock_version !== expectedLockVersion) throw locked('是正事項が更新されています。再読み込みしてください');
+      if (!((item.status === 'open' && status === 'fixed') || (item.status === 'fixed' && status === 'verified'))) throw locked('この是正事項はその状態に変更できません');
+      if (isHandedOver(db, item.quote_request_id)) throw locked('引渡し済みの案件です');
+      item.status = status;
+      if (status === 'fixed') item.fixed_on = todayInJapan();
+      if (status === 'verified') item.verified_at = nowIso();
+      item.lock_version += 1;
+      if (status === 'fixed') {
+        const customer = customerOf(db, item.quote_request_id);
+        if (customer) {
+          notify(db, {
+            recipient_id: customer,
+            audience: 'customer',
+            kind: 'punch_item_fixed',
+            title: 'ご指摘の点の是正が終わりました',
+            body: 'マイページの「ご依頼の進み具合」で、是正の内容をご確認ください。',
+            link: `/mypage/cases/${item.quote_request_id}`,
+          });
+        }
+      }
+      return item.lock_version;
+    });
+  }
+  async recordCompletionCertificate(actor: SessionUser, requestId: string, fileId: string, signedOn: string, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('工事完了承諾書を記録できるのは本部と担当代理店だけです');
+      const current = this.handoverOf(db, requestId);
+      if (!current || current.status === 'handed_over') throw locked('完成確認を始めてから（引渡しの前に）記録できます');
+      if (current.lock_version !== expectedLockVersion) throw locked('他の画面で完了確認が更新されています。再読み込みしてください');
+      if (hasOpenPunchItems(db, requestId)) throw locked('是正の確認が済んでいない是正事項があります');
+      const min = new Date(`${current.inspection_on}T00:00:00Z`);
+      min.setUTCDate(min.getUTCDate() - 365);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(signedOn) || signedOn > todayInJapan() || signedOn < min.toISOString().slice(0, 10)) {
+        throw invalid('承諾書の署名日を正しく入力してください（今日以前）');
+      }
+      if (!tables(db).files.some((f) => f.id === fileId && f.quote_request_id === requestId && f.context === 'handover')) {
+        throw invalid('この案件の「完了確認・引渡し」に登録した、署名済みの承諾書の写しを選んでください');
+      }
+      if (current.customer_confirmation !== 'ok') {
+        Object.assign(current, { customer_confirmation: 'ok', customer_confirmed_via: 'certificate', customer_confirmed_at: nowIso() });
+      }
+      Object.assign(current, { certificate_file_id: fileId, certificate_signed_on: signedOn, status: 'ready', lock_version: current.lock_version + 1, updated_at: nowIso() });
+      return current.lock_version;
+    });
+  }
+  async completeHandover(actor: SessionUser, requestId: string, handedOverOn: string, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('引渡し完了にできるのは本部と担当代理店だけです');
+      const current = this.handoverOf(db, requestId);
+      if (!current || current.status !== 'ready' || !current.certificate_file_id) {
+        throw locked('お客様の確認と工事完了承諾書の記録が済んでから、引渡し完了にできます');
+      }
+      if (current.lock_version !== expectedLockVersion) throw locked('他の画面で完了確認が更新されています。再読み込みしてください');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(handedOverOn) || handedOverOn > todayInJapan() || handedOverOn < current.inspection_on) {
+        throw invalid('引渡し日は完成確認の日から今日までの日付にしてください');
+      }
+      Object.assign(current, { status: 'handed_over', handed_over_on: handedOverOn, lock_version: current.lock_version + 1, updated_at: nowIso() });
+      // 設置済みの個体を引渡し済みにする
+      const t = tables(db);
+      const activeOrders = new Set((t.orders ?? []).filter((o) => o.quote_request_id === requestId && o.status !== 'canceled').map((o) => o.id));
+      for (const unit of t.units ?? []) {
+        if (activeOrders.has(unit.order_id) && unit.status === 'installed') {
+          Object.assign(unit, { status: 'handed_over', handed_over_on: handedOverOn, lock_version: unit.lock_version + 1, updated_at: nowIso() });
+        }
+      }
+      const customer = customerOf(db, requestId);
+      if (customer) {
+        notify(db, { recipient_id: customer, audience: 'customer', kind: 'handover_completed', title: 'お引渡しが完了しました', body: 'これからは、マイページから定期点検・修理などのご依頼ができます。', link: `/mypage/cases/${requestId}` });
+      }
+      notify(db, { recipient_id: null, audience: 'admin', kind: 'handover_completed', title: '引渡しが完了しました', body: '工事完了承諾書の写しは、案件の「引渡し・アフター」タブで確認できます。', link: `/admin/quotes?request=${requestId}` });
+      return current.lock_version;
+    });
+  }
+
+  // ---------- アフター ----------
+  /** RLS と同じ：総代理店は回されたものだけ */
+  private canReadAfterService(access: CaseAccess | null, row: AfterServiceRequest) {
+    return access === 'admin' || access === 'staff' || access === 'customer' || (access === 'manufacturer' && row.escalated_at !== null);
+  }
+  async listAfterServiceRequests(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      return (tables(db).afterService ?? [])
+        .filter((r) => r.quote_request_id === requestId && this.canReadAfterService(access, r))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((r) => ({ ...r }));
+    });
+  }
+  async listAfterServiceBoard(actor: SessionUser): Promise<BoardAfterServiceRequest[]> {
+    return this.read((db) =>
+      (tables(db).afterService ?? [])
+        .filter((r) => {
+          const access = accessOf(db, actor, r.quote_request_id);
+          return access !== 'customer' && this.canReadAfterService(access, r);
+        })
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .map((r) => {
+          const label = caseLabelOf(db, r.quote_request_id);
+          return { ...r, case_label: label.label, case_quote_id: label.quote_id, viewer_access: accessOf(db, actor, r.quote_request_id) };
+        })
+    );
+  }
+  async createAfterServiceRequest(actor: SessionUser, requestId: string, input: AfterServiceRequestInput) {
+    return this.mutate((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'staff' && access !== 'customer') throw forbidden('アフターを登録できるのは、お客様・担当代理店・本部だけです');
+      if (!isHandedOver(db, requestId)) throw locked('お引渡しの後にご依頼いただけます');
+      const t = tables(db);
+      t.afterService ??= [];
+      const now = nowIso();
+      const row: AfterServiceRequest = {
+        id: randomUUID(),
+        quote_request_id: requestId,
+        ...input,
+        status: 'open',
+        response: null,
+        requested_by: actor.id,
+        requested_by_customer: access === 'customer',
+        escalated_at: null,
+        resolved_at: null,
+        lock_version: 1,
+        created_at: now,
+        updated_at: now,
+      };
+      t.afterService.push(row);
+      if (access === 'customer') {
+        const title = `お客様からアフターのご依頼がありました：${input.title}`;
+        notify(db, { recipient_id: null, audience: 'admin', kind: 'after_service_requested', title, body: 'アフターの一覧で内容を確認し、対応してください。', link: '/admin/after-service' });
+        const dealerId = caseDealerId(db, requestId);
+        if (dealerId) notify(db, { recipient_id: dealerId, audience: 'dealer', kind: 'after_service_requested', title, body: 'アフターの一覧で内容を確認し、対応してください。', link: '/admin/after-service' });
+      } else {
+        const customer = customerOf(db, requestId);
+        if (customer) {
+          notify(db, { recipient_id: customer, audience: 'customer', kind: 'after_service_registered', title: `アフターの予定を登録しました：${input.title}`, body: 'マイページの「ご依頼の進み具合」でご確認いただけます。', link: `/mypage/cases/${requestId}` });
+        }
+      }
+      return row.id;
+    });
+  }
+  async updateAfterServiceRequest(actor: SessionUser, id: string, input: AfterServiceUpdateInput, expectedLockVersion: number) {
+    return this.mutate((db) => {
+      const row = (tables(db).afterService ?? []).find((r) => r.id === id);
+      if (!row) throw notFound();
+      const access = accessOf(db, actor, row.quote_request_id);
+      // 回されていないものは、総代理店には存在も分からないようにする
+      if (access === 'manufacturer' && !row.escalated_at) throw notFound();
+      if (!access || access === 'customer') throw forbidden('このアフターを更新する権限がありません');
+      if (access === 'manufacturer' && input.status !== 'escalated' && input.status !== 'resolved') {
+        throw forbidden('製造の担当は、回されたアフターの回答と完了だけ記録できます');
+      }
+      if (row.lock_version !== expectedLockVersion) throw locked('他の画面でアフターが更新されています。再読み込みしてください');
+      if (row.status === 'resolved' && input.status !== 'resolved') throw locked('完了したアフターは戻せません。新しいご依頼として登録してください');
+      let manufacturer: string | null = null;
+      if (input.status === 'escalated' && row.status !== 'escalated') {
+        manufacturer = tables(db).workflows.find((w) => w.quote_request_id === row.quote_request_id)?.manufacturer_id ?? null;
+        if (!manufacturer) throw locked('製造の担当（総代理店）が決まっていない案件です。先に本部が製造の担当を決めてください');
+      }
+      const wasResolved = row.status === 'resolved';
+      row.status = input.status;
+      if (input.response !== undefined) row.response = input.response;
+      if (input.status === 'escalated' && !row.escalated_at) row.escalated_at = nowIso();
+      row.resolved_at = input.status === 'resolved' ? (row.resolved_at ?? nowIso()) : null;
+      row.lock_version += 1;
+      row.updated_at = nowIso();
+      if (manufacturer) {
+        notify(db, { recipient_id: manufacturer, audience: 'dealer', kind: 'after_service_escalated', title: `製造起因のアフターが回ってきました：${row.title}`, body: '修補・部材供給の対応をお願いします。', link: '/admin/after-service' });
+      }
+      if (input.status === 'resolved' && !wasResolved) {
+        const customer = customerOf(db, row.quote_request_id);
+        if (customer) {
+          notify(db, { recipient_id: customer, audience: 'customer', kind: 'after_service_resolved', title: `アフターのご依頼に対応しました：${row.title}`, body: 'マイページの「ご依頼の進み具合」で回答をご確認ください。', link: `/mypage/cases/${row.quote_request_id}` });
+        }
+      }
+      return row.lock_version;
+    });
+  }
+
+  // ---------- 災害時提供の意思 ----------
+  async listDisasterConsentTexts(_actor: SessionUser) {
+    return this.read((db) => [...(tables(db).consentTexts ?? [])].sort((a, b) => b.version - a.version).map((t) => ({ ...t })));
+  }
+  async publishDisasterConsentText(actor: SessionUser, input: { title: string; body: string }) {
+    return this.mutate((db) => {
+      if (rank(actor) < 3) throw forbidden('承諾書の文面を登録できるのは本部だけです');
+      const title = input.title.trim();
+      const body = input.body.trim();
+      if (!title || title.length > 100) throw invalid('見出しを 100 文字以内で入力してください');
+      if (!body || body.length > 20000) throw invalid('文面を 20000 文字以内で入力してください');
+      const t = tables(db);
+      t.consentTexts ??= [];
+      const version = Math.max(0, ...t.consentTexts.map((x) => x.version)) + 1;
+      const id = randomUUID();
+      t.consentTexts.push({ id, version, title, body, published_at: nowIso() });
+      db.auditLogs.push({
+        id: randomUUID(),
+        actor_id: actor.id,
+        actor_email: actor.email,
+        action: 'publish',
+        entity: 'disaster_consent_texts',
+        entity_id: id,
+        summary: `災害時提供の承諾書の文面を登録しました（第${version}版）`,
+        created_at: nowIso(),
+      });
+      return version;
+    });
+  }
+  async listDisasterConsents(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access || access === 'manufacturer') return [];
+      return consentsOf(db, requestId).map((c) => ({ ...c }));
+    });
+  }
+  async setDisasterConsent(actor: SessionUser, requestId: string, input: DisasterConsentInput) {
+    return this.mutate((db) => {
+      if (accessOf(db, actor, requestId) !== 'customer') throw forbidden('災害時提供の意思はお客様が決めます');
+      const conditions = input.conditions?.trim() || null;
+      if (input.decision === 'conditional' && !conditions) throw invalid('条件を入力してください');
+      if ((conditions ?? '').length > 2000) throw invalid('条件は 2000 文字以内で入力してください');
+      const t = tables(db);
+      const text = [...(t.consentTexts ?? [])].sort((a, b) => b.version - a.version)[0];
+      if (!text) throw locked('承諾書の文面の準備ができてから設定できます');
+      if (text.version !== input.text_version) throw locked('承諾書の文面が新しくなりました。再読み込みして最新の文面をご確認ください');
+      if (!isHandedOver(db, requestId)) throw locked('お引渡しの後に設定できます');
+      t.consents ??= [];
+      const row: DisasterConsent = {
+        id: randomUUID(),
+        quote_request_id: requestId,
+        user_id: actor.id,
+        text_id: text.id,
+        decision: input.decision,
+        conditions: input.decision === 'conditional' ? conditions : null,
+        created_at: nowIso(),
+      };
+      t.consents.push(row);
+      if (input.decision === 'declined') {
+        for (const entry of t.stockLedger ?? []) {
+          if (entry.quote_request_id === requestId && entry.registration_status === 'registered') {
+            Object.assign(entry, { registration_status: 'suspended', lock_version: entry.lock_version + 1, updated_at: nowIso() });
+          }
+        }
+      }
+      const label = input.decision === 'accepted' ? '承諾' : input.decision === 'conditional' ? '条件付き承諾' : '不承諾';
+      notify(db, { recipient_id: null, audience: 'admin', kind: 'disaster_consent_set', title: `お客様が災害時提供の意思を設定しました（${label}）`, body: '全国ストック台帳で、登録と提供の可否を確認してください。', link: '/admin/stock-ledger' });
+      return row.id;
+    });
+  }
+
+  // ---------- 全国ストック台帳（本部だけ） ----------
+  async listStockLedger(actor: SessionUser): Promise<StockLedgerRow[]> {
+    return this.read((db) => {
+      if (rank(actor) < 3) return [];
+      const t = tables(db);
+      const entries = t.stockLedger ?? [];
+      return (t.units ?? [])
+        .filter((u) => u.status === 'handed_over' || entries.some((e) => e.unit_id === u.id))
+        .sort((a, b) => (b.handed_over_on ?? '').localeCompare(a.handed_over_on ?? ''))
+        .map((unit) => {
+          const label = caseLabelOf(db, unit.quote_request_id);
+          const entry = entries.find((e) => e.unit_id === unit.id);
+          return {
+            unit: { ...unit },
+            entry: entry ? { ...entry } : null,
+            latest_consent: consentsOf(db, unit.quote_request_id)[0] ?? null,
+            case_label: label.label,
+            case_quote_id: label.quote_id,
+          };
+        });
+    });
+  }
+  async saveStockLedgerEntry(actor: SessionUser, unitId: string, input: StockLedgerEntryInput, expectedLockVersion: number | null) {
+    return this.mutate((db) => {
+      if (rank(actor) < 3) throw forbidden('全国ストック台帳を編集できるのは本部だけです');
+      const t = tables(db);
+      const unit = (t.units ?? []).find((u) => u.id === unitId);
+      if (!unit) throw notFound();
+      if (unit.status !== 'handed_over') throw locked('引渡し済みの個体だけ台帳に載せられます');
+      if (input.registration_status === 'registered' && !canRegisterStock(consentsOf(db, unit.quote_request_id)[0]?.decision ?? null)) {
+        throw locked('お客様が災害時提供を承諾（または条件付きで承諾）していない個体は登録できません');
+      }
+      t.stockLedger ??= [];
+      const current = t.stockLedger.find((e) => e.unit_id === unitId);
+      if ((current?.lock_version ?? null) !== expectedLockVersion) throw locked('他の画面で台帳が更新されています。再読み込みしてください');
+      if (!current) {
+        const row: StockLedgerEntry = {
+          unit_id: unit.id,
+          quote_request_id: unit.quote_request_id,
+          ...input,
+          judged_by: actor.id,
+          judged_at: nowIso(),
+          lock_version: 1,
+          updated_at: nowIso(),
+        };
+        t.stockLedger.push(row);
+        return 1;
+      }
+      Object.assign(current, input, { judged_by: actor.id, judged_at: nowIso(), lock_version: current.lock_version + 1, updated_at: nowIso() });
+      return current.lock_version;
+    });
+  }
+
   // ---------- 写真・書類 ----------
   async listCaseFiles(actor: SessionUser, requestId: string) {
     return this.read((db) => {
@@ -1102,6 +1617,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       // 見えない資料（関係の無い案件、お客様に表示していない資料）は、存在も分からないようにする
       if (!file || !access || (access === 'customer' && !file.customer_visible)) throw notFound();
       if (file.uploaded_by !== actor.id && rank(actor) < 3) throw forbidden('削除できるのは登録した人と本部だけです');
+      if ((t.handovers ?? []).some((h) => h.certificate_file_id === fileId)) throw locked('工事完了承諾書として記録した写しは削除できません');
       t.files = t.files.filter((f) => f.id !== fileId);
       const abs = path.join(filesDir(), 'case-files', file.storage_path);
       if (fs.existsSync(abs)) fs.rmSync(abs);

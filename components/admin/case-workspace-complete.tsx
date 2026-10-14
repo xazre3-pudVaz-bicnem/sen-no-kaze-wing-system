@@ -3,6 +3,7 @@ import { ElectronicContractPanel } from '@/components/admin/electronic-contract-
 import { CaseSitePanels } from '@/components/case-flow/case-site-panels';
 import { CaseChangeRequestsPanel, PaperContractPanel } from '@/components/case-flow/case-contract-panels';
 import { CaseProductionPanels } from '@/components/case-flow/case-production-panels';
+import { CaseDisasterPanel, CaseHandoverPanels } from '@/components/case-flow/case-handover-panels';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -92,36 +93,6 @@ function ContractHistoryMock({ quoteNo, revision, total }: { quoteNo: string; re
   );
 }
 
-function HandoverCorrectionMock() {
-  return (
-    <section className="space-y-3 rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-handover-correction-mock">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-semibold">是正・引渡し前確認</h3>
-        <MockBadge />
-      </div>
-      <p className="text-xs leading-5 text-muted">
-        完了確認で見つかった是正事項を、担当・期限・写真・完了確認と合わせて管理する完成形イメージです。
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ['是正事項', '未記録'],
-          ['担当・期限', '未記録'],
-          ['是正写真', '未登録'],
-          ['是正完了確認', '未判定'],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
-            <p className="text-xs font-semibold text-muted">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
-          </div>
-        ))}
-      </div>
-      <p className="rounded-lg bg-[#f7f8f8] px-3 py-2 text-xs leading-5 text-muted">
-        引渡し日・引渡し確認・保証・点検・修理・問い合わせは上の「引渡し・アフター」完成形表示と連動する想定ですが、現在は正式DBを作らないため保存しません。
-      </p>
-    </section>
-  );
-}
-
 export async function CaseWorkspace(props: CaseWorkspaceProps) {
   const activeTab = props.tab ?? 'estimate';
   let quoteReference: { quoteNo: string; revision: number; total: number; unitCount: string | null } | null = null;
@@ -167,10 +138,13 @@ export async function CaseWorkspace(props: CaseWorkspaceProps) {
         // 製造依頼と個体・工程表・施工の記録と写真（フェーズ11〜13）
         <CaseProductionPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
       )}
-      {quoteReference && activeTab === 'handover' && (
-        <div className="mt-2">
-          <HandoverCorrectionMock />
-        </div>
+      {activeTab === 'handover' && (
+        // 完成確認・是正・工事完了承諾書・引渡し（フェーズ14）とアフター（フェーズ15）
+        <CaseHandoverPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
+      )}
+      {activeTab === 'disaster' && (
+        // お客様の災害時提供の意思と、本部の全国ストック台帳の判定（フェーズ15）
+        <CaseDisasterPanel quoteId={props.quoteId} actor={props.actor} />
       )}
     </>
   );

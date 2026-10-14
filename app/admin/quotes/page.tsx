@@ -203,6 +203,14 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
           <Link href="/admin/manufacturing" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
             製造の進み具合
           </Link>
+          <Link href="/admin/after-service" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            アフター
+          </Link>
+          {canCreateQuote && (
+            <Link href="/admin/stock-ledger" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+              全国ストック台帳
+            </Link>
+          )}
         </p>
       </div>
       {canCreateQuote && (
@@ -260,7 +268,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     const quoteTotal = latest.reduce((sum, quote) => sum + quote.total, 0);
     const newCount = latest.filter((quote) => quote.request_status === 'new').length;
     const acceptedCount = latest.filter((quote) => quote.status === 'accepted').length;
-    const requestedCase = sp.case && latest.some((quote) => quote.id === sp.case) ? sp.case : null;
+    // 通知のリンク（?request=案件）からも、その案件を開く
+    const requestedCase =
+      sp.case && latest.some((quote) => quote.id === sp.case)
+        ? sp.case
+        : sp.request
+          ? (latest.find((quote) => quote.quote_request_id === sp.request)?.id ?? null)
+          : null;
     const selectedQuoteId = requestedCase;
 
     return (
@@ -524,7 +538,14 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   const selectableQuoteIds = new Set(shownQuotes.map((quote) => quote.id));
   const selectablePendingRequestIds = new Set(shown.filter((request) => !request.quote_id).map((request) => request.id));
-  const requestedCase = sp.case && selectableQuoteIds.has(sp.case) ? sp.case : null;
+  // 通知のリンク（?request=案件）は、見積がある案件ならその見積の案件画面を開く
+  const quoteIdOfRequest = sp.request ? (shown.find((request) => request.id === sp.request)?.quote_id ?? null) : null;
+  const requestedCase =
+    sp.case && selectableQuoteIds.has(sp.case)
+      ? sp.case
+      : quoteIdOfRequest && selectableQuoteIds.has(quoteIdOfRequest)
+        ? quoteIdOfRequest
+        : null;
   const requestedPendingRequestId =
     sp.request && selectablePendingRequestIds.has(sp.request) ? sp.request : null;
   const selectedPendingRequest = requestedPendingRequestId

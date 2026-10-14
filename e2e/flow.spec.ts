@@ -239,8 +239,9 @@ test.describe('顧客フロー', () => {
 
   test('2-1. 未ログインで一時保存し、別の端末（別のブラウザ）で URL から続きを開ける', async ({ page, browser }) => {
     await openFreshSimulator(page);
-    await pickOption(page, 'equip-exterior-parts', ['wood-deck']);
+    await page.getByTestId('site-prefecture-select').selectOption('石川県');
     const total = await readTotal(page);
+    const equipment = (await page.getByTestId('equip-exterior-parts').textContent()) ?? '';
     await page.getByTestId('save-button').click();
     await page.getByTestId('guest-save-temporary').click();
     const url = await page.getByTestId('guest-plan-url').inputValue();
@@ -253,7 +254,8 @@ test.describe('顧客フロー', () => {
       await phone.goto(url);
       await waitForSimulator(phone);
       await expect(phone.getByTestId('guest-plan-notice')).toBeVisible();
-      await expect(phone.getByTestId('equip-exterior-parts')).toContainText('ウッドデッキ');
+      await expect(phone.getByTestId('site-prefecture-select')).toHaveValue('石川県');
+      await expect(phone.getByTestId('equip-exterior-parts')).toHaveText(equipment);
       expect(await readTotal(phone)).toBe(total);
       // 鍵が違う・期限切れの URL は開けない
       await phone.goto(url.replace(/plan=.*/, 'plan=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'));

@@ -1196,10 +1196,12 @@ export function SimulatorApp({
         </div>
 
         {pricingPreview && (
-          <Alert tone="info" className="mt-4" data-testid="pricing-preview-banner">
-            本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
-            プレビュー中は保存・見積依頼はできません。
-          </Alert>
+          <div className="mt-4" data-testid="pricing-preview-banner">
+            <Alert tone="info">
+              本部プレビュー：新しい標準見積の価格で表示しています。お客様には現在の価格を表示中です（サイトの新価格へは未切り替え）。
+              プレビュー中は保存・見積依頼はできません。
+            </Alert>
+          </div>
         )}
         {loadError && (
           <Alert tone="warn" className="mt-4">
@@ -1207,11 +1209,13 @@ export function SimulatorApp({
           </Alert>
         )}
         {guestPlanExpiresAt && !configId && (
-          <Alert tone="info" className="mt-4" data-testid="guest-plan-notice">
-            一時保存したプランを開きました（
-            {new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'long', day: 'numeric' }).format(new Date(guestPlanExpiresAt))}
-            まで有効）。金額は今の価格で計算し直しています。会員登録すると、マイページにずっと保存できます。
-          </Alert>
+          <div className="mt-4" data-testid="guest-plan-notice">
+            <Alert tone="info">
+              一時保存したプランを開きました（
+              {new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'long', day: 'numeric' }).format(new Date(guestPlanExpiresAt))}
+              まで有効）。金額は今の価格で計算し直しています。会員登録すると、マイページにずっと保存できます。
+            </Alert>
+          </div>
         )}
         {readOnly && (
           <Alert tone="info" className="mt-4">

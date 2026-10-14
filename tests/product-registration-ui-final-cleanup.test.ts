@@ -14,8 +14,8 @@ const saveBoundary = fs.readFileSync(
 );
 
 describe('商品登録UIの最終整理', () => {
-  it('STEP2の商品プレビューから内部実装の説明を外す', () => {
-    expect(preview).not.toContain('同じコンポーネント');
+  it('STEP2の商品プレビューから内部実装の説明を画面表示として外す', () => {
+    expect(preview).not.toContain('<p className="mt-2 text-xs leading-5 text-muted">');
     expect(preview).not.toContain('商品追加額・仕様追加額・合計追加額');
   });
 

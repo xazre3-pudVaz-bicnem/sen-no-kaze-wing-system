@@ -348,6 +348,10 @@ export function ProductDetail({
         open={manufacturerDocumentOpen}
         url={manufacturerDocumentUrl}
         productName={option.name}
+        groups={editableGroups}
+        choices={choices}
+        selectedVariantIds={selectedVariantIds}
+        onVariantChange={handleVariantChange}
         onClose={closeManufacturerDocument}
       />
     </div>

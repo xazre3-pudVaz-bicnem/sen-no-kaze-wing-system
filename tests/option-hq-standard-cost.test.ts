@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const migration = fs.readFileSync(
-  path.join(root, 'supabase/migrations/20261014100000_option_hq_standard_cost.sql'),
+  path.join(root, 'supabase/migrations/20261014110000_option_hq_standard_cost.sql'),
   'utf8'
 );
 const action = fs.readFileSync(path.join(root, 'lib/actions/option-hq-standard-cost.ts'), 'utf8');

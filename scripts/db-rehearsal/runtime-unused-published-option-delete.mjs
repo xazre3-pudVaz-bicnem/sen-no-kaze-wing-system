@@ -144,31 +144,34 @@ async function runtimeSafeDeleteConcurrency({ connectionString }) {
 
   for (const client of [setup, blocker, deleter, mover, observer, timeoutBlocker, timeoutDeleter]) {
     await client.connect();
+    await client.query("set statement_timeout = '8s'");
   }
 
   try {
     await setupConcurrencyFixtures(setup, ids);
 
     // variant所属変更race:
-    // safe-deleteがvariant tableのSHARE lockを取得してoption行待ちになった後、
-    // choiceのgroup_id変更を試みる。変更はDELETE完了まで待たされ、対象group消滅後のFKで失敗すること。
+    // canonical orderではsafe-deleteが対象Option行を先に確保する。そこでvariant choice
+    // tableをACCESS EXCLUSIVEで一時停止し、safe-deleteを先にSHARE待ちへ並べてから
+    // group_id変更writerを後ろへ並べる。解放後はsafe-deleteが先に完了し、待機writerは
+    // 削除済みtarget groupへのFK変更を23503で拒否されることを確認する。
     await blocker.query('begin');
-    await blocker.query('select 1 from public.options where id = $1::uuid for update', [ids.target]);
+    await blocker.query('lock table public.option_variant_choices in access exclusive mode');
+
     const deleterPid = Number((await deleter.query('select pg_backend_pid() as pid')).rows[0].pid);
     const deletePromise = safeDeleteAsAdmin(deleter, ids.admin, ids.target);
-
-    const deleteHasShareLock = await waitForRelationLock(
+    const deleteWaitsForShare = await waitForRelationLock(
       observer,
       deleterPid,
       'public.option_variant_choices',
       'ShareLock',
-      true
+      false
     );
     results.push({
-      step: 'unused-delete concurrency 1-1 safe-deleteはvariant choiceのSHARE lockを取得する',
+      step: 'unused-delete concurrency 1-1 safe-deleteはOption行確保後にvariant choiceのSHARE lockを待つ',
       expected: 'true',
-      actual: String(deleteHasShareLock),
-      ok: deleteHasShareLock,
+      actual: String(deleteWaitsForShare),
+      ok: deleteWaitsForShare,
     });
 
     await mover.query('begin');
@@ -192,7 +195,7 @@ async function runtimeSafeDeleteConcurrency({ connectionString }) {
       false
     );
     results.push({
-      step: 'unused-delete concurrency 1-2 variant所属変更はsafe-delete中に待機する',
+      step: 'unused-delete concurrency 1-2 variant所属変更raceのwriterはsafe-deleteの後ろで待機する',
       expected: 'true',
       actual: String(moverWaitsForShare),
       ok: moverWaitsForShare,
@@ -234,7 +237,7 @@ async function runtimeSafeDeleteConcurrency({ connectionString }) {
         raceRow.configuration_ref_intact === true,
     });
 
-    // lock_timeout: target optionを別transactionが保持し続けても、広いSHARE lockを無期限に保持しない。
+    // lock_timeout: target optionを別transactionが保持し続けても、後続の広いtable lockへ進まず安全停止する。
     await timeoutBlocker.query('begin');
     await timeoutBlocker.query('select 1 from public.options where id = $1::uuid for update', [ids.timeoutTarget]);
     const timeoutResult = await safeDeleteAsAdmin(timeoutDeleter, ids.admin, ids.timeoutTarget);

@@ -78,6 +78,36 @@ create trigger estimate_templates_baseline_option_refs_validate
 before insert or update of baseline_option_ids on public.estimate_templates
 for each row execute function public.validate_estimate_template_baseline_option_refs();
 
+create or replace function public.validate_configuration_item_variant_refs()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from unnest(coalesce(new.variant_choice_ids, '{}'::uuid[])) ref(choice_id)
+    left join public.option_variant_choices vc on vc.id = ref.choice_id
+    left join public.option_variant_groups vg on vg.id = vc.group_id
+    where vc.id is null
+       or vg.id is null
+       or vg.option_id <> new.option_id
+  ) then
+    raise exception using message = 'VALIDATION: 保存済み仕様のバリエーション参照が商品と一致しません';
+  end if;
+  return new;
+end;
+$$;
+
+alter function public.validate_configuration_item_variant_refs() owner to postgres;
+revoke all on function public.validate_configuration_item_variant_refs() from public, anon, authenticated, service_role;
+
+drop trigger if exists configuration_items_variant_refs_validate on public.configuration_items;
+create trigger configuration_items_variant_refs_validate
+before insert or update of option_id, variant_choice_ids on public.configuration_items
+for each row execute function public.validate_configuration_item_variant_refs();
+
 create or replace function public.validate_configuration_snapshot_option_refs()
 returns trigger
 language plpgsql
@@ -168,6 +198,33 @@ create trigger quote_internal_snapshots_option_refs_validate
 before insert on public.quote_internal_snapshots
 for each row execute function public.validate_quote_internal_snapshot_option_refs();
 
+create or replace function public.validate_legacy_migration_snapshot_option_refs()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from unnest(coalesce(new.legacy_baseline_option_ids, '{}'::uuid[])) ref(option_id)
+    left join public.options o on o.id = ref.option_id
+    where o.id is null
+  ) then
+    raise exception using message = 'VALIDATION: legacy標準見積Snapshotに存在しない商品が含まれています';
+  end if;
+  return new;
+end;
+$$;
+
+alter function public.validate_legacy_migration_snapshot_option_refs() owner to postgres;
+revoke all on function public.validate_legacy_migration_snapshot_option_refs() from public, anon, authenticated, service_role;
+
+drop trigger if exists legacy_migration_snapshot_option_refs_validate on public.legacy_migration_financial_snapshots;
+create trigger legacy_migration_snapshot_option_refs_validate
+before insert or update of legacy_baseline_option_ids on public.legacy_migration_financial_snapshots
+for each row execute function public.validate_legacy_migration_snapshot_option_refs();
+
 create or replace function public.delete_unused_published_option(p_option_id uuid)
 returns void
 language plpgsql
@@ -189,8 +246,8 @@ begin
   end if;
 
   -- 配列・JSON参照とvariant所属変更のTOCTOUを避ける。
-  -- 書込み側は、待機後に上記validation trigger / FK / 保存RPC検証を再実行するため、
-  -- DELETE後に消えた商品ID/codeを新たに保存することもできない。
+  -- 書込み側は、待機後にvalidation trigger / FK / 保存RPC検証を再実行するため、
+  -- DELETE後に消えた商品ID/code/variant UUIDを新たに保存することもできない。
   lock table
     public.base_models,
     public.configuration_items,

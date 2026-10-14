@@ -171,6 +171,8 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
     selection_mode: formData.get('selection_mode'),
     finish_level: formData.get('finish_level') || 'full',
     is_required: formData.get('is_required'),
+    // フォームのチェックボックス。渡し忘れると未チェック扱い（false）になり、保存のたびにお客様画面から消える
+    customer_visible: formData.get('customer_visible'),
     sort_order: formData.get('sort_order'),
     status: formData.get('status'),
   });

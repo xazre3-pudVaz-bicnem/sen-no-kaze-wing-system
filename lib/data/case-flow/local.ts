@@ -19,6 +19,7 @@ import {
   type CaseProgress,
   type CaseWorkflow,
   type DealerProfileInput,
+  type PaperContractInput,
   type QuoteRequestPreferences,
   type QuoteRequestPreferencesInput,
   type SiteSurvey,
@@ -553,6 +554,133 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         if (dealerId) notify(db, { recipient_id: dealerId, audience: 'dealer', kind: 'case_tech_review', title: '技術検討が記録されました', body: input.body.slice(0, 200), link });
       }
       return note.id;
+    });
+  }
+
+  // ---------- 見積の修正依頼（20261013230000 と同じ判定） ----------
+  async listQuoteChangeRequests(actor: SessionUser, requestId: string) {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (!access || access === 'manufacturer') return [];
+      return (tables(db).changeRequests ?? [])
+        .filter((c) => c.quote_request_id === requestId)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((c) => ({ ...c }));
+    });
+  }
+  async requestQuoteChange(actor: SessionUser, quoteId: string, message: string) {
+    return this.mutate((db) => {
+      const quote = db.quotes.find((q) => q.id === quoteId);
+      // 権限は状態の判定より前（見えない見積は存在も分からないようにする）
+      if (!quote || quote.user_id !== actor.id) throw notFound();
+      const text = message.trim();
+      if (!text || text.length > 2000) throw invalid('修正したい内容を 2000 文字以内で入力してください');
+      const request = db.quoteRequests.find((r) => r.id === quote.quote_request_id);
+      if (!request) throw notFound();
+      if (quote.status !== 'issued') throw locked('回答済み・取り消し済みの見積には修正を依頼できません');
+      if (request.quote_id !== quote.id) throw locked('この見積は最新の版ではありません。最新の見積をご確認ください');
+      const t = tables(db);
+      t.changeRequests ??= [];
+      if (t.changeRequests.some((c) => c.quote_id === quote.id && c.status === 'open')) {
+        throw locked('この見積には対応中の修正依頼があります。担当からのご連絡をお待ちください');
+      }
+      const now = nowIso();
+      const row = {
+        id: randomUUID(),
+        quote_request_id: request.id,
+        quote_id: quote.id,
+        message: text,
+        status: 'open' as const,
+        resolution: null,
+        requested_by: actor.id,
+        resolved_at: null,
+        created_at: now,
+        updated_at: now,
+      };
+      t.changeRequests.push(row);
+      const link = `/admin/quotes/${quote.id}`;
+      notify(db, { recipient_id: null, audience: 'admin', kind: 'quote_change_requested', title: `お客様から見積の修正依頼がありました：${quote.quote_no}`, body: text.slice(0, 200), link });
+      if (quote.dealer_id) {
+        notify(db, { recipient_id: quote.dealer_id, audience: 'dealer', kind: 'quote_change_requested', title: `お客様から見積の修正依頼がありました：${quote.quote_no}`, body: text.slice(0, 200), link });
+      }
+      return row.id;
+    });
+  }
+  async resolveQuoteChangeRequest(actor: SessionUser, changeRequestId: string, resolution: string | null) {
+    this.mutate((db) => {
+      const row = (tables(db).changeRequests ?? []).find((c) => c.id === changeRequestId);
+      if (!row) throw notFound();
+      const access = accessOf(db, actor, row.quote_request_id);
+      if (access !== 'admin' && access !== 'staff') throw forbidden('修正依頼を対応済みにできるのは本部と担当代理店だけです');
+      if (row.status !== 'open') throw locked('この修正依頼はすでに対応済みです');
+      if ((resolution ?? '').length > 1000) throw invalid('対応内容は 1000 文字以内で入力してください');
+      row.status = 'resolved';
+      row.resolution = resolution?.trim() || null;
+      row.resolved_at = nowIso();
+      row.updated_at = nowIso();
+      const request = db.quoteRequests.find((r) => r.id === row.quote_request_id);
+      if (request?.user_id) {
+        notify(db, { recipient_id: request.user_id, audience: 'customer', kind: 'quote_change_resolved', title: '見積の修正依頼に対応しました', body: (row.resolution ?? '担当からのご案内をご確認ください。').slice(0, 200), link: `/mypage/cases/${row.quote_request_id}` });
+      }
+    });
+  }
+
+  // ---------- 書面で締結した契約（20261013230000 と同じ判定） ----------
+  async recordPaperContract(actor: SessionUser, quoteId: string, input: PaperContractInput, pdf: Uint8Array) {
+    return this.mutate((db) => {
+      if (rank(actor) < 3) throw forbidden('書面の契約を記録できるのは本部だけです');
+      const quote = db.quotes.find((q) => q.id === quoteId);
+      if (!quote) throw notFound();
+      const request = db.quoteRequests.find((r) => r.id === quote.quote_request_id);
+      if (!request) throw notFound();
+      if (!quote.user_id) throw locked('お客様アカウントのある案件だけ契約を記録できます');
+      if (quote.status !== 'accepted') throw locked('お客様が承諾した見積だけ契約を記録できます');
+      if (request.quote_id !== quote.id) throw locked('この見積は案件の現在の版ではありません');
+      if (db.contracts.some((c) => c.quote_request_id === request.id && ['sending', 'sent', 'signed'].includes(c.status))) {
+        throw locked('この案件には送信中または締結済みの契約があります');
+      }
+      const id = randomUUID();
+      const rel = path.posix.join('contracts', 'paper', `${randomUUID()}.pdf`);
+      const abs = path.join(filesDir(), rel);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, pdf);
+      const now = nowIso();
+      db.contracts.push({
+        id,
+        quote_request_id: request.id,
+        quote_id: quote.id,
+        user_id: quote.user_id,
+        provider: 'paper',
+        status: 'signed',
+        signer_name: input.signer_name,
+        signer_email: input.signer_email,
+        contract_total: quote.total,
+        envelope_xid: null,
+        provider_document_id: null,
+        signed_file_path: rel,
+        failure_reason: null,
+        sent_at: null,
+        signed_at: new Date(`${input.signed_on}T00:00:00+09:00`).toISOString(),
+        canceled_at: null,
+        created_at: now,
+        updated_at: now,
+      });
+      notify(db, { recipient_id: quote.user_id, audience: 'customer', kind: 'contract_signed', title: 'ご契約の記録が完了しました', body: '書面でご締結いただいた契約書は、マイページの見積詳細からご確認いただけます。', link: `/mypage/quotes/${quote.id}` });
+      return id;
+    });
+  }
+  async voidPaperContract(actor: SessionUser, contractId: string, reason: string) {
+    this.mutate((db) => {
+      if (rank(actor) < 3) throw forbidden('書面の契約を無効にできるのは本部だけです');
+      const text = reason.trim();
+      if (!text || text.length > 1000) throw invalid('無効にする理由を 1000 文字以内で入力してください');
+      const contract = db.contracts.find((c) => c.id === contractId);
+      if (!contract) throw notFound();
+      if (contract.provider !== 'paper' || contract.status !== 'signed') throw locked('無効にできるのは、記録済みの書面の契約だけです');
+      contract.status = 'canceled';
+      contract.canceled_at = nowIso();
+      contract.failure_reason = text;
+      contract.updated_at = nowIso();
     });
   }
 

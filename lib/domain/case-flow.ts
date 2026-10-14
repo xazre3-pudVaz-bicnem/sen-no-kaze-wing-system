@@ -469,6 +469,49 @@ export function normalizeCaseNoteInput(raw: Record<string, unknown>): CaseNoteIn
   return { kind: kind as CaseNoteKind, body: body as string, verdict, estimated_cost, parent_id };
 }
 
+// ---------- 見積の修正依頼（フェーズ9） ----------
+
+export interface QuoteChangeRequest {
+  id: string;
+  quote_request_id: string;
+  quote_id: string;
+  message: string;
+  status: 'open' | 'resolved';
+  resolution: string | null;
+  requested_by: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function normalizeChangeRequestMessage(value: unknown): string {
+  const text = cfText(value, 2000, '修正したい内容');
+  if (!text) fail('修正したい内容を 2000 文字以内で入力してください');
+  return text as string;
+}
+
+// ---------- 書面で締結した契約（フェーズ10） ----------
+
+export interface PaperContractInput {
+  signer_name: string;
+  signer_email: string;
+  /** 締結日（日本時間の日付 YYYY-MM-DD） */
+  signed_on: string;
+}
+
+export function normalizePaperContractInput(raw: Record<string, unknown>, today: string): PaperContractInput {
+  const name = cfText(raw.signer_name, 100, '署名者の氏名');
+  if (!name) fail('署名者の氏名を入力してください');
+  const email = (cfText(raw.signer_email, 254, '署名者のメールアドレス') ?? '').toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail('署名者のメールアドレスの形式が正しくありません');
+  const signedOn = cfText(raw.signed_on, 10, '締結日');
+  if (!signedOn || !/^\d{4}-\d{2}-\d{2}$/.test(signedOn) || Number.isNaN(Date.parse(`${signedOn}T00:00:00Z`))) fail('締結日を正しく入力してください');
+  const min = new Date(`${today}T00:00:00Z`);
+  min.setUTCDate(min.getUTCDate() - 3650);
+  if ((signedOn as string) > today || (signedOn as string) < min.toISOString().slice(0, 10)) fail('締結日を正しく入力してください');
+  return { signer_name: name as string, signer_email: email, signed_on: signedOn as string };
+}
+
 // ---------- 案件の写真・書類 ----------
 
 export type CaseFileContext = 'site_survey' | 'progress' | 'handover' | 'punch' | 'after_service' | 'contract' | 'document';

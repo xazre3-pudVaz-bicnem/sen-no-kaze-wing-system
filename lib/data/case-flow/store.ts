@@ -13,6 +13,8 @@ import type {
   CaseWorkflow,
   DealerProfile,
   DealerProfileInput,
+  PaperContractInput,
+  QuoteChangeRequest,
   QuoteRequestPreferences,
   QuoteRequestPreferencesInput,
   SiteSurvey,
@@ -70,6 +72,17 @@ export interface CaseFlowStore {
   // ---- 社内の記録（フェーズ7） ----
   listCaseNotes(actor: SessionUser, requestId: string): Promise<CaseNote[]>;
   addCaseNote(actor: SessionUser, requestId: string, input: CaseNoteInput): Promise<string>;
+
+  // ---- 見積の修正依頼（フェーズ9） ----
+  listQuoteChangeRequests(actor: SessionUser, requestId: string): Promise<QuoteChangeRequest[]>;
+  requestQuoteChange(actor: SessionUser, quoteId: string, message: string): Promise<string>;
+  resolveQuoteChangeRequest(actor: SessionUser, changeRequestId: string, resolution: string | null): Promise<void>;
+
+  // ---- 書面で締結した契約（フェーズ10） ----
+  /** 本部：署名済みの書面（PDF）を非公開の保存先へ置き、締結済みとして記録する */
+  recordPaperContract(actor: SessionUser, quoteId: string, input: PaperContractInput, pdf: Uint8Array): Promise<string>;
+  /** 本部：誤って記録した書面の契約を、理由を残して無効にする */
+  voidPaperContract(actor: SessionUser, contractId: string, reason: string): Promise<void>;
 
   // ---- 写真・書類 ----
   listCaseFiles(actor: SessionUser, requestId: string): Promise<CaseFile[]>;

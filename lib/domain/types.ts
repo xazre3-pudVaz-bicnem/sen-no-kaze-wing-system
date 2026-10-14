@@ -796,7 +796,8 @@ export interface ElectronicContract {
   quote_request_id: string;
   quote_id: string;
   user_id: string;
-  provider: 'gmosign';
+  /** gmosign：GMOサインの電子契約／paper：書面で締結した契約（本部が署名済みの PDF を記録。20261013230000） */
+  provider: 'gmosign' | 'paper';
   status: ElectronicContractStatus;
   signer_name: string;
   signer_email: string;

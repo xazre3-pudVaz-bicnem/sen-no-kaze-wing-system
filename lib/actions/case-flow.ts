@@ -7,7 +7,10 @@ import { StoreError, type SessionUser } from '@/lib/data/store';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import {
+  CASE_FILE_MAX_BYTES,
   CaseFlowValidationError,
+  normalizeChangeRequestMessage,
+  normalizePaperContractInput,
   normalizeAppointmentInput,
   normalizeCaseFileInput,
   normalizeCaseNoteInput,
@@ -329,6 +332,82 @@ export async function addCaseNoteAction(_prev: CaseFlowActionState, formData: Fo
   } catch (e) {
     return { ok: false, error: errorMessage(e) };
   }
+}
+
+// ---------- 見積の修正依頼（フェーズ9） ----------
+
+export async function requestQuoteChangeAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/mypage');
+  try {
+    const quoteId = uuid(formData, 'quote_id');
+    const message = normalizeChangeRequestMessage(text(formData, 'message'));
+    const store = await getCaseFlowStore();
+    await store.requestQuoteChange(user, quoteId, message);
+    await flushNotificationsSafely();
+    revalidateCase(quoteId, text(formData, 'request_id') || null);
+    return { ok: true, message: '修正のご依頼をお送りしました。担当よりご連絡いたします。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function resolveQuoteChangeAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const store = await getCaseFlowStore();
+    const resolution = text(formData, 'resolution').trim();
+    if (resolution.length > 1000) throw new CaseFlowValidationError('対応内容は 1000 文字以内で入力してください');
+    await store.resolveQuoteChangeRequest(user, uuid(formData, 'change_request_id'), resolution || null);
+    await flushNotificationsSafely();
+    revalidateCase(quoteId, text(formData, 'request_id') || null);
+  } catch (e) {
+    redirect(`/admin/quotes/${quoteId}?tab=estimate&error=${encodeURIComponent(errorMessage(e))}`);
+  }
+  redirect(`/admin/quotes/${quoteId}?tab=estimate&done=change`);
+}
+
+// ---------- 書面で締結した契約（フェーズ10） ----------
+
+export async function recordPaperContractAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
+  const user = await actor('/admin/quotes');
+  if (user.role !== 'admin') return { ok: false, error: '書面の契約を記録できるのは本部だけです' };
+  try {
+    const quoteId = uuid(formData, 'quote_id');
+    const input = normalizePaperContractInput(
+      { signer_name: text(formData, 'signer_name'), signer_email: text(formData, 'signer_email'), signed_on: text(formData, 'signed_on') },
+      new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date())
+    );
+    const file = formData.get('file');
+    if (!(file instanceof File) || file.size === 0) throw new CaseFlowValidationError('署名済みの契約書（PDF）を選んでください');
+    if (file.type !== 'application/pdf') throw new CaseFlowValidationError('契約書は PDF で登録してください');
+    if (file.size > CASE_FILE_MAX_BYTES) throw new CaseFlowValidationError('契約書は 20MB 以下にしてください');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    // PDF の先頭の印（%PDF-）を確かめる（種類の申告だけを信用しない）
+    if (!(bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) {
+      throw new CaseFlowValidationError('PDF ファイルを選んでください');
+    }
+    const store = await getCaseFlowStore();
+    await store.recordPaperContract(user, quoteId, input, bytes);
+    await flushNotificationsSafely();
+    revalidateCase(quoteId, text(formData, 'request_id') || null);
+    return { ok: true, message: '書面の契約を記録しました。お客様のマイページからも契約書を開けます。' };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+export async function voidPaperContractAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const store = await getCaseFlowStore();
+    await store.voidPaperContract(user, uuid(formData, 'contract_id'), text(formData, 'reason'));
+    revalidateCase(quoteId, text(formData, 'request_id') || null);
+  } catch (e) {
+    redirect(`/admin/quotes/${quoteId}?tab=documents&error=${encodeURIComponent(errorMessage(e))}`);
+  }
+  redirect(`/admin/quotes/${quoteId}?tab=documents&done=paper_void`);
 }
 
 // ---------- 写真・書類 ----------

@@ -31,7 +31,9 @@ const category = (id: string, code: string, name: string, sortOrder: number): Op
   description: `${name}を個別に選択します。`,
   selection_mode: 'single',
   finish_level: 'shell',
-  is_required: true,
+  // 断熱は本体の構造・製造に必要な直接原価として Base Master 側で扱い、お客様が選ぶ必須項目にはしない
+  // （先方確認 2026-10-14）。必須にすると、断熱を選べない「本体のみ」などが保存・見積依頼できなくなる
+  is_required: false,
   customer_visible: true,
   sort_order: sortOrder,
   status: 'published',

@@ -143,6 +143,10 @@ function mapPgError(e: { code?: string; message?: string } | null): never {
   if (msg.startsWith('QUOTE_IMMUTABLE')) throw new StoreError('LOCKED', '発行済み見積の金額は変更できません');
   // 外部キー違反。DB のメッセージをそのまま画面に出さない
   if (e?.code === '23503') throw new StoreError('VALIDATION', '他のデータから参照されているため削除できません');
+  // lock の待ち切れ・deadlock も raw のまま出さず、再試行できる案内にする
+  if (e?.code === '55P03' || e?.code === '40P01') {
+    throw new StoreError('LOCKED', '現在ほかの処理で使用中です。少し時間をおいて再度お試しください。');
+  }
   if (e?.code === '23505') throw new StoreError('VALIDATION', '同じ値が既に登録されています');
   throw new StoreError('INTERNAL', msg);
 }

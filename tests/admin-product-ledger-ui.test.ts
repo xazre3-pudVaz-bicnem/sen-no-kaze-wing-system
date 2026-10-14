@@ -192,7 +192,10 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('商品管理番号');
     expect(client).toContain('シミュレーター・Web表示設定');
     expect(client).toContain('自社の仕入・発注情報');
-    expect(client).toContain('未登録値を推測せず、取得可能になるまでは表示しません。');
+    expect(client).toContain('本部商品基準原価（税別）');
+    expect(client).toContain('<Row label="仕入先" value={<PendingDbValue />}/>');
+    expect(client).toContain('<Row label="発注コード" value={<PendingDbValue />}/>');
+    expect(client).toContain('<Row label="発注単位" value={<PendingDbValue />}/>');
     expect(client).toContain('登録・権限情報');
     expect(client).toContain('data-product-origin-slot="pending-db"');
     expect(client).toContain('商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。');

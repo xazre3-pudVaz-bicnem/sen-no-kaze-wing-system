@@ -30,6 +30,11 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   const exteriorFaces = await getExteriorFaces(configuration.id);
   // 相談したい代理店の候補：公開中で、設置予定地（未定なら全国）に対応している代理店
   const caseFlow = await getCaseFlowStore();
+  // 設置予定地・土地（フェーズ3）。マイページで入力済みなら、その内容を初期値にする
+  const siteProfile = await caseFlow.getSiteProfile(user, configuration.id);
+  const siteArea = configuration.site_location_undecided
+    ? ''
+    : [configuration.site_prefecture, configuration.site_municipality].filter(Boolean).join('');
   const dealers = (await caseFlow.listPublishedDealerProfiles())
     .filter((dealer) => dealerServesArea(dealer, configuration.site_prefecture ?? null, configuration.site_municipality ?? null))
     .map((dealer) => ({ id: dealer.dealer_id, name: dealer.display_name }));
@@ -60,12 +65,16 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
             lockVersion={configuration.lock_version ?? null}
             dealers={dealers}
             today={todayInJapan()}
+            siteProfile={siteProfile}
+            siteArea={siteArea}
             defaults={{
               full_name: profile?.full_name ?? '',
               company_name: profile?.company_name ?? '',
               email: profile?.email ?? user.email,
               phone: profile?.phone ?? '',
               address: profile?.address ?? '',
+              site_address: siteProfile?.site_address ?? '',
+              site_profile_lock_version: siteProfile ? String(siteProfile.lock_version) : '',
             }}
           />
           <aside className="card h-fit overflow-hidden lg:sticky lg:top-24">

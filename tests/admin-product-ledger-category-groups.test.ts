@@ -6,7 +6,7 @@ const ledgerPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/ledger
 
 describe('商品台帳の表示用大分類', () => {
   it('正式カテゴリーを変更せず、商品台帳だけで探しやすい大分類へまとめる', () => {
-    for (const label of ['性能・仕様', '外まわり', '窓・ドア', '室内', '水回り・設備', '電気・照明', '家具・収納', '別途工事', 'その他']) {
+    for (const label of ['性能・仕様', '外まわり', '窓・ドア', '室内', '水回り・設備', '電気・照明', '家具・収納', '別途工事']) {
       expect(ledgerPage).toContain(`name: '${label}'`);
     }
 

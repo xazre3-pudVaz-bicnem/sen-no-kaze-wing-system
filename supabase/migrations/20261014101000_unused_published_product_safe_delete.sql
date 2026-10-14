@@ -424,11 +424,12 @@ $$;
 
 alter function public.delete_unused_published_option(uuid) owner to postgres;
 
+-- 101000単独適用後は旧実装をapplication roleへ公開しない。
+-- hardening migration 102000がすべて成功した最後に、canonical wrapperだけauthenticatedへ公開する。
 revoke all on function public.delete_unused_published_option(uuid) from public;
 revoke all on function public.delete_unused_published_option(uuid) from anon;
 revoke all on function public.delete_unused_published_option(uuid) from authenticated;
 revoke all on function public.delete_unused_published_option(uuid) from service_role;
-grant execute on function public.delete_unused_published_option(uuid) to authenticated;
 
 -- service_roleはRLSを迂回するため、publishedの直接DELETE経路をtable ACLでも閉じる。
 -- authenticatedのDELETEは既存draft削除に必要なので残し、RLSでdraft限定にする。
@@ -444,3 +445,15 @@ as restrictive
 for delete
 to public
 using (status = 'draft');
+
+-- migration file単位でhistoryが確定するため、中間状態自体をfail-closedで検証する。
+do $postcondition$
+begin
+  if has_function_privilege('public', 'public.delete_unused_published_option(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.delete_unused_published_option(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.delete_unused_published_option(uuid)', 'EXECUTE')
+     or has_function_privilege('service_role', 'public.delete_unused_published_option(uuid)', 'EXECUTE') then
+    raise exception 'POSTCONDITION: pre-hardening safe-delete RPC must not be executable by application roles';
+  end if;
+end;
+$postcondition$;

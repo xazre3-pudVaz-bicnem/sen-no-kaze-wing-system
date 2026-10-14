@@ -75,6 +75,32 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(manufacturerDocumentModal).toContain('aria-label="メーカー資料を閉じる"');
   });
 
+  it('PDFを見ながらカラー・仕様を選び、商品詳細と同じ選択状態へ反映する', () => {
+    expect(productDetail).toContain('groups={editableGroups}');
+    expect(productDetail).toContain('choices={choices}');
+    expect(productDetail).toContain('selectedVariantIds={selectedVariantIds}');
+    expect(productDetail).toContain('onVariantChange={handleVariantChange}');
+    expect(manufacturerDocumentModal).toContain('data-testid="manufacturer-document-variant-panel"');
+    expect(manufacturerDocumentModal).toContain('カラー・仕様を選ぶ');
+    expect(manufacturerDocumentModal).toContain('ここでの選択は商品詳細にもそのまま反映されます。');
+    expect(manufacturerDocumentModal).toContain('<VariantPicker');
+    expect(manufacturerDocumentModal).toContain('selected={selectedVariantIds}');
+    expect(manufacturerDocumentModal).toContain('onChange={onVariantChange}');
+    expect(manufacturerDocumentModal).toContain('showImages');
+  });
+
+  it('PDFと仕様選択はPCで左右、スマホでは上下に同時表示する', () => {
+    expect(manufacturerDocumentModal).toContain('grid-rows-[minmax(15rem,1.35fr)_minmax(12rem,1fr)]');
+    expect(manufacturerDocumentModal).toContain('md:grid-cols-[minmax(0,1.8fr)_minmax(19rem,0.8fr)]');
+    expect(manufacturerDocumentModal).toContain('md:grid-rows-1');
+    expect(manufacturerDocumentModal).toContain('md:border-l md:border-t-0');
+  });
+
+  it('仕様選択がない商品では従来どおりPDFを全面表示する', () => {
+    expect(manufacturerDocumentModal).toContain('const hasSelectableVariants = groups.length > 0;');
+    expect(manufacturerDocumentModal).toContain('{hasSelectableVariants ? (');
+  });
+
   it('外壁4面の専用UIは画像付き仕様選択を維持する', () => {
     expect(exteriorWallFacesDialog).toContain('data-testid="exterior-wall-faces-dialog"');
     expect(exteriorWallFacesDialog).toContain('<VariantPicker');

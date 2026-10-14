@@ -114,6 +114,34 @@ declare
   opt_k constant uuid := '00000000-0000-4000-8000-000000000c12';
   v_se3_text text;
   v_se4_text text;
+  -- サイトの新価格への切り替えスイッチの検査用
+  v_switch_text text;
+  -- 案件の進行（フェーズ9〜10）の検査用：書面の契約を記録する、承諾済みの現在の確定見積
+  c_pc constant uuid := '00000000-0000-4000-8000-00000000c0f1';
+  r_pc constant uuid := '00000000-0000-4000-8000-00000000e0f1';
+  q_pc constant uuid := '00000000-0000-4000-8000-00000000f0f1';
+  -- 修正依頼の検査用：発行済みの現在の見積（第2版）と、その旧版
+  c_cr constant uuid := '00000000-0000-4000-8000-00000000c0f2';
+  r_cr constant uuid := '00000000-0000-4000-8000-00000000e0f2';
+  q_cr constant uuid := '00000000-0000-4000-8000-00000000f0f2';
+  q_cr_old constant uuid := '00000000-0000-4000-8000-00000000f0f3';
+  v_cf_change text;
+  v_cf_paper text;
+  -- 案件の進行（フェーズ11〜13）の検査用
+  v_mo_text text;
+  v_unit_text text;
+  -- 案件の進行（フェーズ14〜15）の検査用
+  v_ho_text text;
+  v_punch_text text;
+  v_doc_text text;
+  v_cert_text text;
+  v_after_text text;
+  v_unit2_text text;
+  -- 案件の進行（フェーズ4〜7）の検査用
+  v_cf_appt text;
+  v_cf_file_cust text;
+  v_cf_file_staff text;
+  v_cf_out text;
   -- シミュレーターの標準見積（PR C2）の検査用
   c_s constant uuid := '00000000-0000-4000-8000-00000000c0dd';
   c_s2 constant uuid := '00000000-0000-4000-8000-00000000c0de';
@@ -780,6 +808,28 @@ begin
           insert into public.configuration_items (configuration_id, option_id, quantity) values (c_s, opt_a, 3);
           set local session_replication_role = origin;
 
+          -- 18. サイトの新価格への切り替えスイッチ（20261013210000）：切れている間は、標準状態の商品があってもこれまでの計算。
+          --     切り替えは本部だけ。以降の 17 の検査は、本部がスイッチを入れた状態で行い、最後に戻す
+          if to_regprocedure('public.simulator_standard_pricing_enabled()') is not null then
+            perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
+            perform public.recalculate_configuration(c_s);
+            perform set_config('request.jwt.claims', '', true);
+            perform pg_temp.expect_eq('18-1 スイッチが切れている間は、標準状態の商品があってもこれまでの計算（本体はモデルの本体価格）',
+              (select m.base_price::text from public.base_models m where m.id = v_model),
+              coalesce((select c.base_price::text from public.configurations c where c.id = c_s), '(なし)'));
+            perform pg_temp.expect_denied('18-2 お客様はシミュレーターの価格を切り替えられない', '42501',
+              pg_temp.run_as('authenticated', u_cust_x, $q$ select public.set_simulator_standard_pricing(true)::text $q$));
+            perform pg_temp.expect_denied('18-3 未ログインの利用者はスイッチの状態を読めない', '42501',
+              pg_temp.run_as('anon', null, $q$ select public.simulator_standard_pricing_enabled()::text $q$));
+            perform pg_temp.expect_blocked('18-4 お客様は設定の表を直接読めない',
+              pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.app_settings $q$));
+            -- 切り替えと監査ログの確認は別の文にする（同じ文の中からは、その文の中で書いた行が見えない）
+            v_switch_text := pg_temp.run_as('authenticated', u_admin, $q$ select public.set_simulator_standard_pricing(true)::text $q$);
+            perform pg_temp.expect_eq('18-5 本部はシミュレーターの価格を切り替えられ、監査ログに残る', 'true/true',
+              v_switch_text || '/' ||
+              exists (select 1 from public.audit_logs a where a.entity = 'app_settings' and a.summary like '%新しい標準見積に切り替え%')::text);
+          end if;
+
           -- recalculate_configuration は保存処理（save_configuration_atomic）の中から呼ぶ内部の関数（API からは実行できない）。
           -- 保存と同じく本人（JWT の sub）として、内部から呼ぶ
           perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
@@ -811,6 +861,16 @@ begin
                from public.quote_items qi where qi.quote_id = q_s));
           perform pg_temp.expect_denied('17-4 お客様は標準見積の明細を作る内部の関数を実行できない', '42501',
             pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.write_standard_estimate_quote_items(%L, %L)::text $q$, c_s, q_s)));
+
+          if to_regprocedure('public.simulator_standard_pricing_enabled()') is not null then
+            perform pg_temp.run_as('authenticated', u_admin, $q$ select public.set_simulator_standard_pricing(false)::text $q$);
+            perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', u_cust_x)::text, true);
+            perform public.recalculate_configuration(c_s);
+            perform set_config('request.jwt.claims', '', true);
+            perform pg_temp.expect_eq('18-6 スイッチを戻すと、これまでの計算に戻る',
+              (select m.base_price::text from public.base_models m where m.id = v_model),
+              coalesce((select c.base_price::text from public.configurations c where c.id = c_s), '(なし)'));
+          end if;
         end if;
       end if;
     end if;
@@ -868,6 +928,403 @@ begin
       pg_temp.run_as('authenticated', u_admin, format($q$ select public.cancel_electronic_contract(%L, 'x')::text $q$, v_contract_text)));
     perform pg_temp.expect_eq('12-15 契約の送信・署名で見積（金額・状態）は変わらない', 'accepted/1100000',
       (select status || '/' || total::text from public.quotes where id = q_f));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 19. 案件の進行（フェーズ4〜7）：代理店の紹介・お客様の希望・受付・日程・現地確認・社内の記録・写真
+  --     顧客Xの案件（r_x）は代理店1が担当。代理店2・顧客Yは関係が無い。総代理店は本部が指定したときだけ技術検討の担当
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.case_access(uuid)') is not null then
+    perform pg_temp.expect_eq('19-1 案件への関わり方：本部・担当代理店・お客様だけ', 'admin/staff/customer/(null)/(null)/(null)',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.case_access(%L) $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.case_access(%L) $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.case_access(%L) $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.case_access(%L) $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select public.case_access(%L) $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.case_access(%L) $q$, r_x)));
+    perform pg_temp.expect_denied('19-2 未ログインの利用者は案件への関わり方を判定できない', '42501',
+      pg_temp.run_as('anon', null, format($q$ select public.case_access(%L) $q$, r_x)));
+
+    -- 代理店の紹介ページ
+    perform pg_temp.expect_denied('19-3 代理店は他の代理店の紹介ページを編集できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_dealer_profile(%L, '{"display_name":"x"}'::jsonb, null)::text $q$, u_dealer2)));
+    perform pg_temp.expect_eq('19-4 代理店は自分の紹介ページを登録できる', '1',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_dealer_profile(%L, '{"display_name":"能登の工務店","service_prefectures":["石川県"],"services":["foundation"]}'::jsonb, null)::text $q$, u_dealer1)));
+    perform pg_temp.expect_denied('19-5 代理店は自分の紹介ページを公開できない（公開は本部）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_dealer_profile_published(%L, true, 1)::text $q$, u_dealer1)));
+    perform pg_temp.expect_eq('19-6 未ログインの利用者は非公開の紹介ページを読めない', '0',
+      pg_temp.run_as('anon', null, format($q$ select count(*)::text from public.dealer_profiles where dealer_id = %L $q$, u_dealer1)));
+    perform pg_temp.expect_denied('19-7 公開前の代理店はお客様が選べない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('preferred_dealer_id', %L))::text $q$, r_x, u_dealer1)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.set_dealer_profile_published(%L, true, 1)::text $q$, u_dealer1));
+    perform pg_temp.expect_eq('19-8 本部が公開すると、未ログインの利用者も読める', '1',
+      pg_temp.run_as('anon', null, format($q$ select count(*)::text from public.dealer_profiles where dealer_id = %L $q$, u_dealer1)));
+
+    -- お客様の希望
+    perform pg_temp.expect_denied('19-9 他のお客様は希望を書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('meeting_method', 'online'))::text $q$, r_x)));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_quote_request_preferences(%L, jsonb_build_object('preferred_dealer_id', %L, 'meeting_method', 'onsite', 'preferred_slots', jsonb_build_array(jsonb_build_object('date', (current_date + 3)::text, 'period', 'pm'))))::text $q$, r_x, u_dealer1));
+    perform pg_temp.expect_eq('19-10 希望は本人・担当代理店に見え、関係の無い代理店には見えない', '1/1/0',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.quote_request_preferences where quote_request_id = %L $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.quote_request_preferences where quote_request_id = %L $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.quote_request_preferences where quote_request_id = %L $q$, r_x)));
+
+    -- 受付・担当
+    perform pg_temp.expect_denied('19-11 お客様は受付できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.acknowledge_case(%L)::text $q$, r_x)));
+    perform pg_temp.expect_denied('19-12 関係の無い代理店は受付できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.acknowledge_case(%L)::text $q$, r_x)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.acknowledge_case(%L)::text $q$, r_x));
+    perform pg_temp.expect_eq('19-13 担当代理店が受付すると、お客様へ知らせる。お客様は社内の担当の設定を読めない', 'true/0',
+      exists (select 1 from public.case_workflows w where w.quote_request_id = r_x and w.acknowledged_at is not null)::text || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.case_workflows where quote_request_id = %L $q$, r_x)));
+    perform pg_temp.expect_eq('19-14 お客様への受付のお知らせ', 'true',
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'case_acknowledged')::text);
+    perform pg_temp.expect_denied('19-15 担当代理店は他の人を主担当者にできない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.assign_case_primary_staff(%L, %L)::text $q$, r_x, u_admin)));
+    perform pg_temp.expect_denied('19-16 主担当者は案件の担当以外から選べない（閲覧を広げない）', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.assign_case_primary_staff(%L, %L)::text $q$, r_x, u_dealer2)));
+    perform pg_temp.expect_denied('19-17 技術検討・製造の担当は本部だけが決める', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_case_manufacturer(%L, %L)::text $q$, r_x, u_master)));
+
+    -- 日程
+    perform pg_temp.expect_denied('19-18 お客様は日程を送れない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.propose_case_appointment(%L, jsonb_build_object('candidates', jsonb_build_array(jsonb_build_object('starts_at', now() + interval '3 days'))))::text $q$, r_x)));
+    v_cf_appt := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.propose_case_appointment(%L, jsonb_build_object('purpose', 'site_survey', 'method', 'onsite', 'candidates', jsonb_build_array(jsonb_build_object('starts_at', now() + interval '3 days'), jsonb_build_object('starts_at', now() + interval '4 days'))))::text $q$, r_x));
+    perform pg_temp.expect_eq('19-19 担当代理店は候補の日時を送れ、関係の無いお客様には見えない', '1/0',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.case_appointments where id::text = %L $q$, v_cf_appt)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select count(*)::text from public.case_appointments where id::text = %L $q$, v_cf_appt)));
+    perform pg_temp.expect_denied('19-20 関係の無いお客様は日程を確定できない（存在も分からない）', 'P0002',
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select public.confirm_case_appointment(%L, 0, 1)::text $q$, v_cf_appt)));
+    perform pg_temp.expect_denied('19-21 読み込んだ版が古いと確定できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_case_appointment(%L, 0, 9)::text $q$, v_cf_appt)));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_case_appointment(%L, 1, 1)::text $q$, v_cf_appt));
+    perform pg_temp.expect_eq('19-22 お客様が候補から選ぶと確定し、担当へ知らせる', 'confirmed/2/true',
+      (select a.status || '/' || a.lock_version from public.case_appointments a where a.id::text = v_cf_appt) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'case_appointment_confirmed')::text);
+    perform pg_temp.expect_denied('19-23 お客様は日程の表を直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ update public.case_appointments set status = 'done' where id::text = %L returning 'updated' $q$, v_cf_appt)));
+
+    -- 現地確認
+    perform pg_temp.expect_eq('19-24 担当代理店は現地確認を記録できる', '1',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_site_survey(%L, '{"land":{"area_sqm":"120"},"legal":{"zoning":"第一種住居地域"}}'::jsonb, null)::text $q$, r_x)));
+    perform pg_temp.expect_denied('19-25 確認日が無いと完了にできない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_site_survey_status(%L, 'completed', 1)::text $q$, r_x)));
+    perform pg_temp.expect_eq('19-26 現地確認はお客様・関係の無い代理店から読めない', '0/0',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.site_surveys where quote_request_id = %L $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.site_surveys where quote_request_id = %L $q$, r_x)));
+    perform pg_temp.expect_eq('19-27 お客様向けの進み具合には、社内の内容を含めない', 'true',
+      (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L)::text $q$, r_x)) !~ '(land|legal|survey_notes|zoning)')::text);
+
+    -- 社内の記録・技術検討
+    perform pg_temp.expect_denied('19-28 お客様は社内の記録を書けない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.add_case_note(%L, '{"kind":"meeting","body":"x"}'::jsonb)::text $q$, r_x)));
+    perform pg_temp.expect_denied('19-29 担当代理店は技術検討を書けない（総代理店・本部）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.add_case_note(%L, '{"kind":"tech_review","body":"x","verdict":"feasible"}'::jsonb)::text $q$, r_x)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.set_case_manufacturer(%L, %L)::text $q$, r_x, u_master));
+    v_cf_out := pg_temp.run_as('authenticated', u_master, format($q$ select public.add_case_note(%L, '{"kind":"tech_review","body":"製造可","verdict":"feasible","estimated_cost":1200000}'::jsonb)::text $q$, r_x));
+    perform pg_temp.expect_eq('19-30 本部が指定した総代理店は技術検討を書け、お客様は社内の記録を読めない', 'manufacturer/1/0',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.case_access(%L) $q$, r_x)) || '/' ||
+      (select count(*)::text from public.case_notes n where n.quote_request_id = r_x and n.kind = 'tech_review') || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.case_notes where quote_request_id = %L $q$, r_x)));
+
+    -- 写真・書類
+    perform pg_temp.expect_denied('19-31 お客様は現地確認の写真を登録できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.register_case_file(%L, '{"context":"site_survey","file_name":"a.png","content_type":"image/png","size_bytes":10}'::jsonb)::text $q$, r_x)));
+    perform pg_temp.expect_denied('19-32 画像・PDF 以外は登録できない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.register_case_file(%L, '{"context":"site_survey","file_name":"a.html","content_type":"text/html","size_bytes":10}'::jsonb)::text $q$, r_x)));
+    v_cf_file_staff := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.register_case_file(%L, '{"context":"site_survey","file_name":"a.png","content_type":"image/png","size_bytes":10}'::jsonb) ->> 'id' $q$, r_x));
+    v_cf_file_cust := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.register_case_file(%L, '{"context":"document","file_name":"b.pdf","content_type":"application/pdf","size_bytes":10}'::jsonb) ->> 'id' $q$, r_x));
+    perform pg_temp.expect_eq('19-33 お客様には、お客様に表示する資料だけが見える。関係の無い代理店には見えない', '1/2/0',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.case_files where quote_request_id = %L $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.case_files where quote_request_id = %L $q$, r_x)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.case_files where quote_request_id = %L $q$, r_x)));
+    perform pg_temp.expect_denied('19-34 お客様は担当が登録した（お客様に表示していない）資料を削除できず、存在も分からない', 'P0002',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.delete_case_file(%L)::text $q$, v_cf_file_staff)));
+    perform pg_temp.expect_eq('19-35 保存先の名前は DB が決める（案件ごとの非公開の場所）', 'true',
+      exists (select 1 from public.case_files f where f.id::text = v_cf_file_cust and f.storage_path like 'cases/' || r_x::text || '/%.pdf' and f.customer_visible)::text);
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 20. 見積の修正依頼（フェーズ9）・書面で締結した契約（フェーズ10）
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.request_quote_change(uuid, text)') is not null then
+    -- 発行済みの現在の見積（第2版）と旧版を用意する（前の検査で q_x は回答済みになっているため）
+    set local session_replication_role = replica;
+    insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+    values (c_cr, u_cust_x, v_model, '修正依頼の検査', 'quote_requested', 'office', 'full');
+    insert into public.quote_requests (id, configuration_id, user_id, quote_id, status) values (r_cr, c_cr, u_cust_x, q_cr, 'sent');
+    insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                               customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                               subtotal, tax_rate, tax, total, quote_kind, revision, parent_quote_id)
+    values (q_cr_old, 'RT-CHANGE-1', r_cr, c_cr, u_cust_x, u_dealer1, 'superseded', now() + interval '30 days', '顧客X', '権限検査用モデル',
+            1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal', 1, null),
+           (q_cr, 'RT-CHANGE-2', r_cr, c_cr, u_cust_x, u_dealer1, 'issued', now() + interval '30 days', '顧客X', '権限検査用モデル',
+            1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal', 2, q_cr_old);
+    set local session_replication_role = origin;
+
+    perform pg_temp.expect_denied('20-1 他のお客様は修正を依頼できない（存在も分からない）', 'P0002',
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select public.request_quote_change(%L, 'x')::text $q$, q_cr)));
+    perform pg_temp.expect_denied('20-2 担当代理店はお客様の代わりに修正を依頼できない', 'P0002',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.request_quote_change(%L, 'x')::text $q$, q_cr)));
+    perform pg_temp.expect_denied('20-3 最新でない版には修正を依頼できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.request_quote_change(%L, 'x')::text $q$, q_cr_old)));
+    v_cf_change := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.request_quote_change(%L, 'エアコンを外したい')::text $q$, q_cr));
+    perform pg_temp.expect_denied('20-4 対応中の依頼があるうちは、同じ見積に重ねて依頼できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.request_quote_change(%L, 'もう一件')::text $q$, q_cr)));
+    perform pg_temp.expect_eq('20-5 修正依頼は見積の状態を変えず、担当へ知らせる。関係の無い代理店には見えない', 'issued/true/0',
+      (select q.status from public.quotes q where q.id = q_cr) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'quote_change_requested')::text || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.quote_change_requests where id::text = %L $q$, v_cf_change)));
+    perform pg_temp.expect_denied('20-6 お客様は修正依頼を対応済みにできない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.resolve_quote_change_request(%L, 'x')::text $q$, v_cf_change)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.resolve_quote_change_request(%L, '第 2 版を発行します')::text $q$, v_cf_change));
+    perform pg_temp.expect_eq('20-7 担当代理店が対応済みにすると、お客様へ知らせる', 'resolved/true',
+      (select c.status from public.quote_change_requests c where c.id::text = v_cf_change) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'quote_change_resolved')::text);
+
+    -- 書面の契約：承諾済みの現在の確定見積を用意する
+    set local session_replication_role = replica;
+    insert into public.configurations (id, user_id, base_model_id, name, status, spec_code, finish_level)
+    values (c_pc, u_cust_x, v_model, '書面の契約の検査', 'quote_requested', 'office', 'full');
+    insert into public.quote_requests (id, configuration_id, user_id, quote_id, status) values (r_pc, c_pc, u_cust_x, q_pc, 'sent');
+    insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                               customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                               subtotal, tax_rate, tax, total, quote_kind)
+    values (q_pc, 'RT-PAPER-1', r_pc, c_pc, u_cust_x, u_dealer1, 'accepted', now() + interval '30 days', '顧客X', '権限検査用モデル',
+            1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 'formal');
+    set local session_replication_role = origin;
+
+    perform pg_temp.expect_denied('20-8 担当代理店は書面の契約を記録できない（本部だけ）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000001.pdf')::text $q$, q_pc)));
+    perform pg_temp.expect_denied('20-9 保存先は決まった場所だけ', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/other/x.pdf')::text $q$, q_pc)));
+    perform pg_temp.expect_denied('20-10 承諾されていない見積には記録できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000001.pdf')::text $q$, q_x)));
+    v_cf_paper := pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000001.pdf')::text $q$, q_pc));
+    perform pg_temp.expect_eq('20-11 本部は書面の契約を締結済みとして記録でき、お客様本人だけが読める', 'paper/signed/1100000/1/0',
+      coalesce((select c.provider || '/' || c.status || '/' || c.contract_total from public.contracts c where c.id::text = v_cf_paper), '(なし)') || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.contracts where id::text = %L $q$, v_cf_paper)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_y, format($q$ select count(*)::text from public.contracts where id::text = %L $q$, v_cf_paper)));
+    perform pg_temp.expect_denied('20-12 契約は同時に 1 つだけ', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000002.pdf')::text $q$, q_pc)));
+    perform pg_temp.expect_denied('20-13 書面の契約を無効にできるのは本部だけ', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.void_paper_contract(%L, '誤記録')::text $q$, v_cf_paper)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.void_paper_contract(%L, '誤記録')::text $q$, v_cf_paper));
+    perform pg_temp.expect_eq('20-14 無効にすると取り消しとして残り、記録し直せる', 'canceled/uuid',
+      (select c.status from public.contracts c where c.id::text = v_cf_paper) || '/' ||
+      case when pg_temp.run_as('authenticated', u_admin, format($q$ select public.record_paper_contract(%L, '顧客X', 'x@example.invalid', current_date, 'contracts/paper/00000000-0000-4000-8000-000000000003.pdf')::text $q$, q_pc))
+                ~ '^[0-9a-f-]{36}$' then 'uuid' else 'error' end);
+    perform pg_temp.expect_denied('20-15 電子契約の取り消し（cancel_electronic_contract）では書面の契約を取り消せない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.cancel_electronic_contract((select id from public.contracts where quote_id = %L and status = 'signed'), 'x')::text $q$, q_pc)));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 21. 製造依頼と個体（フェーズ11）・工程表（12）・施工の記録（13）
+  --     20 で書面の契約を記録した案件（r_pc。担当は代理店1）を使う。総代理店は本部が指定したときだけ製造の担当
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.create_manufacturing_order(uuid, jsonb)') is not null
+     and exists (select 1 from public.contracts c where c.quote_request_id = r_pc and c.status = 'signed') then
+    perform pg_temp.expect_denied('21-1 お客様・関係の無い代理店は製造依頼を作れない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":2}'::jsonb)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('21-2 関係の無い代理店は製造依頼を作れない', '42501',
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":2}'::jsonb)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('21-3 棟数が数字でなければ、分かる形で拒否する', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":"x"}'::jsonb)::text $q$, r_pc)));
+    v_mo_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.create_manufacturing_order(%L, '{"unit_count":2,"spec_note":"標準仕様"}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.expect_eq('21-4 担当代理店は締結済みの案件の製造依頼を作れ、棟数分の個体ができる（番号は発行しない）', 'draft/2/0',
+      coalesce((select o.status from public.manufacturing_orders o where o.id::text = v_mo_text), '(なし)') || '/' ||
+      (select count(*)::text from public.manufacturing_units u where u.order_id::text = v_mo_text) || '/' ||
+      (select count(*)::text from public.manufacturing_units u where u.order_id::text = v_mo_text and u.unit_no is not null));
+    perform pg_temp.expect_denied('21-5 製造の担当が決まるまで送れない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.send_manufacturing_order(%L, 1)::text $q$, v_mo_text)));
+    perform pg_temp.run_as('authenticated', u_admin, format($q$ select public.set_case_manufacturer(%L, %L)::text $q$, r_pc, u_master));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.send_manufacturing_order(%L, 1)::text $q$, v_mo_text));
+    perform pg_temp.expect_eq('21-6 送ると総代理店へ届き、製造仕様は品名・数量だけ（価格を写さない）', 'sent/true/false/true',
+      coalesce((select o.status from public.manufacturing_orders o where o.id::text = v_mo_text), '(なし)') || '/' ||
+      exists (select 1 from public.manufacturing_orders o where o.id::text = v_mo_text and o.manufacturer_id = u_master)::text || '/' ||
+      exists (select 1 from public.manufacturing_orders o where o.id::text = v_mo_text and o.spec_snapshot::text ~ '(unit_price|amount|total)')::text || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_master and n.kind = 'manufacturing_order_sent')::text);
+    perform pg_temp.expect_denied('21-7 担当代理店は受領できない（総代理店）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_manufacturing_order_status(%L, 'received', 2, null)::text $q$, v_mo_text)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.set_manufacturing_order_status(%L, 'received', 2, null)::text $q$, v_mo_text));
+    perform pg_temp.expect_eq('21-8 総代理店が受領する。お客様は製造依頼・個体を読めない', 'received/0/0',
+      coalesce((select o.status from public.manufacturing_orders o where o.id::text = v_mo_text), '(なし)') || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.manufacturing_orders where id::text = %L $q$, v_mo_text)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select count(*)::text from public.manufacturing_units where order_id::text = %L $q$, v_mo_text)));
+
+    -- 個体
+    v_unit_text := (select u.id::text from public.manufacturing_units u where u.order_id::text = v_mo_text and u.seq = 1);
+    perform pg_temp.expect_denied('21-9 担当代理店は製造・出荷を記録できない（総代理店）', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_manufacturing_unit(%L, '{"status":"shipped"}'::jsonb, 1)::text $q$, v_unit_text)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.update_manufacturing_unit(%L, '{"status":"shipped","shipped_on":"2026-10-20"}'::jsonb, 1)::text $q$, v_unit_text));
+    perform pg_temp.expect_denied('21-10 総代理店は設置を記録できない（担当代理店）', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_manufacturing_unit(%L, '{"status":"installed"}'::jsonb, 2)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('21-11 個体の状態は前へだけ進められる（本部以外）', 'P0001',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_manufacturing_unit(%L, '{"status":"in_production"}'::jsonb, 2)::text $q$, v_unit_text)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_manufacturing_unit(%L, '{"status":"installed"}'::jsonb, 2)::text $q$, v_unit_text));
+    perform pg_temp.expect_eq('21-12 総代理店が出荷、担当代理店が設置を記録できる', 'installed/2026-10-20',
+      (select u.status || '/' || u.shipped_on::text from public.manufacturing_units u where u.id::text = v_unit_text));
+
+    -- 工程表
+    perform pg_temp.expect_denied('21-13 総代理店は基礎工事などの現場の工程を作れない', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.save_case_schedule_item(%L, null, '{"category":"foundation","title":"基礎工事"}'::jsonb, null)::text $q$, r_pc)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.save_case_schedule_item(%L, null, '{"category":"manufacturing","title":"製造","customer_visible":true}'::jsonb, null)::text $q$, r_pc));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_case_schedule_item(%L, null, '{"category":"foundation","title":"基礎工事","customer_visible":true}'::jsonb, null)::text $q$, r_pc));
+    perform pg_temp.expect_eq('21-14 お客様には「お客様に表示」の工程だけ見える（総代理店は表示を決められない）。関係の無い代理店には見えない', '基礎工事/0',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select string_agg(title, ',' order by title) from public.case_schedule_items where quote_request_id = %L $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select count(*)::text from public.case_schedule_items where quote_request_id = %L $q$, r_pc)));
+
+    -- 施工の記録
+    perform pg_temp.expect_denied('21-15 総代理店は完了の記録を書けない（進み具合と技術支援だけ）', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.add_case_progress_report(%L, '{"kind":"completion","title":"x"}'::jsonb)::text $q$, r_pc)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.add_case_progress_report(%L, '{"kind":"support","title":"技術支援","customer_visible":true}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.add_case_progress_report(%L, '{"kind":"completion","title":"設置が完了しました","customer_visible":true}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.expect_eq('21-16 お客様には「お客様に表示」の記録だけ見え、表示にした記録はお客様へ知らせる', '設置が完了しました/true',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select string_agg(title, ',') from public.case_progress_reports where quote_request_id = %L $q$, r_pc)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'case_progress_reported')::text);
+    perform pg_temp.expect_eq('21-17 お客様向けの進み具合は製造の状態と台数だけ（製造仕様・供給手配のメモは返さない）', 'received/true',
+      (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L) ->> 'manufacturing_status' $q$, r_pc))) || '/' ||
+      (pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L)::text $q$, r_pc)) !~ '(spec_snapshot|supply_note|spec_note)')::text);
+    perform pg_temp.expect_denied('21-18 製造依頼の表は直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ update public.manufacturing_orders set status = 'completed' where id::text = %L returning 'updated' $q$, v_mo_text)));
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 22. 完了確認・是正・引渡し（フェーズ14）、アフター・災害時提供の意思・全国ストック台帳（フェーズ15）
+  --     21 で 1 棟目を設置済みにした案件（r_pc。担当は代理店1、製造の担当は総代理店）を使う
+  ---------------------------------------------------------------------------
+  if to_regprocedure('public.start_handover_inspection(uuid, jsonb, integer)') is not null and v_unit_text is not null then
+    v_unit2_text := (select u.id::text from public.manufacturing_units u where u.order_id::text = v_mo_text and u.seq = 2);
+    perform pg_temp.expect_denied('22-1 お客様は完成確認を始められない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text), null)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-2 関係の無い代理店は完成確認を始められない', '42501',
+      pg_temp.run_as('authenticated', u_dealer2, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text), null)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-3 契約が無い案件は完成確認を始められない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text), null)::text $q$, r_cr)));
+    v_ho_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.start_handover_inspection(%L, jsonb_build_object('inspection_on', current_date::text, 'inspection_summary', '外装・設備の動作を確認'), null)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-4 担当代理店が完成確認を始めると、お客様へ確認をお願いする', '1/inspecting/pending/true',
+      v_ho_text || '/' || coalesce((select h.status || '/' || h.customer_confirmation from public.case_handovers h where h.quote_request_id = r_pc), '(なし)') || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'handover_inspection')::text);
+    perform pg_temp.expect_denied('22-5 担当代理店はお客様の代わりに回答できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.confirm_handover(%L, 'ok', null, 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-6 気になる点は 1〜20 件', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'issues', '[]'::jsonb, 1)::text $q$, r_pc)));
+    v_ho_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'issues', '["玄関ドアの閉まりが固い"]'::jsonb, 1)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-7 お客様の指摘は是正事項になり、担当へ知らせる', '2/correcting/issues/1/true',
+      v_ho_text || '/' || coalesce((select h.status || '/' || h.customer_confirmation from public.case_handovers h where h.quote_request_id = r_pc), '(なし)') || '/' ||
+      (select count(*)::text from public.case_punch_items p where p.quote_request_id = r_pc and p.raised_by_customer and p.status = 'open') || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'handover_confirmed')::text);
+    perform pg_temp.expect_denied('22-8 是正の確認が済むまで「問題なし」にできない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'ok', null, 2)::text $q$, r_pc)));
+    v_punch_text := (select p.id::text from public.case_punch_items p where p.quote_request_id = r_pc limit 1);
+    perform pg_temp.expect_denied('22-9 お客様は是正済みにできない（担当）', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_punch_item_status(%L, 'fixed', 1)::text $q$, v_punch_text)));
+    perform pg_temp.expect_denied('22-10 製造の担当は是正の確認ができない', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.set_punch_item_status(%L, 'verified', 1)::text $q$, v_punch_text)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_punch_item_status(%L, 'fixed', 1)::text $q$, v_punch_text));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_punch_item_status(%L, 'verified', 2)::text $q$, v_punch_text));
+    v_ho_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.confirm_handover(%L, 'ok', null, 2)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-11 担当が是正し、お客様が確認してから「問題なし」にできる', 'verified/true/3/ready/mypage',
+      (select p.status from public.case_punch_items p where p.id::text = v_punch_text) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'punch_item_fixed')::text || '/' ||
+      v_ho_text || '/' || coalesce((select h.status || '/' || h.customer_confirmed_via from public.case_handovers h where h.quote_request_id = r_pc), '(なし)'));
+
+    -- 工事完了承諾書（写し）と引渡し
+    v_doc_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.register_case_file(%L, '{"context":"document","file_name":"d.pdf","content_type":"application/pdf","size_bytes":10}'::jsonb) ->> 'id' $q$, r_pc));
+    perform pg_temp.expect_denied('22-12 承諾書には「完了確認・引渡し」の資料だけを使える', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.record_completion_certificate(%L, %L, current_date, 3)::text $q$, r_pc, v_doc_text)));
+    v_cert_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.register_case_file(%L, '{"context":"handover","file_name":"c.pdf","content_type":"application/pdf","size_bytes":10}'::jsonb) ->> 'id' $q$, r_pc));
+    perform pg_temp.expect_denied('22-13 お客様は承諾書を記録できない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.record_completion_certificate(%L, %L, current_date, 3)::text $q$, r_pc, v_cert_text)));
+    perform pg_temp.expect_denied('22-14 承諾書の記録の前は引渡し完了にできない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.complete_handover(%L, current_date, 3)::text $q$, r_pc)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.record_completion_certificate(%L, %L, current_date, 3)::text $q$, r_pc, v_cert_text));
+    perform pg_temp.expect_denied('22-15 承諾書として記録した写しは、本部でも削除できない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.delete_case_file(%L)::text $q$, v_cert_text)));
+    perform pg_temp.expect_denied('22-16 引渡し日は今日以前', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.complete_handover(%L, current_date + 1, 4)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-17 お客様は引渡し完了にできない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.complete_handover(%L, current_date, 4)::text $q$, r_pc)));
+    v_ho_text := pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.complete_handover(%L, current_date, 4)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-18 引渡し完了で、設置済みの個体だけ引渡し済みになり、お客様へ知らせる', '5/handed_over/handed_over/planned/true',
+      v_ho_text || '/' || coalesce((select h.status from public.case_handovers h where h.quote_request_id = r_pc), '(なし)') || '/' ||
+      (select u.status from public.manufacturing_units u where u.id::text = v_unit_text) || '/' ||
+      (select u.status from public.manufacturing_units u where u.id::text = v_unit2_text) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'handover_completed')::text);
+    perform pg_temp.expect_denied('22-19 引渡しの後は是正事項を足せない（不具合はアフターで受ける）', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.add_punch_item(%L, 'x', 5)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-20 完了確認の表は直接書き換えられない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ update public.case_handovers set status = 'inspecting' where quote_request_id = %L returning 'updated' $q$, r_pc)));
+
+    -- アフター
+    perform pg_temp.expect_denied('22-21 引渡しの前はアフターを依頼できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_after_service_request(%L, '{"kind":"repair","title":"x"}'::jsonb)::text $q$, r_cr)));
+    perform pg_temp.expect_denied('22-22 製造の担当はアフターを登録できない', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.create_after_service_request(%L, '{"kind":"repair","title":"x"}'::jsonb)::text $q$, r_pc)));
+    v_after_text := pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.create_after_service_request(%L, '{"kind":"repair","title":"窓の鍵がかかりにくい"}'::jsonb)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-23 お客様が依頼すると担当へ知らせる。製造の担当には回されるまで見えない', '0/1/true',
+      pg_temp.run_as('authenticated', u_master, format($q$ select count(*)::text from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_dealer1 and n.kind = 'after_service_requested')::text);
+    perform pg_temp.expect_denied('22-24 回されていないアフターは、製造の担当には存在も分からない', 'P0002',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_after_service_request(%L, '{"status":"resolved"}'::jsonb, 1)::text $q$, v_after_text)));
+    perform pg_temp.expect_denied('22-25 お客様はアフターの状態を変えられない', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.update_after_service_request(%L, '{"status":"resolved"}'::jsonb, 1)::text $q$, v_after_text)));
+    perform pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_after_service_request(%L, '{"status":"escalated","response":"製造元で確認します"}'::jsonb, 1)::text $q$, v_after_text));
+    perform pg_temp.expect_eq('22-26 担当代理店が製造の担当へ回すと、製造の担当に見え、知らせる', 'escalated/1/true',
+      (select a.status from public.after_service_requests a where a.id::text = v_after_text) || '/' ||
+      pg_temp.run_as('authenticated', u_master, format($q$ select count(*)::text from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_master and n.kind = 'after_service_escalated')::text);
+    perform pg_temp.expect_denied('22-27 製造の担当は回答と完了だけ（対応中に戻せない）', '42501',
+      pg_temp.run_as('authenticated', u_master, format($q$ select public.update_after_service_request(%L, '{"status":"in_progress"}'::jsonb, 2)::text $q$, v_after_text)));
+    perform pg_temp.run_as('authenticated', u_master, format($q$ select public.update_after_service_request(%L, '{"status":"resolved","response":"部品を交換しました"}'::jsonb, 2)::text $q$, v_after_text));
+    perform pg_temp.expect_eq('22-28 製造の担当が完了にすると、お客様に回答が見え、知らせる', 'resolved/部品を交換しました/true',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select status || '/' || response from public.after_service_requests where id::text = %L $q$, v_after_text)) || '/' ||
+      exists (select 1 from public.notifications n where n.recipient_id = u_cust_x and n.kind = 'after_service_resolved')::text);
+    perform pg_temp.expect_denied('22-29 完了したアフターは戻せない', 'P0001',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.update_after_service_request(%L, '{"status":"open"}'::jsonb, 3)::text $q$, v_after_text)));
+
+    -- 災害時提供の意思・全国ストック台帳
+    perform pg_temp.expect_denied('22-30 承諾書の文面が無い間は、意思を設定できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'accepted', null, 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-31 承諾書の文面を登録できるのは本部だけ', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, $q$ select public.publish_disaster_consent_text('承諾書', '本文')::text $q$));
+    v_ho_text := pg_temp.run_as('authenticated', u_admin, $q$ select public.publish_disaster_consent_text('災害時提供の承諾書', '（検査用の文面）')::text $q$);
+    perform pg_temp.expect_eq('22-32 本部が文面を第 1 版として登録し、監査ログに残る', '1/true',
+      v_ho_text || '/' || exists (select 1 from public.audit_logs a where a.entity = 'disaster_consent_texts')::text);
+    perform pg_temp.expect_denied('22-33 担当代理店はお客様の代わりに意思を設定できない', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.set_disaster_consent(%L, 'accepted', null, 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-34 読んだ文面が最新の版でなければ設定できない', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'accepted', null, 2)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-35 条件付き承諾には条件が要る', 'P0001',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'conditional', ' ', 1)::text $q$, r_pc)));
+    perform pg_temp.expect_denied('22-36 お客様の承諾が無い個体は台帳に「登録中」として載せられない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered"}'::jsonb, null)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('22-37 全国ストック台帳を編集できるのは本部だけ', '42501',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"suspended"}'::jsonb, null)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('22-38 引渡し済みでない個体は台帳に載せられない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"suspended"}'::jsonb, null)::text $q$, v_unit2_text)));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'conditional', '連絡がついてから', 1)::text $q$, r_pc));
+    v_ho_text := pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered","supply_72h":true}'::jsonb, null)::text $q$, v_unit_text));
+    perform pg_temp.expect_eq('22-39 条件付き承諾の個体は本部が登録でき、台帳は本部だけ・意思は製造の担当に見えない', '1/registered/0/0/conditional',
+      v_ho_text || '/' || coalesce((select e.registration_status from public.stock_ledger_entries e where e.unit_id::text = v_unit_text), '(なし)') || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, $q$ select count(*)::text from public.stock_ledger_entries $q$) || '/' ||
+      pg_temp.run_as('authenticated', u_master, format($q$ select count(*)::text from public.disaster_consents where quote_request_id = %L $q$, r_pc)) || '/' ||
+      (select c.decision from public.disaster_consents c where c.quote_request_id = r_pc order by c.created_at desc, c.id desc limit 1));
+    perform pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.set_disaster_consent(%L, 'declined', '無視される', 1)::text $q$, r_pc));
+    perform pg_temp.expect_eq('22-40 不承諾にすると台帳の登録が止まり、意思の履歴は残る', 'suspended/declined//2',
+      coalesce((select e.registration_status from public.stock_ledger_entries e where e.unit_id::text = v_unit_text), '(なし)') || '/' ||
+      (select c.decision || '/' || coalesce(c.conditions, '') from public.disaster_consents c where c.quote_request_id = r_pc order by c.created_at desc, c.id desc limit 1) || '/' ||
+      (select count(*)::text from public.disaster_consents c where c.quote_request_id = r_pc));
+    perform pg_temp.expect_denied('22-41 不承諾の個体は「登録中」に戻せない', 'P0001',
+      pg_temp.run_as('authenticated', u_admin, format($q$ select public.save_stock_ledger_entry(%L, '{"registration_status":"registered"}'::jsonb, 2)::text $q$, v_unit_text)));
+    perform pg_temp.expect_denied('22-42 意思の表は直接書き込めない（RPC だけ）', '42501',
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ insert into public.disaster_consents (quote_request_id, user_id, text_id, decision) select %L, %L, id, 'accepted' from public.disaster_consent_texts limit 1 returning 'inserted' $q$, r_pc, u_cust_x)));
+    perform pg_temp.expect_eq('22-43 担当代理店は契約の中身を読めないが、進み具合で締結済みかは分かる。お客様には引渡しの状態が返る', '0/true/handed_over',
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select count(*)::text from public.contracts where quote_request_id = %L $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_dealer1, format($q$ select public.get_case_progress(%L) ->> 'contract_signed' $q$, r_pc)) || '/' ||
+      pg_temp.run_as('authenticated', u_cust_x, format($q$ select public.get_case_progress(%L) ->> 'handover_status' $q$, r_pc)));
   end if;
 end
 $test$;

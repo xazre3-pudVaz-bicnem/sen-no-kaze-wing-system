@@ -30,20 +30,28 @@ describe('案件管理・契約以降UIモック', () => {
     expect(completeWorkspace).toContain('契約変更履歴は未保存です');
   });
 
-  it('製造・施工モックに製造依頼から設備工事と写真までを表示する', () => {
-    for (const label of ['製造依頼', '対象Revision', '棟数', '個体番号', '製造担当', '製造予定']) {
-      expect(completeWorkspace).toContain(label);
+  it('製造・施工は、モックではなく正式な欄（製造依頼と個体・工程表・施工の記録と写真）で記録する', () => {
+    const productionPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-production-panels.tsx'), 'utf8');
+    const domain = fs.readFileSync(path.join(root, 'lib/domain/case-flow.ts'), 'utf8');
+    expect(completeWorkspace).toContain('<CaseProductionPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />');
+    expect(completeWorkspace).not.toContain('function ProductionWorkflowMock');
+    for (const label of ['製造依頼と個体', '注文番号', '棟数', '個体番号', '希望納期', '工程表', '施工の記録・写真']) {
+      expect(productionPanels).toContain(label);
     }
-    for (const step of ['出荷', '搬入', '基礎', '設置', '電気', '給排水']) {
-      expect(completeWorkspace).toContain(step);
+    for (const step of ['出荷', '配送・搬入', '基礎工事', '設置', '電気工事', '給排水工事']) {
+      expect(domain).toContain(step);
     }
-    expect(completeWorkspace).toContain('工程写真');
   });
 
-  it('引渡し前の是正UIを持ち正式保存は行わない', () => {
-    expect(completeWorkspace).toContain('是正・引渡し前確認');
-    expect(completeWorkspace).toContain('是正事項');
-    expect(completeWorkspace).toContain('是正完了確認');
+  it('是正・引渡し・アフター・災害時提供は、モックではなく正式な欄で記録する（契約変更履歴はモックのまま）', () => {
+    const handoverPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-handover-panels.tsx'), 'utf8');
+    expect(completeWorkspace).toContain('<CaseHandoverPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />');
+    expect(completeWorkspace).toContain('<CaseDisasterPanel quoteId={props.quoteId} actor={props.actor} />');
+    expect(completeWorkspace).not.toContain('function HandoverCorrectionMock');
+    for (const label of ['是正事項', '是正した', '是正を確認した', '工事完了承諾書（署名済みの写し）', '引渡しを完了する', '災害時提供の意思', '全国ストック台帳（本部）']) {
+      expect(handoverPanels).toContain(label);
+    }
+    // 契約変更履歴は保存しないモックのまま
     expect(completeWorkspace).toContain('UIモック・保存なし');
     expect(completeWorkspace).not.toContain('createContract');
     expect(completeWorkspace).not.toContain('updateContract');

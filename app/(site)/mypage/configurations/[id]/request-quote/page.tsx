@@ -3,6 +3,9 @@ import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getStore } from '@/lib/data/store';
+import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { todayInJapan } from '@/lib/data/case-flow/preferences-from-form';
+import { dealerServesArea } from '@/lib/domain/case-flow';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Container, Section } from '@/components/ui';
@@ -25,6 +28,11 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   if (!bundle) notFound();
   const profile = await store.getProfile(user.id);
   const exteriorFaces = await getExteriorFaces(configuration.id);
+  // 相談したい代理店の候補：公開中で、設置予定地（未定なら全国）に対応している代理店
+  const caseFlow = await getCaseFlowStore();
+  const dealers = (await caseFlow.listPublishedDealerProfiles())
+    .filter((dealer) => dealerServesArea(dealer, configuration.site_prefecture ?? null, configuration.site_municipality ?? null))
+    .map((dealer) => ({ id: dealer.dealer_id, name: dealer.display_name }));
   const pricing = computePricing(
     bundle.model,
     bundle.options,
@@ -50,6 +58,8 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
           <QuoteRequestForm
             configurationId={configuration.id}
             lockVersion={configuration.lock_version ?? null}
+            dealers={dealers}
+            today={todayInJapan()}
             defaults={{
               full_name: profile?.full_name ?? '',
               company_name: profile?.company_name ?? '',

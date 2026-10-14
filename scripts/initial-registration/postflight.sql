@@ -41,7 +41,10 @@ checks as (
     'estimate_initial_rates', not exists (
       select 1 from se where sales_fee_rate <> 1.0 or expense_rate <> 0.15 or markup_rate <> 1.5),
     'estimate_money_snapshot', not exists (select 1 from se where total <= 0 or cost_total <= 0 or total <= cost_total),
-    'estimate_no_por', not exists (select 1 from se where has_por),
+    -- 価格未確定（POR）は、型番のない設備機器（商品確定待ち）のオプションの行だけ
+    'estimate_por_pending_products_only', not exists (
+      select 1 from se join public.standard_estimate_revision_lines l on l.revision_id = se.revision_id
+       where l.price_mode = 'por' and (l.section_code <> 'option' or coalesce(l.remark, '') not like '商品確定待ち：%')),
     'estimate_auto_trunc', not exists (
       select 1 from se join public.standard_estimate_revision_lines l on l.revision_id = se.revision_id
        where l.price_mode = 'auto' and l.unit_price <> trunc(l.cost_unit_price * se.markup_rate)::integer),

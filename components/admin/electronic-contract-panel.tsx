@@ -49,6 +49,11 @@ export async function ElectronicContractPanel({ quoteId, actor }: { quoteId: str
             <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusTone[current.status]}`}>
               {CONTRACT_STATUS_LABEL[current.status]}
             </span>
+            {current.provider === 'paper' && (
+              <span className="rounded-full border border-line px-2 py-0.5 text-xs text-ink-soft" data-testid="contract-provider-paper">
+                書面で締結
+              </span>
+            )}
             <span className="text-sm text-ink-soft">
               {current.signer_name}（{current.signer_email}）
             </span>

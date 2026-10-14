@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { flushNotificationsSafely } from '@/lib/mail/send';
+import { saveQuoteRequestPreferencesFromForm } from '@/lib/data/case-flow/preferences-from-form';
 import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
@@ -79,15 +80,19 @@ export async function requestQuoteAction(_prev: QuoteRequestState, formData: For
   const { configuration_id, message, expected_lock_version, ...contact } = parsed.data;
   const store = await getStore();
   let quoteId: string;
+  let requestId: string;
   try {
     const quote = await store.createQuoteFromConfiguration(user, configuration_id, contact as QuoteContact, message, expected_lock_version);
     quoteId = quote.id;
+    requestId = quote.quote_request_id;
   } catch (e) {
     return { ok: false, error: fromStoreError(e).error, values };
   }
+  // 相談したい代理店・打合せの希望（任意）。見積依頼は成立しているので、保存できなくても依頼は取り消さない
+  const preferenceError = await saveQuoteRequestPreferencesFromForm(user, requestId, formData);
   await flushNotificationsSafely();
   revalidatePath('/mypage');
-  redirect(`/mypage/quotes/${quoteId}?requested=1`);
+  redirect(`/mypage/quotes/${quoteId}?requested=1${preferenceError ? '&preferences=failed' : ''}`);
 }
 
 /** 顧客が見積を承諾／辞退する */

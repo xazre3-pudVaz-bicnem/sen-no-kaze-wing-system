@@ -58,6 +58,24 @@ function localUnavailable(): StandardEstimateActionResult | null {
   return isLocalMode() ? { ok: false, error: '標準見積の管理はSupabase接続環境で利用できます。' } : null;
 }
 
+/**
+ * 本部：シミュレーターの価格を、新しい標準見積に切り替える（または戻す）。
+ * 切り替えは先方の最終確認のあとに行う（2026-10-13 先方回答）。誤操作を防ぐため、切り替えには確認のチェックを必須にする。
+ */
+export async function setSimulatorStandardPricingAction(formData: FormData): Promise<void> {
+  await requireAdmin('/admin/standard-estimates');
+  if (isLocalMode()) redirect('/admin/standard-estimates?error=local');
+  const enabled = formData.get('enabled') === 'true';
+  if (enabled && formData.get('confirmed') !== 'on') redirect('/admin/standard-estimates?error=switch_confirm');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_simulator_standard_pricing', { p_enabled: enabled });
+  if (error) redirect(`/admin/standard-estimates?error=${encodeURIComponent(message(error))}`);
+  // シミュレーターのページは売価とスイッチを CATALOG_TAG で cache しているため破棄する
+  updateTag(CATALOG_TAG);
+  revalidatePath('/admin/standard-estimates');
+  redirect(`/admin/standard-estimates?switched=${enabled ? 'on' : 'off'}`);
+}
+
 /** 公開中の本体 Revision を基準に、標準見積の下書きを作る */
 export async function createStandardEstimateDraftAction(formData: FormData): Promise<void> {
   await requireAdmin('/admin/standard-estimates');

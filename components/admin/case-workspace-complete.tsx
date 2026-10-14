@@ -1,5 +1,9 @@
 import { CaseWorkspace as BaseCaseWorkspace } from '@/components/admin/case-workspace';
 import { ElectronicContractPanel } from '@/components/admin/electronic-contract-panel';
+import { CaseSitePanels } from '@/components/case-flow/case-site-panels';
+import { CaseChangeRequestsPanel, PaperContractPanel } from '@/components/case-flow/case-contract-panels';
+import { CaseProductionPanels } from '@/components/case-flow/case-production-panels';
+import { CaseDisasterPanel, CaseHandoverPanels } from '@/components/case-flow/case-handover-panels';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -21,6 +25,8 @@ type CaseWorkspaceProps = {
   settings?: string;
   embedded?: boolean;
   listSearchParams?: Record<string, string | undefined>;
+  /** 案件の進行の操作結果（?done= / ?error=） */
+  flash?: { done?: string; error?: string };
 };
 
 function MockBadge() {
@@ -87,112 +93,6 @@ function ContractHistoryMock({ quoteNo, revision, total }: { quoteNo: string; re
   );
 }
 
-function ProductionWorkflowMock({ revision, unitCount }: { revision: number; unitCount: string | null }) {
-  const steps = ['製造予定', '出荷', '搬入', '基礎', '設置', '電気', '給排水'];
-
-  return (
-    <section className="space-y-3 rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-production-workflow-mock">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">製造依頼・工程進捗</h3>
-            <MockBadge />
-          </div>
-          <p className="mt-1 text-xs leading-5 text-muted">
-            製造依頼から施工完了までの完成形表示です。個体番号・工程状態・日程・写真はまだ正式保存しません。
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {[
-          ['製造依頼', '未登録'],
-          ['対象Revision', `未固定（参照 第${revision}版）`],
-          ['棟数', unitCount ?? '未登録'],
-          ['個体番号', '未発行'],
-          ['製造担当', '未登録'],
-          ['製造予定', '未登録'],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
-            <p className="text-xs font-semibold text-muted">{label}</p>
-            <p className="mt-1 text-sm font-semibold leading-5 text-ink">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">工程</h4>
-          <span className="text-[0.65rem] text-muted">すべて未判定・未保存</span>
-        </div>
-        <div className="overflow-x-auto pb-1">
-          <div className="flex min-w-[48rem] items-stretch gap-1.5">
-            {steps.map((step, index) => (
-              <div key={step} className="flex min-w-0 flex-1 items-center">
-                <div className="min-w-0 flex-1 rounded-lg border border-line bg-[#f7f8f8] px-2 py-2 text-center">
-                  <p className="text-xs font-semibold text-ink">{step}</p>
-                  <p className="mt-1 text-[0.62rem] text-muted">未記録</p>
-                </div>
-                {index < steps.length - 1 && <span className="w-4 shrink-0 text-center text-muted">→</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-lg border border-dashed border-line bg-[#fbfcfb] p-4">
-          <p className="text-sm font-semibold">工程写真</p>
-          <p className="mt-1 text-xs leading-5 text-muted">製造・出荷・搬入・基礎・設置・設備工事の写真を工程ごとに並べる想定です。</p>
-          <div className="mt-3 grid grid-cols-3 gap-2" aria-label="工程写真の表示イメージ">
-            {[1, 2, 3].map((value) => (
-              <div key={value} className="flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-line bg-white text-[0.62rem] text-muted">
-                写真{value}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-lg border border-[#e6d8a8] bg-[#fffaf0] p-4">
-          <p className="text-sm font-semibold text-[#765d1f]">正式実装時の停止条件</p>
-          <p className="mt-1 text-xs leading-5 text-ink-soft">
-            製造依頼、個体番号、工程状態、担当、日程、写真の正式保存・完了判定は製造・工程DBが必要です。このモックからは更新しません。
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function HandoverCorrectionMock() {
-  return (
-    <section className="space-y-3 rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-handover-correction-mock">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-semibold">是正・引渡し前確認</h3>
-        <MockBadge />
-      </div>
-      <p className="text-xs leading-5 text-muted">
-        完了確認で見つかった是正事項を、担当・期限・写真・完了確認と合わせて管理する完成形イメージです。
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ['是正事項', '未記録'],
-          ['担当・期限', '未記録'],
-          ['是正写真', '未登録'],
-          ['是正完了確認', '未判定'],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-line bg-[#fbfcfb] p-3">
-            <p className="text-xs font-semibold text-muted">{label}</p>
-            <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
-          </div>
-        ))}
-      </div>
-      <p className="rounded-lg bg-[#f7f8f8] px-3 py-2 text-xs leading-5 text-muted">
-        引渡し日・引渡し確認・保証・点検・修理・問い合わせは上の「引渡し・アフター」完成形表示と連動する想定ですが、現在は正式DBを作らないため保存しません。
-      </p>
-    </section>
-  );
-}
-
 export async function CaseWorkspace(props: CaseWorkspaceProps) {
   const activeTab = props.tab ?? 'estimate';
   let quoteReference: { quoteNo: string; revision: number; total: number; unitCount: string | null } | null = null;
@@ -210,13 +110,23 @@ export async function CaseWorkspace(props: CaseWorkspaceProps) {
     }
   }
 
+  const { flash, ...baseProps } = props;
   return (
     <>
-      <BaseCaseWorkspace {...props} />
+      <BaseCaseWorkspace {...baseProps} />
+      {activeTab === 'estimate' && (
+        // お客様からの見積の修正依頼（フェーズ9）。依頼があるときだけ表示する
+        <CaseChangeRequestsPanel quoteId={props.quoteId} actor={props.actor} flash={flash} />
+      )}
+      {activeTab === 'site' && (
+        // 受付・担当・日程・現地確認・技術検討（フェーズ5〜7）。上の「正式登録候補」は案件資料からの参考表示
+        <CaseSitePanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
+      )}
       {quoteReference && activeTab === 'documents' && (
         <div className="mt-2 space-y-2">
-          {/* 電子契約（GMOサイン）は正式な保存・判定を行う。下の契約変更履歴はモックのまま */}
+          {/* 電子契約（GMOサイン）と書面の契約は正式な保存・判定を行う。下の契約変更履歴はモックのまま */}
           <ElectronicContractPanel quoteId={props.quoteId} actor={props.actor} />
+          <PaperContractPanel quoteId={props.quoteId} actor={props.actor} flash={flash} />
           <ContractHistoryMock
             quoteNo={quoteReference.quoteNo}
             revision={quoteReference.revision}
@@ -224,15 +134,17 @@ export async function CaseWorkspace(props: CaseWorkspaceProps) {
           />
         </div>
       )}
-      {quoteReference && activeTab === 'production' && (
-        <div className="mt-2">
-          <ProductionWorkflowMock revision={quoteReference.revision} unitCount={quoteReference.unitCount} />
-        </div>
+      {activeTab === 'production' && (
+        // 製造依頼と個体・工程表・施工の記録と写真（フェーズ11〜13）
+        <CaseProductionPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
       )}
-      {quoteReference && activeTab === 'handover' && (
-        <div className="mt-2">
-          <HandoverCorrectionMock />
-        </div>
+      {activeTab === 'handover' && (
+        // 完成確認・是正・工事完了承諾書・引渡し（フェーズ14）とアフター（フェーズ15）
+        <CaseHandoverPanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
+      )}
+      {activeTab === 'disaster' && (
+        // お客様の災害時提供の意思と、本部の全国ストック台帳の判定（フェーズ15）
+        <CaseDisasterPanel quoteId={props.quoteId} actor={props.actor} />
       )}
     </>
   );

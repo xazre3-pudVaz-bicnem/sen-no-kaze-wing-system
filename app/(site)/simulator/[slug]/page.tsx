@@ -4,7 +4,7 @@ import { getSessionUser } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
-import { getStandardEstimateSaleViews } from '@/lib/data/standard-estimate-sale-views';
+import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
@@ -13,7 +13,7 @@ import { SimulatorCaseImagesProvider } from '@/components/simulator/case-images-
 import { SimulatorApp, type SimulatorInitial } from '@/components/simulator/simulator-app';
 
 type Params = Promise<{ slug: string }>;
-type Search = Promise<{ c?: string; resume?: string; spec?: string }>;
+type Search = Promise<{ c?: string; resume?: string; spec?: string; preview?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { slug } = await params;
@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 }
 
 export default async function SimulatorPage({ params, searchParams }: { params: Params; searchParams: Search }) {
-  const [{ slug }, { c, resume, spec }] = await Promise.all([params, searchParams]);
+  const [{ slug }, { c, resume, spec, preview }] = await Promise.all([params, searchParams]);
 
   // 公開カタログと認証確認は互いに依存しないため並列取得する。
   // カタログは1回だけ取得し、bundle とモデル一覧を同じ結果から組み立てる。
@@ -40,12 +40,16 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
 
   // Excelから取り込んだ標準見積をシミュレーターへ渡す。
   // 未登録・未マイグレーション環境では空配列になり、従来計算へ安全にフォールバックする。
+  // 本部の管理者だけ、?preview=standard で切り替え前の新しい価格を確認できる（保存・見積依頼はできない）
+  const previewRequested = preview === 'standard' && user?.role === 'admin';
   const store = await getStore();
-  const [templateHeaders, saleViews] = await Promise.all([
+  const [templateHeaders, sale] = await Promise.all([
     store.listEstimateTemplates(model.id),
-    // 新しい標準見積（売価だけ）。標準状態の商品が登録された公開中のものがあれば、こちらを価格の正本にする
-    getStandardEstimateSaleViews(model.id),
+    // 新しい標準見積（売価だけ）。サイトの新価格へ切り替えるスイッチが入っているときだけ、お客様にも使う
+    getSimulatorSaleViews(model.id, { preview: previewRequested }),
   ]);
+  const saleViews = sale.saleViews;
+  const pricingPreview = previewRequested && !sale.switchedOn;
   const estimateTemplates = (
     await Promise.all(templateHeaders.map((row) => store.getEstimateTemplateBundle(model.id, row.spec_code)))
   ).filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -126,6 +130,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
           bundle={bundle}
           estimateTemplates={estimateTemplates}
           saleViews={saleViews}
+          pricingPreview={pricingPreview}
           models={allModels.map((m) => ({ slug: m.slug, name: m.name }))}
           elevations={elevations}
           initial={initial}

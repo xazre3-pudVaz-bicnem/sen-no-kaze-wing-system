@@ -11,6 +11,8 @@ import {
   isQuoteDeclineEligible,
 } from '@/lib/domain/quote-lifecycle';
 import { respondToQuoteAction } from '@/lib/actions/configurations';
+import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { QuoteChangeRequestForm } from '@/components/case-flow/forms';
 import { activeContract } from '@/lib/domain/electronic-contract';
 import { COMPANY } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
@@ -18,9 +20,15 @@ import { Alert, Badge, Container, Section } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 import { QuoteTable } from '@/components/mypage/quote-table';
 
-export default async function QuoteDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ requested?: string }> }) {
+export default async function QuoteDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ requested?: string; preferences?: string }>;
+}) {
   const { id } = await params;
-  const { requested } = await searchParams;
+  const { requested, preferences } = await searchParams;
   const user = await requireUser(`/mypage/quotes/${id}`);
   const store = await getStore();
   const detail = await store.getQuote(id, user);
@@ -35,6 +43,12 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
   const isFormalAcceptedUnconfirmed = acceptedQuoteCaseState === 'formal_unconfirmed';
   // 電子契約（GMOサイン）。お客様には自分の案件の契約だけが見える（RLS）
   const contract = request ? activeContract(await store.listElectronicContracts(request.id, user)) : null;
+  // 見積の修正依頼（フェーズ9）。発行済みの現在の見積だけ依頼できる
+  const changeRequests = request
+    ? (await (await getCaseFlowStore()).listQuoteChangeRequests(user, request.id)).filter((c) => c.quote_id === quote.id)
+    : [];
+  const canRequestChange =
+    Boolean(request) && quote.status === 'issued' && request?.quote_id === quote.id && !changeRequests.some((c) => c.status === 'open');
 
   return (
     <Section className="py-10 sm:py-14">
@@ -44,6 +58,18 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
           <Alert tone="success" title="見積依頼を受け付けました" className="mt-4">
             工場生産分（本体・オプション）の概算見積書（PDF）を発行しました。別途工事（運送・現地工事）は設置場所の条件を確認のうえ、代理店よりお見積りします。
           </Alert>
+        )}
+        {preferences === 'failed' && (
+          <Alert tone="warn" className="mt-4">
+            打合せのご希望（日程・代理店）を保存できませんでした。お手数ですが、担当からのご連絡の際にお伝えください。
+          </Alert>
+        )}
+        {request && (
+          <p className="mt-4 text-sm">
+            <Link href={`/mypage/cases/${request.id}`} className="font-semibold underline-offset-4 hover:underline" data-testid="customer-case-link">
+              ご依頼の進み具合（受付・日程・現地確認）を見る →
+            </Link>
+          </p>
         )}
         <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -157,6 +183,21 @@ export default async function QuoteDetailPage({ params, searchParams }: { params
           <Alert tone="info" className="mt-6">
             今回は見送るとご回答いただきました。仕様を変えて再度お見積りすることもできます。
           </Alert>
+        )}
+        {(canRequestChange || changeRequests.length > 0) && request && (
+          <div className="card mt-6 space-y-3 p-5" data-testid="quote-change-requests">
+            <h2 className="text-base font-semibold">見積の内容を修正したいとき</h2>
+            {changeRequests.map((c) => (
+              <div key={c.id} className="rounded-lg bg-[#f7f8f8] p-3 text-sm">
+                <p className="text-xs text-muted">
+                  {formatDate(c.created_at)} にご依頼{c.status === 'open' ? '（担当が対応中です）' : `（${formatDate(c.resolved_at)} に対応しました）`}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">{c.message}</p>
+                {c.resolution && <p className="mt-1 text-xs text-ink-soft">担当より：{c.resolution}</p>}
+              </div>
+            ))}
+            {canRequestChange && <QuoteChangeRequestForm quoteId={quote.id} requestId={request.id} />}
+          </div>
         )}
         {quote.status === 'superseded' && (
           <Alert tone="info" className="mt-6">

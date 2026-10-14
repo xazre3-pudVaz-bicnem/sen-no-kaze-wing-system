@@ -19,6 +19,13 @@ const sections: NavSection[] = [
       '/admin/configurations',
       '/admin/notifications',
       '/admin/contacts',
+      // 案件の進行（予約ボード・代理店の紹介ページ・製造の進み具合・アフター・全国ストック台帳・承諾書の文面）
+      '/admin/appointments',
+      '/admin/dealers',
+      '/admin/manufacturing',
+      '/admin/after-service',
+      '/admin/stock-ledger',
+      '/admin/disaster-consent',
     ],
     exclude: ['/admin/quotes/new', '/admin/quotes/drafts', '/admin/quotes/standard-drafts'],
   },

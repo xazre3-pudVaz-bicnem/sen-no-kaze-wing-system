@@ -1,9 +1,14 @@
 import { Phone } from 'lucide-react';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { COMPANY } from '@/lib/site';
+import { PREFECTURES } from '@/lib/domain/address';
+import { DEALER_SERVICE_LABELS, dealerServesArea } from '@/lib/domain/case-flow';
+import { getCaseFlowStore } from '@/lib/data/case-flow/store';
 import { Breadcrumbs, Container, JsonLd } from '@/components/ui';
 import { RuleHeading } from '@/components/ui/section-heading';
 import { ContactForm } from '@/components/sections/contact-form';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildMetadata({
   title: '代理店・工務店のご紹介',
@@ -12,8 +17,14 @@ export const metadata = buildMetadata({
   path: '/dealers',
 });
 
-/** 見積書の「別途工事」から遷移する代理店紹介＋問い合わせ */
-export default function DealersPage() {
+/** 見積書の「別途工事」から遷移する代理店紹介＋問い合わせ。本部が公開した代理店を、対応エリアで探せる（フェーズ4） */
+export default async function DealersPage({ searchParams }: { searchParams: Promise<{ pref?: string; city?: string }> }) {
+  const sp = await searchParams;
+  const pref = sp.pref && PREFECTURES.includes(sp.pref) ? sp.pref : null;
+  const city = pref && sp.city ? sp.city.trim().slice(0, 30) || null : null;
+  const caseFlow = await getCaseFlowStore();
+  const published = await caseFlow.listPublishedDealerProfiles();
+  const dealers = published.filter((dealer) => dealerServesArea(dealer, pref, city));
   return (
     <>
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '代理店・工務店のご紹介', path: '/dealers' }])} />
@@ -31,6 +42,79 @@ export default function DealersPage() {
             className="max-w-2xl"
           />
         </div>
+
+        <section className="card mb-10 space-y-5 p-6 sm:p-10" data-testid="dealer-directory">
+          <div>
+            <h2 className="font-serif text-xl">お近くの代理店を探す</h2>
+            <p className="mt-2 text-sm text-ink-soft">
+              設置予定地の都道府県を選ぶと、対応している代理店を表示します。見積依頼のときに「相談したい代理店」として指定できます。
+            </p>
+          </div>
+          <form method="get" className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-muted">都道府県</span>
+              <select name="pref" defaultValue={pref ?? ''} className="input h-11 min-w-40">
+                <option value="">すべて</option>
+                {PREFECTURES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-muted">市区町村（任意）</span>
+              <input name="city" defaultValue={city ?? ''} className="input h-11" placeholder="例：七尾市" />
+            </label>
+            <button type="submit" className="btn-primary h-11">
+              探す
+            </button>
+          </form>
+          {published.length === 0 ? (
+            <p className="text-sm text-muted">現在、掲載している代理店はありません。下の窓口からお気軽にご相談ください。</p>
+          ) : dealers.length === 0 ? (
+            <p className="text-sm text-muted">この地域に対応している掲載代理店は見つかりませんでした。下の窓口からご相談ください。</p>
+          ) : (
+            <ul className="grid gap-4 sm:grid-cols-2">
+              {dealers.map((dealer) => (
+                <li key={dealer.dealer_id} className="rounded-xl border border-line p-5" data-testid="dealer-card">
+                  <h3 className="font-semibold">{dealer.display_name}</h3>
+                  <p className="mt-1 text-xs text-muted">対応エリア：{dealer.service_prefectures.join('・') || '—'}</p>
+                  {dealer.services.length > 0 && (
+                    <p className="mt-2 flex flex-wrap gap-1">
+                      {dealer.services.map((s) => (
+                        <span key={s} className="rounded-full bg-sand px-2 py-0.5 text-[0.7rem]">
+                          {DEALER_SERVICE_LABELS[s]}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  {dealer.intro && <p className="mt-3 whitespace-pre-wrap text-sm text-ink-soft">{dealer.intro}</p>}
+                  {dealer.qualifications && <p className="mt-2 text-xs text-ink-soft">資格：{dealer.qualifications}</p>}
+                  {(dealer.track_record || dealer.completed_count !== null) && (
+                    <p className="mt-1 text-xs text-ink-soft">
+                      施工実績：{dealer.completed_count !== null ? `${dealer.completed_count}件　` : ''}
+                      {dealer.track_record ?? ''}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                    {dealer.phone && (
+                      <a href={`tel:${dealer.phone.replace(/-/g, '')}`} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
+                        <Phone className="size-3.5" aria-hidden="true" />
+                        {dealer.phone}
+                      </a>
+                    )}
+                    {dealer.website_url && (
+                      <a href={dealer.website_url} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">
+                        Web サイト
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         <section className="card p-6 sm:p-10">
           <h2 className="font-serif text-xl">別途工事に含まれるもの</h2>

@@ -193,6 +193,25 @@ function CasePageHeading({ caseCount, canCreateQuote }: { caseCount: number; can
         <p className="mt-0.5 text-xs text-ink-soft">
           Web見積依頼と、Web以外で受けた案件をまとめて管理します。現在 {caseCount} 件。
         </p>
+        <p className="mt-1 flex flex-wrap gap-3 text-xs" data-testid="case-flow-links">
+          <Link href="/admin/appointments" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            予約ボード（日程）
+          </Link>
+          <Link href="/admin/dealers" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            代理店の紹介ページ
+          </Link>
+          <Link href="/admin/manufacturing" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            製造の進み具合
+          </Link>
+          <Link href="/admin/after-service" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+            アフター
+          </Link>
+          {canCreateQuote && (
+            <Link href="/admin/stock-ledger" className="font-semibold text-[#2f6b4f] underline-offset-4 hover:underline">
+              全国ストック台帳
+            </Link>
+          )}
+        </p>
       </div>
       {canCreateQuote && (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -249,7 +268,13 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
     const quoteTotal = latest.reduce((sum, quote) => sum + quote.total, 0);
     const newCount = latest.filter((quote) => quote.request_status === 'new').length;
     const acceptedCount = latest.filter((quote) => quote.status === 'accepted').length;
-    const requestedCase = sp.case && latest.some((quote) => quote.id === sp.case) ? sp.case : null;
+    // 通知のリンク（?request=案件）からも、その案件を開く
+    const requestedCase =
+      sp.case && latest.some((quote) => quote.id === sp.case)
+        ? sp.case
+        : sp.request
+          ? (latest.find((quote) => quote.quote_request_id === sp.request)?.id ?? null)
+          : null;
     const selectedQuoteId = requestedCase;
 
     return (
@@ -513,7 +538,14 @@ export default async function AdminQuotesPage({ searchParams }: { searchParams: 
 
   const selectableQuoteIds = new Set(shownQuotes.map((quote) => quote.id));
   const selectablePendingRequestIds = new Set(shown.filter((request) => !request.quote_id).map((request) => request.id));
-  const requestedCase = sp.case && selectableQuoteIds.has(sp.case) ? sp.case : null;
+  // 通知のリンク（?request=案件）は、見積がある案件ならその見積の案件画面を開く
+  const quoteIdOfRequest = sp.request ? (shown.find((request) => request.id === sp.request)?.quote_id ?? null) : null;
+  const requestedCase =
+    sp.case && selectableQuoteIds.has(sp.case)
+      ? sp.case
+      : quoteIdOfRequest && selectableQuoteIds.has(quoteIdOfRequest)
+        ? quoteIdOfRequest
+        : null;
   const requestedPendingRequestId =
     sp.request && selectablePendingRequestIds.has(sp.request) ? sp.request : null;
   const selectedPendingRequest = requestedPendingRequestId

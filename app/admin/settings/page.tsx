@@ -73,6 +73,16 @@ export default async function AdminSettingsPage() {
                 title="ユーザー・担当者"
                 body="担当者と顧客アカウントを確認し、現在のユーザー権限を管理します。"
               />
+              <AvailableCard
+                href="/admin/dealers"
+                title="代理店の紹介ページ"
+                body="代理店の対応エリア・施工対応・資格・実績を登録し、お客様の代理店検索に公開します。"
+              />
+              <AvailableCard
+                href="/admin/appointments"
+                title="予約ボード"
+                body="打合せ・現地調査・引渡しなどの日程を、案件をまたいで確認します。"
+              />
             </div>
           </section>
 

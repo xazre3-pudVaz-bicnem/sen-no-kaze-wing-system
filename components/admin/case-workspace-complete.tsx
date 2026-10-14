@@ -1,5 +1,6 @@
 import { CaseWorkspace as BaseCaseWorkspace } from '@/components/admin/case-workspace';
 import { ElectronicContractPanel } from '@/components/admin/electronic-contract-panel';
+import { CaseSitePanels } from '@/components/case-flow/case-site-panels';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 
@@ -21,6 +22,8 @@ type CaseWorkspaceProps = {
   settings?: string;
   embedded?: boolean;
   listSearchParams?: Record<string, string | undefined>;
+  /** 案件の進行の操作結果（?done= / ?error=） */
+  flash?: { done?: string; error?: string };
 };
 
 function MockBadge() {
@@ -210,9 +213,14 @@ export async function CaseWorkspace(props: CaseWorkspaceProps) {
     }
   }
 
+  const { flash, ...baseProps } = props;
   return (
     <>
-      <BaseCaseWorkspace {...props} />
+      <BaseCaseWorkspace {...baseProps} />
+      {activeTab === 'site' && (
+        // 受付・担当・日程・現地確認・技術検討（フェーズ5〜7）。上の「正式登録候補」は案件資料からの参考表示
+        <CaseSitePanels quoteId={props.quoteId} actor={props.actor} flash={flash} />
+      )}
       {quoteReference && activeTab === 'documents' && (
         <div className="mt-2 space-y-2">
           {/* 電子契約（GMOサイン）は正式な保存・判定を行う。下の契約変更履歴はモックのまま */}

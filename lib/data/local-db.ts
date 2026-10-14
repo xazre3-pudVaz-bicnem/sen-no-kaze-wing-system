@@ -34,6 +34,7 @@ import type {
   EstimateTemplateLine,
   SpecMatrix,
 } from '@/lib/domain/types';
+import type { LocalCaseFlowTables } from './case-flow/local-tables';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
 import { buildSeedMatrix } from '@/lib/seed/matrix';
@@ -87,6 +88,8 @@ export interface LocalDb {
   estimateTemplateLines: EstimateTemplateLine[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
+  /** 案件の進行（フェーズ4以降）。lib/data/case-flow/local.ts が使う */
+  caseFlow?: LocalCaseFlowTables;
 }
 
 export function localDir(): string {

@@ -823,7 +823,7 @@ export async function CaseWorkspace({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold">現地確認</h2>
-                <Badge tone="neutral">完了記録は準備中</Badge>
+                <Badge tone="neutral">参考表示</Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
                 保存済み住所・案件受付メモ・案件資料から、正式確認前の候補情報を表示します。
@@ -842,8 +842,9 @@ export async function CaseWorkspace({
             </div>
           </div>
 
-          <Alert tone="info" title="現地確認の完了記録は現在準備中です">
-            下の情報は確認作業の材料です。候補情報が埋まっていても「現地確認完了」にはなりません。確認日・担当者・完了状態・写真等を記録する機能は現在準備中です。
+          <Alert tone="info" title="現地確認の記録は、下の「現地確認の記録」で行います">
+            この欄は、保存済み住所・案件受付メモ・案件資料から作った参考表示です。候補情報が埋まっていても「現地確認完了」にはなりません。
+            確認日・確認した人・土地と法規の確認内容・写真は、下の「現地確認の記録」に保存し、完了にします。
           </Alert>
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-sm" data-testid="case-site-condition-candidates">
@@ -851,7 +852,7 @@ export async function CaseWorkspace({
               <div>
                 <p className="font-semibold text-ink">正式登録候補</p>
                 <p className="mt-0.5 text-xs text-muted">
-                  現在は保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式に記録する機能は現在準備中です。
+                  保存済み住所・案件受付メモ・案件資料から暫定表示しています。正式な記録は下の「現地確認の記録」に保存します。
                 </p>
               </div>
             </div>

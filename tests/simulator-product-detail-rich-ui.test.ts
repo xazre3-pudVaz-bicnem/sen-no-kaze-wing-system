@@ -6,6 +6,10 @@ const productDetail = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/product-detail.tsx'),
   'utf8'
 );
+const manufacturerDocumentModal = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/simulator/manufacturer-document-modal.tsx'),
+  'utf8'
+);
 const optionPickerDialog = fs.readFileSync(
   path.resolve(process.cwd(), 'components/simulator/option-picker-dialog.tsx'),
   'utf8'
@@ -22,7 +26,7 @@ const exteriorWallFacesDialog = fs.readFileSync(
 describe('シミュレーター商品詳細の情報表示', () => {
   it('通常の商品詳細は全カテゴリーで仕様選択をコンパクトな文字カードにする', () => {
     expect(productDetail).toContain('showImages={false}');
-    expect(productDetail).toContain('名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。');
+    expect(productDetail).toContain('名称と追加金額を確認して選択してください。メーカー資料は「メーカー資料を見る」から確認できます。');
     expect(productDetail).not.toContain('EQUIPMENT_TEXT_VARIANT_CATEGORY_CODES');
     expect(productDetail).not.toContain('useTextVariantCards');
     expect(variantPicker).toContain('const withImage = showImages && list.some((c) => c.image_url);');
@@ -45,15 +49,30 @@ describe('シミュレーター商品詳細の情報表示', () => {
     expect(productDetail).toContain('onChange={handleVariantChange}');
   });
 
-  it('商品本体画像・サブ画像・メーカー資料を左側で確認できる', () => {
+  it('商品本体画像・サブ画像・メーカー資料を確認できる', () => {
     expect(productDetail).toContain('option.image_url');
     expect(productDetail).toContain('option.gallery_images');
     expect(productDetail).toContain('option.manufacturer_document_url');
     expect(productDetail).toContain('商品画像');
-    expect(productDetail).toContain('メーカー資料');
+    expect(productDetail).toContain('メーカー資料を見る');
+    expect(productDetail).toContain('onClick={() => setManufacturerDocumentOpen(true)}');
     expect(productDetail).toContain('onClick={() => setActiveImageIndex(index)}');
     expect(productDetail).toContain('onClick={() => moveImage(-1)}');
     expect(productDetail).toContain('onClick={() => moveImage(1)}');
+  });
+
+  it('メーカー資料は1クリックで大きなPDFモーダルを開き、開いた時だけ読み込む', () => {
+    expect(productDetail).toContain('<ManufacturerDocumentModal');
+    expect(productDetail).not.toContain("activeMedia === 'document'");
+    expect(manufacturerDocumentModal).toContain("if (!open || !url) return null;");
+    expect(manufacturerDocumentModal).toContain('data-testid="manufacturer-document-modal"');
+    expect(manufacturerDocumentModal).toContain('h-[88vh]');
+    expect(manufacturerDocumentModal).toContain('<iframe');
+    expect(manufacturerDocumentModal).toContain('loading="lazy"');
+    expect(manufacturerDocumentModal).toContain('別タブで開く');
+    expect(manufacturerDocumentModal).toContain("event.key === 'Escape'");
+    expect(manufacturerDocumentModal).toContain('event.target === event.currentTarget');
+    expect(manufacturerDocumentModal).toContain('aria-label="メーカー資料を閉じる"');
   });
 
   it('外壁4面の専用UIは画像付き仕様選択を維持する', () => {

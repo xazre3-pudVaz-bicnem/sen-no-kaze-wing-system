@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
+import { ManufacturerDocumentModal } from './manufacturer-document-modal';
 import { VariantPicker } from './variant-picker';
 
 interface Props {
@@ -38,9 +39,10 @@ export function ProductDetail({
   onVariantChange,
 }: Props) {
   const manufacturerDocumentUrl = option.manufacturer_document_url?.trim() || null;
-  const [activeMedia, setActiveMedia] = useState<'image' | 'document'>('image');
+  const [manufacturerDocumentOpen, setManufacturerDocumentOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
+  const closeManufacturerDocument = useCallback(() => setManufacturerDocumentOpen(false), []);
 
   const galleryImages = [
     ...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),
@@ -102,57 +104,36 @@ export function ProductDetail({
         <section className="min-w-0 md:self-start">
           <div
             className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-line bg-sand/45 p-1"
-            role="tablist"
+            role="group"
             aria-label="商品メディア"
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeMedia === 'image'}
-              aria-controls="product-media-panel"
-              onClick={() => setActiveMedia('image')}
-              className={cn(
-                'rounded-md px-3 py-2 text-xs font-semibold transition',
-                activeMedia === 'image'
-                  ? 'bg-white text-brown shadow-sm ring-1 ring-line'
-                  : 'text-muted hover:bg-white/70 hover:text-ink'
-              )}
-            >
+            <span className="rounded-md bg-white px-3 py-2 text-center text-xs font-semibold text-brown shadow-sm ring-1 ring-line">
               商品画像
-            </button>
+            </span>
             <button
               type="button"
-              role="tab"
-              aria-selected={activeMedia === 'document'}
-              aria-controls="product-media-panel"
-              onClick={() => setActiveMedia('document')}
+              onClick={() => setManufacturerDocumentOpen(true)}
               disabled={!manufacturerDocumentUrl}
               title={manufacturerDocumentUrl ? undefined : 'メーカー資料は未登録です'}
-              className={cn(
-                'rounded-md px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45',
-                activeMedia === 'document'
-                  ? 'bg-white text-brown shadow-sm ring-1 ring-line'
-                  : 'text-muted hover:bg-white/70 hover:text-ink disabled:hover:bg-transparent disabled:hover:text-muted'
-              )}
+              className="rounded-md px-3 py-2 text-xs font-semibold text-muted transition hover:bg-white/70 hover:text-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-muted"
             >
-              メーカー資料
+              メーカー資料を見る
               {!manufacturerDocumentUrl && <span className="ml-1 text-[0.62rem] font-normal">未登録</span>}
             </button>
           </div>
 
           <div
             id="product-media-panel"
-            role="tabpanel"
             className={cn(
               'relative overflow-hidden rounded-lg border border-line bg-sand',
               compactMedia ? 'h-[clamp(14rem,55vw,19rem)]' : 'aspect-[3/2]'
             )}
             onTouchStart={(event) => {
-              if (activeMedia !== 'image' || galleryImages.length <= 1) return;
+              if (galleryImages.length <= 1) return;
               touchStartX.current = event.touches[0]?.clientX ?? null;
             }}
             onTouchEnd={(event) => {
-              if (activeMedia !== 'image' || galleryImages.length <= 1 || touchStartX.current == null) return;
+              if (galleryImages.length <= 1 || touchStartX.current == null) return;
               const endX = event.changedTouches[0]?.clientX ?? touchStartX.current;
               const delta = endX - touchStartX.current;
               touchStartX.current = null;
@@ -160,14 +141,7 @@ export function ProductDetail({
               moveImage(delta < 0 ? 1 : -1);
             }}
           >
-            {activeMedia === 'document' && manufacturerDocumentUrl ? (
-              <iframe
-                src={manufacturerDocumentUrl}
-                title={`${option.name} メーカー資料`}
-                className="h-full w-full bg-white"
-                loading="lazy"
-              />
-            ) : activeImage ? (
+            {activeImage ? (
               <>
                 <SmartImage
                   src={activeImage.url}
@@ -208,7 +182,7 @@ export function ProductDetail({
             )}
           </div>
 
-          {activeMedia === 'image' && galleryImages.length > 1 && (
+          {galleryImages.length > 1 && (
             <div className="mt-2">
               <div className="flex gap-2 overflow-x-auto pb-1" aria-label="商品画像一覧">
                 {galleryImages.map((image, index) => (
@@ -317,7 +291,7 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  名称と追加金額を確認して選択してください。商品画像・メーカー資料は左側で確認できます。
+                  名称と追加金額を確認して選択してください。メーカー資料は「メーカー資料を見る」から確認できます。
                 </p>
               </div>
               <VariantPicker
@@ -369,6 +343,13 @@ export function ProductDetail({
           )}
         </section>
       </div>
+
+      <ManufacturerDocumentModal
+        open={manufacturerDocumentOpen}
+        url={manufacturerDocumentUrl}
+        productName={option.name}
+        onClose={closeManufacturerDocument}
+      />
     </div>
   );
 }

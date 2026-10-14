@@ -36,7 +36,7 @@ try {
     await client.query("set statement_timeout = '5s'");
     await client.query("set lock_timeout = '2s'");
     runtime = await runtimeSecurity(client);
-    runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionDelete(client));
+    runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionDelete(client, { connectionString: url }));
     // 同時編集（optimistic locking）は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     printRuntime(runtime);

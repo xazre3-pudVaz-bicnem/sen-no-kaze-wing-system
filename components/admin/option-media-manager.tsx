@@ -363,6 +363,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
               <p className="text-sm font-semibold text-ink">メーカー資料PDF 登録済み</p>
               <button
                 type="button"
+                aria-label="現在の資料を確認"
                 onClick={() => setPdfPreviewOpen(true)}
                 className="mt-1 text-xs text-brown underline underline-offset-4 hover:no-underline"
               >

@@ -11,6 +11,7 @@ const action = fs.readFileSync(path.join(root, 'lib/actions/option-hq-standard-c
 const data = fs.readFileSync(path.join(root, 'lib/data/option-hq-standard-cost.ts'), 'utf8');
 const card = fs.readFileSync(path.join(root, 'components/admin/option-hq-standard-cost-card.tsx'), 'utf8');
 const optionLayout = fs.readFileSync(path.join(root, 'app/admin/options/[id]/layout.tsx'), 'utf8');
+const optionPage = fs.readFileSync(path.join(root, 'app/admin/options/[id]/page.tsx'), 'utf8');
 const ledgerPage = fs.readFileSync(path.join(root, 'app/admin/ledger/page.tsx'), 'utf8');
 const ledgerClient = fs.readFileSync(path.join(root, 'components/admin/product-ledger-client.tsx'), 'utf8');
 
@@ -91,14 +92,22 @@ describe('本部商品基準原価', () => {
     expect(action).toContain('isMissingFunction(error)');
   });
 
-  it('商品編集画面では商品情報保存と分離した本部内部カードとして扱う', () => {
-    expect(optionLayout).toContain('getOptionHqStandardCostAccess');
-    expect(optionLayout).toContain('OptionHqStandardCostCard');
+  it('商品登録STEP1では価格・対象モデルの直後に本部内部情報を置き、固定下部表示をやめる', () => {
+    expect(optionPage).toContain('getOptionHqStandardCostAccess');
+    expect(optionPage).toContain('OptionHqStandardCostCard');
+    expect(optionPage).toContain('data-testid="option-registration-hq-cost"');
+    expect(optionPage).toContain('style={{ order: 55 }}');
+    expect(optionPage.indexOf('data-testid="option-registration-hq-cost"'))
+      .toBeLessThan(optionPage.indexOf('data-testid="option-registration-check"'));
+    expect(optionLayout).not.toContain('OptionHqStandardCostCard');
+    expect(optionLayout).not.toContain('getOptionHqStandardCostAccess');
     expect(card).toContain('本部商品基準原価（税別）');
     expect(card).toContain('実仕入価格・案件実原価ではありません');
     expect(card).toContain('既存の見積・発行済みQuoteには自動反映されません');
+    expect(card).toContain("currentCost === undefined ? '設定' : '変更'");
     expect(card).toContain('expected_lock_version');
     expect(card).toContain('change_reason');
+    expect(card).not.toContain(' ／ version ');
   });
 
   it('商品台帳では許可された本部ユーザーだけ基準原価の項目を受け取る', () => {

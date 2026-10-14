@@ -39,6 +39,7 @@ async function cleanup(client, ids) {
   try {
     await client.query("set local session_replication_role = 'replica'");
     await client.query('delete from public.configuration_items where id = $1::uuid', [ids.item]);
+    await client.query('delete from public.configurations where id = $1::uuid', [ids.configuration]);
     await client.query('delete from public.option_variant_choices where id = $1::uuid', [ids.choice]);
     await client.query('delete from public.option_variant_groups where id = $1::uuid', [ids.group]);
     await client.query('delete from public.options where id = any($1::uuid[])', [[ids.target, ids.peer]]);
@@ -89,6 +90,13 @@ async function setup(client, ids) {
        values ($1::uuid, $2::uuid, 'array-race-choice', '配列race choice', 'published')`,
       [ids.choice, ids.group]
     );
+    // Draft親を実在させ、既存のconfiguration_items draft-parent guardではなく
+    // 今回追加したvariant参照validationがstale writeを拒否することを検証する。
+    await client.query(
+      `insert into public.configurations (id, user_id, base_model_id, name, status, exterior_faces)
+       values ($1::uuid, $2::uuid, $3::uuid, '配列race検査Configuration', 'draft', '[]'::jsonb)`,
+      [ids.configuration, ids.admin, ids.baseModel]
+    );
     await client.query(
       `insert into public.configuration_items (id, configuration_id, option_id, quantity, variant_choice_ids)
        values ($1::uuid, $2::uuid, $3::uuid, 1, '{}'::uuid[])`,
@@ -118,6 +126,7 @@ export async function runtimeUnusedPublishedOptionArrayRace({ connectionString }
     choice: '00000000-0000-4000-8000-00000000d321',
     item: '00000000-0000-4000-8000-00000000d322',
     configuration: '00000000-0000-4000-8000-00000000d323',
+    baseModel: '00000000-0000-4000-8000-00000000d324',
   };
 
   const setupClient = new pg.Client({ connectionString });

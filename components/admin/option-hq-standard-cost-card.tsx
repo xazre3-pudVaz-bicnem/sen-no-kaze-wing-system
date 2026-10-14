@@ -30,12 +30,8 @@ export function OptionHqStandardCostCard({ optionId, canManage, cost }: Props) {
   const currentVersion = state.ok && state.lockVersion !== undefined ? state.lockVersion : cost?.lock_version ?? 0;
 
   useEffect(() => {
-    if (state.error) setEditing(true);
-    if (state.ok) {
-      setEditing(false);
-      router.refresh();
-    }
-  }, [router, state.error, state.ok, state.lockVersion]);
+    if (state.ok) router.refresh();
+  }, [router, state.ok, state.lockVersion]);
 
   return (
     <section className="card space-y-3 p-4 sm:p-5" data-testid="option-hq-standard-cost-card">

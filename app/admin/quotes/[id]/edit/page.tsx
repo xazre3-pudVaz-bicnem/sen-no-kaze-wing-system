@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { isOptionAvailableForEstimate, type ProductLifecycleOption } from '@/lib/domain/product-lifecycle';
 import { canEditCatalog } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
@@ -35,7 +36,7 @@ export default async function AdminQuoteRevisionEditPage({
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter((option) => isOptionAvailableForEstimate(option as ProductLifecycleOption))
     .map((option) => ({
       id: option.id,
       baseModelId: option.base_model_id,

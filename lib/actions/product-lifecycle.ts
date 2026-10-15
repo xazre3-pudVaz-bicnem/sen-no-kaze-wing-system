@@ -37,10 +37,12 @@ async function patchLocalOption(optionId: string, patch: Partial<ProductLifecycl
 }
 
 /**
- * シミュレーターの候補から商品を外す前に、現在使われている標準構成を壊さないことを確認する。
+ * シミュレーターの候補から商品を外す前に、現在使われている正式な基準構成を壊さないことを確認する。
  * 過去のConfiguration / Quote / Snapshot参照は、履歴保持のため外すこと自体を妨げない。
+ * base_models.presets の option_codes はlegacyの初期値候補で、現在のCatalogBundleに存在しないcodeは
+ * buildPresetSelection() / buildEstimateSpecSelection() が読み飛ばすため、Preset参照だけでは停止しない。
  */
-async function assertOptionCanLeaveSimulator(optionId: string, optionCode: string, actionLabel: string) {
+async function assertOptionCanLeaveSimulator(optionId: string, actionLabel: string) {
   const db = await createClient();
 
   const baselineResult = await db
@@ -80,22 +82,6 @@ async function assertOptionCanLeaveSimulator(optionId: string, optionCode: strin
   if ((dependencyResult.data ?? []).length) {
     throw new Error(`ほかの商品がこの商品を必要条件として使用しています。依存関係を整理してから${actionLabel}してください。`);
   }
-
-  const presetResult = await db.from('base_models').select('presets');
-  if (presetResult.error) throw new Error('本体の標準構成を確認できませんでした。');
-  const usedByPreset = (presetResult.data ?? []).some((model) => {
-    const presets = Array.isArray(model.presets) ? model.presets : [];
-    return presets.some((preset) => {
-      if (!preset || typeof preset !== 'object') return false;
-      const codes = Array.isArray((preset as { option_codes?: unknown }).option_codes)
-        ? ((preset as { option_codes: unknown[] }).option_codes)
-        : [];
-      return codes.includes(optionCode);
-    });
-  });
-  if (usedByPreset) {
-    throw new Error(`本体の標準構成で使用中の商品です。先に標準構成を差し替えてから${actionLabel}してください。`);
-  }
 }
 
 export async function setOptionSimulatorVisibilityAction(formData: FormData): Promise<void> {
@@ -109,7 +95,7 @@ export async function setOptionSimulatorVisibilityAction(formData: FormData): Pr
     const db = await createClient();
     const current = await db
       .from('options')
-      .select('id, code, status, archived_at, simulator_visible')
+      .select('id, status, archived_at, simulator_visible')
       .eq('id', optionId)
       .maybeSingle();
     if (current.error) throw new Error('商品の状態を確認できませんでした。');
@@ -118,7 +104,7 @@ export async function setOptionSimulatorVisibilityAction(formData: FormData): Pr
     }
 
     if (!simulatorVisible && current.data.simulator_visible !== false) {
-      await assertOptionCanLeaveSimulator(optionId, current.data.code, 'シミュレーター非表示に');
+      await assertOptionCanLeaveSimulator(optionId, 'シミュレーター非表示に');
     }
 
     const { error } = await db.from('options').update({ simulator_visible: simulatorVisible }).eq('id', optionId);
@@ -139,7 +125,7 @@ export async function endOptionHandlingAction(formData: FormData): Promise<void>
     await patchLocalOption(optionId, { archived_at: new Date().toISOString() });
   } else {
     const db = await createClient();
-    const current = await db.from('options').select('id, code, status, archived_at').eq('id', optionId).maybeSingle();
+    const current = await db.from('options').select('id, status, archived_at').eq('id', optionId).maybeSingle();
     if (current.error) throw new Error('商品の状態を確認できませんでした。');
     if (!current.data || current.data.status !== 'published') throw new Error('登録済みの商品だけ取扱終了にできます。');
     if (current.data.archived_at) {
@@ -147,7 +133,7 @@ export async function endOptionHandlingAction(formData: FormData): Promise<void>
       return;
     }
 
-    await assertOptionCanLeaveSimulator(optionId, current.data.code, '取扱終了に');
+    await assertOptionCanLeaveSimulator(optionId, '取扱終了に');
 
     const { error } = await db.from('options').update({ archived_at: new Date().toISOString() }).eq('id', optionId);
     if (error) throw new Error('取扱終了を保存できませんでした。DB反映状況を確認してください。');

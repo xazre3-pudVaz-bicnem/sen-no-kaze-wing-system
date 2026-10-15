@@ -121,3 +121,73 @@ create trigger configurations_exterior_face_lifecycle_guard
 before insert or update of exterior_faces on public.configurations
 for each row
 execute function public.enforce_configuration_exterior_face_lifecycle();
+
+-- 商品を取扱終了/非表示にした後も、既存Draftの保存値は履歴候補として残す。
+-- ただしDraftのまま再保存せず見積依頼等へ進める抜け道は塞ぐ。
+create or replace function public.enforce_configuration_lifecycle_on_submit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.status = 'draft' and new.status <> 'draft' then
+    if exists (
+      select 1
+        from public.configuration_items ci
+        left join public.options o on o.id = ci.option_id
+       where ci.configuration_id = new.id
+         and (
+           o.id is null
+           or o.status <> 'published'
+           or not coalesce(o.simulator_visible, true)
+           or o.archived_at is not null
+         )
+    ) then
+      raise exception 'VALIDATION: 現在シミュレーターで選択できない商品が含まれています。内容を更新してから進めてください'
+        using errcode = 'P0001';
+    end if;
+
+    if exists (
+      select 1
+        from jsonb_array_elements(
+          case
+            when jsonb_typeof(coalesce(new.exterior_faces, '[]'::jsonb)) = 'array'
+              then coalesce(new.exterior_faces, '[]'::jsonb)
+            else '[]'::jsonb
+          end
+        ) face(value)
+        left join public.options o
+          on o.id = case
+            when jsonb_typeof(face.value) = 'object'
+             and (face.value ->> 'option_id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            then (face.value ->> 'option_id')::uuid
+            else null
+          end
+       where face.value ? 'option_id'
+         and (
+           o.id is null
+           or o.status <> 'published'
+           or not coalesce(o.simulator_visible, true)
+           or o.archived_at is not null
+         )
+    ) then
+      raise exception 'VALIDATION: 外壁に現在シミュレーターで選択できない商品が含まれています。内容を更新してから進めてください'
+        using errcode = 'P0001';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists configurations_lifecycle_submit_guard on public.configurations;
+create trigger configurations_lifecycle_submit_guard
+before update of status on public.configurations
+for each row
+execute function public.enforce_configuration_lifecycle_on_submit();
+
+-- trigger関数は直接呼ばせない。trigger自体は関数所有者権限で実行される。
+revoke all on function public.enforce_configuration_option_lifecycle() from public, anon, authenticated;
+revoke all on function public.enforce_configuration_exterior_face_lifecycle() from public, anon, authenticated;
+revoke all on function public.enforce_configuration_lifecycle_on_submit() from public, anon, authenticated;

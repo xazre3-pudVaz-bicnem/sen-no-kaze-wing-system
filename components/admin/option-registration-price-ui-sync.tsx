@@ -12,7 +12,7 @@ function issueBox(section: HTMLElement, heading: string) {
 }
 
 function visibleIssueCount(box: HTMLElement | null) {
-  if (!box || box.style.display === 'none') return 0;
+  if (!box) return 0;
   return Array.from(box.querySelectorAll<HTMLLIElement>('li')).filter((item) => item.style.display !== 'none').length;
 }
 

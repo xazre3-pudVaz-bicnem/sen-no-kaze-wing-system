@@ -99,7 +99,7 @@ describe('Admin case management UI', () => {
     expect(list).toContain('＋見積書を作成');
     expect(list).toContain('href="/admin/quotes/new?return_to=%2Fadmin%2Fquotes"');
     expect(list).toContain('canCreateQuote={false}');
-    expect(list).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote />');
+    expect(list).toContain('<CasePageHeading caseCount={requests.length} canCreateQuote canSupervise />');
     expect(shell).toContain('href="/admin/notifications"');
     expect(shell).toContain('aria-label="お知らせ"');
     expect(nav).toContain("href: '/admin/customer-management'");

@@ -232,6 +232,71 @@ export interface CaseWorkflow {
   updated_at: string;
 }
 
+/**
+ * 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case。20261015140000）。
+ * お客様の氏名・会社名・連絡先・住所・メッセージ、設置場所・土地の情報、日程の希望、打合せ記録、見積の備考は含めない
+ * （顧客情報の項目は先方の確認が済んでから足す）。
+ */
+export interface SupervisedQuoteSummary {
+  id: string;
+  quote_no: string;
+  revision: number;
+  status: string;
+  base_model_name: string;
+  spec_code: string | null;
+  finish_level: string | null;
+  total: number;
+  issued_at: string | null;
+}
+
+export interface SupervisedCaseSummary {
+  request_id: string;
+  sales_organization: { id: string; name: string };
+  supervisor_organization: { id: string; name: string };
+  manufacturing_organization: { id: string; name: string } | null;
+  primary_staff_name: string | null;
+  quote: SupervisedQuoteSummary | null;
+  progress: CaseProgress | null;
+  activity_at: string;
+}
+
+export interface SupervisedCaseDetail {
+  request_id: string;
+  sales_organization: { id: string; name: string } | null;
+  manufacturing_organization: { id: string; name: string } | null;
+  primary_staff_name: string | null;
+  quote:
+    | (SupervisedQuoteSummary & {
+        valid_until: string | null;
+        base_price: number;
+        base_expense: number;
+        option_subtotal: number;
+        option_expense: number;
+        installation_subtotal: number;
+        adjustment: number;
+        subtotal: number;
+        tax_rate: number;
+        tax: number;
+      })
+    | null;
+  items: { kind: string; name: string; description: string | null; quantity: number; unit: string | null; unit_price: number; amount: number; remark: string | null }[];
+  progress: CaseProgress | null;
+  manufacturing_order: {
+    status: string;
+    unit_count: number;
+    requested_delivery_on: string | null;
+    order_no: string | null;
+    sent_at: string | null;
+    received_at: string | null;
+    completed_at: string | null;
+    spec_snapshot: Record<string, unknown> | null;
+  } | null;
+  units: { seq: number; unit_no: string | null; status: string; produced_on: string | null; inspected_on: string | null; shipped_on: string | null; installed_on: string | null; handed_over_on: string | null; note: string | null }[];
+  schedule: { category: string; title: string; planned_start: string | null; planned_end: string | null; actual_start: string | null; actual_end: string | null; status: string; note: string | null }[];
+  progress_reports: { kind: string; title: string | null; body: string | null; reported_on: string | null; author_name: string | null }[];
+  handover_status: string;
+}
+
 /** 案件の営業担当組織・製造担当組織・主担当者（画面用。DB の get_case_organizations と同じ） */
 export interface CaseOrganizations {
   sales_organization: { id: string; name: string; organization_type: 'headquarters' | 'master_dealer' | 'dealer' } | null;
@@ -858,6 +923,23 @@ export const HANDOVER_STATUS_LABELS: Record<HandoverStatus, string> = {
   ready: '引渡しの準備完了',
   handed_over: '引渡し済み',
 };
+
+/** 案件がどこまで進んだか（いちばん先の段階）。総代理店の「配下の案件」の一覧に使う */
+export function caseStageOf(progress: CaseProgress | null): { label: string; tone: 'neutral' | 'warn' | 'success' } {
+  if (!progress) return { label: '—', tone: 'neutral' };
+  const handover = progress.handover_status ?? 'none';
+  if (handover === 'handed_over') return { label: '引渡し済み', tone: 'success' };
+  if (handover !== 'none') return { label: `完成確認：${HANDOVER_STATUS_LABELS[handover]}`, tone: 'warn' };
+  const manufacturing = progress.manufacturing_status ?? 'none';
+  if (manufacturing !== 'none' && manufacturing !== 'canceled') {
+    return { label: `製造：${MANUFACTURING_ORDER_STATUS_LABELS[manufacturing]}`, tone: manufacturing === 'completed' ? 'success' : 'warn' };
+  }
+  if (progress.contract_signed) return { label: '契約済み', tone: 'neutral' };
+  if (progress.site_survey_status === 'completed') return { label: '現地確認済み', tone: 'neutral' };
+  if (progress.primary_staff_name) return { label: '主担当者が決定', tone: 'neutral' };
+  if (progress.acknowledged_at) return { label: '受付済み', tone: 'neutral' };
+  return { label: '受付待ち', tone: 'warn' };
+}
 
 export type CustomerConfirmation = 'pending' | 'ok' | 'issues';
 export const CUSTOMER_CONFIRMATION_LABELS: Record<CustomerConfirmation, string> = {

@@ -26,6 +26,8 @@ const sections: NavSection[] = [
       '/admin/after-service',
       '/admin/stock-ledger',
       '/admin/disaster-consent',
+      // 総代理店の配下の案件（2026-10-15）
+      '/admin/supervision',
     ],
     exclude: ['/admin/quotes/new', '/admin/quotes/drafts', '/admin/quotes/standard-drafts'],
   },

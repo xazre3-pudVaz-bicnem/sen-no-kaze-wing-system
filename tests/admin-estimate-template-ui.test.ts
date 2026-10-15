@@ -110,7 +110,7 @@ describe('標準見積管理UI', () => {
     expect(excelDemo).toContain('防火仕様');
     expect(excelDemo).toContain('適用地域');
     expect(listPage).toContain('products={demoProducts}');
-    expect(listPage).toContain("option.status === 'published'");
+    expect(listPage).toContain('.filter(isQuoteSelectableProduct)');
     expect(listPage).toContain('categoryCode: categoryMap.get(option.category_id)?.code');
   });
 
@@ -306,7 +306,6 @@ describe('標準見積管理UI', () => {
     expect(workbench).toContain('お客様には表示しない');
   });
 
-
   it('品名右側から商品台帳を開き、現在行の商品を置き換えられる', () => {
     expect(workbench).toContain('title="商品台帳から選ぶ"');
     expect(workbench).toContain('Package className="size-3.5"');
@@ -378,7 +377,7 @@ describe('標準見積管理UI', () => {
   it('区分を折り畳むと数量1・単位式・区分計を1行で表示する', () => {
     expect(workbench).toContain("data-testid={'estimate-section-summary-' + key}");
     expect(workbench).toContain('const summaryRemark = hasPriceOnRequest');
-    expect(workbench).toContain('expenseText ?? \`\${rowCount}行の明細を集約\`;');
+    expect(workbench).toContain('expenseText ?? `\${rowCount}行の明細を集約`;');
     expect(workbench).toContain('>1</td>');
     expect(workbench).toContain('>式</td>');
     expect(workbench).toContain('{formatYen(totalAmount)}');

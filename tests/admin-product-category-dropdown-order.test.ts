@@ -61,8 +61,9 @@ describe('商品登録カテゴリーの表示順', () => {
     }
   });
 
-  it('DBのカテゴリー名は変更せず、登録画面用の表示名だけにグループ名を付ける', () => {
-    expect(helper).toContain("name: `【${groupLabel}】${category.name}`");
+  it('DBのカテゴリー名は変更せず、登録画面用の表示名だけを整える', () => {
+    expect(helper).toContain("aircon: 'エアコン'");
+    expect(helper).toContain('productRegistrationCategoryLabel(category)');
     expect(helper).toContain('...category');
   });
 

@@ -929,17 +929,18 @@ export class SupabaseStore implements DataStore {
 
   async listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]> {
     const db = await this.db();
-    const [{ data, error }, { data: requestMeta, error: requestMetaError }] = await Promise.all([
-      db
-        .from('quotes')
-        .select('*, profiles!quotes_user_id_fkey(email)')
-        .eq('dealer_id', dealerId)
-        .order('issued_at', { ascending: false }),
-      db.rpc('list_dealer_quote_request_meta'),
-    ]);
-    if (error) mapPgError(error);
+    // 一覧に出す見積は DB の list_dealer_quote_request_meta が決める（主担当者の案件と、営業担当組織の管理者なら自社の全案件。
+    // 20261015130000）。関数が無い古い DB では、これまでどおり見積の担当で絞る
+    const { data: requestMeta, error: requestMetaError } = await db.rpc('list_dealer_quote_request_meta');
     if (requestMetaError && !isMissingFunction(requestMetaError)) mapPgError(requestMetaError);
     const requestMetaRows = requestMetaError ? [] : requestMeta ?? [];
+    const quoteIds = (requestMetaRows as Array<{ quote_id: string }>).map((row) => row.quote_id);
+    const base = db.from('quotes').select('*, profiles!quotes_user_id_fkey(email)');
+    const { data, error } = await (requestMetaError
+      ? base.eq('dealer_id', dealerId)
+      : base.in('id', quoteIds.length > 0 ? quoteIds : ['00000000-0000-0000-0000-000000000000'])
+    ).order('issued_at', { ascending: false });
+    if (error) mapPgError(error);
     const requestMetaByQuoteId = new Map(
       (requestMetaRows as Array<{
         quote_id: string;

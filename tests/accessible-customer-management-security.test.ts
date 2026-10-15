@@ -115,12 +115,16 @@ describe('担当案件限定の顧客管理 security contract', () => {
 
   it('does not let master dealer bypass assigned-quote checks in workspace or stores', () => {
     expect(workspace).toContain('const canViewAllQuotes = isAdmin;');
-    expect(workspace).toContain('if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();');
+    // 案件を開けるのは本部・見積の担当・営業担当組織の管理者（DB の case_role が manager）だけ。商品台帳の編集権限では開けない（20261015130000）
+    expect(workspace).toContain('if (!canViewAllQuotes && quote.dealer_id !== actor.id && !isSalesManagerView) notFound();');
+    expect(workspace).toContain("getCaseRole(actor, quote.quote_request_id)) === 'manager'");
     expect(workspace).not.toContain('const canManageAllQuotes = canEditCatalog(actor.role);');
 
     expect(supabaseStore).toContain("const staffScoped = actor.role === 'dealer' || actor.role === 'master_dealer';");
     expect(supabaseStore).toContain("staffScoped\n        ? db.rpc('get_dealer_quote_request_current'");
-    expect(localStore).toContain("const dealerAccess = hasRoleAtLeast(actor.role, 'dealer') && quote?.dealer_id === actor.id;");
+    expect(localStore).toContain(
+      "hasRoleAtLeast(actor.role, 'dealer') && (quote?.dealer_id === actor.id || isCaseSalesManager(db, quote?.quote_request_id, actor.id));"
+    );
     expect(localStore).toContain("if (actor.role !== 'admin' && quote.dealer_id !== actor.id) return null;");
     expect(localStore).not.toContain("const canViewAny = hasRoleAtLeast(actor.role, 'master_dealer');");
   });
@@ -196,8 +200,8 @@ describe('担当案件限定の顧客管理 security contract', () => {
 
   it('keeps local-mode access aligned with the same quote_request assignment boundary', () => {
     expect(localStore).toContain("actor.role === 'admin'");
-    expect(localStore).toContain("db.quotes.filter((quote) => quote.dealer_id === actor.id).map((quote) => quote.quote_request_id)");
+    expect(localStore).toContain('.filter((quote) => quote.dealer_id === actor.id || isCaseSalesManager(db, quote.quote_request_id, actor.id))');
     expect(localStore).toContain("customer.cases.length > 0");
-    expect(localStore).toContain("can_open_quote: actor.role === 'admin' || quote.dealer_id === actor.id");
+    expect(localStore).toContain("can_open_quote: actor.role === 'admin' || quote.dealer_id === actor.id || isCaseSalesManager(db, quote.quote_request_id, actor.id)");
   });
 });

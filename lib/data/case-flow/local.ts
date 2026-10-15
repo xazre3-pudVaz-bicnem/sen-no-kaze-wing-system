@@ -43,6 +43,8 @@ import {
   type CaseOrganizations,
   type CaseRole,
   type SupervisedCaseDetail,
+  type ManufacturingCaseDetail,
+  type ManufacturingCaseSummary,
   type SupervisedCaseSummary,
   type CaseAppointment,
   type CaseAppointmentInput,
@@ -854,6 +856,82 @@ export class LocalCaseFlowStore implements CaseFlowStore {
     });
   }
 
+  // ---------- 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case と同じ。お客様の情報・見積の金額を含まない） ----------
+  private manufacturingCaseRow(db: LocalDb, requestId: string): ManufacturingCaseSummary | null {
+    const request = db.quoteRequests.find((r) => r.id === requestId);
+    const t = tables(db);
+    const workflow = t.workflows.find((w) => w.quote_request_id === requestId);
+    if (!request || !workflow) return null;
+    const orgs = db.organizations?.organizations ?? [];
+    const orgRef = (id: string | null | undefined) => {
+      const org = id ? orgs.find((o) => o.id === id) : undefined;
+      return org ? { id: org.id, name: org.name } : null;
+    };
+    const quote = request.quote_id ? db.quotes.find((q) => q.id === request.quote_id) : undefined;
+    const order = (t.orders ?? [])
+      .filter((o) => o.quote_request_id === requestId && o.status !== 'canceled')
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    const units = order ? (t.units ?? []).filter((u) => u.order_id === order.id) : [];
+    const orderUpdated = (t.orders ?? []).filter((o) => o.quote_request_id === requestId).map((o) => o.updated_at);
+    return {
+      request_id: requestId,
+      quote: quote
+        ? {
+            quote_no: quote.quote_no,
+            revision: quote.revision ?? 1,
+            status: quote.status,
+            base_model_name: quote.base_model_name,
+            spec_code: quote.spec_code ?? null,
+            finish_level: quote.finish_level ?? null,
+          }
+        : null,
+      sales_organization: orgRef(workflow.sales_organization_id),
+      manufacturing_organization: orgRef(workflow.manufacturing_organization_id),
+      primary_staff_name: workflow.primary_staff_id ? db.profiles.find((p) => p.id === workflow.primary_staff_id)?.full_name ?? null : null,
+      contract_signed: db.contracts.some((c) => c.quote_request_id === requestId && c.status === 'signed'),
+      order: order
+        ? {
+            status: order.status,
+            unit_count: order.unit_count,
+            requested_delivery_on: order.requested_delivery_on ?? null,
+            sent_at: order.sent_at ?? null,
+            received_at: order.received_at ?? null,
+            completed_at: order.completed_at ?? null,
+            units_shipped: units.filter((u) => ['shipped', 'installed', 'handed_over'].includes(u.status)).length,
+            units_installed: units.filter((u) => ['installed', 'handed_over'].includes(u.status)).length,
+          }
+        : null,
+      activity_at: [workflow.updated_at, request.updated_at ?? '', ...orderUpdated].sort().at(-1) ?? workflow.updated_at,
+    };
+  }
+  async listManufacturingCases(actor: SessionUser): Promise<ManufacturingCaseSummary[]> {
+    return this.read((db) =>
+      tables(db)
+        .workflows.filter((w) =>
+          rank(actor) >= 3 ? Boolean(w.manufacturing_organization_id || w.manufacturer_id) : accessOf(db, actor, w.quote_request_id) === 'manufacturer'
+        )
+        .map((w) => this.manufacturingCaseRow(db, w.quote_request_id))
+        .filter((row): row is ManufacturingCaseSummary => row !== null)
+        .sort((a, b) => b.activity_at.localeCompare(a.activity_at))
+    );
+  }
+  async getManufacturingCase(actor: SessionUser, requestId: string): Promise<ManufacturingCaseDetail | null> {
+    return this.read((db) => {
+      const access = accessOf(db, actor, requestId);
+      if (access !== 'admin' && access !== 'manufacturer') return null;
+      const row = this.manufacturingCaseRow(db, requestId);
+      if (!row) return null;
+      const request = db.quoteRequests.find((r) => r.id === requestId);
+      const items = request?.quote_id
+        ? db.quoteItems
+            .filter((i) => i.quote_id === request.quote_id)
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((i) => ({ kind: i.kind, name: i.name, quantity: i.quantity, unit: i.unit ?? null }))
+        : [];
+      return { ...row, spec_items: items };
+    });
+  }
+
   async getCaseProgress(actor: SessionUser, requestId: string): Promise<CaseProgress | null> {
     return this.read((db) => {
       // DB の get_case_progress と同じく、読み取りの判定（直属の総代理店の管理者を含む）で返す
@@ -1256,7 +1334,11 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .map((o) => {
           const units = (t.units ?? []).filter((u) => u.order_id === o.id);
-          const quote = db.quotes.filter((q) => q.quote_request_id === o.quote_request_id).sort((x, y) => (y.revision ?? 0) - (x.revision ?? 0))[0];
+          // 製造担当は見積（お客様の名前を含む）を読めない（DB の RLS と同じ）。製造仕様の見積番号を見出しにする
+          const canReadQuote = viewAccessOf(db, actor, o.quote_request_id) !== 'manufacturer';
+          const quote = canReadQuote
+            ? db.quotes.filter((q) => q.quote_request_id === o.quote_request_id).sort((x, y) => (y.revision ?? 0) - (x.revision ?? 0))[0]
+            : undefined;
           return {
             ...o,
             case_label: quote ? `${quote.quote_no} ${quote.customer_name} 様` : (o.spec_snapshot?.quote_no ?? '案件'),

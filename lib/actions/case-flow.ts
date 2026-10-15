@@ -92,7 +92,11 @@ function revalidateCase(quoteId: string | null, requestId: string | null) {
     revalidatePath(`/admin/quotes/${quoteId}`);
     revalidatePath(`/mypage/quotes/${quoteId}`);
   }
-  if (requestId) revalidatePath(`/mypage/cases/${requestId}`);
+  if (requestId) {
+    revalidatePath(`/mypage/cases/${requestId}`);
+    // 製造担当の画面（20261015150000）
+    revalidatePath(`/admin/manufacturing/${requestId}`);
+  }
   revalidatePath('/admin/appointments');
 }
 
@@ -463,8 +467,13 @@ export async function voidPaperContractAction(formData: FormData): Promise<void>
 
 const todayJst = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
 
-function productionBack(quoteId: string, query: string) {
-  return quoteId ? `/admin/quotes/${quoteId}?tab=production&${query}` : `/admin/manufacturing?${query}`;
+/** 戻り先：案件画面の「製造・施工」タブ、製造担当の画面（画面が渡した戻り先）、製造の一覧の順 */
+function productionBack(formData: FormData, query: string) {
+  const quoteId = text(formData, 'quote_id');
+  if (quoteId) return `/admin/quotes/${quoteId}?tab=production&${query}`;
+  const back = text(formData, 'back');
+  if (/^\/admin\/manufacturing\/[0-9a-f-]{36}$/i.test(back)) return `${back}?${query}`;
+  return `/admin/manufacturing?${query}`;
 }
 
 export async function saveManufacturingOrderAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {
@@ -504,9 +513,9 @@ export async function sendManufacturingOrderAction(formData: FormData): Promise<
     revalidateCase(quoteId || null, text(formData, 'request_id') || null);
     revalidatePath('/admin/manufacturing');
   } catch (e) {
-    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+    redirect(productionBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
   }
-  redirect(productionBack(quoteId, 'done=order_sent'));
+  redirect(productionBack(formData, 'done=order_sent'));
 }
 
 export async function setManufacturingOrderStatusAction(formData: FormData): Promise<void> {
@@ -527,9 +536,9 @@ export async function setManufacturingOrderStatusAction(formData: FormData): Pro
     revalidateCase(quoteId || null, text(formData, 'request_id') || null);
     revalidatePath('/admin/manufacturing');
   } catch (e) {
-    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+    redirect(productionBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
   }
-  redirect(productionBack(quoteId, 'done=order_status'));
+  redirect(productionBack(formData, 'done=order_status'));
 }
 
 export async function updateManufacturingUnitAction(formData: FormData): Promise<void> {
@@ -565,9 +574,9 @@ export async function updateManufacturingUnitAction(formData: FormData): Promise
     revalidateCase(quoteId || null, text(formData, 'request_id') || null);
     revalidatePath('/admin/manufacturing');
   } catch (e) {
-    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+    redirect(productionBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
   }
-  redirect(productionBack(quoteId, 'done=unit'));
+  redirect(productionBack(formData, 'done=unit'));
 }
 
 // ---------- 工程表（フェーズ12） ----------
@@ -605,9 +614,9 @@ export async function deleteScheduleItemAction(formData: FormData): Promise<void
     await store.deleteScheduleItem(user, uuid(formData, 'item_id'));
     revalidateCase(quoteId || null, text(formData, 'request_id') || null);
   } catch (e) {
-    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+    redirect(productionBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
   }
-  redirect(productionBack(quoteId, 'done=schedule_deleted'));
+  redirect(productionBack(formData, 'done=schedule_deleted'));
 }
 
 // ---------- 施工の記録（フェーズ13） ----------
@@ -645,9 +654,9 @@ export async function setProgressReportVisibilityAction(formData: FormData): Pro
     await store.setProgressReportVisibility(user, uuid(formData, 'report_id'), text(formData, 'visible') === 'true');
     revalidateCase(quoteId || null, text(formData, 'request_id') || null);
   } catch (e) {
-    redirect(productionBack(quoteId, `error=${encodeURIComponent(errorMessage(e))}`));
+    redirect(productionBack(formData, `error=${encodeURIComponent(errorMessage(e))}`));
   }
-  redirect(productionBack(quoteId, 'done=report_visibility'));
+  redirect(productionBack(formData, 'done=report_visibility'));
 }
 
 // ---------- 完了確認・是正・引渡し（フェーズ14） ----------

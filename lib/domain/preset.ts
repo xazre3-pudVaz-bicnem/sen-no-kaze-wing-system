@@ -1,12 +1,16 @@
+import { isOptionVisibleInSimulator, type ProductLifecycleOption } from './product-lifecycle';
 import type { CatalogBundle, ModelPreset, OptionVariantChoice, OptionVariantGroup } from './types';
 import { defaultSelection, toggleOption, type RuleContext } from './rules';
 
 /**
  * 仕様（プラン）の標準構成を、選択ルール（依存・競合・必須）を通しながら組み立てる。
  * シミュレーターの初期選択と、スタッフの「新規見積作成」で共用する。
+ * legacy Presetに古い商品codeが残っていても、現在シミュレーターで使える商品のみ初期選択する。
  */
 export function buildPresetSelection(ctx: RuleContext, preset: ModelPreset, defaults: string[] = defaultSelection(ctx)): string[] {
-  const byCode = new Map(ctx.options.map((o) => [o.code, o.id]));
+  const visibleOptions = ctx.options.filter((option) => isOptionVisibleInSimulator(option as ProductLifecycleOption));
+  const visibleIds = new Set(visibleOptions.map((option) => option.id));
+  const byCode = new Map(visibleOptions.map((option) => [option.code, option.id]));
   let cur: string[] = [];
   for (const code of preset.option_codes) {
     const oid = byCode.get(code);
@@ -14,9 +18,9 @@ export function buildPresetSelection(ctx: RuleContext, preset: ModelPreset, defa
     const r = toggleOption(ctx, cur, oid);
     if (!r.rejected) cur = r.next;
   }
-  // 必須カテゴリー・必須商品の不足分を既定値から補う
+  // 必須カテゴリー・必須商品の不足分を既定値から補う。非表示・取扱終了商品は補わない。
   for (const oid of defaults) {
-    if (cur.includes(oid)) continue;
+    if (!visibleIds.has(oid) || cur.includes(oid)) continue;
     const o = ctx.options.find((x) => x.id === oid);
     const cat = ctx.categories.find((c) => c.id === o?.category_id);
     const hasCat = cur.some((x) => ctx.options.find((y) => y.id === x)?.category_id === cat?.id);

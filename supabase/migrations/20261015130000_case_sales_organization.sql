@@ -688,7 +688,7 @@ begin
 
   insert into public.case_workflows (quote_request_id, updated_by) values (p_request_id, v_uid)
   on conflict (quote_request_id) do nothing;
-  perform 1 from public.case_workflows w where w.quote_request_id = p_request_id for update;
+  perform 1 from public.case_workflows cw where cw.quote_request_id = p_request_id for update;
   update public.case_workflows
      set primary_staff_id = p_staff_id,
          primary_assigned_at = case when p_staff_id is null then null else now() end,

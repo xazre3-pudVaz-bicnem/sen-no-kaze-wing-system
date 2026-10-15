@@ -1,5 +1,4 @@
 import type { BaseModel, CatalogBundle, OptionCategory, ProductOption, SpecMatrix } from './types';
-import { isSimulatorSelectableProduct } from './product-lifecycle';
 
 /** 公開カタログ内だけで使う「このカテゴリーでは選べる仕様なし」の非永続sentinel。 */
 export const CUSTOMER_SPEC_DENY_ALL = '__customer_category_not_selectable__';
@@ -147,32 +146,15 @@ export function effectiveCustomerSpecCodes(
   return effective.length > 0 ? effective : [CUSTOMER_SPEC_DENY_ALL];
 }
 
-/**
- * 公開シミュレーター用CatalogBundleに、商品単位の表示設定とカテゴリー行列を非破壊で反映する。
- * 取扱終了・シミュレーター非表示の商品は新規候補から外すが、DBの履歴参照自体は変更しない。
- */
+/** 公開シミュレーター用CatalogBundleに、カテゴリー行列を非破壊で反映する（bundle.customerCategoryMatrix を使う）。 */
 export function applyCustomerCategoryApplicability(bundle: CatalogBundle): CatalogBundle {
-  const customerOptions = bundle.options.filter(isSimulatorSelectableProduct);
-  const visibleIds = new Set(customerOptions.map((option) => option.id));
-  const visibleGroupIds = new Set(bundle.variantGroups.filter((group) => visibleIds.has(group.option_id)).map((group) => group.id));
-  const baseBundle: CatalogBundle = {
-    ...bundle,
-    options: customerOptions,
-    dependencies: bundle.dependencies.filter((dependency) => visibleIds.has(dependency.option_id)),
-    conflicts: bundle.conflicts.filter(
-      (conflict) => visibleIds.has(conflict.option_id) && visibleIds.has(conflict.conflicts_with_option_id)
-    ),
-    variantGroups: bundle.variantGroups.filter((group) => visibleIds.has(group.option_id)),
-    variantChoices: bundle.variantChoices.filter((choice) => visibleGroupIds.has(choice.group_id)),
-  };
-
-  const matrix = baseBundle.customerCategoryMatrix ?? null;
-  if (!matrix) return baseBundle;
-  const categoryById = new Map(baseBundle.categories.map((category) => [category.id, category.code]));
-  const options: ProductOption[] = baseBundle.options.map((option) => {
+  const matrix = bundle.customerCategoryMatrix ?? null;
+  if (!matrix) return bundle;
+  const categoryById = new Map(bundle.categories.map((category) => [category.id, category.code]));
+  const options: ProductOption[] = bundle.options.map((option) => {
     const categoryCode = categoryById.get(option.category_id);
     if (!categoryCode) return option;
-    const spec_codes = effectiveCustomerSpecCodes(matrix, baseBundle.model.slug, categoryCode, option.spec_codes);
+    const spec_codes = effectiveCustomerSpecCodes(matrix, bundle.model.slug, categoryCode, option.spec_codes);
     if (
       spec_codes.length === option.spec_codes.length &&
       spec_codes.every((code, index) => code === option.spec_codes[index])
@@ -181,5 +163,5 @@ export function applyCustomerCategoryApplicability(bundle: CatalogBundle): Catal
     }
     return { ...option, spec_codes };
   });
-  return { ...baseBundle, options };
+  return { ...bundle, options };
 }

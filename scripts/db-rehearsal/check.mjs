@@ -17,6 +17,8 @@ import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.m
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
+import { runtimeProductLifecycle } from './runtime-product-lifecycle.mjs';
+import { runtimeLifecycleConcurrency } from './runtime-product-lifecycle-concurrency.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -45,6 +47,9 @@ try {
     // 同時編集（optimistic locking）は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionHqStandardCost(client, { connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeProductLifecycle(client));
+    // 取扱終了と保存・提出・発行の同時実行は 2 本の接続が必要なため、別の接続で実行する
+    runtime = mergeRuntime(runtime, await runtimeLifecycleConcurrency({ connectionString: url }));
     printRuntime(runtime);
   }
   const out = arg('--out');

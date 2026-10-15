@@ -68,6 +68,7 @@ import {
   isCaseSalesManager,
   isCaseSupervisor,
   organizationManagers,
+  selectableOrganizationOfMember,
 } from '@/lib/data/organizations/local-relations';
 import type { BoardAfterServiceRequest, BoardAppointment, BoardManufacturingOrder, CaseFlowStore, StockLedgerRow } from './store';
 
@@ -397,32 +398,37 @@ export class LocalCaseFlowStore implements CaseFlowStore {
         throw invalid('指定した代理店は選べません');
       }
       // お客様が選んだ代理店（組織）。有効な代理店・総代理店で、管理者がいる組織だけ選べる（DB と同じ）
-      const preferredOrg = input.preferred_organization_id
+      const explicitOrg = input.preferred_organization_id
         ? db.organizations?.organizations.find((o) => o.id === input.preferred_organization_id)
         : null;
       if (
         input.preferred_organization_id &&
-        (!preferredOrg ||
-          preferredOrg.status !== 'active' ||
-          preferredOrg.organization_type === 'headquarters' ||
-          organizationManagers(db, preferredOrg.id).length === 0)
+        (!explicitOrg ||
+          explicitOrg.status !== 'active' ||
+          explicitOrg.organization_type === 'headquarters' ||
+          organizationManagers(db, explicitOrg.id).length === 0)
       ) {
         throw invalid('指定した代理店は選べません');
       }
+      // 紹介ページの代理店を選んだときは、その代理店が所属する組織を営業担当の候補にする（DB の 20261015160000 と同じ）
+      const derivedOrgId = !explicitOrg && input.preferred_dealer_id ? selectableOrganizationOfMember(db, input.preferred_dealer_id) : null;
+      const preferredOrg = explicitOrg ?? (derivedOrgId ? db.organizations?.organizations.find((o) => o.id === derivedOrgId) ?? null : null);
       const current = t.preferences.find((p) => p.quote_request_id === requestId);
       const before = current?.preferred_dealer_id ?? null;
       const next: QuoteRequestPreferences = {
         quote_request_id: requestId,
         ...input,
-        preferred_organization_id: input.preferred_organization_id ?? null,
+        preferred_organization_id: preferredOrg?.id ?? null,
         updated_at: nowIso(),
       };
       if (current) Object.assign(current, next);
       else t.preferences.push(next);
       // 営業担当組織が未定なら、お客様が選んだ代理店を営業担当にする（いったん決まった後は、本部だけが変える）
+      let assigned = false;
       if (preferredOrg) {
         const workflow = workflowOf(db, requestId, actor.id);
         if (!workflow.sales_organization_id) {
+          assigned = true;
           workflow.sales_organization_id = preferredOrg.id;
           workflow.sales_assigned_at = nowIso();
           if (workflow.manufacturing_auto !== false || !workflow.manufacturing_organization_id) {
@@ -448,7 +454,8 @@ export class LocalCaseFlowStore implements CaseFlowStore {
           });
         }
       }
-      if (input.preferred_dealer_id && input.preferred_dealer_id !== before) {
+      // 営業担当を決めなかったとき（組織に所属していない代理店・営業担当が決まった後の変更）は、これまでどおり本部へ知らせる
+      if (input.preferred_dealer_id && input.preferred_dealer_id !== before && !assigned) {
         notify(db, {
           recipient_id: null,
           audience: 'admin',

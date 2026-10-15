@@ -97,7 +97,7 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
       <fieldset className="space-y-4 rounded-lg border border-line p-4" data-testid="quote-request-preferences">
         <legend className="px-1 text-sm font-semibold">打合せのご希望（任意）</legend>
         {dealers.length > 0 && (
-          <Field label="相談したい代理店" htmlFor="preferred_dealer_id" hint="設置予定地に対応している代理店です。本部が担当を決めるときの参考にします">
+          <Field label="相談したい代理店" htmlFor="preferred_dealer_id" hint="設置予定地に対応している代理店です。選んだ代理店からご連絡します（本部が調整する場合があります）。指定しないときは本部がご案内します">
             <Select id="preferred_dealer_id" name="preferred_dealer_id" defaultValue={v.preferred_dealer_id ?? ''}>
               <option value="">指定しない</option>
               {dealers.map((dealer) => (

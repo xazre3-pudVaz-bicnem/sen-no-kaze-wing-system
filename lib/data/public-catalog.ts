@@ -18,6 +18,10 @@ import type {
   SpecMatrix,
 } from '@/lib/domain/types';
 import {
+  isOptionVisibleInSimulator,
+  type ProductLifecycleOption,
+} from '@/lib/domain/product-lifecycle';
+import {
   applyCustomerCategoryApplicability,
   buildCustomerCategoryMatrix,
   type CustomerCategoryMatrix,
@@ -30,6 +34,24 @@ export const CATALOG_TAG = 'catalog';
 export interface PublicCatalog {
   models: BaseModel[];
   bundles: Record<string, CatalogBundle>;
+}
+
+function filterBundleForSimulator(bundle: CatalogBundle): CatalogBundle {
+  const options = bundle.options.filter((option) => isOptionVisibleInSimulator(option as ProductLifecycleOption));
+  const optionIds = new Set(options.map((option) => option.id));
+  const variantGroups = bundle.variantGroups.filter((group) => optionIds.has(group.option_id));
+  const variantGroupIds = new Set(variantGroups.map((group) => group.id));
+  return {
+    ...bundle,
+    options,
+    // 依存元が候補に残る限りルールは保持し、前提商品が非表示なら明示的に選択不可とする。
+    dependencies: bundle.dependencies.filter((dependency) => optionIds.has(dependency.option_id)),
+    conflicts: bundle.conflicts.filter(
+      (conflict) => optionIds.has(conflict.option_id) && optionIds.has(conflict.conflicts_with_option_id)
+    ),
+    variantGroups,
+    variantChoices: bundle.variantChoices.filter((choice) => variantGroupIds.has(choice.group_id)),
+  };
 }
 
 function assemble(
@@ -90,7 +112,7 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
     const bundles: Record<string, CatalogBundle> = {};
     for (const m of models) {
       const b = await store.getCatalogBundle(m.id);
-      if (b) bundles[m.id] = applyCustomerCategoryApplicability(b);
+      if (b) bundles[m.id] = applyCustomerCategoryApplicability(filterBundleForSimulator(b));
     }
     return { models, bundles };
   }
@@ -149,12 +171,15 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
       };
   const categoryRows = normalizeCategories((categories.data ?? []) as OptionCategory[]);
   const modelRows = (models.data ?? []) as BaseModel[];
+  const visibleOptions = normalizeOptions((options.data ?? []) as ProductOption[]).filter((option) =>
+    isOptionVisibleInSimulator(option as ProductLifecycleOption)
+  );
 
   return assemble(
     modelRows,
     (images.data ?? []) as ProductImage[],
     categoryRows,
-    normalizeOptions((options.data ?? []) as ProductOption[]),
+    visibleOptions,
     optionImageRows,
     (dependencies.data ?? []) as OptionDependency[],
     (conflicts.data ?? []) as OptionConflict[],

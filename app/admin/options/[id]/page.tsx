@@ -14,6 +14,7 @@ import { OptionCustomerPreview } from '@/components/admin/option-customer-previe
 import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-cost-card';
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
+import { ProductLifecycleControls } from '@/components/admin/product-lifecycle-controls';
 import { RegisteredOptionEditFlow } from '@/components/admin/registered-option-edit-flow';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
@@ -105,6 +106,7 @@ export default async function EditOptionPage({
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
+        <ProductLifecycleControls option={option} canEdit={catalogEditor} />
         {hqCostAccess.available && hqCostAccess.canView && (
           <OptionHqStandardCostCard
             optionId={id}

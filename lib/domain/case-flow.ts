@@ -6,6 +6,8 @@
 
 /** 案件（見積依頼）への関わり方。DB の case_access() と同じ */
 export type CaseAccess = 'admin' | 'staff' | 'manufacturer' | 'customer';
+/** 読み取りの関わり方（DB の case_role）：CaseAccess に、営業担当組織の管理者と直属の総代理店の管理者を足す */
+export type CaseRole = CaseAccess | 'manager' | 'supervisor';
 
 export class CaseFlowValidationError extends Error {
   constructor(message: string) {
@@ -165,6 +167,8 @@ export interface PreferredSlot {
 export interface QuoteRequestPreferences {
   quote_request_id: string;
   preferred_dealer_id: string | null;
+  /** お客様が選んだ代理店（組織）。営業担当組織が未定なら、その組織を営業担当にする */
+  preferred_organization_id?: string | null;
   meeting_method: MeetingMethod | null;
   preferred_slots: PreferredSlot[];
   note: string | null;
@@ -173,6 +177,7 @@ export interface QuoteRequestPreferences {
 
 export interface QuoteRequestPreferencesInput {
   preferred_dealer_id: string | null;
+  preferred_organization_id?: string | null;
   meeting_method: MeetingMethod | null;
   preferred_slots: PreferredSlot[];
   note: string | null;
@@ -217,7 +222,27 @@ export interface CaseWorkflow {
   primary_assigned_at: string | null;
   manufacturer_id: string | null;
   manufacturer_assigned_at: string | null;
+  /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261015130000） */
+  sales_organization_id?: string | null;
+  sales_assigned_at?: string | null;
+  /** 製造担当組織（総代理店）。manufacturing_auto なら営業担当組織から自動で決める */
+  manufacturing_organization_id?: string | null;
+  manufacturing_auto?: boolean;
+  manufacturing_assigned_at?: string | null;
   updated_at: string;
+}
+
+/** 案件の営業担当組織・製造担当組織・主担当者（画面用。DB の get_case_organizations と同じ） */
+export interface CaseOrganizations {
+  sales_organization: { id: string; name: string; organization_type: 'headquarters' | 'master_dealer' | 'dealer' } | null;
+  manufacturing_organization: { id: string; name: string } | null;
+  manufacturing_auto: boolean;
+  primary_staff: { id: string; full_name: string } | null;
+  viewer_role: CaseRole;
+  /** 主担当者を決められるか（本部と営業担当組織の管理者） */
+  can_assign: boolean;
+  /** 主担当者の候補（営業担当組織のメンバー）。決められる人にだけ返る */
+  candidates: { id: string; full_name: string; member_role: string }[];
 }
 
 /** お客様に見せる進み具合（社内の情報は含まない）。DB の get_case_progress と同じ */
@@ -549,6 +574,8 @@ export interface ManufacturingOrder {
   contract_id: string;
   quote_id: string;
   manufacturer_id: string | null;
+  /** 製造担当組織（組織の案件。20261015130000） */
+  manufacturing_organization_id?: string | null;
   status: ManufacturingOrderStatus;
   unit_count: number;
   requested_delivery_on: string | null;

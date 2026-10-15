@@ -7,8 +7,12 @@ import {
   deleteCaseFileAction,
   setAppointmentStatusAction,
   setCaseManufacturerAction,
+  setCaseManufacturingOrganizationAction,
+  setCaseSalesOrganizationAction,
   setSiteSurveyStatusAction,
 } from '@/lib/actions/case-flow';
+import { getOrganizationStore } from '@/lib/data/organizations/store';
+import { ORGANIZATION_TYPE_LABEL, type OrganizationSummary } from '@/lib/domain/organizations';
 import {
   APPOINTMENT_PURPOSE_LABELS,
   APPOINTMENT_STATUS_LABELS,
@@ -32,6 +36,8 @@ import { AppointmentProposeForm, CaseFileUploadForm, CaseNoteForm, SiteSurveyFor
 const DONE_TEXT: Record<string, string> = {
   acknowledged: '受付済みにしました。お客様へお知らせしました。',
   primary: '主担当者を更新しました。',
+  sales: '営業担当組織を更新しました。',
+  manufacturing: '製造担当を更新しました。',
   manufacturer: '技術検討・製造の担当を更新しました。',
   appointment: '日程を更新しました。',
   survey: '現地確認の状態を更新しました。',
@@ -116,9 +122,17 @@ export async function CaseSitePanels({
   const requestId = detail.quote.quote_request_id;
   const caseFlow = await getCaseFlowStore();
   const access: CaseAccess | null = await caseFlow.getCaseAccess(actor, requestId);
-  if (!access || access === 'customer') return null;
+  // 表示は読み取りの関わり方で決める（営業担当組織の管理者も見られる）。入力は書き込みの関わり方（本部・主担当者）だけ
+  const role = await caseFlow.getCaseRole(actor, requestId);
+  if (!role || role === 'customer' || role === 'supervisor') return null;
   const isAdmin = access === 'admin';
+  const isManager = role === 'manager';
   const canOperate = access === 'admin' || access === 'staff';
+  const caseOrgs = await caseFlow.getCaseOrganizations(actor, requestId);
+  const isOrgCase = Boolean(caseOrgs?.sales_organization);
+  const organizations: OrganizationSummary[] = isAdmin ? await (await getOrganizationStore()).listOrganizations(actor) : [];
+  const activeOrganizations = organizations.filter((o) => o.status === 'active');
+  const activeMasterDealers = activeOrganizations.filter((o) => o.organization_type === 'master_dealer');
 
   // お客様が入力した設置予定地・土地（フェーズ3。プランに紐づく）
   const configurationId = detail.request?.configuration_id ?? null;
@@ -165,12 +179,77 @@ export async function CaseSitePanels({
         testId="case-intake-panel"
         badge={workflow?.acknowledged_at ? <Badge tone="success">受付済み</Badge> : <Badge tone="warn">未受付</Badge>}
       >
+        <div className="grid gap-3 lg:grid-cols-2" data-testid="case-organizations">
+          <div className="space-y-2 rounded-lg bg-[#fbfcfb] p-3 text-sm">
+            <p className="text-xs font-semibold text-muted">営業担当組織</p>
+            <p data-testid="case-sales-organization">
+              {caseOrgs?.sales_organization
+                ? `${caseOrgs.sales_organization.name}（${ORGANIZATION_TYPE_LABEL[caseOrgs.sales_organization.organization_type]}）`
+                : '本部が受付中（代理店が未定）'}
+            </p>
+            {isAdmin && (
+              <form action={setCaseSalesOrganizationAction} className="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="quote_id" value={quoteId} />
+                <input type="hidden" name="request_id" value={requestId} />
+                <select
+                  name="organization_id"
+                  defaultValue={caseOrgs?.sales_organization?.id ?? ''}
+                  className="input h-9 max-w-[18rem] text-sm"
+                  aria-label="営業担当組織"
+                  data-testid="case-sales-organization-select"
+                >
+                  <option value="">本部が受付中（代理店が未定）</option>
+                  {activeOrganizations.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {ORGANIZATION_TYPE_LABEL[o.organization_type]}：{o.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn-secondary btn-sm" data-testid="case-sales-organization-submit">
+                  変更
+                </button>
+              </form>
+            )}
+          </div>
+          <div className="space-y-2 rounded-lg bg-[#fbfcfb] p-3 text-sm">
+            <p className="text-xs font-semibold text-muted">製造担当（総代理店）</p>
+            <p data-testid="case-manufacturing-organization">
+              {caseOrgs?.manufacturing_organization?.name ?? (isOrgCase ? '未定（本部が決めます）' : '—')}
+              {caseOrgs?.manufacturing_organization && caseOrgs.manufacturing_auto && (
+                <span className="ml-2 text-[0.65rem] text-muted">営業担当の所属総代理店（自動）</span>
+              )}
+            </p>
+            {isAdmin && isOrgCase && (
+              <form action={setCaseManufacturingOrganizationAction} className="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="quote_id" value={quoteId} />
+                <input type="hidden" name="request_id" value={requestId} />
+                <select
+                  name="organization_id"
+                  defaultValue={caseOrgs?.manufacturing_auto ? '' : caseOrgs?.manufacturing_organization?.id ?? ''}
+                  className="input h-9 max-w-[18rem] text-sm"
+                  aria-label="製造担当"
+                  data-testid="case-manufacturing-organization-select"
+                >
+                  <option value="">自動（営業担当の所属総代理店）</option>
+                  {activeMasterDealers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="btn-secondary btn-sm">
+                  変更
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
         <div className="grid gap-3 lg:grid-cols-3">
           <div className="space-y-2 rounded-lg bg-[#fbfcfb] p-3 text-sm">
             <p className="text-xs font-semibold text-muted">受付</p>
             {workflow?.acknowledged_at ? (
               <p>{formatDate(workflow.acknowledged_at)} に受付（{nameOf(workflow.acknowledged_by) ?? '担当'}）</p>
-            ) : canOperate ? (
+            ) : canOperate || isManager ? (
               <form action={acknowledgeCaseAction}>
                 <input type="hidden" name="quote_id" value={quoteId} />
                 <input type="hidden" name="request_id" value={requestId} />
@@ -185,8 +264,47 @@ export async function CaseSitePanels({
           </div>
           <div className="space-y-2 rounded-lg bg-[#fbfcfb] p-3 text-sm">
             <p className="text-xs font-semibold text-muted">主担当者</p>
-            <p>{nameOf(workflow?.primary_staff_id) ?? (workflow?.primary_staff_id ? '設定済み' : '未設定')}</p>
-            {isAdmin && (
+            {isOrgCase ? (
+              <>
+                <p data-testid="case-primary-staff">
+                  {caseOrgs?.primary_staff
+                    ? caseOrgs.primary_staff.id === actor.id
+                      ? `${caseOrgs.primary_staff.full_name || 'あなた'}（あなた）`
+                      : caseOrgs.primary_staff.full_name || '設定済み'
+                    : '未設定'}
+                </p>
+                {caseOrgs?.can_assign && (
+                  <form action={assignCasePrimaryStaffAction} className="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="quote_id" value={quoteId} />
+                    <input type="hidden" name="request_id" value={requestId} />
+                    <select
+                      name="staff_id"
+                      defaultValue={caseOrgs.primary_staff?.id ?? ''}
+                      className="input h-9 max-w-[14rem] text-sm"
+                      aria-label="主担当者"
+                      data-testid="case-primary-staff-select"
+                    >
+                      <option value="">未設定</option>
+                      {caseOrgs.candidates.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.full_name || '（氏名未登録）'}
+                          {c.member_role === 'owner' || c.member_role === 'admin' ? '（管理者）' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="btn-secondary btn-sm" data-testid="case-primary-staff-submit">
+                      決める
+                    </button>
+                  </form>
+                )}
+                {isManager && !caseOrgs?.primary_staff && (
+                  <p className="text-[0.65rem] text-muted">自社のメンバーから主担当者を決めてください。自分が担当するときは、自分を選びます。</p>
+                )}
+              </>
+            ) : (
+              <p>{nameOf(workflow?.primary_staff_id) ?? (workflow?.primary_staff_id ? '設定済み' : '未設定')}</p>
+            )}
+            {isAdmin && !isOrgCase && (
               <form action={assignCasePrimaryStaffAction} className="flex flex-wrap items-center gap-2">
                 <input type="hidden" name="quote_id" value={quoteId} />
                 <input type="hidden" name="request_id" value={requestId} />
@@ -206,7 +324,7 @@ export async function CaseSitePanels({
                 </button>
               </form>
             )}
-            {access === 'staff' && workflow?.primary_staff_id !== actor.id && (
+            {access === 'staff' && !isOrgCase && workflow?.primary_staff_id !== actor.id && (
               <form action={assignCasePrimaryStaffAction}>
                 <input type="hidden" name="quote_id" value={quoteId} />
                 <input type="hidden" name="request_id" value={requestId} />
@@ -217,6 +335,7 @@ export async function CaseSitePanels({
               </form>
             )}
           </div>
+          {!isOrgCase && (
           <div className="space-y-2 rounded-lg bg-[#fbfcfb] p-3 text-sm">
             <p className="text-xs font-semibold text-muted">技術検討・製造の担当（総代理店）</p>
             <p>{nameOf(workflow?.manufacturer_id) ?? (workflow?.manufacturer_id ? '設定済み' : '未設定')}</p>
@@ -238,6 +357,7 @@ export async function CaseSitePanels({
               </form>
             )}
           </div>
+          )}
         </div>
         <div className="rounded-lg border border-line p-3 text-sm" data-testid="case-preferences">
           <p className="text-xs font-semibold text-muted">お客様のご希望（見積依頼のとき）</p>
@@ -418,12 +538,14 @@ export async function CaseSitePanels({
             ))}
           </ul>
         )}
-        <details className="rounded-lg bg-[#fbfcfb] p-3">
-          <summary className="cursor-pointer text-sm font-semibold">記録を追加する</summary>
-          <div className="mt-3">
-            <CaseNoteForm quoteId={quoteId} requestId={requestId} kinds={noteKinds} consults={isAdmin ? consults : []} />
-          </div>
-        </details>
+        {(canOperate || access === 'manufacturer') && (
+          <details className="rounded-lg bg-[#fbfcfb] p-3">
+            <summary className="cursor-pointer text-sm font-semibold">記録を追加する</summary>
+            <div className="mt-3">
+              <CaseNoteForm quoteId={quoteId} requestId={requestId} kinds={noteKinds} consults={isAdmin ? consults : []} />
+            </div>
+          </details>
+        )}
       </Section>
     </div>
   );

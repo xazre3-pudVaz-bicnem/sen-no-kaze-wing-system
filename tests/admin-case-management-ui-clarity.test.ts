@@ -44,7 +44,7 @@ describe('案件管理UIの未登録・準備中・権限表示と一覧復帰',
   it('権限による未取得をデータなしと断定しない', () => {
     expect(page).toContain('この権限では保存済み仕様の詳細を表示していません。');
     expect(workspace).toContain('この権限では詳細を表示できない場合があります。');
-    expect(workspace).toContain("if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();");
+    expect(workspace).toContain('if (!canViewAllQuotes && quote.dealer_id !== actor.id && !isSalesManagerView) notFound();');
   });
 
   it('案件詳細から一覧へ戻る導線があり一覧条件を保持する', () => {

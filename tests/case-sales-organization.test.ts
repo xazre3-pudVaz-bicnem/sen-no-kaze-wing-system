@@ -37,6 +37,26 @@ describe('案件の営業担当組織：DB の取り決め（migration 202610151
     expect(sqlOnly).not.toMatch(/'supervisor'\)/);
   });
 
+  it('製造担当組織のメンバーには、顧客情報の項目が決まるまで製造・施工の記録だけを見せる（これまでの個人の製造担当は従来どおり）', () => {
+    const policy = (name: string) => {
+      const start = sqlOnly.indexOf(`create policy ${name} `);
+      return sqlOnly.slice(start, sqlOnly.indexOf(');\n\n', start));
+    };
+    expect(policy('case_notes_read')).toMatch(/kind = 'tech_review' or public\.is_case_legacy_manufacturer\(quote_request_id\)/);
+    expect(policy('case_files_read')).toMatch(/context = 'progress' or public\.is_case_legacy_manufacturer\(quote_request_id\)/);
+    expect(policy('site_surveys_read')).not.toContain("'manufacturer'");
+    expect(policy('site_surveys_read')).toContain('public.is_case_legacy_manufacturer(quote_request_id)');
+    const siteProfile = sectionOf(
+      'create or replace function public.configuration_site_profile_access',
+      'create or replace function public.get_case_plan_configuration'
+    );
+    expect(siteProfile).toContain("public.case_access(r.id) = 'staff' or public.is_case_legacy_manufacturer(r.id)");
+    expect(siteProfile).not.toContain("'manufacturer'");
+    const legacy = sectionOf('create function public.is_case_legacy_manufacturer', '-- ---------- 読み取りの権限');
+    expect(legacy).toContain('w.manufacturing_organization_id is null');
+    expect(legacy).toContain('w.manufacturer_id = auth.uid()');
+  });
+
   it('見積は営業担当組織の管理者も読める（直属の総代理店には、顧客情報を含む見積を開かない）', () => {
     expect(migration).toContain('or (quote_request_id is not null and public.is_case_sales_manager(quote_request_id))');
     expect(migration).toContain('or (q.quote_request_id is not null and public.is_case_sales_manager(q.quote_request_id))');

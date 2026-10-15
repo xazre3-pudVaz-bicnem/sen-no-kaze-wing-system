@@ -62,6 +62,8 @@ declare
   q_1b constant uuid := '35000000-0000-4000-8000-000000000002';
   q_legacy constant uuid := '35000000-0000-4000-8000-000000000003';
   k_1 constant uuid := '36000000-0000-4000-8000-000000000001';
+  f_dir constant text := 'cases/34000000-0000-4000-8000-000000000001/';
+  f_dir_legacy constant text := 'cases/34000000-0000-4000-8000-000000000002/';
   mo_1 constant uuid := '37000000-0000-4000-8000-000000000001';
   v_out text;
   v_notifications_before bigint;
@@ -266,6 +268,52 @@ begin
     pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_manufacturing_organization(%L, %L)::text', r_1, o_md)));
   perform pg_temp.cs_expect_eq('25-30 製造担当組織のメンバーは製造依頼を読める', '1',
     pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.manufacturing_orders where quote_request_id = %L', r_1)));
+
+  -- ---------- 製造担当組織には、顧客情報の項目が決まるまで製造・施工の記録だけを見せる ----------
+  -- これまでの案件では、本部が個人として選んだ製造の担当（総代理店の利用者）に従来どおり見せる
+  perform pg_temp.cs_run_as('authenticated', u_admin, format('select public.set_case_manufacturer(%L, %L)::text', r_legacy, u_md2_mgr));
+  set local session_replication_role = replica;
+  insert into public.case_notes (quote_request_id, kind, body, verdict, created_by, author_name)
+  values (r_1, 'meeting', '打合せの記録', null, u_d_staff, '代理店 担当者A'),
+         (r_1, 'tech_review', '製造できる', 'feasible', u_md2_mgr, '別の総代理店 管理者'),
+         (r_legacy, 'meeting', '打合せの記録', null, u_legacy, 'これまでの代理店'),
+         (r_legacy, 'tech_review', '製造できる', 'feasible', u_md2_mgr, '別の総代理店 管理者');
+  insert into public.site_surveys (quote_request_id) values (r_1), (r_legacy);
+  insert into public.case_files (quote_request_id, context, storage_path, file_name, content_type, size_bytes, uploaded_by)
+  values (r_1, 'progress', f_dir || '38000000-0000-4000-8000-000000000001.jpg', '施工.jpg', 'image/jpeg', 10, u_d_staff),
+         (r_1, 'site_survey', f_dir || '38000000-0000-4000-8000-000000000002.jpg', '現地.jpg', 'image/jpeg', 10, u_d_staff),
+         (r_1, 'document', f_dir || '38000000-0000-4000-8000-000000000003.pdf', '資料.pdf', 'application/pdf', 10, u_cust),
+         (r_legacy, 'progress', f_dir_legacy || '38000000-0000-4000-8000-000000000004.jpg', '施工.jpg', 'image/jpeg', 10, u_legacy),
+         (r_legacy, 'site_survey', f_dir_legacy || '38000000-0000-4000-8000-000000000005.jpg', '現地.jpg', 'image/jpeg', 10, u_legacy);
+  insert into public.configuration_site_profiles (configuration_id, land_status, site_address)
+  values (c_1, 'owned', '検査県検査市1-1'), (c_legacy, 'owned', '検査県検査市2-2');
+  set local session_replication_role = origin;
+  perform pg_temp.cs_expect_eq('25-38 製造担当組織のメンバーが読めるのは自分たちの技術検討と施工の写真だけ（打合せ記録・現地確認・資料・設置予定地は読めない）',
+    'tech_review/0/progress/0',
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select string_agg(kind, '','' order by kind) from public.case_notes where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select string_agg(context, '','' order by context) from public.case_files where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.configuration_site_profiles where configuration_id = %L', c_1)));
+  perform pg_temp.cs_expect_eq('25-39 主担当者は、案件の記録をすべて読める', '2/1/3/1',
+    pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.case_notes where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.case_files where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_d_staff, format('select count(*)::text from public.configuration_site_profiles where configuration_id = %L', c_1)));
+  perform pg_temp.cs_expect_eq('25-40 直属の総代理店の管理者（配下の確認）は、案件の記録を表から読めない', '0/0/0/0',
+    pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_notes where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.case_files where quote_request_id = %L', r_1)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md_mgr, format('select count(*)::text from public.configuration_site_profiles where configuration_id = %L', c_1)));
+  perform pg_temp.cs_expect_eq('25-41 これまでの案件で本部が選んだ製造の担当は、従来どおり記録を読める', 'manufacturer/2/1/2/1',
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select public.case_role(%L)', r_legacy)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.case_notes where quote_request_id = %L', r_legacy)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.site_surveys where quote_request_id = %L', r_legacy)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.case_files where quote_request_id = %L', r_legacy)) || '/' ||
+    pg_temp.cs_run_as('authenticated', u_md2_mgr, format('select count(*)::text from public.configuration_site_profiles where configuration_id = %L', c_legacy)));
+  perform pg_temp.cs_expect_eq('25-42 製造担当組織のメンバーも、技術検討は書ける', 'ok',
+    case when pg_temp.cs_run_as('authenticated', u_md2_mgr,
+           format($q$ select public.add_case_note(%L, jsonb_build_object('kind', 'tech_review', 'body', '条件付きで製造できる', 'verdict', 'conditional'))::text $q$, r_1)) ~ '^[0-9a-f-]{36}$'
+         then 'ok' else 'denied' end);
 
   -- ---------- 所属を外れた担当者は、案件を扱えない ----------
   select m.id into v_membership from public.organization_memberships m where m.profile_id = u_d_staff and m.status = 'active';

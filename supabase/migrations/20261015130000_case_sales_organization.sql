@@ -14,6 +14,9 @@
 -- * 管理者（営業担当組織）の閲覧は、読み取りの判定 case_role() に「manager」を足して表す。書き込みの判定 case_access() は従来どおり
 --   admin／staff／manufacturer／customer（管理者が担当として動くときは、自分を主担当者にする）
 -- * 総代理店の配下の閲覧（supervisor）は case_role() で判定だけ用意し、表の読み取りは次の段階で、顧客情報を含まない形で開く
+-- * 製造担当組織のメンバー（manufacturer）が読めるのは、製造・施工の記録（製造依頼・個体・工程・施工の記録と写真・完了確認・是正・
+--   回されたアフター）と自分たちの技術検討だけ。現地確認・打合せ記録や相談・設置予定地と土地・そのほかの資料は、総代理店に見せる
+--   顧客情報の項目が先方の確認で決まるまで見せない（これまでの案件で本部が個人として選んだ製造の担当は従来どおり）
 -- * 営業担当組織が無い案件（これまでの案件）は、従来どおり見積の担当（dealer_id）で判定する
 
 begin;
@@ -273,6 +276,26 @@ $$;
 comment on function public.case_role(uuid) is
   '案件への関わり方（読み取りの判定）：admin／staff／manager（営業担当組織の管理者）／manufacturer／customer／supervisor（直属の総代理店の管理者）／NULL。';
 
+-- これまでの案件（製造担当組織が無い）で、本部が個人として選んだ製造の担当か。
+-- 製造担当組織のメンバーには、総代理店に見せる顧客情報の項目が先方の確認で決まるまで、製造・施工の記録だけを見せる
+-- （現地確認・打合せ記録や相談・設置予定地と土地・お客様の資料や契約書・引渡しの書類は、これまでの個人の製造担当にだけ従来どおり見せる）
+create function public.is_case_legacy_manufacturer(p_request_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.case_workflows w
+     where w.quote_request_id = p_request_id
+       and w.manufacturing_organization_id is null
+       and w.manufacturer_id = auth.uid()
+       and coalesce(public.current_role_rank(), 0) >= 2
+  );
+$$;
+
 -- ---------- 読み取りの権限：営業担当組織の管理者は、担当と同じものを見られる ----------
 
 drop policy if exists after_service_requests_read on public.after_service_requests;
@@ -292,7 +315,10 @@ drop policy if exists case_files_read on public.case_files;
 create policy case_files_read on public.case_files
 for select to authenticated
 using (
-  public.case_role(quote_request_id) in ('admin', 'staff', 'manager', 'manufacturer')
+  public.case_role(quote_request_id) in ('admin', 'staff', 'manager')
+  -- 製造担当組織は施工・製造の写真（progress）だけ。これまでの個人の製造担当は従来どおり
+  or (public.case_role(quote_request_id) = 'manufacturer'
+      and (context = 'progress' or public.is_case_legacy_manufacturer(quote_request_id)))
   or (customer_visible and public.case_role(quote_request_id) = 'customer')
 );
 
@@ -304,7 +330,12 @@ using (public.case_role(quote_request_id) in ('admin', 'staff', 'manager', 'manu
 drop policy if exists case_notes_read on public.case_notes;
 create policy case_notes_read on public.case_notes
 for select to authenticated
-using (public.case_role(quote_request_id) in ('admin', 'staff', 'manager', 'manufacturer'));
+using (
+  public.case_role(quote_request_id) in ('admin', 'staff', 'manager')
+  -- 製造担当組織は自分たちの技術検討だけ（打合せ記録・本部への相談は営業の記録）。これまでの個人の製造担当は従来どおり
+  or (public.case_role(quote_request_id) = 'manufacturer'
+      and (kind = 'tech_review' or public.is_case_legacy_manufacturer(quote_request_id)))
+);
 
 drop policy if exists case_progress_reports_read on public.case_progress_reports;
 create policy case_progress_reports_read on public.case_progress_reports
@@ -360,7 +391,11 @@ using (public.case_role(quote_request_id) in ('admin', 'staff', 'manager', 'cust
 drop policy if exists site_surveys_read on public.site_surveys;
 create policy site_surveys_read on public.site_surveys
 for select to authenticated
-using (public.case_role(quote_request_id) in ('admin', 'staff', 'manager', 'manufacturer'));
+using (
+  public.case_role(quote_request_id) in ('admin', 'staff', 'manager')
+  -- 現地確認は、総代理店に見せる顧客情報の項目が決まるまで製造担当組織には見せない。これまでの個人の製造担当は従来どおり
+  or public.is_case_legacy_manufacturer(quote_request_id)
+);
 
 -- 見積：営業担当組織の管理者は、自社の案件の見積を読める（総代理店の配下の閲覧は、顧客情報を含まない専用の関数で次の段階に開く）
 drop policy if exists quotes_select on public.quotes;
@@ -903,7 +938,7 @@ as $$
            when exists (
              select 1 from public.quote_requests r
               where r.configuration_id = p_configuration_id
-                and (public.case_access(r.id) in ('staff', 'manufacturer') or public.is_case_sales_manager(r.id))
+                and (public.case_access(r.id) = 'staff' or public.is_case_legacy_manufacturer(r.id) or public.is_case_sales_manager(r.id))
            ) then 'staff'
            else null
          end;
@@ -1865,6 +1900,7 @@ alter function public.is_case_supervisor(uuid) owner to postgres;
 alter function public.default_manufacturing_organization(uuid) owner to postgres;
 alter function public.notify_organization_managers(uuid, text, text, text, text) owner to postgres;
 alter function public.case_role(uuid) owner to postgres;
+alter function public.is_case_legacy_manufacturer(uuid) owner to postgres;
 alter function public.apply_case_main_staff(uuid, uuid, uuid) owner to postgres;
 alter function public.write_case_audit(uuid, text, text, jsonb, jsonb) owner to postgres;
 alter function public.set_case_sales_organization(uuid, uuid) owner to postgres;
@@ -1885,6 +1921,8 @@ revoke all on function public.is_case_sales_manager(uuid) from public, anon, aut
 grant execute on function public.is_case_sales_manager(uuid) to anon, authenticated;
 revoke all on function public.case_role(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.case_role(uuid) to authenticated;
+revoke all on function public.is_case_legacy_manufacturer(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.is_case_legacy_manufacturer(uuid) to authenticated;
 
 -- 画面から呼ぶ RPC（中で本部・営業担当組織の管理者を確かめる）
 revoke all on function public.set_case_sales_organization(uuid, uuid) from public, anon, authenticated, service_role;
@@ -1908,8 +1946,8 @@ begin
      where n.nspname = 'public'
        and p.proname in (
          'validate_case_workflow_organizations', 'is_active_organization_member', 'is_case_sales_manager', 'is_case_supervisor',
-         'default_manufacturing_organization', 'notify_organization_managers', 'case_role', 'apply_case_main_staff', 'write_case_audit',
-         'set_case_sales_organization', 'set_case_manufacturing_organization', 'get_case_organizations',
+         'default_manufacturing_organization', 'notify_organization_managers', 'case_role', 'is_case_legacy_manufacturer',
+         'apply_case_main_staff', 'write_case_audit', 'set_case_sales_organization', 'set_case_manufacturing_organization', 'get_case_organizations',
          'case_access', 'assign_case_primary_staff', 'acknowledge_case', 'set_quote_request_preferences', 'get_case_progress',
          'configuration_site_profile_access', 'get_case_plan_configuration', 'send_manufacturing_order', 'set_case_manufacturer',
          'assign_quote_dealer', 'list_dealer_quote_request_meta', 'get_dealer_quote_request_current',
@@ -1931,6 +1969,7 @@ begin
     end if;
   end loop;
   if has_function_privilege('anon', 'public.case_role(uuid)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.is_case_legacy_manufacturer(uuid)', 'EXECUTE')
      or has_function_privilege('anon', 'public.set_case_sales_organization(uuid, uuid)', 'EXECUTE')
      or has_function_privilege('anon', 'public.set_case_manufacturing_organization(uuid, uuid)', 'EXECUTE')
      or has_function_privilege('anon', 'public.get_case_organizations(uuid)', 'EXECUTE') then

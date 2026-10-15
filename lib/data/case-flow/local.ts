@@ -119,6 +119,15 @@ function roleOf(db: LocalDb, actor: SessionUser, requestId: string): CaseRole | 
   return null;
 }
 
+/**
+ * これまでの案件（製造担当組織が無い）で、本部が個人として選んだ製造の担当か（DB の is_case_legacy_manufacturer と同じ）。
+ * 製造担当組織のメンバーには、総代理店に見せる顧客情報の項目が決まるまで、製造・施工の記録だけを見せる
+ */
+function isLegacyManufacturer(db: LocalDb, actor: SessionUser, requestId: string): boolean {
+  const workflow = tables(db).workflows.find((w) => w.quote_request_id === requestId);
+  return !!workflow && !workflow.manufacturing_organization_id && workflow.manufacturer_id === actor.id && rank(actor) >= 2;
+}
+
 /** 一覧・詳細の読み取り：営業担当組織の管理者は担当と同じものを見られる（総代理店の配下の閲覧はここでは開かない） */
 function viewAccessOf(db: LocalDb, actor: SessionUser, requestId: string): CaseAccess | null {
   const role = roleOf(db, actor, requestId);
@@ -212,6 +221,13 @@ function isHandedOver(db: LocalDb, requestId: string): boolean {
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
+/** 資料を読めるか（DB の case_files_read と同じ）。お客様は表示している資料だけ、製造担当組織は施工・製造の写真だけ */
+function canReadCaseFile(db: LocalDb, actor: SessionUser, access: CaseAccess, file: CaseFile): boolean {
+  if (access === 'customer') return file.customer_visible;
+  if (access === 'manufacturer') return file.context === 'progress' || isLegacyManufacturer(db, actor, file.quote_request_id);
+  return true;
+}
+
 /** プランの土地の情報への関わり方（DB の configuration_site_profile_access と同じ） */
 function siteProfileAccessOf(db: LocalDb, actor: SessionUser, configurationId: string): 'owner' | 'admin' | 'staff' | null {
   const configuration = db.configurations.find((c) => c.id === configurationId);
@@ -221,7 +237,7 @@ function siteProfileAccessOf(db: LocalDb, actor: SessionUser, configurationId: s
   const related = db.quoteRequests.some(
     (r) =>
       r.configuration_id === configurationId &&
-      (['staff', 'manufacturer'].includes(accessOf(db, actor, r.id) ?? '') || isCaseSalesManager(db, r.id, actor.id))
+      (accessOf(db, actor, r.id) === 'staff' || isLegacyManufacturer(db, actor, r.id) || isCaseSalesManager(db, r.id, actor.id))
   );
   return related ? 'staff' : null;
 }
@@ -812,6 +828,8 @@ export class LocalCaseFlowStore implements CaseFlowStore {
     return this.read((db) => {
       const access = viewAccessOf(db, actor, requestId);
       if (!access || access === 'customer') return null;
+      // 製造担当組織には、顧客情報の項目が決まるまで見せない（DB の site_surveys_read と同じ）
+      if (access === 'manufacturer' && !isLegacyManufacturer(db, actor, requestId)) return null;
       const row = tables(db).siteSurveys.find((s) => s.quote_request_id === requestId);
       return row ? { ...row, land: { ...row.land }, legal: { ...row.legal } } : null;
     });
@@ -859,8 +877,10 @@ export class LocalCaseFlowStore implements CaseFlowStore {
     return this.read((db) => {
       const access = viewAccessOf(db, actor, requestId);
       if (!access || access === 'customer') return [];
+      // 製造担当組織は自分たちの技術検討だけ（DB の case_notes_read と同じ）
+      const techReviewOnly = access === 'manufacturer' && !isLegacyManufacturer(db, actor, requestId);
       return tables(db)
-        .notes.filter((n) => n.quote_request_id === requestId)
+        .notes.filter((n) => n.quote_request_id === requestId && (!techReviewOnly || n.kind === 'tech_review'))
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((n) => ({ ...n }));
     });
@@ -1913,7 +1933,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const access = viewAccessOf(db, actor, requestId);
       if (!access) return [];
       return tables(db)
-        .files.filter((f) => f.quote_request_id === requestId && (access !== 'customer' || f.customer_visible))
+        .files.filter((f) => f.quote_request_id === requestId && canReadCaseFile(db, actor, access, f))
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((f) => ({ ...f }));
     });
@@ -1954,7 +1974,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       const file = tables(db).files.find((f) => f.id === fileId);
       if (!file) return null;
       const access = viewAccessOf(db, actor, file.quote_request_id);
-      if (!access || (access === 'customer' && !file.customer_visible)) return null;
+      if (!access || !canReadCaseFile(db, actor, access, file)) return null;
       const abs = path.join(filesDir(), 'case-files', file.storage_path);
       if (!fs.existsSync(abs)) return null;
       return { file: { ...file }, bytes: new Uint8Array(fs.readFileSync(abs)) };

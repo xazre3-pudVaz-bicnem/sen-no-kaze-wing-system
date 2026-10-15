@@ -24,13 +24,13 @@ function syncCapacityField(root: ParentNode, airconActive: boolean) {
     input.dataset.powerSpecOriginalPlaceholder = input.placeholder;
   }
 
-  if (airconActive) {
-    if (label) label.textContent = AIRCON_CAPACITY_LABEL;
-    input.placeholder = AIRCON_CAPACITY_PLACEHOLDER;
-  } else {
-    if (label?.dataset.powerSpecOriginalLabel) label.textContent = label.dataset.powerSpecOriginalLabel;
-    input.placeholder = input.dataset.powerSpecOriginalPlaceholder ?? '';
-  }
+  const labelText = airconActive ? AIRCON_CAPACITY_LABEL : label?.dataset.powerSpecOriginalLabel ?? '';
+  const placeholder = airconActive
+    ? AIRCON_CAPACITY_PLACEHOLDER
+    : input.dataset.powerSpecOriginalPlaceholder ?? '';
+
+  if (label && labelText && label.textContent?.trim() !== labelText) label.textContent = labelText;
+  if (input.placeholder !== placeholder) input.placeholder = placeholder;
 }
 
 function PowerSpecInput({
@@ -107,8 +107,8 @@ export function ProductPowerSpecRegistrationField({
       const category = form?.querySelector<HTMLSelectElement>('select[name="category_id"]') ?? null;
       const detailsGrid = form?.querySelector<HTMLElement>('#product-details .grid') ?? null;
       const isAircon = Boolean(airconCategoryId && category?.value === airconCategoryId);
-      setActive(isAircon);
-      setTarget(detailsGrid);
+      setActive((current) => current === isAircon ? current : isAircon);
+      setTarget((current) => current === detailsGrid ? current : detailsGrid);
       if (form) syncCapacityField(form, isAircon);
     };
 
@@ -140,7 +140,7 @@ export function ProductPowerSpecRegistrationField({
   if (!active || !target) return null;
 
   return createPortal(
-    <>
+    <div>
       <PowerSpecInput
         value={value}
         required
@@ -150,8 +150,8 @@ export function ProductPowerSpecRegistrationField({
           markDirty();
         }}
       />
-      {error && <p className="text-xs font-semibold text-danger" role="alert">{error}</p>}
-    </>,
+      {error && <p className="mt-1 text-xs font-semibold text-danger" role="alert">{error}</p>}
+    </div>,
     target
   );
 }

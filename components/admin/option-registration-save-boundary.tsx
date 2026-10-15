@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui';
 import { OptionRegistrationUiEnhancer } from '@/components/admin/option-registration-ui-enhancer';
 import { OptionRegistrationFinalUiEnhancer } from '@/components/admin/option-registration-final-ui-enhancer';
+import { OptionRegistrationPriceUiSync } from '@/components/admin/option-registration-price-ui-sync';
 
 type SaveHandler = () => Promise<boolean>;
 
@@ -151,6 +152,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
       <OptionRegistrationFinalUiEnhancer />
+      <OptionRegistrationPriceUiSync />
       {hasSaveHandler && (
         <div
           data-testid="option-registration-save-status"

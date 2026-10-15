@@ -38,7 +38,8 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('すべて <span');
     expect(client).toContain('登録済み <span');
     expect(client).toContain('下書き <span');
-    expect(client).toContain('aria-label="登録状態"');
+    expect(client).toContain('取扱終了 <span');
+    expect(client).toContain('aria-label="商品状態"');
     expect(client).not.toContain('aria-label="公開状態"');
     expect(client).not.toContain('要確認のみ');
     expect(client).toContain('aria-expanded={searchOpen}');
@@ -63,9 +64,9 @@ describe('商品台帳の入口', () => {
     expect(client).toContain("useState<LedgerSort>('updated-desc')");
     expect(client).not.toContain('aria-label="並び替え"');
     expect(client).not.toContain('商品管理番号順');
-    expect(client).toContain('標準使用数が多い順（接続待ち）');
-    expect(client).toContain('data-simulator-standard-usage-slot="pending-db"');
-    expect(client).toContain('DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。');
+    expect(client).not.toContain('標準使用数が多い順（接続待ち）');
+    expect(client).not.toContain('data-simulator-standard-usage-slot="pending-db"');
+    expect(client).not.toContain('DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。');
     expect(client).not.toContain('Ellipsis');
     expect(client).toContain("useState(50)");
     expect(client).toContain('表示件数');
@@ -104,7 +105,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain("if (event.key === 'Enter' || event.key === ' ')");
   });
 
-  it('各列見出しからExcel風に並び替え、正式データ未接続の標準使用数順は無効表示する', () => {
+  it('各列見出しからExcel風に並び替え、商品状態の順序も共通判定へ接続する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("{ value: 'name-asc', label: '商品名 昇順' }");
     expect(client).toContain("{ value: 'name-desc', label: '商品名 降順' }");
@@ -114,10 +115,11 @@ describe('商品台帳の入口', () => {
     expect(client).toContain("{ value: 'price-desc', label: '高い順' }");
     expect(client).toContain("{ value: 'status-published-first', label: '登録済みを先に表示' }");
     expect(client).toContain("{ value: 'status-draft-first', label: '下書きを先に表示' }");
+    expect(client).toContain('lifecycleRank(a, publishedFirst)');
     expect(client).not.toContain('公開中を先に表示');
     expect(client).toContain("{ value: 'updated-desc', label: '新しい順' }");
     expect(client).toContain("{ value: 'updated-asc', label: '古い順' }");
-    expect(client).toContain("{ label: '標準使用数が多い順（接続待ち）', disabled: true }");
+    expect(client).not.toContain('標準使用数が多い順（接続待ち）');
     expect(client).toContain('event.currentTarget.closest(\'details\')?.removeAttribute(\'open\')');
     expect(client).toContain("if (option.price_on_request) return 1");
     expect(client).toContain('if (!Number.isFinite(option.price)) return 2');
@@ -175,7 +177,7 @@ describe('商品台帳の入口', () => {
   it('お客様表示はシミュレーター共通ProductDetailをそのまま使う', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");
-    expect(client).toContain('シミュレーター画面と同じ商品詳細です。ここで変更した仕様は確認用で、保存されません。');
+    expect(client).toContain('商品詳細の確認画面です。取扱終了・シミュレーター非表示の商品も商品台帳では確認できます。');
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');
     expect(client).toContain('<ProductDetail key={selected.id} category={category} option={selected}');
@@ -190,7 +192,8 @@ describe('商品台帳の入口', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('商品基本情報');
     expect(client).toContain('商品管理番号');
-    expect(client).toContain('シミュレーター・Web表示設定');
+    expect(client).toContain('利用先');
+    expect(client).toContain('<Row label="見積で選択"');
     expect(client).toContain('自社の仕入・発注情報');
     expect(client).toContain('本部商品基準原価（税別）');
     expect(client).toContain('<Row label="仕入先" value={<PendingDbValue />}/>');
@@ -199,7 +202,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('登録・権限情報');
     expect(client).toContain('data-product-origin-slot="pending-db"');
     expect(client).toContain('商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。');
-    expect(client).toContain('label="登録状態"');
+    expect(client).toContain('label="商品状態"');
     expect(client).toContain('label="商品区分" value={<PendingDbValue />}');
     expect(client).toContain('label="登録元組織" value={<PendingDbValue />}');
     expect(client).not.toContain("selected.owner_id ? '登録者の組織' : '共通商品'");
@@ -208,10 +211,12 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('min-[900px]:grid-cols-2');
   });
 
-  it('利用者向けの商品状態は下書き・登録済みに統一する', () => {
+  it('利用者向けの商品状態は下書き・登録済み・取扱終了に統一する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-    expect(client).toContain("return status === 'published' ? '登録済み' : '下書き'");
-    expect(client).toContain('registrationStatusLabel(selected.status)');
+    expect(client).toContain('productLedgerStateLabel(selected)');
+    expect(client).toContain("productLedgerState(selected) === 'registered'");
+    expect(client).toContain("productLedgerState(selected) === 'retired'");
+    expect(client).not.toContain('registrationStatusLabel');
     expect(client).not.toContain('公開中');
     expect(client).not.toContain('label="公開状態"');
   });

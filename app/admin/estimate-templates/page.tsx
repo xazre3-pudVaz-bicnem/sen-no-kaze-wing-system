@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { isOptionAvailableForEstimate, type ProductLifecycleOption } from '@/lib/domain/product-lifecycle';
 import { Alert } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import {
@@ -43,7 +44,7 @@ export default async function EstimateTemplatesPage({
   ]);
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
   const demoProducts: EstimateTemplateExcelDemoProduct[] = options
-    .filter((option) => option.status === 'published')
+    .filter((option) => isOptionAvailableForEstimate(option as ProductLifecycleOption))
     .map((option) => ({
       id: option.id,
       category: categoryMap.get(option.category_id)?.name ?? '未分類',
@@ -158,7 +159,7 @@ export default async function EstimateTemplatesPage({
   }));
 
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter((option) => isOptionAvailableForEstimate(option as ProductLifecycleOption))
     .map((option) => ({
       id: option.id,
       categoryId: option.category_id,

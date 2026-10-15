@@ -8,6 +8,7 @@ import type { ExpenseMethod, PriceMode } from '@/lib/domain/standard-estimate-mo
 import {
   PRICE_MODE_LABEL,
   STANDARD_SECTION_LABEL,
+  moveLineWithinSection,
   previewStandardEstimate,
   toSaveLines,
   type BaseLineView,
@@ -50,6 +51,8 @@ export function StandardEstimateEditor({ revisionId, lockVersion, readOnly, taxR
       ],
     }));
   const removeLine = (index: number) => setState((current) => ({ ...current, lines: current.lines.filter((_, i) => i !== index) }));
+  const moveLine = (index: number, direction: -1 | 1) =>
+    setState((current) => ({ ...current, lines: moveLineWithinSection(current.lines, index, direction) }));
   const intOrNull = (value: string) => (value.trim() === '' ? null : Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : null);
 
   const save = () =>
@@ -119,7 +122,7 @@ export function StandardEstimateEditor({ revisionId, lockVersion, readOnly, taxR
               <table className="w-full min-w-[60rem] text-left text-xs">
                 <thead className="text-muted">
                   <tr>
-                    <th className="px-2 py-1">項目・品名</th>
+                    <th className="px-2 py-1">見出し・品名</th>
                     <th className="px-2 py-1 text-right">数量</th>
                     <th className="px-2 py-1">単位</th>
                     <th className="px-2 py-1">価格の決め方</th>
@@ -146,12 +149,23 @@ export function StandardEstimateEditor({ revisionId, lockVersion, readOnly, taxR
                           <td className="px-2 py-1" />
                         </tr>
                       ))
-                    : indexes.map(({ line, index }) => {
+                    : indexes.map(({ line, index }, position) => {
                         const money = preview.lines[index];
                         return (
                           <tr key={index} className="border-t border-line" data-testid="standard-estimate-line">
                             <td className="px-2 py-1">
-                              <Input value={line.name} disabled={readOnly} aria-label="品名" onChange={(e) => updateLine(index, { name: e.target.value })} />
+                              {/* 見出しは見積書の明細の説明欄に出る（例：「２．その他の設備」）。空欄なら見出しなし */}
+                              <div className="space-y-1">
+                                <Input
+                                  value={line.group_label ?? ''}
+                                  disabled={readOnly}
+                                  aria-label="見出し"
+                                  placeholder="見出し（任意）"
+                                  className="text-muted"
+                                  onChange={(e) => updateLine(index, { group_label: e.target.value || null })}
+                                />
+                                <Input value={line.name} disabled={readOnly} aria-label="品名" onChange={(e) => updateLine(index, { name: e.target.value })} />
+                              </div>
                             </td>
                             <td className="px-2 py-1">
                               <Input value={line.quantity} disabled={readOnly} aria-label="数量" className="w-20 text-right" onChange={(e) => updateLine(index, { quantity: e.target.value })} />
@@ -198,9 +212,17 @@ export function StandardEstimateEditor({ revisionId, lockVersion, readOnly, taxR
                             </td>
                             {!readOnly && (
                               <td className="px-2 py-1">
-                                <Button type="button" variant="ghost" size="sm" onClick={() => removeLine(index)}>
-                                  削除
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button type="button" variant="ghost" size="sm" aria-label="上へ" disabled={position === 0} onClick={() => moveLine(index, -1)}>
+                                    ↑
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" aria-label="下へ" disabled={position === indexes.length - 1} onClick={() => moveLine(index, 1)}>
+                                    ↓
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => removeLine(index)}>
+                                    削除
+                                  </Button>
+                                </div>
                               </td>
                             )}
                           </tr>

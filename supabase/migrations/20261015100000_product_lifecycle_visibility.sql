@@ -84,10 +84,15 @@ set search_path = ''
 as $$
 begin
   if new.status = 'draft'
-     and jsonb_typeof(coalesce(new.exterior_faces, '[]'::jsonb)) = 'array'
      and exists (
        select 1
-         from jsonb_array_elements(coalesce(new.exterior_faces, '[]'::jsonb)) face(value)
+         from jsonb_array_elements(
+           case
+             when jsonb_typeof(coalesce(new.exterior_faces, '[]'::jsonb)) = 'array'
+               then coalesce(new.exterior_faces, '[]'::jsonb)
+             else '[]'::jsonb
+           end
+         ) face(value)
          left join public.options o
            on o.id = case
              when jsonb_typeof(face.value) = 'object'

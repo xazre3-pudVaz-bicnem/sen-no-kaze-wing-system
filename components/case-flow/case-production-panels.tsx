@@ -58,18 +58,39 @@ function Section({ title, badge, children, testId }: { title: string; badge?: Re
 
 /**
  * 案件画面の「製造・施工」タブ：製造依頼と個体（フェーズ11）、工程表（フェーズ12）、施工の記録と写真（フェーズ13）。
- * 本部・担当代理店・製造の担当（総代理店）だけに表示する。お客様に見せるかは、項目ごとに担当代理店・本部が決める。
+ * 本部・担当代理店・製造の担当（総代理店）に表示する。お客様に見せるかは、項目ごとに担当代理店・本部が決める。
+ * 営業担当組織の管理者には読み取りだけで表示する（20261015150000）。製造担当の画面（/admin/manufacturing/[案件]）からは、
+ * 見積を読めない製造担当のために quoteId なしで requestId と戻り先を渡して使う。
  */
-export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId: string; actor: SessionUser; flash?: { done?: string; error?: string } }) {
+export async function CaseProductionPanels({
+  quoteId,
+  requestId: givenRequestId,
+  actor,
+  flash,
+  back: givenBack,
+}: {
+  quoteId: string | null;
+  requestId?: string;
+  actor: SessionUser;
+  flash?: { done?: string; error?: string };
+  back?: string;
+}) {
   const store = await getStore();
-  const detail = await store.getQuote(quoteId, actor);
-  if (!detail) return null;
-  const requestId = detail.quote.quote_request_id;
+  let requestId = givenRequestId ?? null;
+  if (!requestId && quoteId) {
+    const detail = await store.getQuote(quoteId, actor);
+    requestId = detail?.quote.quote_request_id ?? null;
+  }
+  if (!requestId) return null;
   const caseFlow = await getCaseFlowStore();
-  const access: CaseAccess | null = await caseFlow.getCaseAccess(actor, requestId);
-  if (!access || access === 'customer') return null;
+  const caseAccess: CaseAccess | null = await caseFlow.getCaseAccess(actor, requestId);
+  // 営業担当組織の管理者は、担当と同じものを読み取りだけで見る（編集は自分を主担当者にして行う）
+  const readOnly = (!caseAccess || caseAccess === 'customer') && (await caseFlow.getCaseRole(actor, requestId)) === 'manager';
+  if (!readOnly && (!caseAccess || caseAccess === 'customer')) return null;
+  const access: CaseAccess = readOnly ? 'staff' : (caseAccess as CaseAccess);
   const isAdmin = access === 'admin';
-  const canOperate = access === 'admin' || access === 'staff';
+  const canOperate = !readOnly && (access === 'admin' || access === 'staff');
+  const formQuoteId = quoteId ?? '';
   const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
 
   const [order, workflow, contracts, progress, scheduleItems, reports, files] = await Promise.all([
@@ -86,7 +107,7 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
   const hasSignedContract = Boolean(progress?.contract_signed) || contracts.some((c) => c.status === 'signed');
   const scheduleCategories: ScheduleCategory[] = access === 'manufacturer' ? MANUFACTURER_SCHEDULE_CATEGORIES : [...SCHEDULE_CATEGORIES];
   const reportKinds: ProgressKind[] = access === 'manufacturer' ? MANUFACTURER_PROGRESS_KINDS : ['progress', 'completion', 'inspection', 'support'];
-  const back = `/admin/quotes/${quoteId}?tab=production`;
+  const back = givenBack ?? `/admin/quotes/${quoteId}?tab=production`;
   const progressFiles = files.filter((file) => file.context === 'progress');
   // 送り先：組織の案件は製造担当組織、これまでの案件は本部が選んだ総代理店の利用者
   const hasManufacturer = Boolean(workflow?.manufacturing_organization_id || workflow?.manufacturer_id);
@@ -103,7 +124,7 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
       >
         {!order ? (
           canOperate && hasSignedContract ? (
-            <ManufacturingOrderForm quoteId={quoteId} requestId={requestId} order={null} canEditSupply={false} today={today} />
+            <ManufacturingOrderForm quoteId={formQuoteId} requestId={requestId} order={null} canEditSupply={false} today={today} />
           ) : (
             <p className="text-sm text-muted">{hasSignedContract ? '製造依頼は担当代理店か本部が作ります。' : '契約が締結されてから、製造依頼を作れます。'}</p>
           )
@@ -143,14 +164,15 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                 </ul>
               </details>
             )}
-            {(order.status === 'draft' || isAdmin) && (
-              <ManufacturingOrderForm quoteId={quoteId} requestId={requestId} order={order} canEditSupply={isAdmin} today={today} />
+            {!readOnly && (order.status === 'draft' || isAdmin) && (
+              <ManufacturingOrderForm quoteId={formQuoteId} requestId={requestId} order={order} canEditSupply={isAdmin} today={today} />
             )}
             {!isAdmin && order.supply_note && <p className="text-xs text-ink-soft">基幹資材の供給手配：{order.supply_note}</p>}
             <div className="flex flex-wrap gap-2">
               {order.status === 'draft' && canOperate && (
                 <form action={sendManufacturingOrderAction}>
-                  <input type="hidden" name="quote_id" value={quoteId} />
+                  <input type="hidden" name="quote_id" value={formQuoteId} />
+                  <input type="hidden" name="back" value={back} />
                   <input type="hidden" name="request_id" value={requestId} />
                   <input type="hidden" name="order_id" value={order.id} />
                   <input type="hidden" name="expected_lock_version" value={order.lock_version} />
@@ -160,9 +182,10 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                   {!hasManufacturer && <p className="mt-1 text-[0.65rem] text-muted">先に本部が「現地確認」タブの「受付・担当」で製造担当（総代理店）を決めてください。</p>}
                 </form>
               )}
-              {ORDER_NEXT.filter((step) => canChangeOrderStatus(access, order.status, step.to)).map((step) => (
+              {ORDER_NEXT.filter((step) => !readOnly && canChangeOrderStatus(access, order.status, step.to)).map((step) => (
                 <form key={step.to} action={setManufacturingOrderStatusAction}>
-                  <input type="hidden" name="quote_id" value={quoteId} />
+                  <input type="hidden" name="quote_id" value={formQuoteId} />
+                  <input type="hidden" name="back" value={back} />
                   <input type="hidden" name="request_id" value={requestId} />
                   <input type="hidden" name="order_id" value={order.id} />
                   <input type="hidden" name="expected_lock_version" value={order.lock_version} />
@@ -173,11 +196,12 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                 </form>
               ))}
             </div>
-            {canChangeOrderStatus(access, order.status, 'canceled') && (
+            {!readOnly && canChangeOrderStatus(access, order.status, 'canceled') && (
               <details className="text-xs">
                 <summary className="cursor-pointer text-danger">製造依頼を取り消す（本部）</summary>
                 <form action={setManufacturingOrderStatusAction} className="mt-2 flex flex-wrap items-center gap-2">
-                  <input type="hidden" name="quote_id" value={quoteId} />
+                  <input type="hidden" name="quote_id" value={formQuoteId} />
+                  <input type="hidden" name="back" value={back} />
                   <input type="hidden" name="request_id" value={requestId} />
                   <input type="hidden" name="order_id" value={order.id} />
                   <input type="hidden" name="expected_lock_version" value={order.lock_version} />
@@ -198,7 +222,7 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                       <th className="px-3 py-2">個体番号</th>
                       <th className="px-3 py-2">状態</th>
                       <th className="px-3 py-2">製造・検査・出荷・設置・引渡し</th>
-                      <th className="px-3 py-2">記録する</th>
+                      {!readOnly && <th className="px-3 py-2">記録する</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -212,9 +236,11 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                           <td className="px-3 py-2 text-muted">
                             {[unit.produced_on, unit.inspected_on, unit.shipped_on, unit.installed_on, unit.handed_over_on].map((d) => d ?? '—').join(' / ')}
                           </td>
+                          {!readOnly && (
                           <td className="px-3 py-2">
                             <form action={updateManufacturingUnitAction} className="flex flex-wrap items-center gap-1">
-                              <input type="hidden" name="quote_id" value={quoteId} />
+                              <input type="hidden" name="quote_id" value={formQuoteId} />
+                              <input type="hidden" name="back" value={back} />
                               <input type="hidden" name="request_id" value={requestId} />
                               <input type="hidden" name="unit_id" value={unit.id} />
                               <input type="hidden" name="current_status" value={unit.status} />
@@ -232,6 +258,7 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                               </button>
                             </form>
                           </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -249,7 +276,7 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
         ) : (
           <ul className="space-y-2">
             {scheduleItems.map((item) => {
-              const editable = access !== 'manufacturer' || MANUFACTURER_SCHEDULE_CATEGORIES.includes(item.category);
+              const editable = !readOnly && (access !== 'manufacturer' || MANUFACTURER_SCHEDULE_CATEGORIES.includes(item.category));
               return (
                 <li key={item.id} className="rounded-lg border border-line p-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
@@ -266,9 +293,10 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                     <details className="mt-2">
                       <summary className="cursor-pointer text-xs">編集する</summary>
                       <div className="mt-2 space-y-2">
-                        <ScheduleItemForm quoteId={quoteId} requestId={requestId} item={item} categories={scheduleCategories} canSetVisible={canOperate} />
+                        <ScheduleItemForm quoteId={formQuoteId} requestId={requestId} item={item} categories={scheduleCategories} canSetVisible={canOperate} />
                         <form action={deleteScheduleItemAction}>
-                          <input type="hidden" name="quote_id" value={quoteId} />
+                          <input type="hidden" name="quote_id" value={formQuoteId} />
+                          <input type="hidden" name="back" value={back} />
                           <input type="hidden" name="request_id" value={requestId} />
                           <input type="hidden" name="item_id" value={item.id} />
                           <button type="submit" className="text-[0.65rem] text-danger underline-offset-4 hover:underline">
@@ -283,12 +311,14 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
             })}
           </ul>
         )}
-        <details className="rounded-lg bg-[#fbfcfb] p-3">
-          <summary className="cursor-pointer text-sm font-semibold">工程を追加する</summary>
-          <div className="mt-3">
-            <ScheduleItemForm quoteId={quoteId} requestId={requestId} item={null} categories={scheduleCategories} canSetVisible={canOperate} />
-          </div>
-        </details>
+        {!readOnly && (
+          <details className="rounded-lg bg-[#fbfcfb] p-3">
+            <summary className="cursor-pointer text-sm font-semibold">工程を追加する</summary>
+            <div className="mt-3">
+              <ScheduleItemForm quoteId={formQuoteId} requestId={requestId} item={null} categories={scheduleCategories} canSetVisible={canOperate} />
+            </div>
+          </details>
+        )}
       </Section>
 
       <Section title="施工の記録・写真" testId="case-progress-panel">
@@ -306,7 +336,8 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                   {report.customer_visible ? <Badge tone="navy">お客様に表示</Badge> : <span className="text-muted">社内のみ</span>}
                   {canOperate && (
                     <form action={setProgressReportVisibilityAction}>
-                      <input type="hidden" name="quote_id" value={quoteId} />
+                      <input type="hidden" name="quote_id" value={formQuoteId} />
+                      <input type="hidden" name="back" value={back} />
                       <input type="hidden" name="request_id" value={requestId} />
                       <input type="hidden" name="report_id" value={report.id} />
                       <input type="hidden" name="visible" value={report.customer_visible ? 'false' : 'true'} />
@@ -319,21 +350,24 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                 <p className="font-semibold">{report.title}</p>
                 {report.body && <p className="whitespace-pre-wrap text-ink-soft">{report.body}</p>}
                 <CaseFileList files={progressFiles.filter((file) => file.context_id === report.id)} actor={actor} quoteId={quoteId} requestId={requestId} back={back} />
-                <details>
-                  <summary className="cursor-pointer text-xs">この記録に写真を登録する</summary>
-                  <div className="mt-2">
-                    <CaseFileUploadForm quoteId={quoteId} requestId={requestId} context="progress" contextId={report.id} allowCustomerVisible={canOperate} label="写真を登録" />
-                  </div>
-                </details>
+                {!readOnly && (
+                  <details>
+                    <summary className="cursor-pointer text-xs">この記録に写真を登録する</summary>
+                    <div className="mt-2">
+                      <CaseFileUploadForm quoteId={formQuoteId} requestId={requestId} context="progress" contextId={report.id} allowCustomerVisible={canOperate} label="写真を登録" />
+                    </div>
+                  </details>
+                )}
               </li>
             ))}
           </ul>
         )}
+        {!readOnly && (
         <details className="rounded-lg bg-[#fbfcfb] p-3">
           <summary className="cursor-pointer text-sm font-semibold">記録を追加する</summary>
           <div className="mt-3">
             <ProgressReportForm
-              quoteId={quoteId}
+              quoteId={formQuoteId}
               requestId={requestId}
               kinds={reportKinds}
               scheduleItems={scheduleItems.map((item) => ({ id: item.id, label: `${SCHEDULE_CATEGORY_LABELS[item.category]}：${item.title}` }))}
@@ -342,6 +376,7 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
             />
           </div>
         </details>
+        )}
       </Section>
     </div>
   );

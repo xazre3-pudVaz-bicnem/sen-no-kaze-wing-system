@@ -4,6 +4,7 @@ import {
   customerCategorySelectable,
   productSpecCodesAllow,
 } from './customer-category-applicability';
+import { isOptionVisibleInSimulator, type ProductLifecycleOption } from './product-lifecycle';
 import type { BaseModel, EstimateTemplateBundle, ModelPreset, ProductOption } from './types';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
@@ -43,7 +44,7 @@ export function optionAvailableForSpec(
  * 仕様に対してお客様が選択できる商品だけで RuleContext を作る。
  * 商品technical aliasと、本体分類表の業務カテゴリー可否をここで交差させる。
  * dependency / conflict も候補外の商品を参照しないよう同じ集合へ閉じる。
- * modelSlug未指定の既存内部利用では従来どおり商品specだけを判定する。
+ * modelSlug未指定の既存内部利用でも、商品ライフサイクル（登録済み・取扱中・シミュレーター表示）は適用する。
  */
 export function ruleContextForSpec(
   ctx: RuleContext,
@@ -52,6 +53,7 @@ export function ruleContextForSpec(
 ): RuleContext {
   const categoryById = new Map(ctx.categories.map((category) => [category.id, category]));
   const options = ctx.options.filter((option) => {
+    if (!isOptionVisibleInSimulator(option as ProductLifecycleOption)) return false;
     if (!optionAvailableForSpec(option, specCode, modelSlug)) return false;
     if (!modelSlug) return true;
 

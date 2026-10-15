@@ -38,6 +38,15 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
   };
 
   const visibleGroups = visibleVariantGroups(preview.groups, preview.choices, selectedVariantIds);
+  const configuredChoiceGroups = preview.groups.filter((group) =>
+    preview.choices.some((choice) => choice.group_id === group.id)
+  );
+  const registrationPriceDisplay = option.price_on_request
+    ? '別途見積'
+    : `¥${option.price.toLocaleString('ja-JP')}（税別）`;
+  const registrationCustomerChoices = configuredChoiceGroups.length > 0
+    ? `${configuredChoiceGroups.map((group) => group.name).join('・')}（${configuredChoiceGroups.length}項目）`
+    : 'なし';
 
   const categoryDisplayName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
@@ -47,7 +56,13 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
   // 商品追加額などシミュレーター選択状態に依存する操作は、この確認画面では表示しません。
 
   return (
-    <div data-testid="simulator-product-detail-preview">
+    <div
+      data-testid="simulator-product-detail-preview"
+      data-registration-price-display={registrationPriceDisplay}
+      data-registration-manufacturer={option.manufacturer?.trim() || '未設定'}
+      data-registration-model-no={option.model_no?.trim() || '未設定'}
+      data-registration-customer-choices={registrationCustomerChoices}
+    >
       <div className="overflow-hidden rounded-xl border border-line bg-white shadow-soft">
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3">
           <div>
@@ -63,6 +78,7 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
             selectedVariantIds={selectedVariantIds}
             isCurrentlySelected={false}
             onVariantChange={onVariantChange}
+            compactMedia
           />
         </div>
       </div>

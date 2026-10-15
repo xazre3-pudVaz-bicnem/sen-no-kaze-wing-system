@@ -7,6 +7,16 @@ import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-us
 import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
+import { productLifecycleEnabled } from '@/lib/domain/product-lifecycle';
+import { Alert } from '@/components/ui';
+
+/** 商品の状態を変えた後のお知らせ（lib/actions/product-lifecycle.ts の DONE） */
+const PRODUCT_LIFECYCLE_DONE: Record<string, string> = {
+  retired: '取扱を終了しました。新しい見積・シミュレーターの候補から外れます。保存済みの内容や発行済みの見積は変わりません。',
+  resumed: '取扱を再開しました。シミュレーター表示の設定は以前の値のままです。',
+  simulator_shown: 'シミュレーターに表示する設定にしました。',
+  simulator_hidden: 'シミュレーターに表示しない設定にしました。見積では引き続き選べます。',
+};
 
 const LEDGER_DISPLAY_GROUPS = [
   { code: 'exterior', name: '外まわり', sort: 1, categories: ['roof', 'exterior-wall', 'exterior-parts'] },
@@ -27,12 +37,15 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
   const editor = canEditCatalog(actor.role);
-  const [options, categories, models, configurationUsageCounts] = await Promise.all([
+  const [options, categories, models, configurationUsageCounts, lifecycleCapability] = await Promise.all([
     store.listOptions(),
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
+    store.getProductLifecycleCapability(),
   ]);
+  // 取扱終了・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す
+  const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const ledgerCategories = catalogCategories.map((category) => {
     const displayGroup = ledgerDisplayGroupByCategoryCode.get(category.code as (typeof LEDGER_DISPLAY_GROUPS)[number]['categories'][number]);
@@ -113,8 +126,13 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     `}</style>
     <ProductLedgerOverlayDismiss />
     <FlashMessages sp={sp} />
+    {sp.lifecycle && PRODUCT_LIFECYCLE_DONE[sp.lifecycle] && <Alert tone="success">{PRODUCT_LIFECYCLE_DONE[sp.lifecycle]}</Alert>}
+    {editor && !lifecycleEnabled && (
+      <Alert tone="info">取扱終了・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
+    )}
     <ProductLedgerClient
       canEdit={editor}
+      lifecycleEnabled={lifecycleEnabled}
       categories={ledgerCategories}
       options={catalogOptions}
       models={models}

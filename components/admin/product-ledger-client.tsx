@@ -16,12 +16,14 @@ import {
   productSimulatorVisibleSetting,
   type ProductLedgerState,
 } from '@/lib/domain/product-lifecycle';
-import { setProductHandlingStateAction, setProductSimulatorVisibilityAction } from '@/lib/actions/product-lifecycle';
+import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 
 type Props = {
   canEdit: boolean;
+  /** 取扱終了・シミュレーター表示の操作を出してよいか（DB の migration が両方とも適用済みか） */
+  lifecycleEnabled?: boolean;
   categories: OptionCategory[];
   options: ProductOption[];
   models: BaseModel[];
@@ -185,7 +187,7 @@ function matchesLifecycle(option: ProductOption, lifecycle: '' | ProductLedgerSt
   return !lifecycle || productLedgerState(option) === lifecycle;
 }
 
-export function ProductLedgerClient({ canEdit, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId }: Props) {
+export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
@@ -487,14 +489,14 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
               <section className="card p-4" aria-labelledby="ledger-handling-status-title">
                 <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id="ledger-handling-status-title" className="font-semibold">商品状態</h3><p className="mt-1 text-xs leading-relaxed text-muted">下書き、登録済み、取扱終了の3状態で管理します。取扱終了の商品も商品台帳では編集・確認できます。</p></div><Badge tone={productLedgerState(selected) === 'registered' ? 'success' : 'neutral'}>{productLedgerStateLabel(selected)}</Badge></div>
-                {canEdit && selected.status === 'published' && <div className="mt-3 border-t border-line pt-3">{productLedgerState(selected) === 'retired' ? <form action={setProductHandlingStateAction}><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="next" value="resume"/><button type="submit" className="btn-primary btn-sm">取扱を再開する</button><p className="mt-2 text-xs text-muted">再開すると、新しい見積で再び選択できるようになります。シミュレーター表示設定は以前の値を保持します。</p></form> : <form action={setProductHandlingStateAction}><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="next" value="retire"/><button type="submit" className="btn-secondary btn-sm">取扱を終了する</button><p className="mt-2 text-xs text-muted">新しい見積・シミュレーターの候補から外します。過去の保存内容や発行済み見積は変更しません。</p></form>}</div>}
+                {canEdit && lifecycleEnabled && selected.status === 'published' && <div className="mt-3 border-t border-line pt-3">{productLedgerState(selected) === 'retired' ? <form action={setProductLifecycleAction}><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="action" value="resume"/><input type="hidden" name="expected_updated_at" value={selected.updated_at}/><button type="submit" className="btn-primary btn-sm" data-testid="ledger-resume-product">取扱を再開する</button><p className="mt-2 text-xs text-muted">再開すると、新しい見積で再び選択できるようになります。シミュレーター表示設定は以前の値を保持します。</p></form> : <form action={setProductLifecycleAction}><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="action" value="retire"/><input type="hidden" name="expected_updated_at" value={selected.updated_at}/><button type="submit" className="btn-secondary btn-sm" data-testid="ledger-retire-product">取扱を終了する</button><p className="mt-2 text-xs text-muted">新しい見積・シミュレーターの候補から外します。過去の保存内容や発行済み見積は変更しません。</p></form>}</div>}
                 {selected.status === 'draft' && <p className="mt-3 border-t border-line pt-3 text-xs text-muted">下書きは取扱終了にしません。不要なら参照状況を確認して削除します。</p>}
               </section>
 
               <section className="card p-4" aria-labelledby="ledger-customer-simulator-title">
                 <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id="ledger-customer-simulator-title" className="font-semibold">シミュレーター表示</h3><p className="mt-1 text-xs leading-relaxed text-muted">登録済み商品だけ設定できます。実際の表示はカテゴリー・本体・仕様の条件も満たす場合に限ります。</p></div><Badge tone={isQuoteSelectableProduct(selected) && productSimulatorVisibleSetting(selected) ? 'success' : 'neutral'}>{isQuoteSelectableProduct(selected) && productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない'}</Badge></div>
                 <dl className="mt-2"><Row label="対象モデル・仕様" value={`${selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'} ／ ${selected.spec_codes.length ? selected.spec_codes.join(' / ') : '全仕様共通'}`}/></dl>
-                {canEdit && isQuoteSelectableProduct(selected) && <form action={setProductSimulatorVisibilityAction} className="mt-3 border-t border-line pt-3"><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="visible" value={productSimulatorVisibleSetting(selected) ? '0' : '1'}/><button type="submit" className="btn-secondary btn-sm">{productSimulatorVisibleSetting(selected) ? 'シミュレーターに表示しない' : 'シミュレーターに表示する'}</button></form>}
+                {canEdit && lifecycleEnabled && isQuoteSelectableProduct(selected) && <form action={setProductLifecycleAction} className="mt-3 border-t border-line pt-3"><input type="hidden" name="id" value={selected.id}/><input type="hidden" name="action" value={productSimulatorVisibleSetting(selected) ? 'hide_from_simulator' : 'show_in_simulator'}/><input type="hidden" name="expected_updated_at" value={selected.updated_at}/><button type="submit" className="btn-secondary btn-sm" data-testid="ledger-toggle-simulator">{productSimulatorVisibleSetting(selected) ? 'シミュレーターに表示しない' : 'シミュレーターに表示する'}</button></form>}
                 {productLedgerState(selected) === 'retired' && <p className="mt-3 border-t border-line pt-3 text-xs text-muted">取扱終了中はシミュレーターに表示されません。再開すると保存済みの表示設定が再び有効になります。</p>}
               </section>
 

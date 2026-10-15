@@ -16,12 +16,14 @@ describe('商品台帳の商品状態UI', () => {
     expect(client).not.toContain('data-product-handling-status-slot="pending-db"');
   });
 
-  it('商品状態カードから取扱終了と再開を正式保存処理へ接続する', () => {
+  it('商品状態カードから取扱終了と再開を正式保存処理へ接続する（画面が読んだ版を渡し、機能が有効なときだけ出す）', () => {
     expect(client).toContain('>商品状態</h3>');
-    expect(client).toContain('setProductHandlingStateAction');
+    expect(client).toContain('setProductLifecycleAction');
     expect(client).toContain('selected.status === \'published\'');
-    expect(client).toContain('name="next" value="retire"');
-    expect(client).toContain('name="next" value="resume"');
+    expect(client).toContain('name="action" value="retire"');
+    expect(client).toContain('name="action" value="resume"');
+    expect(client).toContain('name="expected_updated_at" value={selected.updated_at}');
+    expect(client).toContain('canEdit && lifecycleEnabled && selected.status === \'published\'');
     expect(client).toContain('取扱を終了する');
     expect(client).toContain('取扱を再開する');
     expect(client).toContain('過去の保存内容や発行済み見積は変更しません。');
@@ -35,12 +37,12 @@ describe('商品台帳の商品状態UI', () => {
 
   it('見積での選択可否とシミュレーター表示設定を別項目として扱う', () => {
     expect(client).toContain('>シミュレーター表示</h3>');
-    expect(client).toContain('setProductSimulatorVisibilityAction');
+    expect(client).toContain('canEdit && lifecycleEnabled && isQuoteSelectableProduct(selected)');
     expect(client).toContain('isQuoteSelectableProduct(selected)');
     expect(client).toContain('productSimulatorVisibleSetting(selected)');
     expect(client).toContain('label="対象モデル・仕様"');
     expect(client).toContain('selected.spec_codes.length ? selected.spec_codes.join');
-    expect(client).toContain('name="visible" value={productSimulatorVisibleSetting(selected) ? \'0\' : \'1\'}');
+    expect(client).toContain('name="action" value={productSimulatorVisibleSetting(selected) ? \'hide_from_simulator\' : \'show_in_simulator\'}');
     expect(client).toContain('シミュレーターに表示しない');
     expect(client).toContain('シミュレーターに表示する');
     expect(client).toContain('取扱終了中はシミュレーターに表示されません。');

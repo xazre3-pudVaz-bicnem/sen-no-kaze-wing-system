@@ -239,7 +239,8 @@ describe('標準見積管理UI', () => {
     expect(newForm).toContain('作成対象の商品モデル・防火仕様に一致する公開中の本体がありません。');
     expect(newPage).toContain('store.listOptions()');
     expect(newPage).toContain('store.listCategories()');
-    expect(newPage).toContain("option.status === 'published'");
+    // 新しく選ぶ候補は取扱中の商品だけ（PR #500。取扱終了は新しい見積で選べない）
+    expect(newPage).toContain('isQuoteSelectableProduct(option) && categoryMap.get(option.category_id)?.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE');
     expect(adminForms).toContain('仕様（推奨構成）');
     expect(adminForms).toContain('見積テンプレートの「仕様」もここから選ばれます');
   });

@@ -111,6 +111,18 @@ export function previewStandardEstimate(baseLines: BaseLineView[], state: Standa
 }
 
 /** 保存 RPC（save_standard_estimate_draft）へ渡す明細。DB が売価・金額を計算するので、単価と方法だけを送る */
+/** 同じ区分の中で、ひとつ前（-1）／後ろ（1）の行と入れ替える。保存で送る順番がそのまま並び順になる */
+export function moveLineWithinSection<T extends { section_code: string }>(lines: T[], index: number, direction: -1 | 1): T[] {
+  const section = lines[index]?.section_code;
+  if (section === undefined) return lines;
+  let target = index + direction;
+  while (target >= 0 && target < lines.length && lines[target].section_code !== section) target += direction;
+  if (target < 0 || target >= lines.length) return lines;
+  const next = [...lines];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
 export function toSaveLines(lines: StandardEstimateLineInput[]) {
   return lines.map((line) => ({
     line_key: line.line_key,

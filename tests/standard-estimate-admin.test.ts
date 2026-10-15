@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { baseLineMoney, lineMoney, revisionMoney, sectionMoney } from '@/lib/domain/standard-estimate-money';
-import { previewStandardEstimate, toSaveLines, type StandardEstimateEditorState } from '@/lib/domain/standard-estimate-view';
+import { moveLineWithinSection, previewStandardEstimate, toSaveLines, type StandardEstimateEditorState } from '@/lib/domain/standard-estimate-view';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').split('\r').join('');
@@ -53,6 +53,33 @@ describe('標準見積の管理画面：試算（DB と同じ式）', () => {
     expect(lines[1]).toMatchObject({ price_mode: 'por', cost_unit_price: null, unit_price: null });
     expect(lines[2]).toMatchObject({ price_mode: 'manual', cost_unit_price: 999, unit_price: 2000 });
   });
+
+  it('見出しは保存で送り、空欄は見出しなしになる', () => {
+    const lines = toSaveLines([
+      { ...state.lines[0], group_label: '２．その他の設備' },
+      { ...state.lines[1], group_label: null },
+    ]);
+    expect(lines[0].group_label).toBe('２．その他の設備');
+    expect(lines[1].group_label).toBeNull();
+  });
+
+  it('並べ替えは同じ区分の中だけで、ひとつ前／後ろの行と入れ替える（区分の端では動かない）', () => {
+    const names = (lines: typeof state.lines) => lines.map((line) => line.name);
+    const lines = [
+      state.lines[0],
+      { ...state.lines[2], name: '据付' },
+      { ...state.lines[0], name: '室内造作' },
+      { ...state.lines[1], name: '各種養生' },
+    ];
+    // 室内造作（option）を上へ：間の sitework を飛ばして、ひとつ前の option（洗面器）と入れ替わる
+    expect(names(moveLineWithinSection(lines, 2, -1))).toEqual(['室内造作', '据付', '洗面器', '各種養生']);
+    // 室内造作を下へ：各種養生と入れ替わる
+    expect(names(moveLineWithinSection(lines, 2, 1))).toEqual(['洗面器', '据付', '各種養生', '室内造作']);
+    // 区分の先頭・末尾、ほかに同じ区分の行がないときは変えない
+    expect(moveLineWithinSection(lines, 0, -1)).toBe(lines);
+    expect(moveLineWithinSection(lines, 3, 1)).toBe(lines);
+    expect(moveLineWithinSection(lines, 1, 1)).toBe(lines);
+  });
 });
 
 describe('標準見積の管理画面：権限と DB の呼び方', () => {
@@ -78,5 +105,13 @@ describe('標準見積の管理画面：権限と DB の呼び方', () => {
     expect(editor).toContain('router.refresh()');
     expect(list).toContain('createStandardEstimateDraftAction');
     expect(read('components/admin/admin-nav.tsx')).toContain("'/admin/standard-estimates',");
+  });
+
+  it('明細ごとに見出しを入力でき、同じ区分の中で並べ替えられる', () => {
+    expect(editor).toContain('aria-label="見出し"');
+    expect(editor).toContain('group_label: e.target.value || null');
+    expect(editor).toContain('aria-label="上へ"');
+    expect(editor).toContain('aria-label="下へ"');
+    expect(editor).toContain('moveLineWithinSection(current.lines, index, direction)');
   });
 });

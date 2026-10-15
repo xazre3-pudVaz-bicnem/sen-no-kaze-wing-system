@@ -36,6 +36,10 @@ export const PRODUCT_REGISTRATION_CATEGORY_GROUPS: readonly ProductRegistrationC
   },
 ] as const;
 
+const PRODUCT_REGISTRATION_CATEGORY_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
+  aircon: 'エアコン',
+};
+
 type RankedCategory = {
   category: OptionCategory;
   groupIndex: number;
@@ -43,6 +47,10 @@ type RankedCategory = {
   originalIndex: number;
   groupLabel: string | null;
 };
+
+function productRegistrationCategoryLabel(category: OptionCategory): string {
+  return PRODUCT_REGISTRATION_CATEGORY_LABEL_OVERRIDES[category.code] ?? category.name;
+}
 
 export function productRegistrationCategoryDisplay(categories: OptionCategory[]): OptionCategory[] {
   const ranked: RankedCategory[] = categories.map((category, originalIndex) => {
@@ -79,7 +87,7 @@ export function productRegistrationCategoryDisplay(categories: OptionCategory[])
     groupLabel
       ? {
           ...category,
-          name: `【${groupLabel}】${category.name}`,
+          name: `【${groupLabel}】${productRegistrationCategoryLabel(category)}`,
         }
       : category
   );

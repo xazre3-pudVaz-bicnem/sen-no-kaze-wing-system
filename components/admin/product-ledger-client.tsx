@@ -10,6 +10,11 @@ import { Badge, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
 import { needsProductAttention, optionMatchesLedgerFilters, selectedOptionAfterFilter } from '@/lib/domain/product-ledger';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
+import {
+  isOptionArchived,
+  productLifecycleLabel,
+  type ProductLifecycleOption,
+} from '@/lib/domain/product-lifecycle';
 import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 
 type Props = {
@@ -37,6 +42,8 @@ type LedgerSort =
 
 type SortChoice = { value?: LedgerSort; label: string; disabled?: boolean };
 
+type LifecycleFilter = '' | 'published' | 'draft' | 'archived';
+
 const EMPTY_VARIANTS: { groups: OptionVariantGroup[]; choices: OptionVariantChoice[] } = { groups: [], choices: [] };
 const dash = '—';
 
@@ -48,8 +55,20 @@ function PendingDbValue() {
   return <span className="inline-flex items-center rounded-full border border-line bg-sand px-2 py-0.5 text-xs font-medium text-muted">接続待ち</span>;
 }
 
-function registrationStatusLabel(status: ProductOption['status']) {
-  return status === 'published' ? '登録済み' : '下書き';
+function lifecycleOption(option: ProductOption): ProductLifecycleOption {
+  return option as ProductLifecycleOption;
+}
+
+function registrationStatusLabel(option: ProductOption) {
+  return productLifecycleLabel(lifecycleOption(option));
+}
+
+function matchesLifecycleFilter(option: ProductOption, filter: LifecycleFilter) {
+  const archived = isOptionArchived(lifecycleOption(option));
+  if (filter === 'archived') return archived;
+  if (filter === 'published') return option.status === 'published' && !archived;
+  if (filter === 'draft') return option.status === 'draft';
+  return true;
 }
 
 function date(value: string) {
@@ -161,16 +180,16 @@ function SortHeader({ label, sort, choices, onSort, align = 'left' }: { label: s
 }
 
 function ProductStatus({ option, configurationUsageCount }: { option: ProductOption; configurationUsageCount: number | null }) {
+  const archived = isOptionArchived(lifecycleOption(option));
   return (
-    <div className="flex min-w-0 flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db" data-product-handling-status-slot="pending-db">
-      <Badge tone={option.status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(option.status)}</Badge>
+    <div className="flex min-w-0 flex-col items-start gap-1" data-simulator-standard-usage-slot="pending-db">
+      <Badge tone={option.status === 'published' && !archived ? 'success' : 'neutral'}>{registrationStatusLabel(option)}</Badge>
       {configurationUsageCount !== null && (
         <span className="whitespace-nowrap text-[0.68rem] font-medium text-muted">
           {configurationUsageCount > 0 ? `保存プラン ${configurationUsageCount}件` : '未使用'}
         </span>
       )}
-      {/* DB是正後、ここに「シミュレーター標準で使用中 ○件」を正式データから接続する。 */}
-      {/* お客様選択可 / 取扱停止 / 本部判断で停止 / 廃番は、正式な判定データ接続後に必要なものだけ追加表示する。 */}
+      {/* 標準見積での使用件数は正式データ接続後に追加する。 */}
     </div>
   );
 }
@@ -180,7 +199,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<LifecycleFilter>('');
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState<LedgerSort>('updated-desc');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -220,7 +239,17 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const filtered = useMemo(
     () =>
       options
-        .filter((option) => (!groupCode || selectedGroupCategoryIds.has(option.category_id)) && optionMatchesLedgerFilters(option, { query, categoryId, status, quick: attentionOnly ? 'needs-attention' : 'all' }))
+        .filter(
+          (option) =>
+            matchesLifecycleFilter(option, status) &&
+            (!groupCode || selectedGroupCategoryIds.has(option.category_id)) &&
+            optionMatchesLedgerFilters(option, {
+              query,
+              categoryId,
+              status: '',
+              quick: attentionOnly ? 'needs-attention' : 'all',
+            })
+        )
         .sort((a, b) => compareOptions(a, b, sort, categoryMap)),
     [attentionOnly, categoryId, categoryMap, groupCode, options, query, selectedGroupCategoryIds, sort, status]
   );
@@ -263,7 +292,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
   const visiblePreviewGroups = visibleVariantGroups(preview.groups, preview.choices, previewVariantIds);
 
   const categoryCounts = useMemo(() => {
-    const base = options.filter((o) => optionMatchesLedgerFilters(o, { query, categoryId: '', status, quick: attentionOnly ? 'needs-attention' : 'all' }));
+    const base = options.filter(
+      (option) =>
+        matchesLifecycleFilter(option, status) &&
+        optionMatchesLedgerFilters(option, { query, categoryId: '', status: '', quick: attentionOnly ? 'needs-attention' : 'all' })
+    );
     const counts = new Map<string, number>();
     for (const option of base) counts.set(option.category_id, (counts.get(option.category_id) ?? 0) + 1);
     return counts;
@@ -277,8 +310,9 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
     return counts;
   }, [categoryCounts, categoryGroups]);
 
-  const registeredCount = useMemo(() => options.filter((option) => option.status === 'published').length, [options]);
-  const draftCount = options.length - registeredCount;
+  const registeredCount = useMemo(() => options.filter((option) => option.status === 'published' && !isOptionArchived(lifecycleOption(option))).length, [options]);
+  const draftCount = useMemo(() => options.filter((option) => option.status === 'draft').length, [options]);
+  const archivedCount = useMemo(() => options.filter((option) => isOptionArchived(lifecycleOption(option))).length, [options]);
   const attentionCount = useMemo(() => options.filter(needsProductAttention).length, [options]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -307,7 +341,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div>
             <h2 className="text-lg font-semibold">商品一覧</h2>
-            <p className="mt-1 text-xs text-muted">探す・比較する・状態を確認するための一覧です。商品を開いて詳細を確認できます。</p>
+            <p className="mt-1 text-xs text-muted">取扱終了の商品も履歴用として残し、一覧から確認・編集できます。</p>
           </div>
           <p className="text-xs font-medium text-muted">
             {filtered.length ? filtered.length + '件中 ' + firstShown + '〜' + lastShown + '件を表示' : '0件'}
@@ -316,7 +350,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
 
         <div className="sticky top-0 z-30 border-b border-line bg-white/95 shadow-sm backdrop-blur" data-testid="ledger-sticky-category-bar">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 sm:px-4">
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="登録状態">
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="商品状態">
               <button type="button" role="tab" aria-selected={status === '' && !attentionOnly} onClick={() => { setStatus(''); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === '' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 すべて <span className="ml-1 text-xs">{options.length}</span>
               </button>
@@ -325,6 +359,9 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               </button>
               <button type="button" role="tab" aria-selected={status === 'draft' && !attentionOnly} onClick={() => { setStatus('draft'); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'draft' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
                 下書き <span className="ml-1 text-xs">{draftCount}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={status === 'archived' && !attentionOnly} onClick={() => { setStatus('archived'); setAttentionOnly(false); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (status === 'archived' && !attentionOnly ? 'bg-forest/10 text-ink' : 'text-muted hover:bg-sand hover:text-ink')}>
+                取扱終了 <span className="ml-1 text-xs">{archivedCount}</span>
               </button>
               <button type="button" role="tab" aria-selected={attentionOnly} onClick={() => { setStatus(''); setAttentionOnly(true); setPage(1); }} className={'rounded-lg px-3 py-1.5 text-sm font-medium ' + (attentionOnly ? 'bg-amber-100 text-amber-900' : 'text-muted hover:bg-amber-50 hover:text-ink')}>
                 要確認 <span className="ml-1 text-xs">{attentionCount}</span>
@@ -566,7 +603,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
               <p className="text-[0.68rem] font-semibold tracking-wide text-brown">選択中の商品</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 <h2 id="ledger-product-detail-title" className="min-w-0 truncate text-lg font-semibold sm:text-xl">{selected.name}</h2>
-                <Badge tone={selected.status === 'published' ? 'success' : 'neutral'}>{registrationStatusLabel(selected.status)}</Badge>
+                <Badge tone={selected.status === 'published' && !isOptionArchived(lifecycleOption(selected)) ? 'success' : 'neutral'}>{registrationStatusLabel(selected)}</Badge>
                 {needsProductAttention(selected) && <Badge tone="warn">要確認</Badge>}
               </div>
               <p className="mt-0.5 truncate text-xs text-muted">{[selected.product_no, selected.manufacturer, selected.model_no].filter(Boolean).join(' ／ ') || dash}</p>
@@ -619,57 +656,31 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                   <Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/>
                 </dl>
                 <dl className="card p-4">
-                  <h3 className="mb-2 font-semibold">シミュレーター・Web表示設定</h3>
-                  <p className="mb-2 text-xs leading-relaxed text-muted">お客様が選べるかどうかは、登録元・登録状態・取扱状況・本体分類表・モデル／仕様適合などを正式ロジックで判定するため、現在の画面値から推測しません。</p>
+                  <h3 className="mb-2 font-semibold">商品状態・利用先</h3>
+                  <Row label="状態" value={registrationStatusLabel(selected)}/>
+                  <Row
+                    label="見積"
+                    value={selected.status === 'published' && !isOptionArchived(lifecycleOption(selected)) ? '選択可' : '新規選択不可'}
+                  />
+                  <Row
+                    label="シミュレーター"
+                    value={
+                      selected.status === 'published' &&
+                      !isOptionArchived(lifecycleOption(selected)) &&
+                      lifecycleOption(selected).simulator_visible !== false
+                        ? '表示'
+                        : '非表示'
+                    }
+                  />
+                  <Row label="対象モデル・仕様" value={`${selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'} ／ ${selected.spec_codes.length ? selected.spec_codes.join(' / ') : '全仕様共通'}`}/>
                   <Row label="商品価格（税別）" value={productPrice(selected)}/>
+                  {canEdit && (
+                    <div className="mt-3 border-t border-line pt-3">
+                      <Link href={`/admin/options/${selected.id}?return_to=%2Fadmin%2Fledger`} className="btn-secondary btn-sm">状態・商品情報を編集</Link>
+                    </div>
+                  )}
                 </dl>
               </div>
-
-              <section className="card p-4" data-product-handling-status-shell="pending-db" aria-labelledby="ledger-handling-status-title">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 id="ledger-handling-status-title" className="font-semibold">取扱状況</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-muted">登録状態とは別に、自組織・本部判断・メーカー状況を独立して確認します。現在は正式な保存項目への接続待ちです。</p>
-                  </div>
-                  <PendingDbValue />
-                </div>
-                <dl className="mt-2">
-                  <Row label="自組織の取扱" value={<PendingDbValue />}/>
-                  <Row label="本部判断" value={<PendingDbValue />}/>
-                  <Row label="メーカー状況" value={<PendingDbValue />}/>
-                </dl>
-                <div className="mt-3 border-t border-line pt-3">
-                  <p className="text-xs font-semibold text-ink-soft">将来の操作位置</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted">保存契約・権限判定を接続するまでは操作できません。client側だけで状態を保存しません。</p>
-                  <div className="mt-2 flex flex-wrap gap-2" aria-label="取扱状況の操作（接続待ち）">
-                    <button type="button" className="btn-secondary btn-sm" disabled>取扱停止にする</button>
-                    <button type="button" className="btn-secondary btn-sm" disabled>取扱再開</button>
-                    <button type="button" className="btn-secondary btn-sm" disabled>本部判断で停止</button>
-                    <button type="button" className="btn-secondary btn-sm" disabled>本部判断による停止を解除</button>
-                    <button type="button" className="btn-secondary btn-sm" disabled>廃番にする</button>
-                    <button type="button" className="btn-secondary btn-sm" disabled>廃番訂正</button>
-                  </div>
-                </div>
-              </section>
-
-              <section className="card p-4" data-customer-simulator-status-shell="pending-db" aria-labelledby="ledger-customer-simulator-title">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 id="ledger-customer-simulator-title" className="font-semibold">お客様のシミュレーター</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-muted">「お客様選択」と「シミュレーター標準での使用状況」は別の情報です。選択可否は正式ロジック接続後に判定します。</p>
-                  </div>
-                  <PendingDbValue />
-                </div>
-                <dl className="mt-2">
-                  <Row label="お客様選択" value={<PendingDbValue />}/>
-                  <Row
-                    label="対象モデル・仕様"
-                    value={`${selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'} ／ ${selected.spec_codes.length ? selected.spec_codes.join(' / ') : '全仕様共通'}`}
-                  />
-                  <Row label="シミュレーター標準での使用状況" value={<PendingDbValue />}/>
-                </dl>
-                <p className="mt-2 border-t border-line pt-3 text-xs leading-relaxed text-muted">対象モデル・仕様は商品に保存済みの設定値を表示しています。実際にお客様が選択できるかどうかは、本体分類表などを含む正式判定とは別です。</p>
-              </section>
 
               <div className="card p-4">
                 <h3 className="font-semibold">自社の仕入・発注情報</h3>
@@ -713,8 +724,11 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                   {canEdit && selected.status === 'draft' && selectedConfigurationUsageCount !== null && selectedConfigurationUsageCount > 0 && (
                     <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">保存プランで使用されているため、この下書きは完全削除できません。</p>
                   )}
-                  {selected.status === 'published' && (
-                    <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み商品は完全削除の対象にしません。取扱停止は正式な保存項目を接続する別工程で扱います。</p>
+                  {isOptionArchived(lifecycleOption(selected)) && (
+                    <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">取扱終了の商品です。新しい見積・シミュレーターには出ませんが、過去履歴と商品情報は残ります。商品情報画面から取扱を再開できます。</p>
+                  )}
+                  {selected.status === 'published' && !isOptionArchived(lifecycleOption(selected)) && (
+                    <p className="mt-3 rounded-lg border border-line bg-sand px-3 py-2 text-xs text-muted">登録済み商品は見積で選択できます。シミュレーター表示は商品情報画面で個別に設定できます。</p>
                   )}
                 </div>
               </details>
@@ -723,7 +737,7 @@ export function ProductLedgerClient({ canEdit, categories, options, models, vari
                 <div className="border-t border-line">
                   <p className="px-4 pt-3 text-xs leading-relaxed text-muted">商品区分・登録元組織は組織情報の接続後に表示します。現在の値からは推測しません。</p>
                   <dl className="px-4">
-                    <Row label="登録状態" value={registrationStatusLabel(selected.status)}/>
+                    <Row label="登録状態" value={registrationStatusLabel(selected)}/>
                     <Row label="商品区分" value={<PendingDbValue />}/>
                     <Row label="登録元組織" value={<PendingDbValue />}/>
                     <Row label="最終更新" value={date(selected.updated_at)}/>

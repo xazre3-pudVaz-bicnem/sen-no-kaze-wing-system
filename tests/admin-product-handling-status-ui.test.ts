@@ -4,48 +4,46 @@ import { describe, expect, it } from 'vitest';
 
 const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
 
-describe('商品台帳の取扱状況UI', () => {
-  it('一覧の5列構成を維持し、未接続の取扱状態を推測しない', () => {
+describe('商品台帳の商品状態UI', () => {
+  it('一覧は下書き・登録済み・取扱終了を正式な商品状態として表示する', () => {
     expect(client).toContain('<SortHeader label="商品"');
     expect(client).toContain('<SortHeader label="カテゴリー"');
     expect(client).toContain('<SortHeader label="商品価格（税別）"');
     expect(client).toContain('<SortHeader label="状態"');
     expect(client).toContain('<SortHeader label="更新日"');
-    expect(client).toContain('data-product-handling-status-slot="pending-db"');
-    expect(client).toContain('お客様選択可 / 取扱停止 / 本部判断で停止 / 廃番');
+    expect(client).toContain('data-product-handling-status={state}');
+    expect(client).toContain('productLedgerStateLabel(option)');
+    expect(client).not.toContain('data-product-handling-status-slot="pending-db"');
   });
 
-  it('登録状態とは別に3つの取扱要因を独立表示する', () => {
-    expect(client).toContain('data-product-handling-status-shell="pending-db"');
-    expect(client).toContain('>取扱状況</h3>');
-    expect(client).toContain('label="自組織の取扱" value={<PendingDbValue />}');
-    expect(client).toContain('label="本部判断" value={<PendingDbValue />}');
-    expect(client).toContain('label="メーカー状況" value={<PendingDbValue />}');
-    expect(client).toContain('登録状態とは別に、自組織・本部判断・メーカー状況を独立して確認します。');
+  it('商品状態カードから取扱終了と再開を正式保存処理へ接続する', () => {
+    expect(client).toContain('>商品状態</h3>');
+    expect(client).toContain('setProductHandlingStateAction');
+    expect(client).toContain('selected.status === \'published\'');
+    expect(client).toContain('name="next" value="retire"');
+    expect(client).toContain('name="next" value="resume"');
+    expect(client).toContain('取扱を終了する');
+    expect(client).toContain('取扱を再開する');
+    expect(client).toContain('過去の保存内容や発行済み見積は変更しません。');
+    expect(client).toContain('シミュレーター表示設定は以前の値を保持します。');
   });
 
-  it('将来操作は保存処理へ接続せず無効なUIシェルにする', () => {
-    for (const label of [
-      '取扱停止にする',
-      '取扱再開',
-      '本部判断で停止',
-      '本部判断による停止を解除',
-      '廃番にする',
-      '廃番訂正',
-    ]) {
-      expect(client).toContain(`disabled>${label}</button>`);
-    }
-    expect(client).toContain('client側だけで状態を保存しません。');
+  it('下書きは取扱終了にせず、不要時は削除する方針を表示する', () => {
+    expect(client).toContain("productLedgerState(selected) === 'retired'");
+    expect(client).toContain('下書きは取扱終了にしません。不要なら参照状況を確認して削除します。');
   });
 
-  it('お客様選択とシミュレーター標準使用を別項目として接続待ちにする', () => {
-    expect(client).toContain('data-customer-simulator-status-shell="pending-db"');
-    expect(client).toContain('>お客様のシミュレーター</h3>');
-    expect(client).toContain('label="お客様選択" value={<PendingDbValue />}');
+  it('見積での選択可否とシミュレーター表示設定を別項目として扱う', () => {
+    expect(client).toContain('>シミュレーター表示</h3>');
+    expect(client).toContain('setProductSimulatorVisibilityAction');
+    expect(client).toContain('isQuoteSelectableProduct(selected)');
+    expect(client).toContain('productSimulatorVisibleSetting(selected)');
     expect(client).toContain('label="対象モデル・仕様"');
     expect(client).toContain('selected.spec_codes.length ? selected.spec_codes.join');
-    expect(client).toContain('label="シミュレーター標準での使用状況" value={<PendingDbValue />}');
-    expect(client).toContain('「お客様選択」と「シミュレーター標準での使用状況」は別の情報です。');
+    expect(client).toContain('name="visible" value={productSimulatorVisibleSetting(selected) ? \'0\' : \'1\'}');
+    expect(client).toContain('シミュレーターに表示しない');
+    expect(client).toContain('シミュレーターに表示する');
+    expect(client).toContain('取扱終了中はシミュレーターに表示されません。');
   });
 
   it('既存表示値からお客様選択可否を推測しない', () => {

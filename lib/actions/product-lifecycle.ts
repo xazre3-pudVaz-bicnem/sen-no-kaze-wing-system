@@ -57,6 +57,16 @@ async function assertArchiveDoesNotBreakCurrentStandard(optionId: string, option
     }
   }
 
+  // legacy標準見積も、現在なお管理画面・互換処理から参照され得るため黙って候補から外さない。
+  const legacyTemplateResult = await db.from('estimate_templates').select('id, baseline_option_ids');
+  if (legacyTemplateResult.error) throw new Error('標準見積の使用状況を確認できませんでした。');
+  const usedByLegacyTemplate = (legacyTemplateResult.data ?? []).some((template) =>
+    Array.isArray(template.baseline_option_ids) && template.baseline_option_ids.includes(optionId)
+  );
+  if (usedByLegacyTemplate) {
+    throw new Error('既存の標準見積で使用中の商品です。標準見積側の差し替えを確認してから取扱終了にしてください。');
+  }
+
   const dependencyResult = await db
     .from('option_dependencies')
     .select('id')

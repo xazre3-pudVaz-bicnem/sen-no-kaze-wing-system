@@ -76,8 +76,13 @@ describe('管理画面の業務領域ナビゲーション', () => {
 
   it('管理設定の準備中項目を正式設定として誤表示しない', () => {
     expect(settingsPage).toContain('準備中');
-    expect(settingsPage).toContain('正式な組織階層と所属管理の接続後に有効化します。');
     expect(settingsPage).toContain('正式な権限基盤とRLS／ACL接続後に有効化します。');
     expect(settingsPage).not.toContain('販売基準は「販売基準」から管理します。');
+  });
+
+  it('組織・代理店は、組織の登録と招待（2026-10-15）ができたので入口を有効にする', () => {
+    expect(settingsPage).not.toContain('正式な組織階層と所属管理の接続後に有効化します。');
+    expect(settingsPage).toContain('href="/admin/organizations"');
+    expect(navSource).toContain("'/admin/organizations'");
   });
 });

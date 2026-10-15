@@ -64,9 +64,10 @@ export default async function AdminSettingsPage() {
               <p className="mt-0.5 text-xs text-muted">担当者や組織など、日常運用の中心となる項目です。</p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <PendingCard
+              <AvailableCard
+                href="/admin/organizations"
                 title="組織・代理店"
-                body="本部・総代理店・代理店の所属関係を管理する入口です。正式な組織階層と所属管理の接続後に有効化します。"
+                body="総代理店・代理店の組織を登録し、最初の管理者を招待します。代理店の直属の総代理店もここで決めます。"
               />
               <AvailableCard
                 href="/admin/customers"

@@ -81,6 +81,11 @@ export function AdminShell({
                   <p className="mt-2 text-xs font-medium text-ink-soft">現在の役割：{roleLabel}</p>
                 </div>
                 <div className="grid gap-1 p-2">
+                  {!migrationOnly && (role === 'dealer' || role === 'master_dealer') && (
+                    <Link href="/admin/organization" className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-sand hover:text-ink">
+                      自社の組織・メンバー
+                    </Link>
+                  )}
                   {!migrationOnly && (
                     <Link href="/admin/manual" className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-sand hover:text-ink">
                       操作マニュアル

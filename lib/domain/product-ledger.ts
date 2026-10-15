@@ -1,11 +1,13 @@
+import { isOptionArchived, type ProductLifecycleOption } from './product-lifecycle';
 import type { ProductOption } from './types';
 
 export type LedgerQuickFilter = 'all' | 'draft' | 'needs-attention';
 
 export function productAttentionReasons(option: ProductOption): string[] {
-  // 商品台帳の「要確認」は、公開中なのにお客様表示の基本素材が欠けている商品だけを対象にする。
-  // 下書きは通常の作業状態で、型番は工事・造作等では存在しない場合があるため警告理由にしない。
-  if (option.status !== 'published') return [];
+  // 商品台帳の「要確認」は、現在取り扱っている登録済み商品のうち、
+  // お客様表示の基本素材が欠けている商品だけを対象にする。
+  // 下書き・取扱終了は通常の確認対象から外す。
+  if (option.status !== 'published' || isOptionArchived(option as ProductLifecycleOption)) return [];
   return option.image_url ? [] : ['画像未登録'];
 }
 

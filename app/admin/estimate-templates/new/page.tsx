@@ -8,6 +8,7 @@ import {
   type InitialEstimateTarget,
 } from '@/components/admin/new-estimate-template-form';
 import { estimateTemplatesFor } from '@/lib/domain/estimate-template';
+import { isOptionAvailableForEstimate, type ProductLifecycleOption } from '@/lib/domain/product-lifecycle';
 import { BASE_BREAKDOWN_ITEMS, BASE_BREAKDOWN_TOTALS } from '@/lib/seed/base-breakdown';
 import { LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 
@@ -182,7 +183,11 @@ export default async function NewEstimateTemplatePage({
         sampleBaseMaster={sampleBaseMaster}
         initialTarget={initialTarget}
         products={options
-          .filter((option) => option.status === 'published' && categoryMap.get(option.category_id)?.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE)
+          .filter(
+            (option) =>
+              isOptionAvailableForEstimate(option as ProductLifecycleOption) &&
+              categoryMap.get(option.category_id)?.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE
+          )
           .map((option) => ({
             id: option.id,
             categoryId: option.category_id,

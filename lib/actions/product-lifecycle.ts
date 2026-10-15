@@ -36,7 +36,11 @@ async function patchLocalOption(optionId: string, patch: Partial<ProductLifecycl
   await store.upsertOption({ ...input, ...patch } as OptionInput);
 }
 
-async function assertArchiveDoesNotBreakCurrentStandard(optionId: string, optionCode: string) {
+/**
+ * シミュレーターの候補から商品を外す前に、現在使われている標準構成を壊さないことを確認する。
+ * 過去のConfiguration / Quote / Snapshot参照は、履歴保持のため外すこと自体を妨げない。
+ */
+async function assertOptionCanLeaveSimulator(optionId: string, optionCode: string, actionLabel: string) {
   const db = await createClient();
 
   const baselineResult = await db
@@ -53,7 +57,7 @@ async function assertArchiveDoesNotBreakCurrentStandard(optionId: string, option
       .limit(1);
     if (currentResult.error) throw new Error('標準見積の使用状況を確認できませんでした。');
     if ((currentResult.data ?? []).length) {
-      throw new Error('現在公開中の標準見積で使用中の商品です。先に新しい標準見積の版で商品を差し替えてから取扱終了にしてください。');
+      throw new Error(`現在公開中の標準見積で使用中の商品です。先に新しい標準見積の版で商品を差し替えてから${actionLabel}してください。`);
     }
   }
 
@@ -64,7 +68,7 @@ async function assertArchiveDoesNotBreakCurrentStandard(optionId: string, option
     Array.isArray(template.baseline_option_ids) && template.baseline_option_ids.includes(optionId)
   );
   if (usedByLegacyTemplate) {
-    throw new Error('既存の標準見積で使用中の商品です。標準見積側の差し替えを確認してから取扱終了にしてください。');
+    throw new Error(`既存の標準見積で使用中の商品です。標準見積側の差し替えを確認してから${actionLabel}してください。`);
   }
 
   const dependencyResult = await db
@@ -74,7 +78,7 @@ async function assertArchiveDoesNotBreakCurrentStandard(optionId: string, option
     .limit(1);
   if (dependencyResult.error) throw new Error('商品の依存関係を確認できませんでした。');
   if ((dependencyResult.data ?? []).length) {
-    throw new Error('ほかの商品がこの商品を必要条件として使用しています。依存関係を整理してから取扱終了にしてください。');
+    throw new Error(`ほかの商品がこの商品を必要条件として使用しています。依存関係を整理してから${actionLabel}してください。`);
   }
 
   const presetResult = await db.from('base_models').select('presets');
@@ -90,7 +94,7 @@ async function assertArchiveDoesNotBreakCurrentStandard(optionId: string, option
     });
   });
   if (usedByPreset) {
-    throw new Error('本体の標準構成で使用中の商品です。先に標準構成を差し替えてから取扱終了にしてください。');
+    throw new Error(`本体の標準構成で使用中の商品です。先に標準構成を差し替えてから${actionLabel}してください。`);
   }
 }
 
@@ -103,15 +107,22 @@ export async function setOptionSimulatorVisibilityAction(formData: FormData): Pr
     await patchLocalOption(optionId, { simulator_visible: simulatorVisible });
   } else {
     const db = await createClient();
-    const { data, error } = await db
+    const current = await db
       .from('options')
-      .update({ simulator_visible: simulatorVisible })
+      .select('id, code, status, archived_at, simulator_visible')
       .eq('id', optionId)
-      .eq('status', 'published')
-      .select('id')
       .maybeSingle();
+    if (current.error) throw new Error('商品の状態を確認できませんでした。');
+    if (!current.data || current.data.status !== 'published' || current.data.archived_at) {
+      throw new Error('登録済み・取扱中の商品だけシミュレーター表示を変更できます。');
+    }
+
+    if (!simulatorVisible && current.data.simulator_visible !== false) {
+      await assertOptionCanLeaveSimulator(optionId, current.data.code, 'シミュレーター非表示に');
+    }
+
+    const { error } = await db.from('options').update({ simulator_visible: simulatorVisible }).eq('id', optionId);
     if (error) throw new Error('シミュレーター表示設定を保存できませんでした。DB反映状況を確認してください。');
-    if (!data) throw new Error('登録済みの商品だけシミュレーター表示を変更できます。');
   }
 
   refreshOptionPages(optionId);
@@ -136,7 +147,7 @@ export async function endOptionHandlingAction(formData: FormData): Promise<void>
       return;
     }
 
-    await assertArchiveDoesNotBreakCurrentStandard(optionId, current.data.code);
+    await assertOptionCanLeaveSimulator(optionId, current.data.code, '取扱終了に');
 
     const { error } = await db.from('options').update({ archived_at: new Date().toISOString() }).eq('id', optionId);
     if (error) throw new Error('取扱終了を保存できませんでした。DB反映状況を確認してください。');

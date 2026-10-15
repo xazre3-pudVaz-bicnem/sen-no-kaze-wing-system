@@ -1,11 +1,13 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { deleteOptionAction, publishOptionAction } from '@/lib/actions/admin';
+import { notFound, redirect } from 'next/navigation';
+import { deleteOptionAction } from '@/lib/actions/admin';
+import { publishOptionWithPowerSpecAction } from '@/lib/actions/product-power-spec';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getOptionHqStandardCostAccess } from '@/lib/data/option-hq-standard-cost';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
+import { productPowerSpec, productRequiresPowerSpec } from '@/lib/domain/product-power-spec';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
 import { Alert } from '@/components/ui';
 import { OptionForm } from '@/components/admin/forms';
@@ -15,6 +17,11 @@ import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { RegisteredOptionEditFlow } from '@/components/admin/registered-option-edit-flow';
+import {
+  ProductPowerSpecPublishedCard,
+  ProductPowerSpecRegistrationField,
+  ProductPowerSpecSummary,
+} from '@/components/admin/product-power-spec';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import {
@@ -54,6 +61,9 @@ export default async function EditOptionPage({
     getOptionHqStandardCostAccess(id),
   ]);
   const category = categories.find((row) => row.id === option.category_id);
+  const airconCategoryId = categories.find((row) => row.code === 'aircon')?.id ?? null;
+  const powerSpec = productPowerSpec(option) ?? '';
+  const powerSpecRequired = productRequiresPowerSpec(category?.code);
   const registrationCategories = category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE
     ? categories.filter((row) => row.code === LEGACY_FIRE_SPEC_CATEGORY_CODE)
     : category?.code === FREE_PRODUCT_CATEGORY_CODE
@@ -78,6 +88,7 @@ export default async function EditOptionPage({
   });
   const registrationBlockingIssues = [
     ...(!option.image_url ? ['メイン画像を登録してください'] : []),
+    ...(powerSpecRequired && !powerSpec ? ['電源仕様を入力してください'] : []),
   ];
   const registrationWarnings = [
     ...(duplicateCandidates.length > 0 ? ['既存商品に重複候補があります'] : []),
@@ -99,6 +110,12 @@ export default async function EditOptionPage({
     }
   }
 
+  if (option.status !== 'published' && step === 'preview' && powerSpecRequired && !powerSpec) {
+    const search = new URLSearchParams({ step: 'info', error: '電源仕様を入力してください' });
+    if (returnTo) search.set('return_to', returnTo);
+    redirect(`/admin/options/${id}?${search.toString()}`);
+  }
+
   if (option.status === 'published') {
     return (
       <AdminPage title={option.name} lead={option.product_no ?? '商品管理番号はDB反映後に表示'}>
@@ -112,6 +129,12 @@ export default async function EditOptionPage({
             cost={hqCostAccess.cost}
           />
         )}
+        <ProductPowerSpecPublishedCard
+          optionId={id}
+          categoryCode={category?.code ?? null}
+          initialValue={powerSpec}
+          editable={canEditThisOption && catalogEditor}
+        />
         {canEditThisOption ? (
           <RegisteredOptionEditFlow
             key={option.updated_at}
@@ -230,6 +253,12 @@ export default async function EditOptionPage({
                 dependencies={deps}
                 conflicts={confs}
                 returnTo={returnTo}
+              />
+
+              <ProductPowerSpecRegistrationField
+                optionId={id}
+                initialValue={powerSpec}
+                airconCategoryId={airconCategoryId}
               />
 
               {sp.created && (
@@ -358,13 +387,15 @@ export default async function EditOptionPage({
               <div className="card p-5 text-sm text-danger">商品カテゴリーが見つからないため、お客様表示を確認できません。</div>
             )}
 
+            <ProductPowerSpecSummary value={powerSpec} />
+
             <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品登録">
               <div>
                 <h3 className="font-semibold">登録状態</h3>
                 <p className="mt-1 text-sm text-muted">現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。</p>
               </div>
               {canEditThisOption && category && (
-                <form action={publishOptionAction} className="space-y-3">
+                <form action={publishOptionWithPowerSpecAction} className="space-y-3">
                   <input type="hidden" name="id" value={option.id} />
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
                   {needsZeroPriceConfirmation && (

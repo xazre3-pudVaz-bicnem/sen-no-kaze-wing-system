@@ -128,6 +128,18 @@ test.describe('商品の取扱終了・シミュレーター表示', () => {
     await page.getByTestId('submit-quote-request').click();
     await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
 
+    // 依頼済み（Draft 以外）のプランも、保存済みの選択のまま表示する。後から取扱終了にしても同じ（既定の商品へ置き換えない）
+    await page.goto(`/simulator/wing-01?c=${configId}`);
+    await waitForSimulator(page);
+    await expect(page.getByTestId(`equip-retained-${HANGER.category}`)).toHaveText('新しくは選べない商品（保存済みの選択）');
+    const adminAfter = await openAdmin(browser);
+    await openLedgerProduct(adminAfter, HANGER.id);
+    await ledgerAction(adminAfter, 'ledger-retire-product', 'retired');
+    await adminAfter.context().close();
+    await page.reload();
+    await waitForSimulator(page);
+    await expect(page.getByTestId(`equip-retained-${HANGER.category}`)).toHaveText('取扱終了の商品（保存済みの選択）');
+
     // 新しいプランでは、取扱終了・非表示の商品はどちらも候補に出ない
     await openFreshSimulator(page);
     await openPicker(page, 'equip-exterior-parts');

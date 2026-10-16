@@ -9,7 +9,8 @@ import {
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 const field = read('components/admin/product-price-unit.tsx');
-const host = read('components/admin/product-power-spec.tsx');
+// 価格単位の部品は商品編集ページへ直接置く（電源仕様の専用欄は 2026-10-16 の先方判断で廃止）
+const host = read('app/admin/options/[id]/page.tsx');
 const preview = read('components/admin/option-customer-preview.tsx');
 const ledger = read('components/admin/product-ledger-client.tsx');
 const action = read('lib/actions/product-price-unit.ts');
@@ -57,7 +58,7 @@ describe('商品登録 価格単位', () => {
     expect(field).toContain('listTouchedRef.current = true');
     expect(field).toContain('if (!priceTouchedRef.current)');
     expect(field).toContain('if (!listTouchedRef.current)');
-    expect(host).toContain('<ProductPriceUnitRegistrationField optionId={optionId} />');
+    expect(host).toContain('<ProductPriceUnitRegistrationField optionId={id} />');
   });
 
   it('別途見積を選ぶと商品価格と商品価格単位だけ入力不可にし、メーカー参考価格は編集可能のままにする', () => {
@@ -98,7 +99,7 @@ describe('商品登録 価格単位', () => {
   it('登録済み商品でも保存済み単位を個別編集できる', () => {
     expect(field).toContain('data-testid="product-price-unit-published-editor"');
     expect(field).toContain('既存の保存値をカテゴリー既定値で自動上書きしません');
-    expect(host).toContain('<ProductPriceUnitPublishedCard optionId={optionId} />');
+    expect(host).toContain('<ProductPriceUnitPublishedCard optionId={id} />');
   });
 
   it('DB変更はnullable列の追加だけで既存商品・価格・履歴を書き換えない', () => {

@@ -161,7 +161,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(adminActions).toContain('const actor = await requireStaff()');
     expect(adminActions).toContain('editableOptionContext(actor, id)');
     expect(adminActions).toContain("status: 'published'");
-    expect(editPage).toContain('publishOptionWithPowerSpecAction');
+    expect(editPage).toContain('publishOptionAction');
     expect(editPage).toContain('現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。');
     expect(editPage).toContain('この内容で登録');
     expect(newPage).toContain('STEP 1で商品情報を入力し、STEP 2で実際のお客様表示を確認して登録します。');

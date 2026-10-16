@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionPowerSpecAction } from '@/lib/actions/product-power-spec';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import { ProductMainImageUrlImporter } from '@/components/admin/product-main-image-url-importer';
 import {
   ProductPriceUnitPublishedCard,
   ProductPriceUnitRegistrationField,
@@ -81,7 +82,7 @@ function PowerSpecInput({
  * STEP1のOptionFormへ電源仕様を追加する補助UI。
  * 既存の大きな商品フォームを複製せず、商品の詳細グリッドへportalし、
  * 同じ保存境界に専用列の保存処理だけを参加させる。
- * 価格単位も同じ拡張ホストから価格欄へ差し込む。
+ * 価格単位とメイン画像URL取込も同じ拡張ホストから差し込む。
  */
 export function ProductPowerSpecRegistrationField({
   optionId,
@@ -99,6 +100,7 @@ export function ProductPowerSpecRegistrationField({
   const [error, setError] = useState<string | null>(null);
   const valueRef = useRef(value);
   const activeRef = useRef(active);
+  const powerSpecDirtyRef = useRef(false);
 
   useEffect(() => {
     valueRef.current = value;
@@ -132,29 +134,42 @@ export function ProductPowerSpecRegistrationField({
 
   useEffect(() =>
     registerSaveHandler(async () => {
-      if (!activeRef.current) return true;
+      // 画像・PDF・商品説明など別項目だけの保存では、電源仕様の専用列へ触れない。
+      // power_spec migration適用前の先行deployでも、未変更なら既存操作を妨げない。
+      if (!powerSpecDirtyRef.current) return true;
+      if (!activeRef.current) {
+        powerSpecDirtyRef.current = false;
+        return true;
+      }
       const result = await saveOptionPowerSpecAction({
         optionId,
         powerSpec: valueRef.current,
         requireComplete: false,
       });
+      if (result.ok) powerSpecDirtyRef.current = false;
       setError(result.ok ? null : result.error ?? '電源仕様を保存できませんでした。');
       return result.ok;
     }),
   [optionId, registerSaveHandler]);
 
-  const priceUnitField = <ProductPriceUnitRegistrationField optionId={optionId} />;
-  if (!active || !target) return priceUnitField;
+  const extensionFields = (
+    <>
+      <ProductPriceUnitRegistrationField optionId={optionId} />
+      <ProductMainImageUrlImporter optionId={optionId} />
+    </>
+  );
+  if (!active || !target) return extensionFields;
 
   return (
     <>
-      {priceUnitField}
+      {extensionFields}
       {createPortal(
         <div>
           <PowerSpecInput
             value={value}
             required
             onChange={(next) => {
+              powerSpecDirtyRef.current = true;
               setValue(next);
               setError(null);
               markDirty();

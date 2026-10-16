@@ -440,7 +440,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
               {pageOptions.map((o) => {
                 const itemCategory = categoryMap.get(o.category_id);
                 return <article key={o.id} className="relative overflow-visible rounded-xl border border-line bg-white" data-testid={'ledger-mobile-option-' + o.code}>
-                  <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示'}</span></button>
+                  <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
                   <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
                     <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span>

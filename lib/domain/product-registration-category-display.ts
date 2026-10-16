@@ -1,40 +1,66 @@
 import type { OptionCategory } from './types';
 
 type ProductRegistrationCategoryGroup = {
+  code: string;
   label: string;
+  sort: number;
   codes: readonly string[];
 };
 
+/**
+ * 商品登録・商品台帳で共通利用する表示用の大分類。
+ *
+ * 業務判定は本体仕様マトリクスの細分類を正本とし、ここでは登録担当者が探しやすいよう
+ * 複数の正式カテゴリーだけを7つの表示グループへまとめる。
+ */
 export const PRODUCT_REGISTRATION_CATEGORY_GROUPS: readonly ProductRegistrationCategoryGroup[] = [
   {
+    code: 'exterior',
     label: '本体・外装',
-    codes: ['insulation', 'roof', 'exterior-wall'],
+    sort: 1,
+    codes: ['roof', 'exterior-wall', 'insulation-floor', 'insulation-wall', 'insulation-ceiling', 'insulation'],
   },
   {
+    code: 'openings',
     label: '開口部・建具',
+    sort: 2,
     codes: ['entrance-door', 'service-door', 'sash', 'interior-door'],
   },
   {
+    code: 'interior',
     label: '内装・造作',
-    codes: ['floor', 'wall-ceiling', 'entrance-storage', 'closet', 'carpentry'],
+    sort: 3,
+    codes: ['floor', 'wall-ceiling', 'carpentry'],
   },
   {
+    code: 'equipment',
     label: '水回り',
+    sort: 4,
     codes: ['ub', 'kitchen', 'washbasin', 'toilet', 'boiler'],
   },
   {
+    code: 'electrical',
     label: '電気・設備',
+    sort: 5,
     codes: ['aircon', 'lighting', 'smartlock'],
   },
   {
-    label: '家具・備品',
-    codes: ['bed', 'furniture', 'appliances', 'office-supplies'],
+    code: 'furniture',
+    label: '家具・収納',
+    sort: 6,
+    codes: ['entrance-storage', 'closet', 'bed', 'furniture', 'appliances', 'office-supplies'],
   },
   {
+    code: 'sitework',
     label: '外構・現地工事',
+    sort: 7,
     codes: ['exterior-parts', 'sitework'],
   },
 ] as const;
+
+const PRODUCT_REGISTRATION_CATEGORY_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
+  aircon: 'エアコン',
+};
 
 type RankedCategory = {
   category: OptionCategory;
@@ -43,6 +69,14 @@ type RankedCategory = {
   originalIndex: number;
   groupLabel: string | null;
 };
+
+function productRegistrationCategoryLabel(category: OptionCategory): string {
+  return PRODUCT_REGISTRATION_CATEGORY_LABEL_OVERRIDES[category.code] ?? category.name;
+}
+
+export function productRegistrationCategoryGroup(categoryCode: string): ProductRegistrationCategoryGroup | null {
+  return PRODUCT_REGISTRATION_CATEGORY_GROUPS.find((group) => group.codes.includes(categoryCode)) ?? null;
+}
 
 export function productRegistrationCategoryDisplay(categories: OptionCategory[]): OptionCategory[] {
   const ranked: RankedCategory[] = categories.map((category, originalIndex) => {
@@ -79,7 +113,7 @@ export function productRegistrationCategoryDisplay(categories: OptionCategory[])
     groupLabel
       ? {
           ...category,
-          name: `【${groupLabel}】${category.name}`,
+          name: `【${groupLabel}】${productRegistrationCategoryLabel(category)}`,
         }
       : category
   );

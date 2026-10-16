@@ -5,22 +5,32 @@ import { createPortal } from 'react-dom';
 
 type ConfirmSubmitProps = ComponentProps<'button'> & {
   message: string;
+  dialogTitle?: string;
+  confirmLabel?: string;
+  destructive?: boolean;
 };
 
-export function ConfirmSubmit({ message, children, ...props }: ConfirmSubmitProps) {
+export function ConfirmSubmit({
+  message,
+  dialogTitle,
+  confirmLabel,
+  destructive: destructiveOverride,
+  children,
+  ...props
+}: ConfirmSubmitProps) {
   const [open, setOpen] = useState(false);
   const submitterRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const dialogId = useId();
   const titleId = `${dialogId}-title`;
   const descriptionId = `${dialogId}-description`;
-  const destructive = message.includes('削除しますか');
-  const dialogTitle = message.includes('登録しますか')
+  const destructive = destructiveOverride ?? message.includes('削除しますか');
+  const resolvedDialogTitle = dialogTitle ?? (message.includes('登録しますか')
     ? 'この内容で登録しますか？'
     : destructive
       ? '削除しますか？'
-      : 'この操作を実行しますか？';
-  const confirmLabel = typeof children === 'string' ? children : destructive ? '削除する' : '実行する';
+      : 'この操作を実行しますか？');
+  const resolvedConfirmLabel = confirmLabel ?? (typeof children === 'string' ? children : destructive ? '削除する' : '実行する');
 
   const closeDialog = () => {
     setOpen(false);
@@ -95,7 +105,7 @@ export function ConfirmSubmit({ message, children, ...props }: ConfirmSubmitProp
             onMouseDown={(event) => event.stopPropagation()}
           >
             <h2 id={titleId} className="text-lg font-semibold text-ink">
-              {dialogTitle}
+              {resolvedDialogTitle}
             </h2>
             <p id={descriptionId} className="mt-2 text-sm leading-6 text-ink-soft">
               {message}
@@ -117,7 +127,7 @@ export function ConfirmSubmit({ message, children, ...props }: ConfirmSubmitProp
                   : 'btn-primary min-w-24'}
                 onClick={confirmSubmit}
               >
-                {confirmLabel}
+                {resolvedConfirmLabel}
               </button>
             </div>
           </section>

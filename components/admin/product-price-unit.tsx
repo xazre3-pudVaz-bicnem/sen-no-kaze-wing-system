@@ -162,6 +162,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
   const [listEditor, setListEditor] = useState<EditorState>(EMPTY_EDITOR);
   const [error, setError] = useState<string | null>(null);
   const loadedRef = useRef(false);
+  const unitDirtyRef = useRef(false);
   const priceEditorRef = useRef(priceEditor);
   const listEditorRef = useRef(listEditor);
   const priceTouchedRef = useRef(false);
@@ -205,8 +206,14 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       const currentRequest = ++requestId;
       void getCategoryPriceUnitDefaultsAction(categoryId).then((result) => {
         if (currentRequest !== requestId || category.value !== categoryId || !result.ok) return;
-        if (!priceTouchedRef.current) setPriceEditor(editorFromUnit(result.priceUnit ?? null));
-        if (!listTouchedRef.current) setListEditor(editorFromUnit(result.listPriceUnit ?? null));
+        if (!priceTouchedRef.current) {
+          setPriceEditor(editorFromUnit(result.priceUnit ?? null));
+          unitDirtyRef.current = true;
+        }
+        if (!listTouchedRef.current) {
+          setListEditor(editorFromUnit(result.listPriceUnit ?? null));
+          unitDirtyRef.current = true;
+        }
       });
     };
     category.addEventListener('change', onCategoryChange);
@@ -218,6 +225,9 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
 
   useEffect(() =>
     registerSaveHandler(async () => {
+      // 商品名・画像・PDFなど別項目だけの保存では、価格単位のDB列へ触れない。
+      // これにより価格単位migration適用前の先行deployでも既存の商品編集を妨げない。
+      if (!unitDirtyRef.current) return true;
       if (!loadedRef.current) {
         setError('価格単位を読み込んでいます。少し待ってからもう一度お試しください。');
         return false;
@@ -227,6 +237,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
         priceUnit: editorValue(priceEditorRef.current),
         listPriceUnit: editorValue(listEditorRef.current),
       });
+      if (result.ok) unitDirtyRef.current = false;
       setError(result.ok ? null : result.error ?? '価格単位を保存できませんでした。');
       return result.ok;
     }),
@@ -246,6 +257,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
         disabled={priceOnRequest}
         onChange={(next) => {
           priceTouchedRef.current = true;
+          unitDirtyRef.current = true;
           setPriceEditor(next);
           setError(null);
           markDirty();
@@ -258,6 +270,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
         editor={listEditor}
         onChange={(next) => {
           listTouchedRef.current = true;
+          unitDirtyRef.current = true;
           setListEditor(next);
           setError(null);
           markDirty();

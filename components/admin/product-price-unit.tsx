@@ -23,6 +23,7 @@ type EditorState = {
 };
 
 const EMPTY_EDITOR: EditorState = { choice: '', custom: '' };
+const PRICE_UNIT_STATE_EVENT = 'product-price-unit-state-change';
 
 function editorFromUnit(unit: string | null | undefined): EditorState {
   const value = unit?.trim() ?? '';
@@ -171,6 +172,9 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
 
   useEffect(() => { priceEditorRef.current = priceEditor; }, [priceEditor]);
   useEffect(() => { listEditorRef.current = listEditor; }, [listEditor]);
+  useEffect(() => {
+    window.dispatchEvent(new Event(PRICE_UNIT_STATE_EVENT));
+  }, [listEditor, priceEditor, priceOnRequest]);
 
   useEffect(() => {
     let active = true;
@@ -182,18 +186,25 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       }
       const savedPrice = state.priceUnit?.trim() || null;
       const savedList = state.listPriceUnit?.trim() || null;
+      let defaultNeedsSave = false;
       if (!priceTouchedRef.current) {
         setPriceEditor(editorFromUnit(savedPrice ?? state.defaultPriceUnit ?? null));
         priceTouchedRef.current = Boolean(savedPrice);
+        if (!savedPrice && state.defaultPriceUnit?.trim()) defaultNeedsSave = true;
       }
       if (!listTouchedRef.current) {
         setListEditor(editorFromUnit(savedList ?? state.defaultListPriceUnit ?? null));
         listTouchedRef.current = Boolean(savedList);
+        if (!savedList && state.defaultListPriceUnit?.trim()) defaultNeedsSave = true;
       }
       loadedRef.current = true;
+      if (defaultNeedsSave) {
+        unitDirtyRef.current = true;
+        markDirty();
+      }
     });
     return () => { active = false; };
-  }, [optionId]);
+  }, [markDirty, optionId]);
 
   useEffect(() => {
     const form = document.getElementById('option-main-form');
@@ -211,13 +222,24 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       const currentRequest = ++requestId;
       void getCategoryPriceUnitDefaultsAction(categoryId).then((result) => {
         if (currentRequest !== requestId || category.value !== categoryId || !result.ok) return;
+        let changed = false;
         if (!priceTouchedRef.current) {
-          setPriceEditor(editorFromUnit(result.priceUnit ?? null));
-          unitDirtyRef.current = true;
+          const next = editorFromUnit(result.priceUnit ?? null);
+          if (editorValue(priceEditorRef.current) !== editorValue(next)) {
+            setPriceEditor(next);
+            changed = true;
+          }
         }
         if (!listTouchedRef.current) {
-          setListEditor(editorFromUnit(result.listPriceUnit ?? null));
+          const next = editorFromUnit(result.listPriceUnit ?? null);
+          if (editorValue(listEditorRef.current) !== editorValue(next)) {
+            setListEditor(next);
+            changed = true;
+          }
+        }
+        if (changed) {
           unitDirtyRef.current = true;
+          markDirty();
         }
       });
     };
@@ -226,7 +248,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       window.cancelAnimationFrame(frameId);
       category.removeEventListener('change', onCategoryChange);
     };
-  }, []);
+  }, [markDirty]);
 
   useEffect(() =>
     registerSaveHandler(async () => {

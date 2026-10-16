@@ -32,7 +32,9 @@ export function ConfirmSubmit({ message, children, ...props }: ConfirmSubmitProp
 
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeDialog();
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      queueMicrotask(() => submitterRef.current?.focus());
     };
 
     document.body.style.overflow = 'hidden';

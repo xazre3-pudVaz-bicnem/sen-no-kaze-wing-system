@@ -9,6 +9,7 @@ import {
 
 const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
 const field = read('components/admin/product-price-unit.tsx');
+const priceUiSync = read('components/admin/option-registration-price-ui-sync.tsx');
 // 価格単位の部品は商品編集ページへ直接置く（電源仕様の専用欄は 2026-10-16 の先方判断で廃止）
 const host = read('app/admin/options/[id]/page.tsx');
 const preview = read('components/admin/option-customer-preview.tsx');
@@ -59,6 +60,35 @@ describe('商品登録 価格単位', () => {
     expect(field).toContain('if (!priceTouchedRef.current)');
     expect(field).toContain('if (!listTouchedRef.current)');
     expect(host).toContain('<ProductPriceUnitRegistrationField optionId={id} />');
+  });
+
+  it('保存値がなくカテゴリー既定値を表示した場合も未保存変更として扱いSTEP2前に保存する', () => {
+    expect(field).toContain('let defaultNeedsSave = false');
+    expect(field).toContain('if (!savedPrice && state.defaultPriceUnit?.trim()) defaultNeedsSave = true');
+    expect(field).toContain('if (!savedList && state.defaultListPriceUnit?.trim()) defaultNeedsSave = true');
+    expect(field).toContain('unitDirtyRef.current = true');
+    expect(field).toContain('markDirty();');
+    expect(field).toContain("const PRICE_UNIT_STATE_EVENT = 'product-price-unit-state-change'");
+  });
+
+  it('カテゴリー変更で自動選択された単位も保存対象として扱う', () => {
+    expect(field).toContain('let changed = false');
+    expect(field).toContain('editorValue(priceEditorRef.current) !== editorValue(next)');
+    expect(field).toContain('editorValue(listEditorRef.current) !== editorValue(next)');
+    expect(field).toContain('if (changed)');
+    expect(field).toContain('unitDirtyRef.current = true');
+    expect(field).toContain('markDirty();');
+  });
+
+  it('登録前チェックで価格単位未選択を公開必須項目として扱う', () => {
+    expect(priceUiSync).toContain('商品価格の単位を選択してください');
+    expect(priceUiSync).toContain('メーカー参考価格を入力した場合は、メーカー参考価格の単位を選択してください');
+    expect(priceUiSync).toContain('shouldBlockProductUnit');
+    expect(priceUiSync).toContain('shouldBlockManufacturerUnit');
+    expect(priceUiSync).toContain("ensureIssueBox(section, '公開に必要')");
+    expect(priceUiSync).toContain('productUnit.required = requiresProductUnit');
+    expect(priceUiSync).toContain('manufacturerUnit.required = requiresManufacturerUnit');
+    expect(priceUiSync).toContain("window.addEventListener(PRICE_UNIT_STATE_EVENT, sync)");
   });
 
   it('別途見積を選ぶと商品価格と商品価格単位だけ入力不可にし、メーカー参考価格は編集可能のままにする', () => {

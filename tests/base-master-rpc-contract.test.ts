@@ -57,8 +57,8 @@ describe('本体マスターRPC契約', () => {
   });
 
   it('下書きの戻し・破棄も中央確認モーダルを通す', () => {
-    expect(revisionForm).toContain('未保存の変更を破棄して、保存時点の内容に戻しますか？');
-    expect(revisionForm).toContain('この下書きを破棄します。よろしいですか？');
+    expect(revisionForm).toContain('未保存の変更を破棄して、保存時点の内容に戻します。入力中の変更は元に戻せません。');
+    expect(revisionForm).toContain('この下書きを破棄します。破棄した下書きは元に戻せません。');
     expect(revisionForm).toContain('下書きを破棄');
   });
 

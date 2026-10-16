@@ -38,7 +38,8 @@ export function ConfirmActionButton({
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      closeDialog();
+      setOpen(false);
+      queueMicrotask(() => triggerRef.current?.focus());
     };
 
     document.body.style.overflow = 'hidden';

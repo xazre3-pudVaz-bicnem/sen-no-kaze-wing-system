@@ -140,7 +140,7 @@ describe('商品台帳の入口', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("if (option.price_on_request) return '別途見積'");
     expect(client).toContain('if (!Number.isFinite(option.price)) return dash');
-    expect(client).toContain('return formatYen(option.price)');
+    expect(client).toContain('return formatPriceWithUnit(option.price, option.price_unit)');
   });
 
   it('商品詳細を2タブのレスポンシブ2ペインで表示する', () => {

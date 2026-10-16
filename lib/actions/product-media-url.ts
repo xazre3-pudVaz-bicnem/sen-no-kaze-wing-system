@@ -2,10 +2,11 @@
 
 import { revalidatePath, updateTag } from 'next/cache';
 import { requireStaff } from '@/lib/auth/session';
-import { getStore, StoreError, type SessionUser } from '@/lib/data/store';
+import { getStore, isLocalMode, StoreError, type OptionInput, type SessionUser } from '@/lib/data/store';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { fetchRemoteMedia } from '@/lib/http/remote-media';
+import { createClient } from '@/lib/supabase/server';
 import type { AdminFormState } from '@/lib/actions/admin';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -32,6 +33,85 @@ async function editableOptionContext(actor: SessionUser, optionId: string) {
 
 function sourceUrl(formData: FormData): string {
   return String(formData.get('source_url') ?? '').trim();
+}
+
+/** 外部画像URLをそのまま正式値にせず、千の風側ストレージへ取り込んでメイン画像として保存する。 */
+export async function uploadOptionMainImageFromUrlAction(
+  _prev: AdminFormState,
+  formData: FormData
+): Promise<AdminFormState> {
+  const actor = await requireStaff();
+  const optionId = String(formData.get('option_id') ?? '').trim();
+  if (!optionId) return { ok: false, error: '商品が指定されていません。' };
+  const url = sourceUrl(formData);
+  if (!url) return { ok: false, fieldErrors: { source_url: ['画像URLを入力してください。'] } };
+
+  let uploadedUrl: string | null = null;
+  try {
+    const { store, option } = await editableOptionContext(actor, optionId);
+    const remote = await fetchRemoteMedia(url, 'image', MAX_IMAGE_BYTES);
+    uploadedUrl = await store.uploadImage(
+      { bytes: remote.bytes, contentType: remote.contentType, fileName: remote.fileName },
+      'options'
+    );
+
+    const previousUrl = option.image_url ?? null;
+    try {
+      if (isLocalMode()) {
+        const {
+          id: currentId,
+          product_no: _productNo,
+          gallery_images: _galleryImages,
+          created_at: _createdAt,
+          updated_at: _updatedAt,
+          ...editableOption
+        } = option;
+        await store.upsertOption({
+          ...editableOption,
+          id: currentId,
+          image_url: uploadedUrl,
+        } as OptionInput);
+      } else {
+        const db = await createClient();
+        const { data, error } = await db
+          .from('options')
+          .update({ image_url: uploadedUrl })
+          .eq('id', option.id)
+          .select('id')
+          .maybeSingle();
+        if (error) throw new StoreError('INTERNAL', 'メイン画像を保存できませんでした。');
+        if (!data) throw new StoreError('NOT_FOUND', '商品を更新できませんでした。');
+      }
+    } catch (error) {
+      await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+      uploadedUrl = null;
+      throw error;
+    }
+
+    if (previousUrl && previousUrl !== uploadedUrl) {
+      await store.deleteUploadedImage(previousUrl).catch(() => undefined);
+    }
+
+    revalidatePath(`/admin/options/${optionId}`);
+    revalidatePath('/admin/ledger');
+    revalidatePath('/', 'layout');
+    updateTag(CATALOG_TAG);
+    return {
+      ok: true,
+      message: '画像URLからメイン画像を千の風側へ保存しました。',
+      savedImageUrl: uploadedUrl,
+    };
+  } catch (error) {
+    if (uploadedUrl) {
+      try {
+        const store = await getStore();
+        await store.deleteUploadedImage(uploadedUrl);
+      } catch {
+        // 登録失敗時の後片付けはベストエフォート。元のエラーを優先する。
+      }
+    }
+    return errorState(error);
+  }
 }
 
 export async function addOptionImageFromUrlAction(

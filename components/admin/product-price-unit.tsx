@@ -180,10 +180,14 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       }
       const savedPrice = state.priceUnit?.trim() || null;
       const savedList = state.listPriceUnit?.trim() || null;
-      setPriceEditor(editorFromUnit(savedPrice ?? state.defaultPriceUnit ?? null));
-      setListEditor(editorFromUnit(savedList ?? state.defaultListPriceUnit ?? null));
-      priceTouchedRef.current = Boolean(savedPrice);
-      listTouchedRef.current = Boolean(savedList);
+      if (!priceTouchedRef.current) {
+        setPriceEditor(editorFromUnit(savedPrice ?? state.defaultPriceUnit ?? null));
+        priceTouchedRef.current = Boolean(savedPrice);
+      }
+      if (!listTouchedRef.current) {
+        setListEditor(editorFromUnit(savedList ?? state.defaultListPriceUnit ?? null));
+        listTouchedRef.current = Boolean(savedList);
+      }
       loadedRef.current = true;
     });
     return () => { active = false; };

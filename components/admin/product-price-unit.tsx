@@ -128,9 +128,11 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
     const form = document.getElementById('option-main-form');
     const priceInput = form?.querySelector<HTMLInputElement>('input[name="price"]') ?? null;
     const grid = priceInput?.closest<HTMLElement>('.grid') ?? null;
-    setTarget(grid);
+    const frameId = window.requestAnimationFrame(() => setTarget(grid));
     const category = form?.querySelector<HTMLSelectElement>('select[name="category_id"]') ?? null;
-    if (!category) return;
+    if (!category) {
+      return () => window.cancelAnimationFrame(frameId);
+    }
 
     let requestId = 0;
     const onCategoryChange = () => {
@@ -143,7 +145,10 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       });
     };
     category.addEventListener('change', onCategoryChange);
-    return () => category.removeEventListener('change', onCategoryChange);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      category.removeEventListener('change', onCategoryChange);
+    };
   }, []);
 
   useEffect(() =>

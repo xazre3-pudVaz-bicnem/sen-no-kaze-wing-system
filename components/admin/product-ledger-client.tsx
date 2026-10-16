@@ -8,6 +8,7 @@ import { ProductLedgerActionsMenu } from '@/components/admin/product-ledger-acti
 import { SmartImage } from '@/components/ui/smart-image';
 import { Badge, Input, Select } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
+import { formatPriceWithUnit } from '@/lib/domain/product-price-unit';
 import { needsProductAttention, optionMatchesLedgerFilters, selectedOptionAfterFilter } from '@/lib/domain/product-ledger';
 import {
   isQuoteSelectableProduct,
@@ -66,7 +67,7 @@ function date(value: string) {
 function productPrice(option: ProductOption) {
   if (option.price_on_request) return '別途見積';
   if (!Number.isFinite(option.price)) return dash;
-  return formatYen(option.price);
+  return formatPriceWithUnit(option.price, option.price_unit);
 }
 
 function priceSortKind(option: ProductOption) {
@@ -484,7 +485,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, categor
             <section id="ledger-admin-panel" role="tabpanel" aria-labelledby="ledger-admin-tab" className="space-y-4">
               <div className="grid gap-4 min-[900px]:grid-cols-2">
                 <dl className="card p-4"><h3 className="mb-2 font-semibold">商品基本情報</h3><Row label="商品管理番号" value={selected.product_no || '未採番'}/><Row label="カテゴリー" value={category.name}/><Row label="メーカー" value={selected.manufacturer || dash}/><Row label="型番・品番" value={selected.model_no || '要設定'}/><Row label="サイズ・仕様" value={selected.size_note || dash}/><Row label="対象モデル" value={selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'}/><Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/></dl>
-                <dl className="card p-4"><h3 className="mb-2 font-semibold">利用先</h3><Row label="見積で選択" value={isQuoteSelectableProduct(selected) ? '選択可' : productLedgerState(selected) === 'retired' ? '選択不可（取扱終了）' : '選択不可（下書き）'}/><Row label="シミュレーター" value={isQuoteSelectableProduct(selected) ? (productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない') : '表示しない'}/><Row label="商品価格（税別）" value={productPrice(selected)}/></dl>
+                <dl className="card p-4"><h3 className="mb-2 font-semibold">利用先</h3><Row label="見積で選択" value={isQuoteSelectableProduct(selected) ? '選択可' : productLedgerState(selected) === 'retired' ? '選択不可（取扱終了）' : '選択不可（下書き）'}/><Row label="シミュレーター" value={isQuoteSelectableProduct(selected) ? (productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない') : '表示しない'}/><Row label="商品価格（税別）" value={productPrice(selected)}/><Row label="メーカー参考価格（税別）" value={selected.list_price == null ? '未設定' : formatPriceWithUnit(selected.list_price, selected.list_price_unit)}/></dl>
               </div>
 
               <section className="card p-4" aria-labelledby="ledger-handling-status-title">

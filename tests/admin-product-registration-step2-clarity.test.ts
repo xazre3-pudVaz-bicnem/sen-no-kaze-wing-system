@@ -33,7 +33,7 @@ describe('商品登録 STEP2 の確認画面', () => {
     expect(refinement).toContain("'お客様選択'");
     expect(refinement).toContain('registrationCustomerChoices');
     expect(customerPreview).toContain('data-registration-price-display');
-    expect(customerPreview).toContain("`¥${option.price.toLocaleString('ja-JP')}（税別）`");
+    expect(customerPreview).toContain('formatPriceWithUnit(option.price, option.price_unit)');
     expect(customerPreview).toContain("option.price_on_request\n    ? '別途見積'");
   });
 

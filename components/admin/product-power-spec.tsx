@@ -5,6 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionPowerSpecAction } from '@/lib/actions/product-power-spec';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import {
+  ProductPriceUnitPublishedCard,
+  ProductPriceUnitRegistrationField,
+  ProductPriceUnitRouteSummary,
+} from '@/components/admin/product-price-unit';
 import { productRequiresPowerSpec } from '@/lib/domain/product-power-spec';
 
 const AIRCON_CAPACITY_LABEL = '能力クラス・容量';
@@ -76,6 +81,7 @@ function PowerSpecInput({
  * STEP1のOptionFormへ電源仕様を追加する補助UI。
  * 既存の大きな商品フォームを複製せず、商品の詳細グリッドへportalし、
  * 同じ保存境界に専用列の保存処理だけを参加させる。
+ * 価格単位も同じ拡張ホストから価格欄へ差し込む。
  */
 export function ProductPowerSpecRegistrationField({
   optionId,
@@ -137,22 +143,28 @@ export function ProductPowerSpecRegistrationField({
     }),
   [optionId, registerSaveHandler]);
 
-  if (!active || !target) return null;
+  const priceUnitField = <ProductPriceUnitRegistrationField optionId={optionId} />;
+  if (!active || !target) return priceUnitField;
 
-  return createPortal(
-    <div>
-      <PowerSpecInput
-        value={value}
-        required
-        onChange={(next) => {
-          setValue(next);
-          setError(null);
-          markDirty();
-        }}
-      />
-      {error && <p className="mt-1 text-xs font-semibold text-danger" role="alert">{error}</p>}
-    </div>,
-    target
+  return (
+    <>
+      {priceUnitField}
+      {createPortal(
+        <div>
+          <PowerSpecInput
+            value={value}
+            required
+            onChange={(next) => {
+              setValue(next);
+              setError(null);
+              markDirty();
+            }}
+          />
+          {error && <p className="mt-1 text-xs font-semibold text-danger" role="alert">{error}</p>}
+        </div>,
+        target
+      )}
+    </>
   );
 }
 
@@ -186,70 +198,84 @@ export function ProductPowerSpecPublishedCard({
     return () => observer.disconnect();
   }, [required]);
 
-  if (!required && !initialValue.trim()) return null;
+  const priceUnitCard = <ProductPriceUnitPublishedCard optionId={optionId} />;
+
+  if (!required && !initialValue.trim()) return priceUnitCard;
 
   if (!editable) {
     return (
-      <section className="card p-4 sm:p-5" data-testid="product-power-spec-readonly">
-        <p className="text-xs font-semibold text-muted">電源仕様</p>
-        <p className="mt-1 text-sm font-semibold text-ink">{value.trim() || '未設定'}</p>
-      </section>
+      <>
+        {priceUnitCard}
+        <section className="card p-4 sm:p-5" data-testid="product-power-spec-readonly">
+          <p className="text-xs font-semibold text-muted">電源仕様</p>
+          <p className="mt-1 text-sm font-semibold text-ink">{value.trim() || '未設定'}</p>
+        </section>
+      </>
     );
   }
 
   return (
-    <section className="card space-y-4 p-4 sm:p-5" data-testid="product-power-spec-published-editor">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-semibold">電源仕様</h2>
-          <p className="mt-1 text-xs text-muted">電気配線・専用回路・ブレーカー確認に使う商品固有情報です。</p>
+    <>
+      {priceUnitCard}
+      <section className="card space-y-4 p-4 sm:p-5" data-testid="product-power-spec-published-editor">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">電源仕様</h2>
+            <p className="mt-1 text-xs text-muted">電気配線・専用回路・ブレーカー確認に使う商品固有情報です。</p>
+          </div>
+          {!value.trim() && required && (
+            <span className="rounded-full bg-[#fff1cf] px-3 py-1 text-xs font-semibold text-[#7c5a18]">未設定</span>
+          )}
         </div>
-        {!value.trim() && required && (
-          <span className="rounded-full bg-[#fff1cf] px-3 py-1 text-xs font-semibold text-[#7c5a18]">未設定</span>
-        )}
-      </div>
-      <PowerSpecInput value={value} required={required} onChange={(next) => { setValue(next); setMessage(null); setError(null); }} />
-      {message && <p className="text-xs font-semibold text-[#245a48]">{message}</p>}
-      {error && <p className="text-xs font-semibold text-danger" role="alert">{error}</p>}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="btn-secondary btn-sm"
-          disabled={saving}
-          onClick={() => {
-            if (required && !value.trim()) {
-              setError('電源仕様を入力してください');
-              return;
-            }
-            setSaving(true);
-            setError(null);
-            void saveOptionPowerSpecAction({ optionId, powerSpec: value, requireComplete: true }).then((result) => {
-              setSaving(false);
-              if (!result.ok) {
-                setError(result.error ?? '電源仕様を保存できませんでした。');
+        <PowerSpecInput value={value} required={required} onChange={(next) => { setValue(next); setMessage(null); setError(null); }} />
+        {message && <p className="text-xs font-semibold text-[#245a48]">{message}</p>}
+        {error && <p className="text-xs font-semibold text-danger" role="alert">{error}</p>}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            disabled={saving}
+            onClick={() => {
+              if (required && !value.trim()) {
+                setError('電源仕様を入力してください');
                 return;
               }
-              setValue(result.value ?? '');
-              setMessage('電源仕様を保存しました。');
-              router.refresh();
-            });
-          }}
-        >
-          {saving ? '保存中…' : '電源仕様を保存'}
-        </button>
-      </div>
-    </section>
+              setSaving(true);
+              setError(null);
+              void saveOptionPowerSpecAction({ optionId, powerSpec: value, requireComplete: true }).then((result) => {
+                setSaving(false);
+                if (!result.ok) {
+                  setError(result.error ?? '電源仕様を保存できませんでした。');
+                  return;
+                }
+                setValue(result.value ?? '');
+                setMessage('電源仕様を保存しました。');
+                router.refresh();
+              });
+            }}
+          >
+            {saving ? '保存中…' : '電源仕様を保存'}
+          </button>
+        </div>
+      </section>
+    </>
   );
 }
 
 export function ProductPowerSpecSummary({ value }: { value: string }) {
-  if (!value.trim()) return null;
-  return (
+  const powerSpecSummary = value.trim() ? (
     <section className="card p-4 sm:p-5" data-testid="product-power-spec-summary">
       <dl className="grid gap-2 text-sm sm:grid-cols-[8rem_1fr]">
         <dt className="font-semibold text-muted">電源仕様</dt>
         <dd className="font-semibold text-ink">{value}</dd>
       </dl>
     </section>
+  ) : null;
+
+  return (
+    <>
+      <ProductPriceUnitRouteSummary />
+      {powerSpecSummary}
+    </>
   );
 }

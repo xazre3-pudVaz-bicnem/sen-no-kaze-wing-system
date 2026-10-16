@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
 import { canEditCatalog, QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { QuoteDraftEditor } from '@/components/admin/quote-draft-editor';
 import { Alert } from '@/components/ui';
 import { formatYen } from '@/lib/domain/pricing';
@@ -41,7 +42,6 @@ export default async function AdminQuoteDraftPage({
   }
   if (!detail) notFound();
 
-  // 標準見積から作成した見積は、率・原価から DB が金額を計算する専用の画面で編集する（現在は本部だけ）
   if (detail.draft.source_kind === 'standard_estimate') {
     if (actor.role === 'admin') {
       redirect(`/admin/quotes/standard-drafts/${id}${sp.revisionDraft ? '?revisionDraft=1' : ''}`);
@@ -49,17 +49,13 @@ export default async function AdminQuoteDraftPage({
     return (
       <div className="mx-auto w-full max-w-[96rem] space-y-2">
         <QuoteManagementTabs active="case" />
-        <Link href={returnHref} className="text-sm text-ink-soft underline-offset-4 hover:underline">
-          ← {returnLabel}へ戻る
-        </Link>
+        <Link href={returnHref} className="text-sm text-ink-soft underline-offset-4 hover:underline">← {returnLabel}へ戻る</Link>
         <Alert tone="info">この見積は標準見積から作成したため、現在は本部だけが編集・発行できます。</Alert>
       </div>
     );
   }
 
-  const parentQuoteDetail = detail.draft.parent_quote_id
-    ? await store.getQuote(detail.draft.parent_quote_id, actor)
-    : null;
+  const parentQuoteDetail = detail.draft.parent_quote_id ? await store.getQuote(detail.draft.parent_quote_id, actor) : null;
   const targetRevision = parentQuoteDetail ? parentQuoteDetail.quote.revision + 1 : 1;
 
   const [model, catalog] = await Promise.all([
@@ -68,29 +64,28 @@ export default async function AdminQuoteDraftPage({
   ]);
 
   const categoryMap = new Map((catalog?.categories ?? []).map((category) => [category.id, category] as const));
-  const products = (catalog?.options ?? []).map((option) => ({
-    id: option.id,
-    baseModelId: option.base_model_id,
-    categoryId: option.category_id,
-    categoryCode: categoryMap.get(option.category_id)?.code ?? '',
-    categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
-    name: option.name,
-    manufacturer: option.manufacturer ?? '',
-    modelNo: option.model_no ?? '',
-    sizeNote: option.size_note ?? '',
-    price: option.price,
-    priceOnRequest: option.price_on_request,
-    imageUrl: option.image_url,
-    specCodes: option.spec_codes ?? [],
-  }));
+  const products = (catalog?.options ?? [])
+    .filter(isQuoteSelectableProduct)
+    .map((option) => ({
+      id: option.id,
+      baseModelId: option.base_model_id,
+      categoryId: option.category_id,
+      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
+      categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
+      name: option.name,
+      manufacturer: option.manufacturer ?? '',
+      modelNo: option.model_no ?? '',
+      sizeNote: option.size_note ?? '',
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+      imageUrl: option.image_url,
+      specCodes: option.spec_codes ?? [],
+    }));
 
   const estimates =
     actor.role === 'admin'
       ? await (async () => {
-          const [quotes, requests] = await Promise.all([
-            store.listAllQuotes(),
-            store.listQuoteRequests(),
-          ]);
+          const [quotes, requests] = await Promise.all([store.listAllQuotes(), store.listQuoteRequests()]);
           const requestById = new Map(requests.map((request) => [request.id, request] as const));
           return quotes
             .filter((quote) => quote.status !== 'superseded')
@@ -126,40 +121,17 @@ export default async function AdminQuoteDraftPage({
     <div className="mx-auto w-full max-w-[96rem] space-y-2">
       <QuoteManagementTabs active="case" />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href={returnHref} className="text-sm text-ink-soft underline-offset-4 hover:underline">
-          ← {returnLabel}へ戻る
-        </Link>
+        <Link href={returnHref} className="text-sm text-ink-soft underline-offset-4 hover:underline">← {returnLabel}へ戻る</Link>
         <div className="text-right">
-          <span className="inline-flex rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">
-            第{targetRevision}版 見積下書き
-          </span>
-          {parentQuoteDetail && (
-            <p className="mt-1 text-[10px] text-muted">
-              現在の発行済み見積：第{parentQuoteDetail.quote.revision}版 {formatYen(parentQuoteDetail.quote.total)}
-            </p>
-          )}
+          <span className="inline-flex rounded-lg bg-[#edf3f6] px-3 py-2 text-xs font-semibold text-[#365467]">第{targetRevision}版 見積下書き</span>
+          {parentQuoteDetail && <p className="mt-1 text-[10px] text-muted">現在の発行済み見積：第{parentQuoteDetail.quote.revision}版 {formatYen(parentQuoteDetail.quote.total)}</p>}
         </div>
       </div>
 
-      {sp.created && (
-        <Alert tone="success">
-          案件を登録しました。まだ正式見積は発行していません。この見積下書きを編集・保存してください。
-        </Alert>
-      )}
-      {sp.revisionDraft && (
-        <Alert tone="success">
-          現在の発行済み見積をもとに、次の見積下書きを開きました。下書きを保存しても発行済み見積は変わりません。
-        </Alert>
-      )}
+      {sp.created && <Alert tone="success">案件を登録しました。まだ正式見積は発行していません。この見積下書きを編集・保存してください。</Alert>}
+      {sp.revisionDraft && <Alert tone="success">現在の発行済み見積をもとに、次の見積下書きを開きました。下書きを保存しても発行済み見積は変わりません。</Alert>}
 
-      <QuoteDraftEditor
-        detail={detail}
-        modelName={model?.name ?? '商品モデル'}
-        canEditBase={canEditCatalog(actor.role)}
-        estimates={estimates}
-        products={products}
-        targetRevision={targetRevision}
-      />
+      <QuoteDraftEditor detail={detail} modelName={model?.name ?? '商品モデル'} canEditBase={canEditCatalog(actor.role)} estimates={estimates} products={products} targetRevision={targetRevision} />
     </div>
   );
 }

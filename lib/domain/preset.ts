@@ -1,5 +1,6 @@
 import type { CatalogBundle, ModelPreset, OptionVariantChoice, OptionVariantGroup } from './types';
 import { defaultSelection, toggleOption, type RuleContext } from './rules';
+import { isQuoteSelectableProduct } from './product-lifecycle';
 
 /**
  * 仕様（プラン）の標準構成を、選択ルール（依存・競合・必須）を通しながら組み立てる。
@@ -7,11 +8,14 @@ import { defaultSelection, toggleOption, type RuleContext } from './rules';
  */
 export function buildPresetSelection(ctx: RuleContext, preset: ModelPreset, defaults: string[] = defaultSelection(ctx)): string[] {
   const byCode = new Map(ctx.options.map((o) => [o.code, o.id]));
+  // 標準構成の商品は、シミュレーター非表示でも標準として入れる（取扱終了は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。
+  // 外すと、標準状態と差額計算の基準がずれる
+  const baselineCtx: RuleContext = { ...ctx, canSelectNew: isQuoteSelectableProduct };
   let cur: string[] = [];
   for (const code of preset.option_codes) {
     const oid = byCode.get(code);
     if (!oid) continue;
-    const r = toggleOption(ctx, cur, oid);
+    const r = toggleOption(baselineCtx, cur, oid);
     if (!r.rejected) cur = r.next;
   }
   // 必須カテゴリー・必須商品の不足分を既定値から補う

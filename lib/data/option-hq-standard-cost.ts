@@ -10,12 +10,26 @@ export type OptionHqStandardCost = {
   updated_at: string;
 };
 
+/** 標準原価の Version（20261016200000）。作った後は変わらない */
+export type OptionStandardCostVersion = {
+  id: string;
+  version_no: number;
+  standard_cost: number;
+  change_reason: string;
+  created_at: string;
+  superseded_at: string | null;
+};
+
 export type OptionHqStandardCostAccess = {
   available: boolean;
   canView: boolean;
   canManage: boolean;
   cost: OptionHqStandardCost | null;
+  /** 新しい順。Version の表がまだ DB に無い間は null（現在値の表示・変更はそのまま使える） */
+  versions: OptionStandardCostVersion[] | null;
 };
+
+const VERSION_HISTORY_LIMIT = 20;
 
 type DbError = { code?: string; message?: string } | null;
 
@@ -33,7 +47,7 @@ function throwDbError(error: Exclude<DbError, null>): never {
  */
 export async function getOptionHqStandardCostAccess(optionId: string): Promise<OptionHqStandardCostAccess> {
   // ローカル検証モード（開発・E2E）は本部の原価を持たない。接続先の無い Supabase へも問い合わせない
-  if (isLocalMode()) return { available: false, canView: false, canManage: false, cost: null };
+  if (isLocalMode()) return { available: false, canView: false, canManage: false, cost: null, versions: null };
 
   const db = await createClient();
   const [viewResult, manageResult] = await Promise.all([
@@ -42,31 +56,41 @@ export async function getOptionHqStandardCostAccess(optionId: string): Promise<O
   ]);
 
   if (migrationUnavailable(viewResult.error) || migrationUnavailable(manageResult.error)) {
-    return { available: false, canView: false, canManage: false, cost: null };
+    return { available: false, canView: false, canManage: false, cost: null, versions: null };
   }
   if (viewResult.error) throwDbError(viewResult.error);
   if (manageResult.error) throwDbError(manageResult.error);
 
   const canView = viewResult.data === true;
   const canManage = manageResult.data === true;
-  if (!canView) return { available: true, canView: false, canManage: false, cost: null };
+  if (!canView) return { available: true, canView: false, canManage: false, cost: null, versions: null };
 
-  const result = await db
-    .from('option_hq_standard_costs')
-    .select('option_id, standard_cost, lock_version, updated_at')
-    .eq('option_id', optionId)
-    .maybeSingle();
+  const [result, versionResult] = await Promise.all([
+    db
+      .from('option_hq_standard_costs')
+      .select('option_id, standard_cost, lock_version, updated_at')
+      .eq('option_id', optionId)
+      .maybeSingle(),
+    db
+      .from('option_standard_cost_versions')
+      .select('id, version_no, standard_cost, change_reason, created_at, superseded_at')
+      .eq('option_id', optionId)
+      .order('version_no', { ascending: false })
+      .limit(VERSION_HISTORY_LIMIT),
+  ]);
 
   if (migrationUnavailable(result.error)) {
-    return { available: false, canView: false, canManage: false, cost: null };
+    return { available: false, canView: false, canManage: false, cost: null, versions: null };
   }
   if (result.error) throwDbError(result.error);
+  if (versionResult.error && !migrationUnavailable(versionResult.error)) throwDbError(versionResult.error);
 
   return {
     available: true,
     canView: true,
     canManage,
     cost: (result.data as OptionHqStandardCost | null) ?? null,
+    versions: versionResult.error ? null : ((versionResult.data ?? []) as OptionStandardCostVersion[]),
   };
 }
 

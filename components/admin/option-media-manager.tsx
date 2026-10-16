@@ -10,6 +10,10 @@ import {
   uploadOptionManufacturerDocumentAction,
   type AdminFormState,
 } from '@/lib/actions/admin';
+import {
+  addOptionImageFromUrlAction,
+  uploadOptionManufacturerDocumentFromUrlAction,
+} from '@/lib/actions/product-media-url';
 import type { OptionImage, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
@@ -83,6 +87,8 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [docState, setDocState] = useState<AdminFormState>(initial);
   const [imagePending, setImagePending] = useState(false);
   const [docPending, setDocPending] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [documentUrl, setDocumentUrl] = useState('');
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
 
   useEffect(() => {
@@ -251,6 +257,36 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
     }
   };
 
+  const handleSubImageUrl = async () => {
+    const url = imageUrl.trim();
+    if (!url || imagePending) return;
+
+    setImagePending(true);
+    setImageState(initial);
+    try {
+      const mainSaved = await saveIfDirty();
+      if (!mainSaved) {
+        setImageState({ ok: false, error: '商品情報を保存できなかったため、画像URLからの登録を中止しました。' });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.set('option_id', option.id);
+      formData.set('source_url', url);
+      formData.set('sort_order', String(images.length));
+      const result = await addOptionImageFromUrlAction(initial, formData);
+      setImageState(result);
+      if (result.ok) {
+        setImageUrl('');
+        router.refresh();
+      }
+    } catch {
+      setImageState({ ok: false, error: '画像URLからの登録中にエラーが発生しました。' });
+    } finally {
+      setImagePending(false);
+    }
+  };
+
   const handleManufacturerDocument = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
@@ -276,6 +312,35 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       setDocState({ ok: false, error: 'メーカー資料PDFの保存中にエラーが発生しました。' });
     } finally {
       input.value = '';
+      setDocPending(false);
+    }
+  };
+
+  const handleManufacturerDocumentUrl = async () => {
+    const url = documentUrl.trim();
+    if (!url || docPending) return;
+
+    setDocPending(true);
+    setDocState(initial);
+    try {
+      const mainSaved = await saveIfDirty();
+      if (!mainSaved) {
+        setDocState({ ok: false, error: '商品情報を保存できなかったため、PDF URLからの登録を中止しました。' });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.set('option_id', option.id);
+      formData.set('source_url', url);
+      const result = await uploadOptionManufacturerDocumentFromUrlAction(initial, formData);
+      setDocState(result);
+      if (result.ok) {
+        setDocumentUrl('');
+        router.refresh();
+      }
+    } catch {
+      setDocState({ ok: false, error: 'PDF URLからの登録中にエラーが発生しました。' });
+    } finally {
       setDocPending(false);
     }
   };
@@ -323,10 +388,33 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                 onChange={(event) => void handleSubImages(event)}
               />
             </Field>
+            <div className="mt-4 rounded-lg border border-line bg-ivory/30 p-3">
+              <Field
+                label="または画像URLから登録"
+                htmlFor="option-sub-image-url"
+                hint="Excelの追加画像URLをそのまま貼り付けできます。URL先の画像を取得し、千の風側のストレージへ保存します。"
+                errors={imageState.fieldErrors?.source_url}
+              >
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="option-sub-image-url"
+                    type="url"
+                    value={imageUrl}
+                    onChange={(event) => setImageUrl(event.target.value)}
+                    placeholder="https://www.example.com/image.jpg"
+                    disabled={imagePending}
+                  />
+                  <Button type="button" disabled={imagePending || !imageUrl.trim()} onClick={() => void handleSubImageUrl()} className="shrink-0">
+                    {imagePending && <Spinner />}
+                    URLから登録
+                  </Button>
+                </div>
+              </Field>
+            </div>
             {imagePending && (
               <p className="mt-2 flex items-center gap-2 text-xs text-muted">
                 <Spinner />
-                サブ画像を保存しています…
+                追加画像を保存しています…
               </p>
             )}
           </div>
@@ -400,6 +488,31 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             onChange={(event) => void handleManufacturerDocument(event)}
           />
         </Field>
+
+        <div className="rounded-lg border border-line bg-ivory/30 p-3">
+          <Field
+            label={option.manufacturer_document_url ? 'またはPDFのURLから差し替える' : 'またはPDFのURLから登録'}
+            htmlFor="manufacturer-document-url"
+            hint="ExcelのメーカーPDF URLを貼り付けできます。カタログ閲覧ページではなく、PDF本体のURLを入力してください。"
+            errors={docState.fieldErrors?.source_url}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="manufacturer-document-url"
+                type="url"
+                value={documentUrl}
+                onChange={(event) => setDocumentUrl(event.target.value)}
+                placeholder="https://www.example.com/catalog.pdf"
+                disabled={docPending}
+              />
+              <Button type="button" disabled={docPending || !documentUrl.trim()} onClick={() => void handleManufacturerDocumentUrl()} className="shrink-0">
+                {docPending && <Spinner />}
+                URLから登録
+              </Button>
+            </div>
+          </Field>
+        </div>
+
         {docPending && (
           <p className="flex items-center gap-2 text-xs text-muted">
             <Spinner />

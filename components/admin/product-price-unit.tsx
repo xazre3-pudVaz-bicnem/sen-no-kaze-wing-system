@@ -35,6 +35,70 @@ function editorValue(editor: EditorState): string {
   return editor.choice === PRODUCT_PRICE_UNIT_OTHER ? editor.custom.trim() : editor.choice;
 }
 
+/**
+ * 「価格は別途見積」と商品価格入力を同期する。
+ * 新たにチェックしたときだけ価格を0円へ切り替え、同じ編集操作中に解除した場合は直前の価格へ戻す。
+ * 既に別途見積で保存済みの商品を開いただけでは、既存の数値を勝手に書き換えない。
+ */
+function usePriceOnRequestLock(formSelector: string) {
+  const [locked, setLocked] = useState(false);
+
+  useEffect(() => {
+    let detach = () => {};
+    const frameId = window.requestAnimationFrame(() => {
+      const form = document.querySelector<HTMLFormElement>(formSelector);
+      const checkbox = form?.querySelector<HTMLInputElement>('input[name="price_on_request"]') ?? null;
+      const priceInput = form?.querySelector<HTMLInputElement>('input[name="price"]') ?? null;
+      if (!checkbox || !priceInput) return;
+
+      const applyVisualState = (nextLocked: boolean) => {
+        priceInput.readOnly = nextLocked;
+        if (nextLocked) {
+          priceInput.setAttribute('aria-readonly', 'true');
+          priceInput.setAttribute('title', '「価格は別途見積」が選択されているため編集できません。');
+        } else {
+          priceInput.removeAttribute('aria-readonly');
+          priceInput.removeAttribute('title');
+        }
+        priceInput.classList.toggle('cursor-not-allowed', nextLocked);
+        priceInput.classList.toggle('bg-sand/35', nextLocked);
+        priceInput.classList.toggle('text-muted', nextLocked);
+      };
+
+      applyVisualState(checkbox.checked);
+      setLocked(checkbox.checked);
+
+      const onChange = () => {
+        const nextLocked = checkbox.checked;
+        if (nextLocked) {
+          if (priceInput.dataset.priceBeforeOnRequest === undefined) {
+            priceInput.dataset.priceBeforeOnRequest = priceInput.value;
+          }
+          priceInput.value = '0';
+        } else {
+          const previousPrice = priceInput.dataset.priceBeforeOnRequest;
+          if (previousPrice !== undefined) {
+            priceInput.value = previousPrice;
+            delete priceInput.dataset.priceBeforeOnRequest;
+          }
+        }
+        applyVisualState(nextLocked);
+        setLocked(nextLocked);
+      };
+
+      checkbox.addEventListener('change', onChange);
+      detach = () => checkbox.removeEventListener('change', onChange);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      detach();
+    };
+  }, [formSelector]);
+
+  return locked;
+}
+
 function UnitEditor({
   id,
   label,
@@ -92,6 +156,7 @@ function UnitEditor({
  */
 export function ProductPriceUnitRegistrationField({ optionId }: { optionId: string }) {
   const { registerSaveHandler, markDirty } = useOptionRegistrationSave();
+  const priceOnRequest = usePriceOnRequestLock('#option-main-form');
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [priceEditor, setPriceEditor] = useState<EditorState>(EMPTY_EDITOR);
   const [listEditor, setListEditor] = useState<EditorState>(EMPTY_EDITOR);
@@ -174,8 +239,11 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
       <UnitEditor
         id="product-price-unit"
         label="商品価格の単位"
-        hint="商品価格は、選択した単位1つあたりの税別価格として扱います。カテゴリーに応じた初期値は変更できます。"
+        hint={priceOnRequest
+          ? '「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。'
+          : '商品価格は、選択した単位1つあたりの税別価格として扱います。カテゴリーに応じた初期値は変更できます。'}
         editor={priceEditor}
+        disabled={priceOnRequest}
         onChange={(next) => {
           priceTouchedRef.current = true;
           setPriceEditor(next);
@@ -204,6 +272,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
 /** 登録済み商品でも、保存済み単位をカテゴリー既定値で上書きせず個別に編集できる。 */
 export function ProductPriceUnitPublishedCard({ optionId }: { optionId: string }) {
   const router = useRouter();
+  const priceOnRequest = usePriceOnRequestLock('[data-testid="registered-option-edit-flow"] form');
   const [state, setState] = useState<ProductPriceUnitState | null>(null);
   const [priceEditor, setPriceEditor] = useState<EditorState>(EMPTY_EDITOR);
   const [listEditor, setListEditor] = useState<EditorState>(EMPTY_EDITOR);
@@ -238,9 +307,11 @@ export function ProductPriceUnitPublishedCard({ optionId }: { optionId: string }
         <UnitEditor
           id="published-product-price-unit"
           label="商品価格の単位"
-          hint="例：台、ケース、㎡。未設定の既存商品はそのまま保持できます。"
+          hint={priceOnRequest
+            ? '「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。'
+            : '例：台、ケース、㎡。未設定の既存商品はそのまま保持できます。'}
           editor={priceEditor}
-          disabled={!editable}
+          disabled={!editable || priceOnRequest}
           onChange={(next) => { setPriceEditor(next); setMessage(null); setError(null); }}
         />
         <UnitEditor

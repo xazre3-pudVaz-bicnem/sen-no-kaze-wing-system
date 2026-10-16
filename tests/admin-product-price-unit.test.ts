@@ -60,6 +60,28 @@ describe('商品登録 価格単位', () => {
     expect(host).toContain('<ProductPriceUnitRegistrationField optionId={optionId} />');
   });
 
+  it('別途見積を選ぶと商品価格と商品価格単位だけ入力不可にし、メーカー参考価格は編集可能のままにする', () => {
+    expect(field).toContain('usePriceOnRequestLock');
+    expect(field).toContain('input[name="price_on_request"]');
+    expect(field).toContain('input[name="price"]');
+    expect(field).toContain('priceInput.readOnly = nextLocked');
+    expect(field).toContain("priceInput.value = '0'");
+    expect(field).toContain('priceInput.dataset.priceBeforeOnRequest');
+    expect(field).toContain('disabled={priceOnRequest}');
+    expect(field).toContain('disabled={!editable || priceOnRequest}');
+    expect(field).toContain('id="manufacturer-list-price-unit"');
+    expect(field).toContain('id="published-manufacturer-list-price-unit"');
+    expect(field).toContain('「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。');
+  });
+
+  it('既に別途見積の商品を開いただけでは既存の価格数値を強制的に0円へ書き換えない', () => {
+    const initialLock = field.indexOf('applyVisualState(checkbox.checked);');
+    const zeroOnToggle = field.indexOf("priceInput.value = '0';");
+    expect(initialLock).toBeGreaterThan(-1);
+    expect(zeroOnToggle).toBeGreaterThan(initialLock);
+    expect(field).toContain('既に別途見積で保存済みの商品を開いただけでは、既存の数値を勝手に書き換えない。');
+  });
+
   it('STEP2で価格と単位を組み合わせて確認できる', () => {
     expect(preview).toContain('formatPriceWithUnit(option.price, option.price_unit)');
     expect(preview).toContain('formatPriceWithUnit(option.list_price, option.list_price_unit)');

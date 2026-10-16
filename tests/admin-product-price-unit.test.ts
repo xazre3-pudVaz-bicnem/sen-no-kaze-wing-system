@@ -11,6 +11,7 @@ const read = (file: string) => fs.readFileSync(path.resolve(process.cwd(), file)
 const field = read('components/admin/product-price-unit.tsx');
 const host = read('components/admin/product-power-spec.tsx');
 const preview = read('components/admin/option-customer-preview.tsx');
+const ledger = read('components/admin/product-ledger-client.tsx');
 const action = read('lib/actions/product-price-unit.ts');
 const migration = read('supabase/migrations/20261016110000_option_price_units.sql');
 
@@ -64,6 +65,12 @@ describe('商品登録 価格単位', () => {
     expect(preview).toContain('formatPriceWithUnit(option.list_price, option.list_price_unit)');
     expect(preview).toContain('data-testid="registration-price-unit-summary"');
     expect(host).toContain('<ProductPriceUnitRouteSummary />');
+  });
+
+  it('商品台帳の一覧・カード・管理情報で商品価格の単位を表示する', () => {
+    expect(ledger).toContain('formatPriceWithUnit(option.price, option.price_unit)');
+    expect(ledger).toContain('メーカー参考価格（税別）');
+    expect(ledger).toContain('formatPriceWithUnit(selected.list_price, selected.list_price_unit)');
   });
 
   it('登録済み商品でも保存済み単位を個別編集できる', () => {

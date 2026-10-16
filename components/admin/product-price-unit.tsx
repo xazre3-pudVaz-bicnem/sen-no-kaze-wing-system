@@ -10,6 +10,7 @@ import {
   type ProductPriceUnitState,
 } from '@/lib/actions/product-price-unit';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import { ProductMainImageUrlImporter } from '@/components/admin/product-main-image-url-importer';
 import {
   isProductPriceUnitPreset,
   PRODUCT_PRICE_UNIT_OTHER,
@@ -243,42 +244,48 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
     }),
   [optionId, registerSaveHandler]);
 
-  if (!target) return null;
+  const mainImageImporter = <ProductMainImageUrlImporter optionId={optionId} />;
+  if (!target) return mainImageImporter;
 
-  return createPortal(
-    <div className="grid gap-5 sm:col-span-2 sm:grid-cols-2" data-testid="product-price-unit-registration">
-      <UnitEditor
-        id="product-price-unit"
-        label="商品価格の単位"
-        hint={priceOnRequest
-          ? '「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。'
-          : '商品価格は、選択した単位1つあたりの税別価格として扱います。カテゴリーに応じた初期値は変更できます。'}
-        editor={priceEditor}
-        disabled={priceOnRequest}
-        onChange={(next) => {
-          priceTouchedRef.current = true;
-          unitDirtyRef.current = true;
-          setPriceEditor(next);
-          setError(null);
-          markDirty();
-        }}
-      />
-      <UnitEditor
-        id="manufacturer-list-price-unit"
-        label="メーカー参考価格の単位"
-        hint="メーカー資料の表記に合わせて選択してください。商品価格の単位と同じでなくても構いません。"
-        editor={listEditor}
-        onChange={(next) => {
-          listTouchedRef.current = true;
-          unitDirtyRef.current = true;
-          setListEditor(next);
-          setError(null);
-          markDirty();
-        }}
-      />
-      {error && <p className="text-xs font-semibold text-danger sm:col-span-2" role="alert">{error}</p>}
-    </div>,
-    target
+  return (
+    <>
+      {mainImageImporter}
+      {createPortal(
+        <div className="grid gap-5 sm:col-span-2 sm:grid-cols-2" data-testid="product-price-unit-registration">
+          <UnitEditor
+            id="product-price-unit"
+            label="商品価格の単位"
+            hint={priceOnRequest
+              ? '「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。'
+              : '商品価格は、選択した単位1つあたりの税別価格として扱います。カテゴリーに応じた初期値は変更できます。'}
+            editor={priceEditor}
+            disabled={priceOnRequest}
+            onChange={(next) => {
+              priceTouchedRef.current = true;
+              unitDirtyRef.current = true;
+              setPriceEditor(next);
+              setError(null);
+              markDirty();
+            }}
+          />
+          <UnitEditor
+            id="manufacturer-list-price-unit"
+            label="メーカー参考価格の単位"
+            hint="メーカー資料の表記に合わせて選択してください。商品価格の単位と同じでなくても構いません。"
+            editor={listEditor}
+            onChange={(next) => {
+              listTouchedRef.current = true;
+              unitDirtyRef.current = true;
+              setListEditor(next);
+              setError(null);
+              markDirty();
+            }}
+          />
+          {error && <p className="text-xs font-semibold text-danger sm:col-span-2" role="alert">{error}</p>}
+        </div>,
+        target
+      )}
+    </>
   );
 }
 

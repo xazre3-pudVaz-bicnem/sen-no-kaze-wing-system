@@ -106,6 +106,24 @@ describe('v2.5 PR-B1：標準見積の v2.5 の Revision', () => {
     expect(recalc).not.toMatch(/\bround\s*\(|\bfloor\s*\(/i);
   });
 
+  it('「要見直し」の明細が残っていれば、公開の RPC で止め、編集画面の確認でも公開できないと返す（2026-10-19 の確定方針）', () => {
+    const publish = functionBody('publish_standard_estimate_v25_revision');
+    expect(publish).toContain('if exists (select 1 from public.standard_estimate_revision_v25_lines l where l.revision_id = rev.id and l.review_required) then');
+    expect(publish.indexOf('l.review_required) then')).toBeLessThan(publish.indexOf('perform public.standard_estimate_v25_recalculate(rev.id, true);'));
+    const preview = functionBody('preview_standard_estimate_v25_revision');
+    expect(preview).toContain("'review_required_lines', v_review_lines,");
+    expect(preview).toContain('and v_review_lines = 0');
+  });
+
+  it('別途工事は自動計算にさせない：保存で拒否し、v2.5 以前からは別途見積（POR）として写す', () => {
+    const save = functionBody('save_standard_estimate_v25_draft');
+    expect(save).toContain("if v_mode = 'auto' and not (v_section_of_slot = any(coalesce(v_auto_sections, '{}'::text[]))) then");
+    expect(save).toContain('別途工事の商品は自動計算（販売費・掛率）にできません');
+    expect(functionBody('standard_estimate_v25_copy_lines')).toContain("case when l.price_mode = 'por' or l.section_code = 'sitework' then 'por' else 'manual' end");
+    expect(functionBody('standard_estimate_v25_copy_slots')).toContain("when b.section_code = any(coalesce(v_auto_sections, '{}'::text[])) then 'auto'");
+    expect(functionBody('start_standard_estimate_v25_draft')).toContain("set price_mode = 'por'");
+  });
+
   it('公開は Revision → 標準見積 → 商品の行（FOR SHARE）の順に lock し、排他の後に原価・ルールの新しさを確かめる', () => {
     const publish = functionBody('publish_standard_estimate_v25_revision');
     const revisionLock = publish.indexOf('from public.standard_estimate_revisions r where r.id = p_revision_id for update;');
@@ -129,7 +147,7 @@ describe('v2.5 PR-B1：標準見積の v2.5 の Revision', () => {
     expect(start).toContain('if p_expected_draft_lock_version is distinct from d.lock_version then');
     expect(start).toContain('perform public.standard_estimate_v25_copy_lines(d.id, d.id, true);');
     expect(start).toContain("perform public.standard_estimate_v25_copy_lines(cur.id, v_rev, cur.pricing_model = 'legacy');");
-    expect(functionBody('standard_estimate_v25_copy_lines')).toContain("case when l.price_mode = 'por' then 'por' else 'manual' end");
+    expect(functionBody('standard_estimate_v25_copy_lines')).toContain("l.remark, true, l.sort_order");
   });
 
   it('シミュレーターの売価の取得・標準見積から作る見積は、v2.5 の Revision をまだ扱わない（PR-C1・D1 で対応）', () => {

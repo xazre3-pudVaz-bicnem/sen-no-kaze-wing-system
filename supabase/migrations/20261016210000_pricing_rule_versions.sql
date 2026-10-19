@@ -10,6 +10,8 @@
 --     manual：明細売価 = trunc(manual 売価単価 × 数量)（販売費・掛率を再適用しない）
 --     por：金額未確定。0 円ではない。区分・合計・税まで「未確定」を伝える
 --     区分小計 = 金額確定済みの明細売価の合計、区分経費 = trunc(区分小計 × 経費率)（経費対象区分だけ）
+--     別途工事（2026-10-19 先方の確定方針）：販売費・経費・掛率を掛けない。auto は使えず、決めた税別売価の manual か por だけ
+--       （計算ルールの auto_price_sections・expense_target_sections に別途工事を含めない）
 --     税別小計 = Σ(区分小計 + 区分経費)、調整後税別額 = 税別小計 + 調整額（整数円・0 円以上）
 --     税額 = trunc(課税対象税別額 × 税率)（全額課税・単一税率）、税込総額 = 調整後税別額 + 税額
 --   宣言した境界以外では丸めない。1,000 円未満の自動切り捨ては持たない
@@ -49,6 +51,9 @@ create table public.pricing_calculation_rule_versions (
   -- 経費を計算する区分（本体・内外装・オプション・別途工事のうち）
   expense_target_sections text[] not null
     check (expense_target_sections <@ array['base', 'interior_exterior', 'option', 'sitework']::text[]),
+  -- auto（販売費率・掛率による自動計算）を使える区分。含まれない区分の明細は manual か por だけ
+  auto_price_sections text[] not null
+    check (auto_price_sections <@ array['base', 'interior_exterior', 'option', 'sitework']::text[]),
   description text not null check (pg_catalog.char_length(pg_catalog.btrim(description)) between 1 and 500),
   created_by uuid,
   created_at timestamptz not null default now(),
@@ -168,11 +173,14 @@ using (public.can_view_pricing_rule_versions());
 
 -- ---------- 初期の Version（v2.5 の初期仕様） ----------
 
-insert into public.pricing_calculation_rule_versions (code, version_no, formula_code, rounding_mode, expense_target_sections, description)
+insert into public.pricing_calculation_rule_versions (
+  code, version_no, formula_code, rounding_mode, expense_target_sections, auto_price_sections, description
+)
 values (
   'CALC-V25-1', 1, 'v2.5', 'trunc',
-  array['base', 'interior_exterior', 'option', 'sitework']::text[],
-  '金額正本 v2.5 第11章の正式計算順序（初期仕様）。販売費率・掛率・数量・経費・税の各境界で 0 方向に 1 円未満を切り捨てる。経費対象は本体・内外装・オプション・別途工事'
+  array['base', 'interior_exterior', 'option']::text[],
+  array['base', 'interior_exterior', 'option']::text[],
+  '金額正本 v2.5 第11章の正式計算順序（初期仕様）。販売費率・掛率・数量・経費・税の各境界で 0 方向に 1 円未満を切り捨てる。経費と自動計算の対象は本体・内外装・オプション。別途工事は販売費・経費・掛率を掛けず、決めた税別売価か別途見積（2026-10-19 先方の確定方針）'
 );
 
 insert into public.tax_rule_versions (code, version_no, tax_mode, tax_rate, rounding_mode, description)
@@ -373,6 +381,10 @@ begin
       end if;
 
       if v_mode = 'auto' then
+        if not (v_code = any(v_rule.auto_price_sections)) then
+          raise exception using errcode = 'P0001',
+            message = format('VALIDATION: 明細 %s：この区分（%s）では自動計算（販売費率・掛率）を使えません。決めた税別売価を入力するか、別途見積にしてください', v_key, v_code);
+        end if;
         v_standard_cost := public.pricing_input_integer(v_line -> 'standard_cost', '商品標準原価', 0, 2147483647);
         v_variant := public.pricing_input_integer(v_line -> 'variant_adjustment', 'バリエーション標準原価調整額', -2147483648, 2147483647, 0);
         v_selection := v_standard_cost + v_variant;

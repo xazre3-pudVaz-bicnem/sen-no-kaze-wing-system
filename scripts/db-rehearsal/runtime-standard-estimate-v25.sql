@@ -98,6 +98,7 @@ declare
   p2 constant uuid := '25000000-0000-4000-8000-000000000332';
   p3 constant uuid := '25000000-0000-4000-8000-000000000333';
   p4 constant uuid := '25000000-0000-4000-8000-000000000334';
+  p5 constant uuid := '25000000-0000-4000-8000-000000000335';
   g1 constant uuid := '25000000-0000-4000-8000-000000000431';
   c1 constant uuid := '25000000-0000-4000-8000-000000000531';
   c2 constant uuid := '25000000-0000-4000-8000-000000000532';
@@ -156,6 +157,9 @@ begin
     (p2, cat_id, 'runtime-sev-p2', '検査商品2', 30000, 'published', 'PRD-925032'),
     (p3, cat_id, 'runtime-sev-p3', '検査商品3（原価未設定）', 50000, 'published', 'PRD-925033'),
     (p4, cat_id, 'runtime-sev-p4', '検査商品4', 10000, 'published', 'PRD-925034');
+  -- 施工の商品は別途工事の区分（estimate_section_for_option）
+  insert into public.options (id, category_id, code, name, price, status, product_no, is_installation)
+  values (p5, cat_id, 'runtime-sev-p5', '検査施工5（別途工事）', 20000, 'published', 'PRD-925035', true);
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
   values (g1, p1, 'size', 'サイズ', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status)
@@ -168,6 +172,7 @@ begin
   perform pg_temp.sev_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 100000, 0, ''初回設定'')', p1));
   perform pg_temp.sev_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 20000, 0, ''初回設定'')', p2));
   perform pg_temp.sev_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 8000, 0, ''初回設定'')', p4));
+  perform pg_temp.sev_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 15000, 0, ''初回設定'')', p5));
   perform pg_temp.sev_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 0, null, ''標準は差なし'')', c1));
   perform pg_temp.sev_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 5000, null, ''大サイズの原価差'')', c2));
   select v.id into v_p1_v1 from public.option_standard_cost_versions v where v.option_id = p1 and v.superseded_at is null;
@@ -201,7 +206,7 @@ begin
   v_se_b1 := pg_temp.sev_run_as('authenticated', u_editor, format($q$ select public.create_standard_estimate_draft(%L)::text $q$, v_bmr_b));
   perform pg_temp.sev_run_as('authenticated', u_editor, format($q$ select (public.save_standard_estimate_draft(%L, 1.07, 0.15, 1.5, 0, null,
     '{"base":"rate","interior_exterior":"rate","option":"rate","sitework":"none"}'::jsonb,
-    '[{"section_code":"option","name":"洗面器","quantity":1,"price_mode":"auto","cost_unit_price":46150}]'::jsonb,
+    '[{"section_code":"option","name":"洗面器","quantity":1,"price_mode":"auto","cost_unit_price":46150},{"section_code":"sitework","name":"設置工事","quantity":1,"price_mode":"auto","cost_unit_price":30000}]'::jsonb,
     1)).id::text $q$, v_se_b1));
   perform pg_temp.sev_run_as('authenticated', u_editor, format($q$ select (public.set_standard_estimate_baseline(%L,
     jsonb_build_array(jsonb_build_object('option_id', %L::text, 'quantity', 1)), 2)).id::text $q$, v_se_b1, p2));
@@ -406,7 +411,23 @@ begin
 
   perform pg_temp.sev_expect_error('古い版のままの公開は拒否する', 'P0001', 'LOCKED',
     pg_temp.sev_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 7)).id::text', v_a2)));
-  v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 8)).status', v_a2));
+
+  -- 「要見直し」が 1 行でも残っていれば公開しない（画面だけでなく DB で止める）
+  perform pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 8, %L::jsonb)).lock_version::text', v_a2,
+    pg_temp.sev_payload(v_slots, jsonb_build_array(
+      jsonb_build_object('section_code', 'sitework', 'name', '設置工事', 'quantity', 1, 'unit', '式', 'price_mode', 'manual', 'unit_price', 50000, 'review_required', true),
+      jsonb_build_object('section_code', 'sitework', 'name', '外構工事', 'quantity', 1, 'unit', '式', 'price_mode', 'por')), -1000, '端数調整')));
+  perform pg_temp.sev_expect_eq('要見直しの明細が残っていれば、編集画面の確認でも公開できないと分かる', '1/false',
+    (pg_temp.sev_preview(u_editor, v_a2) ->> 'review_required_lines') || '/' || (pg_temp.sev_preview(u_editor, v_a2) ->> 'publishable'));
+  perform pg_temp.sev_expect_error('要見直しの明細が残っていれば公開しない', 'P0001', 'LOCKED',
+    pg_temp.sev_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 9)).id::text', v_a2)));
+  perform pg_temp.sev_expect_eq('要見直しで止めた公開では、下書きのまま変わらない', 'draft/9',
+    (select r.status || '/' || r.lock_version from public.standard_estimate_revisions r where r.id = v_a2));
+  perform pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 9, %L::jsonb)).lock_version::text', v_a2,
+    pg_temp.sev_payload(v_slots, v_lines, -1000, '端数調整')));
+  perform pg_temp.sev_expect_eq('見直し済みにすると、公開できる状態になる', '0/true',
+    (pg_temp.sev_preview(u_editor, v_a2) ->> 'review_required_lines') || '/' || (pg_temp.sev_preview(u_editor, v_a2) ->> 'publishable'));
+  v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 10)).status', v_a2));
   perform pg_temp.sev_expect_eq('公開でき、現在の版になり、前の版（v2.5 以前）は置き換わる', 'published/true/superseded/true/true',
     v_out || '/' ||
     (select (m.current_published_revision_id = v_a2)::text from public.standard_estimate_masters m where m.id = v_master_a) || '/' ||
@@ -447,7 +468,7 @@ begin
            = (select b2.standard_cost_version_id from public.standard_estimate_revision_baseline_items b2 where b2.revision_id = v_a2 and b2.option_id = p1))::text) || '/' ||
     (select x.value ->> 'cost_status' from jsonb_array_elements(pg_temp.sev_preview(u_editor, v_a3) -> 'slots') x where (x.value ->> 'option_id')::uuid = p1) || '/' ||
     (select count(*)::text from public.standard_estimate_revision_v25_lines l where l.revision_id = v_a3));
-  perform pg_temp.sev_expect_eq('次の下書きを作っても、公開中の v2.5 の Revision は変わらない', 'published/9',
+  perform pg_temp.sev_expect_eq('次の下書きを作っても、公開中の v2.5 の Revision は変わらない', 'published/11',
     (select r.status || '/' || r.lock_version from public.standard_estimate_revisions r where r.id = v_a2));
 
   -- #500：公開中の標準見積の標準状態にある商品は、取扱終了にできない（従来どおり）
@@ -458,14 +479,31 @@ begin
 
   v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L)::text', v_master_b));
   v_b2 := v_out::uuid;
-  perform pg_temp.sev_expect_eq('公開中の v2.5 以前の Revision を土台に、新しい v2.5 の下書き（版 2）を作る', 'draft/2/v2.5/1/manual:true/auto:true',
+  perform pg_temp.sev_expect_eq('公開中の v2.5 以前の Revision を土台に新しい v2.5 の下書き（版 2）を作り、別途工事の明細は別途見積（要見直し）で写る',
+    'draft/2/v2.5/1/manual:69225:true,por::true/auto:true',
     (select r.status || '/' || r.version || '/' || r.pricing_model || '/' || r.lock_version from public.standard_estimate_revisions r where r.id = v_b2) || '/' ||
-    (select string_agg(l.price_mode || ':' || l.review_required::text, ',') from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2) || '/' ||
+    (select string_agg(l.price_mode || ':' || coalesce(l.unit_price::text, '') || ':' || l.review_required::text, ',' order by l.sort_order)
+       from public.standard_estimate_revision_v25_lines l where l.revision_id = v_b2) || '/' ||
     (select string_agg(b.price_mode || ':' || (b.standard_cost_version_id = (select v.id from public.option_standard_cost_versions v where v.option_id = b.option_id and v.superseded_at is null))::text, ',')
        from public.standard_estimate_revision_baseline_items b where b.revision_id = v_b2));
   perform pg_temp.sev_expect_eq('土台にした v2.5 以前の Revision は公開中のまま変わらない', 'published/legacy/' || v_se_b1,
     (select r.status || '/' || r.pricing_model from public.standard_estimate_revisions r where r.id::text = v_se_b1) || '/' ||
     (select m.current_published_revision_id::text from public.standard_estimate_masters m where m.id = v_master_b));
+  perform pg_temp.sev_expect_error('別途工事の商品は自動計算（販売費・掛率）にできない', 'P0001', 'VALIDATION',
+    pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 1, %L::jsonb)).lock_version::text', v_b2,
+      pg_temp.sev_payload(jsonb_build_array(jsonb_build_object('option_id', p2, 'quantity', 1), jsonb_build_object('option_id', p5, 'quantity', 1)), '[]'::jsonb, 0, null, '1'))));
+  v_out := pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 1, %L::jsonb)).lock_version::text', v_b2,
+    pg_temp.sev_payload(
+      jsonb_build_array(jsonb_build_object('option_id', p2, 'quantity', 1),
+                        jsonb_build_object('option_id', p5, 'quantity', 1, 'price_mode', 'manual', 'manual_unit_price', 100000)),
+      jsonb_build_array(jsonb_build_object('section_code', 'option', 'name', '洗面器', 'quantity', 1, 'price_mode', 'manual', 'unit_price', 69225)),
+      0, null, '1')));
+  -- 販売費率 1.0・掛率 1.5・経費率 0.15。別途工事は決めた税別売価 100,000 円のまま（経費なし）、オプションは経費を掛ける
+  perform pg_temp.sev_expect_eq('別途工事は決めた税別売価のまま経費を掛けず、ほかの区分は従来どおり経費を掛ける', '2/100000/0/none/false/rate',
+    v_out || '/' ||
+    (select s.line_subtotal || '/' || s.expense_amount || '/' || s.expense_method || '/' || s.has_por
+       from public.standard_estimate_revision_sections s where s.revision_id = v_b2 and s.section_code = 'sitework') || '/' ||
+    (select s.expense_method from public.standard_estimate_revision_sections s where s.revision_id = v_b2 and s.section_code = 'option'));
 end;
 $test$;
 

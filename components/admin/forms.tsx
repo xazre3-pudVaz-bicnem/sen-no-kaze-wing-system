@@ -27,6 +27,7 @@ import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCod
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
 
 const initial: AdminFormState = { ok: false };
 
@@ -1030,7 +1031,7 @@ export function OptionForm({
               )}
             </Field>
             <Field label="メーカー記載の特徴（任意）" htmlFor={`highlight-${mode}`} hint="メーカー資料・カタログに明確な記載がある場合のみ入力。記載がなければ空欄で構いません。" errors={e.highlight}>
-              <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
+              <ProductHighlightTextarea id={`highlight-${mode}`} initialValue={option?.highlight ?? ''} />
             </Field>
           </div>
 

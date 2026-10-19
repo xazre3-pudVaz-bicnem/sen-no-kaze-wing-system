@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PRODUCT_HIGHLIGHT_MAX_LENGTH } from '@/lib/domain/product-highlight';
 import { VIEW_KEYS } from '@/lib/domain/types';
 import { PREFECTURES } from '@/lib/domain/address';
 import { contactTopics } from '@/data/site-content';
@@ -187,7 +188,7 @@ export const optionSchema = z.object({
   model_no: optional(80).nullable(),
   size_note: optional(120).nullable(),
   list_price: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).max(100_000_000).nullable()),
-  highlight: optional(80).nullable(),
+  highlight: optional(PRODUCT_HIGHLIGHT_MAX_LENGTH).nullable(),
 });
 
 export const variantGroupSchema = z.object({

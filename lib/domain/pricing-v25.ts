@@ -8,6 +8,7 @@
  *   manual：明細売価 = trunc(manual 売価単価 × 数量)（販売費・掛率を再適用しない）
  *   por：金額未確定。0 円として扱わず、区分・合計・税まで null（未確定）を伝える
  *   区分小計 = 金額確定済みの明細売価の合計、区分経費 = trunc(区分小計 × 経費率)（計算ルールの経費対象区分だけ）
+ *   auto は計算ルールの auto_price_sections の区分だけ（別途工事は販売費・経費・掛率を掛けず、manual か por。2026-10-19 先方の確定方針）
  *   税別小計 = Σ(区分小計 + 区分経費)、調整後税別額 = 税別小計 + 調整額（0 円以上）
  *   税額 = trunc(調整後税別額 × 税率)（全額課税・単一税率）、税込総額 = 調整後税別額 + 税額
  *
@@ -28,6 +29,8 @@ export interface PricingCalculationRule {
   formula_code: string;
   rounding_mode: string;
   expense_target_sections: readonly string[];
+  /** auto（販売費率・掛率による自動計算）を使える区分。含まれない区分の明細は manual か por だけ */
+  auto_price_sections: readonly string[];
 }
 
 /** 税ルール Version（tax_rule_versions の行。税率は numeric(8,6) の 10 進文字列） */
@@ -220,6 +223,9 @@ export function calculatePricingV25(rule: PricingCalculationRule, taxRule: Prici
       if (compareFixed(quantity, '0') < 0 || compareFixed(quantity, '9999999999.9999') > 0) fail(`明細 ${key} の数量が範囲外です`);
 
       if (mode === 'auto') {
+        if (!rule.auto_price_sections.includes(code)) {
+          fail(`明細 ${key}：この区分（${code}）では自動計算（販売費率・掛率）を使えません。決めた税別売価を入力するか、別途見積にしてください`);
+        }
         const standardCost = parseInteger(line.standard_cost, '商品標準原価', 0, INT4_MAX);
         const variant = parseInteger(line.variant_adjustment, 'バリエーション標準原価調整額', INT4_MIN, INT4_MAX, 0);
         const selection = standardCost + variant;

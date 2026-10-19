@@ -111,8 +111,10 @@ begin
 
   -- ---------- 初期の Version ----------
 
-  perform pg_temp.prv_expect_eq('初期の計算ルールはv2.5の式・trunc・経費対象4区分で、現在有効は1つ', 'CALC-V25-1/v2.5/trunc/{base,interior_exterior,option,sitework}/1',
-    (select r.code || '/' || r.formula_code || '/' || r.rounding_mode || '/' || r.expense_target_sections::text from public.pricing_calculation_rule_versions r where r.id = v_calc) || '/' ||
+  perform pg_temp.prv_expect_eq('初期の計算ルールはv2.5の式・trunc・経費と自動計算は本体・内外装・オプション（別途工事は対象外）で、現在有効は1つ',
+    'CALC-V25-1/v2.5/trunc/{base,interior_exterior,option}/{base,interior_exterior,option}/1',
+    (select r.code || '/' || r.formula_code || '/' || r.rounding_mode || '/' || r.expense_target_sections::text || '/' || r.auto_price_sections::text
+       from public.pricing_calculation_rule_versions r where r.id = v_calc) || '/' ||
     (select count(*)::text from public.pricing_calculation_rule_versions r where r.superseded_at is null));
   perform pg_temp.prv_expect_eq('初期の税ルールは全額課税・単一税率10%・truncで、現在有効は1つ', 'TAX-10-1/full_single_rate/0.100000/trunc/1',
     (select t.code || '/' || t.tax_mode || '/' || t.tax_rate::text || '/' || t.rounding_mode from public.tax_rule_versions t where t.id = v_tax) || '/' ||
@@ -141,7 +143,7 @@ begin
 
   perform pg_temp.prv_expect_denied('本部のownerでも計算ルールを直接追加できない', '42501',
     pg_temp.prv_run_as('authenticated', u_owner,
-      'insert into public.pricing_calculation_rule_versions(code,version_no,formula_code,expense_target_sections,description) values (''CALC-X'',9,''v2.5'',''{}'',''直接'') returning id::text'));
+      'insert into public.pricing_calculation_rule_versions(code,version_no,formula_code,expense_target_sections,auto_price_sections,description) values (''CALC-X'',9,''v2.5'',''{}'',''{}'',''直接'') returning id::text'));
   perform pg_temp.prv_expect_denied('本部のownerでも税ルールを直接変更できない', '42501',
     pg_temp.prv_run_as('authenticated', u_owner, 'update public.tax_rule_versions set description = ''変更'' returning id::text'));
   perform pg_temp.prv_expect_denied('正式計算の関数はanonから実行できない', '42501',
@@ -168,10 +170,10 @@ begin
       'insert into public.tax_rule_versions(code,version_no,tax_mode,tax_rate,description) values (''TAX-8-2'',2,''full_single_rate'',0.08,''二重'') returning id::text'));
   perform pg_temp.prv_expect_denied('対応していない計算の式は登録できない', '23514',
     pg_temp.prv_try_super(format(
-      'insert into public.pricing_calculation_rule_versions(code,version_no,formula_code,expense_target_sections,description,superseded_at,superseded_by_version_id) values (''CALC-LEGACY'',7,''legacy'',''{}'',''旧式'',now(),%L) returning id::text', v_calc)));
+      'insert into public.pricing_calculation_rule_versions(code,version_no,formula_code,expense_target_sections,auto_price_sections,description,superseded_at,superseded_by_version_id) values (''CALC-LEGACY'',7,''legacy'',''{}'',''{}'',''旧式'',now(),%L) returning id::text', v_calc)));
   perform pg_temp.prv_expect_denied('知らない区分を経費対象にできない', '23514',
     pg_temp.prv_try_super(format(
-      'insert into public.pricing_calculation_rule_versions(code,version_no,formula_code,expense_target_sections,description,superseded_at,superseded_by_version_id) values (''CALC-BAD'',8,''v2.5'',''{discount}'',''不正'',now(),%L) returning id::text', v_calc)));
+      'insert into public.pricing_calculation_rule_versions(code,version_no,formula_code,expense_target_sections,auto_price_sections,description,superseded_at,superseded_by_version_id) values (''CALC-BAD'',8,''v2.5'',''{discount}'',''{}'',''不正'',now(),%L) returning id::text', v_calc)));
 
   -- 新しい Version への切替（将来の migration の手順）：現在の Version を閉じてから、新しい Version を作る
   perform pg_temp.prv_expect_eq('現在の税ルールを閉じて新しいVersionを作れる（切替は1回だけ）', 'ok',

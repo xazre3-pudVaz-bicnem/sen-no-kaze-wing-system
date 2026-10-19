@@ -114,11 +114,13 @@ describe('v2.5 PR-A2：計算ルール・税ルールの Version（migration）'
     expect(sqlOnly).toContain("tax_mode text not null check (tax_mode in ('full_single_rate'))");
   });
 
-  it('初期の Version は v2.5 の初期仕様（経費対象は 4 区分・全額課税の単一税率 10%）', () => {
+  it('初期の Version は v2.5 の初期仕様（経費・自動計算は本体・内外装・オプション、別途工事は対象外・全額課税の単一税率 10%）', () => {
     expect(sqlOnly).toContain("'CALC-V25-1', 1, 'v2.5', 'trunc',");
-    expect(sqlOnly).toContain("array['base', 'interior_exterior', 'option', 'sitework']::text[],");
+    // 別途工事は経費・自動計算の対象にしない（2026-10-19 先方の確定方針）
+    expect(sqlOnly).toMatch(/'CALC-V25-1', 1, 'v2\.5', 'trunc',\s+array\['base', 'interior_exterior', 'option'\]::text\[\],\s+array\['base', 'interior_exterior', 'option'\]::text\[\],/);
     expect(sqlOnly).toContain("'TAX-10-1', 1, 'full_single_rate', 0.100000, 'trunc',");
-    expect(fixture.rules.standard.expense_target_sections).toEqual(['base', 'interior_exterior', 'option', 'sitework']);
+    expect(fixture.rules.standard.expense_target_sections).toEqual(['base', 'interior_exterior', 'option']);
+    expect(fixture.rules.standard.auto_price_sections).toEqual(['base', 'interior_exterior', 'option']);
     expect(fixture.tax.tax_rate).toBe('0.100000');
   });
 
@@ -129,6 +131,7 @@ describe('v2.5 PR-A2：計算ルール・税ルールの Version（migration）'
     expect(body).toContain('pg_catalog.trunc(v_sale_unit * v_qty)');
     expect(body).toContain('pg_catalog.trunc(v_priced * v_expense_rate)');
     expect(body).toContain('pg_catalog.trunc(v_adjusted * v_tax.tax_rate)');
+    expect(body).toContain('if not (v_code = any(v_rule.auto_price_sections)) then');
     expect(body).not.toMatch(/\bround\s*\(|\bfloor\s*\(|\bceil(ing)?\s*\(|1000\b/i);
     expect(body).not.toMatch(/::(double precision|float|real)\b/i);
   });

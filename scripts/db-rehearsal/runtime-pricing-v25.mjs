@@ -81,7 +81,8 @@ function generateInput(next) {
   const sections = chosen.map((code) => ({
     code,
     lines: Array.from({ length: int(0, 5) }, () => {
-      const mode = pick(['auto', 'auto', 'auto', 'manual', 'manual', 'por']);
+      // 別途工事は manual・por が主（auto はまれに入れて、DB・TypeScript とも拒否することを確かめる）
+      const mode = code === 'sitework' ? pick(['manual', 'manual', 'manual', 'por', 'por', next() < 0.2 ? 'auto' : 'manual']) : pick(['auto', 'auto', 'auto', 'manual', 'manual', 'por']);
       const quantity = next() < 0.02 ? decimal(10, 5) : next() < 0.3 ? int(0, 20) : decimal(50, 4);
       const key = next() < 0.01 && keySeq > 0 ? `k${keySeq}` : `k${++keySeq}`; // ときどきキーの重複
       if (mode === 'auto') {
@@ -121,25 +122,25 @@ export async function runtimePricingV25(client) {
   try {
     await client.query('begin');
     const calc = (await client.query(
-      `select id, formula_code, rounding_mode, expense_target_sections from public.pricing_calculation_rule_versions where superseded_at is null`
+      `select id, formula_code, rounding_mode, expense_target_sections, auto_price_sections from public.pricing_calculation_rule_versions where superseded_at is null`
     )).rows[0];
     const tax = (await client.query(
       `select id, tax_mode, tax_rate::text as tax_rate, rounding_mode from public.tax_rule_versions where superseded_at is null`
     )).rows[0];
 
-    // テストベクトルの「経費対象から別途工事を外した」ルールは、閉じた（過去の）Version として足す（rollback で消える）
-    const noSitework = (await client.query(
+    // テストベクトルの「別途工事も経費・自動計算の対象にする」ルールは、閉じた（過去の）Version として足す（rollback で消える）
+    const allSections = (await client.query(
       `insert into public.pricing_calculation_rule_versions
-         (code, version_no, formula_code, rounding_mode, expense_target_sections, description, created_at, superseded_at, superseded_by_version_id)
-       values ('CALC-TEST-NOSITE', 99, 'v2.5', 'trunc', $1::text[], 'テストベクトル用', now() - interval '1 day', now() - interval '1 hour', $2)
-       returning id, formula_code, rounding_mode, expense_target_sections`,
-      [fixture.rules.no_sitework_expense.expense_target_sections, calc.id]
+         (code, version_no, formula_code, rounding_mode, expense_target_sections, auto_price_sections, description, created_at, superseded_at, superseded_by_version_id)
+       values ('CALC-TEST-ALL', 99, 'v2.5', 'trunc', $1::text[], $2::text[], 'テストベクトル用', now() - interval '1 day', now() - interval '1 hour', $3)
+       returning id, formula_code, rounding_mode, expense_target_sections, auto_price_sections`,
+      [fixture.rules.all_sections.expense_target_sections, fixture.rules.all_sections.auto_price_sections, calc.id]
     )).rows[0];
-    const rules = { standard: calc, no_sitework_expense: noSitework };
+    const rules = { standard: calc, all_sections: allSections };
 
     const sameRules =
       isDeepStrictEqual(
-        { formula_code: calc.formula_code, rounding_mode: calc.rounding_mode, expense_target_sections: calc.expense_target_sections },
+        { formula_code: calc.formula_code, rounding_mode: calc.rounding_mode, expense_target_sections: calc.expense_target_sections, auto_price_sections: calc.auto_price_sections },
         fixture.rules.standard
       ) && isDeepStrictEqual({ tax_mode: tax.tax_mode, tax_rate: tax.tax_rate, rounding_mode: tax.rounding_mode }, fixture.tax);
     push('DB の現在の計算ルール・税ルールはテストベクトルの前提と同じ', 'same', sameRules ? 'same' : JSON.stringify({ calc, tax }), sameRules);

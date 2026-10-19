@@ -28,8 +28,9 @@ test.describe('空調商品の電源仕様', () => {
     await expect(page.getByText('電源仕様を入力してください')).toHaveCount(0);
 
     // 登録できる
-    page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'この内容で登録' }).click();
+    // 登録の確認は画面内の確認ダイアログ（#520）
+    await page.getByRole('dialog', { name: 'この内容で登録しますか？' }).getByRole('button', { name: 'この内容で登録' }).click();
     await expect(page.getByText('商品を登録しました。')).toBeVisible();
 
     // 後始末：ほかの E2E のシミュレーターの候補を変えないよう、取扱終了にしておく

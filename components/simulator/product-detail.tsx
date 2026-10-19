@@ -236,7 +236,7 @@ export function ProductDetail({
 
             {option.highlight && (
               <p
-                className="mt-2 inline-flex rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown"
+                className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-ink-soft"
                 data-testid="product-detail-highlight"
               >
                 {option.highlight}

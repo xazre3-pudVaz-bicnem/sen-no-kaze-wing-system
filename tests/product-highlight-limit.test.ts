@@ -30,6 +30,7 @@ const baseOption = {
   model_no: '',
   size_note: '',
   list_price: '',
+  highlight: '',
 };
 
 describe('メーカー記載の特徴', () => {

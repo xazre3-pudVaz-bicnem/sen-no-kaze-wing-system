@@ -21,6 +21,7 @@ const candidates: V25ProductCandidate[] = [
     variantGroups: [{ id: 'g1', name: 'サイズ', choices: [{ id: 'c1', name: '標準' }, { id: 'c2', name: '大' }] }],
   },
   { id: 'p3', name: '検査商品3', categoryName: '設備', section: 'option' as const, variantGroups: [] },
+  { id: 'p5', name: '設置工事（施工）', categoryName: '施工', section: 'sitework' as const, variantGroups: [] },
   { id: 'p9', name: '取扱終了の商品', categoryName: '設備', section: 'option' as const, retired: true, variantGroups: [] },
 ];
 
@@ -49,6 +50,7 @@ const initial: V25EditorState = {
 
 const preview: V25Preview = {
   rules_current: true,
+  review_required_lines: 1,
   publishable: false,
   calc_error: null,
   incomplete: [],
@@ -104,6 +106,27 @@ describe('標準見積 v2.5 の編集画面（描画）', () => {
     expect(html).toContain('公開できない理由');
     expect(html).toContain('「検査商品1」の原価が更新されています');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*data-testid="v25-publish"/);
+  });
+
+  it('「要見直し」の明細が残っていれば、公開できない理由に出す', () => {
+    const html = render(false);
+    expect(html).toContain('「要見直し」の明細が 1 行残っています');
+  });
+
+  it('別途工事の商品の行では、自動計算を選べない', () => {
+    const html = renderToStaticMarkup(
+      createElement(StandardEstimateV25Editor, {
+        revisionId: '00000000-0000-4000-8000-000000000001',
+        lockVersion: 3,
+        readOnly: false,
+        initial: { ...initial, slots: [{ key: 'slot-b5', baseline_key: 'b5', option_id: 'p5', variant_choices: {}, quantity: '1', price_mode: 'por', manual_unit_price: '' }], lines: [] },
+        candidates,
+        savedSlotAmounts: {},
+        savedLineAmounts: {},
+        preview: { ...preview, review_required_lines: 0, slots: [] },
+      })
+    );
+    expect(html).toMatch(/<option value="auto" disabled="">自動（商品の標準原価から計算）<\/option>/);
   });
 
   it('公開済み（読み取りだけ）では、保存・取り込み・公開・追加・削除を出さない', () => {

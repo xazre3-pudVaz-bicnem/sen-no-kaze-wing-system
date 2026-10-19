@@ -50,11 +50,17 @@ describe('標準見積 v2.5 の編集画面（PR-B1b）', () => {
   });
 
   it('保存は入力の確認の後、最新原価の取り込みは未保存の変更が無いときだけ、公開は確認ダイアログを通す', () => {
-    expect(editor).toContain('const problem = validateV25EditorState(state);');
+    expect(editor).toContain('const problem = validateV25EditorState(state, (optionId) => candidateById.get(optionId)?.section);');
     expect(editor).toContain('disabled={pending || dirty} data-testid="v25-refresh"');
     expect(editor).toContain('<ConfirmActionButton');
     expect(editor).toContain('disabled={pending || blockers.length > 0}');
     expect(editor).toContain('expected_lock_version: lockVersion');
+  });
+
+  it('別途工事の商品は自動計算を選べず、選ぶと別途見積にする。保存前の確認でも止める', () => {
+    expect(editor).toContain("disabled={mode === 'auto' && candidate?.section === 'sitework'}");
+    expect(editor).toContain("next?.section === 'sitework' && slot.price_mode === 'auto' ? { price_mode: 'por' as const } : {}");
+    expect(editor).toContain('validateV25EditorState(state, (optionId) => candidateById.get(optionId)?.section)');
   });
 
   it('以前の標準見積から写した明細は「要見直し」と示し、見直し済みにできる', () => {

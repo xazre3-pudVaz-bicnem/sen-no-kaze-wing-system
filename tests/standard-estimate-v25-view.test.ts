@@ -53,6 +53,16 @@ describe('標準見積 v2.5 の編集画面：入力の確認（DB と同じ決�
   });
 });
 
+describe('標準見積 v2.5 の編集画面：別途工事（2026-10-19 の確定方針）', () => {
+  it('別途工事の商品は自動計算にできない（売価の入力・別途見積はできる）', () => {
+    const state = base();
+    const sectionOf = (id: string) => (id === 'p1' ? ('sitework' as const) : ('option' as const));
+    expect(validateV25EditorState(state, sectionOf)).toMatch(/別途工事の商品は自動計算/);
+    expect(validateV25EditorState({ ...state, slots: [{ ...state.slots[0], price_mode: 'manual', manual_unit_price: '100000' }] }, sectionOf)).toBeNull();
+    expect(validateV25EditorState({ ...state, slots: [{ ...state.slots[0], price_mode: 'por' }] }, sectionOf)).toBeNull();
+  });
+});
+
 describe('標準見積 v2.5 の編集画面：保存内容の組み立て', () => {
   it('選択肢・価格の決め方・売価を RPC の形にし、別途見積・auto には売価を送らない', () => {
     const payload = buildV25SavePayload(base());
@@ -98,6 +108,11 @@ describe('標準見積 v2.5 の編集画面：公開できない理由', () => {
     expect(blockers.join('\n')).toMatch(/計算ルール・税ルールが更新/);
     expect(blockers.join('\n')).toMatch(/「商品3」の商品の標準原価が未設定/);
     expect(blockers.join('\n')).toMatch(/「商品1」の原価が更新されています/);
+  });
+
+  it('「要見直し」の明細が残っていれば公開できない理由に出す', () => {
+    expect(v25PublishBlockers(preview({ review_required_lines: 2 }), false).join(' / ')).toMatch(/「要見直し」の明細が 2 行残っています/);
+    expect(v25PublishBlockers(preview({ review_required_lines: 0 }), false)).toEqual([]);
   });
 
   it('選択枠の状態は、選択肢を含めてもっとも悪いものを示す（auto 以外は示さない）', () => {

@@ -90,7 +90,7 @@ export function StandardEstimateV25Editor({
     });
 
   const save = () => {
-    const problem = validateV25EditorState(state);
+    const problem = validateV25EditorState(state, (optionId) => candidateById.get(optionId)?.section);
     if (problem) {
       setNotice({ tone: 'danger', text: problem });
       return;
@@ -105,6 +105,7 @@ export function StandardEstimateV25Editor({
         <p className="text-xs leading-5 text-muted">
           商品は商品台帳の商品とバリエーションを選びます。auto の商品は、固定した商品の標準原価から計算します（同じ商品・同じ選択肢のまま保存しても原価は変わりません。
           原価の更新を反映するときは「最新原価を取り込む」を押します）。工事費などは明細として、金額が確定していれば売価を入力し、確定しなければ別途見積にします（0 円にはしません）。
+          別途工事には販売費・経費・掛率を掛けません（売価の入力か別途見積）。「要見直し」の明細が残っている間は公開できません。
         </p>
       </div>
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
@@ -166,7 +167,15 @@ export function StandardEstimateV25Editor({
                         value={slot.option_id}
                         disabled={readOnly}
                         aria-label="商品"
-                        onChange={(event) => setSlot(slot.key, { option_id: event.target.value, variant_choices: {} })}
+                        onChange={(event) => {
+                          const next = candidateById.get(event.target.value);
+                          // 別途工事の商品は自動計算にできない（売価の入力か別途見積）。Web では原則として金額を確定しないので別途見積にする
+                          setSlot(slot.key, {
+                            option_id: event.target.value,
+                            variant_choices: {},
+                            ...(next?.section === 'sitework' && slot.price_mode === 'auto' ? { price_mode: 'por' as const } : {}),
+                          });
+                        }}
                       >
                         <option value="">商品を選ぶ</option>
                         {candidate?.retired && <option value={candidate.id} disabled>{candidate.name}（取扱終了）</option>}
@@ -201,7 +210,9 @@ export function StandardEstimateV25Editor({
                       <Select value={slot.price_mode} disabled={readOnly} aria-label="価格の決め方"
                         onChange={(event) => setSlot(slot.key, { price_mode: event.target.value as V25SlotPriceMode })}>
                         {(Object.keys(V25_SLOT_PRICE_MODE_LABEL) as V25SlotPriceMode[]).map((mode) => (
-                          <option key={mode} value={mode}>{V25_SLOT_PRICE_MODE_LABEL[mode]}</option>
+                          <option key={mode} value={mode} disabled={mode === 'auto' && candidate?.section === 'sitework'}>
+                            {V25_SLOT_PRICE_MODE_LABEL[mode]}
+                          </option>
                         ))}
                       </Select>
                     </td>

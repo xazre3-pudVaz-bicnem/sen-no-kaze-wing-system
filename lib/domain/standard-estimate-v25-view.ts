@@ -96,6 +96,8 @@ export interface V25PreviewSlot {
 
 export interface V25Preview {
   rules_current: boolean;
+  /** v2.5 以前から引き継いだ明細のうち「要見直し」が残っている行数（1 行でもあれば公開できない） */
+  review_required_lines?: number;
   publishable: boolean;
   calc_error: string | null;
   incomplete: { option_id: string; name: string; reason: 'missing_standard_cost' | 'missing_variant_cost' }[];
@@ -119,8 +121,12 @@ export function slotCostStatus(slot: V25PreviewSlot | undefined): V25CostStatus 
   return slot.cost_status ?? null;
 }
 
-/** DB と同じ入力の決まりを先に確かめる。問題があれば最初の 1 件を返す（null なら保存へ進める） */
-export function validateV25EditorState(state: V25EditorState): string | null {
+/** DB と同じ入力の決まりを先に確かめる。問題があれば最初の 1 件を返す（null なら保存へ進める）。
+ *  sectionOf は商品の区分（別途工事の商品は自動計算にできない：2026-10-19 の確定方針） */
+export function validateV25EditorState(
+  state: V25EditorState,
+  sectionOf: (optionId: string) => StandardLineSectionCode | undefined = () => undefined
+): string | null {
   for (const key of ['sales_fee_rate', 'markup_rate', 'expense_rate'] as const) {
     const rule = V25_RATE_RULES[key];
     const raw = state[key].trim();
@@ -145,6 +151,9 @@ export function validateV25EditorState(state: V25EditorState): string | null {
     }
     if (slot.price_mode === 'manual' && !NON_NEGATIVE_INTEGER.test(slot.manual_unit_price.trim())) {
       return `${label}の売価単価（税別・経費別、0 円以上の整数）を入力してください`;
+    }
+    if (slot.price_mode === 'auto' && sectionOf(slot.option_id) === 'sitework') {
+      return `${label}：別途工事の商品は自動計算（販売費・掛率）にできません。決めた税別売価を入力するか、別途見積にしてください`;
     }
   }
   for (const [index, line] of state.lines.entries()) {
@@ -200,6 +209,9 @@ export function v25PublishBlockers(preview: V25Preview | null, dirty: boolean): 
   if (dirty) blockers.push('保存していない変更があります。保存してから公開してください');
   if (!preview) return [...blockers, '金額を確認できませんでした。再読み込みしてください'];
   if (!preview.rules_current) blockers.push('計算ルール・税ルールが更新されています。最新原価を取り込んでください');
+  if ((preview.review_required_lines ?? 0) > 0) {
+    blockers.push(`「要見直し」の明細が ${preview.review_required_lines} 行残っています。商品台帳の商品に置き換えるか、金額を確認して見直し済みにしてください`);
+  }
   for (const item of preview.incomplete) {
     blockers.push(
       item.reason === 'missing_standard_cost'

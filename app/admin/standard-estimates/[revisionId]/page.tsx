@@ -12,10 +12,15 @@ import type { StandardEstimateEditorState, StandardLineSectionCode, StandardSect
 import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { startNextStandardEstimateRevisionAction } from '@/lib/actions/standard-estimates';
+import { startStandardEstimateV25DraftAction } from '@/lib/actions/standard-estimate-v25';
+import { getStandardEstimateV25Header, loadStandardEstimateV25 } from '@/lib/data/standard-estimate-v25';
+import type { V25ProductCandidate } from '@/lib/domain/standard-estimate-v25-view';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { StandardEstimateEditor } from '@/components/admin/standard-estimate-editor';
 import { StandardEstimateBaselineEditor, type BaselineCandidate, type BaselineItemView } from '@/components/admin/standard-estimate-baseline-editor';
+import { StandardEstimateV25Editor } from '@/components/admin/standard-estimate-v25-editor';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import { isQuoteSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
 
 export const metadata: Metadata = { title: '標準見積の Revision | 管理画面', robots: { index: false } };
@@ -76,6 +81,15 @@ export default async function StandardEstimateRevisionPage({
       .order('sort_order'),
     getStore(),
   ]);
+  // v2.5 の列（20261019100000）が DB に無い間は null（従来どおりの画面だけを出す）
+  const v25Header = await getStandardEstimateV25Header(supabase, revision.id);
+  const isV25 = v25Header?.pricing_model === 'v2.5';
+  const { data: masterDraft } = await supabase
+    .from('standard_estimate_revisions')
+    .select('id, lock_version')
+    .eq('standard_estimate_master_id', revision.standard_estimate_master_id)
+    .eq('status', 'draft')
+    .maybeSingle();
   const { data: base } = await supabase
     .from('base_masters')
     .select('id, name, fire_spec_code, matrix_row_id, current_published_revision_id')
@@ -156,6 +170,35 @@ export default async function StandardEstimateRevisionPage({
   }));
   const newerBase = base?.current_published_revision_id && base.current_published_revision_id !== revision.base_master_revision_id;
 
+  // v2.5：商品台帳の商品（その仕様でお客様が選べる取扱中の商品。保存済みの取扱終了の商品は表示・保持のために渡す）と公開中の選択肢
+  const v25 = isV25 && v25Header ? await loadStandardEstimateV25(supabase, revision, v25Header) : null;
+  const v25SavedOptionIds = new Set(v25?.slotOptionIds ?? []);
+  const v25Candidates: V25ProductCandidate[] = v25
+    ? (specCtx?.options ?? [])
+        .filter((option) => isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && v25SavedOptionIds.has(option.id)))
+        .map((option) => {
+          const code = categoryById.get(option.category_id)?.code ?? '';
+          return {
+            id: option.id,
+            name: option.name,
+            categoryName: categoryById.get(option.category_id)?.name ?? '未分類',
+            section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
+            retired: productLedgerState(option) === 'retired',
+            variantGroups: (bundle?.variantGroups ?? [])
+              .filter((group) => group.option_id === option.id)
+              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((group) => ({
+                id: group.id,
+                name: group.name,
+                choices: (bundle?.variantChoices ?? [])
+                  .filter((choice) => choice.group_id === group.id)
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((choice) => ({ id: choice.id, name: choice.name })),
+              })),
+          };
+        })
+    : [];
+
   return (
     <AdminPage
       title={identity}
@@ -178,12 +221,61 @@ export default async function StandardEstimateRevisionPage({
           <p className="tabular-nums">{formatYen(revision.cost_total)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted">価格未確定の行</p>
-          <p>{revision.has_por ? <Badge tone="warn">あり（合計に含めない）</Badge> : 'なし'}</p>
+          <p className="text-xs text-muted">{isV25 ? '別途見積' : '価格未確定の行'}</p>
+          <p>
+            {revision.has_por ? <Badge tone="warn">{isV25 ? 'あり（合計は未確定。確定分だけを表示）' : 'あり（合計に含めない）'}</Badge> : 'なし'}
+          </p>
         </div>
       </section>
 
-      {!isDraft && revision.status === 'published' && (
+      {isV25 && v25 && (
+        <section className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-white p-4 text-xs" data-testid="standard-estimate-v25-rules">
+          <Badge tone="navy">v2.5 の計算</Badge>
+          <span className="text-muted">計算ルール {v25.rules.calcCode ?? '—'}・税ルール {v25.rules.taxCode ?? '—'}</span>
+          {v25Header?.v25_pricing_complete === false && <Badge tone="danger">原価が未設定の商品があります（計算から外しています）</Badge>}
+        </section>
+      )}
+
+      {v25Header && !isV25 && (
+        <section className="space-y-2 rounded-lg border border-line bg-white p-4 text-sm" data-testid="standard-estimate-v25-start">
+          <p className="font-semibold">v2.5 の計算で作り直す</p>
+          <p className="text-xs leading-5 text-muted">
+            商品台帳の商品・バリエーションから v2.5 の正式計算で金額を出す下書きを作ります。公開中の Revision は変わりません。
+            今の明細は、商品台帳の商品に置き換えるまで「要見直し」の印付きで写ります（今の売価の manual・価格未確定は別途見積）。
+          </p>
+          {isDraft ? (
+            <form action={startStandardEstimateV25DraftAction}>
+              <input type="hidden" name="master_id" value={revision.standard_estimate_master_id} />
+              <input type="hidden" name="expected_draft_lock_version" value={revision.lock_version} />
+              <ConfirmSubmit
+                className="btn-secondary btn-sm"
+                dialogTitle="この下書きを v2.5 に切り替えますか？"
+                message="この下書きを v2.5 の計算に切り替えます。今の明細は「要見直し」の印付きで写り、v2.5 以前の計算の下書きには戻せません。"
+                confirmLabel="切り替える"
+              >
+                この下書きを v2.5 に切り替える
+              </ConfirmSubmit>
+            </form>
+          ) : masterDraft ? (
+            <a className="text-navy underline" href={`/admin/standard-estimates/${masterDraft.id}`}>編集中の下書きを開く</a>
+          ) : revision.status === 'published' ? (
+            <form action={startStandardEstimateV25DraftAction}>
+              <input type="hidden" name="master_id" value={revision.standard_estimate_master_id} />
+              <button type="submit" className="btn-secondary btn-sm">v2.5 の下書きを作る</button>
+            </form>
+          ) : null}
+        </section>
+      )}
+
+      {!isDraft && revision.status === 'published' && isV25 && !masterDraft && (
+        <form action={startStandardEstimateV25DraftAction} className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white p-4 text-sm">
+          <input type="hidden" name="master_id" value={revision.standard_estimate_master_id} />
+          <span className="text-muted">公開版を土台に、次の v2.5 の下書きを作れます（固定した原価はそのまま引き継ぎます）。</span>
+          <button type="submit" className="btn-secondary btn-sm">次の v2.5 の下書きを作成</button>
+        </form>
+      )}
+
+      {!isDraft && revision.status === 'published' && !isV25 && (
         <form action={startNextStandardEstimateRevisionAction} className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white p-4 text-sm">
           <input type="hidden" name="master_id" value={revision.standard_estimate_master_id} />
           {newerBase && <input type="hidden" name="base_master_revision_id" value={base?.current_published_revision_id ?? ''} />}
@@ -194,7 +286,22 @@ export default async function StandardEstimateRevisionPage({
         </form>
       )}
 
+      {isV25 && v25 && (
+        <StandardEstimateV25Editor
+          key={`v25-${revision.lock_version}`}
+          revisionId={revision.id}
+          lockVersion={revision.lock_version}
+          readOnly={!isDraft}
+          initial={v25.initial}
+          candidates={v25Candidates}
+          savedSlotAmounts={v25.savedSlotAmounts}
+          savedLineAmounts={v25.savedLineAmounts}
+          preview={v25.preview}
+        />
+      )}
+
       {/* 保存のたびに版が進むので、保存後は DB の内容（新しい行の line_key など）で作り直す */}
+      {!isV25 && (
       <StandardEstimateEditor
         key={revision.lock_version}
         revisionId={revision.id}
@@ -204,7 +311,9 @@ export default async function StandardEstimateRevisionPage({
         baseLines={(baseLines ?? []).map((line) => ({ section: line.section, name: line.name, quantity: line.quantity, unit: line.unit, unit_price: line.unit_price }))}
         initial={initial}
       />
+      )}
 
+      {!isV25 && (
       <StandardEstimateBaselineEditor
         key={`baseline-${revision.lock_version}`}
         revisionId={revision.id}
@@ -214,6 +323,7 @@ export default async function StandardEstimateRevisionPage({
         candidates={baselineCandidates}
         suggestedOptionIds={suggestedBaselineIds}
       />
+      )}
     </AdminPage>
   );
 }

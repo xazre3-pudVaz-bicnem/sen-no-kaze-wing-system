@@ -7,6 +7,8 @@
 -- * 採用原価 Version は、明細の追加・商品の置換・バリエーションの変更・明示の「最新原価を取り込む」のときだけ固定する
 --   （下書きの確認中に商品マスターの原価が変わっても、黙って更新しない）
 -- * 公開の時に、固定した原価 Version が現在の Version と同じか・販売状態・計算ルールを確かめる（違えば公開しない）
+-- * 2026-10-19 の確定方針：別途工事は販売費・経費・掛率を掛けない（auto にしない。manual か por）。
+--   v2.5 以前から引き継いだ明細の「要見直し」が 1 行でも残っていれば公開しない（画面だけでなく DB で止める）
 --
 -- 作り：
 -- * standard_estimate_revisions.pricing_model：'legacy'（v2.5 以前の計算。既存の Revision はすべてこちらのまま）／'v2.5'
@@ -558,7 +560,8 @@ end;
 $$;
 
 -- 選択枠の中身を別の Revision へ写す。v2.5 の Revision からは固定した原価 Version をそのまま写し（黙って更新しない）、
--- v2.5 以前の Revision からは auto の選択枠として、いま現在の原価 Version を固定する（原価が未設定なら未設定のまま）
+-- v2.5 以前の Revision からは、写し先の計算ルールで自動計算を使える区分なら auto（いま現在の原価 Version を固定。未設定なら未設定のまま）、
+-- 使えない区分（別途工事）なら por（別途見積。金額は担当が決める）として写す
 create function public.standard_estimate_v25_copy_slots(p_from_revision_id uuid, p_to_revision_id uuid)
 returns void
 language plpgsql
@@ -566,15 +569,26 @@ set search_path = ''
 as $$
 declare
   v_from_model text;
+  v_auto_sections text[];
+  v_mode text;
   b public.standard_estimate_revision_baseline_items%rowtype;
   v_new_id uuid;
 begin
   select r.pricing_model into v_from_model from public.standard_estimate_revisions r where r.id = p_from_revision_id;
+  select rule.auto_price_sections into v_auto_sections
+    from public.standard_estimate_revisions r
+    join public.pricing_calculation_rule_versions rule on rule.id = r.calc_rule_version_id
+   where r.id = p_to_revision_id;
   for b in
     select * from public.standard_estimate_revision_baseline_items bi
      where bi.revision_id = p_from_revision_id
      order by bi.sort_order, bi.id
   loop
+    v_mode := case
+      when v_from_model = 'v2.5' then b.price_mode
+      when b.section_code = any(coalesce(v_auto_sections, '{}'::text[])) then 'auto'
+      else 'por'
+    end;
     insert into public.standard_estimate_revision_baseline_items (
       revision_id, baseline_key, option_id, option_category_id, section_code, selection_target_code, quantity,
       option_code_snapshot, option_name_snapshot, category_code_snapshot, category_name_snapshot,
@@ -585,13 +599,13 @@ begin
       p_to_revision_id, b.baseline_key, b.option_id, b.option_category_id, b.section_code, b.selection_target_code, b.quantity,
       b.option_code_snapshot, b.option_name_snapshot, b.category_code_snapshot, b.category_name_snapshot,
       b.unit_price_snapshot, b.price_on_request_snapshot, b.sort_order,
-      coalesce(b.price_mode, 'auto'),
+      v_mode,
       case
-        when coalesce(b.price_mode, 'auto') <> 'auto' then null
+        when v_mode <> 'auto' then null
         when v_from_model = 'v2.5' then b.standard_cost_version_id
         else (select v.id from public.option_standard_cost_versions v where v.option_id = b.option_id and v.superseded_at is null)
       end,
-      case when b.price_mode = 'manual' then b.manual_unit_price end
+      case when v_mode = 'manual' then b.manual_unit_price end
     )
     returning id into v_new_id;
 
@@ -605,12 +619,12 @@ begin
            bv.variant_group_code_snapshot, bv.variant_group_name_snapshot, bv.variant_choice_code_snapshot, bv.variant_choice_name_snapshot,
            bv.extra_price_snapshot, bv.price_on_request_snapshot, bv.sort_order,
            case
-             when coalesce(b.price_mode, 'auto') <> 'auto' then null
+             when v_mode <> 'auto' then null
              when v_from_model = 'v2.5' then bv.variant_cost_version_id
              else cur.id
            end,
            case
-             when coalesce(b.price_mode, 'auto') <> 'auto' then null
+             when v_mode <> 'auto' then null
              when v_from_model = 'v2.5' then bv.cost_adjustment_snapshot
              else cur.cost_adjustment
            end
@@ -623,7 +637,8 @@ end;
 $$;
 
 -- 商品に紐づかない明細を別の Revision へ写す。v2.5 以前の明細（p_from_legacy）は、今の売価の manual（POR は por）として
--- 「要見直し」で写す。v2.5 以前の下書きを v2.5 に切り替えるとき（写し元と写し先が同じ Revision）も、この引数で写し方を決める
+-- 「要見直し」で写す。別途工事の明細は、Web では原則として金額を確定しない方針（2026-10-19）に合わせて por（要見直し）で写す。
+-- v2.5 以前の下書きを v2.5 に切り替えるとき（写し元と写し先が同じ Revision）も、この引数で写し方を決める
 create function public.standard_estimate_v25_copy_lines(p_from_revision_id uuid, p_to_revision_id uuid, p_from_legacy boolean)
 returns void
 language plpgsql
@@ -643,9 +658,9 @@ begin
       revision_id, line_key, section_code, group_label, name, quantity, unit, price_mode, unit_price, amount, remark, review_required, sort_order
     )
     select p_to_revision_id, l.line_key, l.section_code, l.group_label, l.name, l.quantity, l.unit,
-           case when l.price_mode = 'por' then 'por' else 'manual' end,
-           case when l.price_mode = 'por' then null else l.unit_price end,
-           case when l.price_mode = 'por' then null else trunc(l.quantity * l.unit_price)::integer end,
+           case when l.price_mode = 'por' or l.section_code = 'sitework' then 'por' else 'manual' end,
+           case when l.price_mode = 'por' or l.section_code = 'sitework' then null else l.unit_price end,
+           case when l.price_mode = 'por' or l.section_code = 'sitework' then null else trunc(l.quantity * l.unit_price)::integer end,
            l.remark, true, l.sort_order
       from public.standard_estimate_revision_lines l
      where l.revision_id = p_from_revision_id;
@@ -712,6 +727,7 @@ declare
   v_calc_rule uuid;
   v_tax_rule uuid;
   v_tax_rate numeric;
+  v_auto_sections text[];
   v_pin uuid;
   v_rev uuid;
 begin
@@ -727,7 +743,7 @@ begin
     raise exception using errcode = '42501', message = 'FORBIDDEN: この標準見積を編集できません';
   end if;
 
-  select r.id into v_calc_rule from public.pricing_calculation_rule_versions r where r.superseded_at is null;
+  select r.id, r.auto_price_sections into v_calc_rule, v_auto_sections from public.pricing_calculation_rule_versions r where r.superseded_at is null;
   select t.id, t.tax_rate into v_tax_rule, v_tax_rate from public.tax_rule_versions t where t.superseded_at is null;
   if v_calc_rule is null or v_tax_rule is null then
     raise exception using errcode = 'P0001', message = 'INTERNAL: 現在の計算ルール・税ルールが見つかりません';
@@ -763,6 +779,10 @@ begin
     update public.standard_estimate_revision_baseline_items b
        set price_mode = 'auto',
            standard_cost_version_id = (select v.id from public.option_standard_cost_versions v where v.option_id = b.option_id and v.superseded_at is null)
+     where b.revision_id = d.id and b.price_mode is null
+       and b.section_code = any(coalesce(v_auto_sections, '{}'::text[]));
+    update public.standard_estimate_revision_baseline_items b
+       set price_mode = 'por'
      where b.revision_id = d.id and b.price_mode is null;
     update public.standard_estimate_revision_baseline_variants bv
        set variant_cost_version_id = cur_v.id,
@@ -770,7 +790,7 @@ begin
       from public.option_variant_cost_versions cur_v
      where cur_v.variant_choice_id = bv.variant_choice_id
        and cur_v.superseded_at is null
-       and bv.baseline_item_id in (select b.id from public.standard_estimate_revision_baseline_items b where b.revision_id = d.id);
+       and bv.baseline_item_id in (select b.id from public.standard_estimate_revision_baseline_items b where b.revision_id = d.id and b.price_mode = 'auto');
     perform public.standard_estimate_v25_recalculate(d.id);
     perform public.standard_estimate_v25_set_writer(false);
     return d.id;
@@ -872,6 +892,8 @@ declare
   v_name text;
   v_unit_price integer;
   v_line_key uuid;
+  v_auto_sections text[];
+  v_section_of_slot text;
 begin
   if v_uid is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -931,6 +953,8 @@ begin
 
   select * into m from public.standard_estimate_masters sm where sm.id = rev.standard_estimate_master_id;
   select * into v_model from public.base_models bm where bm.id = m.base_model_id;
+  select rule.auto_price_sections into v_auto_sections
+    from public.pricing_calculation_rule_versions rule where rule.id = rev.calc_rule_version_id;
 
   -- 保存前の auto の選択枠の固定（商品＋選択肢の組み合わせごと）
   select coalesce(pg_catalog.jsonb_object_agg(x.identity, x.pins), '{}'::jsonb)
@@ -1013,6 +1037,11 @@ begin
     select * into c from public.option_categories x where x.id = o.category_id;
     if not coalesce(public.customer_category_selectable(v_model.slug, m.spec_code, c.code), false) then
       raise exception using errcode = 'P0001', message = format('VALIDATION: 商品 %s 件目：この仕様ではお客様が選べないカテゴリーの商品です（%s）', v_index, c.name);
+    end if;
+    v_section_of_slot := public.estimate_section_for_option(c.code, o.is_installation);
+    if v_mode = 'auto' and not (v_section_of_slot = any(coalesce(v_auto_sections, '{}'::text[]))) then
+      raise exception using errcode = 'P0001',
+        message = format('VALIDATION: 商品 %s 件目：別途工事の商品は自動計算（販売費・掛率）にできません。決めた税別売価を入力するか、別途見積にしてください', v_index);
     end if;
 
     -- 選択肢を確かめ、組み合わせの同一性（商品＋選択肢）を作る
@@ -1246,6 +1275,12 @@ begin
     raise exception using errcode = 'P0001',
       message = 'LOCKED: 基準の本体 Revision が公開中ではありません。最新の本体 Revision で下書きを作り直してください';
   end if;
+  -- v2.5 以前から引き継いだ明細の「要見直し」が残っていれば公開しない（2026-10-19 の確定方針）
+  if exists (select 1 from public.standard_estimate_revision_v25_lines l where l.revision_id = rev.id and l.review_required) then
+    raise exception using errcode = 'P0001',
+      message = format('LOCKED: 「要見直し」の明細が %s 行残っています。商品台帳の商品に置き換えるか、金額を確認して見直し済みにしてから公開してください',
+        (select count(*) from public.standard_estimate_revision_v25_lines l where l.revision_id = rev.id and l.review_required));
+  end if;
 
   perform public.standard_estimate_v25_set_writer(true);
 
@@ -1323,6 +1358,7 @@ declare
   v_slots jsonb;
   v_calc_current boolean;
   v_tax_current boolean;
+  v_review_lines integer;
 begin
   if v_uid is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -1385,6 +1421,8 @@ begin
     left join public.option_standard_cost_versions cv on cv.option_id = b.option_id and cv.superseded_at is null
    where b.revision_id = rev.id;
 
+  select count(*)::integer into v_review_lines
+    from public.standard_estimate_revision_v25_lines l where l.revision_id = rev.id and l.review_required;
   v_calc_current := exists (select 1 from public.pricing_calculation_rule_versions r where r.id = rev.calc_rule_version_id and r.superseded_at is null);
   v_tax_current := exists (select 1 from public.tax_rule_versions t where t.id = rev.tax_rule_version_id and t.superseded_at is null);
 
@@ -1395,12 +1433,14 @@ begin
     'calc_rule_version_id', rev.calc_rule_version_id,
     'tax_rule_version_id', rev.tax_rule_version_id,
     'rules_current', v_calc_current and v_tax_current,
+    'review_required_lines', v_review_lines,
     'calc', v_calc,
     'calc_error', v_error,
     'incomplete', v_built -> 'incomplete',
     'slots', v_slots,
     'publishable', rev.status = 'draft'
                    and v_calc is not null
+                   and v_review_lines = 0
                    and v_calc_current and v_tax_current
                    and pg_catalog.jsonb_array_length(v_built -> 'incomplete') = 0
                    and not exists (

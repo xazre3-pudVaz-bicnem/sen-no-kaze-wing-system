@@ -17,9 +17,9 @@ const remoteMedia = fs.readFileSync(
 
 describe('商品登録のメディアURL取込', () => {
   it('追加画像をURLから登録できる導線を表示する', () => {
-    expect(mediaManager).toContain('または画像URLから登録');
+    expect(mediaManager).toContain('画像URLから登録');
     expect(mediaManager).toContain('addOptionImageFromUrlAction');
-    expect(mediaManager).toContain('URL先の画像を取得し、千の風側のストレージへ保存します。');
+    expect(mediaManager).toContain('画像は千の風側へ保存します。');
   });
 
   it('追加画像とPDFのURL取込ボタンを入力欄の下に表示する', () => {
@@ -29,9 +29,9 @@ describe('商品登録のメディアURL取込', () => {
   });
 
   it('メーカーPDFを直接URLから登録できる導線を表示する', () => {
-    expect(mediaManager).toContain('またはPDFのURLから登録');
+    expect(mediaManager).toContain("'PDFのURLから登録'");
     expect(mediaManager).toContain('uploadOptionManufacturerDocumentFromUrlAction');
-    expect(mediaManager).toContain('カタログ閲覧ページではなく、PDF本体のURLを入力してください。');
+    expect(mediaManager).toContain('PDF本体のURLを入力してください。閲覧ページのURLでは登録できません。');
   });
 
   it('取得した画像とPDFを既存の自社ストレージ保存処理へ渡す', () => {

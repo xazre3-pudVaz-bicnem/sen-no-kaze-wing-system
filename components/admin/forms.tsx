@@ -1061,11 +1061,11 @@ export function OptionForm({
               <p className="mt-1 text-xs text-muted">サブ画像とメーカーPDFは、この商品の「お客様資料」画面で続けて登録できます。</p>
             </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="画像ファイル" htmlFor={`image_file-${mode}`}>
-                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
-              </Field>
-              <Field label="または画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
+              <Field label="画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
                 <Input id={`image_url-${mode}`} name="image_url" defaultValue={option?.image_url ?? ''} />
+              </Field>
+              <Field label="または画像ファイル" htmlFor={`image_file-${mode}`}>
+                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
               </Field>
             </div>
           </div>

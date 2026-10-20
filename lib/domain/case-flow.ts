@@ -233,7 +233,7 @@ export interface CaseWorkflow {
 }
 
 /**
- * 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case。20261015140000）。
+ * 総代理店の配下の確認（DB の list_supervised_cases／get_supervised_case。20261016140000）。
  * お客様の氏名・会社名・連絡先・住所・メッセージ、設置場所・土地の情報、日程の希望、打合せ記録、見積の備考は含めない
  * （顧客情報の項目は先方の確認が済んでから足す）。
  */

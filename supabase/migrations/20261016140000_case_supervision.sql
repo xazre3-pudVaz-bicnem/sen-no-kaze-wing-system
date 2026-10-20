@@ -15,7 +15,7 @@ begin;
 do $preflight$
 begin
   if to_regprocedure('public.is_case_supervisor(uuid)') is null or to_regprocedure('public.case_role(uuid)') is null then
-    raise exception 'PRECONDITION: case sales organization (20261015130000) must be applied first';
+    raise exception 'PRECONDITION: case sales organization (20261016130000) must be applied first';
   end if;
 end;
 $preflight$;

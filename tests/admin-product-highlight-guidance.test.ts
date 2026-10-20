@@ -20,8 +20,8 @@ describe('商品特徴の登録方針', () => {
     expect(forms).not.toContain('例：標準候補／清掃性が高い／節水仕様');
   });
 
-  it('highlightの保存項目は残し、空欄なら商品詳細にバッジを表示しない', () => {
-    expect(forms).toContain('name="highlight" defaultValue={option?.highlight ?? \'\'}');
+  it('highlightの保存項目は残し、空欄なら商品詳細に特徴を表示しない', () => {
+    expect(forms).toContain("initialValue={option?.highlight ?? ''}");
     expect(productDetail).toContain('{option.highlight && (');
     expect(productDetail).toContain('{option.highlight}');
   });

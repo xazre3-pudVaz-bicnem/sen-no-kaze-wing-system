@@ -32,12 +32,12 @@ describe('商品台帳の保存済み構成利用状況', () => {
     expect(ledgerClient).toContain('標準見積・発行済み見積・Snapshotの履歴判定は含みません。');
   });
 
-  it('完全削除の導線は未使用の下書きだけに表示する', () => {
+  it('完全削除可能の案内は未使用の下書きだけに表示する', () => {
     expect(ledgerClient).toContain("selected.status === 'draft' && selectedConfigurationUsageCount === 0");
     expect(ledgerClient).toContain('完全削除可能');
     expect(ledgerClient).toContain('一覧右端の「⋮」から直接削除できます。');
-    expect(ledgerClient).toContain('保存プランで使用されているため、この下書きは完全削除できません。');
-    expect(ledgerClient).toContain('登録済み商品は完全削除の対象にしません。');
+    expect(ledgerClient).toContain("selected.status === 'published'");
+    expect(ledgerClient).toContain('登録済み・取扱終了の商品は履歴を守るため、通常は完全削除せず商品状態で管理します。');
   });
 
   it('既存のサーバー側削除処理は保存済み構成からの参照を拒否する', () => {

@@ -15,6 +15,11 @@ import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { RegisteredOptionEditFlow } from '@/components/admin/registered-option-edit-flow';
+import {
+  ProductPriceUnitPublishedCard,
+  ProductPriceUnitRegistrationField,
+  ProductPriceUnitRouteSummary,
+} from '@/components/admin/product-price-unit';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import {
@@ -112,6 +117,7 @@ export default async function EditOptionPage({
             cost={hqCostAccess.cost}
           />
         )}
+        <ProductPriceUnitPublishedCard optionId={id} />
         {canEditThisOption ? (
           <RegisteredOptionEditFlow
             key={option.updated_at}
@@ -231,6 +237,8 @@ export default async function EditOptionPage({
                 conflicts={confs}
                 returnTo={returnTo}
               />
+
+              <ProductPriceUnitRegistrationField optionId={id} />
 
               {sp.created && (
                 <div id="basic-info-saved" className="w-full" style={{ order: 15 }}>
@@ -357,6 +365,8 @@ export default async function EditOptionPage({
             ) : (
               <div className="card p-5 text-sm text-danger">商品カテゴリーが見つからないため、お客様表示を確認できません。</div>
             )}
+
+            <ProductPriceUnitRouteSummary />
 
             <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品登録">
               <div>

@@ -1,4 +1,5 @@
 import { finishLevelRank, type FinishLevel, type OptionCategory, type OptionConflict, type OptionDependency, type ProductOption } from './types';
+import { isSimulatorSelectableProduct, simulatorUnselectableReason } from './product-lifecycle';
 
 export type RuleIssueType = 'conflict' | 'dependency' | 'required' | 'single';
 
@@ -15,7 +16,15 @@ export interface RuleContext {
   conflicts: OptionConflict[];
   /** 本体分類表の選択 / ×（DB のマトリクス由来）。無ければカテゴリーを制限しない（migration 未適用の DB） */
   customerCategoryMatrix?: import('./customer-category-applicability').CustomerCategoryMatrix | null;
+  /**
+   * 新しく選べる商品か。省略時はシミュレーターの判定（取扱中かつシミュレーター表示）。見積の場面では取扱中だけで判定する。
+   * 取扱終了・非表示の商品も options には残し（保存済みの明細の表示・保持のため）、新しい選択・初期選択・自動追加だけをこの判定で止める
+   */
+  canSelectNew?: (option: ProductOption) => boolean;
 }
+
+const selectableNew = (ctx: RuleContext, option: ProductOption) =>
+  option.status === 'published' && (ctx.canSelectNew ?? isSimulatorSelectableProduct)(option);
 
 /**
  * 注文範囲に入っているカテゴリーだけを返す。
@@ -37,8 +46,8 @@ export function pruneToScope(ctx: RuleContext, selectedIds: string[], level: Fin
 
 const nameOf = (ctx: RuleContext, id: string) => ctx.options.find((o) => o.id === id)?.name ?? '不明なオプション';
 
-/** 候補（公開中・このモデル／仕様で選べる商品）に含まれているか */
-const isAvailable = (ctx: RuleContext, id: string) => ctx.options.some((o) => o.id === id && o.status === 'published');
+/** 候補（新しく選べる・このモデル／仕様で選べる商品）に含まれているか */
+const isAvailable = (ctx: RuleContext, id: string) => ctx.options.some((o) => o.id === id && selectableNew(ctx, o));
 
 /**
  * optionId を選ぶために必要な前提商品（依存の連鎖を含む）のうち、候補に無いものがあれば
@@ -69,7 +78,8 @@ const UNSATISFIABLE_DEPENDENCY = (name: string) =>
 export function validateSelection(ctx: RuleContext, selectedIds: string[], level: FinishLevel = 'full'): RuleIssue[] {
   const selected = new Set(selectedIds);
   const issues: RuleIssue[] = [];
-  const published = ctx.options.filter((o) => o.status === 'published');
+  // 必須の判定は新しく選べる商品で数え、選ばれているかは保存済みの明細（取扱終了・非表示）も含めて数える
+  const selectable = ctx.options.filter((o) => selectableNew(ctx, o));
   const inScope = new Set(categoriesInScope(ctx.categories, level).map((c) => c.id));
 
   for (const c of ctx.conflicts) {
@@ -97,8 +107,8 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[], level
     }
   }
   for (const cat of ctx.categories.filter((c) => c.status === 'published' && inScope.has(c.id))) {
-    const inCat = published.filter((o) => o.category_id === cat.id);
-    const chosen = inCat.filter((o) => selected.has(o.id));
+    const inCat = selectable.filter((o) => o.category_id === cat.id);
+    const chosen = ctx.options.filter((o) => o.category_id === cat.id && o.status === 'published' && selected.has(o.id));
     if (cat.selection_mode === 'single' && chosen.length > 1) {
       issues.push({
         type: 'single',
@@ -114,7 +124,7 @@ export function validateSelection(ctx: RuleContext, selectedIds: string[], level
       });
     }
   }
-  for (const o of published.filter((o) => o.is_required && inScope.has(o.category_id))) {
+  for (const o of selectable.filter((o) => o.is_required && inScope.has(o.category_id))) {
     if (!selected.has(o.id)) {
       issues.push({ type: 'required', message: `「${o.name}」は必須です。`, option_ids: [o.id] });
     }
@@ -176,6 +186,14 @@ export function toggleOption(ctx: RuleContext, selectedIds: string[], optionId: 
     return { next: [...selected], notices, rejected: false };
   }
 
+  // 取扱終了・シミュレーター非表示の商品は新しく選べない（保存済みの明細は外せるが、外した後に足し直せない）
+  if (!selectableNew(ctx, option)) {
+    return {
+      next: selectedIds,
+      notices: [simulatorUnselectableReason(option) ?? `「${option.name}」は選べません。`],
+      rejected: true,
+    };
+  }
   for (const c of ctx.conflicts) {
     const other =
       c.option_id === optionId ? c.conflicts_with_option_id : c.conflicts_with_option_id === optionId ? c.option_id : null;
@@ -213,7 +231,7 @@ export function toggleOption(ctx: RuleContext, selectedIds: string[], optionId: 
       if (selected.has(d.requires_option_id)) continue;
       const req = ctx.options.find((o) => o.id === d.requires_option_id);
       // 候補に無い前提商品は上の事前判定で拒否済み（ここへは到達しない）
-      if (!req || req.status !== 'published') continue;
+      if (!req || !selectableNew(ctx, req)) continue;
       const reqCat = ctx.categories.find((c) => c.id === req.category_id);
       if (reqCat?.selection_mode === 'single') {
         for (const o of ctx.options) if (o.category_id === reqCat.id && selected.has(o.id)) selected.delete(o.id);
@@ -253,7 +271,7 @@ export function explainBlocked(ctx: RuleContext, selectedIds: string[]): Map<str
 export function defaultSelection(ctx: RuleContext, level: FinishLevel = 'full'): string[] {
   const inScope = new Set(categoriesInScope(ctx.categories, level).map((c) => c.id));
   const ids = ctx.options
-    .filter((o) => o.status === 'published' && inScope.has(o.category_id) && (o.is_default || o.is_required))
+    .filter((o) => selectableNew(ctx, o) && inScope.has(o.category_id) && (o.is_default || o.is_required))
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((o) => o.id);
   let cur: string[] = [];

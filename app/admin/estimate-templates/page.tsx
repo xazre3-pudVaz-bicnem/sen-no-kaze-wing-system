@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { Alert } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
 import {
@@ -43,7 +44,7 @@ export default async function EstimateTemplatesPage({
   ]);
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
   const demoProducts: EstimateTemplateExcelDemoProduct[] = options
-    .filter((option) => option.status === 'published')
+    .filter(isQuoteSelectableProduct)
     .map((option) => ({
       id: option.id,
       category: categoryMap.get(option.category_id)?.name ?? '未分類',
@@ -67,37 +68,15 @@ export default async function EstimateTemplatesPage({
   }));
 
   const requestedSample = estimateDemoSampleById(sp.sample);
-  const selectedSample =
-    requestedSample ??
-    (!sp.estimate && templates.length === 0 ? ESTIMATE_DEMO_SAMPLES[0] ?? null : null);
-  const selectedTemplate = selectedSample
-    ? null
-    : templates.find((template) => template.id === sp.estimate) ??
-      templates[0] ??
-      null;
+  const selectedSample = requestedSample ?? (!sp.estimate && templates.length === 0 ? ESTIMATE_DEMO_SAMPLES[0] ?? null : null);
+  const selectedTemplate = selectedSample ? null : templates.find((template) => template.id === sp.estimate) ?? templates[0] ?? null;
 
   if (!selectedTemplate) {
     return (
-      <AdminPage
-        title="見積書管理"
-        actions={
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい標準見積を作る
-          </Link>
-        }
-      >
+      <AdminPage title="見積書管理" actions={<Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>}>
         <QuoteManagementTabs active="standard" />
-        <SavedEstimateMenu
-          templates={templates}
-          models={models}
-          samples={savedEstimateSamples}
-          selectedSampleId={selectedSample?.id}
-        />
-        <EstimateTemplateExcelDemo
-          key={selectedSample?.id ?? 'new-estimate-demo'}
-          sampleId={selectedSample?.id}
-          products={demoProducts}
-        />
+        <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
+        <EstimateTemplateExcelDemo key={selectedSample?.id ?? 'new-estimate-demo'} sampleId={selectedSample?.id} products={demoProducts} />
       </AdminPage>
     );
   }
@@ -109,30 +88,16 @@ export default async function EstimateTemplatesPage({
 
   if (!bundle) {
     return (
-      <AdminPage
-        title="見積書管理"
-        actions={
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい標準見積を作る
-          </Link>
-        }
-      >
+      <AdminPage title="見積書管理" actions={<Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>}>
         <QuoteManagementTabs active="standard" />
-        <SavedEstimateMenu
-          templates={templates}
-          models={models}
-          samples={savedEstimateSamples}
-          selectedId={selectedTemplate.id}
-        />
+        <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
         <Alert tone="warn">選択した標準見積の明細を読み込めませんでした。一覧から別の標準見積を選択してください。</Alert>
       </AdminPage>
     );
   }
 
   const baseSection = bundle.sections.find((section) => section.code === 'base');
-  const baseTotal =
-    baseSection?.total ??
-    bundle.base_breakdown_items.reduce((sum, row) => sum + row.amount, 0);
+  const baseTotal = baseSection?.total ?? bundle.base_breakdown_items.reduce((sum, row) => sum + row.amount, 0);
 
   const sections: EstimateTemplateWorkbenchSection[] = (Object.keys(SECTION_LABELS) as SectionCode[]).map((code) => {
     const section = bundle.sections.find((row) => row.code === code);
@@ -158,7 +123,7 @@ export default async function EstimateTemplatesPage({
   }));
 
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter(isQuoteSelectableProduct)
     .map((option) => ({
       id: option.id,
       categoryId: option.category_id,
@@ -174,9 +139,7 @@ export default async function EstimateTemplatesPage({
     }));
 
   const returnSection =
-    sp.return_section === 'interior_exterior' ||
-    sp.return_section === 'option' ||
-    sp.return_section === 'sitework'
+    sp.return_section === 'interior_exterior' || sp.return_section === 'option' || sp.return_section === 'sitework'
       ? sp.return_section
       : undefined;
 
@@ -194,22 +157,13 @@ export default async function EstimateTemplatesPage({
       title="見積書管理"
       actions={
         <div className="flex flex-wrap gap-2">
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">
-            ＋ 新しい標準見積を作る
-          </Link>
-          <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">
-            複製
-          </button>
+          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>
+          <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">複製</button>
         </div>
       }
     >
       <QuoteManagementTabs active="standard" />
-      <SavedEstimateMenu
-        templates={templates}
-        models={models}
-        samples={savedEstimateSamples}
-        selectedId={selectedTemplate.id}
-      />
+      <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
       <EstimateTemplateDetailTabs
         editContent={
           <EstimateTemplateWorkbench
@@ -238,28 +192,12 @@ export default async function EstimateTemplatesPage({
         }
         estimateContent={
           catalogBundle ? (
-            <StandardEstimateSimulatorPreview
-              bundle={catalogBundle}
-              specCode={selectedTemplate.spec_code}
-              template={bundle}
-              initialContentTab="estimate"
-              showContentTabs={false}
-              showEditLink={false}
-              previewOnly
-            />
+            <StandardEstimateSimulatorPreview bundle={catalogBundle} specCode={selectedTemplate.spec_code} template={bundle} initialContentTab="estimate" showContentTabs={false} showEditLink={false} previewOnly />
           ) : unavailablePreview
         }
         planContent={
           catalogBundle ? (
-            <StandardEstimateSimulatorPreview
-              bundle={catalogBundle}
-              specCode={selectedTemplate.spec_code}
-              template={bundle}
-              initialContentTab="plan"
-              showContentTabs={false}
-              showEditLink={false}
-              previewOnly
-            />
+            <StandardEstimateSimulatorPreview bundle={catalogBundle} specCode={selectedTemplate.spec_code} template={bundle} initialContentTab="plan" showContentTabs={false} showEditLink={false} previewOnly />
           ) : unavailablePreview
         }
       />

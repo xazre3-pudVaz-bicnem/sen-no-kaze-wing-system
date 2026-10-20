@@ -84,7 +84,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('overflow-x-auto md:overflow-x-visible');
     expect(authoringUi).toContain('w-full min-w-[46rem] table-fixed border-collapse');
     expect(authoringUi).toContain('md:min-w-0');
-    expect(authoringUi).toContain('data-testid={\`quote-section-summary-\${section.key}\`}');
+    expect(authoringUi).toContain('data-testid={`quote-section-summary-${section.key}`}');
     expect(authoringUi).toContain('const rowNumberByKey = useMemo');
     expect(authoringUi).toContain(">1</td>");
     expect(authoringUi).toContain(">式</td>");
@@ -136,7 +136,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(draftEditor).toContain('image_url: product.imageUrl');
     expect(newQuotePage).toContain('store.listOptions()');
     expect(newQuotePage).toContain('store.listCategories()');
-    expect(newQuotePage).toContain("option.status === 'published'");
+    expect(newQuotePage).toContain('.filter(isQuoteSelectableProduct)');
     expect(draftPage).toContain('store.getCatalogBundle(detail.draft.base_model_id)');
     expect(newQuotePage).toContain('products={products}');
     expect(draftPage).toContain('products={products}');

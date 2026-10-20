@@ -198,7 +198,11 @@ describe('non-Web manual case application wiring', () => {
     expect(draftEditor).toContain('label="下書き保存"');
     expect(draftEditor).toContain('正式見積を発行');
     expect(draftEditor).toContain('この内容で第${targetRevision}版を発行');
-    expect(draftEditor).toContain('未保存の変更があります。先に下書きを保存してください。');
+    expect(draftEditor).toContain('ConfirmSubmit');
+    expect(draftEditor).toContain('この内容を正式な${formalRevisionLabel}として発行します。発行後、この下書きは編集できません。');
+    expect(draftEditor).toContain('dialogTitle={`正式な${formalRevisionLabel}を発行しますか？`}');
+    expect(draftEditor).toContain('disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}');
+    expect(draftEditor).not.toContain("window.alert('未保存の変更があります。先に下書きを保存してください。')");
     expect(draftEditor).toContain('下書き保存時に数量×単価・税額・合計を確認します。');
     expect(draftEditor).toContain('targetRevision = 1');
     expect(draftEditor).toContain('base_master_revision_id');

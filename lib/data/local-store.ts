@@ -36,7 +36,6 @@ import type {
   SpecMatrix,
   MatrixRow,
 } from '@/lib/domain/types';
-import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { computePricing } from '@/lib/domain/pricing';
 import {
   computeStandardEstimatePricing,
@@ -92,7 +91,10 @@ import {
   type AccessibleCustomerQuote,
   type MatrixRowCreateInput,
   type MatrixRowUpdateInput,
+  type ProductLifecycleAction,
 } from './store';
+import { productLedgerState, productSimulatorVisibleSetting, type ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
+import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 
 import { isCaseSalesManager } from '@/lib/data/organizations/local-relations';
 const nowIso = () => new Date().toISOString();
@@ -160,6 +162,52 @@ export class LocalStore implements DataStore {
   }
 
   /** 商品価格の一括更新。価格変更は監査ログに残す */
+  async getProductLifecycleCapability(): Promise<ProductLifecycleCapability> {
+    return { columns: true, guards: true };
+  }
+  async setProductLifecycle({ id, action, expectedUpdatedAt }: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }) {
+    return this.mutate((db) => {
+      const option = db.options.find((o) => o.id === id);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません');
+      if (option.updated_at !== expectedUpdatedAt) {
+        throw new StoreError('LOCKED', '他の画面で商品が更新されたため、操作できませんでした。再読み込みしてから、もう一度操作してください');
+      }
+      const state = productLedgerState(option);
+      if (action === 'retire') {
+        // DB の options_lifecycle_guard と同じ参照保護（標準見積はローカルに無い）
+        if (state !== 'registered') throw new StoreError('VALIDATION', state === 'retired' ? 'この商品はすでに取扱終了です' : '取扱終了にできるのは登録済みの商品だけです。下書きは不要なら削除してください');
+        if (db.estimateTemplates.some((t) => (t.baseline_option_ids ?? []).includes(id))) {
+          throw new StoreError('LOCKED', 'Excel 標準見積の基準商品として使われているため、取扱終了にできません。先に基準商品から外してください');
+        }
+        if (option.is_required || option.is_default) {
+          throw new StoreError('LOCKED', '必須・初期選択の商品は取扱終了にできません。先に必須・初期選択の設定を外してください');
+        }
+        const dependent = db.dependencies
+          .filter((d) => d.requires_option_id === id && d.option_id !== id)
+          .map((d) => db.options.find((o) => o.id === d.option_id))
+          .find((o) => o && productLedgerState(o) === 'registered');
+        if (dependent) throw new StoreError('LOCKED', `「${dependent.name}」の前提商品として使われているため、取扱終了にできません。先に前提の設定を見直してください`);
+        if (db.models.some((m) => (option.base_model_id === null || option.base_model_id === m.id) && (m.presets ?? []).some((p) => p.option_codes.includes(option.code)))) {
+          throw new StoreError('LOCKED', '本体の仕様（標準の商品構成）で使われているため、取扱終了にできません。先に仕様の商品構成から外してください');
+        }
+        option.archived_at = nowIso();
+      } else if (action === 'resume') {
+        if (state !== 'retired') throw new StoreError('VALIDATION', 'この商品は取扱終了ではありません');
+        option.archived_at = null;
+      } else {
+        if (state !== 'registered') throw new StoreError('VALIDATION', 'シミュレーター表示は、取扱中の登録済み商品だけで設定できます');
+        option.simulator_visible = action === 'show_in_simulator';
+      }
+      option.updated_at = nowIso();
+      this.pushAudit(db, null, {
+        action: 'update',
+        entity: 'option',
+        entity_id: option.id,
+        summary: `商品の状態を変更：${option.name}（${{ retire: '取扱終了', resume: '取扱再開', show_in_simulator: 'シミュレーターに表示', hide_from_simulator: 'シミュレーターに表示しない' }[action]}）`,
+      });
+      return { updated_at: option.updated_at };
+    });
+  }
   async updateOptionPrices(items: { id: string; price: number }[]) {
     this.mutate((db) => {
       for (const it of items) {
@@ -921,6 +969,78 @@ export class LocalStore implements DataStore {
     return ruleContextForSpec({ ...full, options, customerCategoryMatrix: customerMatrix }, specCode, model.slug);
   }
 
+  /** 構成のモデル・仕様の標準構成に入っている商品（DB の product_lifecycle_baseline_option_ids と同じ。標準見積はローカルに無い） */
+  private static lifecycleBaselineIds(db: LocalDb, model: BaseModel, specCode: string | null): Set<string> {
+    const ids = new Set<string>();
+    for (const template of db.estimateTemplates) {
+      if (template.base_model_id === model.id && template.spec_code === (specCode ?? '')) {
+        for (const id of template.baseline_option_ids ?? []) ids.add(id);
+      }
+    }
+    const preset = (model.presets ?? []).find((row) => row.code === specCode);
+    for (const code of preset?.option_codes ?? []) {
+      const option = db.options.find((o) => o.code === code && (o.base_model_id === null || o.base_model_id === model.id));
+      if (option) ids.add(option.id);
+    }
+    return ids;
+  }
+
+  /**
+   * 取扱終了・シミュレーター非表示の商品は、保存前の状態にあった同じ明細（同じ商品・同じ選択肢、外壁は同じ面）だけを残せる。
+   * 非表示の商品は、構成のモデル・仕様の標準構成に入っていれば入れてよい（DB のトリガーと同じ）
+   */
+  private static assertLifecycleSelection(
+    db: LocalDb,
+    model: BaseModel,
+    specCode: string | null,
+    items: { option_id: string; variant_choice_ids: string[] }[],
+    faces: ExteriorFaceSelection[],
+    previousItems: { option_id: string; variant_choice_ids: string[] }[],
+    previousFaces: ExteriorFaceSelection[]
+  ) {
+    const sameIds = (a: string[], b: string[]) => {
+      const x = [...new Set(a)].sort();
+      const y = [...new Set(b)].sort();
+      return x.length === y.length && x.every((v, i) => v === y[i]);
+    };
+    let baseline: Set<string> | null = null;
+    const check = (optionId: string, retained: boolean, label: string) => {
+      const option = db.options.find((o) => o.id === optionId);
+      if (!option) return;
+      const state = productLedgerState(option);
+      if (state === 'draft') throw new StoreError('VALIDATION', `${label}「${option.name}」は下書きの商品のため選べません`);
+      if (state === 'registered' && productSimulatorVisibleSetting(option)) return;
+      if (retained) return;
+      if (state === 'registered') {
+        baseline ??= LocalStore.lifecycleBaselineIds(db, model, specCode);
+        if (baseline.has(optionId)) return;
+        throw new StoreError('VALIDATION', `${label}「${option.name}」はシミュレーターでは新しく選べない商品です`);
+      }
+      throw new StoreError('VALIDATION', `${label}「${option.name}」は取扱終了のため新しく選べません。取扱の再開を待つか、別の商品へ変更してください`);
+    };
+    const pool = [...previousItems];
+    for (const item of items) {
+      const index = pool.findIndex((prev) => prev.option_id === item.option_id && sameIds(prev.variant_choice_ids ?? [], item.variant_choice_ids ?? []));
+      if (index >= 0) pool.splice(index, 1);
+      check(item.option_id, index >= 0, '');
+    }
+    for (const face of faces) {
+      const retained = previousFaces.some(
+        (prev) => prev.face_code === face.face_code && prev.option_id === face.option_id && sameIds(prev.variant_choice_ids ?? [], face.variant_choice_ids ?? [])
+      );
+      check(face.option_id, retained, '外壁');
+    }
+  }
+
+  /** 取扱終了の商品が残っていれば止める（見積依頼。DB の quote_requests_lifecycle_guard と同じ） */
+  private static assertNoRetired(db: LocalDb, optionIds: string[], message: (names: string) => string) {
+    const names = optionIds
+      .map((id) => db.options.find((o) => o.id === id))
+      .filter((o): o is ProductOption => Boolean(o) && productLedgerState(o as ProductOption) === 'retired')
+      .map((o) => `「${o.name}」`);
+    if (names.length > 0) throw new StoreError('VALIDATION', message([...new Set(names)].join('・')));
+  }
+
   /** 選択中のモデル・仕様では選べない商品が含まれていたら拒否する（SQL の VALIDATION と同じ扱い） */
   private static assertSelectableForSpec(ctx: RuleContext, optionIds: string[], specCode: string | null) {
     if (!specCode) return;
@@ -955,6 +1075,26 @@ export class LocalStore implements DataStore {
       LocalStore.assertSelectableForSpec(ruleCtx, ids, specCode);
       const issues = validateSelection(ruleCtx, ids, level);
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
+      // 商品の状態（DB の 20261015113000 と同じ）：保存前の明細・外壁の面と照合してから書き込む
+      {
+        const wanted = new Set(input.variant_choice_ids ?? []);
+        const nextItems = ids.map((id) => ({
+          option_id: id,
+          variant_choice_ids: db.variantChoices
+            .filter((c) => wanted.has(c.id) && db.variantGroups.some((g) => g.id === c.group_id && g.option_id === id))
+            .map((c) => c.id),
+        }));
+        const previous = input.id ? db.configurations.find((c) => c.id === input.id) : undefined;
+        LocalStore.assertLifecycleSelection(
+          db,
+          model,
+          specCode,
+          nextItems,
+          (input.exterior_faces ?? []) as ExteriorFaceSelection[],
+          previous ? db.configurationItems.filter((i) => i.configuration_id === previous.id) : [],
+          previous ? (((previous as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces ?? []) as ExteriorFaceSelection[]) : []
+        );
+      }
 
       let cfg: Configuration;
       if (input.id) {
@@ -1037,6 +1177,19 @@ export class LocalStore implements DataStore {
       const src = db.configurations.find((c) => c.id === id);
       if (!src) throw new StoreError('NOT_FOUND', '保存データが見つかりません');
       if (!this.canAccess(actor, src.user_id)) throw new StoreError('FORBIDDEN', '権限がありません');
+      // 複製は新しい構成：取扱終了・非表示（標準構成外）の商品を黙って落とさず、明示的に止める（DB のトリガーと同じ）
+      const srcModel = db.models.find((m) => m.id === src.base_model_id);
+      if (srcModel) {
+        LocalStore.assertLifecycleSelection(
+          db,
+          srcModel,
+          src.spec_code ?? null,
+          db.configurationItems.filter((i) => i.configuration_id === src.id),
+          ((src as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces ?? []) as ExteriorFaceSelection[],
+          [],
+          []
+        );
+      }
       const copy: Configuration = {
         ...src,
         id: randomUUID(),
@@ -1129,6 +1282,12 @@ export class LocalStore implements DataStore {
         ? LocalStore.ruleContextFor(db, cfgModel, cfg.spec_code ?? null)
         : { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts };
       const itemOptionIds = items.map((i) => i.option_id);
+      // 取扱終了の商品が残っている構成からは見積を依頼しない（シミュレーター非表示だけなら依頼できる）
+      LocalStore.assertNoRetired(
+        db,
+        [...itemOptionIds, ...(((cfg as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces ?? []) as ExteriorFaceSelection[]).map((f) => f.option_id)],
+        (names) => `${names} は取扱終了のため、この内容では見積を依頼できません。取扱の再開を待つか、別の商品へ変更してください`
+      );
       LocalStore.assertSelectableForSpec(ruleCtx, itemOptionIds, cfgModel ? (cfg.spec_code ?? null) : null);
       const issues = validateSelection(ruleCtx, itemOptionIds, cfg.finish_level ?? 'full');
       if (issues.length) throw new StoreError('VALIDATION', issues.map((i) => i.message).join(' '));
@@ -1878,7 +2037,14 @@ export class LocalStore implements DataStore {
   }
   async upsertOption(input: OptionInput): Promise<ProductOption> {
     return this.mutate((db) => {
-      const { id, product_no: _productNo, ...rest } = input;
+      // 取扱終了・シミュレーター表示は setProductLifecycle だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
+      const {
+        id,
+        product_no: _productNo,
+        simulator_visible: _simulatorVisible,
+        archived_at: _archivedAt,
+        ...rest
+      } = input as OptionInput & Pick<ProductOption, 'simulator_visible' | 'archived_at'>;
       if (db.options.some((o) => o.code === rest.code && o.id !== id)) {
         throw new StoreError('VALIDATION', `コード「${rest.code}」は既に使われています`);
       }
@@ -1889,6 +2055,8 @@ export class LocalStore implements DataStore {
             ...rest,
             id,
             product_no: allocateLocalProductNo(db),
+            simulator_visible: true,
+            archived_at: null,
             created_at: nowIso(),
             updated_at: nowIso(),
           };

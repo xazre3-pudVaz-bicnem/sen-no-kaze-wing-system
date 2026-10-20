@@ -1,6 +1,6 @@
 import type { AssignableMemberRole, MemberRole, OrganizationStatus, OrganizationType } from '@/lib/domain/organizations';
 
-/** ローカル検証モードの JSON DB（.wing-local/db.json）の organizations。DB の 20261015120000 に対応する */
+/** ローカル検証モードの JSON DB（.wing-local/db.json）の organizations。DB の 20261016120000 に対応する */
 export interface LocalOrganizationTables {
   organizations: LocalOrganization[];
   memberships: LocalMembership[];

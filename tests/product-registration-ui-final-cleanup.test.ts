@@ -31,6 +31,26 @@ describe('商品登録UIの最終整理', () => {
     expect(finalEnhancer).toContain('現在、選択項目はありません。');
   });
 
+  it('保存済み下書きは編集と示し、STEP1の各入力欄へ移動できる', () => {
+    expect(finalEnhancer).toContain('商品を編集中');
+    expect(finalEnhancer).toContain('registration-compact-step-flow');
+    expect(finalEnhancer).toContain('data-registration-section-nav');
+    expect(finalEnhancer).toContain('registrationSectionNav');
+    expect(finalEnhancer).toContain("id: 'product-identify'");
+    expect(finalEnhancer).toContain("id: 'manufacturer-documents'");
+    expect(finalEnhancer).toContain("id: 'registration-final-check'");
+    expect(finalEnhancer).toContain("nav.setAttribute('aria-label', '入力項目へ移動')");
+  });
+
+  it('登録前チェックは該当入力欄へ移動できる', () => {
+    expect(finalEnhancer).toContain("message.includes('メイン画像')");
+    expect(finalEnhancer).toContain("message.includes('メーカー資料')");
+    expect(finalEnhancer).toContain("message.includes('商品価格')");
+    expect(finalEnhancer).toContain("message.includes('選択肢')");
+    expect(finalEnhancer).toContain("link.dataset.registrationCheckLink = 'true'");
+    expect(finalEnhancer).toContain("item.append(' ', link)");
+  });
+
   it('STEP2の案内と0円・選択項目表示を簡潔にする', () => {
     expect(finalEnhancer).toContain('お客様に表示される商品内容を確認します。');
     expect(finalEnhancer).toContain('登録内容を変更する場合はSTEP 1へ戻ってください。');

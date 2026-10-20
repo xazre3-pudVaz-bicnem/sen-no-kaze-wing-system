@@ -17,6 +17,16 @@ describe('商品登録の画像・PDF確認UI', () => {
     expect(source).toContain('<summary className="cursor-pointer text-xs font-semibold text-ink-soft">表示設定</summary>');
   });
 
+  it('登録済PDFは閲覧を優先し、差し替える時だけ入力を表示する', () => {
+    expect(source).toContain('pdfReplaceOpen');
+    expect(source).toContain('aria-expanded={pdfReplaceOpen}');
+    expect(source).toContain('aria-controls="manufacturer-document-replace-fields"');
+    expect(source).toContain('PDFを差し替える');
+    expect(source).toContain("option.manufacturer_document_url && !pdfReplaceOpen ? 'hidden' : 'space-y-4'");
+    expect(source).toContain('setPdfReplaceOpen(false)');
+    expect(source).toContain('option.manufacturer_document_url && (');
+  });
+
   it('PDFは開いた時だけ表示し、枠外クリックとEscで閉じられる', () => {
     expect(source).toContain('pdfPreviewOpen && option.manufacturer_document_url');
     expect(source).toContain('event.target === event.currentTarget');

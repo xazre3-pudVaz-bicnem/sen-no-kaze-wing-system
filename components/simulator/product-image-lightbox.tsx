@@ -108,8 +108,12 @@ export function ProductImageLightbox({ open, productName, images, selectedIndex,
           </div>
         </header>
         <div ref={scrollAreaRef} className="min-h-0 flex-1 overflow-auto overscroll-contain bg-sand/45" data-testid="product-detail-image-zoom-area">
-          <div
-            className="relative min-h-full"
+          <button
+            type="button"
+            aria-label="拡大画像をクリックして閉じる"
+            title="画像をクリックして閉じる"
+            onClick={onClose}
+            className="relative block min-h-full cursor-zoom-out border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-brown"
             style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
           >
             <SmartImage
@@ -120,7 +124,7 @@ export function ProductImageLightbox({ open, productName, images, selectedIndex,
               className="object-contain p-2 sm:p-4"
               unoptimized
             />
-          </div>
+          </button>
         </div>
         {images.length > 1 && (
           <footer className="flex shrink-0 items-center justify-between border-t border-line px-3 py-2">

@@ -57,8 +57,8 @@ describe('共通商品詳細の画像名と拡大表示', () => {
   it('拡大画像のクリック・タップとキーボード操作で閉じられ、他の操作は維持する', () => {
     const scrollArea = lightbox.slice(lightbox.indexOf('data-testid="product-detail-image-zoom-area"'));
     const imageButton = scrollArea.slice(
-      scrollArea.indexOf('aria-label="拡大画像をクリックして閉じる"'),
-      scrollArea.indexOf('</button>')
+      scrollArea.indexOf('<button'),
+      scrollArea.indexOf('</button>') + '</button>'.length
     );
     expect(imageButton).toContain('onClick={onClose}');
     expect(imageButton).toContain('cursor-zoom-out');

@@ -54,6 +54,23 @@ describe('共通商品詳細の画像名と拡大表示', () => {
     expect(lightbox).toContain('aria-label="拡大表示を閉じる"');
   });
 
+  it('拡大画像のクリック・タップとキーボード操作で閉じられ、他の操作は維持する', () => {
+    const scrollArea = lightbox.slice(lightbox.indexOf('data-testid="product-detail-image-zoom-area"'));
+    const imageButton = scrollArea.slice(
+      scrollArea.indexOf('aria-label="拡大画像をクリックして閉じる"'),
+      scrollArea.indexOf('</button>')
+    );
+    expect(imageButton).toContain('onClick={onClose}');
+    expect(imageButton).toContain('cursor-zoom-out');
+    expect(imageButton).toContain('type="button"');
+    expect(imageButton).toContain('<SmartImage');
+    expect(imageButton).toContain('style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}');
+    expect(lightbox).toContain('aria-label="拡大表示を閉じる"');
+    expect(lightbox).toContain('onCancel={(event) => {');
+    expect(lightbox).toContain('aria-label="画像を拡大"');
+    expect(lightbox).toContain('aria-label="拡大画像の次の画像"');
+  });
+
   it('画像操作で商品仕様・金額・PDF表示の動作を変更しない', () => {
     expect(detail).toContain('const handleVariantChange = (choiceId: string, groupId: string) => {');
     expect(detail).toContain('onVariantChange(choiceId, groupId);');

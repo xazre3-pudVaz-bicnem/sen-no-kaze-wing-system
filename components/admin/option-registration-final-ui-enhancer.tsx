@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react';
 
-const IMAGE_URL_MARKER = 'registrationImageUrlToggle';
-
 function directGridChild(element: HTMLElement): HTMLElement | null {
   const grid = element.closest('.grid');
   if (!(grid instanceof HTMLElement)) return null;
@@ -20,6 +18,11 @@ function setTextIfChanged(element: HTMLElement, value: string) {
 function simplifyStepProgress() {
   const flow = document.querySelector<HTMLElement>('section[aria-label="商品登録の2ステップ"]');
   if (!flow) return;
+  flow.classList.add('registration-compact-step-flow');
+
+  // このページは基本情報が保存された下書き商品の編集画面。
+  const title = document.querySelector<HTMLElement>('h1');
+  if (title?.textContent?.trim() === '商品を追加') setTextIfChanged(title, '商品を編集中');
 
   Array.from(flow.querySelectorAll<HTMLElement>('p')).forEach((row) => {
     if (row.textContent?.trim().startsWith('現在：STEP')) row.style.display = 'none';
@@ -28,7 +31,7 @@ function simplifyStepProgress() {
 
 function enhanceMainImageUrl() {
   const input = document.querySelector<HTMLInputElement>('#product-main-media input[name="image_url"]');
-  if (!input || input.dataset[IMAGE_URL_MARKER] === 'true') return;
+  if (!input) return;
 
   const wrapper = directGridChild(input);
   if (!wrapper) return;
@@ -38,31 +41,45 @@ function enhanceMainImageUrl() {
     : null;
   if (label) setTextIfChanged(label, '画像URL');
 
-  const toggleRow = document.createElement('div');
-  toggleRow.className = 'sm:col-span-2';
-  toggleRow.dataset.registrationImageUrlToggle = 'true';
+  // URL取り込みは通常の入力手段なので、折りたたまず常に表示する。
+  document.querySelector('#product-main-media [data-registration-image-url-toggle="true"]')?.remove();
+  if (wrapper.style.display === 'none') wrapper.style.removeProperty('display');
+}
 
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'btn-ghost btn-sm px-0 text-xs';
-  toggleRow.appendChild(button);
-  wrapper.insertAdjacentElement('beforebegin', toggleRow);
+/** STEP1見出しと保存案内だけを簡潔にする。ジャンプ用ナビは設置しない。 */
+function simplifyRegistrationInfoHeading() {
+  const info = document.querySelector<HTMLElement>('[data-testid="option-registration-info"]');
+  if (!info) return;
+  const heading = info.querySelector<HTMLElement>(':scope > div:first-child > h2');
+  if (heading) setTextIfChanged(heading, '商品情報を入力');
+  const guidance = info.querySelector<HTMLElement>(':scope > div:first-child > p');
+  if (guidance) {
+    setTextIfChanged(guidance, '変更はSTEP 2へ進むときと、画像・資料の登録前に保存されます。');
+  }
+}
 
-  let open = Boolean(wrapper.querySelector('.text-danger, [role="alert"]'));
-  const render = () => {
-    wrapper.style.display = open ? '' : 'none';
-    setTextIfChanged(button, open ? 'URL指定を閉じる' : 'URLで画像を指定');
-    button.setAttribute('aria-expanded', String(open));
-  };
+/** 要確認メッセージを読んだ直後に、該当する入力欄へ移動できるようにする。 */
+function enhanceRegistrationCheckLinks() {
+  const check = document.querySelector<HTMLElement>('[data-testid="option-registration-check"]');
+  if (!check) return;
 
-  button.addEventListener('click', () => {
-    open = !open;
-    render();
-    if (open) input.focus();
+  check.querySelectorAll<HTMLLIElement>('li').forEach((item) => {
+    if (item.querySelector('[data-registration-check-link="true"]')) return;
+    const message = item.textContent ?? '';
+    const target = message.includes('メイン画像') ? 'product-main-media'
+      : message.includes('メーカー資料') ? 'manufacturer-documents'
+      : message.includes('商品価格') ? 'sales-settings'
+      : message.includes('選択肢') ? 'customer-selection'
+      : message.includes('重複候補') ? 'product-identify'
+      : null;
+    if (!target || !document.getElementById(target)) return;
+    const link = document.createElement('a');
+    link.href = `#${target}`;
+    link.textContent = '入力欄へ';
+    link.dataset.registrationCheckLink = 'true';
+    link.className = 'registration-check-jump';
+    item.append(' ', link);
   });
-
-  input.dataset[IMAGE_URL_MARKER] = 'true';
-  render();
 }
 
 function simplifyCustomerSelectionEmptyState() {
@@ -100,6 +117,8 @@ export function OptionRegistrationFinalUiEnhancer() {
     const enhance = () => {
       simplifyStepProgress();
       enhanceMainImageUrl();
+      simplifyRegistrationInfoHeading();
+      enhanceRegistrationCheckLinks();
       simplifyCustomerSelectionEmptyState();
       simplifyPreviewGuidance();
     };

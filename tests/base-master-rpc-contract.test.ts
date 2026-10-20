@@ -48,9 +48,18 @@ describe('本体マスターRPC契約', () => {
     expect(rpcSql).toMatch(/set current_published_revision_id = v_revision\.id/i);
   });
 
-  it('Publish UIは不可逆操作の確認ダイアログを通す', () => {
-    expect(revisionForm).toContain('window.confirm');
+  it('Publish UIは不可逆操作の中央確認モーダルを通す', () => {
+    expect(revisionForm).toContain('ConfirmSubmit');
+    expect(revisionForm).toContain('ConfirmActionButton');
+    expect(revisionForm).not.toContain('window.confirm');
     expect(revisionForm).toContain('公開後、この版の内容は直接変更できません');
+    expect(revisionForm).toContain('disabled={publishing || dirty || lines.length === 0}');
+  });
+
+  it('下書きの戻し・破棄も中央確認モーダルを通す', () => {
+    expect(revisionForm).toContain('未保存の変更を破棄して、保存時点の内容に戻します。入力中の変更は元に戻せません。');
+    expect(revisionForm).toContain('この下書きを破棄します。破棄した下書きは元に戻せません。');
+    expect(revisionForm).toContain('下書きを破棄');
   });
 
   it('変更系RPCは本体編集権限をDBで再確認する', () => {

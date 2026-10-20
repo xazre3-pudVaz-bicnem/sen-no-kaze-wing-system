@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff, ZoomIn } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 import { ManufacturerDocumentModal } from './manufacturer-document-modal';
+import { ProductImageLightbox } from './product-image-lightbox';
 import { VariantPicker } from './variant-picker';
 
 interface Props {
@@ -41,8 +42,11 @@ export function ProductDetail({
   const manufacturerDocumentUrl = option.manufacturer_document_url?.trim() || null;
   const [manufacturerDocumentOpen, setManufacturerDocumentOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const swipeHandled = useRef(false);
   const closeManufacturerDocument = useCallback(() => setManufacturerDocumentOpen(false), []);
+  const closeImageLightbox = useCallback(() => setImageLightboxOpen(false), []);
 
   const galleryImages = [
     ...(option.image_url ? [{ url: option.image_url, label: '商品全体' }] : []),
@@ -130,6 +134,7 @@ export function ProductDetail({
             )}
             onTouchStart={(event) => {
               if (galleryImages.length <= 1) return;
+              swipeHandled.current = false;
               touchStartX.current = event.touches[0]?.clientX ?? null;
             }}
             onTouchEnd={(event) => {
@@ -138,18 +143,37 @@ export function ProductDetail({
               const delta = endX - touchStartX.current;
               touchStartX.current = null;
               if (Math.abs(delta) < 40) return;
+              swipeHandled.current = true;
               moveImage(delta < 0 ? 1 : -1);
             }}
           >
             {activeImage ? (
               <>
-                <SmartImage
-                  src={activeImage.url}
-                  alt={`${option.name} ${activeImage.label}`}
-                  fill
-                  sizes="(min-width: 768px) 62vw, 90vw"
-                  className="object-contain"
-                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (swipeHandled.current) {
+                      swipeHandled.current = false;
+                      return;
+                    }
+                    setImageLightboxOpen(true);
+                  }}
+                  className="absolute inset-0 cursor-zoom-in focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-brown"
+                  aria-label={`${activeImage.label}を拡大表示`}
+                  title="画像を拡大表示"
+                >
+                  <SmartImage
+                    src={activeImage.url}
+                    alt={`${option.name} ${activeImage.label}`}
+                    fill
+                    sizes="(min-width: 768px) 62vw, 90vw"
+                    className="object-contain"
+                  />
+                  <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-ink shadow-soft">
+                    <ZoomIn className="size-3.5" aria-hidden="true" />
+                    拡大
+                  </span>
+                </button>
                 {galleryImages.length > 1 && (
                   <>
                     <button
@@ -168,9 +192,6 @@ export function ProductDetail({
                     >
                       <ChevronRight className="size-5" aria-hidden="true" />
                     </button>
-                    <span className="absolute bottom-2 right-2 rounded-full bg-ink/70 px-2 py-1 text-[0.65rem] font-semibold text-white">
-                      {safeImageIndex + 1} / {galleryImages.length}
-                    </span>
                   </>
                 )}
               </>
@@ -181,6 +202,16 @@ export function ProductDetail({
               </div>
             )}
           </div>
+
+          {activeImage && (
+            <div className="mt-2 flex min-w-0 items-center justify-between gap-3" aria-live="polite" data-testid="product-detail-image-caption">
+              <p className="min-w-0 truncate text-[13px] font-semibold text-ink-soft" title={activeImage.label}>
+                <span className="mr-2 text-[11px] font-normal text-muted">表示中の画像</span>
+                {activeImage.label}
+              </p>
+              <span className="shrink-0 text-xs tabular-nums text-muted">{safeImageIndex + 1} / {galleryImages.length}</span>
+            </div>
+          )}
 
           {galleryImages.length > 1 && (
             <div className="mt-2">
@@ -210,11 +241,6 @@ export function ProductDetail({
                   </button>
                 ))}
               </div>
-              {activeImage && (
-                <p className="mt-1 truncate text-[0.65rem] text-muted" title={activeImage.label}>
-                  {activeImage.label}
-                </p>
-              )}
             </div>
           )}
         </section>
@@ -236,7 +262,7 @@ export function ProductDetail({
 
             {option.highlight && (
               <p
-                className="mt-2 inline-flex rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown"
+                className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-relaxed text-ink-soft"
                 data-testid="product-detail-highlight"
               >
                 {option.highlight}
@@ -344,6 +370,14 @@ export function ProductDetail({
         </section>
       </div>
 
+      <ProductImageLightbox
+        open={imageLightboxOpen}
+        productName={option.name}
+        images={galleryImages}
+        selectedIndex={safeImageIndex}
+        onSelect={setActiveImageIndex}
+        onClose={closeImageLightbox}
+      />
       <ManufacturerDocumentModal
         open={manufacturerDocumentOpen}
         url={manufacturerDocumentUrl}

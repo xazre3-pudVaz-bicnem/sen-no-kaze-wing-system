@@ -2,7 +2,8 @@
 
 import { useActionState } from 'react';
 import { cancelElectronicContractAction, sendElectronicContractAction, type ContractActionState } from '@/lib/actions/contracts';
-import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
+import { Alert, Field, Input, Spinner } from '@/components/ui';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 
 const initial: ContractActionState = { ok: false };
 
@@ -36,10 +37,17 @@ export function SendElectronicContractForm({
           <Input id="signer_email" name="signer_email" type="email" defaultValue={defaultEmail} required maxLength={254} />
         </Field>
       </div>
-      <Button type="submit" disabled={disabled || pending} data-testid="electronic-contract-send">
+      <ConfirmSubmit
+        message="入力した署名者へGMOサインの契約書を送信します。氏名とメールアドレスを確認してから送信してください。"
+        dialogTitle="契約書を送信しますか？"
+        confirmLabel="送信する"
+        className="btn-primary inline-flex items-center gap-2"
+        disabled={disabled || pending}
+        data-testid="electronic-contract-send"
+      >
         {pending && <Spinner />}
         {pending ? '送信中…' : 'GMOサインで契約書を送信する'}
-      </Button>
+      </ConfirmSubmit>
     </form>
   );
 }
@@ -55,10 +63,17 @@ export function CancelElectronicContractForm({ quoteId, contractId }: { quoteId:
         <Field label="取り消しの理由（任意）" htmlFor={`cancel-reason-${contractId}`}>
           <Input id={`cancel-reason-${contractId}`} name="reason" maxLength={1000} />
         </Field>
-        <Button type="submit" variant="ghost" size="sm" disabled={pending}>
+        <ConfirmSubmit
+          message="この電子契約を取り消します。取り消し後は、必要に応じて改めて契約書を送信してください。"
+          dialogTitle="この契約を取り消しますか？"
+          confirmLabel="契約を取り消す"
+          destructive
+          className="btn-ghost btn-sm text-danger inline-flex items-center gap-2"
+          disabled={pending}
+        >
           {pending && <Spinner />}
           この契約を取り消す
-        </Button>
+        </ConfirmSubmit>
       </div>
     </form>
   );

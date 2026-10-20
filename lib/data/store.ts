@@ -1,4 +1,5 @@
 import 'server-only';
+import type { ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type {
   FinishLevel,
   BaseBreakdownItem,
@@ -351,7 +352,11 @@ export interface UploadInput {
 
 export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
 export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
-export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images'> & { id?: string | null };
+// 取扱終了・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle だけで変える）
+export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at'> & { id?: string | null };
+
+/** 商品の状態の変更（20261015113000）。取扱終了・取扱再開・シミュレーターに表示する・表示しない */
+export type ProductLifecycleAction = 'retire' | 'resume' | 'show_in_simulator' | 'hide_from_simulator';
 export type OptionImageInput = Omit<OptionImage, 'id' | 'created_at'> & { id?: string | null };
 export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | null };
 export type HotspotInput = Omit<PreviewHotspot, 'id'> & { id?: string | null };
@@ -486,6 +491,13 @@ export interface DataStore {
 
   /** 商品価格の一括更新（総代理店以上）。本体内訳マスターの一括管理表から使う */
   updateOptionPrices(items: { id: string; price: number }[]): Promise<void>;
+  /**
+   * 商品の状態を変える（取扱終了・再開・シミュレーター表示）。画面が読んだ版（updated_at）と一致する行だけを更新し、
+   * 0 件なら失敗にする（古い画面の操作を成功扱いにしない）。参照保護などの判定は DB のトリガーが行う（20261015113000）
+   */
+  setProductLifecycle(input: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }): Promise<{ updated_at: string }>;
+  /** 商品の状態の機能を使えるか（20261015110000 と 20261015113000 が適用済みか） */
+  getProductLifecycleCapability(): Promise<ProductLifecycleCapability>;
 
   // ---- 本体内訳マスター ----
   /** モデル・仕様ごとの本体内訳（分類表見積書）。modelId 省略で全件 */

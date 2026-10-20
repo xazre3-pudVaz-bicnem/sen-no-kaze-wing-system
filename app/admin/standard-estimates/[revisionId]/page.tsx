@@ -16,6 +16,7 @@ import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { StandardEstimateEditor } from '@/components/admin/standard-estimate-editor';
 import { StandardEstimateBaselineEditor, type BaselineCandidate, type BaselineItemView } from '@/components/admin/standard-estimate-baseline-editor';
+import { isQuoteSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
 
 export const metadata: Metadata = { title: '標準見積の Revision | 管理画面', robots: { index: false } };
 export const dynamic = 'force-dynamic';
@@ -120,22 +121,29 @@ export default async function StandardEstimateRevisionPage({
         dependencies: bundle.dependencies,
         conflicts: bundle.conflicts,
         customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
+        // 標準見積は見積の場面：シミュレーター非表示の商品も使える（見積不可ではない）。取扱終了は新しく入れない
+        canSelectNew: isQuoteSelectableProduct,
       }
     : null;
   const specCtx = ruleCtx && catalogModel && master ? ruleContextForSpec(ruleCtx, master.spec_code, catalogModel.slug) : null;
   const categoryById = new Map((bundle?.categories ?? []).map((category) => [category.id, category] as const));
-  const baselineCandidates: BaselineCandidate[] = (specCtx?.options ?? []).map((option) => {
-    const code = categoryById.get(option.category_id)?.code ?? '';
-    return {
-      id: option.id,
-      name: option.name,
-      categoryName: categoryById.get(option.category_id)?.name ?? '未分類',
-      section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
-      price: option.price,
-      priceOnRequest: option.price_on_request,
-      defaultVariantChoiceIds: bundle ? defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, [option.id]) : [],
-    };
-  });
+  // 新しく入れられるのは取扱中の商品だけ。取扱終了でも、この Revision に保存済みの明細は表示・保持のために渡す（DB の保存境界と同じ）
+  const savedBaselineOptionIds = new Set((baselineRows ?? []).map((item) => item.option_id));
+  const baselineCandidates: BaselineCandidate[] = (specCtx?.options ?? [])
+    .filter((option) => isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && savedBaselineOptionIds.has(option.id)))
+    .map((option) => {
+      const code = categoryById.get(option.category_id)?.code ?? '';
+      return {
+        id: option.id,
+        name: option.name,
+        categoryName: categoryById.get(option.category_id)?.name ?? '未分類',
+        section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
+        price: option.price,
+        priceOnRequest: option.price_on_request,
+        defaultVariantChoiceIds: bundle ? defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, [option.id]) : [],
+        retired: productLedgerState(option) === 'retired',
+      };
+    });
   const suggestedBaselineIds = ruleCtx && catalogModel && master ? buildEstimateSpecSelection(ruleCtx, catalogModel, master.spec_code) : [];
   const baselineItems: BaselineItemView[] = (baselineRows ?? []).map((item) => ({
     option_id: item.option_id,

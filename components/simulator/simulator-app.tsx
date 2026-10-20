@@ -50,6 +50,7 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
+import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/domain/product-lifecycle';
 import { Alert, Button } from '@/components/ui';
 import { FinishLevelPicker } from './finish-level-picker';
 import { ElevationStrip, PlanBoard } from './plan-board';
@@ -260,7 +261,7 @@ export function SimulatorApp({
     'exterior-current-gl-bare',
   ]);
   const initialExteriorWallOptions = initialSpecCtx.options
-    .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
+    .filter((o) => o.category_id === exteriorWallCat?.id && isSimulatorSelectableProduct(o))
     .sort((a, b) => a.sort_order - b.sort_order);
   const initialHasCurrentExteriorCatalog = initialExteriorWallOptions.some((option) => currentExteriorCodes.has(option.code));
   const initialSelectableExteriorWallOptions = initialHasCurrentExteriorCatalog
@@ -323,7 +324,7 @@ export function SimulatorApp({
   const eligibleExteriorWallOptions = useMemo(
     () =>
       activeSpecCtx.options
-        .filter((o) => o.category_id === exteriorWallCat?.id && o.status === 'published')
+        .filter((o) => o.category_id === exteriorWallCat?.id && isSimulatorSelectableProduct(o))
         .sort((a, b) => a.sort_order - b.sort_order),
     [activeSpecCtx.options, exteriorWallCat?.id]
   );
@@ -500,7 +501,8 @@ export function SimulatorApp({
 
   // ---- 仕様で絞り込んだカタログ ----
   const specOptions = useMemo(() => {
-    if (!readOnly) return activeSpecCtx.options;
+    // 取扱終了・シミュレーター非表示の商品は、選ばれている間だけ候補に出す（外したら消え、足し直せない。DB でも拒否される）
+    if (!readOnly) return simulatorChoiceOptions(activeSpecCtx.options, selected);
     const eligibleIds = new Set(activeSpecCtx.options.map((option) => option.id));
     const historicalSelected = bundle.options.filter(
       (option) => selected.includes(option.id) && !eligibleIds.has(option.id)
@@ -953,7 +955,7 @@ export function SimulatorApp({
 
   const fireproofCat = bundle.categories.find((c) => c.code === 'fireproof');
   const fireproofOptions = specOptions
-    .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published')
+    .filter((o) => o.category_id === fireproofCat?.id && o.status === 'published' && (readOnly || isSimulatorSelectableProduct(o) || selected.includes(o.id)))
     .sort((a, b) => a.sort_order - b.sort_order);
   const fireproofChosen = fireproofOptions.find((o) => selected.includes(o.id));
   const rawModelSubtitle = model.name === 'Wing' ? '傾斜地対応折畳み式木造コンテナ' : model.tagline ?? '';

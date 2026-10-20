@@ -105,11 +105,12 @@ test.describe('管理者フロー', () => {
     await logout(page);
     await login(page, ADMIN_EMAIL, `/admin/options/${UB_ID}`);
     await applyRegisteredOptionPrice(page, originalPrice);
-    page.on('dialog', (d) => d.accept());
     await page.goto(COMPLETION_IMAGES);
     const testCard = page.getByTestId('preview-rule-card').filter({ has: page.locator('img[alt*="テスト用"]') }).first();
     await testCard.getByText('詳細・その他の操作').click();
     await testCard.getByRole('button', { name: 'この画像を削除' }).click();
+    // 削除の確認は画面内の確認ダイアログ（#520）
+    await page.getByRole('dialog', { name: '削除しますか？' }).getByRole('button', { name: 'この画像を削除' }).click();
     await expect(page).toHaveURL(/deleted=1/);
   });
 });

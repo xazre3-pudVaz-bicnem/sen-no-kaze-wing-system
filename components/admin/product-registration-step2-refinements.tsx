@@ -77,7 +77,7 @@ function enhanceStep2() {
   const intro = heading?.parentElement?.querySelector<HTMLElement>('p') ?? null;
   setTextIfChanged(
     intro,
-    'メイン画像・価格・お客様選択をここで最終確認し、問題がなければ登録してください。'
+    'メイン画像・商品価格・メーカー・型番・お客様選択をここで最終確認し、問題がなければ登録してください。'
   );
 
   const summaryHost = heading?.parentElement;
@@ -91,11 +91,15 @@ function enhanceStep2() {
     summaryHost.append(checklist);
   }
 
+  const productPreview = preview.querySelector<HTMLElement>('[data-testid="simulator-product-detail-preview"]');
   const imageMissing = Array.from(preview.querySelectorAll<HTMLElement>('*')).some(
     (element) => element.children.length === 0 && element.textContent?.trim() === '画像なし'
   );
   const zeroPriceNeedsConfirmation = registration.textContent?.includes('商品価格が0円です') ?? false;
-  const hasCustomerChoices = preview.textContent?.includes('仕様を選ぶ') ?? false;
+  const priceDisplay = productPreview?.dataset.registrationPriceDisplay ?? '未確認';
+  const manufacturer = productPreview?.dataset.registrationManufacturer ?? '未設定';
+  const modelNo = productPreview?.dataset.registrationModelNo ?? '未設定';
+  const customerChoices = productPreview?.dataset.registrationCustomerChoices ?? 'なし';
 
   ensureCheckRow(
     checklist,
@@ -107,17 +111,13 @@ function enhanceStep2() {
   ensureCheckRow(
     checklist,
     'price',
-    '価格',
-    zeroPriceNeedsConfirmation ? '0円の確認が必要' : '確認済み',
+    '商品価格（税別）',
+    zeroPriceNeedsConfirmation ? `${priceDisplay}／0円の確認が必要` : priceDisplay,
     zeroPriceNeedsConfirmation ? 'warning' : 'normal'
   );
-  ensureCheckRow(
-    checklist,
-    'choices',
-    'お客様選択',
-    hasCustomerChoices ? 'お客様表示を確認してください' : '選択項目なし',
-    hasCustomerChoices ? 'warning' : 'normal'
-  );
+  ensureCheckRow(checklist, 'manufacturer', 'メーカー', manufacturer);
+  ensureCheckRow(checklist, 'model', 'シリーズ・型番', modelNo);
+  ensureCheckRow(checklist, 'choices', 'お客様選択', customerChoices);
 }
 
 export function ProductRegistrationStep2Refinements() {

@@ -302,7 +302,7 @@ function enhanceProductImages() {
   if (emptyState) emptyState.style.display = 'none';
 
   const uploadLabel = document.querySelector<HTMLLabelElement>('label[for="option-sub-image"]');
-  if (uploadLabel) setTextIfChanged(uploadLabel, '追加画像');
+  if (uploadLabel) setTextIfChanged(uploadLabel, 'または画像ファイルから登録');
 
   Array.from(subImages.querySelectorAll<HTMLButtonElement>('button')).forEach((button) => {
     if (button.textContent?.trim() === 'このサブ画像を削除') {

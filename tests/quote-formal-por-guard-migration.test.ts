@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
-const migration = read('supabase/migrations/20261020100000_quote_formal_por_guard.sql');
+const migration = read('supabase/migrations/20261016111000_quote_formal_por_guard.sql');
 const moneyMigration = read('supabase/migrations/20261013180000_quote_standard_estimate_money.sql');
 const revisionMigration = read('supabase/migrations/20260928174500_quote_revision_staff_access_corrective.sql');
 const formalizationMigration = read('supabase/migrations/20261005090000_legacy_accepted_formal_compat.sql');
@@ -30,7 +30,7 @@ function anchorText(index: number): string {
   return [...literal.matchAll(/E'((?:[^']|'')*)'/g)].map((m) => m[1].replace(/''/g, "'").replace(/\\n/g, '\n')).join('');
 }
 
-describe('正式見積の発行で未解決の別途見積（POR）を残さない止め（20261020100000）', () => {
+describe('正式見積の発行で未解決の別途見積（POR）を残さない止め（20261016111000）', () => {
   it('適用の前に、前提の関数・列があり、まだ足していないことを確かめる', () => {
     expect(migration).toContain("to_regprocedure('public.create_quote_revision(uuid, jsonb, text)') is null");
     expect(migration).toContain("to_regprocedure('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)') is null");

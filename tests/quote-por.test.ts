@@ -18,7 +18,7 @@ import {
 import type { Configuration, ConfigurationItem, Quote, QuoteItem, QuoteRequest } from '@/lib/domain/types';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261020100000_quote_formal_por_guard.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016111000_quote_formal_por_guard.sql'), 'utf8');
 
 describe('未解決の別途見積（POR）の行（SQL の quote_line_is_unresolved_por と同じ決まり）', () => {
   it('実 DB の検査（QPG-1）と同じ 12 通りで同じ結果になる', () => {

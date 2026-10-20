@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// 正式見積の発行で未解決の別途見積（POR）を残さない止め（20261020100000）の実行時検査（1 本の接続で流して rollback する）
+// 正式見積の発行で未解決の別途見積（POR）を残さない止め（20261016111000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeQuoteFormalPorGuard(client) {

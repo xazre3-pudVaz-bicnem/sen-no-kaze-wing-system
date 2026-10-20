@@ -1,7 +1,7 @@
 /**
  * 正式見積で未解決の別途見積（POR）を残さない（D1 までの暫定。2026-10-19 の先方回答 ③）。
  *
- * DB の quote_line_is_unresolved_por・configuration_por_selections（20261020100000）と同じ決まり。
+ * DB の quote_line_is_unresolved_por・configuration_por_selections（20261016111000）と同じ決まり。
  * 発行を止めるのは DB で、画面はこの関数で先に案内する。ローカル検証モードはこの関数で同じ止めをする。
  */
 import { EXTERIOR_FACES, type ExteriorFaceSelection } from './exterior-wall';

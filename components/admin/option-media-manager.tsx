@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useActionState, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addOptionImageAction,
@@ -21,6 +21,8 @@ import { useOptionRegistrationSave } from '@/components/admin/option-registratio
 
 const initial: AdminFormState = { ok: false };
 
+type ExpandedImage = { src: string; alt: string };
+
 function ActionStatus({ state }: { state: AdminFormState }) {
   if (state.error) return <Alert tone="danger">{state.error}</Alert>;
   if (state.fieldErrors?._form) return <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>;
@@ -37,13 +39,26 @@ function PendingButton({ pending, children }: { pending: boolean; children: Reac
   );
 }
 
-function OptionImageEditor({ optionId, image }: { optionId: string; image: OptionImage }) {
+function OptionImageEditor({
+  optionId,
+  image,
+  onPreview,
+}: {
+  optionId: string;
+  image: OptionImage;
+  onPreview: (preview: ExpandedImage) => void;
+}) {
   const [state, action, pending] = useActionState(updateOptionImageAction, initial);
   return (
     <li className="overflow-hidden rounded-xl border border-line bg-white">
-      <div className="relative h-32 bg-sand sm:h-36">
+      <button
+        type="button"
+        className="relative block h-32 w-full cursor-zoom-in bg-sand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:h-36"
+        aria-label={`${image.caption?.trim() || '追加画像'}を拡大表示`}
+        onClick={() => onPreview({ src: image.url, alt: image.alt || image.caption?.trim() || '追加画像' })}
+      >
         <SmartImage src={image.url} alt={image.alt} fill sizes="160px" className="object-contain" />
-      </div>
+      </button>
       <div className="space-y-2 p-3">
         <ActionStatus state={state} />
         <div className="flex items-start justify-between gap-2">
@@ -91,6 +106,8 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [documentUrl, setDocumentUrl] = useState('');
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [pdfReplaceOpen, setPdfReplaceOpen] = useState(false);
+  const [expandedImage, setExpandedImage] = useState<ExpandedImage | null>(null);
+  const imageCloseButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const section = document.getElementById('product-main-media');
@@ -105,8 +122,11 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
     preview.dataset.mainImageSelectionPreview = 'true';
     preview.className = 'mt-4 flex flex-wrap items-start gap-3';
 
-    const frame = document.createElement('div');
-    frame.className = 'flex h-40 w-56 items-center justify-center overflow-hidden rounded-lg border border-line bg-white';
+    const frame = document.createElement('button');
+    frame.type = 'button';
+    frame.disabled = true;
+    frame.setAttribute('aria-label', 'メイン画像を拡大表示');
+    frame.className = 'flex h-40 w-56 items-center justify-center overflow-hidden rounded-lg border border-line bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-default';
 
     const image = document.createElement('img');
     image.alt = 'メイン画像プレビュー';
@@ -153,6 +173,8 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       image.hidden = !normalized;
       empty.hidden = Boolean(normalized);
       clearButton.hidden = !isLocalSelection;
+      frame.disabled = !normalized;
+      frame.classList.toggle('cursor-zoom-in', Boolean(normalized));
       if (normalized) image.src = normalized;
       else image.removeAttribute('src');
     };
@@ -179,6 +201,12 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
+    const handleExpandMainImage = () => {
+      const src = image.getAttribute('src');
+      if (src && !frame.disabled) setExpandedImage({ src, alt: 'メイン画像' });
+    };
+
+    frame.addEventListener('click', handleExpandMainImage);
     fileInput.addEventListener('change', handleFileChange);
     urlInput.addEventListener('input', handleUrlInput);
     clearButton.addEventListener('click', handleClearSelection);
@@ -186,6 +214,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
     return () => {
       revokeObjectUrl();
+      frame.removeEventListener('click', handleExpandMainImage);
       fileInput.removeEventListener('change', handleFileChange);
       urlInput.removeEventListener('input', handleUrlInput);
       clearButton.removeEventListener('click', handleClearSelection);
@@ -201,6 +230,23 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pdfPreviewOpen]);
+
+  useEffect(() => {
+    if (!expandedImage) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setExpandedImage(null);
+      }
+    };
+    imageCloseButtonRef.current?.focus();
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      previouslyFocused?.focus();
+    };
+  }, [expandedImage]);
 
   const handleSubImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -364,7 +410,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         {images.length > 0 ? (
           <ul className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
             {images.map((image) => (
-              <OptionImageEditor key={image.id} optionId={option.id} image={image} />
+              <OptionImageEditor key={image.id} optionId={option.id} image={image} onPreview={setExpandedImage} />
             ))}
           </ul>
         ) : (
@@ -552,6 +598,44 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           </p>
         )}
       </section>
+
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="商品画像の拡大表示"
+          data-testid="product-image-lightbox"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setExpandedImage(null);
+          }}
+        >
+          <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <p className="truncate text-sm font-semibold text-ink">{expandedImage.alt}</p>
+              <button
+                ref={imageCloseButtonRef}
+                type="button"
+                aria-label="拡大画像を閉じる"
+                onClick={() => setExpandedImage(null)}
+                className="shrink-0 rounded-md border border-line px-3 py-1 text-sm font-semibold text-ink hover:bg-ivory"
+              >
+                閉じる
+              </button>
+            </div>
+            <div className="relative min-h-0 flex-1 bg-white">
+              <SmartImage
+                src={expandedImage.src}
+                alt={expandedImage.alt}
+                fill
+                sizes="(max-width: 640px) 95vw, 1024px"
+                className="object-contain p-3 sm:p-5"
+                unoptimized
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {pdfPreviewOpen && option.manufacturer_document_url && (
         <div

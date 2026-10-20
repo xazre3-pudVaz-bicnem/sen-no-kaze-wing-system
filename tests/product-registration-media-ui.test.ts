@@ -69,6 +69,21 @@ describe('商品登録の画像・PDF確認UI', () => {
     expect(source).toContain('className="object-contain p-3 sm:p-5"');
   });
 
+  it('拡大画像そのものをクリック・Enterキーでも閉じられる', () => {
+    const lightbox = source.slice(
+      source.indexOf('data-testid="product-image-lightbox"'),
+      source.indexOf('{pdfPreviewOpen && option.manufacturer_document_url')
+    );
+    expect(lightbox).toContain('aria-label="拡大画像をクリックして閉じる"');
+    expect(lightbox).toContain('onClick={() => setExpandedImage(null)}');
+    const zoomArea = lightbox.slice(lightbox.indexOf('aria-label="拡大画像をクリックして閉じる"'));
+    expect(zoomArea.indexOf('<SmartImage')).toBeGreaterThanOrEqual(0);
+    expect(zoomArea.indexOf('</button>')).toBeGreaterThan(zoomArea.indexOf('<SmartImage'));
+    expect(lightbox).toContain('cursor-zoom-out');
+    expect(lightbox).toContain('type="button"');
+    expect(lightbox).toContain('onMouseDown={(event) => {');
+  });
+
   it('PDFは開いた時だけ表示し、枠外クリックとEscで閉じられる', () => {
     expect(source).toContain('pdfPreviewOpen && option.manufacturer_document_url');
     expect(source).toContain('event.target === event.currentTarget');

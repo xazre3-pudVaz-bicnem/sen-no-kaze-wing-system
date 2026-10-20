@@ -623,7 +623,12 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                 閉じる
               </button>
             </div>
-            <div className="relative min-h-0 flex-1 bg-white">
+            <button
+              type="button"
+              aria-label="拡大画像をクリックして閉じる"
+              onClick={() => setExpandedImage(null)}
+              className="relative block min-h-0 w-full flex-1 cursor-zoom-out bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+            >
               <SmartImage
                 src={expandedImage.src}
                 alt={expandedImage.alt}
@@ -632,7 +637,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                 className="object-contain p-3 sm:p-5"
                 unoptimized
               />
-            </div>
+            </button>
           </div>
         </div>
       )}

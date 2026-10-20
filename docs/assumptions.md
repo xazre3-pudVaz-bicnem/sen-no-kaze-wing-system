@@ -8,7 +8,7 @@
 - 同じ商品・同じ選択肢の「現在の Version」は常に 1 つです（部分一意 index）
 - 本部商品基準原価の画面・Server Action・`set_option_hq_standard_cost` の呼び方は変えていません。RPC の中で新しい Version を作り、`option_hq_standard_costs` は現在の Version の写し（どの Version かを `current_version_id` で持つ）として同じ transaction で更新します。既存の行があれば Version 1 として移します（本番は 0 行）
 - 調整額はプラス・0・マイナスを持てます（±1 億円まで）。設定できるのは global admin と本部の owner・admin、読めるのはそれに本部の editor を加えた人だけで、総代理店・代理店・お客様は読めません（本部商品基準原価と同じ権限）
-- 原価・調整額の履歴がある商品と選択肢は削除できません（FK RESTRICT。取扱終了で扱う）
+- 原価・調整額の履歴がある商品と選択肢は削除できません（FK RESTRICT。販売停止・廃番で扱う）
 - 標準見積・シミュレーター・見積からの Version の固定（pin）は後続の PR で行います。この PR では金額の計算・表示は変えていません
 
 ### こちらで判断したこと（確認したい点）

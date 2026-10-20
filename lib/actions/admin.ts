@@ -248,6 +248,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     owner_id: catalogEditor ? nullableId(formData.get('owner_id')) : actor.id,
     manufacturer: formData.get('manufacturer'),
     model_no: formData.get('model_no'),
+    manufacturer_product_url: formData.get('manufacturer_product_url'),
     size_note: formData.get('size_note'),
     list_price: formData.get('list_price'),
     highlight: formData.get('highlight'),

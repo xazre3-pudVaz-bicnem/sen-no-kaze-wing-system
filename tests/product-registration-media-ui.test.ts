@@ -39,6 +39,36 @@ describe('商品登録の画像・PDF確認UI', () => {
     expect(pdf.indexOf('id="manufacturer-document"')).toBeGreaterThan(pdf.indexOf('id="manufacturer-document-url"'));
   });
 
+  it('メイン画像をクリック・キーボードで拡大でき、未設定時は無効にする', () => {
+    expect(source).toContain("const frame = document.createElement('button')");
+    expect(source).toContain("frame.type = 'button'");
+    expect(source).toContain("frame.setAttribute('aria-label', 'メイン画像を拡大表示')");
+    expect(source).toContain('frame.disabled = !normalized');
+    expect(source).toContain("frame.addEventListener('click', handleExpandMainImage)");
+    expect(source).toContain("frame.removeEventListener('click', handleExpandMainImage)");
+    expect(source).toContain("setExpandedImage({ src, alt: 'メイン画像' })");
+  });
+
+  it('登録済み追加画像のサムネイルから拡大し、削除・表示設定とは分離する', () => {
+    expect(source).toContain('onPreview: (preview: ExpandedImage) => void');
+    expect(source).toContain('onPreview({ src: image.url, alt:');
+    expect(source).toContain('image={image} onPreview={setExpandedImage}');
+    expect(source).toContain('type="button"');
+    expect(source).toContain('deleteOptionImageAction');
+    expect(source).toContain('updateOptionImageAction');
+  });
+
+  it('拡大画像は枠外クリック・Esc・閉じるボタンで閉じられる', () => {
+    expect(source).toContain('data-testid="product-image-lightbox"');
+    expect(source).toContain('aria-modal="true"');
+    expect(source).toContain("if (event.target === event.currentTarget) setExpandedImage(null)");
+    expect(source).toContain("event.key === 'Escape'");
+    expect(source).toContain('aria-label="拡大画像を閉じる"');
+    expect(source).toContain('imageCloseButtonRef.current?.focus()');
+    expect(source).toContain('previouslyFocused?.focus()');
+    expect(source).toContain('className="object-contain p-3 sm:p-5"');
+  });
+
   it('PDFは開いた時だけ表示し、枠外クリックとEscで閉じられる', () => {
     expect(source).toContain('pdfPreviewOpen && option.manufacturer_document_url');
     expect(source).toContain('event.target === event.currentTarget');

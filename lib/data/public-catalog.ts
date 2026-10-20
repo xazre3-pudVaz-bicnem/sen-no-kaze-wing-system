@@ -22,6 +22,7 @@ import {
   buildCustomerCategoryMatrix,
   type CustomerCategoryMatrix,
 } from '@/lib/domain/customer-category-applicability';
+import { localResetGeneration } from './local-reset';
 import { isLocalMode } from './store';
 import { isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 
@@ -167,13 +168,21 @@ async function fetchPublicCatalog(): Promise<PublicCatalog> {
   );
 }
 
+const PUBLIC_CATALOG_CACHE_KEY = 'public-catalog-v5-spec-matrix';
+const PUBLIC_CATALOG_CACHE_OPTIONS = { tags: [CATALOG_TAG], revalidate: 300 };
+const cachedPublicCatalog = unstable_cache(fetchPublicCatalog, [PUBLIC_CATALOG_CACHE_KEY], PUBLIC_CATALOG_CACHE_OPTIONS);
+
 /**
  * 公開ページ用。管理画面で内容を更新すると revalidateTag(CATALOG_TAG) で破棄される。
+ * ローカル検証モードで DB を初期化する（E2E）ときは、初期化の世代ごとに別のキャッシュにする。
+ * .next に残った前回の実行のカタログ（途中で止まったテストの値上げなど）を、初期化した DB の代わりに表示しないため。
+ * 本番（Supabase）のキャッシュのキーは変えない
  */
-export const getPublicCatalog = unstable_cache(fetchPublicCatalog, ['public-catalog-v5-spec-matrix'], {
-  tags: [CATALOG_TAG],
-  revalidate: 300,
-});
+export async function getPublicCatalog(): Promise<PublicCatalog> {
+  const generation = isLocalMode() ? localResetGeneration() : '';
+  if (!generation) return cachedPublicCatalog();
+  return unstable_cache(fetchPublicCatalog, [PUBLIC_CATALOG_CACHE_KEY, generation], PUBLIC_CATALOG_CACHE_OPTIONS)();
+}
 
 export async function getPublicModels(): Promise<BaseModel[]> {
   return (await getPublicCatalog()).models;

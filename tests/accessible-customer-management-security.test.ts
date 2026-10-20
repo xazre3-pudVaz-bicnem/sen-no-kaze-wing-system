@@ -115,7 +115,7 @@ describe('担当案件限定の顧客管理 security contract', () => {
 
   it('does not let master dealer bypass assigned-quote checks in workspace or stores', () => {
     expect(workspace).toContain('const canViewAllQuotes = isAdmin;');
-    // 案件を開けるのは本部・見積の担当・営業担当組織の管理者（DB の case_role が manager）だけ。商品台帳の編集権限では開けない（20261015130000）
+    // 案件を開けるのは本部・見積の担当・営業担当組織の管理者（DB の case_role が manager）だけ。商品台帳の編集権限では開けない（20261016130000）
     expect(workspace).toContain('if (!canViewAllQuotes && quote.dealer_id !== actor.id && !isSalesManagerView) notFound();');
     expect(workspace).toContain("getCaseRole(actor, quote.quote_request_id)) === 'manager'");
     expect(workspace).not.toContain('const canManageAllQuotes = canEditCatalog(actor.role);');

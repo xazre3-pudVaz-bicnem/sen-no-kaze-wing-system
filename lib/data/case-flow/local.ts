@@ -85,7 +85,7 @@ function rank(actor: SessionUser) {
   return ROLE_RANK[actor.role] ?? 0;
 }
 
-/** DB の case_access() と同じ（書き込みの判定。20261015130000 で組織の案件に対応） */
+/** DB の case_access() と同じ（書き込みの判定。20261016130000 で組織の案件に対応） */
 function accessOf(db: LocalDb, actor: SessionUser, requestId: string): CaseAccess | null {
   const request = db.quoteRequests.find((r) => r.id === requestId);
   if (!request) return null;
@@ -549,7 +549,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       }
     });
   }
-  // ---------- 営業担当組織・製造担当組織（20261015130000） ----------
+  // ---------- 営業担当組織・製造担当組織（20261016130000） ----------
   async getCaseRole(actor: SessionUser, requestId: string): Promise<CaseRole | null> {
     return this.read((db) => roleOf(db, actor, requestId));
   }

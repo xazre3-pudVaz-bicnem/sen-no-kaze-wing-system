@@ -19,7 +19,7 @@ export const REPO = path.resolve(HERE, '..', '..');
  * ここへ足す前に「未ログインの第三者が API から直接呼んでも安全か」を確認すること。
  */
 // is_case_sales_manager：見積（quotes・quote_items）の RLS で評価する。返すのは「自分が案件の営業担当組織の管理者か」だけで、
-// 未ログインなら常に false（20261015130000）
+// 未ログインなら常に false（20261016130000）
 export const ANON_DEFINER_ALLOWLIST = ['can_edit_catalog', 'current_role_rank', 'is_admin', 'is_dealer', 'is_case_sales_manager'];
 
 /**

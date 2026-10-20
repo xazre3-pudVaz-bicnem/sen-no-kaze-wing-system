@@ -1,4 +1,4 @@
--- 案件の営業担当組織・主担当者・製造担当組織（20261015130000）の実行時検査。使い捨て DB 専用。最後に rollback する。
+-- 案件の営業担当組織・主担当者・製造担当組織（20261016130000）の実行時検査。使い捨て DB 専用。最後に rollback する。
 begin;
 
 create temp table _cs_result (seq serial, step text, expected text, actual text, ok boolean) on commit drop;

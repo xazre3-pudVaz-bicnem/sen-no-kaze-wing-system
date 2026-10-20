@@ -606,7 +606,7 @@ export class LocalStore implements DataStore {
       actor.role === 'admin'
         ? db.quoteRequests.map((request) => request.id)
         : db.quotes
-            // 主担当者（見積の担当）に加え、営業担当組織の管理者は自社の案件のお客様を見られる（20261015130000）
+            // 主担当者（見積の担当）に加え、営業担当組織の管理者は自社の案件のお客様を見られる（20261016130000）
             .filter((quote) => quote.dealer_id === actor.id || isCaseSalesManager(db, quote.quote_request_id, actor.id))
             .map((quote) => quote.quote_request_id)
     );

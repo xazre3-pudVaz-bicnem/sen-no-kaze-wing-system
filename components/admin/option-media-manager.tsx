@@ -375,29 +375,12 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
         <div className="border-t border-line pt-5">
           <ActionStatus state={imageState} />
-          <div className="mt-3">
-            <Field
-              label="サブ画像ファイル"
-              htmlFor="option-sub-image"
-              hint="複数選択可・1枚10MBまで。選択すると自動保存します。間違えた場合は登録後すぐ削除できます。"
-              errors={imageState.fieldErrors?.file}
-            >
-              <Input
-                id="option-sub-image"
-                name="file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif"
-                className="py-2"
-                multiple
-                disabled={imagePending}
-                onChange={(event) => void handleSubImages(event)}
-              />
-            </Field>
-            <div className="mt-4 rounded-lg border border-line bg-ivory/30 p-3">
+          <div className="mt-3 grid gap-4 md:grid-cols-2 md:items-start" data-testid="additional-image-input-layout">
+            <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
               <Field
-                label="または画像URLから登録"
+                label="画像URLから登録"
                 htmlFor="option-sub-image-url"
-                hint="Excelの追加画像URLをそのまま貼り付けできます。URL先の画像を取得し、千の風側のストレージへ保存します。"
+                hint="Excelの追加画像URLを貼り付けて登録します。画像は千の風側へ保存します。"
                 errors={imageState.fieldErrors?.source_url}
               >
                 <div className="space-y-2">
@@ -418,13 +401,32 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                 </div>
               </Field>
             </div>
-            {imagePending && (
-              <p className="mt-2 flex items-center gap-2 text-xs text-muted">
-                <Spinner />
-                追加画像を保存しています…
-              </p>
-            )}
+            <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
+              <Field
+                label="または画像ファイルから登録"
+                htmlFor="option-sub-image"
+                hint="複数選択可・1枚10MBまで。選択すると自動保存します。"
+                errors={imageState.fieldErrors?.file}
+              >
+                <Input
+                  id="option-sub-image"
+                  name="file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  className="py-2"
+                  multiple
+                  disabled={imagePending}
+                  onChange={(event) => void handleSubImages(event)}
+                />
+              </Field>
+            </div>
           </div>
+          {imagePending && (
+            <p className="mt-2 flex items-center gap-2 text-xs text-muted">
+              <Spinner />
+              追加画像を保存しています…
+            </p>
+          )}
         </div>
       </section>
 
@@ -495,30 +497,14 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         )}
         <div
           id="manufacturer-document-replace-fields"
-          className={option.manufacturer_document_url && !pdfReplaceOpen ? 'hidden' : 'space-y-4'}
+          className={option.manufacturer_document_url && !pdfReplaceOpen ? 'hidden' : 'grid gap-4 md:grid-cols-2 md:items-start'}
+          data-testid="manufacturer-pdf-input-layout"
         >
-          <Field
-            label={option.manufacturer_document_url ? 'メーカー資料PDFを差し替える' : 'メーカー資料PDFを登録'}
-            htmlFor="manufacturer-document"
-            hint="PDFのみ・20MBまで。ファイルを選択すると自動保存します。"
-            errors={docState.fieldErrors?.file}
-          >
-            <Input
-              id="manufacturer-document"
-              name="file"
-              type="file"
-              accept="application/pdf,.pdf"
-              className="py-2"
-              disabled={docPending}
-              onChange={(event) => void handleManufacturerDocument(event)}
-            />
-          </Field>
-
-          <div className="rounded-lg border border-line bg-ivory/30 p-3">
+          <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
             <Field
-              label={option.manufacturer_document_url ? 'またはPDFのURLから差し替える' : 'またはPDFのURLから登録'}
+              label={option.manufacturer_document_url ? 'PDFのURLから差し替える' : 'PDFのURLから登録'}
               htmlFor="manufacturer-document-url"
-              hint="ExcelのメーカーPDF URLを貼り付けできます。カタログ閲覧ページではなく、PDF本体のURLを入力してください。"
+              hint="PDF本体のURLを入力してください。閲覧ページのURLでは登録できません。"
               errors={docState.fieldErrors?.source_url}
             >
               <div className="space-y-2">
@@ -539,7 +525,24 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
               </div>
             </Field>
           </div>
-
+          <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
+            <Field
+              label={option.manufacturer_document_url ? 'またはPDFファイルで差し替える' : 'またはPDFファイルから登録'}
+              htmlFor="manufacturer-document"
+              hint="PDFのみ・20MBまで。選択すると自動保存します。"
+              errors={docState.fieldErrors?.file}
+            >
+              <Input
+                id="manufacturer-document"
+                name="file"
+                type="file"
+                accept="application/pdf,.pdf"
+                className="py-2"
+                disabled={docPending}
+                onChange={(event) => void handleManufacturerDocument(event)}
+              />
+            </Field>
+          </div>
         </div>
 
         {docPending && (

@@ -16,7 +16,7 @@ export const CASE_ESTIMATE_SPEC_LABELS: Record<string, string> = {
   office: '事務所・店舗',
 };
 
-const ITEM_KIND_LABELS: Record<string, string> = {
+export const ITEM_KIND_LABELS: Record<string, string> = {
   base: '本体',
   base_expense: '本体諸費用',
   interior_exterior: '内外装工事',

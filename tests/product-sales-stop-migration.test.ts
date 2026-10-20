@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 
-const migration = read('supabase/migrations/20261020110000_product_sales_stop_discontinue.sql');
+const migration = read('supabase/migrations/20261016112000_product_sales_stop_discontinue.sql');
 const lifecycleMigration = read('supabase/migrations/20261015113000_product_lifecycle_guards.sql');
 const moneyMigration = read('supabase/migrations/20261013180000_quote_standard_estimate_money.sql');
 const check = read('scripts/db-rehearsal/check.mjs');
@@ -20,7 +20,7 @@ const ledgerPage = read('app/admin/ledger/page.tsx');
 /** options_lifecycle_guard の新しい定義（migration の中の本文） */
 const guard = migration.slice(migration.indexOf('create or replace function public.options_lifecycle_guard()'), migration.indexOf('drop trigger options_lifecycle_guard on public.options;'));
 
-describe('販売停止・廃番（20261020110000）', () => {
+describe('販売停止・廃番（20261016112000）', () => {
   it('適用の前に、#500 の部品があり、まだ廃番の列が無いことを確かめる', () => {
     expect(migration).toContain("to_regprocedure('public.options_lifecycle_guard()') is null");
     expect(migration).toContain("to_regprocedure('public.product_lifecycle_baseline_option_ids(uuid, text)') is null");

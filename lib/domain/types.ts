@@ -382,7 +382,7 @@ export interface ProductOption {
   simulator_visible?: boolean;
   /** 販売停止の日時（NULL＝販売中。20261015110000。#500 の「取扱終了」）。販売停止でも履歴は残し、新しい見積・シミュレーターでは選べない */
   archived_at?: string | null;
-  /** 廃番の日時（20261020110000。廃番は販売停止の商品だけ）。原則再開しない。本部の管理者が理由を記録して取り消すと販売停止に戻る */
+  /** 廃番の日時（20261016112000。廃番は販売停止の商品だけ）。原則再開しない。本部の管理者が理由を記録して取り消すと販売停止に戻る */
   discontinued_at?: string | null;
   created_at: string;
   updated_at: string;

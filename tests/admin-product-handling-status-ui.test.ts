@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
-// 商品状態の欄は 20261020110000（販売停止・廃番）で専用の部品に切り出した
+// 商品状態の欄は 20261016112000（販売停止・廃番）で専用の部品に切り出した
 const panel = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-sales-status-panel.tsx'), 'utf8');
 
 describe('商品台帳の商品状態UI', () => {

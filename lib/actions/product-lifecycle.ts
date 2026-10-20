@@ -24,7 +24,7 @@ function ledgerRedirect(params: Record<string, string>): never {
 /**
  * 商品の状態を変える（販売停止・販売の再開・シミュレーターに表示する／しない）。
  * 画面が読んだ版（updated_at）と一致するときだけ更新し、0 件なら失敗にする（古い画面の操作を成功扱いにしない）。
- * 参照保護（必須・初期選択・前提商品）・廃番の商品の再開の拒否などの判定は DB のトリガーが行う（20261020110000）。
+ * 参照保護（必須・初期選択・前提商品）・廃番の商品の再開の拒否などの判定は DB のトリガーが行う（20261016112000）。
  * 販売の再開は、仕様・供給・価格の確認のチェックが必要（2026-10-19 の先方回答）。
  * 権限は従来の商品台帳の編集権限（requireCatalogEditor）のまま。#502 の未確定事項（総代理店の編集権限）はここで変えない。
  */
@@ -59,7 +59,7 @@ export async function setProductLifecycleAction(formData: FormData): Promise<voi
 
 /**
  * 廃番にする（販売停止の商品だけ）／取り消す（本部の管理者だけ・販売停止に戻る）。理由は必須で、変更履歴に残す。
- * 判定・権限は DB の set_option_discontinued とトリガーが行う（20261020110000）。画面が読んだ版でなければ失敗にする。
+ * 判定・権限は DB の set_option_discontinued とトリガーが行う（20261016112000）。画面が読んだ版でなければ失敗にする。
  */
 export async function setProductDiscontinuedAction(formData: FormData): Promise<void> {
   const actor = await requireCatalogEditor(ledgerPath);

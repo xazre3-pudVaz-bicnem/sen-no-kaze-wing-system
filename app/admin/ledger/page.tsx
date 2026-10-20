@@ -33,7 +33,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
     store.getProductLifecycleCapability(),
   ]);
-  // 販売停止・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す。廃番は 20261020110000 の適用後だけ
+  // 販売停止・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す。廃番は 20261016112000 の適用後だけ
   const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
   const discontinueEnabled = lifecycleEnabled && Boolean(lifecycleCapability.discontinue);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);

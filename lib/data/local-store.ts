@@ -174,7 +174,7 @@ export class LocalStore implements DataStore {
       }
       const state = productLedgerState(option);
       if (action === 'retire') {
-        // DB の options_lifecycle_guard と同じ（20261020110000）：標準見積・Excel 標準見積・本体の仕様で使用中でも販売停止にできる
+        // DB の options_lifecycle_guard と同じ（20261016112000）：標準見積・Excel 標準見積・本体の仕様で使用中でも販売停止にできる
         // （その仕様は新しい受付を止める）。必須・初期選択・前提商品は、先に設定を見直す
         if (state !== 'registered') throw new StoreError('VALIDATION', state === 'retired' ? 'この商品はすでに販売停止です' : '販売停止にできるのは登録済みの商品だけです。下書きは不要なら削除してください');
         if (option.is_required || option.is_default) {
@@ -207,7 +207,7 @@ export class LocalStore implements DataStore {
     });
   }
 
-  /** DB の set_option_discontinued・options_lifecycle_guard と同じ（20261020110000） */
+  /** DB の set_option_discontinued・options_lifecycle_guard と同じ（20261016112000） */
   async setProductDiscontinued(
     { id, discontinued, reason, expectedUpdatedAt }: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string },
     actor: SessionUser
@@ -1323,7 +1323,7 @@ export class LocalStore implements DataStore {
         ? LocalStore.ruleContextFor(db, cfgModel, cfg.spec_code ?? null)
         : { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts };
       const itemOptionIds = items.map((i) => i.option_id);
-      // 仕様の標準構成に販売停止・廃番の商品があれば、新しい受付を止める（DB の quote_requests_baseline_lifecycle_guard と同じ。20261020110000）
+      // 仕様の標準構成に販売停止・廃番の商品があれば、新しい受付を止める（DB の quote_requests_baseline_lifecycle_guard と同じ。20261016112000）
       if (cfgModel) {
         const stopped = LocalStore.stoppedBaselineNames(db, cfgModel, cfg.spec_code ?? null);
         if (stopped.length > 0) {

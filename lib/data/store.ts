@@ -355,7 +355,7 @@ export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
 // 販売停止・廃番・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle・setProductDiscontinued だけで変える）
 export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at' | 'discontinued_at'> & { id?: string | null };
 
-/** 仕様（モデル・仕様コード）で新しい受付ができるか。標準構成に販売停止・廃番の商品があれば受け付けない（20261020110000） */
+/** 仕様（モデル・仕様コード）で新しい受付ができるか。標準構成に販売停止・廃番の商品があれば受け付けない（20261016112000） */
 export interface SpecAcceptanceState {
   accepting: boolean;
   /** 標準構成にある販売停止・廃番の商品の名前 */
@@ -507,7 +507,7 @@ export interface DataStore {
   setProductLifecycle(input: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }): Promise<{ updated_at: string }>;
   /**
    * 廃番にする（販売停止の商品だけ・商品台帳を編集できる人）／取り消す（本部の管理者だけ・販売停止に戻る）。理由は必須で、変更履歴に残す。
-   * 画面が読んだ版（updated_at）でなければ失敗にする（DB の set_option_discontinued。20261020110000）
+   * 画面が読んだ版（updated_at）でなければ失敗にする（DB の set_option_discontinued。20261016112000）
    */
   setProductDiscontinued(
     input: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string },

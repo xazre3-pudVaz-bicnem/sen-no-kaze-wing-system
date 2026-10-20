@@ -20,7 +20,7 @@ export function ProductSalesStatusPanel({
   canEdit: boolean;
   /** 販売停止・シミュレーター表示の操作を出してよいか（20261015110000・113000 が適用済みか） */
   lifecycleEnabled: boolean;
-  /** 廃番の操作を出してよいか（20261020110000 が適用済みか） */
+  /** 廃番の操作を出してよいか（20261016112000 が適用済みか） */
   discontinueEnabled: boolean;
   /** 廃番を取り消せるのは本部の管理者だけ */
   canRestoreDiscontinued: boolean;

@@ -91,7 +91,7 @@ export interface ProductLifecycleCapability {
   columns: boolean;
   /** 保存境界のトリガーがある（20261015113000） */
   guards: boolean;
-  /** 廃番の印と、廃番にする・取り消す RPC がある（20261020110000） */
+  /** 廃番の印と、廃番にする・取り消す RPC がある（20261016112000） */
   discontinue?: boolean;
 }
 

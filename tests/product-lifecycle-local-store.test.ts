@@ -204,7 +204,7 @@ describe.sequential('商品の状態：ローカル検証モード（DB の保�
     }
   });
 
-  it('本体の仕様（標準の商品構成）で使っている商品も販売停止にでき、その仕様は新しい受付を止める（自動で差し替えない。20261020110000）', async () => {
+  it('本体の仕様（標準の商品構成）で使っている商品も販売停止にでき、その仕様は新しい受付を止める（自動で差し替えない。20261016112000）', async () => {
     const { store, model, bundle, input, optionOf } = await setup();
     const dependencyTargets = new Set(bundle.dependencies.map((d) => d.requires_option_id));
     const hotelPreset = (model.presets ?? []).find((p) => p.code === 'hotel')!;

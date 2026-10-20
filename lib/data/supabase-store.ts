@@ -258,7 +258,7 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const capability = await db.rpc('product_lifecycle_capability');
     if (!capability.error && capability.data) {
-      // 廃番の印（20261020110000）があるか。無ければ廃番の操作は出さない
+      // 廃番の印（20261016112000）があるか。無ければ廃番の操作は出さない
       const discontinue = await db.from('options').select('id, discontinued_at').limit(1);
       return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards), discontinue: !discontinue.error };
     }

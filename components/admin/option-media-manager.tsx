@@ -405,7 +405,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
               <Field
                 label="または画像ファイルから登録"
                 htmlFor="option-sub-image"
-                hint="複数選択可・1枚10MBまで。ファイルを選択すると自動保存します。"
+                hint="複数選択可・1枚10MBまで。選択すると自動保存します。"
                 errors={imageState.fieldErrors?.file}
               >
                 <Input

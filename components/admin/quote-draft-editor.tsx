@@ -11,6 +11,7 @@ import { quoteLineAmount } from '@/lib/domain/quote-amount';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
+import { ConfirmSubmit } from './confirm-submit';
 import {
   CustomerQuotePreview,
   QuoteAuthoringGrid,
@@ -425,16 +426,6 @@ export function QuoteDraftEditor({
 
       <form
         action={finalizeAction}
-        onSubmit={(event) => {
-          if (dirty) {
-            event.preventDefault();
-            window.alert('未保存の変更があります。先に下書きを保存してください。');
-            return;
-          }
-          if (!window.confirm(`この内容を正式な${formalRevisionLabel}として発行しますか？発行後、この下書きは編集できません。`)) {
-            event.preventDefault();
-          }
-        }}
         className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d3e0d8] bg-[#f5faf7] px-3 py-2"
       >
         <input type="hidden" name="draft_id" value={detail.draft.id} />
@@ -444,12 +435,15 @@ export function QuoteDraftEditor({
           <p className="text-sm font-semibold">正式見積を発行</p>
           <p className="mt-0.5 text-[10px] text-muted">発行すると、この下書きは編集できなくなり、発行済み見積として履歴に残ります。</p>
         </div>
-        <Button
-          type="submit"
+        <ConfirmSubmit
+          message={`この内容を正式な${formalRevisionLabel}として発行します。発行後、この下書きは編集できません。`}
+          dialogTitle={`正式な${formalRevisionLabel}を発行しますか？`}
+          confirmLabel="発行する"
+          className="btn-primary"
           disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
         >
           {finalizePending ? '発行中…' : `この内容で第${targetRevision}版を発行`}
-        </Button>
+        </ConfirmSubmit>
       </form>
     </div>
   );

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// 案件の営業担当組織・主担当者・製造担当組織（20261015130000）の実行時検査（1 本の接続で流して rollback する）
+// 案件の営業担当組織・主担当者・製造担当組織（20261016130000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeCaseSalesOrganization(client) {

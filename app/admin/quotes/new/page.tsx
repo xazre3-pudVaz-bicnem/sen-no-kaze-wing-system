@@ -1,6 +1,7 @@
 import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS } from '@/lib/domain/types';
+import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { AdminPage } from '@/components/admin/ui';
 import { ManualQuoteWorkbench } from '@/components/admin/manual-quote-workbench';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
@@ -43,7 +44,7 @@ export default async function AdminNewQuotePage({
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter(isQuoteSelectableProduct)
     .map((option) => ({
       id: option.id,
       baseModelId: option.base_model_id,

@@ -15,6 +15,7 @@ import {
   type StandardQuoteLineInput,
 } from '@/lib/domain/standard-quote-view';
 import { Alert, Button, Input, Select, Textarea } from '@/components/ui';
+import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 
 type Props = {
   draftId: string;
@@ -78,7 +79,6 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
     });
   const finalize = () =>
     startTransition(async () => {
-      if (!window.confirm('保存済みの内容で正式な見積書として発行します。発行後は変更できません（変更は次の版で行います）。発行しますか？')) return;
       const result = await finalizeStandardQuoteDraftAction({ draft_id: draftId, expected_lock_version: lockVersion });
       if (result && !result.ok) setNotice({ tone: 'danger', text: result.error });
     });
@@ -271,9 +271,17 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
             <Button type="button" disabled={pending || preview.errors.length > 0} onClick={save} data-testid="standard-quote-save">
               保存
             </Button>
-            <Button type="button" variant="secondary" disabled={pending || blockFinalize} onClick={finalize} data-testid="standard-quote-finalize">
+            <ConfirmActionButton
+              className="btn-secondary btn-sm"
+              disabled={pending || blockFinalize}
+              message="保存済みの内容で正式な見積書として発行します。発行後は変更できません。変更する場合は次の版を作成します。"
+              dialogTitle="正式な見積書を発行しますか？"
+              confirmLabel="発行する"
+              onConfirm={finalize}
+              data-testid="standard-quote-finalize"
+            >
               保存済みの内容で発行
-            </Button>
+            </ConfirmActionButton>
           </div>
           {dirty && <span className="text-xs text-muted">保存していない変更があります。発行の前に保存してください。</span>}
           {!dirty && savedHasPor && <span className="text-xs text-warn">価格未確定の行があるため発行できません。自動か売価の入力で価格を確定して保存してください。</span>}

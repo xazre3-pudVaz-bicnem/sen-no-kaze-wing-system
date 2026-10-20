@@ -440,7 +440,8 @@ describe('corrective migration and simulator contract', () => {
   it('separates category visibility from product candidate availability in the simulator', () => {
     expect(simulator).toContain('customerBusinessItemForCategory(bundle.customerCategoryMatrix, c.code)');
     expect(simulator).toContain('customerCategorySelectable(bundle.customerCategoryMatrix, model.slug, specCode, c.code)');
-    expect(simulator).toContain('if (!readOnly) return activeSpecCtx.options;');
+    // 編集できるプランは仕様で絞った候補を使い、そのうち取扱終了・シミュレーター非表示の商品は選ばれている間だけ出す（PR #500）
+    expect(simulator).toContain('if (!readOnly) return simulatorChoiceOptions(activeSpecCtx.options, selected);');
     expect(simulator).not.toContain('if (activeEstimateTemplate || !hasPreset) return bundle.options;');
     expect(equipment).toContain("const shown = categories.filter((c) => c.code !== 'sitework');");
     expect(publicCatalog).toContain('applyCustomerCategoryApplicability');

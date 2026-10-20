@@ -5,6 +5,7 @@ import {
   productSpecCodesAllow,
 } from './customer-category-applicability';
 import type { BaseModel, EstimateTemplateBundle, ModelPreset, ProductOption } from './types';
+import { isQuoteSelectableProduct } from './product-lifecycle';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
 export const BASE_ESTIMATE_SPEC_CODE = 'base';
@@ -65,6 +66,7 @@ export function ruleContextForSpec(
     categories: ctx.categories,
     options,
     customerCategoryMatrix: ctx.customerCategoryMatrix,
+    canSelectNew: ctx.canSelectNew,
     // 依存ルールは、依存元が候補に残る限り保持する。前提商品が候補から外れたときにルールごと消すと
     // 「前提なしで選べる」状態になるため、rules.ts 側で選択拒否・明示エラーとして扱う。
     dependencies: ctx.dependencies.filter((dependency) => ids.has(dependency.option_id)),
@@ -218,7 +220,7 @@ export function buildEstimateSpecSelection(
   const level = finishLevelForEstimateSpec(specCode);
   const specCtx = ruleContextForSpec(ctx, specCode, model.slug);
   const validSavedIds = savedBaselineIds.filter((id) =>
-    specCtx.options.some((option) => option.id === id && option.status === 'published')
+    specCtx.options.some((option) => option.id === id && isQuoteSelectableProduct(option))
   );
   const optionByCode = new Map(specCtx.options.map((option) => [option.code, option.id]));
   const sourceIds =
@@ -228,9 +230,12 @@ export function buildEstimateSpecSelection(
           .map((code) => optionByCode.get(code))
           .filter((id): id is string => Boolean(id));
 
+  // 標準構成の商品は、シミュレーター非表示でも標準として入れる（取扱終了は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。
+  // 外すと、UI の標準状態と差額計算の基準状態がずれる
+  const baselineCtx: RuleContext = { ...specCtx, canSelectNew: isQuoteSelectableProduct };
   let cur: string[] = [];
   for (const optionId of sourceIds) {
-    const result = toggleOption(specCtx, cur, optionId);
+    const result = toggleOption(baselineCtx, cur, optionId);
     if (!result.rejected) cur = result.next;
   }
 

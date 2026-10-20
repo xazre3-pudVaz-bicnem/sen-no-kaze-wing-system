@@ -27,6 +27,7 @@ import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCod
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
 
 const initial: AdminFormState = { ok: false };
 
@@ -1030,7 +1031,7 @@ export function OptionForm({
               )}
             </Field>
             <Field label="メーカー記載の特徴（任意）" htmlFor={`highlight-${mode}`} hint="メーカー資料・カタログに明確な記載がある場合のみ入力。記載がなければ空欄で構いません。" errors={e.highlight}>
-              <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
+              <ProductHighlightTextarea id={`highlight-${mode}`} initialValue={option?.highlight ?? ''} />
             </Field>
           </div>
 
@@ -1060,11 +1061,11 @@ export function OptionForm({
               <p className="mt-1 text-xs text-muted">サブ画像とメーカーPDFは、この商品の「お客様資料」画面で続けて登録できます。</p>
             </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="画像ファイル" htmlFor={`image_file-${mode}`}>
-                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
-              </Field>
-              <Field label="または画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
+              <Field label="画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
                 <Input id={`image_url-${mode}`} name="image_url" defaultValue={option?.image_url ?? ''} />
+              </Field>
+              <Field label="または画像ファイル" htmlFor={`image_file-${mode}`}>
+                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
               </Field>
             </div>
           </div>

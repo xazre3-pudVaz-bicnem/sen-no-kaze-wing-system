@@ -208,7 +208,7 @@ export async function setCaseManufacturerAction(formData: FormData): Promise<voi
   redirect(`/admin/quotes/${quoteId}?tab=site&done=manufacturer`);
 }
 
-// ---------- 営業担当組織・製造担当組織（本部だけ。20261015130000） ----------
+// ---------- 営業担当組織・製造担当組織（本部だけ。20261016130000） ----------
 
 export async function setCaseSalesOrganizationAction(formData: FormData): Promise<void> {
   const user = await actor('/admin/quotes');

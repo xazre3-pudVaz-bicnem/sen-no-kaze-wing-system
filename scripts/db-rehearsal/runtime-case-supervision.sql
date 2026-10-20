@@ -1,4 +1,4 @@
--- 総代理店の配下の確認（20261015140000）の実行時検査。使い捨て DB 専用。最後に rollback する。
+-- 総代理店の配下の確認（20261016140000）の実行時検査。使い捨て DB 専用。最後に rollback する。
 begin;
 
 create temp table _sv_result (seq serial, step text, expected text, actual text, ok boolean) on commit drop;

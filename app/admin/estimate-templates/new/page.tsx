@@ -10,6 +10,7 @@ import {
 import { estimateTemplatesFor } from '@/lib/domain/estimate-template';
 import { BASE_BREAKDOWN_ITEMS, BASE_BREAKDOWN_TOTALS } from '@/lib/seed/base-breakdown';
 import { LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
+import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 
 async function loadPublishedBaseMasters(): Promise<{
   items: EstimateBaseMasterChoice[];
@@ -182,7 +183,7 @@ export default async function NewEstimateTemplatePage({
         sampleBaseMaster={sampleBaseMaster}
         initialTarget={initialTarget}
         products={options
-          .filter((option) => option.status === 'published' && categoryMap.get(option.category_id)?.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE)
+          .filter((option) => isQuoteSelectableProduct(option) && categoryMap.get(option.category_id)?.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE)
           .map((option) => ({
             id: option.id,
             categoryId: option.category_id,

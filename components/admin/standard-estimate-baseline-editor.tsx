@@ -16,6 +16,8 @@ export type BaselineCandidate = {
   priceOnRequest: boolean;
   /** 標準で選ばれる選択肢（壁色など）。登録時に一緒に送る */
   defaultVariantChoiceIds: string[];
+  /** 取扱終了。この Revision に保存済みの明細だけを表示・保持のために渡す（新しい行では選べない。DB でも拒否される） */
+  retired?: boolean;
 };
 
 export type BaselineItemView = {
@@ -57,7 +59,7 @@ export function StandardEstimateBaselineEditor({
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
   const grouped = useMemo(() => {
     const map = new Map<string, BaselineCandidate[]>();
-    for (const candidate of candidates) map.set(candidate.categoryName, [...(map.get(candidate.categoryName) ?? []), candidate]);
+    for (const candidate of candidates.filter((row) => !row.retired)) map.set(candidate.categoryName, [...(map.get(candidate.categoryName) ?? []), candidate]);
     return [...map.entries()];
   }, [candidates]);
 
@@ -142,6 +144,11 @@ export function StandardEstimateBaselineEditor({
                           onChange={(e) => setRows((current) => current.map((r, i) => (i === index ? { ...r, option_id: e.target.value } : r)))}
                         >
                           <option value="">選んでください</option>
+                          {candidate?.retired && (
+                            <option value={candidate.id} disabled>
+                              {candidate.name}（取扱終了）
+                            </option>
+                          )}
                           {grouped.map(([category, list]) => (
                             <optgroup key={category} label={category}>
                               {list.map((option) => (

@@ -16,54 +16,36 @@ const editPage = fs.readFileSync(
 );
 
 describe('商品登録カテゴリーの表示順', () => {
-  it('部位・用途別のグループ順を固定する', () => {
+  it('マトリクスと矛盾しない7つの表示用大分類へまとめる', () => {
     for (const label of [
       '本体・外装',
       '開口部・建具',
       '内装・造作',
       '水回り',
       '電気・設備',
-      '家具・備品',
+      '家具・収納',
       '外構・現地工事',
     ]) {
       expect(helper).toContain(`label: '${label}'`);
     }
 
-    for (const code of [
-      'insulation',
-      'roof',
-      'exterior-wall',
-      'entrance-door',
-      'service-door',
-      'sash',
-      'interior-door',
-      'floor',
-      'wall-ceiling',
-      'entrance-storage',
-      'closet',
-      'carpentry',
-      'ub',
-      'kitchen',
-      'washbasin',
-      'toilet',
-      'boiler',
-      'aircon',
-      'lighting',
-      'smartlock',
-      'bed',
-      'furniture',
-      'appliances',
-      'office-supplies',
-      'exterior-parts',
-      'sitework',
-    ]) {
-      expect(helper).toContain(`'${code}'`);
-    }
+    expect(helper).toContain("codes: ['roof', 'exterior-wall', 'insulation-floor', 'insulation-wall', 'insulation-ceiling', 'insulation']");
+    expect(helper).toContain("codes: ['entrance-door', 'service-door', 'sash', 'interior-door']");
+    expect(helper).toContain("codes: ['floor', 'wall-ceiling', 'carpentry']");
+    expect(helper).toContain("codes: ['ub', 'kitchen', 'washbasin', 'toilet', 'boiler']");
+    expect(helper).toContain("codes: ['aircon', 'lighting', 'smartlock']");
+    expect(helper).toContain("codes: ['entrance-storage', 'closet', 'bed', 'furniture', 'appliances', 'office-supplies']");
+    expect(helper).toContain("codes: ['exterior-parts', 'sitework']");
   });
 
-  it('DBのカテゴリー名は変更せず、登録画面用の表示名だけにグループ名を付ける', () => {
-    expect(helper).toContain("name: `【${groupLabel}】${category.name}`");
+  it('DBのカテゴリー名は変更せず、登録画面用の表示名だけを整える', () => {
+    expect(helper).toContain("aircon: 'エアコン'");
+    expect(helper).toContain('productRegistrationCategoryLabel(category)');
     expect(helper).toContain('...category');
+  });
+
+  it('商品台帳からも同じ大分類を参照できる', () => {
+    expect(helper).toContain('export function productRegistrationCategoryGroup(categoryCode: string)');
   });
 
   it('新規登録と下書き編集の両方で同じ表示順を使う', () => {

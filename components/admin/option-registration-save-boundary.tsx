@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui';
 import { OptionRegistrationUiEnhancer } from '@/components/admin/option-registration-ui-enhancer';
 import { OptionRegistrationFinalUiEnhancer } from '@/components/admin/option-registration-final-ui-enhancer';
+import { OptionRegistrationPriceUiSync } from '@/components/admin/option-registration-price-ui-sync';
 
 type SaveHandler = () => Promise<boolean>;
 
@@ -39,7 +40,7 @@ export function useOptionRegistrationSave() {
 
 export function OptionRegistrationSaveBoundary({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const saveHandlerRef = useRef<SaveHandler | null>(null);
+  const saveHandlersRef = useRef(new Set<SaveHandler>());
   const dirtyRef = useRef(false);
   const bypassFormRef = useRef<HTMLFormElement | null>(null);
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
@@ -48,13 +49,11 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
   const [hasSaveHandler, setHasSaveHandler] = useState(false);
 
   const registerSaveHandler = useCallback((handler: SaveHandler) => {
-    saveHandlerRef.current = handler;
-    setHasSaveHandler(true);
+    saveHandlersRef.current.add(handler);
+    setHasSaveHandler(saveHandlersRef.current.size > 0);
     return () => {
-      if (saveHandlerRef.current === handler) {
-        saveHandlerRef.current = null;
-        setHasSaveHandler(false);
-      }
+      saveHandlersRef.current.delete(handler);
+      setHasSaveHandler(saveHandlersRef.current.size > 0);
     };
   }, []);
 
@@ -70,11 +69,18 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
 
   const saveIfDirty = useCallback(async () => {
     if (!dirtyRef.current) return true;
-    if (!saveHandlerRef.current) return false;
+    const handlers = [...saveHandlersRef.current];
+    if (handlers.length === 0) return false;
     if (savePromiseRef.current) return savePromiseRef.current;
 
     setSaving(true);
-    const promise = saveHandlerRef.current()
+    const promise = (async () => {
+      for (const handler of handlers) {
+        const ok = await handler();
+        if (!ok) return false;
+      }
+      return true;
+    })()
       .then((ok) => {
         if (ok) {
           dirtyRef.current = false;
@@ -146,6 +152,7 @@ export function OptionRegistrationSaveBoundary({ children }: { children: ReactNo
     >
       <OptionRegistrationUiEnhancer scrollAfterCreate />
       <OptionRegistrationFinalUiEnhancer />
+      <OptionRegistrationPriceUiSync />
       {hasSaveHandler && (
         <div
           data-testid="option-registration-save-status"
@@ -188,6 +195,8 @@ export function OptionRegistrationPreviewButton({
       aria-current={ariaCurrent}
       disabled={saving}
       onClick={() => {
+        const form = document.getElementById('option-main-form');
+        if (form instanceof HTMLFormElement && !form.reportValidity()) return;
         void saveIfDirty().then((ok) => {
           if (ok) router.push(href);
         });

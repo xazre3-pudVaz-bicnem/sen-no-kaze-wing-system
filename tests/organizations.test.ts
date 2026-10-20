@@ -45,7 +45,7 @@ vi.mock('@/lib/data/store', () => ({
 import { acceptInvitationAction, inviteMemberAction } from '@/lib/actions/organizations';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261015120000_organization_accounts.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016120000_organization_accounts.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
@@ -82,7 +82,7 @@ describe('組織とアカウント：表示と判定', () => {
   });
 });
 
-describe('組織とアカウント：DB の取り決め（migration 20261015120000）', () => {
+describe('組織とアカウント：DB の取り決め（migration 20261016120000）', () => {
   it('代理店の直属は総代理店だけ（トリガーで表を直接書き換えても守る）', () => {
     expect(migration).toContain('add column parent_organization_id uuid references public.organizations(id) on delete restrict');
     expect(migration).toContain("if new.organization_type <> 'dealer' then");

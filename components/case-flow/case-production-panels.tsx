@@ -59,7 +59,7 @@ function Section({ title, badge, children, testId }: { title: string; badge?: Re
 /**
  * 案件画面の「製造・施工」タブ：製造依頼と個体（フェーズ11）、工程表（フェーズ12）、施工の記録と写真（フェーズ13）。
  * 本部・担当代理店・製造の担当（総代理店）に表示する。お客様に見せるかは、項目ごとに担当代理店・本部が決める。
- * 営業担当組織の管理者には読み取りだけで表示する（20261015150000）。製造担当の画面（/admin/manufacturing/[案件]）からは、
+ * 営業担当組織の管理者には読み取りだけで表示する（20261016150000）。製造担当の画面（/admin/manufacturing/[案件]）からは、
  * 見積を読めない製造担当のために quoteId なしで requestId と戻り先を渡して使う。
  */
 export async function CaseProductionPanels({

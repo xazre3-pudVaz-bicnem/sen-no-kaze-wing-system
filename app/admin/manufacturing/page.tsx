@@ -17,7 +17,7 @@ const DONE_TEXT: Record<string, string> = { order_status: '製造依頼の状態
 /**
  * 製造の進み具合（フェーズ11〜12）。本部は全国の製造の進み具合、総代理店は届いた製造依頼、代理店は担当の案件。
  * 受領は総代理店がこの画面から行える。製造担当（総代理店）は「製造担当の案件」から案件ごとの画面を開き、
- * 個体・工程・施工の記録・技術検討を行う（20261015150000）。担当代理店と本部は案件画面の「製造・施工」タブ。
+ * 個体・工程・施工の記録・技術検討を行う（20261016150000）。担当代理店と本部は案件画面の「製造・施工」タブ。
  */
 export default async function ManufacturingBoardPage({ searchParams }: { searchParams: Promise<{ done?: string; error?: string }> }) {
   const actor = await requireStaff('/admin/manufacturing');

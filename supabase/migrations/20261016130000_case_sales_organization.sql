@@ -27,7 +27,7 @@ do $preflight$
 begin
   if to_regprocedure('public.is_organization_manager(uuid)') is null
      or to_regclass('public.organization_invitations') is null then
-    raise exception 'PRECONDITION: organization accounts (20261015120000) must be applied first';
+    raise exception 'PRECONDITION: organization accounts (20261016120000) must be applied first';
   end if;
   if to_regprocedure('public.case_access(uuid)') is null
      or to_regclass('public.case_workflows') is null

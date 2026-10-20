@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { caseStageOf, type CaseProgress } from '@/lib/domain/case-flow';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261015140000_case_supervision.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016140000_case_supervision.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
@@ -14,7 +14,7 @@ const functionBody = (name: string) => {
   return sqlOnly.slice(start, sqlOnly.indexOf('\n$$;', start));
 };
 
-describe('総代理店の配下の確認：DB の取り決め（migration 20261015140000）', () => {
+describe('総代理店の配下の確認：DB の取り決め（migration 20261016140000）', () => {
   it('お客様の氏名・会社名・連絡先・設置場所・備考・営業の記録を返さない（顧客情報の項目は先方の確認待ち）', () => {
     for (const name of ['list_supervised_cases', 'get_supervised_case']) {
       const body = functionBody(name);

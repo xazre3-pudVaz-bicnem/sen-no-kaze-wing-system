@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261015150000_manufacturing_cases.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016150000_manufacturing_cases.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
@@ -16,7 +16,7 @@ const actions = fs.readFileSync(path.join(root, 'lib/actions/case-flow.ts'), 'ut
 const productionPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-production-panels.tsx'), 'utf8');
 const handoverPanels = fs.readFileSync(path.join(root, 'components/case-flow/case-handover-panels.tsx'), 'utf8');
 
-describe('製造担当の案件：DB の取り決め（migration 20261015150000）', () => {
+describe('製造担当の案件：DB の取り決め（migration 20261016150000）', () => {
   it('お客様の情報・見積の金額と備考・営業の記録を返さない', () => {
     for (const name of ['manufacturing_case_row', 'list_manufacturing_cases', 'get_manufacturing_case']) {
       const body = functionBody(name);

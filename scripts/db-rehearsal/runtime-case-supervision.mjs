@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// 総代理店の配下の確認（20261015140000）の実行時検査（1 本の接続で流して rollback する）
+// 総代理店の配下の確認（20261016140000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeCaseSupervision(client) {

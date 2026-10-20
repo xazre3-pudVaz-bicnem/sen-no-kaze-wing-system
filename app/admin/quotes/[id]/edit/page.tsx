@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCatalog } from '@/lib/domain/types';
+import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { formatYen } from '@/lib/domain/pricing';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
@@ -34,8 +35,9 @@ export default async function AdminQuoteRevisionEditPage({
   ]);
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
+  // 商品の候補（新しく選ぶ）は取扱中の商品だけ。取扱終了の商品は新しい版で選べない（発行時も DB が止める）
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter(isQuoteSelectableProduct)
     .map((option) => ({
       id: option.id,
       baseModelId: option.base_model_id,

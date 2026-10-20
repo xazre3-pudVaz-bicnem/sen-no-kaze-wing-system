@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
+import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { Alert, Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import {
@@ -84,8 +85,9 @@ export default async function EstimateTemplateDetailPage({
     customerSelection: '—',
   }));
 
+  // 商品の候補（新しく選ぶ）は取扱中の商品だけ（明細は品名・金額で保存し、商品 ID を持たない）
   const products = options
-    .filter((option) => option.status === 'published')
+    .filter(isQuoteSelectableProduct)
     .map((option) => ({
       id: option.id,
       categoryId: option.category_id,

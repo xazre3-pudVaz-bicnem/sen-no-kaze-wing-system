@@ -15,7 +15,7 @@ import type {
 } from '@/lib/domain/organizations';
 
 /**
- * 代理店・総代理店の組織とアカウント（migration 20261015120000）。
+ * 代理店・総代理店の組織とアカウント（migration 20261016120000）。
  * 権限の正本は DB の RPC（本部・その組織の管理者の判定、管理者が 0 人にならない、招待はメールアドレスが一致する本人だけ）。
  * ローカル検証モードは同じ規則を lib/data/organizations/local.ts で再現する。
  */

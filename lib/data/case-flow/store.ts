@@ -111,7 +111,7 @@ export interface CaseFlowStore {
   setCaseSalesOrganization(actor: SessionUser, requestId: string, organizationId: string | null): Promise<void>;
   /** 製造担当組織を変える（本部だけ）。NULL で営業担当組織からの自動に戻す */
   setCaseManufacturingOrganization(actor: SessionUser, requestId: string, organizationId: string | null): Promise<void>;
-  /** 総代理店の配下の確認（直属の総代理店の管理者と本部）。顧客情報を含まない（20261015140000） */
+  /** 総代理店の配下の確認（直属の総代理店の管理者と本部）。顧客情報を含まない（20261016140000） */
   listSupervisedCases(actor: SessionUser): Promise<SupervisedCaseSummary[]>;
   getSupervisedCase(actor: SessionUser, requestId: string): Promise<SupervisedCaseDetail | null>;
   /** 製造担当の案件（製造担当組織のメンバー・これまでの案件の製造担当・本部。お客様の情報・見積の金額を含まない） */

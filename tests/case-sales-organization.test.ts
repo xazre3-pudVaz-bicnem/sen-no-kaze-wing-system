@@ -12,14 +12,14 @@ import {
 import { ANON_DEFINER_ALLOWLIST } from '../scripts/db-rehearsal/checks.mjs';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261015130000_case_sales_organization.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016130000_case_sales_organization.sql'), 'utf8');
 const sqlOnly = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/, ''))
   .join('\n');
 const sectionOf = (start: string, end: string) => migration.slice(migration.indexOf(start), migration.indexOf(end, migration.indexOf(start)));
 
-describe('案件の営業担当組織：DB の取り決め（migration 20261015130000）', () => {
+describe('案件の営業担当組織：DB の取り決め（migration 20261016130000）', () => {
   it('組織の案件では、主担当者（営業担当組織の有効なメンバー）だけが担当。これまでの案件は現在の見積の担当', () => {
     const access = sectionOf('create or replace function public.case_access(p_request_id uuid)', 'comment on function public.case_access(uuid)');
     expect(access).toContain('if w.sales_organization_id is not null then');

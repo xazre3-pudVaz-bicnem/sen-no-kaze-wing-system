@@ -4,7 +4,7 @@ import { isManagerRole } from '@/lib/domain/organizations';
 
 /**
  * ローカル検証モードで、組織と案件の関係を調べる（DB の is_active_organization_member／is_case_sales_manager／
- * is_case_supervisor／default_manufacturing_organization と同じ規則。20261015130000）。
+ * is_case_supervisor／default_manufacturing_organization と同じ規則。20261016130000）。
  */
 
 export function isActiveOrganizationMember(db: LocalDb, organizationId: string | null | undefined, profileId: string): boolean {

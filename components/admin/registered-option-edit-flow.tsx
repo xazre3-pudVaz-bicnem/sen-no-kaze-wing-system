@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
+import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
@@ -97,7 +98,7 @@ function fileToDataUrl(file: File) {
 }
 
 function ReviewValue({ value }: { value: string }) {
-  return <div className="min-h-11 rounded-lg border border-line bg-white px-3 py-2 text-sm leading-6 text-ink-soft">{value || '—'}</div>;
+  return <div className="min-h-11 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-line bg-white px-3 py-2 text-sm leading-6 text-ink-soft">{value || '—'}</div>;
 }
 
 function ImagePreview({ src, label }: { src: string | null; label: string }) {
@@ -391,7 +392,7 @@ export function RegisteredOptionEditFlow({
                 <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
               </Field>
               <Field label="メーカー記載の特徴（任意）" htmlFor="registered-highlight">
-                <Input id="registered-highlight" name="highlight" defaultValue={option.highlight ?? ''} />
+                <ProductHighlightTextarea id="registered-highlight" initialValue={option.highlight ?? ''} />
               </Field>
             </div>
             <Field label="商品説明" htmlFor="registered-description">

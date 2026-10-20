@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// 製造担当の案件（20261015150000）の実行時検査（1 本の接続で流して rollback する）
+// 製造担当の案件（20261016150000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeManufacturingCases(client) {

@@ -6,6 +6,10 @@ const refinement = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/product-registration-step2-refinements.tsx'),
   'utf8'
 );
+const customerPreview = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-customer-preview.tsx'),
+  'utf8'
+);
 const adminLayout = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/layout.tsx'), 'utf8');
 
 describe('商品登録 STEP2 の確認画面', () => {
@@ -15,14 +19,26 @@ describe('商品登録 STEP2 の確認画面', () => {
     expect(refinement).toContain('変更する場合はSTEP1へ戻ってください。');
   });
 
-  it('登録直前に画像・価格・お客様選択を1か所で確認する', () => {
+  it('登録直前に画像・実際の価格・メーカー・型番・お客様選択を1か所で確認する', () => {
     expect(refinement).toContain('登録前の最終チェック');
     expect(refinement).toContain("'メイン画像'");
     expect(refinement).toContain('未登録（STEP1で登録してください）');
-    expect(refinement).toContain("'価格'");
+    expect(refinement).toContain("'商品価格（税別）'");
+    expect(refinement).toContain('registrationPriceDisplay');
     expect(refinement).toContain('0円の確認が必要');
+    expect(refinement).toContain("'メーカー'");
+    expect(refinement).toContain('registrationManufacturer');
+    expect(refinement).toContain("'シリーズ・型番'");
+    expect(refinement).toContain('registrationModelNo');
     expect(refinement).toContain("'お客様選択'");
-    expect(refinement).toContain('お客様表示を確認してください');
+    expect(refinement).toContain('registrationCustomerChoices');
+    expect(customerPreview).toContain('data-registration-price-display');
+    expect(customerPreview).toContain('formatPriceWithUnit(option.price, option.price_unit)');
+    expect(customerPreview).toContain("option.price_on_request\n    ? '別途見積'");
+  });
+
+  it('STEP2だけ商品画像をコンパクト表示にして商品情報へ早く到達できるようにする', () => {
+    expect(customerPreview).toContain('compactMedia');
   });
 
   it('既存の公開処理は変更せず、STEP2の表示補助だけを管理画面へ組み込む', () => {

@@ -397,8 +397,11 @@ begin
       q_parent, o_hid)));
 
   -- ---------- 標準見積 ----------
-  perform pg_temp.pl_expect_error('PL-38 公開中の標準見積の標準状態にある商品は取扱終了にできない', 'P0001', 'LOCKED',
+  -- 20261016112000（2026-10-19 の先方回答）：使用中でも販売停止（#500 の取扱終了）にでき、その仕様は新しい受付を止める
+  perform pg_temp.pl_expect_eq('PL-38 公開中の標準見積の標準状態にある商品も販売停止にできる（20261016112000）', 'ok',
     pg_temp.pl_try(format('update public.options set archived_at = now() where id = %L returning ''ok''', o_std)));
+  -- 後の検査（PL-39）のために販売を再開しておく
+  perform pg_temp.pl_try(format('update public.options set archived_at = null where id = %L returning ''ok''', o_std));
   v_before := (select r.subtotal || '/' || r.total || '/' || b.unit_price_snapshot || '/' || b.quantity
                  from public.standard_estimate_revisions r join public.standard_estimate_revision_baseline_items b on b.revision_id = r.id
                 where r.id = rev_pub);
@@ -437,13 +440,13 @@ begin
       rev_draft, o_hid, c_items)));
 
   -- ---------- 取扱終了の参照保護・状態の変更 ----------
-  perform pg_temp.pl_expect_error('PL-48 Excel 標準見積の基準商品は取扱終了にできない', 'P0001', 'LOCKED',
+  perform pg_temp.pl_expect_eq('PL-48 Excel 標準見積の基準商品も販売停止にできる（20261016112000）', 'ok',
     pg_temp.pl_try(format('update public.options set archived_at = now() where id = %L returning ''ok''', o_tmpl)));
   perform pg_temp.pl_expect_error('PL-49 初期選択（必須）の商品は取扱終了にできない', 'P0001', 'LOCKED',
     pg_temp.pl_try(format('update public.options set archived_at = now() where id = %L returning ''ok''', o_default)));
   perform pg_temp.pl_expect_error('PL-50 取扱中の商品の前提商品は取扱終了にできない', 'P0001', 'LOCKED',
     pg_temp.pl_try(format('update public.options set archived_at = now() where id = %L returning ''ok''', o_dep_target)));
-  perform pg_temp.pl_expect_error('PL-51 本体の仕様（標準の商品構成）に入っている商品は取扱終了にできない', 'P0001', 'LOCKED',
+  perform pg_temp.pl_expect_eq('PL-51 本体の仕様（標準の商品構成）に入っている商品も販売停止にできる（20261016112000）', 'ok',
     pg_temp.pl_try(format('update public.options set archived_at = now() where id = %L returning ''ok''', o_base_hid)));
   perform pg_temp.pl_expect_error('PL-52 下書きの商品は取扱終了にできない', 'P0001', 'VALIDATION',
     pg_temp.pl_try(format('update public.options set archived_at = now() where id = %L returning ''ok''', o_draft)));

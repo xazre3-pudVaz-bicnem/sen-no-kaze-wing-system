@@ -26,6 +26,8 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   }
   const bundle = await store.getCatalogBundle(configuration.base_model_id);
   if (!bundle) notFound();
+  // 仕様の標準構成に販売停止・廃番の商品があれば、新しいご依頼を受け付けない（DB の見積依頼の止めと同じ判定。2026-10-19 の先方回答 ③ の ①）
+  const acceptance = await store.getSpecAcceptanceState(configuration.base_model_id, configuration.spec_code ?? null);
   const profile = await store.getProfile(user.id);
   const exteriorFaces = await getExteriorFaces(configuration.id);
   // 相談したい代理店の候補：公開中で、設置予定地（未定なら全国）に対応している代理店
@@ -59,24 +61,35 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
         <h1 className="mt-1 text-3xl sm:text-4xl">見積依頼</h1>
         <p className="mt-2 text-ink-soft">以下の仕様で見積を依頼します。送信すると見積番号付きの概算見積書（PDF）が発行され、別途工事は設置場所の確認後に代理店からご案内します。</p>
 
+        {!acceptance.accepting && (
+          <div className="mt-6" data-testid="request-acceptance-stopped">
+            <Alert tone="warn" title="現在、この仕様の新しいご依頼を受け付けていません">
+              この仕様の標準の商品構成に、販売停止の商品（{acceptance.stoppedNames.join('・')}）が含まれるためです。
+              プランは保存されています。再開まで担当からのご案内をお待ちください。
+            </Alert>
+          </div>
+        )}
+
         <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_22rem]">
-          <QuoteRequestForm
-            configurationId={configuration.id}
-            lockVersion={configuration.lock_version ?? null}
-            dealers={dealers}
-            today={todayInJapan()}
-            siteProfile={siteProfile}
-            siteArea={siteArea}
-            defaults={{
-              full_name: profile?.full_name ?? '',
-              company_name: profile?.company_name ?? '',
-              email: profile?.email ?? user.email,
-              phone: profile?.phone ?? '',
-              address: profile?.address ?? '',
-              site_address: siteProfile?.site_address ?? '',
-              site_profile_lock_version: siteProfile ? String(siteProfile.lock_version) : '',
-            }}
-          />
+          {acceptance.accepting && (
+            <QuoteRequestForm
+              configurationId={configuration.id}
+              lockVersion={configuration.lock_version ?? null}
+              dealers={dealers}
+              today={todayInJapan()}
+              siteProfile={siteProfile}
+              siteArea={siteArea}
+              defaults={{
+                full_name: profile?.full_name ?? '',
+                company_name: profile?.company_name ?? '',
+                email: profile?.email ?? user.email,
+                phone: profile?.phone ?? '',
+                address: profile?.address ?? '',
+                site_address: siteProfile?.site_address ?? '',
+                site_profile_lock_version: siteProfile ? String(siteProfile.lock_version) : '',
+              }}
+            />
+          )}
           <aside className="card h-fit overflow-hidden lg:sticky lg:top-24">
             {configuration.preview_image_url && (
               <div className="relative aspect-[16/10] bg-sand">

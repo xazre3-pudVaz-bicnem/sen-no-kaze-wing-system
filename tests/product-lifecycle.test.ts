@@ -35,12 +35,16 @@ describe('product lifecycle', () => {
     expect(isSimulatorSelectableProduct(product)).toBe(false);
   });
 
-  it('取扱終了は履歴用状態として新規候補にしない', () => {
+  it('販売停止・廃番は履歴用状態として新規候補にしない（2026-10-19 の先方回答：#500 の取扱終了を販売停止と呼び、廃番を分ける）', () => {
     const product = { status: 'published' as const, archived_at: '2026-10-15T00:00:00Z', simulator_visible: true };
     expect(productLedgerState(product)).toBe('retired');
-    expect(productLedgerStateLabel(product)).toBe('取扱終了');
+    expect(productLedgerStateLabel(product)).toBe('販売停止');
     expect(isQuoteSelectableProduct(product)).toBe(false);
     expect(isSimulatorSelectableProduct(product)).toBe(false);
+    const discontinued = { ...product, discontinued_at: '2026-10-20T00:00:00Z' };
+    expect(productLedgerState(discontinued)).toBe('retired');
+    expect(productLedgerStateLabel(discontinued)).toBe('廃番');
+    expect(isQuoteSelectableProduct(discontinued)).toBe(false);
   });
 
   it('migration未適用時の表示設定は従来互換でON扱いにする', () => {
@@ -53,9 +57,10 @@ describe('product lifecycle', () => {
     const product = { name: '照明A', status: 'published' as const, archived_at: null, simulator_visible: true };
     expect(simulatorUnselectableReason(product)).toBeNull();
     expect(simulatorUnselectableReason({ ...product, simulator_visible: false })).toBe('「照明A」はシミュレーターでは新しく選べません。');
-    expect(simulatorUnselectableReason({ ...product, archived_at: '2026-10-15T00:00:00Z' })).toBe('「照明A」は取扱終了のため、新しく選べません。');
-    // 取扱終了は表示設定より優先して伝える（再開しない限り選べないため）
-    expect(simulatorUnselectableReason({ ...product, archived_at: '2026-10-15T00:00:00Z', simulator_visible: false })).toContain('取扱終了');
+    expect(simulatorUnselectableReason({ ...product, archived_at: '2026-10-15T00:00:00Z' })).toBe('「照明A」は販売停止中のため、新しく選べません。');
+    expect(simulatorUnselectableReason({ ...product, archived_at: '2026-10-15T00:00:00Z', discontinued_at: '2026-10-20T00:00:00Z' })).toBe('「照明A」は廃番のため、新しく選べません。');
+    // 販売停止は表示設定より優先して伝える（再開しない限り選べないため）
+    expect(simulatorUnselectableReason({ ...product, archived_at: '2026-10-15T00:00:00Z', simulator_visible: false })).toContain('販売停止中');
     expect(simulatorUnselectableReason({ ...product, status: 'draft' as const })).toBe('「照明A」は準備中のため選べません。');
   });
 

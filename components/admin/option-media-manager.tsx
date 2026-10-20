@@ -90,6 +90,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [imageUrl, setImageUrl] = useState('');
   const [documentUrl, setDocumentUrl] = useState('');
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfReplaceOpen, setPdfReplaceOpen] = useState(false);
 
   useEffect(() => {
     const section = document.getElementById('product-main-media');
@@ -307,7 +308,10 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       formData.set('file', file);
       const result = await uploadOptionManufacturerDocumentAction(initial, formData);
       setDocState(result);
-      if (result.ok) router.refresh();
+      if (result.ok) {
+        setPdfReplaceOpen(false);
+        router.refresh();
+      }
     } catch {
       setDocState({ ok: false, error: 'メーカー資料PDFの保存中にエラーが発生しました。' });
     } finally {
@@ -336,6 +340,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       setDocState(result);
       if (result.ok) {
         setDocumentUrl('');
+        setPdfReplaceOpen(false);
         router.refresh();
       }
     } catch {
@@ -443,9 +448,11 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           </span>
         </div>
 
-        <p className="text-xs leading-5 text-ink-soft">
-          メーカー資料が用意されていない商品は未登録のまま進められます。その場合は登録前チェックで確認事項として表示します。
-        </p>
+        {!option.manufacturer_document_url && (
+          <p className="text-xs leading-5 text-ink-soft">
+            資料がない場合は未登録で進められます。登録前チェックに確認事項として表示します。
+          </p>
+        )}
 
         {option.manufacturer_document_url ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ivory/50 px-4 py-3">
@@ -474,6 +481,22 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         )}
 
         <ActionStatus state={docState} />
+        {option.manufacturer_document_url && (
+          <button
+            type="button"
+            className="registration-pdf-replace-toggle"
+            aria-expanded={pdfReplaceOpen}
+            aria-controls="manufacturer-document-replace-fields"
+            disabled={docPending}
+            onClick={() => setPdfReplaceOpen((open) => !open)}
+          >
+            {pdfReplaceOpen ? 'PDFの差し替えを閉じる' : 'PDFを差し替える'}
+          </button>
+        )}
+        <div
+          id="manufacturer-document-replace-fields"
+          className={option.manufacturer_document_url && !pdfReplaceOpen ? 'hidden' : 'space-y-4'}
+        >
         <Field
           label={option.manufacturer_document_url ? 'メーカー資料PDFを差し替える' : 'メーカー資料PDFを登録'}
           htmlFor="manufacturer-document"
@@ -515,6 +538,8 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
               </div>
             </div>
           </Field>
+        </div>
+
         </div>
 
         {docPending && (

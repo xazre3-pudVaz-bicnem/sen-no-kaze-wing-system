@@ -19,10 +19,11 @@ describe('商品登録UIの最終整理', () => {
     expect(preview).not.toContain('商品追加額・仕様追加額・合計追加額');
   });
 
-  it('画像URLは通常時に隠し、必要なときだけ開ける', () => {
-    expect(finalEnhancer).toContain('URLで画像を指定');
-    expect(finalEnhancer).toContain("wrapper.style.display = open ? '' : 'none'");
-    expect(finalEnhancer).toContain("button.setAttribute('aria-expanded', String(open))");
+  it('メイン画像URL欄は初期状態から常に表示する', () => {
+    expect(finalEnhancer).toContain("input[name=\"image_url\"]");
+    expect(finalEnhancer).toContain("wrapper.style.removeProperty('display')");
+    expect(finalEnhancer).not.toContain("wrapper.style.display = open ? '' : 'none'");
+    expect(finalEnhancer).not.toContain('URLで画像を指定');
   });
 
   it('重複する現在STEP表示と空状態の説明を簡略化する', () => {

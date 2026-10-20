@@ -15,6 +15,7 @@ import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRunti
 import { runtimeConcurrency } from './runtime-concurrency.mjs';
 import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.mjs';
 import { runtimeOptionStandardCostVersions } from './runtime-option-standard-cost-versions.mjs';
+import { runtimePricingV25 } from './runtime-pricing-v25.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
@@ -50,6 +51,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionHqStandardCost(client, { connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionStandardCostVersions(client, { connectionString: url }));
+    // 正式計算は DB の結果を、手で検算した値と TypeScript の同じ計算の両方と突き合わせる
+    runtime = mergeRuntime(runtime, await runtimePricingV25(client));
     runtime = mergeRuntime(runtime, await runtimeConfigurationVariantAssignment(client));
     runtime = mergeRuntime(runtime, await runtimeProductLifecycle(client));
     // 取扱終了と保存・提出・発行の同時実行は 2 本の接続が必要なため、別の接続で実行する

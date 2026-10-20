@@ -405,7 +405,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
               <Field
                 label="または画像ファイルから登録"
                 htmlFor="option-sub-image"
-                hint="複数選択可・1枚10MBまで。選択すると自動保存します。"
+                hint="複数選択可・1枚10MBまで。ファイルを選択すると自動保存します。"
                 errors={imageState.fieldErrors?.file}
               >
                 <Input
@@ -529,7 +529,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             <Field
               label={option.manufacturer_document_url ? 'またはPDFファイルで差し替える' : 'またはPDFファイルから登録'}
               htmlFor="manufacturer-document"
-              hint="PDFのみ・20MBまで。選択すると自動保存します。"
+              hint="PDFのみ・20MBまで。ファイルを選択すると自動保存します。"
               errors={docState.fieldErrors?.file}
             >
               <Input

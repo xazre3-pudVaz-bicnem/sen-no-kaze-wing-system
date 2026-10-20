@@ -46,61 +46,16 @@ function enhanceMainImageUrl() {
   if (wrapper.style.display === 'none') wrapper.style.removeProperty('display');
 }
 
-/**
- * STEP1の長い入力画面を、画面を分割せず項目別に直接移動できるようにする。
- * 同じ商品フォームを使い続け、保存フィールドの配置は変更しない。
- */
-function enhanceRegistrationSectionNavigation() {
+/** STEP1見出しと保存案内だけを簡潔にする。ジャンプ用ナビは設置しない。 */
+function simplifyRegistrationInfoHeading() {
   const info = document.querySelector<HTMLElement>('[data-testid="option-registration-info"]');
-  const sections = info?.querySelector<HTMLElement>('.registration-step1-sections');
-  if (!info || !sections) return;
-
+  if (!info) return;
   const heading = info.querySelector<HTMLElement>(':scope > div:first-child > h2');
   if (heading) setTextIfChanged(heading, '商品情報を入力');
   const guidance = info.querySelector<HTMLElement>(':scope > div:first-child > p');
   if (guidance) {
     setTextIfChanged(guidance, '変更はSTEP 2へ進むときと、画像・資料の登録前に保存されます。');
   }
-
-  const check = info.querySelector<HTMLElement>('[data-testid="option-registration-check"]');
-  if (check) check.id = 'registration-final-check';
-
-  if (info.querySelector('[data-registration-section-nav="true"]')) return;
-
-  const links = [
-    { id: 'product-identify', label: '基本情報' },
-    { id: 'product-details', label: '商品詳細' },
-    { id: 'product-main-media', label: '商品画像' },
-    { id: 'manufacturer-documents', label: 'メーカー資料' },
-    { id: 'customer-selection', label: 'お客様選択' },
-    { id: 'sales-settings', label: '価格' },
-    { id: 'option-registration-hq-cost', label: '本部原価' },
-    { id: 'registration-final-check', label: '登録前チェック' },
-  ].filter((item) => item.id === 'option-registration-hq-cost'
-    ? Boolean(info.querySelector('[data-testid="option-registration-hq-cost"]'))
-    : Boolean(document.getElementById(item.id)));
-
-  const nav = document.createElement('nav');
-  nav.dataset.registrationSectionNav = 'true';
-  nav.className = 'registration-section-nav';
-  nav.setAttribute('aria-label', '入力項目へ移動');
-  const title = document.createElement('p');
-  title.textContent = '入力項目へ移動';
-  title.className = 'registration-section-nav-title';
-  const items = document.createElement('div');
-  items.className = 'registration-section-nav-items';
-
-  for (const item of links) {
-    const link = document.createElement('a');
-    link.href = `#${item.id}`;
-    link.textContent = item.label;
-    items.append(link);
-  }
-  nav.append(title, items);
-  sections.insertAdjacentElement('beforebegin', nav);
-
-  const hqCost = info.querySelector<HTMLElement>('[data-testid="option-registration-hq-cost"]');
-  if (hqCost) hqCost.id = 'option-registration-hq-cost';
 }
 
 /** 要確認メッセージを読んだ直後に、該当する入力欄へ移動できるようにする。 */
@@ -162,7 +117,7 @@ export function OptionRegistrationFinalUiEnhancer() {
     const enhance = () => {
       simplifyStepProgress();
       enhanceMainImageUrl();
-      enhanceRegistrationSectionNavigation();
+      simplifyRegistrationInfoHeading();
       enhanceRegistrationCheckLinks();
       simplifyCustomerSelectionEmptyState();
       simplifyPreviewGuidance();

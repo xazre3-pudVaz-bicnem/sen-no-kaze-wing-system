@@ -35,10 +35,14 @@ describe('メーカー公式商品ページの任意リンク', () => {
     const form = source('components/admin/forms.tsx');
     const actions = source('lib/actions/admin.ts');
     const detail = source('components/simulator/product-detail.tsx');
+    const registered = source('components/admin/registered-option-edit-flow.tsx');
     const preview = source('components/admin/option-customer-preview.tsx');
     expect(form).toContain('name="manufacturer_product_url"');
     expect(form).toContain('value={option.manufacturer_product_url ??');
     expect(actions).toContain("manufacturer_product_url: formData.get('manufacturer_product_url')");
+    expect(registered).toContain('name="manufacturer_product_url"');
+    expect(registered).toContain("manufacturer_product_url: nullable(data.get('manufacturer_product_url'))");
+    expect(registered).toContain("key: 'manufacturer_product_url'");
     expect(detail).toContain('safeManufacturerProductUrl(option.manufacturer_product_url)');
     expect(detail).toContain('data-testid="manufacturer-product-link"');
     expect(detail).toContain('target="_blank"');

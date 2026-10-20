@@ -94,7 +94,7 @@ function revalidateCase(quoteId: string | null, requestId: string | null) {
   }
   if (requestId) {
     revalidatePath(`/mypage/cases/${requestId}`);
-    // 製造担当の画面（20261015150000）
+    // 製造担当の画面（20261016150000）
     revalidatePath(`/admin/manufacturing/${requestId}`);
   }
   revalidatePath('/admin/appointments');

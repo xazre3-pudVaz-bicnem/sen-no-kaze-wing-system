@@ -54,7 +54,7 @@ const todayJst = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo'
 /**
  * 案件画面の「引渡し・アフター」タブ：完成確認・是正・工事完了承諾書・引渡し（フェーズ14）と、アフター（フェーズ15）。
  * 本部・担当代理店・製造の担当（総代理店）に表示する。総代理店が見られるアフターは、回されたもの（製造起因）だけ。
- * 営業担当組織の管理者には読み取りだけで表示する（20261015150000）。
+ * 営業担当組織の管理者には読み取りだけで表示する（20261016150000）。
  */
 export async function CaseHandoverPanels({ quoteId, actor, flash }: { quoteId: string; actor: SessionUser; flash?: { done?: string; error?: string } }) {
   const store = await getStore();

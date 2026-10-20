@@ -298,7 +298,7 @@ export interface SupervisedCaseDetail {
 }
 
 /**
- * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261015150000）。
+ * 製造担当の案件（DB の list_manufacturing_cases／get_manufacturing_case。20261016150000）。
  * 製造担当（製造担当組織のメンバー・これまでの案件で本部が選んだ総代理店の利用者）と本部が使う。お客様の情報・見積の金額は含めない。
  */
 export interface ManufacturingCaseSummary {

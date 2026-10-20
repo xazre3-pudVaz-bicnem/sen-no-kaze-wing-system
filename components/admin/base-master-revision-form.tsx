@@ -9,6 +9,8 @@ import {
 } from '@/lib/actions/base-masters';
 import { formatBaseMasterRevision } from '@/lib/domain/base-master-ui';
 import { Button, Field, Input, Select, Spinner } from '@/components/ui';
+import { ConfirmActionButton } from './confirm-action-button';
+import { ConfirmSubmit } from './confirm-submit';
 import { BaseMasterActionStatus } from './base-master-form';
 import { BaseMasterLinesEditor, type BaseMasterRevisionLine } from './base-master-lines';
 
@@ -65,7 +67,6 @@ export function BaseMasterDraftEditor({
   const revisionNumber = formatBaseMasterRevision(revision.version);
 
   const resetDraft = () => {
-    if (dirty && !window.confirm('未保存の変更を破棄して、保存時点の内容に戻しますか？')) return;
     setName(master.name);
     setFireSpec(master.fire_spec_code);
     setMethod(revision.expense_method);
@@ -94,7 +95,20 @@ export function BaseMasterDraftEditor({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetDraft}>保存時点に戻す</Button>
+            {dirty ? (
+              <ConfirmActionButton
+                className="btn-secondary btn-sm"
+                message="未保存の変更を破棄して、保存時点の内容に戻します。入力中の変更は元に戻せません。"
+                dialogTitle="保存時点に戻しますか？"
+                confirmLabel="保存時点に戻す"
+                destructive
+                onConfirm={resetDraft}
+              >
+                保存時点に戻す
+              </ConfirmActionButton>
+            ) : (
+              <Button type="button" variant="secondary" size="sm" onClick={resetDraft}>保存時点に戻す</Button>
+            )}
             <button
               type="submit"
               form="base-master-save-form"
@@ -107,19 +121,16 @@ export function BaseMasterDraftEditor({
             <form action={publishAction}>
               <input type="hidden" name="revision_id" value={revision.id} />
               <input type="hidden" name="master_id" value={master.id} />
-              <Button
-                type="submit"
-                size="sm"
+              <ConfirmSubmit
+                message={`下書き ${revisionNumber} を公開します。公開後、この版の内容は直接変更できません。`}
+                dialogTitle="本体マスターを公開しますか？"
+                confirmLabel="公開する"
+                className="btn-primary btn-sm inline-flex items-center gap-2"
                 disabled={publishing || dirty || lines.length === 0}
-                onClick={(event) => {
-                  if (!window.confirm(`下書き ${revisionNumber} を公開します。公開後、この版の内容は直接変更できません。よろしいですか？`)) {
-                    event.preventDefault();
-                  }
-                }}
               >
                 {publishing && <Spinner />}
                 この内容で公開
-              </Button>
+              </ConfirmSubmit>
             </form>
           </div>
         </div>
@@ -212,18 +223,17 @@ export function BaseMasterDraftEditor({
             </div>
             <form action={discardAction}>
               <input type="hidden" name="revision_id" value={revision.id} />
-              <Button
-                type="submit"
-                variant="ghost"
-                className="text-danger"
+              <ConfirmSubmit
+                message="この下書きを破棄します。破棄した下書きは元に戻せません。"
+                dialogTitle="下書きを破棄しますか？"
+                confirmLabel="下書きを破棄"
+                destructive
+                className="btn-ghost text-danger inline-flex items-center gap-2"
                 disabled={discarding}
-                onClick={(event) => {
-                  if (!window.confirm('この下書きを破棄します。よろしいですか？')) event.preventDefault();
-                }}
               >
                 {discarding && <Spinner />}
                 下書きを破棄
-              </Button>
+              </ConfirmSubmit>
             </form>
           </div>
           {dirty && <p className="text-xs text-warn">未保存の変更があります。公開する前に下書きを保存してください。</p>}

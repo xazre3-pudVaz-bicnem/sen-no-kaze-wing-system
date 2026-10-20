@@ -12,6 +12,7 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { Reveal } from '@/components/ui/reveal';
 import { OrderScopeSection } from '@/components/sections/order-scope';
 import { ProductGallery } from '@/components/sections/product-gallery';
+import { isSimulatorSelectableProduct } from '@/lib/domain/product-lifecycle';
 
 type Params = Promise<{ slug: string }>;
 
@@ -49,7 +50,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const interior = bundle.images.find((i) => i.kind === 'interior') ?? null;
   const optionsByCategory = bundle.categories
     .filter((c) => c.code !== 'sitework')
-    .map((c) => ({ category: c, options: bundle.options.filter((o) => o.category_id === c.id) }))
+    .map((c) => ({ category: c, options: bundle.options.filter((o) => o.category_id === c.id && isSimulatorSelectableProduct(o)) }))
     .filter((g) => g.options.length);
 
   return (

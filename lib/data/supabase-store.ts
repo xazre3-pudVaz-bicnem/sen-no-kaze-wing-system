@@ -1,5 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type {
   BaseBreakdownItem,
   BaseModel,
@@ -73,6 +74,7 @@ import {
   type AccessibleCustomerDetailResult,
   type MatrixRowCreateInput,
   type MatrixRowUpdateInput,
+  type ProductLifecycleAction,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
@@ -136,6 +138,8 @@ function mapPgError(e: { code?: string; message?: string } | null): never {
     throw new StoreError('VALIDATION', msg.replace(/^[A-Z_]+:\s*/, ''));
   }
   if (msg.startsWith('VALIDATION:')) throw new StoreError('VALIDATION', msg.replace(/^VALIDATION:\s*/, ''));
+  // 取扱終了の商品を新しく選ぼうとした・残ったまま依頼や発行をしようとした（20261015113000）
+  if (msg.startsWith('RETIRED:')) throw new StoreError('VALIDATION', msg.replace(/^RETIRED:\s*/, ''));
   if (msg.startsWith('LOCKED')) throw new StoreError('LOCKED', msg.replace(/^LOCKED:\s*/, ''));
   if (msg.startsWith('FORBIDDEN') || e?.code === '42501') throw new StoreError('FORBIDDEN', '権限がありません');
   if (msg.startsWith('NOT_FOUND') || e?.code === 'P0002' || e?.code === 'PGRST116') throw new StoreError('NOT_FOUND', 'データが見つかりません');
@@ -248,6 +252,38 @@ export class SupabaseStore implements DataStore {
     };
   }
 
+  /** 商品の状態の機能を使えるか（20261015113000 の判定関数があるか。無ければ列の有無だけ確かめ、機能は有効にしない） */
+  async getProductLifecycleCapability(): Promise<ProductLifecycleCapability> {
+    const db = await this.db();
+    const capability = await db.rpc('product_lifecycle_capability');
+    if (!capability.error && capability.data) {
+      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards) };
+    }
+    const columns = await db.from('options').select('id, archived_at, simulator_visible').limit(1);
+    return { columns: !columns.error, guards: false };
+  }
+  /** 商品の状態を変える。画面が読んだ版（updated_at）の行だけを更新し、参照保護などの判定は options のトリガーが行う */
+  async setProductLifecycle({ id, action, expectedUpdatedAt }: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }) {
+    const patch =
+      action === 'retire'
+        ? { archived_at: new Date().toISOString() }
+        : action === 'resume'
+          ? { archived_at: null }
+          : { simulator_visible: action === 'show_in_simulator' };
+    const db = await this.db();
+    const { data, error } = await db
+      .from('options')
+      .update(patch)
+      .eq('id', id)
+      .eq('updated_at', expectedUpdatedAt)
+      .select('id, updated_at');
+    if (error) mapPgError(error);
+    const rows = (data ?? []) as { id: string; updated_at: string }[];
+    if (rows.length === 0) {
+      throw new StoreError('LOCKED', '他の画面で商品が更新されたため、操作できませんでした。再読み込みしてから、もう一度操作してください');
+    }
+    return { updated_at: rows[0].updated_at };
+  }
   /** 商品価格の一括更新（監査ログは DB トリガーが記録する） */
   async updateOptionPrices(items: { id: string; price: number }[]) {
     const db = await this.db();
@@ -930,7 +966,7 @@ export class SupabaseStore implements DataStore {
   async listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]> {
     const db = await this.db();
     // 一覧に出す見積は DB の list_dealer_quote_request_meta が決める（主担当者の案件と、営業担当組織の管理者なら自社の全案件。
-    // 20261015130000）。関数が無い古い DB では、これまでどおり見積の担当で絞る
+    // 20261016130000）。関数が無い古い DB では、これまでどおり見積の担当で絞る
     const { data: requestMeta, error: requestMetaError } = await db.rpc('list_dealer_quote_request_meta');
     if (requestMetaError && !isMissingFunction(requestMetaError)) mapPgError(requestMetaError);
     const requestMetaRows = requestMetaError ? [] : requestMeta ?? [];
@@ -1163,7 +1199,10 @@ export class SupabaseStore implements DataStore {
     };
   }
   async upsertOption(input: OptionInput) {
-    return this.upsert<ProductOption>('options', input);
+    // 取扱終了・シミュレーター表示は setProductLifecycle だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
+    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, ...rest } = input as OptionInput &
+      Pick<ProductOption, 'simulator_visible' | 'archived_at'>;
+    return this.upsert<ProductOption>('options', rest);
   }
   async deleteOption(id: string) {
     const db = await this.db();

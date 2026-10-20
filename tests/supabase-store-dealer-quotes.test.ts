@@ -43,7 +43,7 @@ describe('SupabaseStore.listDealerQuotes', () => {
     ]);
     expect(db.rpc).toHaveBeenCalledWith('list_dealer_quote_request_meta');
     expect(db.from).toHaveBeenCalledTimes(1);
-    // 一覧に出す見積は RPC が決める（主担当者の案件と、営業担当組織の管理者なら自社の全案件。20261015130000）
+    // 一覧に出す見積は RPC が決める（主担当者の案件と、営業担当組織の管理者なら自社の全案件。20261016130000）
     expect(inFilter).toHaveBeenCalledWith('id', ['quote-1']);
     expect(eq).not.toHaveBeenCalled();
     expect(getQuote).not.toHaveBeenCalled();

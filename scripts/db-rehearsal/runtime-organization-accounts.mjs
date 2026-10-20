@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-// 代理店・総代理店の組織とアカウント（20261015120000）の実行時検査。
+// 代理店・総代理店の組織とアカウント（20261016120000）の実行時検査。
 // 1 本の接続で流す検査（runtime-organization-accounts.sql）と、2 本の接続で
 // 「管理者 2 人が同時にお互いを担当者にしても、管理者が 0 人にならない」ことを確かめる。
 

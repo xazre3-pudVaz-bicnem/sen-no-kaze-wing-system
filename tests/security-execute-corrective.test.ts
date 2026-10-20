@@ -89,7 +89,7 @@ describe('Security corrective: API ロールへ公開しない EXECUTE を閉じ
   });
 
   it('リハーサル検査の「未是正」リストを空にし、許可リストは RLS 判定用の 5 関数だけにする', () => {
-    // is_case_sales_manager は見積（quotes・quote_items）の RLS で評価する判定（20261015130000）。未ログインなら常に false
+    // is_case_sales_manager は見積（quotes・quote_items）の RLS で評価する判定（20261016130000）。未ログインなら常に false
     expect(checks).toContain("export const ANON_DEFINER_ALLOWLIST = ['can_edit_catalog', 'current_role_rank', 'is_admin', 'is_dealer', 'is_case_sales_manager'];");
     expect(checks).toContain('export const ANON_DEFINER_PENDING_SECURITY_CORRECTIVE = [];');
   });

@@ -222,7 +222,7 @@ export interface CaseWorkflow {
   primary_assigned_at: string | null;
   manufacturer_id: string | null;
   manufacturer_assigned_at: string | null;
-  /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261015130000） */
+  /** 営業担当組織（本部・総代理店・代理店）。NULL は本部が受付中（相談）または従来の案件（20261016130000） */
   sales_organization_id?: string | null;
   sales_assigned_at?: string | null;
   /** 製造担当組織（総代理店）。manufacturing_auto なら営業担当組織から自動で決める */
@@ -639,7 +639,7 @@ export interface ManufacturingOrder {
   contract_id: string;
   quote_id: string;
   manufacturer_id: string | null;
-  /** 製造担当組織（組織の案件。20261015130000） */
+  /** 製造担当組織（組織の案件。20261016130000） */
   manufacturing_organization_id?: string | null;
   status: ManufacturingOrderStatus;
   unit_count: number;

@@ -18,6 +18,7 @@ import {
   type StandardSectionCode,
 } from '@/lib/domain/standard-estimate-view';
 import { Alert, Button, Input, Select } from '@/components/ui';
+import { ConfirmActionButton } from '@/components/admin/confirm-action-button';
 
 type Props = {
   revisionId: string;
@@ -273,9 +274,17 @@ export function StandardEstimateEditor({ revisionId, lockVersion, readOnly, taxR
             <Button type="button" disabled={pending || preview.errors.length > 0} onClick={save} data-testid="standard-estimate-save">
               保存
             </Button>
-            <Button type="button" variant="secondary" disabled={pending} onClick={publish} data-testid="standard-estimate-publish">
+            <ConfirmActionButton
+              className="btn-secondary btn-sm"
+              disabled={pending}
+              message="保存済みの標準見積を公開します。公開後、このRevisionは直接変更できません。変更する場合は新しい下書きRevisionを作成します。"
+              dialogTitle="標準見積を公開しますか？"
+              confirmLabel="公開する"
+              onConfirm={publish}
+              data-testid="standard-estimate-publish"
+            >
               保存済みの内容で公開
-            </Button>
+            </ConfirmActionButton>
           </div>
         )}
       </section>

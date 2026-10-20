@@ -146,7 +146,13 @@ export function effectiveCustomerSpecCodes(
   return effective.length > 0 ? effective : [CUSTOMER_SPEC_DENY_ALL];
 }
 
-/** 公開シミュレーター用CatalogBundleに、カテゴリー行列を非破壊で反映する（bundle.customerCategoryMatrix を使う）。 */
+/**
+ * 公開シミュレーター用CatalogBundleに、カテゴリー行列を非破壊で反映する（bundle.customerCategoryMatrix を使う）。
+ *
+ * 取扱終了・シミュレーター非表示の商品も外さない（保存済みの構成の表示・保持、標準構成の価格を変えないため）。
+ * 新しく選べるかは rules.ts（RuleContext.canSelectNew・isSimulatorSelectableProduct）と画面の候補（simulatorChoiceOptions）で決め、
+ * DB の保存境界（20261015113000）でも確かめる。ここで外すと、保存済みの商品が画面から消え、標準の価格の基準も変わってしまう。
+ */
 export function applyCustomerCategoryApplicability(bundle: CatalogBundle): CatalogBundle {
   const matrix = bundle.customerCategoryMatrix ?? null;
   if (!matrix) return bundle;

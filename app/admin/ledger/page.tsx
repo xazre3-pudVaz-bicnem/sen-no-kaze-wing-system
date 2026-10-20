@@ -6,40 +6,40 @@ import { requireStaff } from '@/lib/auth/session';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
 import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
+import { productRegistrationCategoryGroup } from '@/lib/domain/product-registration-category-display';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
+import { productLifecycleEnabled } from '@/lib/domain/product-lifecycle';
+import { Alert } from '@/components/ui';
 
-const LEDGER_DISPLAY_GROUPS = [
-  { code: 'exterior', name: '外まわり', sort: 1, categories: ['roof', 'exterior-wall', 'exterior-parts'] },
-  { code: 'openings', name: '窓・ドア', sort: 2, categories: ['entrance-door', 'sash', 'service-door', 'smartlock'] },
-  { code: 'interior', name: '室内', sort: 3, categories: ['floor', 'wall-ceiling', 'carpentry', 'interior-door'] },
-  { code: 'equipment', name: '水回り・設備', sort: 4, categories: ['ub', 'kitchen', 'washbasin', 'toilet', 'boiler', 'aircon'] },
-  { code: 'electrical', name: '電気・照明', sort: 5, categories: ['lighting'] },
-  { code: 'furniture', name: '家具・収納', sort: 6, categories: ['entrance-storage', 'closet', 'bed', 'furniture', 'appliances', 'office-supplies'] },
-  { code: 'sitework', name: '別途工事', sort: 7, categories: ['sitework'] },
-] as const;
-
-const ledgerDisplayGroupByCategoryCode = new Map(
-  LEDGER_DISPLAY_GROUPS.flatMap((group) => group.categories.map((categoryCode) => [categoryCode, group] as const))
-);
+/** 商品の状態を変えた後のお知らせ（lib/actions/product-lifecycle.ts の DONE） */
+const PRODUCT_LIFECYCLE_DONE: Record<string, string> = {
+  retired: '取扱を終了しました。新しい見積・シミュレーターの候補から外れます。保存済みの内容や発行済みの見積は変わりません。',
+  resumed: '取扱を再開しました。シミュレーター表示の設定は以前の値のままです。',
+  simulator_shown: 'シミュレーターに表示する設定にしました。',
+  simulator_hidden: 'シミュレーターに表示しない設定にしました。見積では引き続き選べます。',
+};
 
 export default async function AdminLedgerPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
   const editor = canEditCatalog(actor.role);
-  const [options, categories, models, configurationUsageCounts] = await Promise.all([
+  const [options, categories, models, configurationUsageCounts, lifecycleCapability] = await Promise.all([
     store.listOptions(),
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
+    store.getProductLifecycleCapability(),
   ]);
+  // 取扱終了・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す
+  const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const ledgerCategories = catalogCategories.map((category) => {
-    const displayGroup = ledgerDisplayGroupByCategoryCode.get(category.code as (typeof LEDGER_DISPLAY_GROUPS)[number]['categories'][number]);
+    const displayGroup = productRegistrationCategoryGroup(category.code);
     return {
       ...category,
       group_code: displayGroup?.code ?? 'other',
-      group_name: displayGroup?.name ?? 'その他',
+      group_name: displayGroup?.label ?? 'その他',
       group_sort: displayGroup?.sort ?? 8,
     };
   });
@@ -113,8 +113,13 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     `}</style>
     <ProductLedgerOverlayDismiss />
     <FlashMessages sp={sp} />
+    {sp.lifecycle && PRODUCT_LIFECYCLE_DONE[sp.lifecycle] && <Alert tone="success">{PRODUCT_LIFECYCLE_DONE[sp.lifecycle]}</Alert>}
+    {editor && !lifecycleEnabled && (
+      <Alert tone="info">取扱終了・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
+    )}
     <ProductLedgerClient
       canEdit={editor}
+      lifecycleEnabled={lifecycleEnabled}
       categories={ledgerCategories}
       options={catalogOptions}
       models={models}

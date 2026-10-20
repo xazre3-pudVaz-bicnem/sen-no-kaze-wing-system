@@ -1,4 +1,4 @@
--- 代理店・総代理店の組織とアカウント（20261015120000）の実行時検査。使い捨て DB 専用。最後に rollback する。
+-- 代理店・総代理店の組織とアカウント（20261016120000）の実行時検査。使い捨て DB 専用。最後に rollback する。
 begin;
 
 create temp table _org_result (seq serial, step text, expected text, actual text, ok boolean) on commit drop;

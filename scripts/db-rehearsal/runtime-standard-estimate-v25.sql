@@ -472,10 +472,10 @@ begin
     (select r.status || '/' || r.lock_version from public.standard_estimate_revisions r where r.id = v_a2));
 
   -- #500：公開中の標準見積の標準状態にある商品は、販売停止（旧称：取扱終了）にできない。
-  -- 販売停止・廃番（20261020110000）を適用済みなら、使用中でも販売停止にでき、その仕様は新しい受付を止める（2026-10-19 の先方回答）。
+  -- 販売停止・廃番（20261016112000）を適用済みなら、使用中でも販売停止にでき、その仕様は新しい受付を止める（2026-10-19 の先方回答）。
   -- どちらの順で適用しても正しく確かめられるよう、廃番の列の有無で期待を切り替える
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'options' and column_name = 'discontinued_at') then
-    perform pg_temp.sev_expect_eq('公開中の v2.5 の標準見積の選択枠にある商品も販売停止にできる（20261020110000 の適用後）', p1::text,
+    perform pg_temp.sev_expect_eq('公開中の v2.5 の標準見積の選択枠にある商品も販売停止にできる（20261016112000 の適用後）', p1::text,
       pg_temp.sev_try_super(format('update public.options set archived_at = now() where id = %L returning id::text', p1)));
     -- 後の検査のために販売を再開しておく
     perform pg_temp.sev_try_super(format('update public.options set archived_at = null where id = %L returning id::text', p1));

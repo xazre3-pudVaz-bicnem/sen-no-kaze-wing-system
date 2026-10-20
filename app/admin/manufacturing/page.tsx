@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireStaff } from '@/lib/auth/session';
 import { getCaseFlowStore } from '@/lib/data/case-flow/store';
+import { getOrganizationStore } from '@/lib/data/organizations/store';
 import { setManufacturingOrderStatusAction } from '@/lib/actions/case-flow';
 import { MANUFACTURING_ORDER_STATUS_LABELS, canChangeOrderStatus } from '@/lib/domain/case-flow';
 import { formatDate } from '@/lib/utils';
@@ -21,9 +22,21 @@ export default async function ManufacturingBoardPage({ searchParams }: { searchP
   const actor = await requireStaff('/admin/manufacturing');
   const sp = await searchParams;
   const caseFlow = await getCaseFlowStore();
-  const orders = await caseFlow.listManufacturingBoard(actor);
-  const accessOf = (manufacturerId: string | null) =>
-    actor.role === 'admin' ? 'admin' : manufacturerId === actor.id && actor.role === 'master_dealer' ? 'manufacturer' : 'staff';
+  const [orders, mine] = await Promise.all([
+    caseFlow.listManufacturingBoard(actor),
+    actor.role === 'admin' ? Promise.resolve(null) : (await getOrganizationStore()).getMyOrganization(actor),
+  ]);
+  // 製造の担当：組織あての製造依頼は製造担当組織のメンバー、これまでの製造依頼は本部が選んだ総代理店の利用者（最終の判定は DB）
+  const accessOf = (order: (typeof orders)[number]) =>
+    actor.role === 'admin'
+      ? 'admin'
+      : order.manufacturing_organization_id
+        ? order.manufacturing_organization_id === mine?.organization_id
+          ? 'manufacturer'
+          : 'staff'
+        : order.manufacturer_id === actor.id && actor.role === 'master_dealer'
+          ? 'manufacturer'
+          : 'staff';
 
   return (
     <AdminPage
@@ -49,7 +62,7 @@ export default async function ManufacturingBoardPage({ searchParams }: { searchP
         </thead>
         <tbody>
           {orders.map((order) => {
-            const access = accessOf(order.manufacturer_id);
+            const access = accessOf(order);
             return (
               <tr key={order.id} data-testid="manufacturing-board-row">
                 <Td>

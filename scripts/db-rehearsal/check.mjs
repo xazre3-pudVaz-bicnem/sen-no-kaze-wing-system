@@ -15,6 +15,7 @@ import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRunti
 import { runtimeConcurrency } from './runtime-concurrency.mjs';
 import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.mjs';
 import { runtimeOrganizationAccounts } from './runtime-organization-accounts.mjs';
+import { runtimeCaseSalesOrganization } from './runtime-case-sales-organization.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
@@ -54,6 +55,7 @@ try {
     // 取扱終了と保存・提出・発行の同時実行は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeLifecycleConcurrency({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOrganizationAccounts(client, { connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeCaseSalesOrganization(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

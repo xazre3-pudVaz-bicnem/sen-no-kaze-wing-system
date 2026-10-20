@@ -18,6 +18,11 @@ function setTextIfChanged(element: HTMLElement, value: string) {
 function simplifyStepProgress() {
   const flow = document.querySelector<HTMLElement>('section[aria-label="商品登録の2ステップ"]');
   if (!flow) return;
+  flow.classList.add('registration-compact-step-flow');
+
+  // このページは基本情報が保存された下書き商品の編集画面。
+  const title = document.querySelector<HTMLElement>('h1');
+  if (title?.textContent?.trim() === '商品を追加') setTextIfChanged(title, '商品を編集中');
 
   Array.from(flow.querySelectorAll<HTMLElement>('p')).forEach((row) => {
     if (row.textContent?.trim().startsWith('現在：STEP')) row.style.display = 'none';

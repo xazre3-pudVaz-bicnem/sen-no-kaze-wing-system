@@ -20,6 +20,16 @@ describe('商品登録 STEP1 の見やすさと選択肢操作', () => {
     expect(css).toContain("font-size: 1rem !important;");
   });
 
+  it('入力導線と画像・PDF・原価の表示をコンパクトにする', () => {
+    expect(css).toContain('.registration-compact-step-flow');
+    expect(css).toContain('.registration-section-nav-items a');
+    expect(css).toContain('.registration-check-jump');
+    expect(css).toContain("[data-main-image-selection-preview='true']");
+    expect(css).toContain('.registration-pdf-replace-toggle');
+    expect(css).toContain(":has([data-testid='option-registration-hq-cost'])");
+    expect(css).toContain("content: '6. 価格・原価'");
+  });
+
   it('選択肢追加を入力済み選択肢の後ろに置く', () => {
     expect(refinement).toContain('＋ 選択肢を追加');
     expect(css).toContain('display: contents !important;');

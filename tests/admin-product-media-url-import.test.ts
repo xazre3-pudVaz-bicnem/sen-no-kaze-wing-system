@@ -22,6 +22,12 @@ describe('商品登録のメディアURL取込', () => {
     expect(mediaManager).toContain('URL先の画像を取得し、千の風側のストレージへ保存します。');
   });
 
+  it('追加画像とPDFのURL取込ボタンを入力欄の下に表示する', () => {
+    expect(mediaManager).toMatch(/id="option-sub-image-url"[\s\S]*?className="w-full sm:w-auto"/);
+    expect(mediaManager).toMatch(/id="manufacturer-document-url"[\s\S]*?className="w-full sm:w-auto"/);
+    expect(mediaManager).not.toContain('flex flex-col gap-2 sm:flex-row');
+  });
+
   it('メーカーPDFを直接URLから登録できる導線を表示する', () => {
     expect(mediaManager).toContain('またはPDFのURLから登録');
     expect(mediaManager).toContain('uploadOptionManufacturerDocumentFromUrlAction');
@@ -42,5 +48,9 @@ describe('商品登録のメディアURL取込', () => {
     expect(remoteMedia).toContain('readWithLimit(response, maxBytes)');
     expect(remoteMedia).toContain("detected !== 'application/pdf'");
     expect(remoteMedia).toContain("!IMAGE_TYPES.has(detected)");
+    expect(remoteMedia).toContain('MAX_TRANSPORT_ATTEMPTS = 2');
+    expect(remoteMedia).toContain('if (attempt > 1) await validatePublicHost(current)');
+    expect(remoteMedia).toContain("console.warn('[remote-media] URL取込の通信エラー'");
+    expect(remoteMedia).toContain('ファイルをPCに保存して');
   });
 });

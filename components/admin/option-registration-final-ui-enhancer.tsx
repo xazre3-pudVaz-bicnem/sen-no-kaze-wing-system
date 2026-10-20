@@ -2,8 +2,6 @@
 
 import { useEffect } from 'react';
 
-const IMAGE_URL_MARKER = 'registrationImageUrlToggle';
-
 function directGridChild(element: HTMLElement): HTMLElement | null {
   const grid = element.closest('.grid');
   if (!(grid instanceof HTMLElement)) return null;
@@ -28,7 +26,7 @@ function simplifyStepProgress() {
 
 function enhanceMainImageUrl() {
   const input = document.querySelector<HTMLInputElement>('#product-main-media input[name="image_url"]');
-  if (!input || input.dataset[IMAGE_URL_MARKER] === 'true') return;
+  if (!input) return;
 
   const wrapper = directGridChild(input);
   if (!wrapper) return;
@@ -38,31 +36,9 @@ function enhanceMainImageUrl() {
     : null;
   if (label) setTextIfChanged(label, '画像URL');
 
-  const toggleRow = document.createElement('div');
-  toggleRow.className = 'sm:col-span-2';
-  toggleRow.dataset.registrationImageUrlToggle = 'true';
-
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'btn-ghost btn-sm px-0 text-xs';
-  toggleRow.appendChild(button);
-  wrapper.insertAdjacentElement('beforebegin', toggleRow);
-
-  let open = Boolean(wrapper.querySelector('.text-danger, [role="alert"]'));
-  const render = () => {
-    wrapper.style.display = open ? '' : 'none';
-    setTextIfChanged(button, open ? 'URL指定を閉じる' : 'URLで画像を指定');
-    button.setAttribute('aria-expanded', String(open));
-  };
-
-  button.addEventListener('click', () => {
-    open = !open;
-    render();
-    if (open) input.focus();
-  });
-
-  input.dataset[IMAGE_URL_MARKER] = 'true';
-  render();
+  // URL取り込みは通常の入力手段なので、折りたたまず常に表示する。
+  document.querySelector('#product-main-media [data-registration-image-url-toggle="true"]')?.remove();
+  if (wrapper.style.display === 'none') wrapper.style.removeProperty('display');
 }
 
 function simplifyCustomerSelectionEmptyState() {

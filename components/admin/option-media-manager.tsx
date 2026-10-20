@@ -395,7 +395,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                 hint="Excelの追加画像URLをそのまま貼り付けできます。URL先の画像を取得し、千の風側のストレージへ保存します。"
                 errors={imageState.fieldErrors?.source_url}
               >
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="space-y-2">
                   <Input
                     id="option-sub-image-url"
                     type="url"
@@ -404,10 +404,12 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                     placeholder="https://www.example.com/image.jpg"
                     disabled={imagePending}
                   />
-                  <Button type="button" disabled={imagePending || !imageUrl.trim()} onClick={() => void handleSubImageUrl()} className="shrink-0">
-                    {imagePending && <Spinner />}
-                    URLから登録
-                  </Button>
+                  <div className="flex justify-start">
+                    <Button type="button" disabled={imagePending || !imageUrl.trim()} onClick={() => void handleSubImageUrl()} className="w-full sm:w-auto">
+                      {imagePending && <Spinner />}
+                      URLから登録
+                    </Button>
+                  </div>
                 </div>
               </Field>
             </div>
@@ -496,7 +498,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
             hint="ExcelのメーカーPDF URLを貼り付けできます。カタログ閲覧ページではなく、PDF本体のURLを入力してください。"
             errors={docState.fieldErrors?.source_url}
           >
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="space-y-2">
               <Input
                 id="manufacturer-document-url"
                 type="url"
@@ -505,10 +507,12 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                 placeholder="https://www.example.com/catalog.pdf"
                 disabled={docPending}
               />
-              <Button type="button" disabled={docPending || !documentUrl.trim()} onClick={() => void handleManufacturerDocumentUrl()} className="shrink-0">
-                {docPending && <Spinner />}
-                URLから登録
-              </Button>
+              <div className="flex justify-start">
+                <Button type="button" disabled={docPending || !documentUrl.trim()} onClick={() => void handleManufacturerDocumentUrl()} className="w-full sm:w-auto">
+                  {docPending && <Spinner />}
+                  URLから登録
+                </Button>
+              </div>
             </div>
           </Field>
         </div>

@@ -187,7 +187,7 @@ export const optionSchema = z.object({
   manufacturer: optional(60).nullable(),
   model_no: optional(80).nullable(),
   manufacturer_product_url: z.preprocess(
-    (value) => (typeof value === 'string' && !value.trim() ? null : value),
+    (value) => (value == null || (typeof value === 'string' && !value.trim()) ? null : value),
     z.string().trim().max(1000, 'URLは1000文字以内で入力してください').url('有効なURLを入力してください').refine((value) => {
       try {
         const url = new URL(value);

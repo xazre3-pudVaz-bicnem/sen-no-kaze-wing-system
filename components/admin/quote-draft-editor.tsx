@@ -8,6 +8,7 @@ import {
 } from '@/lib/actions/admin';
 import type { QuoteDraftDetail, QuoteDraftSaveItem } from '@/lib/data/store';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
+import { isUnresolvedPorLine } from '@/lib/domain/quote-por';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
@@ -104,6 +105,19 @@ export function QuoteDraftEditor({
   const [dealerNote, setDealerNote] = useState(detail.draft.dealer_note ?? '');
   const [notes, setNotes] = useState(detail.draft.notes ?? '');
   const [showPreview, setShowPreview] = useState(false);
+
+  // 正式見積には、価格が未確定（別途見積）の明細を残せない（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する）
+  const porProductIds = new Set(products.filter((product) => product.priceOnRequest).map((product) => product.id));
+  const unresolvedPorNames = rows
+    .filter((row) =>
+      isUnresolvedPorLine({
+        unit_price: row.unit_price,
+        description: row.description,
+        remark: row.remark,
+        optionIsPor: Boolean(row.option_id && porProductIds.has(row.option_id)),
+      })
+    )
+    .map((row) => row.name || '（品名なし）');
 
   const isRevisionDraft = detail.draft.parent_quote_id !== null;
   const baseLocked = isRevisionDraft && !canEditBase;
@@ -434,13 +448,19 @@ export function QuoteDraftEditor({
         <div>
           <p className="text-sm font-semibold">正式見積を発行</p>
           <p className="mt-0.5 text-[10px] text-muted">発行すると、この下書きは編集できなくなり、発行済み見積として履歴に残ります。</p>
+          {unresolvedPorNames.length > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-amber-900" data-testid="draft-por-blockers">
+              別途見積（価格未確定）の明細が {unresolvedPorNames.length} 行残っています（{unresolvedPorNames.join('、')}）。
+              売価を入力するか、0 円のままにする場合は備考に理由（ほかの明細に含む など）を書くか、明細から外して保存してから発行してください。
+            </p>
+          )}
         </div>
         <ConfirmSubmit
           message={`この内容を正式な${formalRevisionLabel}として発行します。発行後、この下書きは編集できません。`}
           dialogTitle={`正式な${formalRevisionLabel}を発行しますか？`}
           confirmLabel="発行する"
           className="btn-primary"
-          disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId}
+          disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedPorNames.length > 0}
         >
           {finalizePending ? '発行中…' : `この内容で第${targetRevision}版を発行`}
         </ConfirmSubmit>

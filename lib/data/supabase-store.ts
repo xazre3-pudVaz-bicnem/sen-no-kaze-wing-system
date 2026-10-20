@@ -79,6 +79,7 @@ import {
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
+import { EMPTY_POR_SELECTION_STATE, type QuotePorSelection, type QuotePorSelectionState } from '@/lib/domain/quote-por';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -998,6 +999,15 @@ export class SupabaseStore implements DataStore {
 
   async createDealerRevision(id: string, input: DealerRevisionInput) {
     const db = await this.db();
+    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる）。
+    // migration の適用前は確認の仕組みが無いので、従来どおり発行だけを行う
+    if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
+      const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+        p_quote_id: id,
+        p_selection_keys: input.por_confirmation_keys,
+      });
+      if (confirmError && !isMissingNamedFunction(confirmError, 'confirm_quote_por_selections')) mapPgError(confirmError);
+    }
     const { data, error } = await db.rpc('create_quote_revision', {
       p_quote_id: id,
       p_items: input.items,
@@ -1008,6 +1018,22 @@ export class SupabaseStore implements DataStore {
     const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', newId).single();
     if (e2) mapPgError(e2);
     return q as Quote;
+  }
+
+  async getQuotePorSelections(quoteId: string): Promise<QuotePorSelectionState> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_quote_por_selections', { p_quote_id: quoteId });
+    if (error) {
+      // migration の適用前は確認の仕組みが無い（画面は確認欄を出さず、発行は従来どおり）
+      if (isMissingNamedFunction(error, 'get_quote_por_selections')) return EMPTY_POR_SELECTION_STATE;
+      mapPgError(error);
+    }
+    const value = (data ?? {}) as { selections?: QuotePorSelection[]; confirmed?: boolean };
+    return {
+      selections: Array.isArray(value.selections) ? value.selections : [],
+      confirmed: Boolean(value.confirmed),
+      available: true,
+    };
   }
 
   // ---------- PDF（service role） ----------

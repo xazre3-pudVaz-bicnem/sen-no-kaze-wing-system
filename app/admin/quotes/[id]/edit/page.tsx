@@ -29,9 +29,11 @@ export default async function AdminQuoteRevisionEditPage({
 
   if (!isLegacyWebRevision) notFound();
 
-  const [categories, options] = await Promise.all([
+  const [categories, options, porState] = await Promise.all([
     store.listCategories(),
     store.listOptions(),
+    // お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。発行時に DB が確かめる）
+    store.getQuotePorSelections(quote.id, actor),
   ]);
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
@@ -108,6 +110,7 @@ export default async function AdminQuoteRevisionEditPage({
           products={products}
           baseModelId={quote.base_model_id ?? ''}
           specCode={quote.spec_code ?? ''}
+          porState={porState}
           sheetMode
         />
       </section>

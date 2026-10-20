@@ -4,10 +4,14 @@ import { useActionState, useMemo, useState } from 'react';
 import { formalizeLegacyAcceptedQuoteAction } from '@/lib/actions/legacy-accepted-formalization';
 import type { QuoteItem } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
+import { EMPTY_POR_SELECTION_STATE, isUnresolvedPorLine, type QuotePorSelectionState } from '@/lib/domain/quote-por';
+import { QuotePorReview, type QuotePorReviewRow } from './quote-por-review';
 
 interface InstallationRow {
   key: string;
   source_item_id: string | null;
+  /** 元の明細の説明（DB は元の明細の説明を新しい明細へ写す。別途見積の判定に使う） */
+  description: string | null;
   name: string;
   unit: string;
   remark: string;
@@ -21,6 +25,7 @@ function initialRow(item: QuoteItem): InstallationRow {
   return {
     key: item.id,
     source_item_id: item.id,
+    description: item.description ?? null,
     name: item.name,
     unit: item.unit ?? '式',
     remark: item.remark ?? '',
@@ -36,15 +41,59 @@ function amountOf(row: InstallationRow) {
 export function LegacyAcceptedFormalizationForm({
   quoteId,
   installationItems,
+  carriedItems = [],
   defaultDealerNote,
+  porState = EMPTY_POR_SELECTION_STATE,
 }: {
   quoteId: string;
   installationItems: QuoteItem[];
+  /** 施工以外の明細（そのまま確定見積へ写る。この画面では直せない） */
+  carriedItems?: QuoteItem[];
   defaultDealerNote: string | null;
+  /** お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定） */
+  porState?: QuotePorSelectionState;
 }) {
   const [state, action, pending] = useActionState(formalizeLegacyAcceptedQuoteAction, initialState);
   const [rows, setRows] = useState<InstallationRow[]>(() => installationItems.map(initialRow));
   const [dealerNote, setDealerNote] = useState(defaultDealerNote ?? '');
+
+  // ---- 別途見積（POR）の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
+  const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
+  const [initialPorRowKeys] = useState(
+    () => new Set(installationItems.map(initialRow).filter((row) => isUnresolvedPorLine(row)).map((row) => row.key))
+  );
+  const porRows: QuotePorReviewRow[] = [
+    ...carriedItems
+      .filter((item) => isUnresolvedPorLine(item))
+      .map((item) => ({
+        key: item.id,
+        name: item.name,
+        sectionLabel: '施工以外',
+        unitPrice: item.unit_price,
+        remark: item.remark ?? '',
+        unresolved: true,
+        editable: false,
+        note: 'この画面では施工の金額だけを入れられるため、この明細は直せません。本部にご相談ください',
+      })),
+    ...rows
+      .filter((row) => initialPorRowKeys.has(row.key) || isUnresolvedPorLine(row))
+      .map((row) => ({
+        key: row.key,
+        name: row.name,
+        sectionLabel: '施工',
+        unitPrice: row.unit_price,
+        remark: row.remark,
+        unresolved: isUnresolvedPorLine(row),
+        editable: false,
+        note: '上の施工明細の表で、単価か備考（0 円のままにする理由）を入れてください',
+      })),
+  ];
+  const porSelections = porState.available ? porState.selections : [];
+  const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
+  const porBlockers = [
+    ...(unresolvedPorCount > 0 ? [`別途見積（価格未確定）の明細が ${unresolvedPorCount} 行残っています`] : []),
+    ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),
+  ];
 
   const installationTotal = useMemo(
     () => rows.reduce((sum, row) => sum + amountOf(row), 0),
@@ -57,6 +106,7 @@ export function LegacyAcceptedFormalizationForm({
       {
         key: `new-${crypto.randomUUID()}`,
         source_item_id: null,
+        description: null,
         name: '',
         unit: '式',
         remark: '',
@@ -220,6 +270,16 @@ export function LegacyAcceptedFormalizationForm({
         />
       </section>
 
+      <div className="overflow-hidden rounded-lg border border-amber-200 shadow-sm">
+        <QuotePorReview
+          rows={porRows}
+          selections={porSelections}
+          confirmed={porConfirmed}
+          onConfirmedChange={setPorConfirmed}
+          onUpdate={() => undefined}
+        />
+      </div>
+
       <section className="rounded-lg border-2 border-[#d9b65f] bg-[#fff9e9] p-3">
         <p className="text-sm font-semibold text-[#6f5518]">発行すると新しい確定見積になります</p>
         <p className="mt-1 text-xs leading-5 text-ink-soft">
@@ -228,13 +288,18 @@ export function LegacyAcceptedFormalizationForm({
         <div className="mt-3 flex justify-end">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || porBlockers.length > 0}
             className="btn-primary"
             data-testid="formalization-submit"
           >
             {pending ? '発行中…' : '施工金額を反映して確定見積を発行'}
           </button>
         </div>
+        {porBlockers.length > 0 && (
+          <p className="mt-2 text-right text-xs font-semibold text-amber-900" data-testid="formalization-por-blockers">
+            発行できない理由：{porBlockers.join('／')}
+          </p>
+        )}
       </section>
     </form>
   );

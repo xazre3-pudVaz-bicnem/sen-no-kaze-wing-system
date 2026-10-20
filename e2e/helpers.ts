@@ -224,8 +224,33 @@ export async function revisionTotal(form: Locator): Promise<number> {
   return yen(text.match(/編集中\s*([^差]+)/)?.[1] ?? '');
 }
 
+/**
+ * 別途見積の確認（正式見積の発行前に必要。D1 までの暫定）：未確定の行は 0 円のまま理由の備考を入れ、
+ * お客様が選んだ別途見積の商品の確認にチェックを入れる。初期データでは照明（別途見積）が標準で選ばれている
+ */
+export async function confirmPorBeforeIssue(form: Locator, remark = '現地確認の結果、ほかの明細に含む') {
+  const review = form.getByTestId('por-review');
+  if ((await review.count()) === 0) return;
+  await resolveUnresolvedPorRows(form, remark);
+  const confirm = review.getByTestId('por-confirm');
+  if ((await confirm.count()) > 0 && !(await confirm.isChecked())) await confirm.check();
+}
+
+/** 別途見積の確認の欄で、未確定の行すべてに理由の備考を入れる（0 円のまま） */
+export async function resolveUnresolvedPorRows(form: Locator, remark: string) {
+  const rows = form.getByTestId('por-review').getByTestId('por-review-row');
+  const count = await rows.count();
+  for (let i = 0; i < count; i += 1) {
+    const row = rows.nth(i);
+    if ((await row.getByText('未確定', { exact: true }).count()) > 0) {
+      await row.getByTestId('por-review-remark').fill(remark);
+    }
+  }
+}
+
 /** 編集中の内容を次の版として発行し、新しい版の見積 ID を返す（発行後は案件の画面へ戻る） */
 export async function issueRevision(page: Page, form: Locator): Promise<string> {
+  await confirmPorBeforeIssue(form);
   await form.getByRole('button', { name: /版を発行/ }).click();
   await page.waitForURL(/revised=1/);
   return new URL(page.url()).searchParams.get('case')!;

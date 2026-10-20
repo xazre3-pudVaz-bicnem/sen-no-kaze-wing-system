@@ -45,6 +45,19 @@ function userFacingRpcError(error: { code?: string; message?: string } | null) {
   return '確定見積の発行に失敗しました。案件を再読み込みして状態を確認してください。';
 }
 
+/** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null */
+function parsePorKeys(value: FormDataEntryValue | null): string[] | null {
+  if (value === null || value === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(String(value));
+    if (!Array.isArray(parsed) || parsed.length > 500) return null;
+    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 200)) return null;
+    return parsed as string[];
+  } catch {
+    return null;
+  }
+}
+
 export async function formalizeLegacyAcceptedQuoteAction(
   _prev: LegacyAcceptedFormalizationState,
   formData: FormData
@@ -67,6 +80,15 @@ export async function formalizeLegacyAcceptedQuoteAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください。' };
   }
 
+  // お客様が選んだ別途見積の商品（画面に出した一覧）。確認欄にチェックがあるときだけ確認として記録する（D1 までの暫定）
+  const porKeys = parsePorKeys(formData.get('por_keys'));
+  if (porKeys === null) {
+    return { ok: false, error: '別途見積の確認の内容を読み取れませんでした。画面を再読み込みしてください。' };
+  }
+  if (porKeys.length > 0 && formData.get('por_confirmed') !== '1') {
+    return { ok: false, error: 'お客様が選んだ別途見積の商品について、「別途見積の確認」にチェックを入れてから発行してください。' };
+  }
+
   // LocalStore has no equivalent privileged transaction. Do not emulate a
   // lifecycle write in memory and accidentally claim DB-level guarantees.
   if (isLocalMode()) {
@@ -74,6 +96,16 @@ export async function formalizeLegacyAcceptedQuoteAction(
   }
 
   const db = await createClient();
+  if (porKeys.length > 0) {
+    const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+      p_quote_id: parsed.data.quote_id,
+      p_selection_keys: porKeys,
+    });
+    // migration の適用前は確認の仕組みが無い（従来どおり発行だけを行う）
+    if (confirmError && !isMissingNamedFunction(confirmError, 'confirm_quote_por_selections')) {
+      return { ok: false, error: userFacingRpcError(confirmError) };
+    }
+  }
   const { data, error } = await db.rpc('create_formal_quote_from_accepted_preliminary', {
     p_quote_id: parsed.data.quote_id,
     p_installation_items: parsed.data.items,

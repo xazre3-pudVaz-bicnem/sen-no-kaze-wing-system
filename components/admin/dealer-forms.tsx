@@ -1,11 +1,13 @@
 'use client';
 
-import { Fragment, useActionState, useState } from 'react';
+import { Fragment, useActionState, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatYen } from '@/lib/domain/pricing';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
+import { EMPTY_POR_SELECTION_STATE, isUnresolvedPorLine, type QuotePorSelectionState } from '@/lib/domain/quote-por';
+import { QuotePorReview, type QuotePorReviewRow } from './quote-por-review';
 import { Button, Field, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 import type { CatalogPickerItem } from './catalog-picker';
@@ -62,6 +64,18 @@ interface Row {
   image_url: string | null;
 }
 
+/** 別途見積の確認の欄に出す区分名 */
+const POR_SECTION_LABELS: Partial<Record<QuoteItem['kind'], string>> = {
+  base: '本体',
+  base_expense: '本体諸費用',
+  interior_exterior: '内外装工事',
+  interior_exterior_expense: '内外装工事経費',
+  option: 'オプション',
+  option_expense: 'オプション諸費用',
+  installation: '別途工事',
+  free: 'フリー商品',
+};
+
 /** 案件見積で編集できる区分 */
 const FULL_KINDS: RevisionItemKind[] = [
   'base',
@@ -96,6 +110,7 @@ export function DealerRevisionForm({
   products = [],
   baseModelId = '',
   specCode = '',
+  porState = EMPTY_POR_SELECTION_STATE,
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -110,6 +125,8 @@ export function DealerRevisionForm({
   products?: QuoteCatalogProduct[];
   baseModelId?: string;
   specCode?: string;
+  /** お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。DB の get_quote_por_selections） */
+  porState?: QuotePorSelectionState;
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
   const editable = (kind: QuoteItem['kind']): kind is RevisionItemKind =>
@@ -134,6 +151,64 @@ export function DealerRevisionForm({
 
   const [rows, setRows] = useState<Row[]>(buildInitialRows);
   const [isDirty, setIsDirty] = useState(false);
+
+  // ---- 別途見積（POR）の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
+  const porProductIds = useMemo(() => new Set(products.filter((product) => product.priceOnRequest).map((product) => product.id)), [products]);
+  const isPorLine = (line: { unit_price: number; description: string | null; remark: string | null; option_id: string | null }) =>
+    isUnresolvedPorLine({
+      unit_price: line.unit_price,
+      description: line.description,
+      remark: line.remark,
+      optionIsPor: Boolean(line.option_id && porProductIds.has(line.option_id)),
+    });
+  // 最初に未確定だった行は、金額・理由を入れた後も欄に残す（何を確定したかを見返せるように）
+  const [initialPorRowKeys] = useState(() => new Set(buildInitialRows().filter(isPorLine).map((row) => row.key)));
+  const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
+  const porRows: QuotePorReviewRow[] = [
+    ...items
+      .filter((item) => !editable(item.kind) && isPorLine({ ...item, description: item.description ?? null, remark: item.remark ?? null, option_id: item.option_id ?? null }))
+      .map((item) => ({
+        key: item.id,
+        name: item.name,
+        sectionLabel: POR_SECTION_LABELS[item.kind] ?? item.kind,
+        unitPrice: item.unit_price,
+        remark: item.remark ?? '',
+        unresolved: true,
+        editable: false,
+      })),
+    ...rows
+      .filter((row) => initialPorRowKeys.has(row.key) || isPorLine(row))
+      .map((row) => ({
+        key: row.key,
+        name: row.name,
+        sectionLabel: POR_SECTION_LABELS[row.kind] ?? row.kind,
+        unitPrice: row.unit_price,
+        remark: row.remark,
+        unresolved: isPorLine(row),
+        // 本体の明細はこの画面では本部でも参照のみ（表と同じ）
+        editable: row.kind !== 'base' && row.kind !== 'base_expense',
+      })),
+  ];
+  const porSelections = porState.available ? porState.selections : [];
+  const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
+  const porBlockers = [
+    ...(unresolvedPorCount > 0 ? [`別途見積（価格未確定）の明細が ${unresolvedPorCount} 行残っています`] : []),
+    ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),
+  ];
+  const updatePorRow = (key: string, patch: { unitPrice?: number; remark?: string }) => {
+    setRows((current) =>
+      current.map((row) =>
+        row.key === key
+          ? {
+              ...row,
+              ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
+              ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
+            }
+          : row
+      )
+    );
+    setIsDirty(true);
+  };
   const [scopeChangeMode, setScopeChangeMode] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -485,6 +560,15 @@ export function DealerRevisionForm({
         </div>
       )}
 
+      <QuotePorReview
+        rows={porRows}
+        selections={porSelections}
+        confirmed={porConfirmed}
+        onConfirmedChange={setPorConfirmed}
+        onUpdate={updatePorRow}
+        lockedNote="本体の明細は、この画面では直せません。本部・総代理店に依頼してください"
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f7f9f8] px-3 py-2">
         <div>
           <p className="text-[0.67rem] text-muted">
@@ -498,8 +582,13 @@ export function DealerRevisionForm({
           <Button type="button" variant="secondary" size="sm" onClick={() => setShowPreview((current) => !current)}>
             {showPreview ? 'プレビューを閉じる' : 'プレビュー'}
           </Button>
-          <SubmitButton pending={pending} label={`この内容で第${quote.revision + 1}版を発行`} />
+          <SubmitButton pending={pending} disabled={porBlockers.length > 0} label={`この内容で第${quote.revision + 1}版を発行`} />
         </div>
+        {porBlockers.length > 0 && (
+          <p className="w-full text-right text-[0.68rem] font-semibold text-amber-900" data-testid="por-blockers">
+            発行できない理由：{porBlockers.join('／')}
+          </p>
+        )}
       </div>
     </form>
   );

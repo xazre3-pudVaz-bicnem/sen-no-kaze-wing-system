@@ -50,6 +50,11 @@ export default async function LegacyAcceptedFormalizationPage({
   const installationItems = items
     .filter((item) => item.kind === 'installation')
     .sort((a, b) => a.sort_order - b.sort_order);
+  const carriedItems = items
+    .filter((item) => item.kind !== 'installation')
+    .sort((a, b) => a.sort_order - b.sort_order);
+  // お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。発行時に DB が確かめる）
+  const porState = await store.getQuotePorSelections(quote.id, actor);
   const returnHref = `/admin/quotes?case=${encodeURIComponent(quote.id)}&tab=estimate#case-workspace`;
 
   return (
@@ -94,7 +99,9 @@ export default async function LegacyAcceptedFormalizationPage({
       <LegacyAcceptedFormalizationForm
         quoteId={quote.id}
         installationItems={installationItems}
+        carriedItems={carriedItems}
         defaultDealerNote={quote.dealer_note}
+        porState={porState}
       />
     </div>
   );

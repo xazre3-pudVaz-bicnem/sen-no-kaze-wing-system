@@ -958,12 +958,19 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
     dealer_note: formData.get('dealer_note'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  // お客様が選んだ別途見積の商品（画面に出した一覧）。確認欄にチェックがあるときだけ確認として送る（D1 までの暫定）
+  const porKeys = parsePorConfirmationKeys(formData.get('por_keys'));
+  if (porKeys === null) return { ok: false, error: '別途見積の確認の内容を読み取れませんでした。画面を再読み込みしてください。' };
+  const porConfirmed = formData.get('por_confirmed') === '1';
+  if (porKeys.length > 0 && !porConfirmed) {
+    return { ok: false, error: 'お客様が選んだ別途見積の商品について、「別途見積の確認」にチェックを入れてから発行してください。' };
+  }
   let newId: string | null = null;
   try {
     const store = await getStore();
     const quote = await store.createDealerRevision(
       parsed.data.quote_id,
-      { items: parsed.data.items, dealer_note: parsed.data.dealer_note },
+      { items: parsed.data.items, dealer_note: parsed.data.dealer_note, por_confirmation_keys: porConfirmed ? porKeys : null },
       actor
     );
     newId = quote.id;
@@ -974,6 +981,19 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
     return errState(e);
   }
   redirect(`/admin/quotes?case=${encodeURIComponent(newId)}&tab=estimate&revised=1#case-workspace`);
+}
+
+/** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null */
+function parsePorConfirmationKeys(value: FormDataEntryValue | null): string[] | null {
+  if (value === null || value === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(String(value));
+    if (!Array.isArray(parsed) || parsed.length > 500) return null;
+    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 200)) return null;
+    return parsed as string[];
+  } catch {
+    return null;
+  }
 }
 
 /** 管理者：ユーザーの権限を変更する（自分自身は変更できない） */

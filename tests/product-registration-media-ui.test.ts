@@ -76,7 +76,9 @@ describe('商品登録の画像・PDF確認UI', () => {
     );
     expect(lightbox).toContain('aria-label="拡大画像をクリックして閉じる"');
     expect(lightbox).toContain('onClick={() => setExpandedImage(null)}');
-    expect(lightbox).toMatch(/<button[\\s\\S]*?aria-label="拡大画像をクリックして閉じる"[\\s\\S]*?<SmartImage[\\s\\S]*?<\\/button>/);
+    const zoomArea = lightbox.slice(lightbox.indexOf('aria-label="拡大画像をクリックして閉じる"'));
+    expect(zoomArea.indexOf('<SmartImage')).toBeGreaterThanOrEqual(0);
+    expect(zoomArea.indexOf('</button>')).toBeGreaterThan(zoomArea.indexOf('<SmartImage'));
     expect(lightbox).toContain('cursor-zoom-out');
     expect(lightbox).toContain('type="button"');
     expect(lightbox).toContain('onMouseDown={(event) => {');

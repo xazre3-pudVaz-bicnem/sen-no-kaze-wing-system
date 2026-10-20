@@ -64,6 +64,11 @@ async function cleanupRaceFixture(connectionString) {
     await client.query('set local session_replication_role = replica');
     await client.query('delete from public.audit_logs where entity_id = $1', [RACE_OPTION]);
     await client.query('delete from public.option_hq_standard_costs where option_id = $1', [RACE_OPTION]);
+    // 20261016200000 以降は標準原価の Version も残さない（replica では FK・トリガーが動かないので明示的に消す）
+    const versions = await client.query("select to_regclass('public.option_standard_cost_versions') is not null as present");
+    if (versions.rows[0]?.present) {
+      await client.query('delete from public.option_standard_cost_versions where option_id = $1', [RACE_OPTION]);
+    }
     await client.query('delete from public.options where id = $1', [RACE_OPTION]);
     await client.query('delete from public.option_categories where id = $1', [RACE_CATEGORY]);
     await client.query('delete from public.profiles where id = $1', [RACE_USER]);

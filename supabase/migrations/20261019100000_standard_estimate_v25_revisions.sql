@@ -14,7 +14,7 @@
 -- * standard_estimate_revisions.pricing_model：'legacy'（v2.5 以前の計算。既存の Revision はすべてこちらのまま）／'v2.5'
 --   v2.5 の Revision は計算ルール・税ルールの Version を固定し、金額は public.pricing_calculate（20261016210000）で計算する
 -- * 商品の選択枠は「標準状態の商品」（standard_estimate_revision_baseline_items / _variants）に価格方式と原価 Version の固定を足す
---   （#500 の取扱終了の保護・シミュレーターの標準状態と同じ行を使う）
+--   （#500 の販売停止（旧称：取扱終了）の保護・シミュレーターの標準状態と同じ行を使う）
 -- * 商品に紐づかない明細は新しい表 standard_estimate_revision_v25_lines（manual / por だけ）
 -- * v2.5 の Revision は v2.5 の RPC からだけ変更できる（旧来の保存・公開・次の Revision・標準状態の変更からは変えられない。
 --   RPC が同じトランザクションの中だけ有効な印（GUC）を立て、トリガーで確かめる）
@@ -1236,7 +1236,7 @@ end;
 $$;
 
 -- v2.5 の下書きを公開する（本部だけ）。
--- lock の順：Revision → 標準見積 → 選択枠の商品の行（FOR SHARE。原価の切替・取扱終了と順序付ける）。
+-- lock の順：Revision → 標準見積 → 選択枠の商品の行（FOR SHARE。原価の切替・販売停止と順序付ける）。
 -- 排他が成立した後の状態で、計算ルール・税ルールと固定した原価 Version が現在の Version と同じか、原価がそろっているかを確かめ、
 -- 正式計算で金額を作り直してから公開する（違えば公開しない。最新原価を取り込んで確認してから公開し直す）
 create function public.publish_standard_estimate_v25_revision(p_revision_id uuid, p_expected_lock_version integer)

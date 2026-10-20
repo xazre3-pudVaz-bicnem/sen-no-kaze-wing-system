@@ -39,16 +39,13 @@ export function ProductImageLightbox({ open, productName, images, selectedIndex,
     };
   }, [open]);
 
-  useEffect(() => {
+  const move = (direction: -1 | 1) => {
+    if (images.length < 2) return;
     setZoom(1);
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollLeft = 0;
       scrollAreaRef.current.scrollTop = 0;
     }
-  }, [index, open]);
-
-  const move = (direction: -1 | 1) => {
-    if (images.length < 2) return;
     onSelect((index + direction + images.length) % images.length);
   };
 

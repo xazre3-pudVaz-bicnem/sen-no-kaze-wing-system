@@ -4,21 +4,50 @@ type ProductLifecycleFields = {
   status: ProductOption['status'];
   simulator_visible?: boolean | null;
   archived_at?: string | null;
+  discontinued_at?: string | null;
 };
 
+/** 'retired' は販売停止（廃番を含む）。新しく選べない状態をまとめて表す（DB の product_lifecycle_state と同じ） */
 export type ProductLedgerState = 'draft' | 'registered' | 'retired';
 
-/** 商品の状態。DB の product_lifecycle_state と同じ（下書き＝status draft、取扱終了＝公開中かつ archived_at あり） */
+/** 商品の状態。DB の product_lifecycle_state と同じ（下書き＝status draft、販売停止＝公開中かつ archived_at あり） */
 export function productLedgerState(option: ProductLifecycleFields): ProductLedgerState {
   if (option.status === 'draft') return 'draft';
   return option.archived_at ? 'retired' : 'registered';
 }
 
-export function productLedgerStateLabel(option: ProductLifecycleFields): string {
+/** 販売の状態（2026-10-19 の先方回答）：販売停止は再開できる。廃番は原則再開しない（本部の管理者が取り消すと販売停止に戻る） */
+export type ProductSalesState = 'draft' | 'registered' | 'stopped' | 'discontinued';
+
+export function productSalesState(option: ProductLifecycleFields): ProductSalesState {
   const state = productLedgerState(option);
-  if (state === 'draft') return '下書き';
-  if (state === 'retired') return '取扱終了';
-  return '登録済み';
+  if (state !== 'retired') return state;
+  return option.discontinued_at ? 'discontinued' : 'stopped';
+}
+
+export const PRODUCT_SALES_STATE_LABELS: Record<ProductSalesState, string> = {
+  draft: '下書き',
+  registered: '登録済み',
+  stopped: '販売停止',
+  discontinued: '廃番',
+};
+
+export function productLedgerStateLabel(option: ProductLifecycleFields): string {
+  return PRODUCT_SALES_STATE_LABELS[productSalesState(option)];
+}
+
+/**
+ * 標準構成の商品のうち、販売停止・廃番のもの（2026-10-19 の先方回答 ③ の ①）。
+ * 別の商品で自動的に補わない。この商品がある仕様は新しい受付を止める（DB の spec_stopped_baseline_names と同じ考え方）
+ */
+export function stoppedBaselineProducts<T extends ProductLifecycleFields & { id: string; category_id: string; sort_order: number }>(
+  options: T[],
+  ids: Iterable<string>
+): T[] {
+  const wanted = new Set(ids);
+  return options
+    .filter((option) => wanted.has(option.id) && productLedgerState(option) === 'retired')
+    .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 }
 
 /** 登録済みの商品は見積の商品台帳候補として使える（シミュレーター非表示も見積では選べる）。 */
@@ -41,7 +70,7 @@ export function isSimulatorSelectableProduct(option: ProductLifecycleFields): bo
  */
 export function simulatorUnselectableReason(option: ProductLifecycleFields & { name: string }): string | null {
   const state = productLedgerState(option);
-  if (state === 'retired') return `「${option.name}」は取扱終了のため、新しく選べません。`;
+  if (state === 'retired') return `「${option.name}」は${option.discontinued_at ? '廃番' : '販売停止中'}のため、新しく選べません。`;
   if (state === 'draft') return `「${option.name}」は準備中のため選べません。`;
   if (!productSimulatorVisibleSetting(option)) return `「${option.name}」はシミュレーターでは新しく選べません。`;
   return null;
@@ -62,6 +91,8 @@ export interface ProductLifecycleCapability {
   columns: boolean;
   /** 保存境界のトリガーがある（20261015113000） */
   guards: boolean;
+  /** 廃番の印と、廃番にする・取り消す RPC がある（20261020110000） */
+  discontinue?: boolean;
 }
 
 export const PRODUCT_LIFECYCLE_UNAVAILABLE: ProductLifecycleCapability = { columns: false, guards: false };

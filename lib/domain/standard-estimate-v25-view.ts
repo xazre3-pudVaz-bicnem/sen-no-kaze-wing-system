@@ -79,7 +79,7 @@ export interface V25ProductCandidate {
   name: string;
   categoryName: string;
   section: StandardLineSectionCode;
-  /** 取扱終了。この Revision に保存済みの行だけを表示・保持のために渡す */
+  /** 販売停止・廃番（旧称：取扱終了）。この Revision に保存済みの行だけを表示・保持のために渡す */
   retired?: boolean;
   variantGroups: { id: string; name: string; choices: { id: string; name: string }[] }[];
 }

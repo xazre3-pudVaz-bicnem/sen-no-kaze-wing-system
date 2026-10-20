@@ -178,7 +178,7 @@ export function StandardEstimateV25Editor({
                         }}
                       >
                         <option value="">商品を選ぶ</option>
-                        {candidate?.retired && <option value={candidate.id} disabled>{candidate.name}（取扱終了）</option>}
+                        {candidate?.retired && <option value={candidate.id} disabled>{candidate.name}（販売停止）</option>}
                         {grouped.map(([categoryName, rows]) => (
                           <optgroup key={categoryName} label={categoryName}>
                             {rows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}

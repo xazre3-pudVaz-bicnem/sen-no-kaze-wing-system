@@ -22,7 +22,7 @@ const candidates: V25ProductCandidate[] = [
   },
   { id: 'p3', name: '検査商品3', categoryName: '設備', section: 'option' as const, variantGroups: [] },
   { id: 'p5', name: '設置工事（施工）', categoryName: '施工', section: 'sitework' as const, variantGroups: [] },
-  { id: 'p9', name: '取扱終了の商品', categoryName: '設備', section: 'option' as const, retired: true, variantGroups: [] },
+  { id: 'p9', name: '販売停止の商品', categoryName: '設備', section: 'option' as const, retired: true, variantGroups: [] },
 ];
 
 const initial: V25EditorState = {
@@ -89,10 +89,10 @@ describe('標準見積 v2.5 の編集画面（描画）', () => {
     expect(html).not.toContain('¥0');
   });
 
-  it('保存済みの取扱終了の商品は、選べない選択肢として残して表示する', () => {
+  it('保存済みの販売停止の商品は、選べない選択肢として残して表示する', () => {
     const html = render(false);
-    expect(html).toContain('取扱終了の商品（取扱終了）');
-    expect(html).toMatch(/<option value="p9" disabled=""( selected="")?>取扱終了の商品（取扱終了）<\/option>/);
+    expect(html).toContain('販売停止の商品（販売停止）');
+    expect(html).toMatch(/<option value="p9" disabled=""( selected="")?>販売停止の商品（販売停止）<\/option>/);
   });
 
   it('以前の標準見積から写した明細は「要見直し」と示し、見直し済みにできる', () => {

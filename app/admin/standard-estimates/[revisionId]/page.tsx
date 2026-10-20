@@ -135,13 +135,13 @@ export default async function StandardEstimateRevisionPage({
         dependencies: bundle.dependencies,
         conflicts: bundle.conflicts,
         customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
-        // 標準見積は見積の場面：シミュレーター非表示の商品も使える（見積不可ではない）。取扱終了は新しく入れない
+        // 標準見積は見積の場面：シミュレーター非表示の商品も使える（見積不可ではない）。販売停止・廃番は新しく入れない
         canSelectNew: isQuoteSelectableProduct,
       }
     : null;
   const specCtx = ruleCtx && catalogModel && master ? ruleContextForSpec(ruleCtx, master.spec_code, catalogModel.slug) : null;
   const categoryById = new Map((bundle?.categories ?? []).map((category) => [category.id, category] as const));
-  // 新しく入れられるのは取扱中の商品だけ。取扱終了でも、この Revision に保存済みの明細は表示・保持のために渡す（DB の保存境界と同じ）
+  // 新しく入れられるのは販売中の商品だけ。販売停止・廃番でも、この Revision に保存済みの明細は表示・保持のために渡す（DB の保存境界と同じ）
   const savedBaselineOptionIds = new Set((baselineRows ?? []).map((item) => item.option_id));
   const baselineCandidates: BaselineCandidate[] = (specCtx?.options ?? [])
     .filter((option) => isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && savedBaselineOptionIds.has(option.id)))
@@ -170,7 +170,7 @@ export default async function StandardEstimateRevisionPage({
   }));
   const newerBase = base?.current_published_revision_id && base.current_published_revision_id !== revision.base_master_revision_id;
 
-  // v2.5：商品台帳の商品（その仕様でお客様が選べる取扱中の商品。保存済みの取扱終了の商品は表示・保持のために渡す）と公開中の選択肢
+  // v2.5：商品台帳の商品（その仕様でお客様が選べる販売中の商品。保存済みの販売停止・廃番の商品は表示・保持のために渡す）と公開中の選択肢
   const v25 = isV25 && v25Header ? await loadStandardEstimateV25(supabase, revision, v25Header) : null;
   const v25SavedOptionIds = new Set(v25?.slotOptionIds ?? []);
   const v25Candidates: V25ProductCandidate[] = v25

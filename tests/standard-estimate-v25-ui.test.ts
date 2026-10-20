@@ -35,10 +35,10 @@ describe('標準見積 v2.5 の編集画面（PR-B1b）', () => {
     expect(actions).toContain('p_expected_draft_lock_version: draftLock');
   });
 
-  it('商品の候補は、その仕様でお客様が選べる取扱中の商品と公開中の選択肢（保存済みの取扱終了は表示・保持だけ）', () => {
+  it('商品の候補は、その仕様でお客様が選べる販売中の商品と公開中の選択肢（保存済みの販売停止・廃番は表示・保持だけ）', () => {
     expect(page).toContain("isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && v25SavedOptionIds.has(option.id))");
     expect(page).toContain('.filter((group) => group.option_id === option.id)');
-    expect(editor).toContain('{candidate?.retired && <option value={candidate.id} disabled>{candidate.name}（取扱終了）</option>}');
+    expect(editor).toContain('{candidate?.retired && <option value={candidate.id} disabled>{candidate.name}（販売停止）</option>}');
   });
 
   it('別途見積は 0 円と表示せず、原価の状態（最新・更新あり・未設定）と公開できない理由を示す', () => {

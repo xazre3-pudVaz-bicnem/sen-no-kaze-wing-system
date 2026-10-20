@@ -62,7 +62,7 @@ export function defaultManufacturingOrganization(db: LocalDb, salesOrganizationI
 
 /**
  * 紹介ページの代理店（利用者）が所属する、お客様が選べる組織（有効で管理者がいる代理店・総代理店）。
- * DB の set_quote_request_preferences と同じ（20261015160000）。所属は 1 人 1 つ
+ * DB の set_quote_request_preferences と同じ（20261016160000）。所属は 1 人 1 つ
  */
 export function selectableOrganizationOfMember(db: LocalDb, profileId: string): string | null {
   const t = db.organizations;

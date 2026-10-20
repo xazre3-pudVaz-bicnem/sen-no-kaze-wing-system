@@ -410,7 +410,7 @@ export class LocalCaseFlowStore implements CaseFlowStore {
       ) {
         throw invalid('指定した代理店は選べません');
       }
-      // 紹介ページの代理店を選んだときは、その代理店が所属する組織を営業担当の候補にする（DB の 20261015160000 と同じ）
+      // 紹介ページの代理店を選んだときは、その代理店が所属する組織を営業担当の候補にする（DB の 20261016160000 と同じ）
       const derivedOrgId = !explicitOrg && input.preferred_dealer_id ? selectableOrganizationOfMember(db, input.preferred_dealer_id) : null;
       const preferredOrg = explicitOrg ?? (derivedOrgId ? db.organizations?.organizations.find((o) => o.id === derivedOrgId) ?? null : null);
       const current = t.preferences.find((p) => p.quote_request_id === requestId);

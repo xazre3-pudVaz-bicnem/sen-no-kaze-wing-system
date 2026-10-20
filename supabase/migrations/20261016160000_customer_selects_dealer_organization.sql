@@ -1,7 +1,7 @@
 -- お客様が代理店を選ぶ（2026-10-15 先方確定：通常の Web 案件は、お客様が対応代理店を選び、その代理店の管理者が主担当者を決める）。
 --
 -- 見積依頼の「相談したい代理店」は、公開中の紹介ページ（dealer_profiles。代理店の利用者ごと）から選ぶ。
--- 選んだ代理店が組織（1 代理店＝1 組織）に所属していれば、その組織を営業担当の候補にして、20261015130000 の規則
+-- 選んだ代理店が組織（1 代理店＝1 組織）に所属していれば、その組織を営業担当の候補にして、20261016130000 の規則
 -- （営業担当組織が未定なら決める・組織の管理者へ知らせる・製造担当は直属の総代理店）に乗せる。
 -- 組織に所属していない代理店を選んだときは、これまでどおり本部が担当を決める。
 
@@ -11,7 +11,7 @@ do $preflight$
 begin
   if to_regprocedure('public.set_quote_request_preferences(uuid, jsonb)') is null
      or to_regprocedure('public.default_manufacturing_organization(uuid)') is null then
-    raise exception 'PRECONDITION: case sales organization (20261015130000) must be applied first';
+    raise exception 'PRECONDITION: case sales organization (20261016130000) must be applied first';
   end if;
 end;
 $preflight$;

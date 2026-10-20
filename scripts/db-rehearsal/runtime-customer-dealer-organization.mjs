@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// お客様が代理店を選ぶ（20261015160000）の実行時検査（1 本の接続で流して rollback する）
+// お客様が代理店を選ぶ（20261016160000）の実行時検査（1 本の接続で流して rollback する）
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export async function runtimeCustomerDealerOrganization(client) {

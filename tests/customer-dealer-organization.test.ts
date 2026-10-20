@@ -5,9 +5,9 @@ import type { LocalDb } from '@/lib/data/local-db';
 import { selectableOrganizationOfMember } from '@/lib/data/organizations/local-relations';
 
 const root = process.cwd();
-const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261015160000_customer_selects_dealer_organization.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20261016160000_customer_selects_dealer_organization.sql'), 'utf8');
 
-describe('お客様が代理店を選ぶ：DB の取り決め（migration 20261015160000）', () => {
+describe('お客様が代理店を選ぶ：DB の取り決め（migration 20261016160000）', () => {
   it('紹介ページの代理店が所属する、有効で管理者がいる代理店・総代理店を営業担当の候補にする（組織の指定があればそちらを使う）', () => {
     const derive = migration.slice(migration.indexOf('if v_org is null and v_dealer is not null then'), migration.indexOf("v_method := public.cf_text(p_preferences, 'meeting_method'"));
     expect(derive).toContain('where m.profile_id = v_dealer');

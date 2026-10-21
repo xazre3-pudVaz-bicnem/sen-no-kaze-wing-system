@@ -22,7 +22,7 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(indices.every((position, index) => index === 0 || position > indices[index - 1])).toBe(true);
     for (const heading of [
       '1. 基本情報', '2. 商品の詳細', '3. 商品画像',
-      '4. メーカー資料・追加画像', '5. お客様選択',
+      '4. メーカー資料', '5. お客様選択',
       '6. 価格・対象モデル', '7. 変更内容の確認',
     ]) {
       expect(flow).toContain(heading);
@@ -67,6 +67,27 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('sm:h-36');
   });
 
+  it('下書きと同じ2ステップ案内、商品管理番号、メイン画像プレビューを表示する', () => {
+    expect(flow).toContain('data-testid="registered-option-change-steps"');
+    expect(flow).toContain('商品変更の流れ');
+    expect(flow).toContain('STEP 1 商品情報を編集');
+    expect(flow).toContain('STEP 2');
+    expect(flow).toContain('aria-current={screen === \'edit\'');
+    expect(flow).toContain('aria-current={screen === \'review\'');
+    expect(flow).toContain('data-testid="registered-option-product-number"');
+    expect(flow).toContain('option.product_no');
+    expect(flow).toContain('data-testid="registered-option-main-image-preview"');
+    expect(flow).toContain('src={mainImagePreview}');
+    expect(flow).toContain('value={imageUrlInput}');
+    expect(flow).toContain('updateImageFilePreview(event.target.files?.[0] ?? null)');
+    expect(flow).toContain('const mainImagePreview = selectedImagePreview ??');
+    expect(flow).toContain('fileToDataUrl(file)');
+    expect(flow).toContain('imagePreviewRequest.current === request');
+    expect(flow).toContain('この画面から変更できません');
+    expect(flow).toContain('画像を選んだだけでは保存されません');
+    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
+  });
+
   it('変更後のお客様表示プレビューと編集への戻り導線を持ち、戻っても入力フォームを破棄しない', () => {
     expect(flow).toContain('変更後のお客様表示プレビュー');
     expect(flow).toContain('<OptionCustomerPreview');
@@ -98,16 +119,22 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(edit).toContain('name="status" value="published"');
   });
 
-  it('現在の追加画像・メーカーPDF・選択肢を参照専用で表示し、直接保存しない', () => {
-    const gallerySection = flow.indexOf('data-testid="registered-option-pending-subedit"');
+  it('追加画像を画像欄にまとめ、PDFとお客様選択は参照専用を維持する', () => {
+    const imageSection = flow.indexOf('data-testid="registered-product-main-media"');
+    const gallerySection = flow.indexOf('data-testid="registered-option-current-gallery"');
+    const pdfSection = flow.indexOf('data-testid="registered-option-pending-subedit"');
     const choicesSection = flow.indexOf('data-testid="registered-option-current-choices"');
     const priceSection = flow.indexOf('data-testid="registered-product-pricing"');
-    expect(gallerySection).toBeGreaterThan(-1);
-    expect(choicesSection).toBeGreaterThan(gallerySection);
+    expect(gallerySection).toBeGreaterThan(imageSection);
+    expect(pdfSection).toBeGreaterThan(gallerySection);
+    expect(choicesSection).toBeGreaterThan(pdfSection);
     expect(priceSection).toBeGreaterThan(choicesSection);
-    const readOnly = flow.slice(gallerySection, priceSection);
-    expect(readOnly).toContain('data-testid="registered-option-current-gallery"');
-    expect(readOnly).toContain('galleryImages.map(');
+    const gallery = flow.slice(gallerySection, pdfSection);
+    const readOnly = flow.slice(pdfSection, priceSection);
+    expect(gallery).toContain('galleryImages.map(');
+    expect(gallery).not.toContain('<Button');
+    expect(gallery).not.toContain('<Input');
+    expect(gallery).not.toContain('<form');
     expect(readOnly).toContain('option.manufacturer_document_url');
     expect(readOnly).toContain('orderedVariantGroups.map(');
     expect(readOnly).toContain('orderedVariantChoices.filter(');

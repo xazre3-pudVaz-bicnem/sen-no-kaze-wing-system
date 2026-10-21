@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
+import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 import { SmartImage } from '@/components/ui/smart-image';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
@@ -461,56 +462,23 @@ export function RegisteredOptionEditFlow({
                 <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} onChange={() => setIdentityChanged(true)} />
               </Field>
             </div>
-            <div className="rounded-lg border border-line bg-sand/25 px-3 py-2" data-testid="registered-option-product-number">
-              <p className="text-xs font-semibold text-muted">商品管理番号</p>
-              <p className="mt-1 font-mono text-sm font-semibold text-ink">{option.product_no ?? '商品管理番号は未反映'}</p>
-              <p className="mt-1 text-xs text-muted">登録済みの管理番号はこの画面から変更できません。</p>
-            </div>
+            <ProductManagementNumber
+              number={option.product_no}
+              fallback="商品管理番号は未反映"
+              testId="registered-option-product-number"
+            />
             {duplicateCandidates && (
-              <section
-                className={`rounded-lg border px-3 py-3 ${!identityChanged && duplicateCandidates.length ? 'border-[#d9a441] bg-[#fff8e8]' : 'border-line bg-ivory/30'}`}
-                aria-label="既存商品チェック"
-                data-testid="registered-option-duplicate-status"
-                aria-live="polite"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold">既存商品チェック</p>
-                  <span className="text-xs font-semibold text-muted">
-                    {identityChanged
-                      ? '入力変更後の重複は未確認'
-                      : duplicateCandidates.length
-                        ? '要確認：重複候補あり'
-                        : duplicateCheckReady ? '重複候補なし' : '確認に必要な情報が不足'}
-                  </span>
-                </div>
-                {identityChanged ? (
-                  <p className="mt-2 text-xs text-muted">変更前の登録内容に対する確認結果です。入力した変更内容の重複判定はここでは行いません。</p>
-                ) : duplicateCandidates.length ? (
-                  <div className="mt-2">
-                    <p className="text-xs text-ink-soft">同じ商品を重複登録していないか確認してください。この表示だけで保存を停止しません。</p>
-                    <ul className="mt-2 space-y-2">
-                      {duplicateCandidates.map((candidate) => (
-                        <li key={candidate.id} className="rounded border border-line bg-white px-3 py-2 text-xs">
-                          <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">{candidate.name}</a>
-                          <span className="ml-2 text-muted">{candidate.productNo ?? '商品番号未反映'}</span>
-                          <p className="mt-1 text-muted">
-                            {candidate.reason === 'manufacturer-model'
-                              ? 'メーカー＋シリーズ・型番／品番が一致'
-                              : '同一カテゴリー＋メーカー＋商品名が一致'}
-                            {candidate.modelNo ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.modelNo}` : ''}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="mt-1 text-xs text-muted">
-                    {duplicateCheckReady
-                      ? '現在登録されているメーカー・商品名・型番について、重複候補は見つかっていません。'
-                      : 'メーカーと商品名または型番を確認してください。'}
-                  </p>
-                )}
-              </section>
+              <ProductDuplicateStatus
+                candidates={duplicateCandidates}
+                ready={duplicateCheckReady}
+                stale={identityChanged}
+                testId="registered-option-duplicate-status"
+                staleHint="変更前の登録内容に対する確認結果です。入力した変更内容の重複判定はここでは行いません。"
+                candidateHint="同じ商品を重複登録していないか確認してください。この表示だけで保存を停止しません。"
+                emptyHint={duplicateCheckReady
+                  ? '現在登録されているメーカー・商品名・型番について、重複候補は見つかっていません。'
+                  : 'メーカーと商品名または型番を確認してください。'}
+              />
             )}
           </section>
 

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'), 'utf8');
 const newPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'), 'utf8');
 const flow = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/registered-option-edit-flow.tsx'), 'utf8');
+const identityView = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-identity-status.tsx'), 'utf8');
 
 describe('登録済み商品の変更確認フロー', () => {
   it('新規登録STEP1と同じ順序で基本情報・詳細・画像・資料・価格・確認を並べる', () => {
@@ -68,14 +69,15 @@ describe('登録済み商品の変更確認フロー', () => {
   });
 
   it('重複チェックは登録内容を表示し、編集後は未確認として扱う', () => {
-    expect(flow).toContain('data-testid="registered-option-duplicate-status"');
+    expect(flow).toContain('testId="registered-option-duplicate-status"');
     expect(flow).toContain('duplicateCandidates &&');
+    expect(flow).toContain('<ProductDuplicateStatus');
     expect(flow).toContain("const [identityChanged, setIdentityChanged] = useState(false)");
     expect(flow).toContain('setIdentityChanged(true)');
-    expect(flow).toContain('入力変更後の重複は未確認');
+    expect(identityView).toContain('入力変更後の重複は未確認');
     expect(flow).toContain('変更前の登録内容に対する確認結果です');
-    expect(flow).toContain("candidate.reason === 'manufacturer-model'");
-    expect(flow).toContain('candidate.productNo');
+    expect(identityView).toContain("candidate.reason === 'manufacturer-model'");
+    expect(identityView).toContain('candidate.productNo');
     expect(flow).toContain('同じ商品を重複登録していないか確認してください');
   });
 
@@ -109,7 +111,8 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('STEP 2');
     expect(flow).toContain('aria-current={screen === \'edit\'');
     expect(flow).toContain('aria-current={screen === \'review\'');
-    expect(flow).toContain('data-testid="registered-option-product-number"');
+    expect(flow).toContain('testId="registered-option-product-number"');
+    expect(flow).toContain('<ProductManagementNumber');
     expect(flow).toContain('option.product_no');
     expect(flow).toContain('data-testid="registered-option-main-image-preview"');
     expect(flow).toContain('src={mainImagePreview}');
@@ -118,7 +121,7 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('const mainImagePreview = selectedImagePreview ??');
     expect(flow).toContain('fileToDataUrl(file)');
     expect(flow).toContain('imagePreviewRequest.current === request');
-    expect(flow).toContain('この画面から変更できません');
+    expect(identityView).toContain('登録後は変更しません');
     expect(flow).toContain('画像を選んだだけでは保存されません');
     expect(flow).toContain('saveOptionAction(initialState, review.formData)');
   });

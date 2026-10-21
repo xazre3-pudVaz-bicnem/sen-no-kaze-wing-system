@@ -1,6 +1,8 @@
 'use client';
 
-import { Check, ImageOff } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ImageOff, ZoomIn } from 'lucide-react';
+import { ProductImageLightbox } from './product-image-lightbox';
 import { formatYen } from '@/lib/domain/pricing';
 import { VARIANT_KIND_LABELS, type OptionVariantChoice, type OptionVariantGroup } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -16,6 +18,28 @@ interface Props {
   showImages?: boolean;
   /** 選択中の値をグループ見出し横へ表示するか */
   showCurrentValue?: boolean;
+}
+
+function ChoiceThumbnail({ src, name }: { src: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <span className="flex h-full flex-col items-center justify-center gap-1 px-2 text-center text-[0.65rem] text-muted">
+        <ImageOff className="size-5" aria-hidden="true" />
+        <span>{src ? '画像を表示できません' : '画像なし'}</span>
+      </span>
+    );
+  }
+  return (
+    <SmartImage
+      src={src}
+      alt={name}
+      fill
+      sizes="(min-width: 640px) 150px, 45vw"
+      className="object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 /**
@@ -34,6 +58,7 @@ export function VariantPicker({
 }: Props) {
   if (groups.length === 0) return null;
   const picked = new Set(selected);
+  const [enlargedChoice, setEnlargedChoice] = useState<{ url: string; label: string } | null>(null);
 
   return (
     <div className="space-y-3 border-t border-line pt-3" data-testid="variant-picker">
@@ -68,7 +93,7 @@ export function VariantPicker({
               className={cn(
                 'mt-2 gap-2',
                 withImage
-                  ? 'grid grid-cols-3 sm:grid-cols-4'
+                  ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
                   : 'grid grid-cols-1 sm:grid-cols-2'
               )}
             >
@@ -83,7 +108,7 @@ export function VariantPicker({
                       : null;
 
                 return (
-                  <li key={c.id}>
+                  <li key={c.id} className="relative">
                     <button
                       type="button"
                       onClick={() => onChange(c.id, g.id)}
@@ -104,13 +129,7 @@ export function VariantPicker({
                     >
                       {withImage && (
                         <span className="relative block aspect-square bg-sand">
-                          {c.image_url ? (
-                            <SmartImage src={c.image_url} alt={c.name} fill sizes="120px" className="object-cover" />
-                          ) : (
-                            <span className="flex h-full items-center justify-center text-muted">
-                              <ImageOff className="size-4" aria-hidden="true" />
-                            </span>
-                          )}
+                          <ChoiceThumbnail key={c.image_url ?? 'no-image'} src={c.image_url} name={c.name} />
                         </span>
                       )}
 
@@ -147,6 +166,16 @@ export function VariantPicker({
                         </span>
                       </span>
                     </button>
+                    {withImage && c.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => setEnlargedChoice({ url: c.image_url!, label: c.name })}
+                        aria-label={`${c.name}の色・柄見本を拡大`}
+                        className="absolute right-1 top-1 z-10 inline-flex min-h-8 min-w-8 items-center justify-center rounded-md border border-line bg-white/95 text-ink shadow-sm hover:bg-white"
+                      >
+                        <ZoomIn className="size-4" aria-hidden="true" />
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -154,6 +183,14 @@ export function VariantPicker({
           </section>
         );
       })}
+      <ProductImageLightbox
+        open={Boolean(enlargedChoice)}
+        productName="選択肢"
+        images={enlargedChoice ? [enlargedChoice] : []}
+        selectedIndex={0}
+        onSelect={() => {}}
+        onClose={() => setEnlargedChoice(null)}
+      />
     </div>
   );
 }

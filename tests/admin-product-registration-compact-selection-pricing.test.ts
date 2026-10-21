@@ -82,8 +82,10 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain("groups: ['色', '柄', '張り方', '仕上げ']");
     expect(finalRefinements).toContain("groups: ['デザイン', '色', 'ハンドル', 'ガラス']");
     expect(finalRefinements).toContain('selectedOptions[0]?.textContent?.trim()');
-    expect(finalRefinements).toContain("current === 'group' ? null : 'group'");
-    expect(finalRefinements).toContain('current === index ? null : index');
+    expect(finalRefinements).toContain('data-testid="inline-variant-suggestions"');
+    expect(finalRefinements).toContain('values={suggestions.groups}');
+    expect(finalRefinements).toContain('values={suggestions.choices}');
+    expect(finalRefinements).not.toContain('候補を見る');
     expect(finalRefinements).not.toContain("onFocus={() => setActiveSuggestions('group')}");
     expect(finalRefinements).not.toContain('onFocus={() => setActiveSuggestions(index)}');
     expect(finalRefinements).toContain('候補外も自由入力できます。');
@@ -104,8 +106,7 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(registrationCss).toContain('max-width: min(100%, 22rem);');
     expect(finalRefinements).toContain('max-w-[22rem] flex-[1_1_14rem]');
     expect(finalRefinements).toContain('max-w-[44rem] space-y-2');
-    expect(finalRefinements).toContain('aria-expanded={activeSuggestions === index}');
-    expect(finalRefinements).toContain('aria-expanded={activeSuggestions === \'group\'}');
+    expect(finalRefinements).toContain('aria-expanded={open}');
     expect(registrationCss).not.toContain('form > div.rounded-xl.border.border-line.bg-white.p-4');
   });
 

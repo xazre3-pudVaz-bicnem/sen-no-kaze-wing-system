@@ -7,6 +7,30 @@ const newPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/n
 const flow = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/registered-option-edit-flow.tsx'), 'utf8');
 
 describe('登録済み商品の変更確認フロー', () => {
+  it('新規登録STEP1と同じ順序で基本情報・詳細・画像・資料・価格・確認を並べる', () => {
+    const sectionIds = [
+      'registered-product-identify',
+      'registered-product-details',
+      'registered-product-main-media',
+      'registered-option-pending-subedit',
+      'registered-product-pricing',
+      'registered-product-change-check',
+    ];
+    const indices = sectionIds.map((id) => flow.indexOf(`data-testid="${id}"`));
+    expect(indices.every((position) => position >= 0)).toBe(true);
+    expect(indices.every((position, index) => index === 0 || position > indices[index - 1])).toBe(true);
+    for (const heading of [
+      '1. 基本情報', '2. 商品の詳細', '3. 商品画像',
+      '4. メーカー資料・追加画像／5. お客様選択',
+      '6. 価格・対象モデル', '7. 変更内容の確認',
+    ]) {
+      expect(flow).toContain(heading);
+    }
+    expect(flow).toContain('name="status" value="published"');
+    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
+    expect(flow).toContain('registered-option-pending-subedit');
+  });
+
   it('登録済み商品を初回登録のSTEPフローから分離する', () => {
     expect(page).toContain("if (option.status === 'published')");
     expect(page).toContain('<RegisteredOptionEditFlow');

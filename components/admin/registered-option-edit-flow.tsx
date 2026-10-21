@@ -130,6 +130,23 @@ export function RegisteredOptionEditFlow({
   const [state, setState] = useState<AdminFormState>(initialState);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState(option.image_url ?? '');
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [imagePreviewError, setImagePreviewError] = useState<string | null>(null);
+  const imagePreviewRequest = useRef(0);
+
+  const updateImageFilePreview = (file: File | null) => {
+    const request = ++imagePreviewRequest.current;
+    setImagePreviewError(null);
+    setSelectedImagePreview(null);
+    if (!file || file.size === 0) return;
+    void fileToDataUrl(file).then((preview) => {
+      if (imagePreviewRequest.current === request) setSelectedImagePreview(preview);
+    }).catch(() => {
+      if (imagePreviewRequest.current === request) setImagePreviewError('選択した画像を読み込めませんでした。');
+    });
+  };
+  const mainImagePreview = selectedImagePreview ?? (imageUrlInput.trim() || null);
 
   const galleryImages = useMemo(
     () => [...(option.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
@@ -250,6 +267,33 @@ export function RegisteredOptionEditFlow({
 
   return (
     <div className="space-y-6">
+      <section className="card p-4 sm:p-5" aria-label="商品変更の2ステップ" data-testid="registered-option-change-steps">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="font-semibold">商品変更の流れ</h2>
+            <p className="mt-1 text-xs text-muted">STEP 1で商品情報を変更し、STEP 2で変更点とお客様表示を確認します。入力中は自動保存されません。</p>
+          </div>
+          <span className="text-xs font-semibold text-brown">現在：STEP {screen === 'edit' ? 1 : 2}</span>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="商品変更ステップ">
+          <div
+            aria-current={screen === 'edit' ? 'step' : undefined}
+            className={`rounded-xl border px-3 py-3 ${screen === 'edit' ? 'border-brown bg-ivory/80 ring-1 ring-brown/20' : 'border-line bg-white'}`}
+          >
+            <span className="block text-xs font-semibold text-brown">STEP 1</span>
+            <span className="mt-1 block text-sm font-semibold">商品情報の変更</span>
+            <span className="mt-1 block text-xs text-muted">基本情報・画像・資料・お客様選択・価格を確認</span>
+          </div>
+          <div
+            aria-current={screen === 'review' ? 'step' : undefined}
+            className={`rounded-xl border px-3 py-3 ${screen === 'review' ? 'border-brown bg-ivory/80 ring-1 ring-brown/20' : 'border-line bg-white'}`}
+          >
+            <span className="block text-xs font-semibold text-brown">STEP 2</span>
+            <span className="mt-1 block text-sm font-semibold">変更内容確認</span>
+            <span className="mt-1 block text-xs text-muted">差分とシミュレーター共通の商品詳細で確認</span>
+          </div>
+        </div>
+      </section>
       {review && (
         <section hidden={screen !== 'review'} className="space-y-6" data-testid="registered-option-change-review">
           <section className="card p-4 sm:p-5" aria-label="変更内容確認">
@@ -356,13 +400,10 @@ export function RegisteredOptionEditFlow({
       )}
 
       <section hidden={screen !== 'edit'} className="space-y-4" data-testid="registered-option-edit-flow">
-        <section className="card px-4 py-3 sm:px-5" aria-label="商品を編集">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="text-lg font-semibold">商品を編集</h2>
-            <span className="text-xs font-semibold text-brown">登録済み商品</span>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-muted">入力中は未反映です。変更内容とお客様表示を確認してから反映します。</p>
-        </section>
+        <div className="space-y-1" aria-label="商品を編集">
+          <h2 className="text-lg font-semibold">STEP 1 商品情報を編集</h2>
+          <p className="text-xs leading-5 text-muted">登録済みの商品です。変更内容とお客様表示を確認するまで、入力した内容は反映されません。</p>
+        </div>
 
         {reviewError && <Alert tone="danger">{reviewError}</Alert>}
 
@@ -405,6 +446,11 @@ export function RegisteredOptionEditFlow({
                 <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} />
               </Field>
             </div>
+            <div className="rounded-lg border border-line bg-sand/25 px-3 py-2" data-testid="registered-option-product-number">
+              <p className="text-xs font-semibold text-muted">商品管理番号</p>
+              <p className="mt-1 font-mono text-sm font-semibold text-ink">{option.product_no ?? '商品管理番号は未反映'}</p>
+              <p className="mt-1 text-xs text-muted">登録済みの管理番号はこの画面から変更できません。</p>
+            </div>
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-details">
@@ -425,25 +471,62 @@ export function RegisteredOptionEditFlow({
             </Field>
           </section>
 
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-main-media">
+          <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-main-media">
             <div>
               <h3 className="text-lg font-semibold">3. 商品画像</h3>
-              <p className="mt-1 text-sm text-muted">画像ファイルまたは画像URLを変更できます。変更後の画像は確認画面で現在の内容と比較します。</p>
+              <p className="mt-1 text-sm text-muted">下書き画面と同じように、メイン画像と追加画像を確認できます。追加画像は改版機能の準備ができるまで参照専用です。</p>
+            </div>
+            <div className="flex flex-wrap items-start gap-3 rounded-lg border border-line bg-ivory/30 p-3" data-testid="registered-option-main-image-preview">
+              <div className="w-40 max-w-full sm:w-48">
+                <ImagePreview src={mainImagePreview} label="メイン画像プレビュー" />
+              </div>
+              <div className="min-w-44 flex-1 space-y-2 pt-1">
+                <p className="text-xs text-muted">選択した画像URLまたは画像ファイルをここで確認できます。ファイルを選んだ場合はファイルの画像を優先して表示します。</p>
+                <p className="text-xs text-muted">画像を選んだだけでは保存されません。変更内容確認を経て反映します。</p>
+                {imagePreviewError && <Alert tone="danger">{imagePreviewError}</Alert>}
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="画像URL" htmlFor="registered-image-url">
-                <Input id="registered-image-url" name="image_url" defaultValue={option.image_url ?? ''} />
+                <Input id="registered-image-url" name="image_url" value={imageUrlInput} onChange={(event) => setImageUrlInput(event.target.value)} />
               </Field>
               <Field label="または画像ファイル" htmlFor="registered-image-file">
-                <Input id="registered-image-file" name="image_file" type="file" accept="image/*" className="py-2" />
+                <Input id="registered-image-file" name="image_file" type="file" accept="image/*" className="py-2" onChange={(event) => updateImageFilePreview(event.target.files?.[0] ?? null)} />
               </Field>
+            </div>
+            <div className="border-t border-line pt-3">
+              <div className="space-y-2" data-testid="registered-option-current-gallery">
+                <p className="text-sm font-semibold">追加画像（{galleryImages.length}枚）</p>
+                {galleryImages.length > 0 ? (
+                  <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {galleryImages.map((image, index) => (
+                      <li key={image.id} className="min-w-0 rounded-lg border border-line bg-white p-2">
+                        <div className="relative aspect-square overflow-hidden rounded bg-sand/30">
+                          <SmartImage
+                            src={image.url}
+                            alt={image.alt || `追加画像${index + 1}`}
+                            fill
+                            sizes="(max-width: 640px) 160px, 120px"
+                            className="object-contain"
+                          />
+                        </div>
+                        <p className="mt-1 line-clamp-2 break-words text-xs text-ink-soft">
+                          {image.caption || image.alt || `追加画像${index + 1}`}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted">追加画像は未登録です。</p>
+                )}
+              </div>
             </div>
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
             <div>
-              <h3 className="text-lg font-semibold">4. メーカー資料・追加画像</h3>
-              <p className="mt-1 text-sm text-muted">現在登録されている内容を参照できます。変更・解除はまだできません。</p>
+              <h3 className="text-lg font-semibold">4. メーカー資料</h3>
+              <p className="mt-1 text-sm text-muted">メーカー資料PDFの登録状況を確認できます。変更・解除はまだできません。</p>
             </div>
             <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
               サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。
@@ -461,31 +544,6 @@ export function RegisteredOptionEditFlow({
                 </a>
               ) : (
                 <p className="text-sm text-muted">メーカー資料PDFは未登録です。</p>
-              )}
-            </div>
-            <div className="space-y-2" data-testid="registered-option-current-gallery">
-              <p className="text-sm font-semibold">追加画像（{galleryImages.length}枚）</p>
-              {galleryImages.length > 0 ? (
-                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {galleryImages.map((image, index) => (
-                    <li key={image.id} className="min-w-0 rounded-lg border border-line bg-white p-2">
-                      <div className="relative aspect-square overflow-hidden rounded bg-sand/30">
-                        <SmartImage
-                          src={image.url}
-                          alt={image.alt || `追加画像${index + 1}`}
-                          fill
-                          sizes="(max-width: 640px) 160px, 120px"
-                          className="object-contain"
-                        />
-                      </div>
-                      <p className="mt-1 line-clamp-2 break-words text-xs text-ink-soft">
-                        {image.caption || image.alt || `追加画像${index + 1}`}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted">追加画像は未登録です。</p>
               )}
             </div>
           </section>

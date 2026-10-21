@@ -79,6 +79,8 @@
   [data-combined-create-root='true'] {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 44rem;
 }
 
 /* 保存済みデータを守る理由は、登録担当者に必要な操作だけ短く案内する。 */
@@ -159,6 +161,16 @@
   [data-testid='compact-variant-group-field']
   .input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 選択肢の入力欄だけを短めに保つ。スマホは親幅の範囲で収める。 */
+.registration-step1-sections
+  #customer-selection
+  [data-testid='compact-variant-choices']
+  .input {
+  max-width: min(100%, 22rem);
   min-width: 0;
 }
 

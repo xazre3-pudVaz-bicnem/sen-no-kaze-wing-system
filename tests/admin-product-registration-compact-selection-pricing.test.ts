@@ -82,9 +82,10 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain("groups: ['色', '柄', '張り方', '仕上げ']");
     expect(finalRefinements).toContain("groups: ['デザイン', '色', 'ハンドル', 'ガラス']");
     expect(finalRefinements).toContain('selectedOptions[0]?.textContent?.trim()');
-    expect(finalRefinements).toContain("setActiveSuggestions('group')");
-    expect(finalRefinements).toContain('setActiveSuggestions(0)');
-    expect(finalRefinements).toContain('setActiveSuggestions(index)');
+    expect(finalRefinements).toContain("current === 'group' ? null : 'group'");
+    expect(finalRefinements).toContain('current === index ? null : index');
+    expect(finalRefinements).not.toContain("onFocus={() => setActiveSuggestions('group')}");
+    expect(finalRefinements).not.toContain('onFocus={() => setActiveSuggestions(index)}');
     expect(finalRefinements).toContain('候補外も自由入力できます。');
   });
 
@@ -92,13 +93,19 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain('const groupPlaceholder =');
     expect(finalRefinements).toContain("suggestions.groups.slice(0, 3).join('／')");
     expect(finalRefinements).toContain('data-testid="compact-variant-group-field"');
-    expect(finalRefinements).toContain('sm:grid-cols-[7rem_minmax(0,1fr)]');
+    expect(finalRefinements).toContain('sm:grid-cols-[7rem_minmax(0,26rem)]');
     expect(finalRefinements).toContain('placeholder={groupPlaceholder}');
     expect(finalRefinements).not.toContain('placeholder="例：周辺パネル"');
     expect(finalRefinements).toContain('data-testid="compact-variant-choices"');
     expect(finalRefinements).toContain('data-testid="compact-variant-footer"');
     expect(finalRefinements).toContain('name={`choice_image_file_${index}`}');
     expect(registrationCss).toContain("[data-testid='compact-variant-footer']");
+    expect(registrationCss).toContain('max-width: 44rem;');
+    expect(registrationCss).toContain('max-width: min(100%, 22rem);');
+    expect(finalRefinements).toContain('max-w-[22rem] flex-[1_1_14rem]');
+    expect(finalRefinements).toContain('max-w-[44rem] space-y-2');
+    expect(finalRefinements).toContain('aria-expanded={activeSuggestions === index}');
+    expect(finalRefinements).toContain('aria-expanded={activeSuggestions === \'group\'}');
     expect(registrationCss).not.toContain('form > div.rounded-xl.border.border-line.bg-white.p-4');
   });
 

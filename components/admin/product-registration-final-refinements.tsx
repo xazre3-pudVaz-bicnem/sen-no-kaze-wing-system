@@ -213,14 +213,14 @@ function SuggestionButtons({
 }) {
   if (values.length === 0) return null;
   return (
-    <div className="mt-2 rounded-lg border border-line bg-white p-3">
+    <div className="mt-1.5 max-w-[34rem] rounded-lg bg-ivory/40 px-2 py-2">
       <p className="text-xs font-semibold text-ink-soft">{title}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
         {values.map((value) => (
           <button
             key={value}
             type="button"
-            className="rounded-full border border-line bg-ivory/30 px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+            className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onSelect(value)}
           >
@@ -334,7 +334,7 @@ function VariantCreatePortal({
   };
 
   return createPortal(
-    <div className="space-y-2" data-combined-create-root="true">
+    <div className="w-full max-w-[44rem] space-y-2" data-combined-create-root="true">
       {!open && (
         <button
           type="button"
@@ -351,7 +351,7 @@ function VariantCreatePortal({
       )}
 
       {open && (
-        <div className="rounded-xl border border-dashed border-line bg-ivory/20 p-3 sm:p-4">
+        <div className="border-t border-line/70 pt-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">選択項目を追加</p>
             <button
@@ -376,23 +376,33 @@ function VariantCreatePortal({
               )
             )}
 
-            <div className="grid gap-1.5 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center" data-testid="compact-variant-group-field">
+            <div className="grid gap-1.5 sm:grid-cols-[7rem_minmax(0,26rem)] sm:items-center" data-testid="compact-variant-group-field">
               <label htmlFor="registration-variant-group-name" className="text-sm font-semibold">
                 選択項目名 <span className="text-xs text-red-700">必須</span>
               </label>
-              <div className="min-w-0">
-                <Input
-                  id="registration-variant-group-name"
-                  name="name"
-                  value={groupName}
-                  onChange={(event) => setGroupName(event.target.value)}
-                  onFocus={() => setActiveSuggestions('group')}
-                  placeholder={groupPlaceholder}
-                  title="候補外も自由入力できます。"
-                  aria-invalid={Boolean(state.fieldErrors?.name?.length)}
-                  autoComplete="off"
-                  required
-                />
+              <div className="min-w-0 max-w-[26rem]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Input
+                    id="registration-variant-group-name"
+                    name="name"
+                    className="min-w-0 flex-1"
+                    value={groupName}
+                    onChange={(event) => setGroupName(event.target.value)}
+                    placeholder={groupPlaceholder}
+                    title="候補外も自由入力できます。"
+                    aria-invalid={Boolean(state.fieldErrors?.name?.length)}
+                    autoComplete="off"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-semibold text-brown underline underline-offset-2"
+                    aria-expanded={activeSuggestions === 'group'}
+                    onClick={() => setActiveSuggestions((current) => current === 'group' ? null : 'group')}
+                  >
+                    候補を見る
+                  </button>
+                </div>
                 {state.fieldErrors?.name?.[0] && (
                   <p className="mt-1 text-xs text-danger" role="alert">{state.fieldErrors.name[0]}</p>
                 )}
@@ -402,7 +412,7 @@ function VariantCreatePortal({
                     values={suggestions.groups}
                     onSelect={(value) => {
                       setGroupName(value);
-                      setActiveSuggestions(0);
+                      setActiveSuggestions(null);
                     }}
                   />
                 )}
@@ -410,21 +420,7 @@ function VariantCreatePortal({
             </div>
 
             <div className="space-y-2" data-testid="compact-variant-choices">
-              <div className="flex flex-wrap items-center justify-between gap-1.5">
-                <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択）</span></p>
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  disabled={pending}
-                  onClick={() => {
-                    setChoiceNames((rows) => [...rows, '']);
-                    setChoiceRowIds((rows) => [...rows, nextChoiceRowId.current++]);
-                    setActiveSuggestions(choiceNames.length);
-                  }}
-                >
-                  ＋ 選択肢を追加
-                </button>
-              </div>
+              <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択）</span></p>
 
               <div className="space-y-1.5">
                 {choiceNames.map((value, index) => {
@@ -433,7 +429,7 @@ function VariantCreatePortal({
                   const previewUrl = imagePreviews[rowId];
                   return (
                     <div key={rowId} className="space-y-1">
-                      <div className={`flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 ${isStandard ? 'border-brown bg-ivory/40' : 'border-line bg-white'}`}>
+                      <div className={`flex flex-wrap items-center gap-1.5 border-b border-line/70 py-2 ${isStandard ? 'bg-ivory/20' : ''}`}>
                         <label className="flex shrink-0 cursor-pointer items-center gap-1 text-xs font-semibold text-ink-soft">
                           <input
                             type="radio"
@@ -448,15 +444,24 @@ function VariantCreatePortal({
                         <label htmlFor={`registration-choice-${rowId}`} className="sr-only">選択肢 {index + 1}</label>
                         <Input
                           id={`registration-choice-${rowId}`}
-                          className="min-w-32 flex-[1_1_12rem]"
+                          className="min-w-0 max-w-[22rem] flex-[1_1_14rem]"
                           value={value}
                           disabled={pending}
                           onChange={(event) => updateChoice(index, event.target.value)}
-                          onFocus={() => setActiveSuggestions(index)}
                           placeholder={`選択肢 ${index + 1}：ホワイトなど`}
                           autoComplete="off"
                           required={isStandard}
                         />
+                        {suggestions.choices.length > 0 && (
+                          <button
+                            type="button"
+                            className="shrink-0 px-1 text-xs font-semibold text-brown underline underline-offset-2"
+                            aria-expanded={activeSuggestions === index}
+                            onClick={() => setActiveSuggestions((current) => current === index ? null : index)}
+                          >
+                            候補を見る
+                          </button>
+                        )}
                         {previewUrl && (
                           <span className="relative size-9 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
                             <SmartImage src={previewUrl} alt={`${value || '選択肢'}の画像`} fill sizes="36px" className="object-contain" />
@@ -492,12 +497,27 @@ function VariantCreatePortal({
                         <SuggestionButtons
                           title="選択肢の候補"
                           values={suggestions.choices}
-                          onSelect={(nextValue) => updateChoice(index, nextValue)}
+                          onSelect={(nextValue) => {
+                            updateChoice(index, nextValue);
+                            setActiveSuggestions(null);
+                          }}
                         />
                       )}
                     </div>
                   );
                 })}
+                <button
+                  type="button"
+                  className="mt-1 inline-flex items-center rounded-md px-2 py-1.5 text-sm font-semibold text-brown hover:bg-ivory/50"
+                  disabled={pending}
+                  onClick={() => {
+                    setChoiceNames((rows) => [...rows, '']);
+                    setChoiceRowIds((rows) => [...rows, nextChoiceRowId.current++]);
+                    setActiveSuggestions(null);
+                  }}
+                >
+                  ＋ 選択肢を追加
+                </button>
                 {(state.fieldErrors?.first_choice_name || state.fieldErrors?.additional_choice_name) && (
                   <p className="text-xs text-danger">
                     {[...(state.fieldErrors.first_choice_name ?? []), ...(state.fieldErrors.additional_choice_name ?? [])].join(' / ')}

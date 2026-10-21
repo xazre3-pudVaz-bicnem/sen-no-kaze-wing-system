@@ -391,7 +391,8 @@ export default async function EditOptionPage({
                   文字列からの簡易チェックです。色番号が数字のみの場合などは注意が出る場合があります。公開を自動停止しません。
                 </p>
               </section>
-              
+            )}
+
             <ProductPriceUnitRouteSummary />
 
             <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品登録">

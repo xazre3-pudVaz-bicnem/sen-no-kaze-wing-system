@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -444,10 +445,10 @@ export function RegisteredOptionEditFlow({
           ))}
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-identify">
-            <div>
-              <h3 className="text-lg font-semibold">1. 基本情報</h3>
-              <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番／品番を確認・変更します。</p>
-            </div>
+            <ProductSectionHeading
+              label="1. 基本情報"
+              description="カテゴリー、メーカー、商品名、シリーズ・型番／品番を確認・変更します。"
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="カテゴリー" htmlFor="registered-category" required>
                 <Select id="registered-category" name="category_id" defaultValue={option.category_id} onChange={() => setIdentityChanged(true)} required>
@@ -485,10 +486,10 @@ export function RegisteredOptionEditFlow({
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-details">
-            <div>
-              <h3 className="text-lg font-semibold">2. 商品の詳細</h3>
-              <p className="mt-1 text-sm text-muted">サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。</p>
-            </div>
+            <ProductSectionHeading
+              label="2. 商品の詳細"
+              description="サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。"
+            />
             <ProductDetailsFields
               sizeField={
                 <Field label="サイズ・仕様" htmlFor="registered-size-note">
@@ -503,10 +504,10 @@ export function RegisteredOptionEditFlow({
           </section>
 
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-main-media">
-            <div>
-              <h3 className="text-lg font-semibold">3. 商品画像</h3>
-              <p className="mt-1 text-sm text-muted">下書き画面と同じように、メイン画像と追加画像を確認できます。追加画像は改版機能の準備ができるまで参照専用です。</p>
-            </div>
+            <ProductSectionHeading
+              label="3. 商品画像"
+              description="メイン画像と追加画像を確認できます。追加画像は改版機能の準備ができるまで参照専用です。"
+            />
             <div className="flex flex-wrap items-start gap-3 rounded-lg border border-line bg-ivory/30 p-3" data-testid="registered-option-main-image-preview">
               <div className="w-40 max-w-full sm:w-48">
                 <ImagePreview src={mainImagePreview} label="メイン画像プレビュー" />
@@ -547,13 +548,11 @@ export function RegisteredOptionEditFlow({
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold">4. メーカー資料</h3>
-                <p className="mt-1 text-sm text-muted">メーカー資料PDFの登録状況を確認できます。変更・解除はまだできません。</p>
-              </div>
-              <ProductDocumentStatus url={option.manufacturer_document_url} testId="registered-manufacturer-document-status" />
-            </div>
+            <ProductSectionHeading
+              label="4. メーカー資料"
+              description="メーカー資料PDFの登録状況を確認できます。変更・解除はまだできません。"
+              trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="registered-manufacturer-document-status" />}
+            />
             <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
               サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。
             </p>
@@ -575,10 +574,10 @@ export function RegisteredOptionEditFlow({
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-current-choices">
-            <div>
-              <h3 className="text-lg font-semibold">5. お客様選択</h3>
-              <p className="mt-1 text-sm text-muted">選択項目と選択肢の現在の設定を確認できます。追加・編集・価格変更はまだできません。</p>
-            </div>
+            <ProductSectionHeading
+              label="5. お客様選択"
+              description="選択項目と選択肢の現在の設定を確認できます。追加・編集・価格変更はまだできません。"
+            />
             {orderedVariantGroups.length > 0 ? (
               <div className="space-y-3">
                 {orderedVariantGroups.map((group) => {
@@ -625,10 +624,10 @@ export function RegisteredOptionEditFlow({
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-pricing">
-            <div>
-              <h3 className="text-lg font-semibold">6. 価格・対象モデル</h3>
-              <p className="mt-1 text-sm text-muted">登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。</p>
-            </div>
+            <ProductSectionHeading
+              label="6. 価格・対象モデル"
+              description="登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。"
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="商品価格（税別・円）" htmlFor="registered-price" required>
                 <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required />

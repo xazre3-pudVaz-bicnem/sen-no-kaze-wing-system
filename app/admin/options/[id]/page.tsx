@@ -241,14 +241,6 @@ export default async function EditOptionPage({
                 .registration-step1-sections #product-details { order: 20; }
                 .registration-step1-sections #product-main-media { order: 30; }
                 .registration-step1-sections #sales-settings { order: 50; }
-                .registration-step1-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
-                .registration-step1-sections #product-details > div:first-child > p:first-child::before { content: '2. '; }
-                .registration-step1-sections #product-main-media > div:first-child > p:first-child { font-size: 0; }
-                .registration-step1-sections #product-main-media > div:first-child > p:first-child::after { content: '3. 商品画像'; font-size: 1.125rem; line-height: 1.75rem; }
-                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2 { font-size: 0; }
-                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2::after { content: '5. お客様選択'; font-size: 1.25rem; line-height: 1.75rem; }
-                .registration-step1-sections #sales-settings > div:first-child > p:first-child { font-size: 0; }
-                .registration-step1-sections #sales-settings > div:first-child > p:first-child::after { content: '6. 価格・対象モデル'; font-size: 1.125rem; line-height: 1.75rem; }
               `}</style>
 
               <OptionForm

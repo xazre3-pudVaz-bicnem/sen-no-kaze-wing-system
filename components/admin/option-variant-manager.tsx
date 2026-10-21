@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { SmartImage } from '@/components/ui/smart-image';
 import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import {
   saveVariantChoiceAction,
   saveVariantGroupAction,
@@ -426,12 +427,11 @@ export function OptionVariantManager({
 
   return (
     <section id="customer-selection" className="space-y-5 scroll-mt-6">
-      <div>
-        <h2 className="text-xl font-semibold">お客様選択</h2>
-        <p className="mt-1 text-sm text-muted">
-          お客様が選べる部位・色・仕様などがある場合だけ設定します。
-        </p>
-      </div>
+      <ProductSectionHeading
+        label="5. お客様選択"
+        description="お客様が選べる部位・色・仕様などがある場合だけ設定します。"
+        level="h2"
+      />
 
       <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="選択項目を追加">
         <p className="text-sm font-semibold">選択項目を追加</p>

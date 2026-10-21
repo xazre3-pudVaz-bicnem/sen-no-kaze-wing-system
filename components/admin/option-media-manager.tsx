@@ -17,6 +17,7 @@ import {
 import type { OptionImage, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
 
@@ -478,18 +479,13 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       </section>
 
       <section id="manufacturer-documents" className="card space-y-5 p-5 sm:p-6 scroll-mt-6" data-testid="manufacturer-document-section">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">4. メーカー資料</h2>
-              <span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。
-            </p>
-          </div>
-          <ProductDocumentStatus url={option.manufacturer_document_url} testId="manufacturer-document-status" />
-        </div>
+        <ProductSectionHeading
+          label="4. メーカー資料"
+          description="商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。"
+          level="h2"
+          badge={<span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>}
+          trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="manufacturer-document-status" />}
+        />
 
         {!option.manufacturer_document_url && (
           <p className="text-xs leading-5 text-ink-soft">

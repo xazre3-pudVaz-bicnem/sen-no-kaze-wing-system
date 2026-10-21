@@ -17,8 +17,15 @@ describe('商品登録 STEP1 の簡潔化', () => {
     const openedForm = refinement.indexOf('className="border-t border-line/70 pt-3"', button);
     expect(button).toBeGreaterThan(-1);
     expect(openedForm).toBeGreaterThan(button);
-    expect(refinement).toContain('{!open && (');
-    expect(refinement).toContain('aria-expanded={false}');
+    expect(refinement).not.toContain('{!open && (');
+    expect(refinement).toContain('aria-expanded={open}');
+    expect(refinement).toContain('disabled={pending || open}');
+    expect(refinement).toContain('aria-controls="registration-variant-create-form"');
+    expect(refinement).toContain('id="registration-variant-create-form"');
+    expect(refinement.indexOf('aria-controls="registration-variant-create-form"')).toBeLessThan(
+      refinement.indexOf('id="registration-variant-create-form"')
+    );
+    expect(refinement).not.toContain('画像なし');
     expect(refinement).toContain('{open && (');
     expect(refinement).toContain('画像は任意');
     expect(css).toContain("[data-combined-create-root='true']");

@@ -510,7 +510,7 @@ function VariantCreatePortal({
                       </div>
                       <div className="flex flex-wrap items-center gap-2 sm:pl-14" data-testid="choice-image-inputs">
                         <label htmlFor={`registration-choice-image-url-${rowId}`} className="sr-only">
-                          ${value || `選択肢 ${index + 1}`} の画像URL（任意）
+                          {value || `選択肢 ${index + 1}`} の画像URL（任意）
                         </label>
                         <Input
                           id={`registration-choice-image-url-${rowId}`}

@@ -203,7 +203,8 @@ export function RegisteredOptionEditFlow({
       base_model_id: nullable(data.get('base_model_id')),
       manufacturer: nullable(data.get('manufacturer')),
       model_no: nullable(data.get('model_no')),
-      size_note: nullable(data.get('size_note')),
+      manufacturer_product_url: nullable(data.get('manufacturer_product_url')),
+      size_note: nullable(data.get('size_note')), 
       list_price: numberOrNull(data.get('list_price')),
       highlight: nullable(data.get('highlight')),
       preview_key: nullable(data.get('preview_key')),
@@ -247,6 +248,7 @@ export function RegisteredOptionEditFlow({
       { key: 'category', label: 'カテゴリー', before: categoryMap.get(option.category_id)?.name ?? '—', after: categoryMap.get(next.category_id)?.name ?? '—' },
       { key: 'manufacturer', label: 'メーカー', before: option.manufacturer ?? '—', after: next.manufacturer ?? '—' },
       { key: 'model_no', label: 'シリーズ・型番／品番', before: option.model_no ?? '—', after: next.model_no ?? '—' },
+      { key: 'manufacturer_product_url', label: 'メーカー公式商品ページURL', before: option.manufacturer_product_url ?? '—', after: next.manufacturer_product_url ?? '—', kind: 'long' },
       { key: 'size_note', label: 'サイズ・仕様', before: option.size_note ?? '—', after: next.size_note ?? '—' },
       { key: 'price', label: '商品価格（税別）', before: option.price_on_request ? '別途見積' : yen(option.price), after: next.price_on_request ? '別途見積' : yen(next.price) },
       { key: 'list_price', label: 'メーカー参考価格（税別）', before: yen(option.list_price), after: yen(next.list_price) },
@@ -498,6 +500,17 @@ export function RegisteredOptionEditFlow({
             </div>
             <Field label="商品説明" htmlFor="registered-description">
               <Textarea id="registered-description" name="description" defaultValue={option.description ?? ''} className="min-h-28" />
+            </Field>
+            <Field label="メーカー公式商品ページURL（任意）" htmlFor="registered-manufacturer-product-url" hint="カラー・仕様を確認できるメーカー公式ページを入力します。画像・メーカーPDFのURLは入力しません。">
+              <Input
+                id="registered-manufacturer-product-url"
+                name="manufacturer_product_url"
+                type="url"
+                inputMode="url"
+                maxLength={1000}
+                placeholder="https://www.example.com/products/..."
+                defaultValue={option.manufacturer_product_url ?? ''}
+              />
             </Field>
           </section>
 

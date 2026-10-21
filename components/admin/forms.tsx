@@ -737,6 +737,7 @@ export function OptionForm({
       <input type="hidden" name="size_note" value={option.size_note ?? ''} />
       <input type="hidden" name="highlight" value={option.highlight ?? ''} />
       <input type="hidden" name="description" value={option.description ?? ''} />
+      <input type="hidden" name="manufacturer_product_url" value={option.manufacturer_product_url ?? ''} />
     </>
   ) : null;
 
@@ -1003,6 +1004,23 @@ export function OptionForm({
 
           <Field label="商品説明" htmlFor={`description-${mode}`} errors={e.description}>
             <Textarea id={`description-${mode}`} name="description" defaultValue={option?.description ?? ''} className="min-h-28" />
+          </Field>
+
+          <Field
+            label="メーカー公式商品ページURL（任意）"
+            htmlFor={`manufacturer-product-url-${mode}`}
+            hint="メーカーのカラー・仕様などを確認できる公式商品ページのURL。画像URL・メーカーPDFとは別です。販売店URLは登録しないでください。"
+            errors={e.manufacturer_product_url}
+          >
+            <Input
+              id={`manufacturer-product-url-${mode}`}
+              name="manufacturer_product_url"
+              type="url"
+              inputMode="url"
+              placeholder="https://www.example.com/products/..."
+              maxLength={1000}
+              defaultValue={option?.manufacturer_product_url ?? ''}
+            />
           </Field>
 
           <p className="text-xs text-muted">

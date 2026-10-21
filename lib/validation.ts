@@ -186,6 +186,17 @@ export const optionSchema = z.object({
   owner_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
   manufacturer: optional(60).nullable(),
   model_no: optional(80).nullable(),
+  manufacturer_product_url: z.preprocess(
+    (value) => (value == null || (typeof value === 'string' && !value.trim()) ? null : value),
+    z.string().trim().max(1000, 'URLは1000文字以内で入力してください').url('有効なURLを入力してください').refine((value) => {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && !url.username && !url.password;
+      } catch {
+        return false;
+      }
+    }, 'https://から始まるメーカー公式商品ページURLを入力してください').nullable()
+  ),
   size_note: optional(120).nullable(),
   list_price: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).max(100_000_000).nullable()),
   highlight: optional(PRODUCT_HIGHLIGHT_MAX_LENGTH).nullable(),

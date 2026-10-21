@@ -7,7 +7,7 @@ import {
   createVariantGroupWithFirstChoiceAction,
   type ProductVariantCreateState,
 } from '@/lib/actions/product-registration-variants';
-import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
+import { Alert, Button, Input, Spinner } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
 
 const initialState: ProductVariantCreateState = { ok: false };
@@ -255,7 +255,6 @@ function VariantCreatePortal({
   const [imagePreviews, setImagePreviews] = useState<Record<number, string>>({});
   const [standardIndex, setStandardIndex] = useState(0);
   const [activeSuggestions, setActiveSuggestions] = useState<'group' | number | null>(null);
-  const categoryName = normalizeCategoryLabel(categoryLabel);
   const suggestions = suggestionsForCategory(categoryLabel);
   const groupPlaceholder = `例：${suggestions.groups.slice(0, 3).join('／')}`;
 

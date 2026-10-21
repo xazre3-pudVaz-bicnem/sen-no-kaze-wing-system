@@ -79,6 +79,22 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).not.toContain("if (screen === 'review' && review)");
   });
 
+  it('編集欄の余白を抑え、資料とお客様選択は件数付きで折り畳む', () => {
+    expect(flow).toContain('data-testid="registered-option-edit-flow"');
+    expect(flow).toContain('className="space-y-4" noValidate');
+    expect(flow).toContain('className="grid gap-3 sm:grid-cols-2"');
+    expect(flow).toContain('<details className="card group" data-testid="registered-option-pending-subedit">');
+    expect(flow).toContain('<details className="card group" data-testid="registered-option-current-choices">');
+    expect(flow).toContain('PDF{option.manufacturer_document_url');
+    expect(flow).toContain('追加画像{galleryImages.length}枚');
+    expect(flow).toContain('{orderedVariantGroups.length}項目・{orderedVariantChoices.length}選択肢');
+    expect(flow).toContain('<details key={group.id}');
+    expect(flow).toContain("saveOptionAction(initialState, review.formData)");
+    expect(flow).toContain("hidden={screen !== 'review'}");
+    expect(flow).toContain("hidden={screen !== 'edit'}");
+    expect(flow).not.toContain('defaultOpen');
+  });
+
   it('現在の追加画像・メーカーPDF・選択肢を参照専用で表示し、直接保存しない', () => {
     const gallerySection = flow.indexOf('data-testid="registered-option-pending-subedit"');
     const choicesSection = flow.indexOf('data-testid="registered-option-current-choices"');

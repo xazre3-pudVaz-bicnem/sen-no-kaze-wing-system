@@ -186,10 +186,11 @@ function ChoiceEditor({
   const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
   const [customerVisible, setCustomerVisible] = useState(choice?.status !== 'draft');
   const [imageRemoved, setImageRemoved] = useState(false);
+  const [imageUrl, setImageUrl] = useState(choice?.image_url ?? '');
   const [selectedImage, setSelectedImage] = useState<{ url: string; fileName: string } | null>(null);
   const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const previewUrl = selectedImage?.url ?? (imageRemoved ? null : choice?.image_url ?? null);
+  const previewUrl = selectedImage?.url ?? (imageRemoved ? null : imageUrl.trim() || null);
   useEffect(() => {
     return () => {
       if (selectedImage) URL.revokeObjectURL(selectedImage.url);
@@ -198,19 +199,42 @@ function ChoiceEditor({
   const e = state.fieldErrors ?? {};
   const isNew = !choice;
 
+  const onImageUrlChange = (value: string) => {
+    // URL とファイルの二重指定を避ける。行は既存の choice ID と紐づけたまま。
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    setSelectedImage(null);
+    setImageUrl(value);
+    setImageRemoved(!value.trim() && Boolean(choice?.image_url));
+    setFailedPreviewUrl(null);
+  };
+
   const onImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       setSelectedImage(null);
+      if (!imageUrl.trim() && !imageRemoved) {
+        setImageUrl(choice?.image_url ?? '');
+      }
       return;
     }
+    setImageUrl('');
     setImageRemoved(false);
+    setFailedPreviewUrl(null);
     setSelectedImage({ url: URL.createObjectURL(file), fileName: file.name });
   };
+
   const clearImage = () => {
     setSelectedImage(null);
+    setImageUrl('');
     setImageRemoved(true);
+    setFailedPreviewUrl(null);
     if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const restoreImage = () => {
+    clearImage();
+    setImageUrl(choice?.image_url ?? '');
+    setImageRemoved(false);
   };
 
   const form = (
@@ -219,67 +243,56 @@ function ChoiceEditor({
       <input type="hidden" name="option_id" value={optionId} />
       <input type="hidden" name="group_id" value={group.id} />
       <input type="hidden" name="status" value={customerVisible ? 'published' : 'draft'} />
-      <input type="hidden" name="image_url" value={imageRemoved ? '' : (choice?.image_url ?? '')} />
       <ActionStatus state={state} />
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
-        <Field label="選択肢名" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} hint="例：ホワイト／ベージュ／ブラック" required errors={e.name}>
-          <Input
-            id={`variant-choice-name-${choice?.id ?? group.id}`}
-            name="name"
-            defaultValue={choice?.name ?? ''}
-            placeholder="例：ホワイト"
-            required
-          />
-        </Field>
-        <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} errors={e.extra_price}>
-          <Input
-            id={`variant-choice-price-${choice?.id ?? group.id}`}
-            name="extra_price"
-            type="number"
-            min={0}
-            step={100}
-            defaultValue={choice?.extra_price ?? 0}
-          />
-        </Field>
-      </div>
+      <div className="space-y-2 border-b border-line/70 pb-3" data-testid="draft-choice-unified-two-row">
+        <div className="flex flex-wrap items-end gap-3" data-testid="draft-choice-main-row">
+          <div className="min-w-0 flex-[1_1_12rem]">
+            <Field label="選択肢名" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} hint="例：ホワイト／ベージュ／ブラック" required errors={e.name}>
+              <Input
+                id={`variant-choice-name-${choice?.id ?? group.id}`}
+                name="name"
+                defaultValue={choice?.name ?? ''}
+                placeholder="例：ホワイト"
+                required
+              />
+            </Field>
+          </div>
+          <div className="w-36 shrink-0">
+            <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} errors={e.extra_price}>
+              <Input
+                id={`variant-choice-price-${choice?.id ?? group.id}`}
+                name="extra_price"
+                type="number"
+                min={0}
+                step={100}
+                defaultValue={choice?.extra_price ?? 0}
+              />
+            </Field>
+          </div>
+          <div className="pb-2">
+            <Checkbox
+              checked={kind === 'standard'}
+              disabled={kind === 'fixed'}
+              onChange={(event) => setKind(event.target.checked ? 'standard' : 'option')}
+              label="標準の選択肢にする"
+            />
+          </div>
+        </div>
 
-      <Checkbox
-        checked={kind === 'standard'}
-        disabled={kind === 'fixed'}
-        onChange={(event) => setKind(event.target.checked ? 'standard' : 'option')}
-        label="標準の選択肢にする"
-      />
-
-      <details className="rounded-xl border border-line bg-white p-3 sm:p-4" data-testid="variant-choice-image-editor">
-        <summary className="cursor-pointer text-sm font-semibold">
-          {previewUrl ? '選択肢の画像を確認・変更（任意）' : '色・柄などの画像を登録（任意）'}
-        </summary>
-        <p className="mt-2 text-xs text-muted">
-          Excelの画像ZIPなどから、この選択肢に対応する画像を1枚指定できます。画像なしでも登録できます。
-          メーカーの対象色・仕様とWeb掲載の利用条件を確認した画像だけ使用してください。
-        </p>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
-          {previewUrl && (
-            <div className="relative aspect-square w-32 shrink-0 overflow-hidden rounded-lg border border-line bg-sand/40">
-              {failedPreviewUrl === previewUrl ? (
-                <span className="flex h-full items-center justify-center p-2 text-center text-xs text-muted">画像を表示できません</span>
-              ) : (
-                <SmartImage
-                  src={previewUrl}
-                  alt={`${choice?.name ?? '選択肢'}の画像プレビュー`}
-                  fill
-                  sizes="128px"
-                  className="object-contain"
-                  onError={() => setFailedPreviewUrl(previewUrl)}
-                />
-              )}
-            </div>
-          )}
-          <div className="min-w-0 flex-1 space-y-2">
-            <label htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} className="block text-xs font-semibold text-ink">
-              画像ファイル（JPEG / PNG / WebP / AVIF、10MB以下）
-            </label>
+        <div className="flex flex-wrap items-center gap-2" data-testid="draft-choice-image-row">
+          <label className="sr-only" htmlFor={`variant-choice-image-url-${choice?.id ?? group.id}`}>画像URL（任意）</label>
+          <Input
+            id={`variant-choice-image-url-${choice?.id ?? group.id}`}
+            name="image_url"
+            value={imageUrl}
+            onChange={(event) => onImageUrlChange(event.target.value)}
+            placeholder="画像URL（https://...）"
+            className="min-w-0 max-w-[22rem] flex-[1_1_12rem]"
+            disabled={pending}
+          />
+          <label className="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink-soft hover:border-brown">
+            ファイル選択
             <input
               ref={imageInputRef}
               id={`variant-choice-image-${choice?.id ?? group.id}`}
@@ -287,27 +300,41 @@ function ChoiceEditor({
               type="file"
               accept="image/jpeg,image/png,image/webp,image/avif"
               onChange={onImageChange}
-              className="block w-full rounded-lg border border-line bg-white p-2 text-xs file:mr-2 file:rounded-md file:border-0 file:bg-ivory file:px-2 file:py-1.5"
+              className="sr-only"
+              disabled={pending}
             />
-            {selectedImage && <p className="break-all text-xs text-muted">選択中：{selectedImage.fileName}（保存すると反映）</p>}
-            {imageRemoved && <p className="text-xs text-muted">保存すると画像の関連付けを解除します。</p>}
-            {previewUrl && (
-              <button type="button" className="text-xs text-brown underline underline-offset-2" onClick={clearImage}>
-                画像を外す
-              </button>
-            )}
-            {imageRemoved && (
-              <button
-                type="button"
-                className="text-xs text-brown underline underline-offset-2"
-                onClick={() => setImageRemoved(false)}
-              >
-                画像の解除を取り消す
-              </button>
-            )}
-          </div>
+          </label>
+          {previewUrl && (
+            <span className="relative size-11 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
+              {failedPreviewUrl === previewUrl ? (
+                <span className="flex h-full items-center justify-center text-[9px] text-muted">表示不可</span>
+              ) : (
+                <SmartImage
+                  src={previewUrl}
+                  alt={`${choice?.name ?? '選択肢'}の画像プレビュー`}
+                  fill
+                  sizes="44px"
+                  className="object-contain"
+                  onError={() => setFailedPreviewUrl(previewUrl)}
+                />
+              )}
+            </span>
+          )}
+          {(imageUrl.trim() || selectedImage) && (
+            <button type="button" className="text-xs text-brown underline underline-offset-2" disabled={pending} onClick={clearImage}>
+              解除
+            </button>
+          )}
+          {imageRemoved && choice?.image_url && (
+            <button type="button" className="text-xs text-brown underline underline-offset-2" disabled={pending} onClick={restoreImage}>
+              元に戻す
+            </button>
+          )}
         </div>
-      </details>
+        {selectedImage && <p className="break-all text-xs text-muted">選択中：{selectedImage.fileName}（保存すると反映）</p>}
+        {imageRemoved && choice?.image_url && <p className="text-xs text-muted">保存すると画像の関連付けを解除します。</p>}
+        <p className="text-xs text-muted">画像は任意（JPEG / PNG / WebP / AVIF、10MB以下）。メーカーの掲載条件を確認してください。</p>
+      </div>
 
       <details className="rounded-xl border border-line bg-ivory/30 p-4">
         <summary className="cursor-pointer text-sm font-semibold">表示などの詳細設定</summary>

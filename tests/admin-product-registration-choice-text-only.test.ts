@@ -25,9 +25,10 @@ describe('商品登録 お客様選択の簡潔化', () => {
     expect(manager).toContain('name="image_file"');
     expect(manager).toContain('accept="image/jpeg,image/png,image/webp,image/avif"');
     expect(manager).toContain('<SmartImage');
-    expect(manager).toContain('value={imageRemoved ?');
-    expect(manager).toContain('画像なしでも登録できます');
-    expect(manager).toContain('画像を外す');
+    expect(manager).toContain('value={imageUrl}');
+    expect(manager).toContain('画像は任意');
+    expect(manager).toContain('解除');
+    expect(manager).toContain('元に戻す');
     expect(manager).toContain('表示などの詳細設定');
   });
 });

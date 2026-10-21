@@ -90,9 +90,18 @@ describe('管理画面の色・仕様管理', () => {
   it('既存のサーバー保存機能を使って選択肢画像を任意登録し、既存画像を保持・解除できる', () => {
     expect(manager).toContain('name="image_file"');
     expect(manager).toContain('name="image_url"');
-    expect(manager).toContain('value={imageRemoved ?');
+    expect(manager).toContain('value={imageUrl}');
     expect(manager).toContain('SmartImage');
-    expect(manager).toContain('画像を外す');
+    expect(manager).toContain('解除');
+    expect(manager).toContain('元に戻す');
+    expect(manager).toContain('data-testid="draft-choice-unified-two-row"');
+    expect(manager).toContain('data-testid="draft-choice-image-row"');
+    expect(manager).toContain('name="image_url"');
+    expect(manager).not.toContain('<input type="hidden" name="image_url"');
+    expect(manager).not.toContain('data-testid="variant-choice-image-editor"');
+    expect(manager).toContain('const restoreImage = () => {');
+    expect(manager).toContain('onImageUrlChange(event.target.value)');
+    expect(manager).toContain("setImageUrl('')");
     expect(actions).toContain("formData.get('image_file')");
     expect(actions).toContain("resolveImageUrl(fd, 'variant-choices')");
   });

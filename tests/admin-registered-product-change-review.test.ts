@@ -79,6 +79,25 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).not.toContain("if (screen === 'review' && review)");
   });
 
+  it('入力・参照項目は折り畳まず常に表示し、余白だけコンパクトにする', () => {
+    const start = flow.indexOf('data-testid="registered-option-edit-flow"');
+    const end = flow.indexOf('</form>', start);
+    const edit = flow.slice(start, end);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(edit).not.toContain('<details');
+    expect(edit).not.toContain('<summary');
+    expect(edit).toContain('className="space-y-4" noValidate');
+    expect(edit).toContain('className="grid gap-3 sm:grid-cols-2"');
+    expect(edit).toContain('data-testid="registered-option-pending-subedit"');
+    expect(edit).toContain('data-testid="registered-option-current-choices"');
+    expect(edit).toContain('data-testid="registered-product-display-settings"');
+    expect(edit).toContain('name="spec_codes"');
+    expect(edit).toContain('name="is_required"');
+    expect(edit).toContain('name="price"');
+    expect(edit).toContain('name="status" value="published"');
+  });
+
   it('現在の追加画像・メーカーPDF・選択肢を参照専用で表示し、直接保存しない', () => {
     const gallerySection = flow.indexOf('data-testid="registered-option-pending-subedit"');
     const choicesSection = flow.indexOf('data-testid="registered-option-current-choices"');

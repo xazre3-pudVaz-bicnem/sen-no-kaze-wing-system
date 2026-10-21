@@ -368,10 +368,10 @@ export function RegisteredOptionEditFlow({
             </span>
           ))}
 
-          <section className="card space-y-5 p-5 sm:p-6">
+          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-identify">
             <div>
-              <h3 className="text-lg font-semibold">商品情報</h3>
-              <p className="mt-1 text-sm text-muted">商品名、メーカー、型番、主要仕様を変更します。</p>
+              <h3 className="text-lg font-semibold">1. 基本情報</h3>
+              <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番／品番を確認・変更します。</p>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="カテゴリー" htmlFor="registered-category" required>
@@ -388,6 +388,15 @@ export function RegisteredOptionEditFlow({
               <Field label="シリーズ・型番／品番" htmlFor="registered-model-no">
                 <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} />
               </Field>
+            </div>
+          </section>
+
+          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-details">
+            <div>
+              <h3 className="text-lg font-semibold">2. 商品の詳細</h3>
+              <p className="mt-1 text-sm text-muted">サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。</p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
               <Field label="サイズ・仕様" htmlFor="registered-size-note">
                 <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
               </Field>
@@ -400,9 +409,9 @@ export function RegisteredOptionEditFlow({
             </Field>
           </section>
 
-          <section className="card space-y-5 p-5 sm:p-6">
+          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-main-media">
             <div>
-              <h3 className="text-lg font-semibold">メイン画像</h3>
+              <h3 className="text-lg font-semibold">3. 商品画像</h3>
               <p className="mt-1 text-sm text-muted">画像ファイルまたは画像URLを変更できます。変更後の画像は確認画面で現在の内容と比較します。</p>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
@@ -415,9 +424,15 @@ export function RegisteredOptionEditFlow({
             </div>
           </section>
 
-          <section className="card space-y-5 p-5 sm:p-6">
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
+            <h3 className="font-semibold">4. メーカー資料・追加画像／5. お客様選択</h3>
+            <p className="text-sm leading-6 text-muted">サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。</p>
+            <p className="text-xs text-muted">現在登録されている内容は、変更後のお客様表示プレビューではそのまま使用します。</p>
+          </section>
+
+          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-pricing">
             <div>
-              <h3 className="text-lg font-semibold">価格・対象設定</h3>
+              <h3 className="text-lg font-semibold">6. 価格・対象モデル</h3>
               <p className="mt-1 text-sm text-muted">登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。</p>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
@@ -477,15 +492,15 @@ export function RegisteredOptionEditFlow({
             </div>
           </details>
 
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
-            <h3 className="font-semibold">お客様資料・お客様選択</h3>
-            <p className="text-sm leading-6 text-muted">サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。</p>
-            <p className="text-xs text-muted">現在登録されている内容は、変更後のお客様表示プレビューではそのまま使用します。</p>
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-change-check">
+            <div>
+              <h3 className="font-semibold">7. 変更内容の確認</h3>
+              <p className="mt-1 text-sm text-muted">登録済み商品は自動保存されません。変更前後の内容とお客様表示を確認してから反映します。</p>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit">変更内容を確認</Button>
+            </div>
           </section>
-
-          <div className="flex justify-end">
-            <Button type="submit">変更内容を確認</Button>
-          </div>
         </form>
       </section>
     </div>

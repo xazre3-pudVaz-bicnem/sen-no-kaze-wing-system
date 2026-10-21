@@ -30,6 +30,22 @@ function selectedChoiceImage(formData: FormData, choiceIndex: number): File | nu
   return value instanceof File && value.size > 0 ? value : null;
 }
 
+function selectedChoiceImageUrl(formData: FormData, choiceIndex: number): string {
+  return String(formData.get(`choice_image_url_${choiceIndex}`) ?? '').trim();
+}
+
+// 外部 URL はサーバー側で取得せず、表示用 URL として保存する。
+function isAllowedChoiceImageUrl(value: string): boolean {
+  if (!value || value.length > 1000) return false;
+  if (value.startsWith('/images/')) return !/[\\\s<>]/.test(value);
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 export async function createVariantGroupWithFirstChoiceAction(
   _prev: ProductVariantCreateState,
   formData: FormData
@@ -84,7 +100,9 @@ export async function createVariantGroupWithFirstChoiceAction(
         name: String(raw).trim(),
         choiceIndex: index >= standardIndex ? index + 1 : index,
       }));
-    if (additionalInputs.some((row) => !row.name && selectedChoiceImage(formData, row.choiceIndex))) {
+    if (additionalInputs.some((row) => !row.name && (
+      selectedChoiceImage(formData, row.choiceIndex) || selectedChoiceImageUrl(formData, row.choiceIndex)
+    ))) {
       return { ok: false, fieldErrors: { additional_choice_name: ['画像を付けた選択肢には名前を入力してください。'] } };
     }
     const choiceInputs = [
@@ -106,8 +124,14 @@ export async function createVariantGroupWithFirstChoiceAction(
 
     for (const input of choiceInputs) {
       const file = selectedChoiceImage(formData, input.choiceIndex);
-      if (!file) continue;
-      if (!IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_SIZE) {
+      const imageUrl = selectedChoiceImageUrl(formData, input.choiceIndex);
+      if (file && imageUrl) {
+        return { ok: false, fieldErrors: { _form: ['画像URLとファイルはどちらか一方だけ指定してください。'] } };
+      }
+      if (imageUrl && !isAllowedChoiceImageUrl(imageUrl)) {
+        return { ok: false, fieldErrors: { _form: ['画像URLはHTTPS、または /images/ で始まるパスを入力してください。'] } };
+      }
+      if (file && (!IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_SIZE)) {
         return {
           ok: false,
           fieldErrors: { _form: ['色見本画像はJPEG / PNG / WebP / AVIF、1枚10MB以下にしてください。'] },
@@ -134,7 +158,7 @@ export async function createVariantGroupWithFirstChoiceAction(
         kind: input.kind,
         extra_price: 0,
         price_on_request: false,
-        image_url: null,
+        image_url: selectedChoiceImageUrl(formData, input.choiceIndex) || null,
         note: null,
         sort_order: input.sortOrder,
         status: 'published',

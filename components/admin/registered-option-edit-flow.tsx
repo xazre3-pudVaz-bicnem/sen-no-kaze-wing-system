@@ -687,43 +687,46 @@ export function RegisteredOptionEditFlow({
               </div>
             </div>
             <Checkbox name="price_on_request" defaultChecked={option.price_on_request} label="価格は別途見積（0円扱い）" />
-          </section>
-
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-display-settings">
-            <h3 className="text-lg font-semibold">主要仕様・表示設定</h3>
-            <div className="space-y-3">
-              <div>
-                <p className="label">対応する仕様</p>
-                <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用'], ['hotel-single', 'ホテル単身者仕様']].map(([code, label]) => (
-                    <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option.spec_codes.includes(code)} label={label} />
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
-                <Field label="選択方式（表示）" htmlFor="registered-selection-type">
-                  <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
-                    <option value="checkbox">チェックボックス</option>
-                    <option value="radio">ラジオボタン</option>
-                  </Select>
-                </Field>
-                <Field label="プレビューキー" htmlFor="registered-preview-key"><Input id="registered-preview-key" name="preview_key" defaultValue={option.preview_key ?? ''} /></Field>
+            <div className="border-t border-line pt-3">
+  <section className="space-y-3 rounded-xl border border-line bg-ivory/30 p-3 sm:p-4" data-testid="registered-product-display-settings">
+              <h3 className="text-lg font-semibold">主要仕様・表示設定</h3>
+              <div className="space-y-3">
                 <div>
-                  <p className="label">反映するビュー</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
-                    {VIEW_KEYS.map((view) => <Checkbox key={view} name="affects_views" value={view} defaultChecked={option.affects_views.includes(view)} label={VIEW_LABELS[view]} />)}
+                  <p className="label">対応する仕様</p>
+                  <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用'], ['hotel-single', 'ホテル単身者仕様']].map(([code, label]) => (
+                      <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option.spec_codes.includes(code)} label={label} />
+                    ))}
                   </div>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
+                  <Field label="選択方式（表示）" htmlFor="registered-selection-type">
+                    <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
+                      <option value="checkbox">チェックボックス</option>
+                      <option value="radio">ラジオボタン</option>
+                    </Select>
+                  </Field>
+                  <Field label="プレビューキー" htmlFor="registered-preview-key"><Input id="registered-preview-key" name="preview_key" defaultValue={option.preview_key ?? ''} /></Field>
+                  <div>
+                    <p className="label">反映するビュー</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
+                      {VIEW_KEYS.map((view) => <Checkbox key={view} name="affects_views" value={view} defaultChecked={option.affects_views.includes(view)} label={VIEW_LABELS[view]} />)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <Checkbox name="is_default" defaultChecked={option.is_default} label="初期状態で選択" />
+                  <Checkbox name="is_required" defaultChecked={option.is_required} label="必須（解除不可）" />
+                  <Checkbox name="is_installation" defaultChecked={option.is_installation} label="設置関連費用として集計" />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-2">
-                <Checkbox name="is_default" defaultChecked={option.is_default} label="初期状態で選択" />
-                <Checkbox name="is_required" defaultChecked={option.is_required} label="必須（解除不可）" />
-                <Checkbox name="is_installation" defaultChecked={option.is_installation} label="設置関連費用として集計" />
-              </div>
+            </section>
             </div>
           </section>
+
+
 
         </form>
         <section className="space-y-3" data-testid="registered-product-financial-tools" aria-label="価格単位と本部基準原価">

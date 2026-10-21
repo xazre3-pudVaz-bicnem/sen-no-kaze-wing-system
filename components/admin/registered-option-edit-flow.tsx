@@ -4,7 +4,8 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
-import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
+import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 import { SmartImage } from '@/components/ui/smart-image';
 import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
@@ -488,17 +489,17 @@ export function RegisteredOptionEditFlow({
               <h3 className="text-lg font-semibold">2. 商品の詳細</h3>
               <p className="mt-1 text-sm text-muted">サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="サイズ・仕様" htmlFor="registered-size-note">
-                <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
-              </Field>
-              <Field label="メーカー記載の特徴（任意）" htmlFor="registered-highlight">
-                <ProductHighlightTextarea id="registered-highlight" initialValue={option.highlight ?? ''} />
-              </Field>
-            </div>
-            <Field label="商品説明" htmlFor="registered-description">
-              <Textarea id="registered-description" name="description" defaultValue={option.description ?? ''} className="min-h-28" />
-            </Field>
+            <ProductDetailsFields
+              sizeField={
+                <Field label="サイズ・仕様" htmlFor="registered-size-note">
+                  <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
+                </Field>
+              }
+              highlightId="registered-highlight"
+              highlight={option.highlight ?? ''}
+              descriptionId="registered-description"
+              description={option.description ?? ''}
+            />
           </section>
 
           <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-main-media">
@@ -584,11 +585,7 @@ export function RegisteredOptionEditFlow({
                   const choices = orderedVariantChoices.filter((choice) => choice.group_id === group.id);
                   return (
                     <div key={group.id} className="rounded-lg border border-line bg-white p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-semibold">{group.name}</h4>
-                        <span className="text-xs text-muted">{group.status === 'published' ? '公開中' : '非公開'}</span>
-                        {group.is_required && <span className="text-xs text-muted">必須</span>}
-                      </div>
+                      <ProductVariantGroupHeading group={group} choiceCount={choices.length} headingLevel="h4" />
                       {group.note && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
                       {choices.length > 0 ? (
                         <ul className="mt-3 grid gap-2 sm:grid-cols-2">

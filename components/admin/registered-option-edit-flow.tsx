@@ -450,45 +450,45 @@ export function RegisteredOptionEditFlow({
             </summary>
             <div className="space-y-3 border-t border-line px-4 py-3 sm:px-5">
               <p className="text-xs leading-5 text-muted">現在の登録内容を表示しています。サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。変更・解除はまだできません。</p>
-            <div className="space-y-2">
-              <p className="text-sm font-semibold">メーカー資料PDF</p>
-              {option.manufacturer_document_url ? (
-                <a
-                  href={option.manufacturer_document_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-h-10 items-center rounded-lg border border-line px-3 py-2 text-sm text-brown underline underline-offset-2 hover:bg-ivory"
-                >
-                  登録済みPDFを別タブで確認
-                </a>
-              ) : (
-                <p className="text-sm text-muted">メーカー資料PDFは未登録です。</p>
-              )}
-            </div>
-            <div className="space-y-2" data-testid="registered-option-current-gallery">
-              <p className="text-sm font-semibold">追加画像（{galleryImages.length}枚）</p>
-              {galleryImages.length > 0 ? (
-                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {galleryImages.map((image, index) => (
-                    <li key={image.id} className="min-w-0 rounded-lg border border-line bg-white p-2">
-                      <div className="relative aspect-square overflow-hidden rounded bg-sand/30">
-                        <SmartImage
-                          src={image.url}
-                          alt={image.alt || `追加画像${index + 1}`}
-                          fill
-                          sizes="(max-width: 640px) 160px, 120px"
-                          className="object-contain"
-                        />
-                      </div>
-                      <p className="mt-1 line-clamp-2 break-words text-xs text-ink-soft">
-                        {image.caption || image.alt || `追加画像${index + 1}`}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted">追加画像は未登録です。</p>
-              )}
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">メーカー資料PDF</p>
+                {option.manufacturer_document_url ? (
+                  <a
+                    href={option.manufacturer_document_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center rounded-lg border border-line px-3 py-2 text-sm text-brown underline underline-offset-2 hover:bg-ivory"
+                  >
+                    登録済みPDFを別タブで確認
+                  </a>
+                ) : (
+                  <p className="text-sm text-muted">メーカー資料PDFは未登録です。</p>
+                )}
+              </div>
+              <div className="space-y-2" data-testid="registered-option-current-gallery">
+                <p className="text-sm font-semibold">追加画像（{galleryImages.length}枚）</p>
+                {galleryImages.length > 0 ? (
+                  <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {galleryImages.map((image, index) => (
+                      <li key={image.id} className="min-w-0 rounded-lg border border-line bg-white p-2">
+                        <div className="relative aspect-square overflow-hidden rounded bg-sand/30">
+                          <SmartImage
+                            src={image.url}
+                            alt={image.alt || `追加画像${index + 1}`}
+                            fill
+                            sizes="(max-width: 640px) 160px, 120px"
+                            className="object-contain"
+                          />
+                        </div>
+                        <p className="mt-1 line-clamp-2 break-words text-xs text-ink-soft">
+                          {image.caption || image.alt || `追加画像${index + 1}`}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted">追加画像は未登録です。</p>
+                )}
             </div>
             </div>
           </details>
@@ -503,57 +503,57 @@ export function RegisteredOptionEditFlow({
             </summary>
             <div className="space-y-3 border-t border-line px-4 py-3 sm:px-5">
               <p className="text-xs leading-5 text-muted">現在の選択項目と選択肢です。追加・編集・価格変更はまだできません。</p>
-            {orderedVariantGroups.length > 0 ? (
-              <div className="space-y-3">
-                {orderedVariantGroups.map((group) => {
-                  const choices = orderedVariantChoices.filter((choice) => choice.group_id === group.id);
-                  return (
-                    <details key={group.id} className="group/choice rounded-lg border border-line bg-white">
-                      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 marker:hidden [&::-webkit-details-marker]:hidden">
-                        <span className="min-w-0 break-words text-sm font-semibold">{group.name}</span>
-                        <span className="shrink-0 text-xs text-muted">
-                          {choices.length}件・{group.status === 'published' ? '公開中' : '非公開'}
-                          {group.is_required ? '・必須' : ''}
-                          <span aria-hidden="true" className="ml-2 text-brown">⌄</span>
-                        </span>
-                      </summary>
-                      <div className="border-t border-line/70 p-3">
-                      {group.note && <p className="mb-2 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
-                      {choices.length > 0 ? (
-                        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {choices.map((choice) => (
-                            <li key={choice.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-line/70 bg-ivory/20 p-2">
-                              {choice.image_url && (
-                                <div className="relative size-12 shrink-0 overflow-hidden rounded border border-line bg-white">
-                                  <SmartImage
-                                    src={choice.image_url}
-                                    alt={`${choice.name}の画像`}
-                                    fill
-                                    sizes="48px"
-                                    className="object-contain"
-                                  />
+              {orderedVariantGroups.length > 0 ? (
+                <div className="space-y-3">
+                  {orderedVariantGroups.map((group) => {
+                    const choices = orderedVariantChoices.filter((choice) => choice.group_id === group.id);
+                    return (
+                      <details key={group.id} className="group/choice rounded-lg border border-line bg-white">
+                        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 marker:hidden [&::-webkit-details-marker]:hidden">
+                          <span className="min-w-0 break-words text-sm font-semibold">{group.name}</span>
+                          <span className="shrink-0 text-xs text-muted">
+                            {choices.length}件・{group.status === 'published' ? '公開中' : '非公開'}
+                            {group.is_required ? '・必須' : ''}
+                            <span aria-hidden="true" className="ml-2 text-brown">⌄</span>
+                          </span>
+                        </summary>
+                        <div className="border-t border-line/70 p-3">
+                        {group.note && <p className="mb-2 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
+                        {choices.length > 0 ? (
+                          <ul className="grid gap-2 sm:grid-cols-2">
+                            {choices.map((choice) => (
+                              <li key={choice.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-line/70 bg-ivory/20 p-2">
+                                {choice.image_url && (
+                                  <div className="relative size-12 shrink-0 overflow-hidden rounded border border-line bg-white">
+                                    <SmartImage
+                                      src={choice.image_url}
+                                      alt={`${choice.name}の画像`}
+                                      fill
+                                      sizes="48px"
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <p className="break-words text-sm font-semibold">{choice.name}</p>
+                                  <p className="text-xs text-muted">
+                                    {VARIANT_KIND_LABELS[choice.kind]}・{choice.price_on_request ? '別途見積' : `追加金額 ${yen(choice.extra_price)}（税別）`}
+                                    {choice.status === 'draft' ? '・非公開' : ''}
+                                  </p>
                                 </div>
-                              )}
-                              <div className="min-w-0">
-                                <p className="break-words text-sm font-semibold">{choice.name}</p>
-                                <p className="text-xs text-muted">
-                                  {VARIANT_KIND_LABELS[choice.kind]}・{choice.price_on_request ? '別途見積' : `追加金額 ${yen(choice.extra_price)}（税別）`}
-                                  {choice.status === 'draft' ? '・非公開' : ''}
-                                </p>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-muted">選択肢は未登録です。</p>
-                      )}
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-muted">選択肢は未登録です。</p>
+                        )}
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
             )}
             </div>
           </details>
@@ -586,7 +586,7 @@ export function RegisteredOptionEditFlow({
 
           <details className="rounded-xl border border-line bg-ivory/30">
             <summary className="cursor-pointer px-4 py-4 font-semibold sm:px-5">主要仕様・表示設定 <span className="ml-2 text-xs font-normal text-muted">必要な場合だけ変更</span></summary>
-            <div className="space-y-6 border-t border-line p-4 sm:p-5">
+            <div className="space-y-4 border-t border-line p-4 sm:p-5">
               <div>
                 <p className="label">対応する仕様</p>
                 <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>

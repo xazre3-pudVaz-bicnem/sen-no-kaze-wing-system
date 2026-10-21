@@ -34,7 +34,8 @@ describe('商品登録 STEP1 の見やすさと選択肢操作', () => {
     expect(refinement).toContain('＋ 選択肢を追加');
     expect(refinement).toContain('data-testid="compact-variant-choices"');
     expect(refinement).toContain('border-b border-line/70 py-2');
-    expect(refinement).toContain('current === index ? null : index');
+    expect(refinement).toContain('data-testid="inline-variant-suggestions"');
+    expect(refinement).not.toContain('候補を見る');
     expect(refinement).not.toContain('rounded-lg border px-2 py-1.5');
     expect(css).not.toContain('display: contents !important;');
     expect(css).not.toContain('order: 30;');

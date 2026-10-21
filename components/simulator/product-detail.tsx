@@ -57,7 +57,7 @@ export function ProductDetail({
   ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
   const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
   const activeImage = galleryImages[safeImageIndex] ?? null;
-  const isSekinoKosan = option.manufacturer?.trim() === 'セキノ興産';
+  const isSekinoKosan = option.manufacturer?.includes('セキノ興産') ?? false;
 
   const moveImage = (direction: -1 | 1) => {
     if (galleryImages.length <= 1) return;

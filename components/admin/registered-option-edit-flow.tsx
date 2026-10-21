@@ -415,11 +415,11 @@ export function RegisteredOptionEditFlow({
               <p className="mt-1 text-sm text-muted">画像ファイルまたは画像URLを変更できます。変更後の画像は確認画面で現在の内容と比較します。</p>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="新しい画像ファイル" htmlFor="registered-image-file">
-                <Input id="registered-image-file" name="image_file" type="file" accept="image/*" className="py-2" />
-              </Field>
-              <Field label="または画像URL" htmlFor="registered-image-url">
+              <Field label="画像URL" htmlFor="registered-image-url">
                 <Input id="registered-image-url" name="image_url" defaultValue={option.image_url ?? ''} />
+              </Field>
+              <Field label="または画像ファイル" htmlFor="registered-image-file">
+                <Input id="registered-image-file" name="image_file" type="file" accept="image/*" className="py-2" />
               </Field>
             </div>
           </section>

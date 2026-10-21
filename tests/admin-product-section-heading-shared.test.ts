@@ -36,7 +36,7 @@ describe('商品登録・編集の共通セクション見出し', () => {
     expect(newPage).not.toContain("content: '1. '");
     expect(editPage).toContain('.registration-step1-sections > form#option-main-form { display: contents; }');
     expect(editPage).toContain('registration-step1-sections');
-    expect(newPage).toContain('id="size_note-create"');
+    expect(newPage).toContain('hideCreateSize');
   });
 
   it('見出し共通化に保存・公開機能を混入しない', () => {

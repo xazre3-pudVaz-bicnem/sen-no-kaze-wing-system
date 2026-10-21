@@ -345,8 +345,8 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(variants).toContain('お客様に表示する');
     expect(variants).toContain('表示などの詳細設定');
     expect(variants).toContain('name="image_file"');
-    expect(variants).toContain('画像なしでも登録できます');
-    expect(variants).toContain('画像を外す');
+    expect(variants).toContain('画像は任意');
+    expect(variants).toContain('元に戻す');
     expect(variants).not.toContain('色・仕様ごとの追加金額');
     expect(variants).not.toContain('ChoicePriceEditor');
     expect(editPage).not.toContain('OptionVariantPricing');

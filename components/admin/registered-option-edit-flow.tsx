@@ -731,7 +731,7 @@ export function RegisteredOptionEditFlow({
         </form>
         <section className="space-y-3" data-testid="registered-product-financial-tools" aria-label="価格単位と本部基準原価">
           <p className="px-1 text-xs leading-5 text-muted">
-            価格単位と本部商品基準原価は別々に保存します。商品価格の「変更内容を確認」では保存されません。
+            価格単位と本部商品基準原価は別々に保存します。商品価格の「変更内容を確認」では保存されません。途中で個別保存すると画面が再読み込みされる場合があるため、商品情報の変更を先に確認・反映してください。
           </p>
           {financialTools}
         </section>

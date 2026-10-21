@@ -12,14 +12,15 @@ const refinement = fs.readFileSync(
 );
 
 describe('商品登録 STEP1 の簡潔化', () => {
-  it('選択項目の追加ボタンを残したまま、その直下に入力フォームを展開する', () => {
+  it('閉じた状態は追加ボタン、展開中は重複のないコンパクトな入力フォームを表示する', () => {
     const button = refinement.indexOf('＋ 選択項目を追加');
-    const openedForm = refinement.indexOf("rounded-xl border border-dashed border-line bg-ivory/20 p-4", button);
+    const openedForm = refinement.indexOf("rounded-xl border border-dashed border-line bg-ivory/20 p-3 sm:p-4", button);
     expect(button).toBeGreaterThan(-1);
     expect(openedForm).toBeGreaterThan(button);
-    expect(refinement).toContain('aria-expanded={open}');
+    expect(refinement).toContain('{!open && (');
+    expect(refinement).toContain('aria-expanded={false}');
     expect(refinement).toContain('{open && (');
-    expect(refinement).not.toContain('!open ? (');
+    expect(refinement).toContain('画像は任意');
     expect(css).toContain("[data-combined-create-root='true']");
     expect(css).toContain('flex-direction: column;');
   });

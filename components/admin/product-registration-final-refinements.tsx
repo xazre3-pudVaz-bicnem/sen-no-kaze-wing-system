@@ -224,21 +224,18 @@ function SuggestionButtons({
 }) {
   if (values.length === 0) return null;
   return (
-    <div className="mt-1.5 max-w-[34rem] rounded-lg bg-ivory/40 px-2 py-2">
-      <p className="text-xs font-semibold text-ink-soft">{title}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {values.map((value) => (
-          <button
-            key={value}
-            type="button"
-            className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onSelect(value)}
-          >
-            {value}
-          </button>
-        ))}
-      </div>
+    <div role="group" aria-label={title} className="flex flex-wrap items-center gap-1" data-testid="inline-variant-suggestions">
+      {values.map((value) => (
+        <button
+          key={value}
+          type="button"
+          className="rounded-full border border-line bg-ivory/30 px-2 py-0.5 text-xs text-ink-soft hover:border-brown hover:text-ink"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onSelect(value)}
+        >
+          {value}
+        </button>
+      ))}
     </div>
   );
 }
@@ -266,7 +263,6 @@ function VariantCreatePortal({
   const [imagePreviews, setImagePreviews] = useState<Record<number, string>>({});
   const [choiceImageUrls, setChoiceImageUrls] = useState<Record<number, string>>({});
   const [standardIndex, setStandardIndex] = useState(0);
-  const [activeSuggestions, setActiveSuggestions] = useState<'group' | number | null>(null);
   const suggestions = suggestionsForCategory(categoryLabel);
   const groupPlaceholder = `例：${suggestions.groups.slice(0, 3).join('／')}`;
 
@@ -325,7 +321,6 @@ function VariantCreatePortal({
     setChoiceRowIds([0]);
     nextChoiceRowId.current = 1;
     setStandardIndex(0);
-    setActiveSuggestions(null);
   };
 
   const updateChoice = (index: number, value: string) => {
@@ -341,7 +336,6 @@ function VariantCreatePortal({
       if (current === index) return 0;
       return current > index ? current - 1 : current;
     });
-    setActiveSuggestions(null);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -367,23 +361,23 @@ function VariantCreatePortal({
 
   return createPortal(
     <div className="w-full max-w-[44rem] space-y-2" data-combined-create-root="true">
-      {!open && (
-        <button
-          type="button"
-          className="btn-secondary btn-sm"
-          aria-expanded={false}
-          onClick={() => {
-            setState(initialState);
-            resetChoiceForm();
-            setOpen(true);
-          }}
-        >
-          ＋ 選択項目を追加
-        </button>
-      )}
+      <button
+        type="button"
+        className="btn-secondary btn-sm self-start"
+        aria-expanded={open}
+        aria-controls="registration-variant-create-form"
+        disabled={pending || open}
+        onClick={() => {
+          setState(initialState);
+          resetChoiceForm();
+          setOpen(true);
+        }}
+      >
+        ＋ 選択項目を追加
+      </button>
 
       {open && (
-        <div className="border-t border-line/70 pt-3">
+        <div id="registration-variant-create-form" className="border-t border-line/70 pt-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">選択項目を追加</p>
             <button
@@ -426,28 +420,18 @@ function VariantCreatePortal({
                     autoComplete="off"
                     required
                   />
-                  <button
-                    type="button"
-                    className="shrink-0 text-xs font-semibold text-brown underline underline-offset-2"
-                    aria-expanded={activeSuggestions === 'group'}
-                    onClick={() => setActiveSuggestions((current) => current === 'group' ? null : 'group')}
-                  >
-                    候補を見る
-                  </button>
+
                 </div>
                 {state.fieldErrors?.name?.[0] && (
                   <p className="mt-1 text-xs text-danger" role="alert">{state.fieldErrors.name[0]}</p>
                 )}
-                {activeSuggestions === 'group' && (
+                <div className="mt-1.5">
                   <SuggestionButtons
                     title="選択項目名の候補"
                     values={suggestions.groups}
-                    onSelect={(value) => {
-                      setGroupName(value);
-                      setActiveSuggestions(null);
-                    }}
+                    onSelect={(value) => setGroupName(value)}
                   />
-                )}
+                </div>
               </div>
             </div>
 
@@ -487,16 +471,11 @@ function VariantCreatePortal({
                           autoComplete="off"
                           required={isStandard}
                         />
-                        {suggestions.choices.length > 0 && (
-                          <button
-                            type="button"
-                            className="shrink-0 px-1 text-xs font-semibold text-brown underline underline-offset-2"
-                            aria-expanded={activeSuggestions === index}
-                            onClick={() => setActiveSuggestions((current) => current === index ? null : index)}
-                          >
-                            候補を見る
-                          </button>
-                        )}
+                        <SuggestionButtons
+                          title="選択肢の候補"
+                          values={suggestions.choices}
+                          onSelect={(nextValue) => updateChoice(index, nextValue)}
+                        />
                         {choiceNames.length > 1 && (
                           <button
                             type="button"
@@ -534,29 +513,16 @@ function VariantCreatePortal({
                             onChange={(event) => onChoiceImageChange(rowId, event.currentTarget.files?.[0] ?? null)}
                           />
                         </label>
-                        {previewUrl ? (
+                        {previewUrl && (
                           <span className="relative size-9 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
                             <SmartImage src={previewUrl} alt={`${value || '選択肢'}の画像`} fill sizes="36px" className="object-contain" />
-                          </span>
-                        ) : (
-                          <span className="flex size-9 shrink-0 items-center justify-center rounded border border-line bg-white text-[9px] text-muted">
-                            画像なし
                           </span>
                         )}
                         {(imagePreviews[rowId] || imageUrl.trim()) && (
                           <button type="button" className="text-xs text-muted underline" disabled={pending} onClick={() => clearChoiceMedia(rowId)}>解除</button>
                         )}
                       </div>
-                      {activeSuggestions === index && (
-                        <SuggestionButtons
-                          title="選択肢の候補"
-                          values={suggestions.choices}
-                          onSelect={(nextValue) => {
-                            updateChoice(index, nextValue);
-                            setActiveSuggestions(null);
-                          }}
-                        />
-                      )}
+
                     </div>
                   );
                 })}
@@ -567,7 +533,6 @@ function VariantCreatePortal({
                   onClick={() => {
                     setChoiceNames((rows) => [...rows, '']);
                     setChoiceRowIds((rows) => [...rows, nextChoiceRowId.current++]);
-                    setActiveSuggestions(null);
                   }}
                 >
                   ＋ 選択肢を追加

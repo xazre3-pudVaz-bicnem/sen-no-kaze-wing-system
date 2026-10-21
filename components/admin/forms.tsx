@@ -28,6 +28,7 @@ import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, p
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 
 const initial: AdminFormState = { ok: false };
@@ -810,14 +811,12 @@ export function OptionForm({
 
       {showIdentify && (
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">
-              {mode === 'create'
-                ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
-                : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
-            </p>
-          </div>
+          <ProductSectionHeading
+            label={mode === 'identify' ? '商品特定' : '1. 基本情報'}
+            description={mode === 'create'
+              ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
+              : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
+          />
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
@@ -942,10 +941,10 @@ export function OptionForm({
 
       {showDetails && (
         <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">商品の詳細</p>
-            <p className="mt-1 text-sm text-muted">サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。</p>
-          </div>
+          <ProductSectionHeading
+            label="2. 商品の詳細"
+            description="サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。"
+          />
 
           {(registrationHint || guidance.example || guidance.fixedInfo.length > 0) && (
             <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft" data-testid="category-registration-guidance">
@@ -1017,10 +1016,10 @@ export function OptionForm({
 
       {showMedia && (
         <section id="product-main-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">メイン画像</p>
-            <p className="mt-1 text-sm text-muted">ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。</p>
-          </div>
+          <ProductSectionHeading
+            label="3. 商品画像"
+            description="ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。追加画像は下の専用欄で登録します。"
+          />
 
           <div className="rounded-xl border border-line bg-ivory/35 p-4 sm:p-5">
             <div>
@@ -1045,10 +1044,10 @@ export function OptionForm({
 
       {showSales && (
         <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : '価格・公開設定'}</p>
-            <p className="mt-1 text-sm text-muted">商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。</p>
-          </div>
+          <ProductSectionHeading
+            label={mode === 'sales' ? '販売・詳細設定' : '6. 価格・対象モデル'}
+            description="商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。"
+          />
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <p className="font-semibold">価格</p>

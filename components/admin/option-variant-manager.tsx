@@ -291,9 +291,18 @@ function ChoiceEditor({
             />
             {selectedImage && <p className="break-all text-xs text-muted">選択中：{selectedImage.fileName}（保存すると反映）</p>}
             {imageRemoved && <p className="text-xs text-muted">保存すると画像の関連付けを解除します。</p>}
-            {(previewUrl || imageRemoved) && (
+            {previewUrl && (
               <button type="button" className="text-xs text-brown underline underline-offset-2" onClick={clearImage}>
                 画像を外す
+              </button>
+            )}
+            {imageRemoved && (
+              <button
+                type="button"
+                className="text-xs text-brown underline underline-offset-2"
+                onClick={() => setImageRemoved(false)}
+              >
+                画像の解除を取り消す
               </button>
             )}
           </div>
@@ -451,7 +460,7 @@ export function OptionVariantManager({
                 <div className="space-y-2">
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
-                      key={choice.id}
+                      key={`${choice.id}:${choice.image_url ?? ''}`}
                       optionId={option.id}
                       group={group}
                       choice={choice}

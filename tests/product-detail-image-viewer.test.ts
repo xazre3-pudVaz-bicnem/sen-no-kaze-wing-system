@@ -72,7 +72,7 @@ describe('共通商品詳細の画像名と拡大表示', () => {
   });
 
   it('セキノ興産の商品画像で提供元と色の注意書きを自動表示する', () => {
-    expect(detail).toContain("const isSekinoKosan = option.manufacturer?.trim() === 'セキノ興産';");
+    expect(detail).toContain("const isSekinoKosan = option.manufacturer?.includes('セキノ興産') ?? false;");
     expect(detail).toContain('{isSekinoKosan && galleryImages.length > 0 && (');
     expect(detail).toContain('data-testid="sekino-image-attribution"');
     expect(detail).toContain('画像提供：株式会社セキノ興産');

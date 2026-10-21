@@ -11,7 +11,26 @@ const refinement = fs.readFileSync(
   'utf8'
 );
 
+const adminLayout = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/layout.tsx'),
+  'utf8'
+);
+
 describe('商品登録 STEP1 の簡潔化', () => {
+  it('旧絶対配置処理を使わず、追加ボタン直下の通常フローでフォームを開く', () => {
+    const buttonIndex = refinement.indexOf('aria-controls="registration-variant-create-form"');
+    const formIndex = refinement.indexOf('id="registration-variant-create-form"');
+    expect(buttonIndex).toBeGreaterThan(-1);
+    expect(formIndex).toBeGreaterThan(buttonIndex);
+    expect(refinement).toContain('data-combined-create-root="true"');
+    expect(refinement).toContain('aria-expanded={open}');
+    expect(adminLayout).toContain('<ProductRegistrationFinalRefinements />');
+    expect(adminLayout).not.toContain('ProductRegistrationFormPlacementFix');
+    expect(fs.existsSync(path.resolve(
+      process.cwd(), 'components/admin/product-registration-form-placement-fix.tsx'
+    ))).toBe(false);
+  });
+
   it('閉じた状態は追加ボタン、展開中は重複のないコンパクトな入力フォームを表示する', () => {
     const button = refinement.indexOf('＋ 選択項目を追加');
     const openedForm = refinement.indexOf('className="border-t border-line/70 pt-3"', button);

@@ -11,6 +11,7 @@ import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication
 import {
   VIEW_KEYS,
   VIEW_LABELS,
+  VARIANT_KIND_LABELS,
   type BaseModel,
   type OptionCategory,
   type OptionConflict,
@@ -129,6 +130,19 @@ export function RegisteredOptionEditFlow({
   const [state, setState] = useState<AdminFormState>(initialState);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const galleryImages = useMemo(
+    () => [...(option.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [option.gallery_images]
+  );
+  const orderedVariantGroups = useMemo(
+    () => [...variantGroups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [variantGroups]
+  );
+  const orderedVariantChoices = useMemo(
+    () => [...variantChoices].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [variantChoices]
+  );
 
   const categoryMap = useMemo(() => new Map(categories.map((row) => [row.id, row])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((row) => [row.id, row])), [models]);
@@ -424,10 +438,108 @@ export function RegisteredOptionEditFlow({
             </div>
           </section>
 
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
-            <h3 className="font-semibold">4. メーカー資料・追加画像／5. お客様選択</h3>
-            <p className="text-sm leading-6 text-muted">サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。</p>
-            <p className="text-xs text-muted">現在登録されている内容は、変更後のお客様表示プレビューではそのまま使用します。</p>
+          <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
+            <div>
+              <h3 className="text-lg font-semibold">4. メーカー資料・追加画像</h3>
+              <p className="mt-1 text-sm text-muted">現在登録されている内容を参照できます。変更・解除はまだできません。</p>
+            </div>
+            <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
+              サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。
+            </p>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">メーカー資料PDF</p>
+              {option.manufacturer_document_url ? (
+                <a
+                  href={option.manufacturer_document_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-line px-3 py-2 text-sm text-brown underline underline-offset-2 hover:bg-ivory"
+                >
+                  登録済みPDFを別タブで確認
+                </a>
+              ) : (
+                <p className="text-sm text-muted">メーカー資料PDFは未登録です。</p>
+              )}
+            </div>
+            <div className="space-y-2" data-testid="registered-option-current-gallery">
+              <p className="text-sm font-semibold">追加画像（{galleryImages.length}枚）</p>
+              {galleryImages.length > 0 ? (
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {galleryImages.map((image, index) => (
+                    <li key={image.id} className="min-w-0 rounded-lg border border-line bg-white p-2">
+                      <div className="relative aspect-square overflow-hidden rounded bg-sand/30">
+                        <SmartImage
+                          src={image.url}
+                          alt={image.alt || `追加画像${index + 1}`}
+                          fill
+                          sizes="(max-width: 640px) 160px, 120px"
+                          className="object-contain"
+                        />
+                      </div>
+                      <p className="mt-1 line-clamp-2 break-words text-xs text-ink-soft">
+                        {image.caption || image.alt || `追加画像${index + 1}`}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted">追加画像は未登録です。</p>
+              )}
+            </div>
+          </section>
+
+          <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-option-current-choices">
+            <div>
+              <h3 className="text-lg font-semibold">5. お客様選択</h3>
+              <p className="mt-1 text-sm text-muted">選択項目と選択肢の現在の設定を確認できます。追加・編集・価格変更はまだできません。</p>
+            </div>
+            {orderedVariantGroups.length > 0 ? (
+              <div className="space-y-3">
+                {orderedVariantGroups.map((group) => {
+                  const choices = orderedVariantChoices.filter((choice) => choice.group_id === group.id);
+                  return (
+                    <div key={group.id} className="rounded-lg border border-line bg-white p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-semibold">{group.name}</h4>
+                        <span className="text-xs text-muted">{group.status === 'published' ? '公開中' : '非公開'}</span>
+                        {group.is_required && <span className="text-xs text-muted">必須</span>}
+                      </div>
+                      {group.note && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
+                      {choices.length > 0 ? (
+                        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {choices.map((choice) => (
+                            <li key={choice.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-line/70 bg-ivory/20 p-2">
+                              {choice.image_url && (
+                                <div className="relative size-12 shrink-0 overflow-hidden rounded border border-line bg-white">
+                                  <SmartImage
+                                    src={choice.image_url}
+                                    alt={`${choice.name}の画像`}
+                                    fill
+                                    sizes="48px"
+                                    className="object-contain"
+                                  />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="break-words text-sm font-semibold">{choice.name}</p>
+                                <p className="text-xs text-muted">
+                                  {VARIANT_KIND_LABELS[choice.kind]}・{choice.price_on_request ? '別途見積' : `追加金額 ${yen(choice.extra_price)}（税別）`}
+                                  {choice.status === 'draft' ? '・非公開' : ''}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-sm text-muted">選択肢は未登録です。</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
+            )}
           </section>
 
           <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-pricing">

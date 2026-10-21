@@ -13,6 +13,7 @@ describe('登録済み商品の変更確認フロー', () => {
       'registered-product-details',
       'registered-product-main-media',
       'registered-option-pending-subedit',
+      'registered-option-current-choices',
       'registered-product-pricing',
       'registered-product-change-check',
     ];
@@ -21,7 +22,7 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(indices.every((position, index) => index === 0 || position > indices[index - 1])).toBe(true);
     for (const heading of [
       '1. 基本情報', '2. 商品の詳細', '3. 商品画像',
-      '4. メーカー資料・追加画像／5. お客様選択',
+      '4. メーカー資料・追加画像', '5. お客様選択',
       '6. 価格・対象モデル', '7. 変更内容の確認',
     ]) {
       expect(flow).toContain(heading);
@@ -76,6 +77,32 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain("hidden={screen !== 'review'}");
     expect(flow).toContain("hidden={screen !== 'edit'}");
     expect(flow).not.toContain("if (screen === 'review' && review)");
+  });
+
+  it('現在の追加画像・メーカーPDF・選択肢を参照専用で表示し、直接保存しない', () => {
+    const gallerySection = flow.indexOf('data-testid="registered-option-pending-subedit"');
+    const choicesSection = flow.indexOf('data-testid="registered-option-current-choices"');
+    const priceSection = flow.indexOf('data-testid="registered-product-pricing"');
+    expect(gallerySection).toBeGreaterThan(-1);
+    expect(choicesSection).toBeGreaterThan(gallerySection);
+    expect(priceSection).toBeGreaterThan(choicesSection);
+    const readOnly = flow.slice(gallerySection, priceSection);
+    expect(readOnly).toContain('data-testid="registered-option-current-gallery"');
+    expect(readOnly).toContain('galleryImages.map(');
+    expect(readOnly).toContain('option.manufacturer_document_url');
+    expect(readOnly).toContain('orderedVariantGroups.map(');
+    expect(readOnly).toContain('orderedVariantChoices.filter(');
+    expect(readOnly).toContain('VARIANT_KIND_LABELS[choice.kind]');
+    expect(readOnly).toContain("choice.price_on_request ? '別途見積'");
+    expect(readOnly).toContain("group.status === 'published'");
+    expect(readOnly).toContain("choice.status === 'draft'");
+    expect(readOnly).toContain('rel="noopener noreferrer"');
+    expect(readOnly).not.toContain('<form');
+    expect(readOnly).not.toContain('<Input');
+    expect(readOnly).not.toContain('<Button');
+    expect(readOnly).not.toContain('<Checkbox');
+    expect(readOnly).not.toContain('name=');
+    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
   });
 
   it('別保存の資料・お客様選択は仮実装せず接続待ちにする', () => {

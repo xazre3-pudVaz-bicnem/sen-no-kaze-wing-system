@@ -317,7 +317,7 @@ export function ProductDetail({
               <div className="mb-2">
                 <h4 className="text-sm font-semibold text-ink">仕様を選ぶ</h4>
                 <p className="mt-0.5 text-[0.65rem] leading-relaxed text-muted">
-                  名称と追加金額を確認して選択してください。メーカー資料は「メーカー資料を見る」から確認できます。
+                  名称と追加金額を確認して選択してください。色・柄の見本画像は拡大できます。メーカー資料も確認できます。
                 </p>
               </div>
               <VariantPicker
@@ -325,7 +325,7 @@ export function ProductDetail({
                 choices={choices}
                 selected={selectedVariantIds}
                 onChange={handleVariantChange}
-                showImages={false}
+                showImages
                 showCurrentValue
               />
             </div>

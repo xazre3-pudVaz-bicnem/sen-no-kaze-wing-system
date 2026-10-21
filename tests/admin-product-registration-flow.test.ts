@@ -334,7 +334,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
   });
 
-  it('お客様選択は部位ごとの項目と選択肢を文字中心に登録し、価格と表示を管理する', () => {
+  it('お客様選択は部位ごとの文字情報に加え、必要な選択肢だけ画像を任意登録できる', () => {
     expect(variants).toContain('お客様選択');
     expect(variants).toContain('＋ 選択項目を追加');
     expect(variants).toContain('選択項目名');
@@ -344,7 +344,9 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(variants).toContain('標準の選択肢にする');
     expect(variants).toContain('お客様に表示する');
     expect(variants).toContain('表示などの詳細設定');
-    expect(variants).not.toContain('name="image_file"');
+    expect(variants).toContain('name="image_file"');
+    expect(variants).toContain('画像なしでも登録できます');
+    expect(variants).toContain('画像を外す');
     expect(variants).not.toContain('色・仕様ごとの追加金額');
     expect(variants).not.toContain('ChoicePriceEditor');
     expect(editPage).not.toContain('OptionVariantPricing');

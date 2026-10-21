@@ -87,11 +87,14 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
-  it('選択肢画像の登録UIを表示せず既存画像URLは保持する', () => {
-    expect(manager).not.toContain('name="image_file"');
+  it('既存のサーバー保存機能を使って選択肢画像を任意登録し、既存画像を保持・解除できる', () => {
+    expect(manager).toContain('name="image_file"');
     expect(manager).toContain('name="image_url"');
-    expect(manager).toContain("choice?.image_url ?? ''");
-    expect(manager).not.toContain('SmartImage');
+    expect(manager).toContain('value={imageRemoved ?');
+    expect(manager).toContain('SmartImage');
+    expect(manager).toContain('画像を外す');
+    expect(actions).toContain("formData.get('image_file')");
+    expect(actions).toContain("resolveImageUrl(fd, 'variant-choices')");
   });
 
   it('技術コードを内部生成・既存保持し、複数標準もサーバー側で防ぐ', () => {

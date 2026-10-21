@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
+import { SmartImage } from '@/components/ui/smart-image';
 import {
   saveVariantChoiceAction,
   saveVariantGroupAction,
@@ -184,8 +185,33 @@ function ChoiceEditor({
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
   const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
   const [customerVisible, setCustomerVisible] = useState(choice?.status !== 'draft');
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ url: string; fileName: string } | null>(null);
+  const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const previewUrl = selectedImage?.url ?? (imageRemoved ? null : choice?.image_url ?? null);
+  useEffect(() => {
+    return () => {
+      if (selectedImage) URL.revokeObjectURL(selectedImage.url);
+    };
+  }, [selectedImage]);
   const e = state.fieldErrors ?? {};
   const isNew = !choice;
+
+  const onImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setSelectedImage(null);
+      return;
+    }
+    setImageRemoved(false);
+    setSelectedImage({ url: URL.createObjectURL(file), fileName: file.name });
+  };
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImageRemoved(true);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
 
   const form = (
     <form action={action} className="space-y-4" noValidate>
@@ -193,7 +219,7 @@ function ChoiceEditor({
       <input type="hidden" name="option_id" value={optionId} />
       <input type="hidden" name="group_id" value={group.id} />
       <input type="hidden" name="status" value={customerVisible ? 'published' : 'draft'} />
-      <input type="hidden" name="image_url" value={choice?.image_url ?? ''} />
+      <input type="hidden" name="image_url" value={imageRemoved ? '' : (choice?.image_url ?? '')} />
       <ActionStatus state={state} />
 
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
@@ -224,6 +250,64 @@ function ChoiceEditor({
         onChange={(event) => setKind(event.target.checked ? 'standard' : 'option')}
         label="標準の選択肢にする"
       />
+
+      <details className="rounded-xl border border-line bg-white p-3 sm:p-4" data-testid="variant-choice-image-editor">
+        <summary className="cursor-pointer text-sm font-semibold">
+          {previewUrl ? '選択肢の画像を確認・変更（任意）' : '色・柄などの画像を登録（任意）'}
+        </summary>
+        <p className="mt-2 text-xs text-muted">
+          Excelの画像ZIPなどから、この選択肢に対応する画像を1枚指定できます。画像なしでも登録できます。
+          メーカーの対象色・仕様とWeb掲載の利用条件を確認した画像だけ使用してください。
+        </p>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+          {previewUrl && (
+            <div className="relative aspect-square w-32 shrink-0 overflow-hidden rounded-lg border border-line bg-sand/40">
+              {failedPreviewUrl === previewUrl ? (
+                <span className="flex h-full items-center justify-center p-2 text-center text-xs text-muted">画像を表示できません</span>
+              ) : (
+                <SmartImage
+                  src={previewUrl}
+                  alt={`${choice?.name ?? '選択肢'}の画像プレビュー`}
+                  fill
+                  sizes="128px"
+                  className="object-contain"
+                  onError={() => setFailedPreviewUrl(previewUrl)}
+                />
+              )}
+            </div>
+          )}
+          <div className="min-w-0 flex-1 space-y-2">
+            <label htmlFor={`variant-choice-image-${choice?.id ?? group.id}`} className="block text-xs font-semibold text-ink">
+              画像ファイル（JPEG / PNG / WebP / AVIF、10MB以下）
+            </label>
+            <input
+              ref={imageInputRef}
+              id={`variant-choice-image-${choice?.id ?? group.id}`}
+              name="image_file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              onChange={onImageChange}
+              className="block w-full rounded-lg border border-line bg-white p-2 text-xs file:mr-2 file:rounded-md file:border-0 file:bg-ivory file:px-2 file:py-1.5"
+            />
+            {selectedImage && <p className="break-all text-xs text-muted">選択中：{selectedImage.fileName}（保存すると反映）</p>}
+            {imageRemoved && <p className="text-xs text-muted">保存すると画像の関連付けを解除します。</p>}
+            {previewUrl && (
+              <button type="button" className="text-xs text-brown underline underline-offset-2" onClick={clearImage}>
+                画像を外す
+              </button>
+            )}
+            {imageRemoved && (
+              <button
+                type="button"
+                className="text-xs text-brown underline underline-offset-2"
+                onClick={() => setImageRemoved(false)}
+              >
+                画像の解除を取り消す
+              </button>
+            )}
+          </div>
+        </div>
+      </details>
 
       <details className="rounded-xl border border-line bg-ivory/30 p-4">
         <summary className="cursor-pointer text-sm font-semibold">表示などの詳細設定</summary>
@@ -376,7 +460,7 @@ export function OptionVariantManager({
                 <div className="space-y-2">
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
-                      key={choice.id}
+                      key={`${choice.id}:${choice.image_url ?? ''}`}
                       optionId={option.id}
                       group={group}
                       choice={choice}

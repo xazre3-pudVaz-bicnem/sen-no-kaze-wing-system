@@ -21,11 +21,13 @@ describe('商品登録 お客様選択の簡潔化', () => {
     expect(manager).toContain('open={firstChoice}');
   });
 
-  it('選択肢画像の新規登録UIを出さず、既存画像URLは保存時に保持する', () => {
-    expect(manager).not.toContain('name="image_file"');
-    expect(manager).not.toContain('SmartImage');
-    expect(manager).not.toContain('画像・表示などの詳細設定');
-    expect(manager).toContain('name="image_url" value={choice?.image_url ?? \'\'}');
+  it('色見本画像は任意で登録でき、既存URLの保持・解除を選べる', () => {
+    expect(manager).toContain('name="image_file"');
+    expect(manager).toContain('accept="image/jpeg,image/png,image/webp,image/avif"');
+    expect(manager).toContain('<SmartImage');
+    expect(manager).toContain('value={imageRemoved ?');
+    expect(manager).toContain('画像なしでも登録できます');
+    expect(manager).toContain('画像を外す');
     expect(manager).toContain('表示などの詳細設定');
   });
 });

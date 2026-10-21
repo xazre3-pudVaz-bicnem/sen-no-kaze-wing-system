@@ -57,6 +57,7 @@ export function ProductDetail({
   ].filter((image, index, list) => list.findIndex((item) => item.url === image.url) === index);
   const safeImageIndex = galleryImages.length > 0 ? Math.min(activeImageIndex, galleryImages.length - 1) : 0;
   const activeImage = galleryImages[safeImageIndex] ?? null;
+  const isSekinoKosan = option.manufacturer?.trim() === 'セキノ興産';
 
   const moveImage = (direction: -1 | 1) => {
     if (galleryImages.length <= 1) return;
@@ -241,6 +242,12 @@ export function ProductDetail({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+          {isSekinoKosan && galleryImages.length > 0 && (
+            <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-muted" data-testid="sekino-image-attribution">
+              <p>画像提供：株式会社セキノ興産</p>
+              <p>※画面上の色は実物と異なる場合があります。</p>
             </div>
           )}
         </section>

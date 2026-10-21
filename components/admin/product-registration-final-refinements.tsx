@@ -448,7 +448,7 @@ function VariantCreatePortal({
                           value={value}
                           disabled={pending}
                           onChange={(event) => updateChoice(index, event.target.value)}
-                           placeholder={`選択肢 ${index + 1}：ホワイトなど`}
+                          placeholder={`選択肢 ${index + 1}：ホワイトなど`}
                           autoComplete="off"
                           required={isStandard}
                         />

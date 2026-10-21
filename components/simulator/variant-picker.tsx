@@ -56,9 +56,9 @@ export function VariantPicker({
   showImages = true,
   showCurrentValue = true,
 }: Props) {
+  const [enlargedChoice, setEnlargedChoice] = useState<{ url: string; label: string } | null>(null);
   if (groups.length === 0) return null;
   const picked = new Set(selected);
-  const [enlargedChoice, setEnlargedChoice] = useState<{ url: string; label: string } | null>(null);
 
   return (
     <div className="space-y-3 border-t border-line pt-3" data-testid="variant-picker">

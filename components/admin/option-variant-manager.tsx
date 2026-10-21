@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { SmartImage } from '@/components/ui/smart-image';
+import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import {
   saveVariantChoiceAction,
   saveVariantGroupAction,
@@ -472,17 +473,7 @@ export function OptionVariantManager({
             const firstChoice = groupChoices.length === 0;
             return (
               <article key={group.id} className="card space-y-4 p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold">{group.name}</h3>
-                    <p className="mt-1 text-xs text-muted">
-                      {groupChoices.length}選択肢・{group.status === 'published' ? 'お客様に表示' : '非表示'}
-                    </p>
-                  </div>
-                  {group.depends_on_group_code && (
-                    <span className="rounded-full bg-ivory px-2.5 py-1 text-xs text-ink-soft">表示条件あり</span>
-                  )}
-                </div>
+                <ProductVariantGroupHeading group={group} choiceCount={groupChoices.length} />
 
                 <div className="space-y-2">
                   {groupChoices.map((choice) => (

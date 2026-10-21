@@ -27,7 +27,7 @@ import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCod
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
-import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
+import { ProductDetailsFields } from '@/components/admin/product-details-fields';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 
 const initial: AdminFormState = { ok: false };
@@ -965,45 +965,46 @@ export function OptionForm({
             </div>
           )}
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
-              <Input
-                id={`size_note-${mode}`}
-                name="size_note"
-                list="option-size-note-suggestions"
-                value={sizeNoteValue}
-                onChange={(event) => setSizeNoteValue(event.target.value)}
-                placeholder={sizeMeta.placeholder}
-              />
-              <datalist id="option-size-note-suggestions">
-                {sizeSuggestions.map((value) => <option key={value} value={value} />)}
-              </datalist>
-              {guidance.sizeCandidates.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
-                  {guidance.sizeCandidates.slice(0, 10).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
-                      onClick={() => {
-                        setSizeNoteValue(value);
-                        markOptionDirty();
-                      }}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Field>
-            <Field label="メーカー記載の特徴（任意）" htmlFor={`highlight-${mode}`} hint="メーカー資料・カタログに明確な記載がある場合のみ入力。記載がなければ空欄で構いません。" errors={e.highlight}>
-              <ProductHighlightTextarea id={`highlight-${mode}`} initialValue={option?.highlight ?? ''} />
-            </Field>
-          </div>
-
-          <Field label="商品説明" htmlFor={`description-${mode}`} errors={e.description}>
-            <Textarea id={`description-${mode}`} name="description" defaultValue={option?.description ?? ''} className="min-h-28" />
-          </Field>
+          <ProductDetailsFields
+            sizeField={
+                <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
+                  <Input
+                    id={`size_note-${mode}`}
+                    name="size_note"
+                    list="option-size-note-suggestions"
+                    value={sizeNoteValue}
+                    onChange={(event) => setSizeNoteValue(event.target.value)}
+                    placeholder={sizeMeta.placeholder}
+                  />
+                  <datalist id="option-size-note-suggestions">
+                    {sizeSuggestions.map((value) => <option key={value} value={value} />)}
+                  </datalist>
+                  {guidance.sizeCandidates.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
+                      {guidance.sizeCandidates.slice(0, 10).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+                          onClick={() => {
+                            setSizeNoteValue(value);
+                            markOptionDirty();
+                          }}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+            }
+            highlightId={`highlight-${mode}`}
+            highlight={option?.highlight ?? ''}
+            highlightErrors={e.highlight}
+            descriptionId={`description-${mode}`}
+            description={option?.description ?? ''}
+            descriptionErrors={e.description}
+          />
 
           <p className="text-xs text-muted">
             固定の商品構成・標準装備は、メーカー資料で確認できるものまで無理に個別登録する必要はありません。

@@ -66,10 +66,13 @@ describe('メーカー記載の特徴', () => {
 
     const draft = readFileSync('components/admin/forms.tsx', 'utf8');
     const published = readFileSync('components/admin/registered-option-edit-flow.tsx', 'utf8');
-    expect(draft).toContain("initialValue={option?.highlight ?? ''}");
-    expect(published).toContain("initialValue={option.highlight ?? ''}");
-    expect(draft).toContain('<ProductHighlightTextarea');
-    expect(published).toContain('<ProductHighlightTextarea');
+    const sharedDetails = readFileSync('components/admin/product-details-fields.tsx', 'utf8');
+    expect(draft).toContain("highlight={option?.highlight ?? ''}");
+    expect(published).toContain("highlight={option.highlight ?? ''}");
+    expect(draft).toContain('<ProductDetailsFields');
+    expect(published).toContain('<ProductDetailsFields');
+    expect(sharedDetails).toContain('<ProductHighlightTextarea');
+    expect(sharedDetails).toContain('initialValue={highlight}');
   });
 
   it('STEP2とお客様の商品詳細は共通ProductDetailで改行・長文を表示する', () => {

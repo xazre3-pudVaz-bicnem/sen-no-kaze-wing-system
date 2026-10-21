@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'), 'utf8');
 const newPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'), 'utf8');
 const flow = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/registered-option-edit-flow.tsx'), 'utf8');
+const variantHeading = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-variant-group-heading.tsx'), 'utf8');
 const identityView = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-identity-status.tsx'), 'utf8');
 
 describe('登録済み商品の変更確認フロー', () => {
@@ -178,7 +179,8 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(readOnly).toContain('orderedVariantChoices.filter(');
     expect(readOnly).toContain('VARIANT_KIND_LABELS[choice.kind]');
     expect(readOnly).toContain("choice.price_on_request ? '別途見積'");
-    expect(readOnly).toContain("group.status === 'published'");
+    expect(readOnly).toContain('<ProductVariantGroupHeading group={group} choiceCount={choices.length} headingLevel="h4" />');
+    expect(variantHeading).toContain("group.status === 'published'");
     expect(readOnly).toContain("choice.status === 'draft'");
     expect(readOnly).toContain('rel="noopener noreferrer"');
     expect(readOnly).not.toContain('<form');

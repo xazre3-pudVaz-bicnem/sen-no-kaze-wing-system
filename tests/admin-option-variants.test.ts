@@ -96,6 +96,10 @@ describe('管理画面の色・仕様管理', () => {
     expect(manager).toContain('元に戻す');
     expect(manager).toContain('data-testid="draft-choice-unified-two-row"');
     expect(manager).toContain('data-testid="draft-choice-image-row"');
+    expect(manager).toContain('name="image_url"');
+    expect(manager).not.toContain('<input type="hidden" name="image_url"');
+    expect(manager).not.toContain('data-testid="variant-choice-image-editor"');
+    expect(manager).toContain('const restoreImage = () => {');
     expect(manager).toContain('onImageUrlChange(event.target.value)');
     expect(manager).toContain("setImageUrl('')");
     expect(actions).toContain("formData.get('image_file')");

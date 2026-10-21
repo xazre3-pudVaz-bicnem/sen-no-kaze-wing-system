@@ -212,6 +212,9 @@ function ChoiceEditor({
     const file = event.target.files?.[0];
     if (!file) {
       setSelectedImage(null);
+      if (!imageUrl.trim() && !imageRemoved) {
+        setImageUrl(choice?.image_url ?? '');
+      }
       return;
     }
     setImageUrl('');

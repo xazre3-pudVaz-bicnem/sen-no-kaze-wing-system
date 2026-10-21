@@ -355,16 +355,18 @@ export function RegisteredOptionEditFlow({
         </section>
       )}
 
-      <section hidden={screen !== 'edit'} className="space-y-6" data-testid="registered-option-edit-flow">
-        <section className="card p-4 sm:p-5" aria-label="商品を編集">
-          <p className="text-xs font-semibold tracking-wide text-brown">登録済み商品</p>
-          <h2 className="mt-1 text-xl font-semibold">商品を編集</h2>
-          <p className="mt-1 text-sm text-muted">入力中の変更はまだ登録済み内容へ反映されません。変更後は「変更内容を確認」へ進み、差分とお客様表示を確認してください。</p>
+      <section hidden={screen !== 'edit'} className="space-y-4" data-testid="registered-option-edit-flow">
+        <section className="card px-4 py-3 sm:px-5" aria-label="商品を編集">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="text-lg font-semibold">商品を編集</h2>
+            <span className="text-xs font-semibold text-brown">登録済み商品</span>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted">入力中は未反映です。変更内容とお客様表示を確認してから反映します。</p>
         </section>
 
         {reviewError && <Alert tone="danger">{reviewError}</Alert>}
 
-        <form ref={formRef} className="space-y-6" noValidate onSubmit={(event) => { event.preventDefault(); void openReview(); }}>
+        <form ref={formRef} className="space-y-4" noValidate onSubmit={(event) => { event.preventDefault(); void openReview(); }}>
           <input type="hidden" name="id" value={option.id} />
           <input type="hidden" name="owner_id" value={option.owner_id ?? ''} />
           <input type="hidden" name="status" value="published" />
@@ -382,12 +384,12 @@ export function RegisteredOptionEditFlow({
             </span>
           ))}
 
-          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-identify">
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-identify">
             <div>
               <h3 className="text-lg font-semibold">1. 基本情報</h3>
               <p className="mt-1 text-sm text-muted">カテゴリー、メーカー、商品名、シリーズ・型番／品番を確認・変更します。</p>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="カテゴリー" htmlFor="registered-category" required>
                 <Select id="registered-category" name="category_id" defaultValue={option.category_id} required>
                   {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
@@ -405,12 +407,12 @@ export function RegisteredOptionEditFlow({
             </div>
           </section>
 
-          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-details">
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-details">
             <div>
               <h3 className="text-lg font-semibold">2. 商品の詳細</h3>
               <p className="mt-1 text-sm text-muted">サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。</p>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="サイズ・仕様" htmlFor="registered-size-note">
                 <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
               </Field>
@@ -423,12 +425,12 @@ export function RegisteredOptionEditFlow({
             </Field>
           </section>
 
-          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-main-media">
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-main-media">
             <div>
               <h3 className="text-lg font-semibold">3. 商品画像</h3>
               <p className="mt-1 text-sm text-muted">画像ファイルまたは画像URLを変更できます。変更後の画像は確認画面で現在の内容と比較します。</p>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="画像URL" htmlFor="registered-image-url">
                 <Input id="registered-image-url" name="image_url" defaultValue={option.image_url ?? ''} />
               </Field>
@@ -438,14 +440,16 @@ export function RegisteredOptionEditFlow({
             </div>
           </section>
 
-          <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
-            <div>
-              <h3 className="text-lg font-semibold">4. メーカー資料・追加画像</h3>
-              <p className="mt-1 text-sm text-muted">現在登録されている内容を参照できます。変更・解除はまだできません。</p>
-            </div>
-            <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
-              サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。
-            </p>
+          <details className="card group" data-testid="registered-option-pending-subedit">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 marker:hidden sm:px-5 [&::-webkit-details-marker]:hidden">
+              <span className="text-base font-semibold">4. メーカー資料・追加画像</span>
+              <span className="flex items-center gap-2 text-xs text-muted">
+                PDF{option.manufacturer_document_url ? '登録済み' : '未登録'}・追加画像{galleryImages.length}枚
+                <span aria-hidden="true" className="text-brown transition-transform group-open:rotate-180">⌄</span>
+              </span>
+            </summary>
+            <div className="space-y-3 border-t border-line px-4 py-3 sm:px-5">
+              <p className="text-xs leading-5 text-muted">現在の登録内容を表示しています。サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。変更・解除はまだできません。</p>
             <div className="space-y-2">
               <p className="text-sm font-semibold">メーカー資料PDF</p>
               {option.manufacturer_document_url ? (
@@ -486,25 +490,35 @@ export function RegisteredOptionEditFlow({
                 <p className="text-sm text-muted">追加画像は未登録です。</p>
               )}
             </div>
-          </section>
-
-          <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-option-current-choices">
-            <div>
-              <h3 className="text-lg font-semibold">5. お客様選択</h3>
-              <p className="mt-1 text-sm text-muted">選択項目と選択肢の現在の設定を確認できます。追加・編集・価格変更はまだできません。</p>
             </div>
+          </details>
+
+          <details className="card group" data-testid="registered-option-current-choices">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-4 py-3 marker:hidden sm:px-5 [&::-webkit-details-marker]:hidden">
+              <span className="text-base font-semibold">5. お客様選択</span>
+              <span className="flex items-center gap-2 text-xs text-muted">
+                {orderedVariantGroups.length}項目・{orderedVariantChoices.length}選択肢
+                <span aria-hidden="true" className="text-brown transition-transform group-open:rotate-180">⌄</span>
+              </span>
+            </summary>
+            <div className="space-y-3 border-t border-line px-4 py-3 sm:px-5">
+              <p className="text-xs leading-5 text-muted">現在の選択項目と選択肢です。追加・編集・価格変更はまだできません。</p>
             {orderedVariantGroups.length > 0 ? (
               <div className="space-y-3">
                 {orderedVariantGroups.map((group) => {
                   const choices = orderedVariantChoices.filter((choice) => choice.group_id === group.id);
                   return (
-                    <div key={group.id} className="rounded-lg border border-line bg-white p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-semibold">{group.name}</h4>
-                        <span className="text-xs text-muted">{group.status === 'published' ? '公開中' : '非公開'}</span>
-                        {group.is_required && <span className="text-xs text-muted">必須</span>}
-                      </div>
-                      {group.note && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
+                    <details key={group.id} className="group/choice rounded-lg border border-line bg-white">
+                      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 marker:hidden [&::-webkit-details-marker]:hidden">
+                        <span className="min-w-0 break-words text-sm font-semibold">{group.name}</span>
+                        <span className="shrink-0 text-xs text-muted">
+                          {choices.length}件・{group.status === 'published' ? '公開中' : '非公開'}
+                          {group.is_required ? '・必須' : ''}
+                          <span aria-hidden="true" className="ml-2 text-brown">⌄</span>
+                        </span>
+                      </summary>
+                      <div className="border-t border-line/70 p-3">
+                      {group.note && <p className="mb-2 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
                       {choices.length > 0 ? (
                         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                           {choices.map((choice) => (
@@ -531,23 +545,25 @@ export function RegisteredOptionEditFlow({
                           ))}
                         </ul>
                       ) : (
-                        <p className="mt-2 text-sm text-muted">選択肢は未登録です。</p>
+                        <p className="text-sm text-muted">選択肢は未登録です。</p>
                       )}
-                    </div>
+                      </div>
+                    </details>
                   );
                 })}
               </div>
             ) : (
               <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
             )}
-          </section>
+            </div>
+          </details>
 
-          <section className="card space-y-5 p-5 sm:p-6" data-testid="registered-product-pricing">
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-pricing">
             <div>
               <h3 className="text-lg font-semibold">6. 価格・対象モデル</h3>
               <p className="mt-1 text-sm text-muted">登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。</p>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="商品価格（税別・円）" htmlFor="registered-price" required>
                 <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required />
               </Field>
@@ -580,7 +596,7 @@ export function RegisteredOptionEditFlow({
                   ))}
                 </div>
               </div>
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
                 <Field label="選択方式（表示）" htmlFor="registered-selection-type">
                   <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
@@ -607,7 +623,7 @@ export function RegisteredOptionEditFlow({
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-change-check">
             <div>
               <h3 className="font-semibold">7. 変更内容の確認</h3>
-              <p className="mt-1 text-sm text-muted">登録済み商品は自動保存されません。変更前後の内容とお客様表示を確認してから反映します。</p>
+              <p className="mt-1 text-xs text-muted">自動保存はされません。確認後に変更を反映します。</p>
             </div>
             <div className="flex justify-end">
               <Button type="submit">変更内容を確認</Button>

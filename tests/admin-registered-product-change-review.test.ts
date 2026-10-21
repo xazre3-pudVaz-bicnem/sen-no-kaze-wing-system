@@ -44,6 +44,41 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).not.toContain('変更内容を自動保存しました。');
   });
 
+  it('価格単位・本部基準原価を6の後、確認の前に置き、独立保存を維持する', () => {
+    const priceStart = flow.indexOf('data-testid="registered-product-pricing"');
+    const formClose = flow.indexOf('</form>', priceStart);
+    const toolsStart = flow.indexOf('data-testid="registered-product-financial-tools"');
+    const reviewStart = flow.indexOf('data-testid="registered-product-change-check"');
+    expect(priceStart).toBeGreaterThan(-1);
+    expect(formClose).toBeGreaterThan(priceStart);
+    expect(toolsStart).toBeGreaterThan(formClose);
+    expect(reviewStart).toBeGreaterThan(toolsStart);
+    expect(flow).toContain('id="registered-option-main-edit-form"');
+    expect(flow).toContain('form="registered-option-main-edit-form"');
+    expect(flow).toContain('saveOptionAction(initialState, review.formData)');
+    expect(flow).toContain('商品価格の「変更内容を確認」では保存されません');
+    expect(page).toContain('financialTools={');
+    const editableBranch = page.slice(page.indexOf('if (option.status === \'published\')'), page.indexOf('const stepHref'));
+    const editorProps = editableBranch.slice(editableBranch.indexOf('<RegisteredOptionEditFlow'), editableBranch.indexOf(') : ('));
+    expect(editorProps).toContain('<ProductPriceUnitPublishedCard');
+    expect(editorProps).toContain('<OptionHqStandardCostCard');
+    expect(editorProps).toContain('duplicateCandidates={catalogEditor ?');
+    expect(editorProps).not.toContain('allOptions={options}');
+    expect(editableBranch).toContain('この商品は閲覧専用です');
+  });
+
+  it('重複チェックは登録内容を表示し、編集後は未確認として扱う', () => {
+    expect(flow).toContain('data-testid="registered-option-duplicate-status"');
+    expect(flow).toContain('duplicateCandidates &&');
+    expect(flow).toContain("const [identityChanged, setIdentityChanged] = useState(false)");
+    expect(flow).toContain('setIdentityChanged(true)');
+    expect(flow).toContain('入力変更後の重複は未確認');
+    expect(flow).toContain('変更前の登録内容に対する確認結果です');
+    expect(flow).toContain("candidate.reason === 'manufacturer-model'");
+    expect(flow).toContain('candidate.productNo');
+    expect(flow).toContain('同じ商品を重複登録していないか確認してください');
+  });
+
   it('確認前はブラウザ内のFormDataだけに保持し、反映ボタンで既存保存Actionを呼ぶ', () => {
     expect(flow).toContain("const data = new FormData(form)");
     expect(flow).toContain("setScreen('review')");

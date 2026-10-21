@@ -112,14 +112,6 @@ export default async function EditOptionPage({
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
-        {hqCostAccess.available && hqCostAccess.canView && (
-          <OptionHqStandardCostCard
-            optionId={id}
-            canManage={hqCostAccess.canManage}
-            cost={hqCostAccess.cost}
-          />
-        )}
-        <ProductPriceUnitPublishedCard optionId={id} />
         {canEditThisOption ? (
           <RegisteredOptionEditFlow
             key={option.updated_at}
@@ -131,9 +123,39 @@ export default async function EditOptionPage({
             variantGroups={variants.groups}
             variantChoices={variants.choices}
             returnTo={returnTo}
+            duplicateCandidates={catalogEditor ? duplicateCandidates.slice(0, 3).map(({ option: candidate, reason }) => ({
+              id: candidate.id,
+              name: candidate.name,
+              productNo: candidate.product_no ?? null,
+              reason,
+              modelNo: candidate.model_no,
+              manufacturer: candidate.manufacturer,
+            })) : undefined}
+            financialTools={
+              <>
+                <ProductPriceUnitPublishedCard optionId={id} />
+                {hqCostAccess.available && hqCostAccess.canView && (
+                  <OptionHqStandardCostCard
+                    optionId={id}
+                    canManage={hqCostAccess.canManage}
+                    cost={hqCostAccess.cost}
+                  />
+                )}
+              </>
+            }
           />
         ) : (
-          <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>
+          <>
+            {hqCostAccess.available && hqCostAccess.canView && (
+              <OptionHqStandardCostCard
+                optionId={id}
+                canManage={hqCostAccess.canManage}
+                cost={hqCostAccess.cost}
+              />
+            )}
+            <ProductPriceUnitPublishedCard optionId={id} />
+            <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>
+          </>
         )}
       </AdminPage>
     );

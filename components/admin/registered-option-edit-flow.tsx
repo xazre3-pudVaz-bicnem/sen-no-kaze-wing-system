@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
@@ -23,6 +23,15 @@ import {
 
 const initialState: AdminFormState = { ok: false };
 
+type DuplicateCandidateSummary = {
+  id: string;
+  name: string;
+  productNo: string | null;
+  reason: 'manufacturer-model' | 'category-manufacturer-name';
+  modelNo: string | null;
+  manufacturer: string | null;
+};
+
 type Props = {
   option: ProductOption;
   categories: OptionCategory[];
@@ -32,6 +41,8 @@ type Props = {
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   returnTo?: string;
+  financialTools: ReactNode;
+  duplicateCandidates?: DuplicateCandidateSummary[];
 };
 
 type ReviewState = {
@@ -122,6 +133,8 @@ export function RegisteredOptionEditFlow({
   variantGroups,
   variantChoices,
   returnTo,
+  financialTools,
+  duplicateCandidates,
 }: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -130,6 +143,8 @@ export function RegisteredOptionEditFlow({
   const [state, setState] = useState<AdminFormState>(initialState);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [identityChanged, setIdentityChanged] = useState(false);
+  const duplicateCheckReady = Boolean(option.manufacturer?.trim() && (option.model_no?.trim() || option.name.trim()));
   const [imageUrlInput, setImageUrlInput] = useState(option.image_url ?? '');
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
   const [imagePreviewError, setImagePreviewError] = useState<string | null>(null);
@@ -407,7 +422,7 @@ export function RegisteredOptionEditFlow({
 
         {reviewError && <Alert tone="danger">{reviewError}</Alert>}
 
-        <form ref={formRef} className="space-y-4" noValidate onSubmit={(event) => { event.preventDefault(); void openReview(); }}>
+        <form id="registered-option-main-edit-form" ref={formRef} className="space-y-4" noValidate onSubmit={(event) => { event.preventDefault(); void openReview(); }}>
           <input type="hidden" name="id" value={option.id} />
           <input type="hidden" name="owner_id" value={option.owner_id ?? ''} />
           <input type="hidden" name="status" value="published" />
@@ -432,18 +447,18 @@ export function RegisteredOptionEditFlow({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="カテゴリー" htmlFor="registered-category" required>
-                <Select id="registered-category" name="category_id" defaultValue={option.category_id} required>
+                <Select id="registered-category" name="category_id" defaultValue={option.category_id} onChange={() => setIdentityChanged(true)} required>
                   {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
                 </Select>
               </Field>
               <Field label="メーカー" htmlFor="registered-manufacturer">
-                <Input id="registered-manufacturer" name="manufacturer" defaultValue={option.manufacturer ?? ''} />
+                <Input id="registered-manufacturer" name="manufacturer" defaultValue={option.manufacturer ?? ''} onChange={() => setIdentityChanged(true)} />
               </Field>
               <Field label="商品名" htmlFor="registered-name" required>
-                <Input id="registered-name" name="name" defaultValue={option.name} required />
+                <Input id="registered-name" name="name" defaultValue={option.name} onChange={() => setIdentityChanged(true)} required />
               </Field>
               <Field label="シリーズ・型番／品番" htmlFor="registered-model-no">
-                <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} />
+                <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} onChange={() => setIdentityChanged(true)} />
               </Field>
             </div>
             <div className="rounded-lg border border-line bg-sand/25 px-3 py-2" data-testid="registered-option-product-number">
@@ -451,6 +466,52 @@ export function RegisteredOptionEditFlow({
               <p className="mt-1 font-mono text-sm font-semibold text-ink">{option.product_no ?? '商品管理番号は未反映'}</p>
               <p className="mt-1 text-xs text-muted">登録済みの管理番号はこの画面から変更できません。</p>
             </div>
+            {duplicateCandidates && (
+              <section
+                className={`rounded-lg border px-3 py-3 ${!identityChanged && duplicateCandidates.length ? 'border-[#d9a441] bg-[#fff8e8]' : 'border-line bg-ivory/30'}`}
+                aria-label="既存商品チェック"
+                data-testid="registered-option-duplicate-status"
+                aria-live="polite"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">既存商品チェック</p>
+                  <span className="text-xs font-semibold text-muted">
+                    {identityChanged
+                      ? '入力変更後の重複は未確認'
+                      : duplicateCandidates.length
+                        ? '要確認：重複候補あり'
+                        : duplicateCheckReady ? '重複候補なし' : '確認に必要な情報が不足'}
+                  </span>
+                </div>
+                {identityChanged ? (
+                  <p className="mt-2 text-xs text-muted">変更前の登録内容に対する確認結果です。入力した変更内容の重複判定はここでは行いません。</p>
+                ) : duplicateCandidates.length ? (
+                  <div className="mt-2">
+                    <p className="text-xs text-ink-soft">同じ商品を重複登録していないか確認してください。この表示だけで保存を停止しません。</p>
+                    <ul className="mt-2 space-y-2">
+                      {duplicateCandidates.map((candidate) => (
+                        <li key={candidate.id} className="rounded border border-line bg-white px-3 py-2 text-xs">
+                          <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">{candidate.name}</a>
+                          <span className="ml-2 text-muted">{candidate.productNo ?? '商品番号未反映'}</span>
+                          <p className="mt-1 text-muted">
+                            {candidate.reason === 'manufacturer-model'
+                              ? 'メーカー＋シリーズ・型番／品番が一致'
+                              : '同一カテゴリー＋メーカー＋商品名が一致'}
+                            {candidate.modelNo ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.modelNo}` : ''}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted">
+                    {duplicateCheckReady
+                      ? '現在登録されているメーカー・商品名・型番について、重複候補は見つかっていません。'
+                      : 'メーカーと商品名または型番を確認してください。'}
+                  </p>
+                )}
+              </section>
+            )}
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-details">
@@ -626,54 +687,64 @@ export function RegisteredOptionEditFlow({
               </div>
             </div>
             <Checkbox name="price_on_request" defaultChecked={option.price_on_request} label="価格は別途見積（0円扱い）" />
-          </section>
-
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-display-settings">
-            <h3 className="text-lg font-semibold">主要仕様・表示設定</h3>
-            <div className="space-y-3">
-              <div>
-                <p className="label">対応する仕様</p>
-                <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用'], ['hotel-single', 'ホテル単身者仕様']].map(([code, label]) => (
-                    <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option.spec_codes.includes(code)} label={label} />
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
-                <Field label="選択方式（表示）" htmlFor="registered-selection-type">
-                  <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
-                    <option value="checkbox">チェックボックス</option>
-                    <option value="radio">ラジオボタン</option>
-                  </Select>
-                </Field>
-                <Field label="プレビューキー" htmlFor="registered-preview-key"><Input id="registered-preview-key" name="preview_key" defaultValue={option.preview_key ?? ''} /></Field>
+            <div className="border-t border-line pt-3">
+  <section className="space-y-3 rounded-xl border border-line bg-ivory/30 p-3 sm:p-4" data-testid="registered-product-display-settings">
+              <h3 className="text-lg font-semibold">主要仕様・表示設定</h3>
+              <div className="space-y-3">
                 <div>
-                  <p className="label">反映するビュー</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
-                    {VIEW_KEYS.map((view) => <Checkbox key={view} name="affects_views" value={view} defaultChecked={option.affects_views.includes(view)} label={VIEW_LABELS[view]} />)}
+                  <p className="label">対応する仕様</p>
+                  <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用'], ['hotel-single', 'ホテル単身者仕様']].map(([code, label]) => (
+                      <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option.spec_codes.includes(code)} label={label} />
+                    ))}
                   </div>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
+                  <Field label="選択方式（表示）" htmlFor="registered-selection-type">
+                    <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
+                      <option value="checkbox">チェックボックス</option>
+                      <option value="radio">ラジオボタン</option>
+                    </Select>
+                  </Field>
+                  <Field label="プレビューキー" htmlFor="registered-preview-key"><Input id="registered-preview-key" name="preview_key" defaultValue={option.preview_key ?? ''} /></Field>
+                  <div>
+                    <p className="label">反映するビュー</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
+                      {VIEW_KEYS.map((view) => <Checkbox key={view} name="affects_views" value={view} defaultChecked={option.affects_views.includes(view)} label={VIEW_LABELS[view]} />)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <Checkbox name="is_default" defaultChecked={option.is_default} label="初期状態で選択" />
+                  <Checkbox name="is_required" defaultChecked={option.is_required} label="必須（解除不可）" />
+                  <Checkbox name="is_installation" defaultChecked={option.is_installation} label="設置関連費用として集計" />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-2">
-                <Checkbox name="is_default" defaultChecked={option.is_default} label="初期状態で選択" />
-                <Checkbox name="is_required" defaultChecked={option.is_required} label="必須（解除不可）" />
-                <Checkbox name="is_installation" defaultChecked={option.is_installation} label="設置関連費用として集計" />
-              </div>
+            </section>
             </div>
           </section>
 
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-change-check">
-            <div>
-              <h3 className="font-semibold">7. 変更内容の確認</h3>
-              <p className="mt-1 text-sm text-muted">登録済み商品は自動保存されません。変更前後の内容とお客様表示を確認してから反映します。</p>
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit">変更内容を確認</Button>
-            </div>
-          </section>
+
+
         </form>
+        <section className="space-y-3" data-testid="registered-product-financial-tools" aria-label="価格単位と本部基準原価">
+          <p className="px-1 text-xs leading-5 text-muted">
+            価格単位と本部商品基準原価は別々に保存します。商品価格の「変更内容を確認」では保存されません。途中で個別保存すると画面が再読み込みされる場合があるため、商品情報の変更を先に確認・反映してください。
+          </p>
+          {financialTools}
+        </section>
+
+        <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-change-check">
+          <div>
+            <h3 className="font-semibold">7. 変更内容の確認</h3>
+            <p className="mt-1 text-xs text-muted">商品情報の変更は自動保存されません。変更内容とお客様表示を確認してから反映します。価格単位・本部基準原価は上の専用ボタンで別途保存します。</p>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" form="registered-option-main-edit-form">変更内容を確認</Button>
+          </div>
+        </section>
       </section>
     </div>
   );

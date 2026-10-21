@@ -285,7 +285,7 @@ function VariantCreatePortal({
 
   const resetChoiceForm = () => {
     Object.values(imageUrls.current).forEach((url) => URL.revokeObjectURL(url));
-    imageUrls.current = {};
+    Object.keys(imageUrls.current).forEach((id) => { delete imageUrls.current[Number(id)]; });
     imageInputs.current = {};
     setImagePreviews({});
     setGroupName('');

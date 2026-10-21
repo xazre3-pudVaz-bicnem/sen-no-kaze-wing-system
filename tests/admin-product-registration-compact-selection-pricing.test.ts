@@ -125,6 +125,15 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain('<SmartImage src={previewUrl}');
   });
 
+  it('画像URLへの切り替えとファイルへの切り替えで他方の指定を解除する', () => {
+    expect(finalRefinements).toContain('const onChoiceImageUrlChange = (rowId: number, value: string) => {');
+    expect(finalRefinements).toContain('if (value.trim()) clearChoiceImage(rowId);');
+    expect(finalRefinements).toContain("setChoiceImageUrls((urls) => ({ ...urls, [rowId]: '' }))");
+    expect(finalRefinements).toContain('const clearChoiceMedia = (rowId: number) => {');
+    expect(finalRefinements).toContain('delete next[rowId];');
+    expect(finalRefinements).toContain('clearChoiceMedia(choiceRowIds[index])');
+  });
+
   it('URLも元の行番号で保存し、不正URLとファイル同時指定を拒否する', () => {
     expect(variantCreateAction).toContain('function selectedChoiceImageUrl(formData: FormData, choiceIndex: number)');
     expect(variantCreateAction).toContain('index >= standardIndex ? index + 1 : index');

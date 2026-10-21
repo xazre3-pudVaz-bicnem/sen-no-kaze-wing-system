@@ -7,6 +7,7 @@ import { OptionCustomerPreview } from '@/components/admin/option-customer-previe
 import { ProductHighlightTextarea } from '@/components/admin/product-highlight-textarea';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 import { SmartImage } from '@/components/ui/smart-image';
+import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
 import {
@@ -524,24 +525,16 @@ export function RegisteredOptionEditFlow({
               </Field>
             </div>
             <div className="border-t border-line pt-3">
-              <div className="space-y-2" data-testid="registered-option-current-gallery">
-                <p className="text-sm font-semibold">追加画像（{galleryImages.length}枚）</p>
+              <div className="space-y-3" data-testid="registered-option-current-gallery">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">追加画像</p>
+                  <ProductGalleryCount count={galleryImages.length} />
+                </div>
                 {galleryImages.length > 0 ? (
-                  <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {galleryImages.map((image, index) => (
-                      <li key={image.id} className="min-w-0 rounded-lg border border-line bg-white p-2">
-                        <div className="relative aspect-square overflow-hidden rounded bg-sand/30">
-                          <SmartImage
-                            src={image.url}
-                            alt={image.alt || `追加画像${index + 1}`}
-                            fill
-                            sizes="(max-width: 640px) 160px, 120px"
-                            className="object-contain"
-                          />
-                        </div>
-                        <p className="mt-1 line-clamp-2 break-words text-xs text-ink-soft">
-                          {image.caption || image.alt || `追加画像${index + 1}`}
-                        </p>
+                  <ul className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                    {galleryImages.map((image) => (
+                      <li key={image.id} className="min-w-0 overflow-hidden rounded-xl border border-line bg-white p-2">
+                        <ProductGalleryThumbnail image={image} showCaption />
                       </li>
                     ))}
                   </ul>
@@ -553,9 +546,12 @@ export function RegisteredOptionEditFlow({
           </section>
 
           <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
-            <div>
-              <h3 className="text-lg font-semibold">4. メーカー資料</h3>
-              <p className="mt-1 text-sm text-muted">メーカー資料PDFの登録状況を確認できます。変更・解除はまだできません。</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold">4. メーカー資料</h3>
+                <p className="mt-1 text-sm text-muted">メーカー資料PDFの登録状況を確認できます。変更・解除はまだできません。</p>
+              </div>
+              <ProductDocumentStatus url={option.manufacturer_document_url} testId="registered-manufacturer-document-status" />
             </div>
             <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
               サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。

@@ -489,7 +489,7 @@ export function RegisteredOptionEditFlow({
                 ) : (
                   <p className="text-sm text-muted">追加画像は未登録です。</p>
                 )}
-            </div>
+              </div>
             </div>
           </details>
 
@@ -518,8 +518,8 @@ export function RegisteredOptionEditFlow({
                           </span>
                         </summary>
                         <div className="border-t border-line/70 p-3">
-                        {group.note && <p className="mb-2 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
-                        {choices.length > 0 ? (
+                          {group.note && <p className="mb-2 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
+                          {choices.length > 0 ? (
                           <ul className="grid gap-2 sm:grid-cols-2">
                             {choices.map((choice) => (
                               <li key={choice.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-line/70 bg-ivory/20 p-2">
@@ -544,9 +544,9 @@ export function RegisteredOptionEditFlow({
                               </li>
                             ))}
                           </ul>
-                        ) : (
-                          <p className="text-sm text-muted">選択肢は未登録です。</p>
-                        )}
+                          ) : (
+                            <p className="text-sm text-muted">選択肢は未登録です。</p>
+                          )}
                         </div>
                       </details>
                     );
@@ -554,7 +554,7 @@ export function RegisteredOptionEditFlow({
                 </div>
               ) : (
                 <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
-            )}
+              )}
             </div>
           </details>
 

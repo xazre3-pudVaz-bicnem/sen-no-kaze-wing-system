@@ -121,7 +121,7 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(flow).toContain('const mainImagePreview = selectedImagePreview ??');
     expect(flow).toContain('fileToDataUrl(file)');
     expect(flow).toContain('imagePreviewRequest.current === request');
-    expect(flow).toContain('この画面から変更できません');
+    expect(identityView).toContain('登録後は変更しません');
     expect(flow).toContain('画像を選んだだけでは保存されません');
     expect(flow).toContain('saveOptionAction(initialState, review.formData)');
   });

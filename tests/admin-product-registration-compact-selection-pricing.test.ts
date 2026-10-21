@@ -88,6 +88,20 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain('候補外も自由入力できます。');
   });
 
+  it('選択項目名と候補はカテゴリーに応じて短く表示し、画像登録は同じ行に残す', () => {
+    expect(finalRefinements).toContain('const groupPlaceholder =');
+    expect(finalRefinements).toContain("suggestions.groups.slice(0, 3).join('／')");
+    expect(finalRefinements).toContain('data-testid="compact-variant-group-field"');
+    expect(finalRefinements).toContain('sm:grid-cols-[7rem_minmax(0,1fr)]');
+    expect(finalRefinements).toContain('placeholder={groupPlaceholder}');
+    expect(finalRefinements).not.toContain('placeholder="例：周辺パネル"');
+    expect(finalRefinements).toContain('data-testid="compact-variant-choices"');
+    expect(finalRefinements).toContain('data-testid="compact-variant-footer"');
+    expect(finalRefinements).toContain('name={`choice_image_file_${index}`}');
+    expect(registrationCss).toContain("[data-testid='compact-variant-footer']");
+    expect(registrationCss).not.toContain('form > div.rounded-xl.border.border-line.bg-white.p-4');
+  });
+
   it('メイン画像と追加画像の実際の余白を測り、同じカードに見える位置まで詰める', () => {
     expect(finalRefinements).toContain("'.registration-step1-sections #product-main-media'");
     expect(finalRefinements).toContain("'.registration-step1-sections #product-sub-images'");

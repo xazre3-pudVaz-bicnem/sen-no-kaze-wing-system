@@ -43,8 +43,8 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain('画像は任意');
     expect(finalRefinements).toContain('name={`choice_image_file_${index}`}');
     expect(finalRefinements).toContain('<SmartImage src={previewUrl}');
-    expect(finalRefinements).toContain('画像変更');
-    expect(finalRefinements).toContain('clearChoiceImage(rowId)');
+    expect(finalRefinements).toContain('ファイル選択');
+    expect(finalRefinements).toContain('clearChoiceMedia(rowId)');
     expect(variantCreateAction).toContain('selectedChoiceImage(formData, input.choiceIndex)');
     expect(variantCreateAction).toContain('store.uploadImage({');
     expect(variantCreateAction).toContain("}, 'variant-choices')");
@@ -89,7 +89,7 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain('候補外も自由入力できます。');
   });
 
-  it('選択項目名と候補はカテゴリーに応じて短く表示し、画像登録は同じ行に残す', () => {
+  it('選択項目名は短く、各選択肢を名称と画像の2行に分けて直接入力できる', () => {
     expect(finalRefinements).toContain('const groupPlaceholder =');
     expect(finalRefinements).toContain("suggestions.groups.slice(0, 3).join('／')");
     expect(finalRefinements).toContain('data-testid="compact-variant-group-field"');
@@ -107,6 +107,43 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain('aria-expanded={activeSuggestions === index}');
     expect(finalRefinements).toContain('aria-expanded={activeSuggestions === \'group\'}');
     expect(registrationCss).not.toContain('form > div.rounded-xl.border.border-line.bg-white.p-4');
+  });
+
+  it('画像URL欄は選択肢の2行目にあり、行IDで入力状態を保持する', () => {
+    expect(finalRefinements).toContain('data-testid="two-line-choice"');
+    expect(finalRefinements).toContain('data-testid="choice-image-inputs"');
+    expect(finalRefinements.indexOf('data-testid="choice-image-inputs"')).toBeGreaterThan(
+      finalRefinements.indexOf('name="standard_choice_index"')
+    );
+    expect(finalRefinements).toContain('name={`choice_image_url_${index}`}');
+    expect(finalRefinements).toContain('name={`choice_image_file_${index}`}');
+    expect(finalRefinements).toContain('onChange={(event) => onChoiceImageUrlChange(rowId, event.target.value)}');
+    expect(finalRefinements).toContain('const [choiceImageUrls, setChoiceImageUrls] = useState<Record<number, string>>({})');
+    expect(finalRefinements).toContain('const imageUrl = choiceImageUrls[rowId]');
+    expect(finalRefinements).toContain("setChoiceImageUrls((urls) => ({ ...urls, [rowId]: '' }))");
+    expect(finalRefinements).toContain('clearChoiceMedia(rowId)');
+    expect(finalRefinements).toContain('<SmartImage src={previewUrl}');
+  });
+
+  it('画像URLへの切り替えとファイルへの切り替えで他方の指定を解除する', () => {
+    expect(finalRefinements).toContain('const onChoiceImageUrlChange = (rowId: number, value: string) => {');
+    expect(finalRefinements).toContain('if (value.trim()) clearChoiceImage(rowId);');
+    expect(finalRefinements).toContain("setChoiceImageUrls((urls) => ({ ...urls, [rowId]: '' }))");
+    expect(finalRefinements).toContain('const clearChoiceMedia = (rowId: number) => {');
+    expect(finalRefinements).toContain('delete next[rowId];');
+    expect(finalRefinements).toContain('clearChoiceMedia(choiceRowIds[index])');
+  });
+
+  it('URLも元の行番号で保存し、不正URLとファイル同時指定を拒否する', () => {
+    expect(variantCreateAction).toContain('function selectedChoiceImageUrl(formData: FormData, choiceIndex: number)');
+    expect(variantCreateAction).toContain('index >= standardIndex ? index + 1 : index');
+    expect(variantCreateAction).toContain('const imageUrl = selectedChoiceImageUrl(formData, input.choiceIndex)');
+    expect(variantCreateAction).toContain('if (file && imageUrl)');
+    expect(variantCreateAction).toContain('imageUrl && !isAllowedChoiceImageUrl(imageUrl)');
+    expect(variantCreateAction).toContain("url.protocol === 'https:'");
+    expect(variantCreateAction).toContain('image_url: selectedChoiceImageUrl(formData, input.choiceIndex) || null');
+    expect(variantCreateAction).toContain('image_url: uploadedUrl ?? choice.image_url');
+    expect(variantCreateAction).toContain('row.name && (');
   });
 
   it('メイン画像と追加画像の実際の余白を測り、同じカードに見える位置まで詰める', () => {

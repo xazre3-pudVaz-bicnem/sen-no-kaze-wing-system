@@ -12,6 +12,17 @@ import { SmartImage } from '@/components/ui/smart-image';
 
 const initialState: ProductVariantCreateState = { ok: false };
 
+function canPreviewChoiceImageUrl(value: string): boolean {
+  const url = value.trim();
+  if (url.startsWith('/images/')) return !/[\\\s<>]/.test(url);
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
 type SuggestionSet = {
   groups: readonly string[];
   choices: readonly string[];
@@ -253,6 +264,7 @@ function VariantCreatePortal({
   const imageInputs = useRef<Record<number, HTMLInputElement | null>>({});
   const imageUrls = useRef<Record<number, string>>({});
   const [imagePreviews, setImagePreviews] = useState<Record<number, string>>({});
+  const [choiceImageUrls, setChoiceImageUrls] = useState<Record<number, string>>({});
   const [standardIndex, setStandardIndex] = useState(0);
   const [activeSuggestions, setActiveSuggestions] = useState<'group' | number | null>(null);
   const suggestions = suggestionsForCategory(categoryLabel);
@@ -270,6 +282,21 @@ function VariantCreatePortal({
     setImagePreviews({ ...imageUrls.current });
   };
 
+  const clearChoiceMedia = (rowId: number) => {
+    clearChoiceImage(rowId);
+    setChoiceImageUrls((urls) => {
+      const next = { ...urls };
+      delete next[rowId];
+      return next;
+    });
+  };
+
+  const onChoiceImageUrlChange = (rowId: number, value: string) => {
+    if (value.trim()) clearChoiceImage(rowId);
+    setChoiceImageUrls((urls) => ({ ...urls, [rowId]: value }));
+    setState(initialState);
+  };
+
   const onChoiceImageChange = (rowId: number, file: File | null) => {
     if (file && (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(file.type) || file.size > 10 * 1024 * 1024)) {
       clearChoiceImage(rowId);
@@ -277,8 +304,12 @@ function VariantCreatePortal({
       return;
     }
     if (imageUrls.current[rowId]) URL.revokeObjectURL(imageUrls.current[rowId]);
-    if (file && file.size > 0) imageUrls.current[rowId] = URL.createObjectURL(file);
-    else delete imageUrls.current[rowId];
+    if (file && file.size > 0) {
+      imageUrls.current[rowId] = URL.createObjectURL(file);
+      setChoiceImageUrls((urls) => ({ ...urls, [rowId]: '' }));
+    } else {
+      delete imageUrls.current[rowId];
+    }
     setImagePreviews({ ...imageUrls.current });
     setState(initialState);
   };
@@ -288,6 +319,7 @@ function VariantCreatePortal({
     Object.keys(imageUrls.current).forEach((id) => { delete imageUrls.current[Number(id)]; });
     imageInputs.current = {};
     setImagePreviews({});
+    setChoiceImageUrls({});
     setGroupName('');
     setChoiceNames(['']);
     setChoiceRowIds([0]);
@@ -302,7 +334,7 @@ function VariantCreatePortal({
 
   const removeChoice = (index: number) => {
     if (choiceNames.length <= 1) return;
-    clearChoiceImage(choiceRowIds[index]);
+    clearChoiceMedia(choiceRowIds[index]);
     setChoiceRowIds((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
     setChoiceNames((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
     setStandardIndex((current) => {
@@ -426,10 +458,13 @@ function VariantCreatePortal({
                 {choiceNames.map((value, index) => {
                   const isStandard = standardIndex === index;
                   const rowId = choiceRowIds[index];
-                  const previewUrl = imagePreviews[rowId];
+                  const imageUrl = choiceImageUrls[rowId] ?? '';
+                  const previewUrl = imagePreviews[rowId] || (canPreviewChoiceImageUrl(imageUrl) ? imageUrl.trim() : '');
                   return (
-                    <div key={rowId} className="space-y-1">
-                      <div className={`flex flex-wrap items-center gap-1.5 border-b border-line/70 py-2 ${isStandard ? 'bg-ivory/20' : ''}`}>
+                    <div key={rowId} data-testid="two-line-choice" className={isStandard
+                      ? 'space-y-1.5 border-b border-line/70 bg-ivory/20 py-2'
+                      : 'space-y-1.5 border-b border-line/70 py-2'}>
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <label className="flex shrink-0 cursor-pointer items-center gap-1 text-xs font-semibold text-ink-soft">
                           <input
                             type="radio"
@@ -462,13 +497,33 @@ function VariantCreatePortal({
                             候補を見る
                           </button>
                         )}
-                        {previewUrl && (
-                          <span className="relative size-9 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
-                            <SmartImage src={previewUrl} alt={`${value || '選択肢'}の画像`} fill sizes="36px" className="object-contain" />
-                          </span>
+                        {choiceNames.length > 1 && (
+                          <button
+                            type="button"
+                            className="shrink-0 px-1 text-xs text-muted underline"
+                            disabled={pending}
+                            onClick={() => removeChoice(index)}
+                          >
+                            削除
+                          </button>
                         )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 sm:pl-14" data-testid="choice-image-inputs">
+                        <label htmlFor={`registration-choice-image-url-${rowId}`} className="sr-only">
+                          {value || `選択肢 ${index + 1}`} の画像URL（任意）
+                        </label>
+                        <Input
+                          id={`registration-choice-image-url-${rowId}`}
+                          name={`choice_image_url_${index}`}
+                          value={imageUrl}
+                          onChange={(event) => onChoiceImageUrlChange(rowId, event.target.value)}
+                          placeholder="画像URL（https://...）"
+                          className="min-w-0 max-w-[22rem] flex-[1_1_12rem]"
+                          disabled={pending}
+                          autoComplete="off"
+                        />
                         <label className="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink-soft hover:border-brown">
-                          {previewUrl ? '画像変更' : '＋ 画像'}
+                          ファイル選択
                           <input
                             ref={(node) => { imageInputs.current[rowId] = node; }}
                             name={`choice_image_file_${index}`}
@@ -479,18 +534,17 @@ function VariantCreatePortal({
                             onChange={(event) => onChoiceImageChange(rowId, event.currentTarget.files?.[0] ?? null)}
                           />
                         </label>
-                        {previewUrl && (
-                          <button type="button" className="text-xs text-muted underline" disabled={pending} onClick={() => clearChoiceImage(rowId)}>解除</button>
+                        {previewUrl ? (
+                          <span className="relative size-9 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
+                            <SmartImage src={previewUrl} alt={`${value || '選択肢'}の画像`} fill sizes="36px" className="object-contain" />
+                          </span>
+                        ) : (
+                          <span className="flex size-9 shrink-0 items-center justify-center rounded border border-line bg-white text-[9px] text-muted">
+                            画像なし
+                          </span>
                         )}
-                        {choiceNames.length > 1 && (
-                          <button
-                            type="button"
-                            className="shrink-0 px-1 text-xs text-muted underline"
-                            disabled={pending}
-                            onClick={() => removeChoice(index)}
-                          >
-                            削除
-                          </button>
+                        {(imagePreviews[rowId] || imageUrl.trim()) && (
+                          <button type="button" className="text-xs text-muted underline" disabled={pending} onClick={() => clearChoiceMedia(rowId)}>解除</button>
                         )}
                       </div>
                       {activeSuggestions === index && (

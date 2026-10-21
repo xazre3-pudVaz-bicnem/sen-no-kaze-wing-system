@@ -32,7 +32,7 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(variants).not.toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
     expect(finalRefinements).toContain('＋ 選択項目を追加');
     expect(finalRefinements).toContain('選択項目名');
-    expect(finalRefinements).toContain('お客様が選べる候補をまとめて入力し、その中から標準にするものを1つ選びます。');
+    expect(finalRefinements).toContain('（標準を1つ選択）');
     expect(finalRefinements).toContain('＋ 選択肢を追加');
     expect(finalRefinements).toContain('name="standard_choice_index"');
     expect(finalRefinements).toContain('name="first_choice_name"');
@@ -40,8 +40,15 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).not.toContain('その他の選択肢');
     expect(finalRefinements).not.toContain('label="標準の選択肢"');
     expect(finalRefinements).toContain('メーカー資料を優先してください。');
-    expect(finalRefinements).toContain('選択肢ごとの画像は登録しません。');
-    expect(finalRefinements).not.toContain('name="image_file"');
+    expect(finalRefinements).toContain('画像は任意');
+    expect(finalRefinements).toContain('name={`choice_image_file_${index}`}');
+    expect(finalRefinements).toContain('<SmartImage src={previewUrl}');
+    expect(finalRefinements).toContain('画像変更');
+    expect(finalRefinements).toContain('clearChoiceImage(rowId)');
+    expect(variantCreateAction).toContain('selectedChoiceImage(formData, input.choiceIndex)');
+    expect(variantCreateAction).toContain('store.uploadImage({');
+    expect(variantCreateAction).toContain("}, 'variant-choices')");
+    expect(variantCreateAction).toContain('store.deleteUploadedImage(uploadedUrl)');
     expect(variantCreateAction).toContain("kind: 'standard' as const");
     expect(variantCreateAction).toContain("kind: 'option' as const");
     expect(variantCreateAction).toContain("getAll('additional_choice_name')");
@@ -55,6 +62,10 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain("value={choiceNames[standardIndex] ?? ''}");
     expect(finalRefinements).toContain('index === standardIndex ? null');
     expect(finalRefinements).toContain('onChange={() => setStandardIndex(index)}');
+    expect(finalRefinements).toContain('key={rowId}');
+    expect(finalRefinements).toContain('setChoiceRowIds((rows) => rows.filter');
+    expect(variantCreateAction).toContain('index >= standardIndex ? index + 1 : index');
+    expect(variantCreateAction).toContain('standardIndex < 0 || standardIndex > additionalChoiceNames.length');
   });
 
   it('選択肢保存では検証用option_idをDB payloadへ送らない', () => {

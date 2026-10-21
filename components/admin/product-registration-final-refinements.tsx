@@ -8,6 +8,7 @@ import {
   type ProductVariantCreateState,
 } from '@/lib/actions/product-registration-variants';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
+import { SmartImage } from '@/components/ui/smart-image';
 
 const initialState: ProductVariantCreateState = { ok: false };
 
@@ -247,14 +248,50 @@ function VariantCreatePortal({
   const [pending, setPending] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [choiceNames, setChoiceNames] = useState<string[]>(['']);
+  const [choiceRowIds, setChoiceRowIds] = useState<number[]>([0]);
+  const nextChoiceRowId = useRef(1);
+  const imageInputs = useRef<Record<number, HTMLInputElement | null>>({});
+  const imageUrls = useRef<Record<number, string>>({});
+  const [imagePreviews, setImagePreviews] = useState<Record<number, string>>({});
   const [standardIndex, setStandardIndex] = useState(0);
   const [activeSuggestions, setActiveSuggestions] = useState<'group' | number | null>(null);
   const categoryName = normalizeCategoryLabel(categoryLabel);
   const suggestions = suggestionsForCategory(categoryLabel);
 
+  useEffect(() => {
+    const urls = imageUrls.current;
+    return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
+  const clearChoiceImage = (rowId: number) => {
+    if (imageUrls.current[rowId]) URL.revokeObjectURL(imageUrls.current[rowId]);
+    delete imageUrls.current[rowId];
+    if (imageInputs.current[rowId]) imageInputs.current[rowId]!.value = '';
+    setImagePreviews({ ...imageUrls.current });
+  };
+
+  const onChoiceImageChange = (rowId: number, file: File | null) => {
+    if (file && (!['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(file.type) || file.size > 10 * 1024 * 1024)) {
+      clearChoiceImage(rowId);
+      setState({ ok: false, fieldErrors: { _form: ['画像はJPEG / PNG / WebP / AVIF、1枚10MB以下にしてください。'] } });
+      return;
+    }
+    if (imageUrls.current[rowId]) URL.revokeObjectURL(imageUrls.current[rowId]);
+    if (file && file.size > 0) imageUrls.current[rowId] = URL.createObjectURL(file);
+    else delete imageUrls.current[rowId];
+    setImagePreviews({ ...imageUrls.current });
+    setState(initialState);
+  };
+
   const resetChoiceForm = () => {
+    Object.values(imageUrls.current).forEach((url) => URL.revokeObjectURL(url));
+    Object.keys(imageUrls.current).forEach((id) => { delete imageUrls.current[Number(id)]; });
+    imageInputs.current = {};
+    setImagePreviews({});
     setGroupName('');
     setChoiceNames(['']);
+    setChoiceRowIds([0]);
+    nextChoiceRowId.current = 1;
     setStandardIndex(0);
     setActiveSuggestions(null);
   };
@@ -265,6 +302,8 @@ function VariantCreatePortal({
 
   const removeChoice = (index: number) => {
     if (choiceNames.length <= 1) return;
+    clearChoiceImage(choiceRowIds[index]);
+    setChoiceRowIds((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
     setChoiceNames((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
     setStandardIndex((current) => {
       if (current === index) return 0;
@@ -295,32 +334,31 @@ function VariantCreatePortal({
   };
 
   return createPortal(
-    <div className="space-y-3" data-combined-create-root="true">
-      <div>
-        <p className="text-sm font-semibold">選択項目を追加</p>
-        <p className="mt-1 text-xs text-muted">カテゴリーに合う候補から選ぶか、そのまま自由入力できます。</p>
-      </div>
-
-      <button
-        type="button"
-        className="btn-secondary btn-sm"
-        aria-expanded={open}
-        disabled={open}
-        onClick={() => {
-          setState(initialState);
-          resetChoiceForm();
-          setOpen(true);
-        }}
-      >
-        ＋ 選択項目を追加
-      </button>
+    <div className="space-y-2" data-combined-create-root="true">
+      {!open && (
+        <>
+          <p className="text-sm font-semibold">選択項目を追加</p>
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            aria-expanded={false}
+            onClick={() => {
+              setState(initialState);
+              resetChoiceForm();
+              setOpen(true);
+            }}
+          >
+            ＋ 選択項目を追加
+          </button>
+        </>
+      )}
 
       {open && (
-        <div className="rounded-xl border border-dashed border-line bg-ivory/20 p-4">
+        <div className="rounded-xl border border-dashed border-line bg-ivory/20 p-3 sm:p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">選択項目を追加</p>
-              {categoryName && <p className="mt-1 text-xs text-muted">{categoryName}の入力候補を表示します。</p>}
+              {categoryName && <p className="text-xs text-muted">{categoryName}：候補を表示できます</p>}
             </div>
             <button
               type="button"
@@ -335,7 +373,7 @@ function VariantCreatePortal({
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
 
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-3" noValidate>
             <input type="hidden" name="option_id" value={optionId} />
             <input type="hidden" name="first_choice_name" value={choiceNames[standardIndex] ?? ''} />
             {choiceNames.map((value, index) =>
@@ -374,17 +412,15 @@ function VariantCreatePortal({
             </Field>
 
             <div className="rounded-xl border border-line bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span></p>
-                  <p className="mt-1 text-xs text-muted">お客様が選べる候補をまとめて入力し、その中から標準にするものを1つ選びます。</p>
-                </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択）</span></p>
                 <button
                   type="button"
                   className="btn-secondary btn-sm"
                   disabled={pending}
                   onClick={() => {
                     setChoiceNames((rows) => [...rows, '']);
+                    setChoiceRowIds((rows) => [...rows, nextChoiceRowId.current++]);
                     setActiveSuggestions(choiceNames.length);
                   }}
                 >
@@ -392,58 +428,61 @@ function VariantCreatePortal({
                 </button>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <div className="mt-2 space-y-2">
                 {choiceNames.map((value, index) => {
                   const isStandard = standardIndex === index;
+                  const rowId = choiceRowIds[index];
+                  const previewUrl = imagePreviews[rowId];
                   return (
-                    <div
-                      key={`choice-${index}`}
-                      className={`rounded-lg border p-3 ${isStandard ? 'border-brown bg-ivory/40' : 'border-line bg-white'}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <label className="mt-7 flex shrink-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-ink-soft">
+                    <div key={rowId} className="space-y-1">
+                      <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-2 py-2 ${isStandard ? 'border-brown bg-ivory/40' : 'border-line bg-white'}`}>
+                        <label className="flex shrink-0 cursor-pointer items-center gap-1 text-xs font-semibold text-ink-soft">
                           <input
                             type="radio"
                             name="standard_choice_index"
                             value={index}
                             checked={isStandard}
+                            disabled={pending}
                             onChange={() => setStandardIndex(index)}
                           />
                           標準
                         </label>
-                        <div className="min-w-0 flex-1">
-                          <Field
-                            label={`選択肢 ${index + 1}`}
-                            htmlFor={`registration-choice-${index}`}
-                            required={isStandard}
-                            errors={
-                              isStandard
-                                ? state.fieldErrors?.first_choice_name
-                                : state.fieldErrors?.additional_choice_name
-                            }
-                          >
-                            <Input
-                              id={`registration-choice-${index}`}
-                              value={value}
-                              onChange={(event) => updateChoice(index, event.target.value)}
-                              onFocus={() => setActiveSuggestions(index)}
-                              placeholder="例：ホワイト／グレー／ブラック"
-                              autoComplete="off"
-                              required={isStandard}
-                            />
-                            {activeSuggestions === index && (
-                              <SuggestionButtons
-                                title="選択肢の候補"
-                                values={suggestions.choices}
-                                onSelect={(nextValue) => updateChoice(index, nextValue)}
-                              />
-                            )}
-                          </Field>
-                        </div>
+                        <label htmlFor={`registration-choice-${rowId}`} className="sr-only">選択肢 {index + 1}</label>
+                        <Input
+                          id={`registration-choice-${rowId}`}
+                          className="min-w-32 flex-[1_1_12rem]"
+                          value={value}
+                          disabled={pending}
+                          onChange={(event) => updateChoice(index, event.target.value)}
+                          onFocus={() => setActiveSuggestions(index)}
+                          placeholder={`選択肢 ${index + 1}：ホワイトなど`}
+                          autoComplete="off"
+                          required={isStandard}
+                        />
+                        {previewUrl && (
+                          <span className="relative size-9 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
+                            <SmartImage src={previewUrl} alt={`${value || '選択肢'}の画像`} fill sizes="36px" className="object-contain" />
+                          </span>
+                        )}
+                        <label className="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink-soft hover:border-brown">
+                          {previewUrl ? '画像変更' : '＋ 画像'}
+                          <input
+                            ref={(node) => { imageInputs.current[rowId] = node; }}
+                            name={`choice_image_file_${index}`}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/avif"
+                            className="sr-only"
+                            disabled={pending}
+                            onChange={(event) => onChoiceImageChange(rowId, event.currentTarget.files?.[0] ?? null)}
+                          />
+                        </label>
+                        {previewUrl && (
+                          <button type="button" className="text-xs text-muted underline" disabled={pending} onClick={() => clearChoiceImage(rowId)}>解除</button>
+                        )}
                         {choiceNames.length > 1 && (
                           <button
                             type="button"
-                            className="mt-7 shrink-0 text-xs text-muted underline underline-offset-4"
+                            className="shrink-0 px-1 text-xs text-muted underline"
                             disabled={pending}
                             onClick={() => removeChoice(index)}
                           >
@@ -451,14 +490,26 @@ function VariantCreatePortal({
                           </button>
                         )}
                       </div>
+                      {activeSuggestions === index && (
+                        <SuggestionButtons
+                          title="選択肢の候補"
+                          values={suggestions.choices}
+                          onSelect={(nextValue) => updateChoice(index, nextValue)}
+                        />
+                      )}
                     </div>
                   );
                 })}
+                {(state.fieldErrors?.first_choice_name || state.fieldErrors?.additional_choice_name) && (
+                  <p className="text-xs text-danger">
+                    {[...(state.fieldErrors.first_choice_name ?? []), ...(state.fieldErrors.additional_choice_name ?? [])].join(' / ')}
+                  </p>
+                )}
               </div>
             </div>
 
             <p className="text-xs text-muted">
-              候補は入力補助です。実際の商品で選べる名称はメーカー資料を優先してください。選択肢ごとの画像は登録しません。
+              候補は入力補助です。実際に選べる色・仕様はメーカー資料を優先してください。画像は任意（JPEG / PNG / WebP / AVIF、10MB以下）。
             </p>
             <Button type="submit" disabled={pending}>
               {pending && <Spinner />}

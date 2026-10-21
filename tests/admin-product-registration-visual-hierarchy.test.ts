@@ -30,10 +30,12 @@ describe('商品登録 STEP1 の見やすさと選択肢操作', () => {
     expect(css).toContain("content: '6. 価格・原価'");
   });
 
-  it('選択肢追加を見出しの横に置き、入れ子の枠を減らす', () => {
+  it('選択肢追加を入力欄の下に置き、候補を手動開閉にして入れ子の枠を減らす', () => {
     expect(refinement).toContain('＋ 選択肢を追加');
     expect(refinement).toContain('data-testid="compact-variant-choices"');
-    expect(refinement).toContain('flex flex-wrap items-center justify-between gap-1.5');
+    expect(refinement).toContain('border-b border-line/70 py-2');
+    expect(refinement).toContain('current === index ? null : index');
+    expect(refinement).not.toContain('rounded-lg border px-2 py-1.5');
     expect(css).not.toContain('display: contents !important;');
     expect(css).not.toContain('order: 30;');
   });

@@ -74,7 +74,8 @@ describe('共通商品詳細の画像名と拡大表示', () => {
   it('画像操作で商品仕様・金額・PDF表示の動作を変更しない', () => {
     expect(detail).toContain('const handleVariantChange = (choiceId: string, groupId: string) => {');
     expect(detail).toContain('onVariantChange(choiceId, groupId);');
-    expect(detail).toContain('showImages={false}');
+    expect(detail).toContain('showImages');
+    expect(detail).not.toContain('showImages={false}');
     expect(detail).toContain('onChange={handleVariantChange}');
     expect(detail).toContain('<ManufacturerDocumentModal');
     expect(detail).not.toContain('setActiveImageIndex(imageIndex);');

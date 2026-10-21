@@ -257,6 +257,7 @@ function VariantCreatePortal({
   const [activeSuggestions, setActiveSuggestions] = useState<'group' | number | null>(null);
   const categoryName = normalizeCategoryLabel(categoryLabel);
   const suggestions = suggestionsForCategory(categoryLabel);
+  const groupPlaceholder = `例：${suggestions.groups.slice(0, 3).join('／')}`;
 
   useEffect(() => {
     const urls = imageUrls.current;
@@ -336,30 +337,24 @@ function VariantCreatePortal({
   return createPortal(
     <div className="space-y-2" data-combined-create-root="true">
       {!open && (
-        <>
-          <p className="text-sm font-semibold">選択項目を追加</p>
-          <button
-            type="button"
-            className="btn-secondary btn-sm"
-            aria-expanded={false}
-            onClick={() => {
-              setState(initialState);
-              resetChoiceForm();
-              setOpen(true);
-            }}
-          >
-            ＋ 選択項目を追加
-          </button>
-        </>
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          aria-expanded={false}
+          onClick={() => {
+            setState(initialState);
+            resetChoiceForm();
+            setOpen(true);
+          }}
+        >
+          ＋ 選択項目を追加
+        </button>
       )}
 
       {open && (
         <div className="rounded-xl border border-dashed border-line bg-ivory/20 p-3 sm:p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">選択項目を追加</p>
-              {categoryName && <p className="text-xs text-muted">{categoryName}：候補を表示できます</p>}
-            </div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">選択項目を追加</p>
             <button
               type="button"
               className="text-xs text-muted underline underline-offset-4"
@@ -373,7 +368,7 @@ function VariantCreatePortal({
           {state.error && <Alert tone="danger">{state.error}</Alert>}
           {state.fieldErrors?._form?.[0] && <Alert tone="danger">{state.fieldErrors._form[0]}</Alert>}
 
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-3" noValidate>
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-2" noValidate>
             <input type="hidden" name="option_id" value={optionId} />
             <input type="hidden" name="first_choice_name" value={choiceNames[standardIndex] ?? ''} />
             {choiceNames.map((value, index) =>
@@ -382,37 +377,41 @@ function VariantCreatePortal({
               )
             )}
 
-            <Field
-              label="選択項目名"
-              htmlFor="registration-variant-group-name"
-              hint="例：床／周辺パネル／アクセントパネル／浴槽。候補外も自由入力できます。"
-              required
-              errors={state.fieldErrors?.name}
-            >
-              <Input
-                id="registration-variant-group-name"
-                name="name"
-                value={groupName}
-                onChange={(event) => setGroupName(event.target.value)}
-                onFocus={() => setActiveSuggestions('group')}
-                placeholder="例：周辺パネル"
-                autoComplete="off"
-                required
-              />
-              {activeSuggestions === 'group' && (
-                <SuggestionButtons
-                  title="選択項目名の候補"
-                  values={suggestions.groups}
-                  onSelect={(value) => {
-                    setGroupName(value);
-                    setActiveSuggestions(0);
-                  }}
+            <div className="grid gap-1.5 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center" data-testid="compact-variant-group-field">
+              <label htmlFor="registration-variant-group-name" className="text-sm font-semibold">
+                選択項目名 <span className="text-xs text-red-700">必須</span>
+              </label>
+              <div className="min-w-0">
+                <Input
+                  id="registration-variant-group-name"
+                  name="name"
+                  value={groupName}
+                  onChange={(event) => setGroupName(event.target.value)}
+                  onFocus={() => setActiveSuggestions('group')}
+                  placeholder={groupPlaceholder}
+                  title="候補外も自由入力できます。"
+                  aria-invalid={Boolean(state.fieldErrors?.name?.length)}
+                  autoComplete="off"
+                  required
                 />
-              )}
-            </Field>
+                {state.fieldErrors?.name?.[0] && (
+                  <p className="mt-1 text-xs text-danger" role="alert">{state.fieldErrors.name[0]}</p>
+                )}
+                {activeSuggestions === 'group' && (
+                  <SuggestionButtons
+                    title="選択項目名の候補"
+                    values={suggestions.groups}
+                    onSelect={(value) => {
+                      setGroupName(value);
+                      setActiveSuggestions(0);
+                    }}
+                  />
+                )}
+              </div>
+            </div>
 
-            <div className="rounded-xl border border-line bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-2" data-testid="compact-variant-choices">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択）</span></p>
                 <button
                   type="button"
@@ -428,14 +427,14 @@ function VariantCreatePortal({
                 </button>
               </div>
 
-              <div className="mt-2 space-y-2">
+              <div className="space-y-1.5">
                 {choiceNames.map((value, index) => {
                   const isStandard = standardIndex === index;
                   const rowId = choiceRowIds[index];
                   const previewUrl = imagePreviews[rowId];
                   return (
                     <div key={rowId} className="space-y-1">
-                      <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-2 py-2 ${isStandard ? 'border-brown bg-ivory/40' : 'border-line bg-white'}`}>
+                      <div className={`flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1.5 ${isStandard ? 'border-brown bg-ivory/40' : 'border-line bg-white'}`}>
                         <label className="flex shrink-0 cursor-pointer items-center gap-1 text-xs font-semibold text-ink-soft">
                           <input
                             type="radio"
@@ -508,13 +507,15 @@ function VariantCreatePortal({
               </div>
             </div>
 
-            <p className="text-xs text-muted">
-              候補は入力補助です。実際に選べる色・仕様はメーカー資料を優先してください。画像は任意（JPEG / PNG / WebP / AVIF、10MB以下）。
-            </p>
-            <Button type="submit" disabled={pending}>
-              {pending && <Spinner />}
-              この選択項目を作成
-            </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2" data-testid="compact-variant-footer">
+              <p className="text-xs text-muted">
+                メーカー資料を優先してください。画像は任意（10MB以下）。
+              </p>
+              <Button type="submit" disabled={pending} className="ml-auto">
+                {pending && <Spinner />}
+                この選択項目を作成
+              </Button>
+            </div>
           </form>
         </div>
       )}

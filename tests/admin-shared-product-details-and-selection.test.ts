@@ -20,7 +20,9 @@ describe('下書き／登録済みの商品詳細・お客様選択のUI共通�
     expect(draft).toContain('list="option-size-note-suggestions"');
     expect(draft).toContain('sizeSuggestions.map(');
     expect(draft).toContain('markOptionDirty()');
-    expect(published).toContain('id="registered-size-note" name="size_note"');
+    expect(published).toContain('id="registered-size-note"');
+    expect(published).toContain('name="size_note"');
+    expect(published).toContain('value={sizeNoteValue}');
     expect(published).toContain('highlightId="registered-highlight"');
     expect(published).toContain('descriptionId="registered-description"');
   });

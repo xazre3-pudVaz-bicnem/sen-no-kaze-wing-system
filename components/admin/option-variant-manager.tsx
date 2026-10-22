@@ -204,8 +204,12 @@ function ChoiceEditor({
 
   // 保存結果（エラーを含む）は折り畳まれたまま隠さない。
   useEffect(() => {
-    if ((state.ok || state.error || Object.keys(state.fieldErrors ?? {}).length > 0) && editorDetailsRef.current) {
-      editorDetailsRef.current.open = true;
+    if (state.ok || state.error || Object.keys(state.fieldErrors ?? {}).length > 0) {
+      const editor = editorDetailsRef.current;
+      if (!editor) return;
+      editor.open = true;
+      const groupDetails = editor.closest<HTMLDetailsElement>('details[data-testid="variant-group-compact"]');
+      if (groupDetails) groupDetails.open = true;
     }
   }, [state]);
 

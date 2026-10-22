@@ -307,7 +307,7 @@ export function RegisteredOptionEditFlow({
         }
       }
       for (const edit of Object.values(galleryEdits)) {
-        if (!edit.removed && (!/^\\d+$/.test(edit.order) || Number(edit.order) > 100000 || edit.caption.length > 200)) {
+        if (!edit.removed && (!/^\d+$/.test(edit.order) || Number(edit.order) > 100000 || edit.caption.length > 200)) {
           setReviewError('追加画像の表示順は0以上100000以下、説明は200文字以内で入力してください。');
           return;
         }

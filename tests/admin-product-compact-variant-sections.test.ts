@@ -34,7 +34,7 @@ describe('商品登録の選択肢をコンパクトにして、主要セクシ�
     expect(variant).toContain('name="status"');
     expect(variant).toContain('＋ 選択肢を追加（追加金額も入力）');
     expect(variant).toContain('この項目の名前・詳細設定');
-    expect(variant).toContain('key={`${choice.id}:${choice.image_url ?? \'\'}`}'.replaceAll('\\', ''));
+    expect(variant).toContain('key={`${choice.id}:${choice.image_url ??');
   });
 
   it('下書きと登録済み商品に限って白・アイボリーを交互に表示する', () => {

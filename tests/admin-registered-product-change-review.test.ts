@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 const page = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'), 'utf8');
 const newPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/new/page.tsx'), 'utf8');
 const flow = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/registered-option-edit-flow.tsx'), 'utf8');
-const variantHeading = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-variant-group-heading.tsx'), 'utf8');
 const identityView = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-identity-status.tsx'), 'utf8');
 
 describe('登録済み商品の変更確認フロー', () => {
@@ -174,7 +173,8 @@ describe('登録済み商品の変更確認フロー', () => {
     const choices = flow.slice(choicesSection, priceSection);
     expect(gallery).toContain('galleryImages.map(');
     expect(gallery).toContain('registered-new-gallery');
-    expect(gallery).toContain('setNewGalleryImages(');
+    expect(gallery).toContain('handleNewGalleryFiles(event.target.files)');
+    expect(flow).toContain('setNewGalleryImages(next)');
     expect(gallery).toContain('editGallery(image.id,');
     expect(gallery).toContain('この追加画像を削除予定にする');
     expect(pdf).toContain("documentAction === 'replace'");

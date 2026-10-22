@@ -994,7 +994,6 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
   redirect(`/admin/quotes?case=${encodeURIComponent(newId)}&tab=estimate&revised=1#case-workspace`);
 }
 
-/** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null */
 /** 管理者：ユーザーの権限を変更する（自分自身は変更できない） */
 export async function updateUserRoleAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const admin = await requireAdmin();

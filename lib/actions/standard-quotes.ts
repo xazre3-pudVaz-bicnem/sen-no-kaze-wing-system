@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/session';
-import { isLocalMode, StoreError } from '@/lib/data/store';
-import { assertQuoteLineGuardReady } from '@/lib/data/quote-line-guard';
+import { isLocalMode } from '@/lib/data/store';
+import { quoteLineGuardError } from '@/lib/data/quote-line-guard';
 import { applyQuoteLineStateInput, LINE_STATE_REASON_MAX, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { createClient } from '@/lib/supabase/server';
 
@@ -70,17 +70,6 @@ function message(error: { message?: string } | null | undefined): string {
 }
 
 const LOCAL_UNAVAILABLE = '標準見積からの見積作成はSupabase接続環境で利用できます。';
-
-/** DB の更新（20261016111000）が済んでいなければ、その文面を返す */
-async function guardError(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string | null> {
-  try {
-    await assertQuoteLineGuardReady(supabase);
-    return null;
-  } catch (e) {
-    if (e instanceof StoreError) return e.message;
-    throw e;
-  }
-}
 
 /** 公開中の標準見積から、案件と見積下書きを作る */
 export async function createStandardQuoteCaseAction(_prev: StandardQuoteCaseFormState, formData: FormData): Promise<StandardQuoteCaseFormState> {
@@ -147,7 +136,7 @@ export async function saveStandardQuoteDraftAction(input: unknown): Promise<Stan
   const supabase = await createClient();
   // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
   if (value.lines.some((line) => line.line_state)) {
-    const blocked = await guardError(supabase);
+    const blocked = await quoteLineGuardError(supabase);
     if (blocked) return { ok: false, error: blocked };
   }
   const { data, error } = await supabase.rpc('save_standard_quote_draft', {
@@ -175,7 +164,7 @@ export async function finalizeStandardQuoteDraftAction(input: unknown): Promise<
   if (!parsed.success) return { ok: false, error: '入力内容を確認してください' };
   const supabase = await createClient();
   // DB の更新（20261016111000）が済むまで、旧い関数で正式見積を発行しない
-  const blocked = await guardError(supabase);
+  const blocked = await quoteLineGuardError(supabase);
   if (blocked) return { ok: false, error: blocked };
   // 初回か改訂かは DB の下書きで判断する（画面の値は使わない）
   const { data: detail, error: readError } = await supabase.rpc('get_standard_quote_draft', { p_draft_id: parsed.data.draft_id });

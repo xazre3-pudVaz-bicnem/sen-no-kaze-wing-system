@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth/session';
-import { isLocalMode, StoreError } from '@/lib/data/store';
-import { assertQuoteLineGuardReady } from '@/lib/data/quote-line-guard';
+import { isLocalMode } from '@/lib/data/store';
+import { quoteLineGuardError } from '@/lib/data/quote-line-guard';
 import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { isMissingNamedFunction } from '@/lib/data/schema-compat';
 import { flushNotificationsSafely } from '@/lib/mail/send';
@@ -97,12 +97,8 @@ export async function formalizeLegacyAcceptedQuoteAction(
 
   const db = await createClient();
   // DB の更新（20261016111000）が済むまで、旧い関数で確定見積を発行しない
-  try {
-    await assertQuoteLineGuardReady(db);
-  } catch (e) {
-    if (e instanceof StoreError) return { ok: false, error: e.message };
-    throw e;
-  }
+  const blocked = await quoteLineGuardError(db);
+  if (blocked) return { ok: false, error: blocked };
   if (porKeys.length > 0) {
     const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
       p_quote_id: parsed.data.quote_id,

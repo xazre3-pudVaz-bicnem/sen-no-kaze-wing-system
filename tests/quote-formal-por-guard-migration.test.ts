@@ -142,7 +142,7 @@ describe('画面・データ層のつなぎ', () => {
   });
 
   it('改訂の画面は一覧を DB から読み、確認欄と未確定の行を示し、理由が残る間は発行のボタンを押せない', () => {
-    expect(editPage).toContain('store.getQuotePorSelections(quote.id, actor),');
+    expect(editPage).toContain('store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true })),');
     expect(editPage).toContain('porState={porState}');
     expect(dealerForms).toContain('<QuotePorReview');
     expect(dealerForms).toContain('<SubmitButton pending={pending} disabled={porBlockers.length > 0} label={');
@@ -153,7 +153,7 @@ describe('画面・データ層のつなぎ', () => {
   });
 
   it('承諾済みの概算から確定見積を作る画面も、確認を記録してから発行する（施工以外の未確定の行は直せないと示す）', () => {
-    expect(formalizePage).toContain('const porState = await store.getQuotePorSelections(quote.id, actor);');
+    expect(formalizePage).toContain('store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true })),');
     expect(formalizePage).toContain('carriedItems={carriedItems}');
     expect(formalizationForm).toContain('disabled={pending || porBlockers.length > 0}');
     expect(formalizationForm).toContain('この画面では施工の金額だけを入れられるため、この明細は直せません');

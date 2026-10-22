@@ -40,6 +40,17 @@ export async function assertQuoteLineGuardReady(db: RpcClient): Promise<void> {
   if (state === 'unknown') throw new StoreError('VALIDATION', QUOTE_LINE_GUARD_UNKNOWN_MESSAGE);
 }
 
+/** Server Action 用：入っていなければ、その文面を返す（入っていれば null） */
+export async function quoteLineGuardError(db: RpcClient): Promise<string | null> {
+  try {
+    await assertQuoteLineGuardReady(db);
+    return null;
+  } catch (e) {
+    if (e instanceof StoreError) return e.message;
+    throw e;
+  }
+}
+
 /** テスト用：確認の結果を忘れる */
 export function resetQuoteLineGuardForTest(): void {
   guardReady = false;

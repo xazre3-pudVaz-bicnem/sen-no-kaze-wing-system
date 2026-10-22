@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Package, Search, X } from 'lucide-react';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
-import { LINE_STATE_KINDS, QUOTE_LINE_STATE_LABELS, type QuoteLineState } from '@/lib/domain/quote-por';
+import { EXCLUDED_MARKER, LINE_STATE_KINDS, QUOTE_LINE_STATE_LABELS, ZERO_CONFIRMED_MARKER, type QuoteLineState } from '@/lib/domain/quote-por';
 import { Button, Input } from '@/components/ui';
 import { EstimateRateControls } from '@/components/admin/estimate-workbench-shared';
 
@@ -1198,8 +1198,8 @@ function customerPreviewRowAmount(row: QuoteAuthoringRow): number {
 
 /** お客様向けプレビューの備考（扱いを選んだ行は、保存後の見積書と同じ文言） */
 function customerPreviewRemark(row: QuoteAuthoringRow): string {
-  if (row.lineState === 'excluded') return `［今回の契約対象外］${row.lineStateReason?.trim() ?? ''}`;
-  if (row.lineState === 'zero_confirmed') return `［0円確定］：${row.lineStateReason?.trim() ?? ''}`;
+  if (row.lineState === 'excluded') return `${EXCLUDED_MARKER}${row.lineStateReason?.trim() ?? ''}`;
+  if (row.lineState === 'zero_confirmed') return `${ZERO_CONFIRMED_MARKER}${row.lineStateReason?.trim() ?? ''}`;
   return row.remark || '';
 }
 

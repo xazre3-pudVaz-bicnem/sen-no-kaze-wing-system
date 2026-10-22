@@ -48,11 +48,13 @@ export default async function StandardQuoteDraftPage({
   const { draft, request, standard_estimate: source, parent, internals } = payload;
   // 金額が未確定の行（POR と、0 円の内外装・オプション・別途工事の行のうち、自動計算・前の版と同じ 0 円・0円確定・対象外のどれでもない行）。
   // 止めるのは DB の正式保存（D1 までの暫定）。前の版の明細は明細のキーで突き合わせる
-  const parentItems = parent
-    ? (((await supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)).data ??
-        []) as QuoteLineCheckLine[])
-    : [];
-  const unresolvedItems = findUnresolvedLines(payload.items, { parentLines: parentItems, matchLineKey: true });
+  const parentRead = parent
+    ? await supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
+    : { data: [], error: null };
+  const parentReadFailed = Boolean(parentRead.error);
+  const unresolvedItems = parentReadFailed
+    ? new Set<StandardQuoteDraftPayload['items'][number]>()
+    : findUnresolvedLines(payload.items, { parentLines: (parentRead.data ?? []) as QuoteLineCheckLine[], matchLineKey: true });
   const savedUnresolvedNames = payload.items
     .filter((item) => item.price_mode === 'por' || unresolvedItems.has(item))
     .map((item) => item.name);
@@ -96,7 +98,10 @@ export default async function StandardQuoteDraftPage({
         </div>
         <div>
           <p className="text-xs text-muted">金額未確定の行</p>
-          <p>{savedUnresolvedNames.length > 0 ? <Badge tone="warn">{savedUnresolvedNames.length} 行（発行できません）</Badge> : 'なし'}</p>
+          <p>
+            {savedUnresolvedNames.length > 0 ? <Badge tone="warn">{savedUnresolvedNames.length} 行（発行できません）</Badge> : 'なし'}
+            {parentReadFailed && <span className="block text-xs text-muted">前の版の明細を読み取れなかったため、発行の可否は発行のときに確かめます</span>}
+          </p>
         </div>
         {parent && (
           <p className="text-xs text-muted sm:col-span-4">

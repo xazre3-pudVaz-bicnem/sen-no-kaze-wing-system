@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useActionState, useState } from 'react';
+import { Fragment, useActionState, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatYen } from '@/lib/domain/pricing';
@@ -11,8 +11,11 @@ import {
   findUnresolvedLines,
   EMPTY_POR_SELECTION_STATE,
   LINE_STATE_KINDS,
+  porSelectionUnavailableReason,
+  quoteOptionFlagMap,
   splitQuoteLineStateRemark,
   type QuoteLineState,
+  type QuoteOptionFlag,
   type QuotePorSelectionState,
 } from '@/lib/domain/quote-por';
 import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
@@ -32,6 +35,7 @@ import {
 } from './quote-authoring-ui';
 
 const initial = { ok: false } as const;
+const NO_OPTION_FLAGS: QuoteOptionFlag[] = [];
 
 /** 管理者：見積の担当代理店を割り当てる */
 export function AssignDealerForm({ quote, dealers }: { quote: Quote; dealers: Profile[] }) {
@@ -123,6 +127,7 @@ export function DealerRevisionForm({
   baseModelId = '',
   specCode = '',
   porState = EMPTY_POR_SELECTION_STATE,
+  optionFlags = NO_OPTION_FLAGS,
 }: {
   quote: Quote;
   items: QuoteItem[];
@@ -139,6 +144,8 @@ export function DealerRevisionForm({
   specCode?: string;
   /** お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。DB の get_quote_por_selections） */
   porState?: QuotePorSelectionState;
+  /** 商品台帳のすべての商品（前の版の明細が指す商品の別途見積の判定に使う） */
+  optionFlags?: QuoteOptionFlag[];
 }) {
   const [state, action, pending] = useActionState(createDealerRevisionAction, initial);
   const editable = (kind: QuoteItem['kind']): kind is RevisionItemKind =>
@@ -165,16 +172,25 @@ export function DealerRevisionForm({
   const [isDirty, setIsDirty] = useState(false);
 
   // ---- 金額未確定の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
-  // 前の版（いまの発行済み見積）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい。
-  // 改訂の明細には商品台帳の紐付け（option_id）を残さないため、DB と同じく台帳の 0 円・別途見積の商品では判定しない
+  // 前の版（いまの発行済み見積）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい（前の版の行の数まで）。
+  // 改訂の明細には商品台帳の紐付け（option_id）を残さないため、DB と同じく新しい版の行では台帳の 0 円・別途見積の商品で判定しない
   // （台帳から足した別途見積の商品は備考「別途見積」で未確定になる。台帳の 0 円の商品を新しく足したときは「0円確定」を選ぶ）
-  // 発行する版の明細＝参照のみの行（そのまま写る）＋編集中の行。前の版の同じ 0 円の明細は前の版の行の数まで
-  const unresolvedLines = findUnresolvedLines<QuoteItem | Row>([...lockedItems, ...rows], { parentLines: items });
+  // 発行する版の明細＝参照のみの行（そのまま写る）＋編集中の行
+  const optionMap = useMemo(() => quoteOptionFlagMap(optionFlags), [optionFlags]);
+  const unresolvedLines = findUnresolvedLines<QuoteItem | Row>([...lockedItems, ...rows], {
+    parentLines: items,
+    options: optionMap,
+    ignoreLineOptions: true,
+  });
   const isUnresolved = (line: QuoteItem | Row) => unresolvedLines.has(line);
   // 最初に未確定だった行は、金額・扱いを入れた後も欄に残す（何を確定したかを見返せるように）
   const [initialPorRowKeys] = useState(() => {
     const initialRows = buildInitialRows();
-    const initialUnresolved = findUnresolvedLines<QuoteItem | Row>([...lockedItems, ...initialRows], { parentLines: items });
+    const initialUnresolved = findUnresolvedLines<QuoteItem | Row>([...lockedItems, ...initialRows], {
+      parentLines: items,
+      options: quoteOptionFlagMap(optionFlags),
+      ignoreLineOptions: true,
+    });
     return new Set(initialRows.filter((row) => initialUnresolved.has(row)).map((row) => row.key));
   });
   const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
@@ -212,8 +228,8 @@ export function DealerRevisionForm({
   const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
   const missingReasonCount = rows.filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim()).length;
   const porBlockers = [
-    // DB の更新（20261016111000）の前は確認の仕組みが無い。旧い関数で発行しないよう止める（発行の処理でも止める）
-    ...(!porState.available ? ['DB の更新（金額未確定の明細の確認）が済むまで発行できません'] : []),
+    // DB の更新（20261016111000）の前・一覧を読み込めないときは発行しない（発行の処理でも止める）
+    ...(porSelectionUnavailableReason(porState) ? [porSelectionUnavailableReason(porState) as string] : []),
     ...(unresolvedPorCount > 0 ? [`金額が未確定の明細が ${unresolvedPorCount} 行残っています`] : []),
     ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),

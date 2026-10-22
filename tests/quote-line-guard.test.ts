@@ -3,6 +3,7 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { QUOTE_LINE_GUARD_PENDING_MESSAGE, assertQuoteLineGuardReady, quoteLineGuardState, resetQuoteLineGuardForTest } from '@/lib/data/quote-line-guard';
 import { StoreError } from '@/lib/data/store';
+import { porSelectionUnavailableReason } from '@/lib/domain/quote-por';
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
@@ -34,6 +35,12 @@ describe('マージ後・migration の適用前は、正式見積の発行と状
     await expect(assertQuoteLineGuardReady(fakeDb({ message: 'fetch failed' }))).rejects.toThrow('DB の状態を確認できませんでした');
   });
 
+  it('確認の仕組みが使えないときの理由（DB の更新前・読み込めない）', () => {
+    expect(porSelectionUnavailableReason({ selections: [], confirmed: false, available: true })).toBeNull();
+    expect(porSelectionUnavailableReason({ selections: [], confirmed: false, available: false })).toBe('DB の更新（金額未確定の明細の確認）が済むまで発行できません');
+    expect(porSelectionUnavailableReason({ selections: [], confirmed: false, available: false, loadError: true })).toContain('画面を再読み込みしてください');
+  });
+
   it('RPC があれば（存在しない見積で NOT_FOUND）通し、その後は確かめない', async () => {
     const db = fakeDb(NOT_FOUND);
     expect(await quoteLineGuardState(db)).toBe('ready');
@@ -50,11 +57,15 @@ describe('マージ後・migration の適用前は、正式見積の発行と状
     // 下書きの保存・新規登録は、印のある明細があるときだけ
     expect(supabaseStore.match(/if \(input\.items\.some\(\(item\) => isReservedLineStateRemark\(item\.remark\)\)\) await assertQuoteLineGuardReady\(db\);/g)).toHaveLength(2);
     // 標準見積から作る下書きの保存（扱いを選んだとき）と正式保存、旧形式の確定見積
-    expect(standard.match(/await guardError\(supabase\)/g)).toHaveLength(2);
-    expect(legacy).toContain('await assertQuoteLineGuardReady(db);');
-    expect(legacy.indexOf('await assertQuoteLineGuardReady(db);')).toBeLessThan(legacy.indexOf("db.rpc('confirm_quote_por_selections'"));
-    // 画面も、確認の仕組みが無い間は発行のボタンを止める
-    expect(read('components/admin/dealer-forms.tsx')).toContain("...(!porState.available ? ['DB の更新（金額未確定の明細の確認）が済むまで発行できません'] : []),");
-    expect(read('components/admin/legacy-accepted-formalization-form.tsx')).toContain("...(!porState.available ? ['DB の更新（金額未確定の明細の確認）が済むまで発行できません'] : []),");
+    expect(standard.match(/await quoteLineGuardError\(supabase\)/g)).toHaveLength(2);
+    expect(legacy).toContain('const blocked = await quoteLineGuardError(db);');
+    expect(legacy.indexOf('await quoteLineGuardError(db);')).toBeLessThan(legacy.indexOf("db.rpc('confirm_quote_por_selections'"));
+    // 画面も、確認の仕組みが無い間（読み込めないときも）は発行のボタンを止める。読み込めなくても画面は落とさない
+    for (const form of ['components/admin/dealer-forms.tsx', 'components/admin/legacy-accepted-formalization-form.tsx']) {
+      expect(read(form)).toContain('...(porSelectionUnavailableReason(porState) ? [porSelectionUnavailableReason(porState) as string] : []),');
+    }
+    for (const page of ['app/admin/quotes/[id]/edit/page.tsx', 'app/admin/quotes/[id]/formalize/page.tsx']) {
+      expect(read(page)).toContain('store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true }))');
+    }
   });
 });

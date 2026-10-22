@@ -8,9 +8,12 @@ import {
   chooseQuoteLineState,
   findUnresolvedLines,
   EMPTY_POR_SELECTION_STATE,
+  porSelectionUnavailableReason,
   QUOTE_LINE_STATE_LABELS,
+  quoteOptionFlagMap,
   splitQuoteLineStateRemark,
   type QuoteLineState,
+  type QuoteOptionFlag,
   type QuotePorSelectionState,
 } from '@/lib/domain/quote-por';
 import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
@@ -20,6 +23,8 @@ interface InstallationRow {
   source_item_id: string | null;
   /** 元の明細の説明（DB は元の明細の説明を新しい明細へ写す。金額未確定の判定に使う） */
   description: string | null;
+  /** 元の明細の商品台帳の紐付け（DB は元の明細から写す。金額未確定の判定に使う） */
+  option_id: string | null;
   name: string;
   unit: string;
   remark: string;
@@ -31,12 +36,14 @@ interface InstallationRow {
 }
 
 const initialState = { ok: false } as const;
+const NO_OPTION_FLAGS: QuoteOptionFlag[] = [];
 
 function initialRow(item: QuoteItem): InstallationRow {
   return {
     key: item.id,
     source_item_id: item.id,
     description: item.description ?? null,
+    option_id: item.option_id ?? null,
     name: item.name,
     unit: item.unit ?? '式',
     ...splitQuoteLineStateRemark(item.remark),
@@ -55,6 +62,7 @@ export function LegacyAcceptedFormalizationForm({
   carriedItems = [],
   defaultDealerNote,
   porState = EMPTY_POR_SELECTION_STATE,
+  optionFlags = NO_OPTION_FLAGS,
 }: {
   quoteId: string;
   installationItems: QuoteItem[];
@@ -63,6 +71,8 @@ export function LegacyAcceptedFormalizationForm({
   defaultDealerNote: string | null;
   /** お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定） */
   porState?: QuotePorSelectionState;
+  /** 商品台帳のすべての商品（明細が指す商品の別途見積・台帳の価格の判定に使う） */
+  optionFlags?: QuoteOptionFlag[];
 }) {
   const [state, action, pending] = useActionState(formalizeLegacyAcceptedQuoteAction, initialState);
   const [rows, setRows] = useState<InstallationRow[]>(() => installationItems.map(initialRow));
@@ -71,12 +81,13 @@ export function LegacyAcceptedFormalizationForm({
   // ---- 金額未確定の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
   // 前の版（承諾済みの概算）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい
   // 確定見積の明細＝施工以外の明細（そのまま写る）＋施工の明細。前の版の同じ 0 円の明細は前の版の行の数まで
+  const optionMap = useMemo(() => quoteOptionFlagMap(optionFlags), [optionFlags]);
   const unresolvedKeysOf = (installationRows: InstallationRow[]) => {
     const lines = [
       ...carriedItems.map((item) => ({ ...item, key: item.id })),
       ...installationRows.map((row) => ({ ...row, kind: 'installation' as const })),
     ];
-    const unresolved = findUnresolvedLines(lines, { parentLines: [...carriedItems, ...installationItems] });
+    const unresolved = findUnresolvedLines(lines, { parentLines: [...carriedItems, ...installationItems], options: optionMap });
     return new Set(lines.filter((line) => unresolved.has(line)).map((line) => line.key));
   };
   const unresolvedKeys = unresolvedKeysOf(rows);
@@ -121,8 +132,8 @@ export function LegacyAcceptedFormalizationForm({
   const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
   const missingReasonCount = rows.filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim()).length;
   const porBlockers = [
-    // DB の更新（20261016111000）の前は確認の仕組みが無い。旧い関数で発行しないよう止める（発行の処理でも止める）
-    ...(!porState.available ? ['DB の更新（金額未確定の明細の確認）が済むまで発行できません'] : []),
+    // DB の更新（20261016111000）の前・一覧を読み込めないときは発行しない（発行の処理でも止める）
+    ...(porSelectionUnavailableReason(porState) ? [porSelectionUnavailableReason(porState) as string] : []),
     ...(unresolvedPorCount > 0 ? [`金額が未確定の明細が ${unresolvedPorCount} 行残っています`] : []),
     ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),
@@ -140,6 +151,7 @@ export function LegacyAcceptedFormalizationForm({
         key: `new-${crypto.randomUUID()}`,
         source_item_id: null,
         description: null,
+        option_id: null,
         name: '',
         unit: '式',
         remark: '',

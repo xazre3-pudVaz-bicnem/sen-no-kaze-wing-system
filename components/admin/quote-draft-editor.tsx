@@ -8,7 +8,14 @@ import {
 } from '@/lib/actions/admin';
 import type { QuoteDraftDetail, QuoteDraftSaveItem } from '@/lib/data/store';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
-import { chooseQuoteLineState, findUnresolvedLines, splitQuoteLineStateRemark, type QuoteLineState } from '@/lib/domain/quote-por';
+import {
+  chooseQuoteLineState,
+  findUnresolvedLines,
+  quoteOptionFlagMap,
+  splitQuoteLineStateRemark,
+  type QuoteLineState,
+  type QuoteOptionFlag,
+} from '@/lib/domain/quote-por';
 import type { QuoteItem, QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
@@ -31,6 +38,7 @@ import {
 
 const initialState: QuoteDraftFormState = { ok: false };
 const NO_PARENT_ITEMS: QuoteItem[] = [];
+const NO_OPTION_FLAGS: QuoteOptionFlag[] = [];
 
 const KINDS = ([
   'base',
@@ -80,6 +88,7 @@ export function QuoteDraftEditor({
   products = [],
   targetRevision = 1,
   parentItems = NO_PARENT_ITEMS,
+  optionFlags = NO_OPTION_FLAGS,
 }: {
   detail: QuoteDraftDetail;
   modelName: string;
@@ -89,6 +98,8 @@ export function QuoteDraftEditor({
   targetRevision?: number;
   /** 改訂の下書きの前の版（現在の発行済み見積）の明細。変えていない 0 円の明細の判定に使う */
   parentItems?: QuoteItem[];
+  /** 商品台帳のすべての商品（販売停止・非公開を含む。明細が指す商品の別途見積・台帳の価格の判定に使う） */
+  optionFlags?: QuoteOptionFlag[];
 }) {
   const [saveState, saveAction, savePending] = useActionState(saveQuoteDraftAction, initialState);
   const [finalizeState, finalizeAction, finalizePending] = useActionState(finalizeQuoteDraftAction, initialState);
@@ -115,11 +126,8 @@ export function QuoteDraftEditor({
   const [showPreview, setShowPreview] = useState(false);
 
   // 正式見積には、金額が未確定の明細を残せない（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する）
-  const productOptions = useMemo(
-    () => new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
-    [products]
-  );
-  const unresolvedRows = findUnresolvedLines(rows, { parentLines: parentItems, options: productOptions, matchLineKey: true });
+  const optionMap = useMemo(() => quoteOptionFlagMap(optionFlags), [optionFlags]);
+  const unresolvedRows = findUnresolvedLines(rows, { parentLines: parentItems, options: optionMap, matchLineKey: true });
   const unresolvedKeys = new Set(rows.filter((row) => unresolvedRows.has(row)).map((row) => row.key));
   const unresolvedNames = rows.filter((row) => unresolvedKeys.has(row.key)).map((row) => row.name || '（品名なし）');
   const missingReasonNames = rows

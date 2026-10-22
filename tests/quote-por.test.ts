@@ -12,6 +12,7 @@ import {
   chooseQuoteLineState,
   lineStateReasonSeed,
   parsePorSelectionKeys,
+  quoteOptionFlagMap,
   configurationPorSelections,
   findUnresolvedLines,
   isUnresolvedQuoteLine,
@@ -140,6 +141,18 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
     const kept = { line_key: 'k1', kind: 'installation', name: '養生', unit_price: 0 };
     const added = { line_key: 'k9', kind: 'installation', name: '養生', unit_price: 0 };
     expect([...findUnresolvedLines([kept, added], { parentLines: draftParent, matchLineKey: true })]).toEqual([added]);
+    // 改訂の明細は台帳の紐付けを残さない：新しい版の行の option_id は見ず、前の版の行は台帳で別途見積かを見る
+    const options = quoteOptionFlagMap([
+      { id: 'o-zero', price: 0, priceOnRequest: false },
+      { id: 'o-por', price: 0, priceOnRequest: true },
+    ]);
+    const catalogZero = { kind: 'option', name: '無償の部材', unit_price: 0, option_id: 'o-zero' };
+    expect(findUnresolvedLines([catalogZero], { options }).size).toBe(0);
+    expect(findUnresolvedLines([catalogZero], { options, ignoreLineOptions: true }).size).toBe(1);
+    const porParent = [{ kind: 'option', name: '特注の棚', remark: null, unit_price: 0, option_id: 'o-por' }];
+    const copied = { kind: 'option', name: '特注の棚', unit_price: 0, option_id: null };
+    expect(findUnresolvedLines([copied], { parentLines: porParent, options, ignoreLineOptions: true }).size).toBe(1);
+    expect(findUnresolvedLines([copied], { parentLines: porParent, ignoreLineOptions: true }).size).toBe(0);
     expect(migration).toContain('row_number() over (partition by l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
     expect(migration).toContain('row_number() over (partition by l.line_key, l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
     expect(migration.match(/where c\.seq > coalesce\(z\.line_count, 0\)/g)).toHaveLength(2);

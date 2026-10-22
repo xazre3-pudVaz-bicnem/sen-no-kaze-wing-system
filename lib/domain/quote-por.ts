@@ -8,7 +8,7 @@
  * 明細の扱いは「金額確定／金額未確定／契約対象外／0円確定」を区別する。自由記述の備考の文章から状態を推測しない。
  * 「対象外」「0円確定」は画面の明示の選択からサーバーが備考に印を付ける（手入力の印は受け付けない）。
  */
-import { EXTERIOR_FACES, type ExteriorFaceSelection } from './exterior-wall';
+import { exteriorFaceLabel, type ExteriorFaceSelection } from './exterior-wall';
 
 /** POR の目印になる備考（手入力・改訂の画面は「別途見積」、標準見積からの概算は「価格未確定（別途お見積り）」） */
 export const POR_REMARKS = ['別途見積', '価格未確定（別途お見積り）'] as const;
@@ -263,6 +263,19 @@ export interface QuoteLineCheckContext {
   options?: ReadonlyMap<string, { price: number; price_on_request: boolean }>;
   /** 下書き（quote_draft_items）は、前の版と明細のキーでも突き合わせる（DB の assert_quote_draft_lines_resolved と同じ） */
   matchLineKey?: boolean;
+  /** 新しい版の行の option_id を見ない（改訂＝確定見積の明細は台帳の紐付けを残さないため。前の版の行は見る） */
+  ignoreLineOptions?: boolean;
+}
+
+/** 画面の判定に使う商品台帳の商品（販売停止・非公開を含むすべて。明細が指す商品の別途見積・台帳の価格を引く） */
+export interface QuoteOptionFlag {
+  id: string;
+  price: number;
+  priceOnRequest: boolean;
+}
+
+export function quoteOptionFlagMap(flags: readonly QuoteOptionFlag[]): Map<string, { price: number; price_on_request: boolean }> {
+  return new Map(flags.map((flag) => [flag.id, { price: flag.price, price_on_request: flag.priceOnRequest }]));
 }
 
 /**
@@ -287,7 +300,7 @@ export function findUnresolvedLines<T extends QuoteLineCheckLine>(lines: readonl
   const unresolved = new Set<T>();
   for (const line of lines) {
     if (line.line_state) continue;
-    const option = optionOf(line.option_id);
+    const option = context.ignoreLineOptions ? undefined : optionOf(line.option_id);
     const input: QuoteLineCheckInput = {
       kind: line.kind,
       unit_price: line.unit_price,
@@ -334,8 +347,18 @@ export interface QuotePorSelectionState {
   selections: QuotePorSelection[];
   /** 自分（発行する担当者）の確認が、いまの一覧を覆っているか */
   confirmed: boolean;
-  /** DB に確認の仕組みがあるか（migration の適用前は false。画面は確認欄を出さない） */
+  /** DB に確認の仕組みがあるか（migration の適用前は false。画面は発行を止める） */
   available: boolean;
+  /** 一覧を読み込めなかった（画面は発行を止め、再読み込みを案内する） */
+  loadError?: boolean;
+}
+
+/** 発行を止める理由（確認の仕組みが使えないとき）。使えるなら null */
+export function porSelectionUnavailableReason(state: QuotePorSelectionState): string | null {
+  if (state.available) return null;
+  return state.loadError
+    ? '金額未確定の確認の情報を読み込めませんでした。画面を再読み込みしてください'
+    : 'DB の更新（金額未確定の明細の確認）が済むまで発行できません';
 }
 
 export const EMPTY_POR_SELECTION_STATE: QuotePorSelectionState = { selections: [], confirmed: false, available: false };
@@ -408,7 +431,7 @@ export function configurationPorSelections(
         .filter((row): row is { choice: typeof row.choice; group: NonNullable<typeof row.group> } => row.group?.option_id === option.id)
         .sort((a, b) => a.group.sort_order - b.group.sort_order || a.choice.sort_order - b.choice.sort_order);
       if (!option.price_on_request && porChoices.length === 0) return;
-      const label = EXTERIOR_FACES.find((row) => row.code === face.face_code)?.label ?? face.face_code;
+      const label = exteriorFaceLabel(face.face_code);
       const labels = porChoices.map(({ group, choice }) => `${group.name}：${choice.name}`).join('／');
       rows.push({
         key: `face:${face.face_code}:${option.id}`,

@@ -415,7 +415,7 @@ export default async function EditOptionPage({
                 <p className="mt-1 text-sm text-muted">現在は下書きです。上の登録内容とお客様表示に問題がなければ登録してください。</p>
               </div>
               {canEditThisOption && category && (
-                <form action={publishOptionAction} className="w-full space-y-3">
+                <form action={publishOptionAction} className="space-y-3">
                   <input type="hidden" name="id" value={option.id} />
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
                   {needsZeroPriceConfirmation && (

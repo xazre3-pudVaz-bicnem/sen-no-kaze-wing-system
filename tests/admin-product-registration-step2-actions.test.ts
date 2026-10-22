@@ -7,7 +7,7 @@ const page = fs.readFileSync(
   'utf8'
 );
 const bottomActions = page.slice(
-  page.indexOf('data-testid="step2-publish-panel"'),
+  page.indexOf('<section className="card space-y-4 p-4 sm:p-5" aria-label="商品登録" data-testid="step2-publish-panel">'),
   page.indexOf('</OptionRegistrationSaveBoundary>')
 );
 

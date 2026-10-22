@@ -400,7 +400,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
   return (
     <div id="product-media" className="space-y-6">
-      <section id="product-sub-images" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
+      <section id="product-sub-images" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">サブ画像 <span className="text-xs font-normal text-muted">任意</span></h2>
@@ -478,7 +478,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         </div>
       </section>
 
-      <section id="manufacturer-documents" className="card space-y-5 p-5 sm:p-6 scroll-mt-6" data-testid="manufacturer-document-section">
+      <section id="manufacturer-documents" className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-testid="manufacturer-document-section">
         <ProductSectionHeading
           label="4. メーカー資料"
           description="商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。"

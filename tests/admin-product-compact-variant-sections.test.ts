@@ -20,7 +20,9 @@ describe('商品登録の選択肢をコンパクトにして、主要セクシ�
     expect(variant).toContain('choice.extra_price.toLocaleString');
     expect(variant).toContain('choice.status === \'draft\'');
     expect(variant).toContain('編集 <span aria-hidden="true">▾</span>');
-    expect(variant).toContain('editorDetailsRef.current.open = true');
+    expect(variant).toContain('editor.open = true');
+    expect(variant).toContain("editor.closest<HTMLDetailsElement>('details[data-testid=\"variant-group-compact\"]')");
+    expect(variant).toContain('groupDetails.open = true');
   });
 
   it('既存の選択肢保存・新規追加・画像・標準指定の処理をそのまま利用する', () => {

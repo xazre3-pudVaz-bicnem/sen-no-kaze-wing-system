@@ -646,7 +646,7 @@ export function OptionForm({
       <Status state={displayState} />
 
       {showIdentify && (
-        <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+        <section id="product-identify" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
           <ProductSectionHeading
             label={mode === 'identify' ? '商品特定' : '1. 基本情報'}
             description={mode === 'create'
@@ -654,7 +654,7 @@ export function OptionForm({
               : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
           />
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
               <Select
                 id={`category_id-${mode}`}
@@ -776,7 +776,7 @@ export function OptionForm({
       )}
 
       {showDetails && (
-        <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+        <section id="product-details" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
           <ProductSectionHeading
             label="2. 商品の詳細"
             description="サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。"
@@ -835,7 +835,7 @@ export function OptionForm({
       )}
 
       {showMedia && (
-        <section id="product-main-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+        <section id="product-main-media" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
           <ProductSectionHeading
             label="3. 商品画像"
             description="ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。追加画像は下の専用欄で登録します。"
@@ -846,7 +846,7 @@ export function OptionForm({
               <p className="font-semibold">メイン画像</p>
               <p className="mt-1 text-xs text-muted">サブ画像とメーカーPDFは、この商品の「お客様資料」画面で続けて登録できます。</p>
             </div>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
                 <Input id={`image_url-${mode}`} name="image_url" defaultValue={option?.image_url ?? ''} />
               </Field>
@@ -863,7 +863,7 @@ export function OptionForm({
       {mode === 'product' && <SubmitButton pending={pending} label="商品情報を保存" />}
 
       {showSales && (
-        <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
+        <section id="sales-settings" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
           <ProductSectionHeading
             label={mode === 'sales' ? '販売・詳細設定' : '6. 価格・対象モデル'}
             description="商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。"
@@ -871,7 +871,7 @@ export function OptionForm({
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <p className="font-semibold">価格</p>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。標準品との差額は別途の計算で扱います" errors={e.price}>
                 <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
               </Field>
@@ -892,7 +892,7 @@ export function OptionForm({
               <p className="font-semibold">通常設定</p>
               <p className="mt-1 text-xs text-muted">通常の商品登録では、対象モデルと公開状態だけ確認します。</p>
             </div>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="対象モデル" htmlFor={`base_model_id-${mode}`} hint="通常は全モデル共通。特定モデル専用の商品だけ変更します" errors={e.base_model_id}>
                 <Select id={`base_model_id-${mode}`} name="base_model_id" defaultValue={option?.base_model_id ?? ''}>
                   <option value="">全モデル共通</option>
@@ -938,7 +938,7 @@ export function OptionForm({
                   <p className="font-semibold">シミュレーター表示条件</p>
                   <p className="mt-1 text-xs text-muted">通常は変更不要です。表示順・仕様限定・標準選択などを調整する場合だけ使用します。</p>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="表示順" htmlFor={`sort_order-${mode}`} errors={e.sort_order}>
                     <Input id={`sort_order-${mode}`} name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} />
                   </Field>
@@ -959,7 +959,7 @@ export function OptionForm({
                 </div>
               </section>
 
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="選択方式（表示）" htmlFor={`selection_type-${mode}`} errors={e.selection_type}>
                   <Select id={`selection_type-${mode}`} name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>
                     <option value="checkbox">チェックボックス</option>

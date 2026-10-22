@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { productSizeMeta, productRegistrationGuidance, ProductCategoryGuidance } from '@/components/admin/product-category-guidance';
 import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
@@ -148,6 +149,11 @@ export function RegisteredOptionEditFlow({
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [identityChanged, setIdentityChanged] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(option.category_id);
+  const [sizeNoteValue, setSizeNoteValue] = useState(option.size_note ?? '');
+  const selectedCategoryCode = categories.find((category) => category.id === selectedCategoryId)?.code ?? '';
+  const sizeMeta = productSizeMeta(selectedCategoryCode);
+  const sizeGuidance = productRegistrationGuidance(selectedCategoryCode);
   const duplicateCheckReady = Boolean(option.manufacturer?.trim() && (option.model_no?.trim() || option.name.trim()));
   const [imageUrlInput, setImageUrlInput] = useState(option.image_url ?? '');
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
@@ -451,7 +457,13 @@ export function RegisteredOptionEditFlow({
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="カテゴリー" htmlFor="registered-category" required>
-                <Select id="registered-category" name="category_id" defaultValue={option.category_id} onChange={() => setIdentityChanged(true)} required>
+                <Select
+                  id="registered-category"
+                  name="category_id"
+                  value={selectedCategoryId}
+                  onChange={(event) => { setSelectedCategoryId(event.target.value); setIdentityChanged(true); }}
+                  required
+                >
                   {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
                 </Select>
               </Field>
@@ -490,10 +502,39 @@ export function RegisteredOptionEditFlow({
               label="2. 商品の詳細"
               description="サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。"
             />
+            <ProductCategoryGuidance categoryCode={selectedCategoryCode} readOnlyChoices />
             <ProductDetailsFields
               sizeField={
-                <Field label="サイズ・仕様" htmlFor="registered-size-note">
-                  <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
+                <Field
+                  label={sizeMeta.label}
+                  htmlFor="registered-size-note"
+                  hint={sizeGuidance.sizeCandidates.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined}
+                >
+                  <Input
+                    id="registered-size-note"
+                    name="size_note"
+                    list="registered-size-note-suggestions"
+                    value={sizeNoteValue}
+                    onChange={(event) => setSizeNoteValue(event.target.value)}
+                    placeholder={sizeMeta.placeholder}
+                  />
+                  <datalist id="registered-size-note-suggestions">
+                    {sizeGuidance.sizeCandidates.map((value) => <option key={value} value={value} />)}
+                  </datalist>
+                  {sizeGuidance.sizeCandidates.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
+                      {sizeGuidance.sizeCandidates.slice(0, 10).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+                          onClick={() => setSizeNoteValue(value)}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </Field>
               }
               highlightId="registered-highlight"

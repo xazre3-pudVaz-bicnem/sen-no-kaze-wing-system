@@ -63,7 +63,7 @@ describe('商品登録 UI polish', () => {
     expect(enhancer).toContain("document.getElementById('product-sub-images')");
     expect(enhancer).toContain("registrationWrapper.style.marginTop = '-1.5rem'");
     expect(enhancer).toContain("setLeadingTextIfChanged(heading, '追加画像')");
-    expect(enhancer).toContain("setTextIfChanged(uploadLabel, '追加画像')");
+    expect(enhancer).toContain("setTextIfChanged(uploadLabel, 'または画像ファイルから登録')");
     expect(enhancer).toContain("row.textContent?.trim() === 'サブ画像はまだ登録されていません。'");
   });
 

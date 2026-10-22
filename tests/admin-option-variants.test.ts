@@ -87,11 +87,23 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
-  it('選択肢画像の登録UIを表示せず既存画像URLは保持する', () => {
-    expect(manager).not.toContain('name="image_file"');
+  it('既存のサーバー保存機能を使って選択肢画像を任意登録し、既存画像を保持・解除できる', () => {
+    expect(manager).toContain('name="image_file"');
     expect(manager).toContain('name="image_url"');
-    expect(manager).toContain("choice?.image_url ?? ''");
-    expect(manager).not.toContain('SmartImage');
+    expect(manager).toContain('value={imageUrl}');
+    expect(manager).toContain('SmartImage');
+    expect(manager).toContain('解除');
+    expect(manager).toContain('元に戻す');
+    expect(manager).toContain('data-testid="draft-choice-unified-two-row"');
+    expect(manager).toContain('data-testid="draft-choice-image-row"');
+    expect(manager).toContain('name="image_url"');
+    expect(manager).not.toContain('<input type="hidden" name="image_url"');
+    expect(manager).not.toContain('data-testid="variant-choice-image-editor"');
+    expect(manager).toContain('const restoreImage = () => {');
+    expect(manager).toContain('onImageUrlChange(event.target.value)');
+    expect(manager).toContain("setImageUrl('')");
+    expect(actions).toContain("formData.get('image_file')");
+    expect(actions).toContain("resolveImageUrl(fd, 'variant-choices')");
   });
 
   it('技術コードを内部生成・既存保持し、複数標準もサーバー側で防ぐ', () => {

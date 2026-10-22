@@ -4,7 +4,6 @@ import { requireStaff, requireUser } from '@/lib/auth/session';
 import { canEditCatalog } from '@/lib/domain/types';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { ProductRegistrationFinalRefinements } from '@/components/admin/product-registration-final-refinements';
-import { ProductRegistrationFormPlacementFix } from '@/components/admin/product-registration-form-placement-fix';
 import { ProductRegistrationStep2Refinements } from '@/components/admin/product-registration-step2-refinements';
 import { PublishedOptionDeleteControl } from '@/components/admin/published-option-delete-control';
 import './product-registration-refinements.css';
@@ -30,7 +29,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       migrationOnly={migrationOnly}
     >
       <ProductRegistrationFinalRefinements />
-      <ProductRegistrationFormPlacementFix />
       <ProductRegistrationStep2Refinements />
       <PublishedOptionDeleteControl enabled={canEditCatalog(user.role)} />
       {children}

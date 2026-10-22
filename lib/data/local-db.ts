@@ -39,6 +39,7 @@ import type { QuotePorSelection } from '@/lib/domain/quote-por';
 import '@/lib/seed/independent-insulation';
 import { seedCatalog } from '@/lib/seed/catalog';
 import { buildSeedMatrix } from '@/lib/seed/matrix';
+import { takeLocalReset } from './local-reset';
 
 /**
  * ローカル検証モードの JSON データベース。
@@ -254,15 +255,10 @@ function reconcileIndependentInsulation(db: LocalDb): boolean {
   return changed;
 }
 
-declare global {
-  var __wingLocalReset: boolean | undefined;
-}
-
 export function loadDb(): LocalDb {
   const p = dbPath();
-  // WING_LOCAL_RESET=1 のときはサーバー起動ごとに初期化（E2E 用）
-  if (process.env.WING_LOCAL_RESET === '1' && !globalThis.__wingLocalReset) {
-    globalThis.__wingLocalReset = true;
+  // WING_LOCAL_RESET=1 のときは初期化する（E2E 用）。WING_LOCAL_RESET_ID があれば、その実行の中で 1 回だけ（local-reset.ts）
+  if (takeLocalReset(localDir())) {
     if (fs.existsSync(p)) fs.rmSync(p);
     const files = path.join(localDir(), 'files');
     if (fs.existsSync(files)) fs.rmSync(files, { recursive: true, force: true });

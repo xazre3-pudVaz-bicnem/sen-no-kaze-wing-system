@@ -27,6 +27,9 @@ import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCod
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
+import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 
 const initial: AdminFormState = { ok: false };
 
@@ -808,14 +811,12 @@ export function OptionForm({
 
       {showIdentify && (
         <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">
-              {mode === 'create'
-                ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
-                : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
-            </p>
-          </div>
+          <ProductSectionHeading
+            label={mode === 'identify' ? '商品特定' : '1. 基本情報'}
+            description={mode === 'create'
+              ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
+              : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
+          />
 
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
@@ -912,61 +913,26 @@ export function OptionForm({
               </Field>
             )}
             {mode === 'all' && (
-              <div>
-                <p className="label">商品管理番号</p>
-                <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">
-                  {option ? option.product_no ?? '未採番' : '保存時に自動採番'}
-                </div>
-                <p className="mt-1 text-xs text-muted">PRD-000001形式で自動採番し、登録後は変更しません。</p>
-              </div>
+              <ProductManagementNumber
+                number={option?.product_no}
+                fallback={option ? '未採番' : '保存時に自動採番'}
+              />
             )}
           </div>
 
-          <div
-            className={`rounded-xl border px-4 py-3 ${duplicateCandidates.length > 0 ? 'border-[#d9a441] bg-[#fff8e8]' : 'border-line bg-ivory/30'}`}
-            data-testid="option-duplicate-status"
-            aria-live="polite"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-ink">既存商品チェック</p>
-              <span className={`text-xs font-semibold ${duplicateCandidates.length > 0 ? 'text-[#8a641d]' : 'text-muted'}`}>
-                {duplicateCandidates.length > 0
-                  ? '要確認：重複候補あり'
-                  : duplicateCheckReady
-                    ? '重複候補なし'
-                    : '確認に必要な情報を入力'}
-              </span>
-            </div>
-            {duplicateCandidates.length > 0 ? (
-              <div className="mt-2" data-testid="option-duplicate-warning">
-                <p className="text-xs leading-5 text-ink-soft">
-                  登録を止める判定ではありません。新規商品かどうかを確認してから保存してください。
-                </p>
-                <ul className="mt-3 space-y-2">
-                  {duplicateCandidates.map(({ option: candidate, reason }) => (
-                    <li key={candidate.id} className="rounded-lg border border-[#ead6a7] bg-white px-3 py-2 text-sm">
-                      <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">
-                        {candidate.name}
-                      </a>
-                      <span className="ml-2 text-xs text-muted">{candidate.product_no ?? '商品番号未反映'}</span>
-                      <p className="mt-1 text-xs text-muted">
-                        {reason === 'manufacturer-model'
-                          ? 'メーカー＋シリーズ・型番／品番が一致'
-                          : '同一カテゴリー＋メーカー＋商品名が一致'}
-                        {candidate.model_no ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.model_no}` : ''}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-muted">
-                {duplicateCheckReady
-                  ? 'メーカーと商品名・型番から、登録済み商品の重複候補は見つかっていません。'
-                  : 'メーカーと商品名または型番を入力すると、自動で重複候補を確認します。'}
-              </p>
-            )}
-          </div>
+          <ProductDuplicateStatus
+            testId="option-duplicate-status"
+            warningTestId="option-duplicate-warning"
+            ready={duplicateCheckReady}
+            candidates={duplicateCandidates.map(({ option: candidate, reason }) => ({
+              id: candidate.id,
+              name: candidate.name,
+              productNo: candidate.product_no ?? null,
+              reason,
+              modelNo: candidate.model_no,
+              manufacturer: candidate.manufacturer,
+            }))}
+          />
 
           {mode === 'create' && <SubmitButton pending={pending} label="次へ：画像・資料" />}
           {mode === 'identify' && <SubmitButton pending={pending} label="商品特定を保存" />}
@@ -975,10 +941,10 @@ export function OptionForm({
 
       {showDetails && (
         <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">商品の詳細</p>
-            <p className="mt-1 text-sm text-muted">サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。</p>
-          </div>
+          <ProductSectionHeading
+            label="2. 商品の詳細"
+            description="サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。"
+          />
 
           {(registrationHint || guidance.example || guidance.fixedInfo.length > 0) && (
             <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft" data-testid="category-registration-guidance">
@@ -998,45 +964,46 @@ export function OptionForm({
             </div>
           )}
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
-              <Input
-                id={`size_note-${mode}`}
-                name="size_note"
-                list="option-size-note-suggestions"
-                value={sizeNoteValue}
-                onChange={(event) => setSizeNoteValue(event.target.value)}
-                placeholder={sizeMeta.placeholder}
-              />
-              <datalist id="option-size-note-suggestions">
-                {sizeSuggestions.map((value) => <option key={value} value={value} />)}
-              </datalist>
-              {guidance.sizeCandidates.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
-                  {guidance.sizeCandidates.slice(0, 10).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
-                      onClick={() => {
-                        setSizeNoteValue(value);
-                        markOptionDirty();
-                      }}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Field>
-            <Field label="メーカー記載の特徴（任意）" htmlFor={`highlight-${mode}`} hint="メーカー資料・カタログに明確な記載がある場合のみ入力。記載がなければ空欄で構いません。" errors={e.highlight}>
-              <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
-            </Field>
-          </div>
-
-          <Field label="商品説明" htmlFor={`description-${mode}`} errors={e.description}>
-            <Textarea id={`description-${mode}`} name="description" defaultValue={option?.description ?? ''} className="min-h-28" />
-          </Field>
+          <ProductDetailsFields
+            sizeField={
+                <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
+                  <Input
+                    id={`size_note-${mode}`}
+                    name="size_note"
+                    list="option-size-note-suggestions"
+                    value={sizeNoteValue}
+                    onChange={(event) => setSizeNoteValue(event.target.value)}
+                    placeholder={sizeMeta.placeholder}
+                  />
+                  <datalist id="option-size-note-suggestions">
+                    {sizeSuggestions.map((value) => <option key={value} value={value} />)}
+                  </datalist>
+                  {guidance.sizeCandidates.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
+                      {guidance.sizeCandidates.slice(0, 10).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+                          onClick={() => {
+                            setSizeNoteValue(value);
+                            markOptionDirty();
+                          }}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+            }
+            highlightId={`highlight-${mode}`}
+            highlight={option?.highlight ?? ''}
+            highlightErrors={e.highlight}
+            descriptionId={`description-${mode}`}
+            description={option?.description ?? ''}
+            descriptionErrors={e.description}
+          />
 
           <p className="text-xs text-muted">
             固定の商品構成・標準装備は、メーカー資料で確認できるものまで無理に個別登録する必要はありません。
@@ -1049,10 +1016,10 @@ export function OptionForm({
 
       {showMedia && (
         <section id="product-main-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">メイン画像</p>
-            <p className="mt-1 text-sm text-muted">ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。</p>
-          </div>
+          <ProductSectionHeading
+            label="3. 商品画像"
+            description="ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。追加画像は下の専用欄で登録します。"
+          />
 
           <div className="rounded-xl border border-line bg-ivory/35 p-4 sm:p-5">
             <div>
@@ -1060,11 +1027,11 @@ export function OptionForm({
               <p className="mt-1 text-xs text-muted">サブ画像とメーカーPDFは、この商品の「お客様資料」画面で続けて登録できます。</p>
             </div>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="画像ファイル" htmlFor={`image_file-${mode}`}>
-                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
-              </Field>
-              <Field label="または画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
+              <Field label="画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
                 <Input id={`image_url-${mode}`} name="image_url" defaultValue={option?.image_url ?? ''} />
+              </Field>
+              <Field label="または画像ファイル" htmlFor={`image_file-${mode}`}>
+                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
               </Field>
             </div>
           </div>
@@ -1077,10 +1044,10 @@ export function OptionForm({
 
       {showSales && (
         <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : '価格・公開設定'}</p>
-            <p className="mt-1 text-sm text-muted">商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。</p>
-          </div>
+          <ProductSectionHeading
+            label={mode === 'sales' ? '販売・詳細設定' : '6. 価格・対象モデル'}
+            description="商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。"
+          />
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <p className="font-semibold">価格</p>

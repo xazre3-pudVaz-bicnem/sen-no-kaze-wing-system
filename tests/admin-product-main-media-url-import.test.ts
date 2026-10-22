@@ -7,6 +7,7 @@ const action = read('lib/actions/product-media-url.ts');
 const importer = read('components/admin/product-main-image-url-importer.tsx');
 const units = read('components/admin/product-price-unit.tsx');
 const media = read('components/admin/option-media-manager.tsx');
+const forms = read('components/admin/forms.tsx');
 
 describe('商品メディア URL 取込', () => {
   it('メイン画像URLは外部URLを正式値にせず自社ストレージへ取り込んで image_url だけ更新する', () => {
@@ -26,6 +27,18 @@ describe('商品メディア URL 取込', () => {
     expect(importer).toContain('input.value = result.savedImageUrl');
     expect(importer).toContain("new Event('input', { bubbles: true })");
     expect(units).toContain('<ProductMainImageUrlImporter optionId={optionId} />');
+  });
+
+  it('メイン画像のURL入力欄をファイル選択より左側の先頭へ置く', () => {
+    const block = forms.slice(
+      forms.indexOf('<section id="product-main-media"'),
+      forms.indexOf("{mode === 'media' && <SubmitButton pending={pending} label=\"メイン画像を保存\" />}")
+    );
+    expect(block).toContain('sm:grid-cols-2');
+    expect(block.indexOf('name="image_url"')).toBeGreaterThanOrEqual(0);
+    expect(block.indexOf('name="image_file"')).toBeGreaterThan(block.indexOf('name="image_url"'));
+    expect(block).toContain('画像URL');
+    expect(block).toContain('または画像ファイル');
   });
 
   it('価格単位を変更していない別項目保存では価格単位専用列へ書き込まない', () => {

@@ -6,6 +6,10 @@ const forms = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/forms.tsx'),
   'utf8'
 );
+const identityView = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/product-identity-status.tsx'),
+  'utf8'
+);
 const editPage = fs.readFileSync(
   path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'),
   'utf8'
@@ -187,14 +191,14 @@ describe('商品登録管理画面の業務フロー', () => {
   it('商品登録中に既存商品の重複状態を常時表示する', () => {
     expect(forms).toContain('findProductDuplicateCandidates');
     expect(forms).toContain('option-duplicate-status');
-    expect(forms).toContain('既存商品チェック');
-    expect(forms).toContain('重複候補なし');
-    expect(forms).toContain('要確認：重複候補あり');
+    expect(identityView).toContain('既存商品チェック');
+    expect(identityView).toContain('重複候補なし');
+    expect(identityView).toContain('要確認：重複候補あり');
     expect(forms).toContain('option-duplicate-warning');
-    expect(forms).toContain('登録を止める判定ではありません');
-    expect(forms).toContain('メーカー＋シリーズ・型番／品番が一致');
-    expect(forms).toContain('同一カテゴリー＋メーカー＋商品名が一致');
-    expect(forms).toContain('/admin/options/\${candidate.id}');
+    expect(identityView).toContain('登録を止める判定ではありません');
+    expect(identityView).toContain('メーカー＋シリーズ・型番／品番が一致');
+    expect(identityView).toContain('同一カテゴリー＋メーカー＋商品名が一致');
+    expect(identityView).toContain('/admin/options/\${candidate.id}');
   });
 
   it('カテゴリーに応じてメーカー・商品名・主要仕様の入力を支援する', () => {
@@ -273,7 +277,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('このカテゴリーの入力目安');
     expect(forms).toContain('商品管理番号');
     expect(forms).toContain('保存時に自動採番');
-    expect(forms).toContain('PRD-000001形式');
+    expect(identityView).toContain('PRD-000001形式');
     expect(forms).not.toContain('label="管理用コード"');
     expect(forms).not.toContain('id="code-all"');
     expect(adminActions).toContain('const internalCode = existingOption?.code ?? `opt-${randomUUID()}`');
@@ -334,7 +338,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(media).not.toContain("option.manufacturer_document_url ? '資料を差し替える' : '資料を登録'");
   });
 
-  it('お客様選択は部位ごとの項目と選択肢を文字中心に登録し、価格と表示を管理する', () => {
+  it('お客様選択は部位ごとの文字情報に加え、必要な選択肢だけ画像を任意登録できる', () => {
     expect(variants).toContain('お客様選択');
     expect(variants).toContain('＋ 選択項目を追加');
     expect(variants).toContain('選択項目名');
@@ -344,7 +348,9 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(variants).toContain('標準の選択肢にする');
     expect(variants).toContain('お客様に表示する');
     expect(variants).toContain('表示などの詳細設定');
-    expect(variants).not.toContain('name="image_file"');
+    expect(variants).toContain('name="image_file"');
+    expect(variants).toContain('画像は任意');
+    expect(variants).toContain('元に戻す');
     expect(variants).not.toContain('色・仕様ごとの追加金額');
     expect(variants).not.toContain('ChoicePriceEditor');
     expect(editPage).not.toContain('OptionVariantPricing');

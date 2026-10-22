@@ -14,6 +14,14 @@ const media = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/option-media-manager.tsx'),
   'utf8'
 );
+const forms = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/forms.tsx'),
+  'utf8'
+);
+const variants = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/option-variant-manager.tsx'),
+  'utf8'
+);
 
 describe('商品登録 STEP1 の1画面導線', () => {
   const sections = [
@@ -31,7 +39,8 @@ describe('商品登録 STEP1 の1画面導線', () => {
     expect(newPage).not.toContain('data-testid="option-registration-step1-outline"');
     expect(newPage).toContain('lockedSections');
     expect(newPage).toContain('基本情報保存後');
-    expect(newPage).toContain("content: '1. '");
+    expect(forms).toContain("'1. 基本情報'");
+    expect(newPage).not.toContain("content: '1. '");
     expect(newPage).toContain("content: '基本情報を保存して続ける'");
     for (const label of sections) expect(newPage).toContain(label);
   });
@@ -42,12 +51,13 @@ describe('商品登録 STEP1 の1画面導線', () => {
     expect(editPage).not.toContain('data-testid="option-registration-step1-progress"');
     expect(editPage).toContain('registration-step1-sections');
     expect(editPage).toContain('mode="all"');
-    expect(editPage).toContain("content: '1. '");
-    expect(editPage).toContain("content: '2. '");
-    expect(editPage).toContain("content: '3. 商品画像'");
-    expect(media).toContain('4. メーカー資料');
-    expect(editPage).toContain("content: '5. お客様選択'");
-    expect(editPage).toContain("content: '6. 価格・対象モデル'");
+    for (const title of ['1. 基本情報', '2. 商品の詳細', '3. 商品画像', '6. 価格・対象モデル']) {
+      expect(forms).toContain(title);
+    }
+    expect(media).toContain('label="4. メーカー資料"');
+    expect(variants).toContain('label="5. お客様選択"');
+    expect(editPage).not.toContain("content: '1. '");
+    expect(editPage).not.toContain("content: '3. 商品画像'");
     expect(editPage).toContain('7. 登録前チェック');
     expect(editPage).toContain('<OptionMediaManager option={option} />');
     expect(editPage).toContain('<OptionVariantManager option={option}');

@@ -11,15 +11,42 @@ const refinement = fs.readFileSync(
   'utf8'
 );
 
+const adminLayout = fs.readFileSync(
+  path.resolve(process.cwd(), 'app/admin/layout.tsx'),
+  'utf8'
+);
+
 describe('商品登録 STEP1 の簡潔化', () => {
-  it('選択項目の追加ボタンを残したまま、その直下に入力フォームを展開する', () => {
+  it('旧絶対配置処理を使わず、追加ボタン直下の通常フローでフォームを開く', () => {
+    const buttonIndex = refinement.indexOf('aria-controls="registration-variant-create-form"');
+    const formIndex = refinement.indexOf('id="registration-variant-create-form"');
+    expect(buttonIndex).toBeGreaterThan(-1);
+    expect(formIndex).toBeGreaterThan(buttonIndex);
+    expect(refinement).toContain('data-combined-create-root="true"');
+    expect(refinement).toContain('aria-expanded={open}');
+    expect(adminLayout).toContain('<ProductRegistrationFinalRefinements />');
+    expect(adminLayout).not.toContain('ProductRegistrationFormPlacementFix');
+    expect(fs.existsSync(path.resolve(
+      process.cwd(), 'components/admin/product-registration-form-placement-fix.tsx'
+    ))).toBe(false);
+  });
+
+  it('閉じた状態は追加ボタン、展開中は重複のないコンパクトな入力フォームを表示する', () => {
     const button = refinement.indexOf('＋ 選択項目を追加');
-    const openedForm = refinement.indexOf("rounded-xl border border-dashed border-line bg-ivory/20 p-4", button);
+    const openedForm = refinement.indexOf('className="border-t border-line/70 pt-3"', button);
     expect(button).toBeGreaterThan(-1);
     expect(openedForm).toBeGreaterThan(button);
+    expect(refinement).not.toContain('{!open && (');
     expect(refinement).toContain('aria-expanded={open}');
+    expect(refinement).toContain('disabled={pending || open}');
+    expect(refinement).toContain('aria-controls="registration-variant-create-form"');
+    expect(refinement).toContain('id="registration-variant-create-form"');
+    expect(refinement.indexOf('aria-controls="registration-variant-create-form"')).toBeLessThan(
+      refinement.indexOf('id="registration-variant-create-form"')
+    );
+    expect(refinement).not.toContain('画像なし');
     expect(refinement).toContain('{open && (');
-    expect(refinement).not.toContain('!open ? (');
+    expect(refinement).toContain('画像は任意');
     expect(css).toContain("[data-combined-create-root='true']");
     expect(css).toContain('flex-direction: column;');
   });

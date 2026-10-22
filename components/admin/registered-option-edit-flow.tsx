@@ -1,15 +1,21 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
+import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
+import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
+import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 import { SmartImage } from '@/components/ui/smart-image';
+import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { introducesUnconfirmedZeroPrice } from '@/lib/domain/product-publication';
 import {
   VIEW_KEYS,
   VIEW_LABELS,
+  VARIANT_KIND_LABELS,
   type BaseModel,
   type OptionCategory,
   type OptionConflict,
@@ -21,6 +27,15 @@ import {
 
 const initialState: AdminFormState = { ok: false };
 
+type DuplicateCandidateSummary = {
+  id: string;
+  name: string;
+  productNo: string | null;
+  reason: 'manufacturer-model' | 'category-manufacturer-name';
+  modelNo: string | null;
+  manufacturer: string | null;
+};
+
 type Props = {
   option: ProductOption;
   categories: OptionCategory[];
@@ -30,6 +45,8 @@ type Props = {
   variantGroups: OptionVariantGroup[];
   variantChoices: OptionVariantChoice[];
   returnTo?: string;
+  financialTools: ReactNode;
+  duplicateCandidates?: DuplicateCandidateSummary[];
 };
 
 type ReviewState = {
@@ -97,7 +114,7 @@ function fileToDataUrl(file: File) {
 }
 
 function ReviewValue({ value }: { value: string }) {
-  return <div className="min-h-11 rounded-lg border border-line bg-white px-3 py-2 text-sm leading-6 text-ink-soft">{value || '—'}</div>;
+  return <div className="min-h-11 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-line bg-white px-3 py-2 text-sm leading-6 text-ink-soft">{value || '—'}</div>;
 }
 
 function ImagePreview({ src, label }: { src: string | null; label: string }) {
@@ -120,6 +137,8 @@ export function RegisteredOptionEditFlow({
   variantGroups,
   variantChoices,
   returnTo,
+  financialTools,
+  duplicateCandidates,
 }: Props) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -128,6 +147,38 @@ export function RegisteredOptionEditFlow({
   const [state, setState] = useState<AdminFormState>(initialState);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [identityChanged, setIdentityChanged] = useState(false);
+  const duplicateCheckReady = Boolean(option.manufacturer?.trim() && (option.model_no?.trim() || option.name.trim()));
+  const [imageUrlInput, setImageUrlInput] = useState(option.image_url ?? '');
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [imagePreviewError, setImagePreviewError] = useState<string | null>(null);
+  const imagePreviewRequest = useRef(0);
+
+  const updateImageFilePreview = (file: File | null) => {
+    const request = ++imagePreviewRequest.current;
+    setImagePreviewError(null);
+    setSelectedImagePreview(null);
+    if (!file || file.size === 0) return;
+    void fileToDataUrl(file).then((preview) => {
+      if (imagePreviewRequest.current === request) setSelectedImagePreview(preview);
+    }).catch(() => {
+      if (imagePreviewRequest.current === request) setImagePreviewError('選択した画像を読み込めませんでした。');
+    });
+  };
+  const mainImagePreview = selectedImagePreview ?? (imageUrlInput.trim() || null);
+
+  const galleryImages = useMemo(
+    () => [...(option.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [option.gallery_images]
+  );
+  const orderedVariantGroups = useMemo(
+    () => [...variantGroups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [variantGroups]
+  );
+  const orderedVariantChoices = useMemo(
+    () => [...variantChoices].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)),
+    [variantChoices]
+  );
 
   const categoryMap = useMemo(() => new Map(categories.map((row) => [row.id, row])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((row) => [row.id, row])), [models]);
@@ -235,6 +286,33 @@ export function RegisteredOptionEditFlow({
 
   return (
     <div className="space-y-6">
+      <section className="card p-4 sm:p-5" aria-label="商品変更の2ステップ" data-testid="registered-option-change-steps">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="font-semibold">商品変更の流れ</h2>
+            <p className="mt-1 text-xs text-muted">STEP 1で商品情報を変更し、STEP 2で変更点とお客様表示を確認します。入力中は自動保存されません。</p>
+          </div>
+          <span className="text-xs font-semibold text-brown">現在：STEP {screen === 'edit' ? 1 : 2}</span>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2" aria-label="商品変更ステップ">
+          <div
+            aria-current={screen === 'edit' ? 'step' : undefined}
+            className={`rounded-xl border px-3 py-3 ${screen === 'edit' ? 'border-brown bg-ivory/80 ring-1 ring-brown/20' : 'border-line bg-white'}`}
+          >
+            <span className="block text-xs font-semibold text-brown">STEP 1</span>
+            <span className="mt-1 block text-sm font-semibold">商品情報の変更</span>
+            <span className="mt-1 block text-xs text-muted">基本情報・画像・資料・お客様選択・価格を確認</span>
+          </div>
+          <div
+            aria-current={screen === 'review' ? 'step' : undefined}
+            className={`rounded-xl border px-3 py-3 ${screen === 'review' ? 'border-brown bg-ivory/80 ring-1 ring-brown/20' : 'border-line bg-white'}`}
+          >
+            <span className="block text-xs font-semibold text-brown">STEP 2</span>
+            <span className="mt-1 block text-sm font-semibold">変更内容確認</span>
+            <span className="mt-1 block text-xs text-muted">差分とシミュレーター共通の商品詳細で確認</span>
+          </div>
+        </div>
+      </section>
       {review && (
         <section hidden={screen !== 'review'} className="space-y-6" data-testid="registered-option-change-review">
           <section className="card p-4 sm:p-5" aria-label="変更内容確認">
@@ -340,16 +418,15 @@ export function RegisteredOptionEditFlow({
         </section>
       )}
 
-      <section hidden={screen !== 'edit'} className="space-y-6" data-testid="registered-option-edit-flow">
-        <section className="card p-4 sm:p-5" aria-label="商品を編集">
-          <p className="text-xs font-semibold tracking-wide text-brown">登録済み商品</p>
-          <h2 className="mt-1 text-xl font-semibold">商品を編集</h2>
-          <p className="mt-1 text-sm text-muted">入力中の変更はまだ登録済み内容へ反映されません。変更後は「変更内容を確認」へ進み、差分とお客様表示を確認してください。</p>
-        </section>
+      <section hidden={screen !== 'edit'} className="space-y-4" data-testid="registered-option-edit-flow">
+        <div className="space-y-1" aria-label="商品を編集">
+          <h2 className="text-lg font-semibold">STEP 1 商品情報を編集</h2>
+          <p className="text-xs leading-5 text-muted">登録済みの商品です。変更内容とお客様表示を確認するまで、入力した内容は反映されません。</p>
+        </div>
 
         {reviewError && <Alert tone="danger">{reviewError}</Alert>}
 
-        <form ref={formRef} className="space-y-6" noValidate onSubmit={(event) => { event.preventDefault(); void openReview(); }}>
+        <form id="registered-option-main-edit-form" ref={formRef} className="space-y-4" noValidate onSubmit={(event) => { event.preventDefault(); void openReview(); }}>
           <input type="hidden" name="id" value={option.id} />
           <input type="hidden" name="owner_id" value={option.owner_id ?? ''} />
           <input type="hidden" name="status" value="published" />
@@ -367,59 +444,191 @@ export function RegisteredOptionEditFlow({
             </span>
           ))}
 
-          <section className="card space-y-5 p-5 sm:p-6">
-            <div>
-              <h3 className="text-lg font-semibold">商品情報</h3>
-              <p className="mt-1 text-sm text-muted">商品名、メーカー、型番、主要仕様を変更します。</p>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-identify">
+            <ProductSectionHeading
+              label="1. 基本情報"
+              description="カテゴリー、メーカー、商品名、シリーズ・型番／品番を確認・変更します。"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="カテゴリー" htmlFor="registered-category" required>
-                <Select id="registered-category" name="category_id" defaultValue={option.category_id} required>
+                <Select id="registered-category" name="category_id" defaultValue={option.category_id} onChange={() => setIdentityChanged(true)} required>
                   {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
                 </Select>
               </Field>
               <Field label="メーカー" htmlFor="registered-manufacturer">
-                <Input id="registered-manufacturer" name="manufacturer" defaultValue={option.manufacturer ?? ''} />
+                <Input id="registered-manufacturer" name="manufacturer" defaultValue={option.manufacturer ?? ''} onChange={() => setIdentityChanged(true)} />
               </Field>
               <Field label="商品名" htmlFor="registered-name" required>
-                <Input id="registered-name" name="name" defaultValue={option.name} required />
+                <Input id="registered-name" name="name" defaultValue={option.name} onChange={() => setIdentityChanged(true)} required />
               </Field>
               <Field label="シリーズ・型番／品番" htmlFor="registered-model-no">
-                <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} />
-              </Field>
-              <Field label="サイズ・仕様" htmlFor="registered-size-note">
-                <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
-              </Field>
-              <Field label="メーカー記載の特徴（任意）" htmlFor="registered-highlight">
-                <Input id="registered-highlight" name="highlight" defaultValue={option.highlight ?? ''} />
+                <Input id="registered-model-no" name="model_no" defaultValue={option.model_no ?? ''} onChange={() => setIdentityChanged(true)} />
               </Field>
             </div>
-            <Field label="商品説明" htmlFor="registered-description">
-              <Textarea id="registered-description" name="description" defaultValue={option.description ?? ''} className="min-h-28" />
-            </Field>
+            <ProductManagementNumber
+              number={option.product_no}
+              fallback="商品管理番号は未反映"
+              testId="registered-option-product-number"
+            />
+            {duplicateCandidates && (
+              <ProductDuplicateStatus
+                candidates={duplicateCandidates}
+                ready={duplicateCheckReady}
+                stale={identityChanged}
+                testId="registered-option-duplicate-status"
+                staleHint="変更前の登録内容に対する確認結果です。入力した変更内容の重複判定はここでは行いません。"
+                candidateHint="同じ商品を重複登録していないか確認してください。この表示だけで保存を停止しません。"
+                emptyHint={duplicateCheckReady
+                  ? '現在登録されているメーカー・商品名・型番について、重複候補は見つかっていません。'
+                  : 'メーカーと商品名または型番を確認してください。'}
+              />
+            )}
           </section>
 
-          <section className="card space-y-5 p-5 sm:p-6">
-            <div>
-              <h3 className="text-lg font-semibold">メイン画像</h3>
-              <p className="mt-1 text-sm text-muted">画像ファイルまたは画像URLを変更できます。変更後の画像は確認画面で現在の内容と比較します。</p>
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-details">
+            <ProductSectionHeading
+              label="2. 商品の詳細"
+              description="サイズ・仕様、メーカー記載の特徴、商品説明を確認・変更します。"
+            />
+            <ProductDetailsFields
+              sizeField={
+                <Field label="サイズ・仕様" htmlFor="registered-size-note">
+                  <Input id="registered-size-note" name="size_note" defaultValue={option.size_note ?? ''} />
+                </Field>
+              }
+              highlightId="registered-highlight"
+              highlight={option.highlight ?? ''}
+              descriptionId="registered-description"
+              description={option.description ?? ''}
+            />
+          </section>
+
+          <section className="card space-y-4 p-4 sm:p-5" data-testid="registered-product-main-media">
+            <ProductSectionHeading
+              label="3. 商品画像"
+              description="メイン画像と追加画像を確認できます。追加画像は改版機能の準備ができるまで参照専用です。"
+            />
+            <div className="flex flex-wrap items-start gap-3 rounded-lg border border-line bg-ivory/30 p-3" data-testid="registered-option-main-image-preview">
+              <div className="w-40 max-w-full sm:w-48">
+                <ImagePreview src={mainImagePreview} label="メイン画像プレビュー" />
+              </div>
+              <div className="min-w-44 flex-1 space-y-2 pt-1">
+                <p className="text-xs text-muted">選択した画像URLまたは画像ファイルをここで確認できます。ファイルを選んだ場合はファイルの画像を優先して表示します。</p>
+                <p className="text-xs text-muted">画像を選んだだけでは保存されません。変更内容確認を経て反映します。</p>
+                {imagePreviewError && <Alert tone="danger">{imagePreviewError}</Alert>}
+              </div>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="新しい画像ファイル" htmlFor="registered-image-file">
-                <Input id="registered-image-file" name="image_file" type="file" accept="image/*" className="py-2" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="画像URL" htmlFor="registered-image-url">
+                <Input id="registered-image-url" name="image_url" value={imageUrlInput} onChange={(event) => setImageUrlInput(event.target.value)} />
               </Field>
-              <Field label="または画像URL" htmlFor="registered-image-url">
-                <Input id="registered-image-url" name="image_url" defaultValue={option.image_url ?? ''} />
+              <Field label="または画像ファイル" htmlFor="registered-image-file">
+                <Input id="registered-image-file" name="image_file" type="file" accept="image/*" className="py-2" onChange={(event) => updateImageFilePreview(event.target.files?.[0] ?? null)} />
               </Field>
+            </div>
+            <div className="border-t border-line pt-3">
+              <div className="space-y-3" data-testid="registered-option-current-gallery">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">追加画像</p>
+                  <ProductGalleryCount count={galleryImages.length} />
+                </div>
+                {galleryImages.length > 0 ? (
+                  <ul className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                    {galleryImages.map((image) => (
+                      <li key={image.id} className="min-w-0 overflow-hidden rounded-xl border border-line bg-white p-2">
+                        <ProductGalleryThumbnail image={image} showCaption />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted">追加画像は未登録です。</p>
+                )}
+              </div>
             </div>
           </section>
 
-          <section className="card space-y-5 p-5 sm:p-6">
-            <div>
-              <h3 className="text-lg font-semibold">価格・対象設定</h3>
-              <p className="mt-1 text-sm text-muted">登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。</p>
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
+            <ProductSectionHeading
+              label="4. メーカー資料"
+              description="メーカー資料PDFの登録状況を確認できます。変更・解除はまだできません。"
+              trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="registered-manufacturer-document-status" />}
+            />
+            <p className="rounded-lg border border-line bg-ivory/40 px-3 py-2 text-xs leading-5 text-muted">
+              サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。
+            </p>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">メーカー資料PDF</p>
+              {option.manufacturer_document_url ? (
+                <a
+                  href={option.manufacturer_document_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-line px-3 py-2 text-sm text-brown underline underline-offset-2 hover:bg-ivory"
+                >
+                  登録済みPDFを別タブで確認
+                </a>
+              ) : (
+                <p className="text-sm text-muted">メーカー資料PDFは未登録です。</p>
+              )}
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
+          </section>
+
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-current-choices">
+            <ProductSectionHeading
+              label="5. お客様選択"
+              description="選択項目と選択肢の現在の設定を確認できます。追加・編集・価格変更はまだできません。"
+            />
+            {orderedVariantGroups.length > 0 ? (
+              <div className="space-y-3">
+                {orderedVariantGroups.map((group) => {
+                  const choices = orderedVariantChoices.filter((choice) => choice.group_id === group.id);
+                  return (
+                    <div key={group.id} className="rounded-lg border border-line bg-white p-3">
+                      <ProductVariantGroupHeading group={group} choiceCount={choices.length} headingLevel="h4" />
+                      {group.note && <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{group.note}</p>}
+                      {choices.length > 0 ? (
+                        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {choices.map((choice) => (
+                            <li key={choice.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-line/70 bg-ivory/20 p-2">
+                              {choice.image_url && (
+                                <div className="relative size-12 shrink-0 overflow-hidden rounded border border-line bg-white">
+                                  <SmartImage
+                                    src={choice.image_url}
+                                    alt={`${choice.name}の画像`}
+                                    fill
+                                    sizes="48px"
+                                    className="object-contain"
+                                  />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="break-words text-sm font-semibold">{choice.name}</p>
+                                <p className="text-xs text-muted">
+                                  {VARIANT_KIND_LABELS[choice.kind]}・{choice.price_on_request ? '別途見積' : `追加金額 ${yen(choice.extra_price)}（税別）`}
+                                  {choice.status === 'draft' ? '・非公開' : ''}
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-sm text-muted">選択肢は未登録です。</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">お客様選択の項目は未登録です。</p>
+            )}
+          </section>
+
+          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-pricing">
+            <ProductSectionHeading
+              label="6. 価格・対象モデル"
+              description="登録状態は「登録済み」のままです。この画面から下書きへ戻す操作は行いません。"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="商品価格（税別・円）" htmlFor="registered-price" required>
                 <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required />
               </Field>
@@ -438,54 +647,64 @@ export function RegisteredOptionEditFlow({
               </div>
             </div>
             <Checkbox name="price_on_request" defaultChecked={option.price_on_request} label="価格は別途見積（0円扱い）" />
-          </section>
-
-          <details className="rounded-xl border border-line bg-ivory/30">
-            <summary className="cursor-pointer px-4 py-4 font-semibold sm:px-5">主要仕様・表示設定 <span className="ml-2 text-xs font-normal text-muted">必要な場合だけ変更</span></summary>
-            <div className="space-y-6 border-t border-line p-4 sm:p-5">
-              <div>
-                <p className="label">対応する仕様</p>
-                <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用'], ['hotel-single', 'ホテル単身者仕様']].map(([code, label]) => (
-                    <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option.spec_codes.includes(code)} label={label} />
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
-                <Field label="選択方式（表示）" htmlFor="registered-selection-type">
-                  <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
-                    <option value="checkbox">チェックボックス</option>
-                    <option value="radio">ラジオボタン</option>
-                  </Select>
-                </Field>
-                <Field label="プレビューキー" htmlFor="registered-preview-key"><Input id="registered-preview-key" name="preview_key" defaultValue={option.preview_key ?? ''} /></Field>
+            <div className="border-t border-line pt-3">
+  <section className="space-y-3 rounded-xl border border-line bg-ivory/30 p-3 sm:p-4" data-testid="registered-product-display-settings">
+              <h3 className="text-lg font-semibold">主要仕様・表示設定</h3>
+              <div className="space-y-3">
                 <div>
-                  <p className="label">反映するビュー</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
-                    {VIEW_KEYS.map((view) => <Checkbox key={view} name="affects_views" value={view} defaultChecked={option.affects_views.includes(view)} label={VIEW_LABELS[view]} />)}
+                  <p className="label">対応する仕様</p>
+                  <p className="mb-2 text-xs text-muted">未選択なら全仕様で表示します。</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {[['hotel', 'ホテル仕様'], ['residence', '住宅仕様'], ['office', '事務所・店舗用'], ['hotel-single', 'ホテル単身者仕様']].map(([code, label]) => (
+                      <Checkbox key={code} name="spec_codes" value={code} defaultChecked={option.spec_codes.includes(code)} label={label} />
+                    ))}
                   </div>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="表示順" htmlFor="registered-sort-order"><Input id="registered-sort-order" name="sort_order" type="number" defaultValue={option.sort_order} /></Field>
+                  <Field label="選択方式（表示）" htmlFor="registered-selection-type">
+                    <Select id="registered-selection-type" name="selection_type" defaultValue={option.selection_type}>
+                      <option value="checkbox">チェックボックス</option>
+                      <option value="radio">ラジオボタン</option>
+                    </Select>
+                  </Field>
+                  <Field label="プレビューキー" htmlFor="registered-preview-key"><Input id="registered-preview-key" name="preview_key" defaultValue={option.preview_key ?? ''} /></Field>
+                  <div>
+                    <p className="label">反映するビュー</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 pt-2">
+                      {VIEW_KEYS.map((view) => <Checkbox key={view} name="affects_views" value={view} defaultChecked={option.affects_views.includes(view)} label={VIEW_LABELS[view]} />)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <Checkbox name="is_default" defaultChecked={option.is_default} label="初期状態で選択" />
+                  <Checkbox name="is_required" defaultChecked={option.is_required} label="必須（解除不可）" />
+                  <Checkbox name="is_installation" defaultChecked={option.is_installation} label="設置関連費用として集計" />
+                </div>
               </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-2">
-                <Checkbox name="is_default" defaultChecked={option.is_default} label="初期状態で選択" />
-                <Checkbox name="is_required" defaultChecked={option.is_required} label="必須（解除不可）" />
-                <Checkbox name="is_installation" defaultChecked={option.is_installation} label="設置関連費用として集計" />
-              </div>
+            </section>
             </div>
-          </details>
-
-          <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-option-pending-subedit">
-            <h3 className="font-semibold">お客様資料・お客様選択</h3>
-            <p className="text-sm leading-6 text-muted">サブ画像・メーカーPDF・お客様が選ぶ仕様は、登録済み商品の変更確認フローへの接続待ちです。確認前に正式データへ反映しない仕組みが整うまで、この編集画面からの変更は停止しています。</p>
-            <p className="text-xs text-muted">現在登録されている内容は、変更後のお客様表示プレビューではそのまま使用します。</p>
           </section>
 
-          <div className="flex justify-end">
-            <Button type="submit">変更内容を確認</Button>
-          </div>
+
+
         </form>
+        <section className="space-y-3" data-testid="registered-product-financial-tools" aria-label="価格単位と本部基準原価">
+          <p className="px-1 text-xs leading-5 text-muted">
+            価格単位と本部商品基準原価は別々に保存します。商品価格の「変更内容を確認」では保存されません。途中で個別保存すると画面が再読み込みされる場合があるため、商品情報の変更を先に確認・反映してください。
+          </p>
+          {financialTools}
+        </section>
+
+        <section className="card space-y-3 p-4 sm:p-5" data-testid="registered-product-change-check">
+          <div>
+            <h3 className="font-semibold">7. 変更内容の確認</h3>
+            <p className="mt-1 text-xs text-muted">商品情報の変更は自動保存されません。変更内容とお客様表示を確認してから反映します。価格単位・本部基準原価は上の専用ボタンで別途保存します。</p>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" form="registered-option-main-edit-form">変更内容を確認</Button>
+          </div>
+        </section>
       </section>
     </div>
   );

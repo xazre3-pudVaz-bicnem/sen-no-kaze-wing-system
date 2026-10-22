@@ -261,7 +261,7 @@ function ChoiceEditor({
             </Field>
           </div>
           <div className="w-36 shrink-0">
-            <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} errors={e.extra_price}>
+            <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} hint="選択肢ごとに設定します。追加がなければ0円です。" errors={e.extra_price}>
               <Input
                 id={`variant-choice-price-${choice?.id ?? group.id}`}
                 name="extra_price"
@@ -396,20 +396,20 @@ function ChoiceEditor({
   if (isNew) return <div className="rounded-xl border border-dashed border-line bg-white p-4">{form}</div>;
 
   return (
-    <details className="rounded-xl border border-line bg-white">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+    <div className="rounded-xl border border-line bg-white" data-testid="variant-choice-price-editor">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
         <span className="min-w-0">
           <span className="font-semibold text-ink">{choice.name}</span>
           {choice.kind === 'standard' && <span className="ml-2 text-xs text-success">標準</span>}
-          {!choice.price_on_request && choice.extra_price > 0 && (
-            <span className="ml-2 text-xs text-ink-soft">+¥{choice.extra_price.toLocaleString('ja-JP')}</span>
+          {!choice.price_on_request && (
+            <span className="ml-2 text-xs text-ink-soft">追加金額 ¥{choice.extra_price.toLocaleString('ja-JP')}（税別）</span>
           )}
           {choice.price_on_request && <span className="ml-2 text-xs text-warn">別途見積</span>}
         </span>
-        <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? '表示' : '非表示'}・編集</span>
-      </summary>
+        <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? 'お客様に表示' : '非表示'}</span>
+      </div>
       <div className="border-t border-line p-4">{form}</div>
-    </details>
+    </div>
   );
 }
 
@@ -429,13 +429,13 @@ export function OptionVariantManager({
     <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
       <ProductSectionHeading
         label="5. お客様選択"
-        description="お客様が選べる部位・色・仕様などがある場合だけ設定します。"
+        description="部位・色・仕様などの選択項目を作り、各選択肢に追加金額（税別）を入力できます。"
         level="h2"
       />
 
       <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="選択項目を追加">
         <p className="text-sm font-semibold">選択項目を追加</p>
-        <p className="mt-1 text-xs text-muted">例：床、カウンター、アクセントパネル、浴槽など</p>
+        <p className="mt-1 text-xs text-muted">① 選択項目（例：水栓位置）を作成 → ② 選択肢（例：左・右）を追加 → ③ 各選択肢の追加金額（税別・円）を入力します。</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="btn-secondary btn-sm" onClick={() => setNewGroupOpen(true)}>
             ＋ 選択項目を追加
@@ -462,7 +462,7 @@ export function OptionVariantManager({
 
       {orderedGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-white px-5 py-5 text-sm text-muted">
-          お客様が選ぶ項目はまだありません。必要な場合だけ上の「選択項目を追加」から登録してください。
+          お客様が選ぶ項目はまだありません。上の「選択項目を追加」で項目を作成すると、各選択肢の名前と「追加金額（税別・円）」を入力できます。
         </div>
       ) : (
         <div className="space-y-4">
@@ -488,7 +488,7 @@ export function OptionVariantManager({
 
                   <details className="rounded-xl border border-dashed border-line bg-ivory/20" open={firstChoice}>
                     <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-                      {firstChoice ? '最初の選択肢を追加' : '＋ 選択肢を追加'}
+                      {firstChoice ? '最初の選択肢を追加（追加金額も入力）' : '＋ 選択肢を追加（追加金額も入力）'}
                     </summary>
                     <div className="border-t border-line p-4">
                       <ChoiceEditor

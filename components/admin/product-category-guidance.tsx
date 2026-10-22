@@ -164,11 +164,12 @@ export function categoryRegistrationHint(categoryCode: string): string | null {
 }
 
 
-export function ProductCategoryGuidance({ categoryCode }: { categoryCode: string }) {
+export function ProductCategoryGuidance({ categoryCode, readOnlyChoices = false }: { categoryCode: string; readOnlyChoices?: boolean }) {
   const registrationHint = categoryRegistrationHint(categoryCode);
   const guidance = productRegistrationGuidance(categoryCode);
   return (
     <>
+      {readOnlyChoices && <p className="text-xs text-muted">カテゴリー別の入力目安です。お客様選択の追加・編集はこの画面ではできません。</p>}
               {(registrationHint || guidance.example || guidance.fixedInfo.length > 0) && (
                 <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft" data-testid="category-registration-guidance">
                   {registrationHint && (

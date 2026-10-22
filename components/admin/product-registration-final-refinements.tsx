@@ -256,6 +256,7 @@ function VariantCreatePortal({
   const [pending, setPending] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [choiceNames, setChoiceNames] = useState<string[]>(['']);
+  const [choicePrices, setChoicePrices] = useState<Record<number, string>>({});
   const [choiceRowIds, setChoiceRowIds] = useState<number[]>([0]);
   const nextChoiceRowId = useRef(1);
   const imageInputs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -318,6 +319,7 @@ function VariantCreatePortal({
     setChoiceImageUrls({});
     setGroupName('');
     setChoiceNames(['']);
+    setChoicePrices({});
     setChoiceRowIds([0]);
     nextChoiceRowId.current = 1;
     setStandardIndex(0);
@@ -329,7 +331,13 @@ function VariantCreatePortal({
 
   const removeChoice = (index: number) => {
     if (choiceNames.length <= 1) return;
-    clearChoiceMedia(choiceRowIds[index]);
+    const removedRowId = choiceRowIds[index];
+    clearChoiceMedia(removedRowId);
+    setChoicePrices((prices) => {
+      const next = { ...prices };
+      delete next[removedRowId];
+      return next;
+    });
     setChoiceRowIds((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
     setChoiceNames((rows) => rows.filter((_, rowIndex) => rowIndex !== index));
     setStandardIndex((current) => {
@@ -436,7 +444,7 @@ function VariantCreatePortal({
             </div>
 
             <div className="space-y-2" data-testid="compact-variant-choices">
-              <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択）</span></p>
+              <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択・追加金額は税別円）</span></p>
 
               <div className="space-y-1.5">
                 {choiceNames.map((value, index) => {
@@ -471,6 +479,24 @@ function VariantCreatePortal({
                           autoComplete="off"
                           required={isStandard}
                         />
+                        <div className="w-36 shrink-0">
+                          <label htmlFor={`registration-choice-price-${rowId}`} className="block text-xs font-semibold text-ink-soft">
+                            追加金額（税別・円）
+                          </label>
+                          <Input
+                            id={`registration-choice-price-${rowId}`}
+                            name={`choice_extra_price_${index}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={100000000}
+                            step={1}
+                            value={choicePrices[rowId] ?? '0'}
+                            onChange={(event) => setChoicePrices((prices) => ({ ...prices, [rowId]: event.target.value }))}
+                            disabled={pending}
+                            aria-label={`選択肢${index + 1}の追加金額（税別・円）`}
+                          />
+                        </div>
                         <SuggestionButtons
                           title="選択肢の候補"
                           values={suggestions.choices}
@@ -537,6 +563,7 @@ function VariantCreatePortal({
                 >
                   ＋ 選択肢を追加
                 </button>
+                <p className="text-xs text-muted">追加金額がない選択肢は0円です。金額は選択肢名に書かず、右の入力欄へ入れてください。</p>
                 {(state.fieldErrors?.first_choice_name || state.fieldErrors?.additional_choice_name) && (
                   <p className="text-xs text-danger">
                     {[...(state.fieldErrors.first_choice_name ?? []), ...(state.fieldErrors.additional_choice_name ?? [])].join(' / ')}

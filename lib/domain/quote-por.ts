@@ -130,12 +130,15 @@ export function lineStateReasonSeed(remark: string | null | undefined): string {
 
 /**
  * 編集画面で扱いを選んだときの行。「0円確定」「対象外」は 0 円にし、理由・メモが空なら今の備考を入れておく。
- * 扱いを外したときは備考を元のままにする（金額は入れ直す）
+ * 扱いを外したときは備考を元のままにする（金額は入れ直す）。備考が空なら、理由・メモを備考へ戻す（黙って消さない）
  */
 export function chooseQuoteLineState<
   T extends { remark?: string | null; unit_price: number | null; line_state: QuoteLineState | null; line_state_reason: string },
 >(row: T, state: QuoteLineState | null): T {
-  if (!state) return { ...row, line_state: null };
+  if (!state) {
+    const remark = (row.remark ?? '').trim() ? row.remark : row.line_state_reason.trim() || row.remark;
+    return { ...row, line_state: null, remark };
+  }
   return {
     ...row,
     line_state: state,
@@ -242,7 +245,8 @@ export function isUnresolvedQuoteLine(line: QuoteLineCheckInput): boolean {
 
 /** 前の版と同じ明細かを比べるキー（区分・品名・説明） */
 export function quoteLineIdentityKey(line: { kind: string; name: string; description?: string | null }): string {
-  return `${line.kind}\u0000${line.name.trim()}\u0000${(line.description ?? '').trim()}`;
+  // SQL の btrim と同じく、前後の半角スペースだけを除いて比べる
+  return `${line.kind}\u0000${btrim(line.name)}\u0000${btrim(line.description)}`;
 }
 
 export interface QuoteLineCheckLine {

@@ -1822,9 +1822,11 @@ export class LocalStore implements DataStore {
         const guardError = quoteLineStateGuardError(it);
         if (guardError) throw new StoreError('VALIDATION', guardError);
       }
+      // 改訂の明細は DB と同じく台帳の紐付けで判定しない（create_quote_revision は新しい版の行に option_id を写さない）
       const unresolvedLines = findUnresolvedLines(newItems, {
         parentLines: db.quoteItems.filter((it) => it.quote_id === parent.id),
         options: new Map(db.options.map((o) => [o.id, o])),
+        ignoreLineOptions: true,
       });
       const unresolved = newItems.filter((it) => unresolvedLines.has(it));
       if (unresolved.length > 0) throw new StoreError('VALIDATION', unresolvedLinesError(unresolved.map((it) => it.name)));

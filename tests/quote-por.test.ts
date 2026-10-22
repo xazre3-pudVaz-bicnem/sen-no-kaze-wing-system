@@ -168,8 +168,9 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
     expect(findUnresolvedLines([standard, expense], { baselineLines, matchLineKey: true }).size).toBe(0);
     expect([...findUnresolvedLines([standard, expense, added], { baselineLines, matchLineKey: true })]).toEqual([added]);
     expect([...findUnresolvedLines([standard, duplicate], { baselineLines, matchLineKey: true })]).toEqual([duplicate]);
-    // 品名・説明の前後の空白は DB に保存するときに除くので、比べるときも除く
+    // 品名・説明の前後の半角スペースは SQL の btrim と同じく除いて比べる（全角スペースは除かない）
     expect(findUnresolvedLines([{ ...standard, name: ' 標準の0円の工事 ' }], { baselineLines, matchLineKey: true }).size).toBe(0);
+    expect(findUnresolvedLines([{ ...standard, name: '標準の0円の工事　' }], { baselineLines, matchLineKey: true }).size).toBe(1);
     expect(migration).toContain("i.price_mode = 'auto' and coalesce(c.line_role, 'line') = 'expense', false) as unresolved_alone");
     expect(migration).toContain('from public.standard_estimate_revision_lines s');
     expect(migration).toContain("and ((s.price_mode = 'auto' and coalesce(s.cost_unit_price, 0) = 0) or (s.price_mode = 'manual' and coalesce(s.unit_price, 0) = 0))");
@@ -262,6 +263,13 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(chooseQuoteLineState({ ...row, line_state_reason: '入力済み' }, 'zero_confirmed').line_state_reason).toBe('入力済み');
     expect(chooseQuoteLineState({ ...row, remark: '別途見積' }, 'zero_confirmed').line_state_reason).toBe('');
     expect(chooseQuoteLineState({ ...row, line_state: 'excluded' as const, unit_price: 0 }, null)).toEqual({ ...row, unit_price: 0 });
+    // 保存済みの印の行（備考は空・メモあり）で扱いを外すと、メモを備考へ戻す
+    expect(chooseQuoteLineState({ remark: '', unit_price: 0, line_state: 'excluded' as const, line_state_reason: 'お客様手配' }, null)).toEqual({
+      remark: 'お客様手配',
+      unit_price: 0,
+      line_state: null,
+      line_state_reason: 'お客様手配',
+    });
     expect(lineStateReasonSeed('価格未確定（別途お見積り）')).toBe('');
     expect(lineStateReasonSeed('別途見積項目あり・見積発行時点の面別外壁仕様')).toBe('');
     expect(lineStateReasonSeed('［今回の契約対象外］')).toBe('');

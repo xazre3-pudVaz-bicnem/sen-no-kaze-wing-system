@@ -8,7 +8,7 @@ import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewIm
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError, type DealerRevisionItem, type EstimateTemplateImportInput, type QuoteDraftSaveItem, type SessionUser } from '@/lib/data/store';
-import { applyQuoteLineStates, QuoteLineStateInputError } from '@/lib/domain/quote-por';
+import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
@@ -970,7 +970,7 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
     throw e;
   }
   // お客様が選んだ別途見積の商品（画面に出した一覧）。確認欄にチェックがあるときだけ確認として送る（D1 までの暫定）
-  const porKeys = parsePorConfirmationKeys(formData.get('por_keys'));
+  const porKeys = parsePorSelectionKeys(formData.get('por_keys'));
   if (porKeys === null) return { ok: false, error: '金額未確定の確認の内容を読み取れませんでした。画面を再読み込みしてください。' };
   const porConfirmed = formData.get('por_confirmed') === '1';
   if (porKeys.length > 0 && !porConfirmed) {
@@ -995,18 +995,6 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
 }
 
 /** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null */
-function parsePorConfirmationKeys(value: FormDataEntryValue | null): string[] | null {
-  if (value === null || value === '') return [];
-  try {
-    const parsed: unknown = JSON.parse(String(value));
-    if (!Array.isArray(parsed) || parsed.length > 500) return null;
-    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 200)) return null;
-    return parsed as string[];
-  } catch {
-    return null;
-  }
-}
-
 /** 管理者：ユーザーの権限を変更する（自分自身は変更できない） */
 export async function updateUserRoleAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const admin = await requireAdmin();

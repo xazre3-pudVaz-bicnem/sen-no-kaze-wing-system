@@ -5,6 +5,7 @@ import { formalizeLegacyAcceptedQuoteAction } from '@/lib/actions/legacy-accepte
 import type { QuoteItem } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import {
+  chooseQuoteLineState,
   createUnresolvedLineCheck,
   EMPTY_POR_SELECTION_STATE,
   QUOTE_LINE_STATE_LABELS,
@@ -140,9 +141,14 @@ export function LegacyAcceptedFormalizationForm({
   };
 
   const updateRow = (key: string, patch: Partial<InstallationRow>) => {
-    // 「0円確定」「対象外」を選んだ行は 0 円にする（戻したら金額を入れ直す）
+    // 「0円確定」「対象外」を選んだ行は 0 円にし、理由・メモが空なら今の備考を入れておく（戻したら金額を入れ直す）
     setRows((current) =>
-      current.map((row) => (row.key === key ? { ...row, ...patch, ...(patch.line_state ? { unit_price: 0 } : {}) } : row))
+      current.map((row) => {
+        if (row.key !== key) return row;
+        const { line_state: state, ...rest } = patch;
+        const next = { ...row, ...rest };
+        return state !== undefined ? chooseQuoteLineState(next, state) : next;
+      })
     );
   };
   const updatePorRow = (key: string, patch: QuotePorReviewPatch) =>

@@ -7,8 +7,10 @@ import { formatYen } from '@/lib/domain/pricing';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
 import {
+  chooseQuoteLineState,
   createUnresolvedLineCheck,
   EMPTY_POR_SELECTION_STATE,
+  LINE_STATE_KINDS,
   splitQuoteLineStateRemark,
   type QuoteLineState,
   type QuotePorSelectionState,
@@ -163,15 +165,10 @@ export function DealerRevisionForm({
   const [isDirty, setIsDirty] = useState(false);
 
   // ---- 金額未確定の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
-  // 前の版（いまの発行済み見積）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい
-  const isUnresolved = useMemo(
-    () =>
-      createUnresolvedLineCheck({
-        parentLines: items,
-        options: new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
-      }),
-    [items, products]
-  );
+  // 前の版（いまの発行済み見積）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい。
+  // 改訂の明細には商品台帳の紐付け（option_id）を残さないため、DB と同じく台帳の 0 円・別途見積の商品では判定しない
+  // （台帳から足した別途見積の商品は備考「別途見積」で未確定になる。台帳の 0 円の商品を新しく足したときは「0円確定」を選ぶ）
+  const isUnresolved = useMemo(() => createUnresolvedLineCheck({ parentLines: items }), [items]);
   // 最初に未確定だった行は、金額・扱いを入れた後も欄に残す（何を確定したかを見返せるように）
   const [initialPorRowKeys] = useState(() => new Set(buildInitialRows().filter(isUnresolved).map((row) => row.key)));
   const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
@@ -200,8 +197,9 @@ export function DealerRevisionForm({
         lineState: row.line_state,
         lineStateReason: row.line_state_reason,
         unresolved: isUnresolved(row),
-        // 本体の明細はこの画面では本部でも参照のみ（表と同じ）
+        // 本体の明細はこの画面では本部でも参照のみ（表と同じ）。経費の行は金額だけを直せる
         editable: row.kind !== 'base' && row.kind !== 'base_expense',
+        lineStateSelectable: LINE_STATE_KINDS.has(row.kind),
       })),
   ];
   const porSelections = porState.available ? porState.selections : [];
@@ -212,14 +210,18 @@ export function DealerRevisionForm({
     ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),
   ];
-  const patchRow = (row: Row, patch: QuotePorReviewPatch): Row => ({
-    ...row,
-    ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
-    ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
-    // 「0円確定」「対象外」を選んだ行は 0 円にする（戻したら金額を入れ直す）
-    ...(patch.lineState !== undefined ? { line_state: patch.lineState, ...(patch.lineState ? { unit_price: 0 } : {}) } : {}),
-    ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
-  });
+  const patchRow = (row: Row, patch: QuotePorReviewPatch): Row => {
+    const next: Row = {
+      ...row,
+      ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
+      ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
+      ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
+    };
+    // 「0円確定」「対象外」を選んだ行は 0 円にし、理由・メモが空なら今の備考を入れておく
+    return patch.lineState !== undefined && (patch.lineState === null || LINE_STATE_KINDS.has(row.kind))
+      ? chooseQuoteLineState(next, patch.lineState)
+      : next;
+  };
   const updatePorRow = (key: string, patch: QuotePorReviewPatch) => {
     setRows((current) => current.map((row) => (row.key === key ? patchRow(row, patch) : row)));
     setIsDirty(true);

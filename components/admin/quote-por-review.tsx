@@ -17,6 +17,8 @@ export interface QuotePorReviewRow {
   unresolved: boolean;
   /** この画面で単価・扱い・備考を直せるか。直せない行は note（無ければ lockedNote）を示す */
   editable: boolean;
+  /** 「0円確定」「対象外」を選べるか（本体・経費の行は選べない。既定は選べる） */
+  lineStateSelectable?: boolean;
   note?: string;
 }
 
@@ -89,7 +91,13 @@ export function QuotePorReview({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.key} className="border-t border-amber-100" data-testid="por-review-row" data-line-state={row.lineState ?? (row.unresolved ? 'unresolved' : 'resolved')}>
+                <tr
+                  key={row.key}
+                  className="border-t border-amber-100"
+                  data-testid="por-review-row"
+                  data-row-key={row.key}
+                  data-line-state={row.lineState ?? (row.unresolved ? 'unresolved' : 'resolved')}
+                >
                   <td className="px-2 py-1.5 font-semibold">{row.name || '（品名なし）'}</td>
                   <td className="px-2 py-1.5 text-muted">{row.sectionLabel}</td>
                   {row.editable ? (
@@ -112,6 +120,9 @@ export function QuotePorReview({
                         )}
                       </td>
                       <td className="px-2 py-1.5">
+                        {row.lineStateSelectable === false ? (
+                          <span className="block px-1.5 py-1 text-[0.68rem] text-muted">金額を入れる</span>
+                        ) : (
                         <select
                           value={row.lineState ?? ''}
                           onChange={(event) => onUpdate(row.key, { lineState: (event.target.value || null) as QuoteLineState | null })}
@@ -123,6 +134,7 @@ export function QuotePorReview({
                           <option value="zero_confirmed">0円確定</option>
                           <option value="excluded">対象外</option>
                         </select>
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
                         {row.lineState ? (

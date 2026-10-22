@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { finalizeStandardQuoteDraftAction, saveStandardQuoteDraftAction } from '@/lib/actions/standard-quotes';
 import { formatYen } from '@/lib/domain/pricing';
-import { QUOTE_LINE_STATE_LABELS, type QuoteLineState } from '@/lib/domain/quote-por';
+import { chooseQuoteLineState, QUOTE_LINE_STATE_LABELS, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { ExpenseMethod, PriceMode } from '@/lib/domain/standard-estimate-money';
 import { PRICE_MODE_LABEL, STANDARD_SECTION_LABEL, type StandardSectionCode } from '@/lib/domain/standard-estimate-view';
 import {
@@ -63,13 +63,18 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
     setDirty(true);
   };
   const intOrNull = (value: string) => (value.trim() === '' ? null : Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : null);
-  const choosePrice = (index: number, choice: PriceChoice) =>
-    updateLine(
-      index,
-      choice === 'excluded' || choice === 'zero_confirmed'
-        ? { price_mode: 'manual', unit_price: 0, line_state: choice }
-        : { price_mode: choice, line_state: null }
-    );
+  // 「0円確定」「対象外」は「金額を入力」の 0 円の行にし、理由・メモが空なら今の備考を入れておく
+  const choosePrice = (index: number, choice: PriceChoice) => {
+    setState((current) => ({
+      ...current,
+      lines: current.lines.map((line, i) => {
+        if (i !== index) return line;
+        if (choice === 'excluded' || choice === 'zero_confirmed') return { ...chooseQuoteLineState(line, choice), price_mode: 'manual' };
+        return { ...line, price_mode: choice, line_state: null };
+      }),
+    }));
+    setDirty(true);
+  };
 
   const save = () =>
     startTransition(async () => {

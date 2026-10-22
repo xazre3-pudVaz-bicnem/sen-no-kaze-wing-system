@@ -9,6 +9,9 @@ import {
   UNRESOLVED_LINES_MESSAGE,
   applyQuoteLineStateInput,
   applyQuoteLineStates,
+  chooseQuoteLineState,
+  lineStateReasonSeed,
+  parsePorSelectionKeys,
   configurationPorSelections,
   createUnresolvedLineCheck,
   isUnresolvedQuoteLine,
@@ -191,6 +194,28 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(quoteLineStateAmountLabel('［今回の契約対象外］')).toBe('対象外');
     expect(quoteLineStateAmountLabel('［0円確定］：サービス')).toBe('0円確定');
     expect(quoteLineStateAmountLabel('サービス')).toBeNull();
+  });
+
+  it('編集画面で扱いを選ぶと 0 円にし、理由・メモが空なら今の備考を入れておく（別途見積の目印は入れない）。外すと備考は元のまま', () => {
+    const row = { remark: 'Panasonic ／ XYZ-1', unit_price: 12_000, line_state: null, line_state_reason: '' };
+    expect(chooseQuoteLineState(row, 'excluded')).toEqual({ remark: 'Panasonic ／ XYZ-1', unit_price: 0, line_state: 'excluded', line_state_reason: 'Panasonic ／ XYZ-1' });
+    expect(chooseQuoteLineState({ ...row, line_state_reason: '入力済み' }, 'zero_confirmed').line_state_reason).toBe('入力済み');
+    expect(chooseQuoteLineState({ ...row, remark: '別途見積' }, 'zero_confirmed').line_state_reason).toBe('');
+    expect(chooseQuoteLineState({ ...row, line_state: 'excluded' as const, unit_price: 0 }, null)).toEqual({ ...row, unit_price: 0 });
+    expect(lineStateReasonSeed('価格未確定（別途お見積り）')).toBe('');
+    expect(lineStateReasonSeed('別途見積項目あり・見積発行時点の面別外壁仕様')).toBe('');
+    expect(lineStateReasonSeed('［今回の契約対象外］')).toBe('');
+    expect(lineStateReasonSeed('あ'.repeat(200))).toHaveLength(150);
+  });
+
+  it('画面が送った別途見積の一覧の key の読み取り（形が違えば null）', () => {
+    expect(parsePorSelectionKeys(null)).toEqual([]);
+    expect(parsePorSelectionKeys('')).toEqual([]);
+    expect(parsePorSelectionKeys('["product:a","face:front:b"]')).toEqual(['product:a', 'face:front:b']);
+    expect(parsePorSelectionKeys('{"a":1}')).toBeNull();
+    expect(parsePorSelectionKeys('[""]')).toBeNull();
+    expect(parsePorSelectionKeys('[1]')).toBeNull();
+    expect(parsePorSelectionKeys('not json')).toBeNull();
   });
 
   it('表の保存境界（DB の quote_line_state_guard と同じ）：印のある行は 0 円、0円確定は理由あり、価格の決め方は「金額を入力」', () => {

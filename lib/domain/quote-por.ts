@@ -118,6 +118,42 @@ export function splitQuoteLineStateRemark(remark: string | null | undefined): {
   return { line_state: null, line_state_reason: '', remark: remark ?? '' };
 }
 
+/** 扱いの理由・メモの初期値：今の備考（別途見積の目印でないもの）を入れておく（扱いを選んでも備考を黙って消さない） */
+export function lineStateReasonSeed(remark: string | null | undefined): string {
+  const text = (remark ?? '').trim();
+  if (!text || isReservedLineStateRemark(text) || isPorMarkedLine({ remark: text })) return '';
+  return text.slice(0, LINE_STATE_REASON_MAX);
+}
+
+/**
+ * 編集画面で扱いを選んだときの行。「0円確定」「対象外」は 0 円にし、理由・メモが空なら今の備考を入れておく。
+ * 扱いを外したときは備考を元のままにする（金額は入れ直す）
+ */
+export function chooseQuoteLineState<
+  T extends { remark?: string | null; unit_price: number | null; line_state: QuoteLineState | null; line_state_reason: string },
+>(row: T, state: QuoteLineState | null): T {
+  if (!state) return { ...row, line_state: null };
+  return {
+    ...row,
+    line_state: state,
+    unit_price: 0,
+    line_state_reason: row.line_state_reason.trim() ? row.line_state_reason : lineStateReasonSeed(row.remark),
+  };
+}
+
+/** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null（Server Action で使う） */
+export function parsePorSelectionKeys(value: FormDataEntryValue | null): string[] | null {
+  if (value === null || value === '') return [];
+  try {
+    const parsed: unknown = JSON.parse(String(value));
+    if (!Array.isArray(parsed) || parsed.length > 500) return null;
+    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 200)) return null;
+    return parsed as string[];
+  } catch {
+    return null;
+  }
+}
+
 /** 見積書・明細の表の金額欄：対象外の行は「対象外」と出す（0 円の確定と区別する）。印が無ければ null */
 export function quoteLineStateAmountLabel(remark: string | null | undefined): string | null {
   const parsed = parseQuoteLineState(remark);

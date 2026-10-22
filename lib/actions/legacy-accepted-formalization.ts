@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
-import { applyQuoteLineStates, QuoteLineStateInputError } from '@/lib/domain/quote-por';
+import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { isMissingNamedFunction } from '@/lib/data/schema-compat';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { createClient } from '@/lib/supabase/server';
@@ -49,19 +49,6 @@ function userFacingRpcError(error: { code?: string; message?: string } | null) {
   return '確定見積の発行に失敗しました。案件を再読み込みして状態を確認してください。';
 }
 
-/** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null */
-function parsePorKeys(value: FormDataEntryValue | null): string[] | null {
-  if (value === null || value === '') return [];
-  try {
-    const parsed: unknown = JSON.parse(String(value));
-    if (!Array.isArray(parsed) || parsed.length > 500) return null;
-    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 200)) return null;
-    return parsed as string[];
-  } catch {
-    return null;
-  }
-}
-
 export async function formalizeLegacyAcceptedQuoteAction(
   _prev: LegacyAcceptedFormalizationState,
   formData: FormData
@@ -93,7 +80,7 @@ export async function formalizeLegacyAcceptedQuoteAction(
   }
 
   // お客様が選んだ別途見積の商品（画面に出した一覧）。確認欄にチェックがあるときだけ確認として記録する（D1 までの暫定）
-  const porKeys = parsePorKeys(formData.get('por_keys'));
+  const porKeys = parsePorSelectionKeys(formData.get('por_keys'));
   if (porKeys === null) {
     return { ok: false, error: '金額未確定の確認の内容を読み取れませんでした。画面を再読み込みしてください。' };
   }

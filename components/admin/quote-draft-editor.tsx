@@ -8,7 +8,7 @@ import {
 } from '@/lib/actions/admin';
 import type { QuoteDraftDetail, QuoteDraftSaveItem } from '@/lib/data/store';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
-import { createUnresolvedLineCheck, splitQuoteLineStateRemark, type QuoteLineState } from '@/lib/domain/quote-por';
+import { chooseQuoteLineState, createUnresolvedLineCheck, splitQuoteLineStateRemark, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { QuoteItem, QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
@@ -223,17 +223,17 @@ export function QuoteDraftEditor({
           nextQuantity = patch.quantity;
         }
 
-        return {
+        const next: EditorRow = {
           ...row,
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.quantity !== undefined || patch.unit !== undefined ? { quantity: nextQuantity } : {}),
           ...(patch.unit !== undefined ? { unit: nextUnit } : {}),
           ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
           ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
-          // 「0円確定」「対象外」を選んだ行は 0 円にする（戻したら金額を入れ直す）
-          ...(patch.lineState !== undefined ? { line_state: patch.lineState, ...(patch.lineState ? { unit_price: 0 } : {}) } : {}),
           ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
         };
+        // 「0円確定」「対象外」を選んだ行は 0 円にし、理由・メモが空なら今の備考を入れておく（戻したら金額を入れ直す）
+        return patch.lineState !== undefined ? chooseQuoteLineState(next, patch.lineState) : next;
       })
     );
     markDirty();

@@ -241,14 +241,15 @@ export async function confirmPorBeforeIssue(form: Locator, reason = '現地確�
  * 備考の自由記述では解消しない（2026-10-22 の確定事項 A-2-1）
  */
 export async function resolveUnresolvedPorRows(form: Locator, reason: string, state: 'zero_confirmed' | 'excluded' = 'zero_confirmed') {
-  const rows = form.getByTestId('por-review').locator('[data-testid="por-review-row"][data-line-state="unresolved"]');
-  // 扱いを選ぶと行の状態が変わり、一覧から外れる（選び終えるまで先頭の行を処理する）
+  const review = form.getByTestId('por-review');
+  const rows = review.locator('[data-testid="por-review-row"][data-line-state="unresolved"]');
+  // 扱いを選ぶと行の状態が変わり、未確定の一覧から外れる（選び終えるまで先頭の行を処理する。行は key で選び直す）
   for (let guard = 0; guard < 50 && (await rows.count()) > 0; guard += 1) {
-    const row = rows.first();
-    if ((await row.getByTestId('por-review-state').count()) === 0) return;
-    await row.getByTestId('por-review-state').selectOption(state);
-    const resolvedRow = form.getByTestId('por-review').locator(`[data-testid="por-review-row"][data-line-state="${state}"]`).last();
-    await resolvedRow.getByTestId('por-review-reason').fill(reason);
+    const first = rows.first();
+    if ((await first.getByTestId('por-review-state').count()) === 0) return;
+    const key = await first.getAttribute('data-row-key');
+    await first.getByTestId('por-review-state').selectOption(state);
+    await review.locator(`[data-testid="por-review-row"][data-row-key="${key}"]`).getByTestId('por-review-reason').fill(reason);
   }
 }
 

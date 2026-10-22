@@ -6,8 +6,14 @@ import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleActi
 import { formatYen } from '@/lib/domain/pricing';
 import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } from '@/lib/domain/types';
 import type { RevisionItemKind } from '@/lib/data/store';
-import { EMPTY_POR_SELECTION_STATE, isUnresolvedPorLine, type QuotePorSelectionState } from '@/lib/domain/quote-por';
-import { QuotePorReview, type QuotePorReviewRow } from './quote-por-review';
+import {
+  createUnresolvedLineCheck,
+  EMPTY_POR_SELECTION_STATE,
+  splitQuoteLineStateRemark,
+  type QuoteLineState,
+  type QuotePorSelectionState,
+} from '@/lib/domain/quote-por';
+import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
 import { Button, Field, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 import type { CatalogPickerItem } from './catalog-picker';
@@ -18,6 +24,7 @@ import {
   QuoteFinancialSummary,
   QuoteInternalRateStrip,
   type QuoteAuthoringRow,
+  type QuoteAuthoringRowPatch,
   type QuoteAuthoringSection,
   type QuoteCatalogProduct,
 } from './quote-authoring-ui';
@@ -62,9 +69,12 @@ interface Row {
   quantity: number;
   /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧用） */
   image_url: string | null;
+  /** 扱い（0円確定・対象外）。発行のときにサーバーが備考の印にする */
+  line_state: QuoteLineState | null;
+  line_state_reason: string;
 }
 
-/** 別途見積の確認の欄に出す区分名 */
+/** 金額未確定の確認の欄に出す区分名 */
 const POR_SECTION_LABELS: Partial<Record<QuoteItem['kind'], string>> = {
   base: '本体',
   base_expense: '本体諸費用',
@@ -143,7 +153,7 @@ export function DealerRevisionForm({
         name: item.name,
         description: item.description ?? '',
         unit: item.unit ?? '式',
-        remark: item.remark ?? '',
+        ...splitQuoteLineStateRemark(item.remark),
         unit_price: item.unit_price,
         quantity: item.quantity,
         image_url: item.image_url ?? null,
@@ -152,61 +162,66 @@ export function DealerRevisionForm({
   const [rows, setRows] = useState<Row[]>(buildInitialRows);
   const [isDirty, setIsDirty] = useState(false);
 
-  // ---- 別途見積（POR）の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
-  const porProductIds = useMemo(() => new Set(products.filter((product) => product.priceOnRequest).map((product) => product.id)), [products]);
-  const isPorLine = (line: { unit_price: number; description: string | null; remark: string | null; option_id: string | null }) =>
-    isUnresolvedPorLine({
-      unit_price: line.unit_price,
-      description: line.description,
-      remark: line.remark,
-      optionIsPor: Boolean(line.option_id && porProductIds.has(line.option_id)),
-    });
-  // 最初に未確定だった行は、金額・理由を入れた後も欄に残す（何を確定したかを見返せるように）
-  const [initialPorRowKeys] = useState(() => new Set(buildInitialRows().filter(isPorLine).map((row) => row.key)));
+  // ---- 金額未確定の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
+  // 前の版（いまの発行済み見積）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい
+  const isUnresolved = useMemo(
+    () =>
+      createUnresolvedLineCheck({
+        parentLines: items,
+        options: new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
+      }),
+    [items, products]
+  );
+  // 最初に未確定だった行は、金額・扱いを入れた後も欄に残す（何を確定したかを見返せるように）
+  const [initialPorRowKeys] = useState(() => new Set(buildInitialRows().filter(isUnresolved).map((row) => row.key)));
   const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
   const porRows: QuotePorReviewRow[] = [
     ...items
-      .filter((item) => !editable(item.kind) && isPorLine({ ...item, description: item.description ?? null, remark: item.remark ?? null, option_id: item.option_id ?? null }))
+      .filter((item) => !editable(item.kind) && isUnresolved(item))
       .map((item) => ({
         key: item.id,
         name: item.name,
         sectionLabel: POR_SECTION_LABELS[item.kind] ?? item.kind,
         unitPrice: item.unit_price,
         remark: item.remark ?? '',
+        lineState: null,
+        lineStateReason: '',
         unresolved: true,
         editable: false,
       })),
     ...rows
-      .filter((row) => initialPorRowKeys.has(row.key) || isPorLine(row))
+      .filter((row) => initialPorRowKeys.has(row.key) || row.line_state !== null || isUnresolved(row))
       .map((row) => ({
         key: row.key,
         name: row.name,
         sectionLabel: POR_SECTION_LABELS[row.kind] ?? row.kind,
         unitPrice: row.unit_price,
         remark: row.remark,
-        unresolved: isPorLine(row),
+        lineState: row.line_state,
+        lineStateReason: row.line_state_reason,
+        unresolved: isUnresolved(row),
         // 本体の明細はこの画面では本部でも参照のみ（表と同じ）
         editable: row.kind !== 'base' && row.kind !== 'base_expense',
       })),
   ];
   const porSelections = porState.available ? porState.selections : [];
   const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
+  const missingReasonCount = rows.filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim()).length;
   const porBlockers = [
-    ...(unresolvedPorCount > 0 ? [`別途見積（価格未確定）の明細が ${unresolvedPorCount} 行残っています`] : []),
+    ...(unresolvedPorCount > 0 ? [`金額が未確定の明細が ${unresolvedPorCount} 行残っています`] : []),
+    ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),
   ];
-  const updatePorRow = (key: string, patch: { unitPrice?: number; remark?: string }) => {
-    setRows((current) =>
-      current.map((row) =>
-        row.key === key
-          ? {
-              ...row,
-              ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
-              ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
-            }
-          : row
-      )
-    );
+  const patchRow = (row: Row, patch: QuotePorReviewPatch): Row => ({
+    ...row,
+    ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
+    ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
+    // 「0円確定」「対象外」を選んだ行は 0 円にする（戻したら金額を入れ直す）
+    ...(patch.lineState !== undefined ? { line_state: patch.lineState, ...(patch.lineState ? { unit_price: 0 } : {}) } : {}),
+    ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
+  });
+  const updatePorRow = (key: string, patch: QuotePorReviewPatch) => {
+    setRows((current) => current.map((row) => (row.key === key ? patchRow(row, patch) : row)));
     setIsDirty(true);
   };
   const [scopeChangeMode, setScopeChangeMode] = useState(false);
@@ -242,18 +257,24 @@ export function DealerRevisionForm({
     ].includes(row.kind);
   };
   const authoringRows: QuoteAuthoringRow[] = [
-    ...lockedItems.map((item) => ({
-      key: item.id,
-      kind: item.kind,
-      name: item.name,
-      quantity: item.quantity,
-      unit: item.unit ?? '',
-      unitPrice: item.unit_price,
-      amount: item.amount,
-      remark: item.remark ?? '',
-      optionId: item.option_id ?? null,
-      locked: true,
-    })),
+    ...lockedItems.map((item) => {
+      const split = splitQuoteLineStateRemark(item.remark);
+      return {
+        key: item.id,
+        kind: item.kind,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit ?? '',
+        unitPrice: item.unit_price,
+        amount: item.amount,
+        remark: split.remark,
+        optionId: item.option_id ?? null,
+        locked: true,
+        lineState: split.line_state,
+        lineStateReason: split.line_state_reason,
+        unresolved: isUnresolved(item),
+      };
+    }),
     ...rows.map((row) => {
       const editable = rowCanEdit(row);
       const catalogLinked = Boolean(row.option_id);
@@ -283,8 +304,12 @@ export function DealerRevisionForm({
               remark: true,
               remove: row.kind === 'installation' || scopeChangeMode,
               selectProduct: catalogProductChangeAllowed,
+              lineState: true,
             }
           : undefined,
+        lineState: row.line_state,
+        lineStateReason: row.line_state_reason,
+        unresolved: isUnresolved(row),
       };
     }),
   ];
@@ -295,22 +320,25 @@ export function DealerRevisionForm({
 
   const markDirty = () => setIsDirty(true);
 
-  const updateAuthoringRow = (
-    key: string,
-    patch: Partial<Pick<QuoteAuthoringRow, 'name' | 'quantity' | 'unit' | 'unitPrice' | 'remark'>>
-  ) => {
+  const updateAuthoringRow = (key: string, patch: QuoteAuthoringRowPatch) => {
     setRows((current) =>
       current.map((row) => {
         if (row.key !== key || !rowCanEdit(row)) return row;
         const catalogLinked = Boolean(row.option_id);
-        return {
-          ...row,
-          ...(!catalogLinked && patch.name !== undefined ? { name: patch.name } : {}),
-          ...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
-          ...(!catalogLinked && patch.unit !== undefined ? { unit: patch.unit ?? '' } : {}),
-          ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
-          ...(patch.remark !== undefined ? { remark: patch.remark ?? '' } : {}),
-        };
+        return patchRow(
+          {
+            ...row,
+            ...(!catalogLinked && patch.name !== undefined ? { name: patch.name } : {}),
+            ...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
+            ...(!catalogLinked && patch.unit !== undefined ? { unit: patch.unit ?? '' } : {}),
+          },
+          {
+            unitPrice: patch.unitPrice,
+            remark: patch.remark === undefined ? undefined : patch.remark ?? '',
+            lineState: patch.lineState,
+            lineStateReason: patch.lineStateReason,
+          }
+        );
       })
     );
     markDirty();
@@ -339,6 +367,8 @@ export function DealerRevisionForm({
         unit_price: 0,
         quantity: 1,
         image_url: null,
+        line_state: null,
+        line_state_reason: '',
       },
     ]);
     markDirty();
@@ -360,6 +390,8 @@ export function DealerRevisionForm({
       unit_price: product.priceOnRequest ? 0 : product.price,
       remark: productRemark,
       image_url: product.imageUrl,
+      line_state: null,
+      line_state_reason: '',
     };
 
     setRows((current) => {
@@ -419,6 +451,8 @@ export function DealerRevisionForm({
           <input type="hidden" name={`items.${index}.unit_price`} value={row.unit_price} />
           <input type="hidden" name={`items.${index}.quantity`} value={row.quantity} />
           <input type="hidden" name={`items.${index}.image_url`} value={row.image_url ?? ''} />
+          <input type="hidden" name={`items.${index}.line_state`} value={row.line_state ?? ''} />
+          <input type="hidden" name={`items.${index}.line_state_reason`} value={row.line_state ? row.line_state_reason : ''} />
         </Fragment>
       ))}
 
@@ -518,6 +552,7 @@ export function DealerRevisionForm({
         onRemove={removeAuthoringRow}
         onAddFree={addAuthoringRow}
         onSelectProduct={selectCatalogProduct}
+        showLineState
       />
 
       <div className="grid gap-2 border-t border-line bg-[#fafbf9] px-3 py-3 lg:grid-cols-[1fr_36rem]">

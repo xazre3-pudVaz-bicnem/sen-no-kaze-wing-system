@@ -5,6 +5,7 @@ import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } f
 import { type Quote, type QuoteItem } from '@/lib/domain/types';
 import { formatQty } from '@/lib/domain/pricing';
 import { isFormalQuote } from '@/lib/domain/quote-lifecycle';
+import { quoteLineStateAmountLabel } from '@/lib/domain/quote-por';
 import { COMPANY, PROJECT_NAME } from '@/lib/site';
 import { formatDate } from '@/lib/utils';
 
@@ -121,7 +122,9 @@ function QuoteDocument({ quote, items, image, productImages }: PdfInput) {
       <Text style={s.cDesc}>{[it.description, it.remark].filter(Boolean).join(' / ')}</Text>
       <Text style={s.cPrice}>{it.unit_price !== 0 ? yen(it.unit_price) : ''}</Text>
       <Text style={s.cQty}>{it.unit ? `${formatQty(it.quantity)} ${it.unit}` : formatQty(it.quantity)}</Text>
-      <Text style={s.cAmount}>{opts.dash && it.amount === 0 ? '−' : yen(it.amount)}</Text>
+      <Text style={s.cAmount}>
+        {quoteLineStateAmountLabel(it.remark) === '対象外' ? '対象外' : opts.dash && it.amount === 0 ? '−' : yen(it.amount)}
+      </Text>
     </View>
   );
   /** 【◯◯計】の小計行 */

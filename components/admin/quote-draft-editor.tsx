@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import {
   finalizeQuoteDraftAction,
   saveQuoteDraftAction,
@@ -8,8 +8,8 @@ import {
 } from '@/lib/actions/admin';
 import type { QuoteDraftDetail, QuoteDraftSaveItem } from '@/lib/data/store';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
-import { isUnresolvedPorLine } from '@/lib/domain/quote-por';
-import type { QuoteItemKind } from '@/lib/domain/types';
+import { createUnresolvedLineCheck, splitQuoteLineStateRemark, type QuoteLineState } from '@/lib/domain/quote-por';
+import type { QuoteItem, QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
 import { ConfirmSubmit } from './confirm-submit';
@@ -23,12 +23,14 @@ import {
   isValidQuoteQuantity,
   quoteQuantityRule,
   type QuoteAuthoringRow,
+  type QuoteAuthoringRowPatch,
   type QuoteAuthoringSection,
   type QuoteCatalogProduct,
   type QuotePickerRow,
 } from '@/components/admin/quote-authoring-ui';
 
 const initialState: QuoteDraftFormState = { ok: false };
+const NO_PARENT_ITEMS: QuoteItem[] = [];
 
 const KINDS = ([
   'base',
@@ -42,7 +44,8 @@ const KINDS = ([
   'discount',
 ] as QuoteItemKind[]).filter((kind) => kind !== 'discount');
 
-type EditorRow = QuoteDraftSaveItem & { key: string };
+/** 編集中の行。扱い（0円確定・対象外）は保存のときにサーバーが備考の印にする */
+type EditorRow = QuoteDraftSaveItem & { key: string; line_state: QuoteLineState | null; line_state_reason: string };
 
 function kindForSection(section: QuoteAuthoringSection): QuoteItemKind {
   if (section === 'base') return 'base';
@@ -64,6 +67,8 @@ function newRow(kind: QuoteItemKind = 'installation'): EditorRow {
     unit_price: 0,
     quantity: 1,
     image_url: null,
+    line_state: null,
+    line_state_reason: '',
   };
 }
 
@@ -74,6 +79,7 @@ export function QuoteDraftEditor({
   estimates = [],
   products = [],
   targetRevision = 1,
+  parentItems = NO_PARENT_ITEMS,
 }: {
   detail: QuoteDraftDetail;
   modelName: string;
@@ -81,6 +87,8 @@ export function QuoteDraftEditor({
   estimates?: QuotePickerRow[];
   products?: QuoteCatalogProduct[];
   targetRevision?: number;
+  /** 改訂の下書きの前の版（現在の発行済み見積）の明細。変えていない 0 円の明細の判定に使う */
+  parentItems?: QuoteItem[];
 }) {
   const [saveState, saveAction, savePending] = useActionState(saveQuoteDraftAction, initialState);
   const [finalizeState, finalizeAction, finalizePending] = useActionState(finalizeQuoteDraftAction, initialState);
@@ -93,7 +101,7 @@ export function QuoteDraftEditor({
       name: item.name,
       description: item.description,
       unit: item.unit,
-      remark: item.remark,
+      ...splitQuoteLineStateRemark(item.remark),
       unit_price: item.unit_price,
       quantity: item.quantity,
       image_url: item.image_url,
@@ -106,17 +114,20 @@ export function QuoteDraftEditor({
   const [notes, setNotes] = useState(detail.draft.notes ?? '');
   const [showPreview, setShowPreview] = useState(false);
 
-  // 正式見積には、価格が未確定（別途見積）の明細を残せない（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する）
-  const porProductIds = new Set(products.filter((product) => product.priceOnRequest).map((product) => product.id));
-  const unresolvedPorNames = rows
-    .filter((row) =>
-      isUnresolvedPorLine({
-        unit_price: row.unit_price,
-        description: row.description,
-        remark: row.remark,
-        optionIsPor: Boolean(row.option_id && porProductIds.has(row.option_id)),
-      })
-    )
+  // 正式見積には、金額が未確定の明細を残せない（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する）
+  const isUnresolved = useMemo(
+    () =>
+      createUnresolvedLineCheck({
+        parentLines: parentItems,
+        options: new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
+        matchLineKey: true,
+      }),
+    [parentItems, products]
+  );
+  const unresolvedKeys = new Set(rows.filter(isUnresolved).map((row) => row.key));
+  const unresolvedNames = rows.filter((row) => unresolvedKeys.has(row.key)).map((row) => row.name || '（品名なし）');
+  const missingReasonNames = rows
+    .filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim())
     .map((row) => row.name || '（品名なし）');
 
   const isRevisionDraft = detail.draft.parent_quote_id !== null;
@@ -166,6 +177,8 @@ export function QuoteDraftEditor({
       remark: row.remark || null,
       image_url: row.image_url || null,
       option_id: row.option_id || null,
+      line_state: row.line_state,
+      line_state_reason: row.line_state ? row.line_state_reason : '',
     }))
   );
 
@@ -182,6 +195,9 @@ export function QuoteDraftEditor({
       remark: row.remark ?? '',
       optionId: row.option_id ?? null,
       locked: rowBaseLocked,
+      lineState: row.line_state,
+      lineStateReason: row.line_state_reason,
+      unresolved: unresolvedKeys.has(row.key),
     };
   });
 
@@ -189,10 +205,7 @@ export function QuoteDraftEditor({
     ? KINDS.filter((kind) => kind !== 'base' && kind !== 'base_expense')
     : KINDS;
 
-  const updateAuthoringRow = (
-    key: string,
-    patch: Partial<Pick<QuoteAuthoringRow, 'name' | 'quantity' | 'unit' | 'unitPrice' | 'remark'>>
-  ) => {
+  const updateAuthoringRow = (key: string, patch: QuoteAuthoringRowPatch) => {
     setRows((current) =>
       current.map((row) => {
         if (row.key !== key) return row;
@@ -217,6 +230,9 @@ export function QuoteDraftEditor({
           ...(patch.unit !== undefined ? { unit: nextUnit } : {}),
           ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
           ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
+          // 「0円確定」「対象外」を選んだ行は 0 円にする（戻したら金額を入れ直す）
+          ...(patch.lineState !== undefined ? { line_state: patch.lineState, ...(patch.lineState ? { unit_price: 0 } : {}) } : {}),
+          ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
         };
       })
     );
@@ -247,6 +263,8 @@ export function QuoteDraftEditor({
       unit_price: product.priceOnRequest ? 0 : product.price,
       remark: productRemark,
       image_url: product.imageUrl,
+      line_state: null,
+      line_state_reason: '',
     };
 
     setRows((current) => {
@@ -371,6 +389,7 @@ export function QuoteDraftEditor({
             onRemove={removeAuthoringRow}
             onAddFree={addAuthoringRow}
             onSelectProduct={selectCatalogProduct}
+            showLineState
           />
         </div>
 
@@ -448,10 +467,15 @@ export function QuoteDraftEditor({
         <div>
           <p className="text-sm font-semibold">正式見積を発行</p>
           <p className="mt-0.5 text-[10px] text-muted">発行すると、この下書きは編集できなくなり、発行済み見積として履歴に残ります。</p>
-          {unresolvedPorNames.length > 0 && (
+          {unresolvedNames.length > 0 && (
             <p className="mt-1 text-[11px] font-semibold text-amber-900" data-testid="draft-por-blockers">
-              別途見積（価格未確定）の明細が {unresolvedPorNames.length} 行残っています（{unresolvedPorNames.join('、')}）。
-              売価を入力するか、0 円のままにする場合は備考に理由（ほかの明細に含む など）を書くか、明細から外して保存してから発行してください。
+              金額が未確定の明細が {unresolvedNames.length} 行残っています（{unresolvedNames.join('、')}）。
+              売価を入力するか、表の「扱い」で「0円確定」（理由が必要）か「対象外」を選ぶか、明細から外して保存してから発行してください。
+            </p>
+          )}
+          {missingReasonNames.length > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-amber-900" data-testid="draft-zero-reason-missing">
+              「0円確定」の理由が入っていない明細があります（{missingReasonNames.join('、')}）。備考の欄に理由を入れてください。
             </p>
           )}
         </div>
@@ -460,7 +484,7 @@ export function QuoteDraftEditor({
           dialogTitle={`正式な${formalRevisionLabel}を発行しますか？`}
           confirmLabel="発行する"
           className="btn-primary"
-          disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedPorNames.length > 0}
+          disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedNames.length > 0}
         >
           {finalizePending ? '発行中…' : `この内容で第${targetRevision}版を発行`}
         </ConfirmSubmit>

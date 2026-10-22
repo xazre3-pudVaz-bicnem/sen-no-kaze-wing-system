@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Package, Search, X } from 'lucide-react';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
+import { LINE_STATE_KINDS, QUOTE_LINE_STATE_LABELS, type QuoteLineState } from '@/lib/domain/quote-por';
 import { Button, Input } from '@/components/ui';
 import { EstimateRateControls } from '@/components/admin/estimate-workbench-shared';
 
@@ -19,6 +20,8 @@ export type QuoteAuthoringRowEditableFields = {
   remark?: boolean;
   remove?: boolean;
   selectProduct?: boolean;
+  /** 扱い（0円確定・対象外）の選択。showLineState の表で、本体・経費以外の行だけ */
+  lineState?: boolean;
 };
 
 export type QuoteAuthoringRow = {
@@ -34,7 +37,23 @@ export type QuoteAuthoringRow = {
   locked?: boolean;
   /** 未指定なら従来どおり全項目を編集可。用途別画面だけ項目単位で制限する。 */
   editableFields?: QuoteAuthoringRowEditableFields;
+  /** 扱い（0円確定・対象外。画面の明示の選択で、保存すると備考の印になる。D1 までの暫定） */
+  lineState?: QuoteLineState | null;
+  /** 0円確定の理由・対象外のメモ（扱いを選んだ行は備考の欄で入力する） */
+  lineStateReason?: string;
+  /** 正式発行を止める金額未確定の行か（案内用。止めるのは DB） */
+  unresolved?: boolean;
 };
+
+export type QuoteAuthoringRowPatch = Partial<
+  Pick<QuoteAuthoringRow, 'name' | 'quantity' | 'unit' | 'unitPrice' | 'remark' | 'lineState' | 'lineStateReason'>
+>;
+
+/** 扱いの列の表示（扱いを選んでいない行は、金額未確定なら「未確定」、それ以外は「確定」） */
+function lineStateText(row: QuoteAuthoringRow): string {
+  if (row.lineState) return QUOTE_LINE_STATE_LABELS[row.lineState];
+  return row.unresolved ? '未確定' : '確定';
+}
 
 const DECIMAL_QUANTITY_UNITS = new Set(['m', 'ｍ', '㎡', 'm²', 'm2']);
 
@@ -387,17 +406,20 @@ export function QuoteAuthoringGrid({
   onAddFree,
   onSelectProduct,
   editableSections,
+  showLineState = false,
 }: {
   rows: QuoteAuthoringRow[];
   products: QuoteCatalogProduct[];
   baseModelId: string;
   specCode: string;
-  onUpdate: (key: string, patch: Partial<Pick<QuoteAuthoringRow, 'name' | 'quantity' | 'unit' | 'unitPrice' | 'remark'>>) => void;
+  onUpdate: (key: string, patch: QuoteAuthoringRowPatch) => void;
   onRemove: (key: string) => void;
   onAddFree: (section: QuoteAuthoringSection) => void;
   onSelectProduct: (section: QuoteAuthoringSection, targetKey: string | null, product: QuoteCatalogProduct) => void;
   /** 画面用途・権限により追加可能な区分だけを制限する。未指定は全区分。 */
   editableSections?: readonly QuoteAuthoringSection[];
+  /** 扱い（確定／未確定／0円確定／対象外）の列を出す（正式見積の発行に進む画面。D1 までの暫定） */
+  showLineState?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState<Set<QuoteAuthoringSection>>(() => new Set());
   const [pickerSection, setPickerSection] = useState<QuoteAuthoringSection | null>(null);
@@ -525,7 +547,7 @@ export function QuoteAuthoringGrid({
         Tab→ ／ Enter↓ ／ Shift+Enter↑ ｜ 数量：式＝1固定 ／ 個・台・枚＝整数 ／ m・㎡＝小数可 ｜ 黄色＝入力 ／ グレー＝参照 ｜ 別途見積＝合計に含めない ／ —＝この画面では表示なし
       </div>
       <div className="overflow-x-auto md:overflow-x-visible">
-        <table className="w-full min-w-[46rem] table-fixed border-collapse text-[10px] md:min-w-0">
+        <table className={`w-full ${showLineState ? 'min-w-[50rem]' : 'min-w-[46rem]'} table-fixed border-collapse text-[10px] md:min-w-0`}>
           <colgroup>
             <col className="w-7" />
             <col className="w-7" />
@@ -537,6 +559,7 @@ export function QuoteAuthoringGrid({
             <col className="w-14" />
             <col className="w-16" />
             <col className="w-16" />
+            {showLineState && <col className="w-16" />}
             <col className="w-24" />
             <col className="w-10" />
           </colgroup>
@@ -552,6 +575,14 @@ export function QuoteAuthoringGrid({
               <th className="sticky top-0 z-20 w-14 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">売価</th>
               <th className="sticky top-0 z-20 w-16 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">売価金額</th>
               <th className="sticky top-0 z-20 w-16 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-right text-[9px] font-semibold leading-tight text-slate-600">粗利</th>
+              {showLineState && (
+                <th
+                  className="sticky top-0 z-20 w-16 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[9px] font-semibold leading-tight text-slate-600"
+                  title="金額で確定／金額未確定／0円確定（理由必須）／今回の契約対象外"
+                >
+                  扱い
+                </th>
+              )}
               <th className="sticky top-0 z-20 w-24 border-b border-r border-slate-300 bg-slate-100 px-1 py-1 text-left text-[9px] font-semibold leading-tight text-slate-600">備考</th>
               <th className="sticky top-0 z-20 w-10 border-b border-slate-300 bg-slate-100 px-1 py-1 text-center text-[9px] font-semibold leading-tight text-slate-600">操作</th>
             </tr>
@@ -601,6 +632,7 @@ export function QuoteAuthoringGrid({
                     <td className="w-14 border-r border-emerald-800 px-1 text-right text-[10px] font-semibold tabular-nums">{collapsedAmount}</td>
                     <td className="w-16 border-r border-emerald-800 px-1 text-right text-[10px] font-semibold tabular-nums">{collapsedAmount}</td>
                     <td className="w-16 border-r border-emerald-800 px-1 text-right text-white/60">—</td>
+                    {showLineState && <td className="w-16 border-r border-emerald-800 px-1 text-white/60"></td>}
                     <td className="w-24 border-r border-emerald-800 px-2 text-[9px] text-white/75">{summaryRemark}</td>
                     <td className="w-10 px-0.5 text-center text-[9px] text-white/60">—</td>
                   </tr>
@@ -664,7 +696,7 @@ export function QuoteAuthoringGrid({
                         )}
                       </div>
                     </td>
-                    <td colSpan={9} className="bg-emerald-900 px-1.5 py-0.5">
+                    <td colSpan={showLineState ? 10 : 9} className="bg-emerald-900 px-1.5 py-0.5">
                       <div className="flex items-center justify-end gap-3">
                         {section.key === 'installation' && separate && (
                           <span className="text-[9px] text-white/75">別途見積を含む</span>
@@ -690,6 +722,8 @@ export function QuoteAuthoringGrid({
                     const remarkEditable = fieldEditable('remark');
                     const removeEditable = fieldEditable('remove');
                     const selectProductEditable = fieldEditable('selectProduct');
+                    const lineStateEditable = showLineState && LINE_STATE_KINDS.has(row.kind) && fieldEditable('lineState');
+                    const stateLabel = row.lineState ? QUOTE_LINE_STATE_LABELS[row.lineState] : null;
                     const editCellClass = (editable: boolean) => editable ? 'bg-amber-50' : 'bg-slate-100';
 
                     return (
@@ -777,7 +811,9 @@ export function QuoteAuthoringGrid({
                         <td className="w-14 border-r border-slate-200 bg-slate-50 px-2 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
                         <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
                         <td className={`w-14 border-r border-slate-200 px-0.5 ${editCellClass(unitPriceEditable)}`}>
-                          {separatePrice ? (
+                          {stateLabel ? (
+                            <div className="flex h-5 items-center justify-end px-1 text-[9px] font-semibold text-slate-700" data-testid="quote-line-state-price">{stateLabel}</div>
+                          ) : separatePrice ? (
                             <div className="flex h-5 items-center justify-end px-1 text-[9px] font-semibold text-amber-900">別途見積</div>
                           ) : (
                             <Input
@@ -793,18 +829,62 @@ export function QuoteAuthoringGrid({
                             />
                           )}
                         </td>
-                        <td className="w-16 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-2 text-right tabular-nums">{separatePrice ? '—' : formatYen(row.amount)}</td>
+                        <td className="w-16 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-2 text-right tabular-nums">
+                          {row.lineState === 'excluded' ? '対象外' : separatePrice && !row.lineState ? '—' : formatYen(row.amount)}
+                        </td>
                         <td className="w-16 border-r border-slate-200 bg-slate-50 px-1 text-right text-slate-400" title="原価は現在この画面では表示していません">—</td>
-                        <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass(remarkEditable)}`}>
-                          <Input
-                            value={row.remark ?? ''}
-                            disabled={!remarkEditable}
-                            data-quote-grid-col="remark"
-                            onKeyDown={handleGridKeyDown}
-                            onChange={(event) => onUpdate(row.key, { remark: event.target.value })}
-                            className="h-5 min-h-5 w-full border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
-                            aria-label={`備考 ${number}`}
-                          />
+                        {showLineState && (
+                          <td
+                            className={`w-16 border-r border-slate-200 px-0.5 ${row.unresolved && !row.lineState ? 'bg-amber-100' : editCellClass(lineStateEditable)}`}
+                            data-testid="quote-line-state-cell"
+                            data-line-state={row.lineState ?? (row.unresolved ? 'unresolved' : 'resolved')}
+                          >
+                            {lineStateEditable ? (
+                              <select
+                                value={row.lineState ?? ''}
+                                onChange={(event) =>
+                                  onUpdate(row.key, { lineState: (event.target.value || null) as QuoteLineState | null })
+                                }
+                                className={`h-5 w-full rounded border-0 bg-transparent px-0.5 text-[10px] focus:ring-2 focus:ring-emerald-700/30 ${row.unresolved && !row.lineState ? 'font-semibold text-amber-900' : ''}`}
+                                aria-label={`扱い ${number}`}
+                                data-testid="quote-line-state"
+                              >
+                                <option value="">{row.unresolved ? '未確定' : '確定'}</option>
+                                <option value="zero_confirmed">0円確定</option>
+                                <option value="excluded">対象外</option>
+                              </select>
+                            ) : (
+                              <span className={`block px-1 text-[9px] ${row.unresolved && !row.lineState ? 'font-semibold text-amber-900' : 'text-slate-600'}`}>
+                                {lineStateText(row)}
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        <td className={`w-24 border-r border-slate-200 px-0.5 ${editCellClass(row.lineState ? lineStateEditable : remarkEditable)}`}>
+                          {row.lineState ? (
+                            <Input
+                              value={row.lineStateReason ?? ''}
+                              disabled={!lineStateEditable}
+                              maxLength={150}
+                              placeholder={row.lineState === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
+                              data-quote-grid-col="remark"
+                              onKeyDown={handleGridKeyDown}
+                              onChange={(event) => onUpdate(row.key, { lineStateReason: event.target.value })}
+                              className="h-5 min-h-5 w-full border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
+                              aria-label={`${row.lineState === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'} ${number}`}
+                              data-testid="quote-line-state-reason"
+                            />
+                          ) : (
+                            <Input
+                              value={row.remark ?? ''}
+                              disabled={!remarkEditable}
+                              data-quote-grid-col="remark"
+                              onKeyDown={handleGridKeyDown}
+                              onChange={(event) => onUpdate(row.key, { remark: event.target.value })}
+                              className="h-5 min-h-5 w-full border-0 bg-transparent px-1 text-[10px] shadow-none focus:ring-2 focus:ring-emerald-700/30"
+                              aria-label={`備考 ${number}`}
+                            />
+                          )}
                         </td>
                         <td className="w-10 px-0.5 text-center">
                           <button
@@ -831,6 +911,7 @@ export function QuoteAuthoringGrid({
                     <td className="px-1 text-right">{section.key === 'installation' && separate ? '別途見積' : formatYen(sectionSale)}</td>
                     <td></td>
                     <td className="px-1 text-right text-slate-400">—</td>
+                    {showLineState && <td></td>}
                     <td></td>
                     <td></td>
                   </tr>}
@@ -1112,7 +1193,14 @@ function customerPreviewLineName(row: QuoteAuthoringRow): string {
 }
 
 function customerPreviewRowAmount(row: QuoteAuthoringRow): number {
-  return row.unitPrice === 0 && row.remark?.trim() === '別途見積' ? 0 : row.amount;
+  return row.lineState || (row.unitPrice === 0 && row.remark?.trim() === '別途見積') ? 0 : row.amount;
+}
+
+/** お客様向けプレビューの備考（扱いを選んだ行は、保存後の見積書と同じ文言） */
+function customerPreviewRemark(row: QuoteAuthoringRow): string {
+  if (row.lineState === 'excluded') return `［今回の契約対象外］${row.lineStateReason?.trim() ?? ''}`;
+  if (row.lineState === 'zero_confirmed') return `［0円確定］：${row.lineStateReason?.trim() ?? ''}`;
+  return row.remark || '';
 }
 
 export function CustomerQuotePreview({
@@ -1234,16 +1322,17 @@ export function CustomerQuotePreview({
                     </th>
                   </tr>
                   {sectionRows.map((row) => {
-                    const separate = row.unitPrice === 0 && row.remark?.trim() === '別途見積';
+                    const separate = !row.lineState && row.unitPrice === 0 && row.remark?.trim() === '別途見積';
+                    const excluded = row.lineState === 'excluded';
                     return (
                       <tr key={row.key} className="border-b border-slate-200">
                         <td className="px-2 py-1.5 font-semibold text-slate-600">{section.label}</td>
                         <td className="px-2 py-1.5">{customerPreviewLineName(row)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{row.quantity}</td>
                         <td className="px-2 py-1.5">{row.unit || '—'}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '別途見積' : formatYen(row.unitPrice)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '—' : formatYen(row.amount)}</td>
-                        <td className="px-2 py-1.5 text-slate-600">{row.remark || ''}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '別途見積' : excluded ? '' : formatYen(row.unitPrice)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{separate ? '—' : excluded ? '対象外' : formatYen(row.amount)}</td>
+                        <td className="px-2 py-1.5 text-slate-600">{customerPreviewRemark(row)}</td>
                       </tr>
                     );
                   })}

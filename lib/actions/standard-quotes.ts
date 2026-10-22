@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
+import { applyQuoteLineStateInput, LINE_STATE_REASON_MAX, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -35,6 +36,9 @@ const lineSchema = z.object({
   cost_unit_price: z.number().int().min(0).nullable(),
   unit_price: z.number().int().min(0).nullable(),
   remark: z.string().trim().max(200).nullable(),
+  /** 明細の状態（画面の明示の選択。サーバーが備考に印を付ける。D1 までの暫定） */
+  line_state: z.enum(['excluded', 'zero_confirmed']).nullable().optional(),
+  line_state_reason: z.string().trim().max(LINE_STATE_REASON_MAX, `理由・メモは ${LINE_STATE_REASON_MAX} 文字以内で入力してください`).nullable().optional(),
 });
 
 const saveSchema = z.object({
@@ -106,6 +110,28 @@ export async function saveStandardQuoteDraftAction(input: unknown): Promise<Stan
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' };
   const value = parsed.data;
+  // 「対象外」「0円確定」は本体以外の区分の「金額を入力」の 0 円の行だけ。印は画面の選択から付け、手入力の印は受け付けない。
+  // 対象外の行は今回の契約に含めないので、原価も 0 円にする（経費の計算にも入れない）
+  let lines;
+  try {
+    lines = value.lines.map(({ line_state, line_state_reason, ...line }) => {
+      if (line_state && (line.section_code === 'base' || line.price_mode !== 'manual')) {
+        throw new QuoteLineStateInputError(
+          `「対象外」「0円確定」の明細（${line.name}）は、本体以外の区分で、価格の決め方を「金額を入力」にしてください`
+        );
+      }
+      const remark = applyQuoteLineStateInput({ name: line.name, remark: line.remark, unit_price: line.unit_price ?? 0, line_state, line_state_reason });
+      return {
+        ...line,
+        remark,
+        cost_unit_price: line.price_mode === 'por' ? null : line_state === 'excluded' ? 0 : line.cost_unit_price,
+        unit_price: line.price_mode === 'manual' ? (line_state ? 0 : line.unit_price) : null,
+      };
+    });
+  } catch (e) {
+    if (e instanceof QuoteLineStateInputError) return { ok: false, error: e.message };
+    throw e;
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('save_standard_quote_draft', {
     p_draft_id: value.draft_id,
@@ -114,11 +140,7 @@ export async function saveStandardQuoteDraftAction(input: unknown): Promise<Stan
     p_expense_rate: value.expense_rate,
     p_markup_rate: value.markup_rate,
     p_expense_methods: value.expense_methods,
-    p_lines: value.lines.map((line) => ({
-      ...line,
-      cost_unit_price: line.price_mode === 'por' ? null : line.cost_unit_price,
-      unit_price: line.price_mode === 'manual' ? line.unit_price : null,
-    })),
+    p_lines: lines,
     p_adjustment: value.adjustment,
     p_adjustment_reason: value.adjustment_reason || null,
     p_notes: value.notes || null,

@@ -1,8 +1,12 @@
 /**
- * 正式見積で未解決の別途見積（POR）を残さない（D1 までの暫定。2026-10-19 の先方回答 ③）。
+ * 正式見積で、金額が未確定の明細を残さない（D1 までの暫定。2026-10-19 の先方回答 ③・2026-10-22 の確定事項 A-2-1）。
  *
- * DB の quote_line_is_unresolved_por・configuration_por_selections（20261016111000）と同じ決まり。
- * 発行を止めるのは DB で、画面はこの関数で先に案内する。ローカル検証モードはこの関数で同じ止めをする。
+ * DB の quote_line_explicit_state・quote_line_por_marked・quote_line_unresolved・quote_line_state_guard・
+ * configuration_por_selections（20261016111000）と同じ決まり。発行を止めるのは DB で、画面はこの関数で先に案内する。
+ * ローカル検証モードはこの関数で同じ止めをする。
+ *
+ * 明細の扱いは「金額確定／金額未確定／契約対象外／0円確定」を区別する。自由記述の備考の文章から状態を推測しない。
+ * 「対象外」「0円確定」は画面の明示の選択からサーバーが備考に印を付ける（手入力の印は受け付けない）。
  */
 import { EXTERIOR_FACES, type ExteriorFaceSelection } from './exterior-wall';
 
@@ -13,33 +17,265 @@ export const POR_FACE_REMARK_PREFIX = '別途見積項目あり';
 /** Web の概算で POR の商品に付く説明 */
 export const POR_DESCRIPTION = '設置場所確認後に別途お見積り';
 
+/** 今回の契約対象外の印（続けて任意のメモ） */
+export const EXCLUDED_MARKER = '［今回の契約対象外］';
+/** 0円確定の印の書き出し（理由が続く） */
+export const ZERO_CONFIRMED_PREFIX = '［0円確定］';
+/** 0円確定の印（この後に理由） */
+export const ZERO_CONFIRMED_MARKER = '［0円確定］：';
+/** 理由・メモの長さの上限（備考の 200 文字に印を足しても収まるように） */
+export const LINE_STATE_REASON_MAX = 150;
+
+/** 明細の状態（印で表すもの）。金額確定・金額未確定は印を持たない */
+export type QuoteLineState = 'excluded' | 'zero_confirmed';
+
+export const QUOTE_LINE_STATE_LABELS: Record<QuoteLineState, string> = {
+  excluded: '対象外',
+  zero_confirmed: '0円確定',
+};
+
 /** SQL の btrim と同じく、前後の半角スペースだけを取り除く */
 function btrim(value: string | null | undefined): string {
   return (value ?? '').replace(/^ +| +$/g, '');
 }
 
-export interface PorLineInput {
-  unit_price: number | null | undefined;
-  description?: string | null;
+/** DB の quote_line_explicit_state と同じ。印が無ければ null */
+export function parseQuoteLineState(remark: string | null | undefined): { state: QuoteLineState; reason: string } | null {
+  const value = remark ?? '';
+  if (value.startsWith(EXCLUDED_MARKER)) {
+    return { state: 'excluded', reason: value.slice(EXCLUDED_MARKER.length).replace(/^：/, '').trim() };
+  }
+  if (/^［0円確定］：\s*\S/.test(value)) {
+    return { state: 'zero_confirmed', reason: value.slice(ZERO_CONFIRMED_MARKER.length).trim() };
+  }
+  return null;
+}
+
+/** 状態の印で始まる備考か（印の形が崩れているものも含む。手入力の拒否と、表の保存境界に使う） */
+export function isReservedLineStateRemark(remark: string | null | undefined): boolean {
+  const value = remark ?? '';
+  return value.startsWith(EXCLUDED_MARKER) || value.startsWith(ZERO_CONFIRMED_PREFIX);
+}
+
+/** 画面の入力の誤り（サーバーで印を組み立てるとき・ローカル検証モードの保存境界） */
+export class QuoteLineStateInputError extends Error {}
+
+/** 状態の印を組み立てる（サーバーだけが使う） */
+export function quoteLineStateRemark(state: QuoteLineState, reason: string | null | undefined): string {
+  const text = (reason ?? '').trim();
+  if (text.length > LINE_STATE_REASON_MAX) {
+    throw new QuoteLineStateInputError(`理由・メモは ${LINE_STATE_REASON_MAX} 文字以内で入力してください`);
+  }
+  if (state === 'zero_confirmed') {
+    if (!text) throw new QuoteLineStateInputError('0円確定の明細は理由を入力してください');
+    return `${ZERO_CONFIRMED_MARKER}${text}`;
+  }
+  return text ? `${EXCLUDED_MARKER}${text}` : EXCLUDED_MARKER;
+}
+
+/** 「0円確定」「対象外」を選べる区分（本体・経費の行は、本体 Revision・経費の決まりで扱うので選べない） */
+export const LINE_STATE_KINDS: ReadonlySet<string> = new Set(['interior_exterior', 'option', 'installation', 'free']);
+
+export interface QuoteLineStateInput {
+  kind?: string | null;
+  name?: string | null;
   remark?: string | null;
-  /** 商品台帳の別途見積（price_on_request）の商品を指す行か */
-  optionIsPor?: boolean;
+  unit_price: number;
+  line_state?: QuoteLineState | null;
+  line_state_reason?: string | null;
 }
 
 /**
- * 未解決の POR の行か。0 円で、備考が POR の目印、または備考が空で説明が「設置場所確認後に別途お見積り」か POR の商品を指す行。
- * 解消のしかた：売価を入れる／0 円のままにするなら備考に理由（ほかの明細に含む など）を書く／明細から外す。
+ * 画面の明示の選択（line_state）から、保存する備考を決める（サーバーの保存処理で使う）。
+ * 印を備考に直接書いたものは受け付けない。「対象外」「0円確定」の明細は 0 円に限る。
  */
-export function isUnresolvedPorLine(line: PorLineInput): boolean {
-  if ((line.unit_price ?? 0) !== 0) return false;
-  const remark = btrim(line.remark);
-  if ((POR_REMARKS as readonly string[]).includes(remark)) return true;
-  if (remark.startsWith(POR_FACE_REMARK_PREFIX)) return true;
-  if (remark !== '') return false;
-  return btrim(line.description) === POR_DESCRIPTION || Boolean(line.optionIsPor);
+export function applyQuoteLineStateInput(row: QuoteLineStateInput): string | null {
+  const name = row.name?.trim() || '（品名なし）';
+  if (!row.line_state) {
+    const remark = (row.remark ?? '').trim();
+    if (isReservedLineStateRemark(remark)) {
+      throw new QuoteLineStateInputError(`「${name}」：「対象外」「0円確定」は画面の選択で設定してください（備考には直接書けません）`);
+    }
+    return remark || null;
+  }
+  if (row.kind && !LINE_STATE_KINDS.has(row.kind)) {
+    throw new QuoteLineStateInputError(`本体・経費の明細（${name}）は「対象外」「0円確定」にできません`);
+  }
+  if (row.unit_price !== 0) {
+    throw new QuoteLineStateInputError(`「対象外」「0円確定」の明細（${name}）は 0 円にしてください`);
+  }
+  return quoteLineStateRemark(row.line_state, row.line_state_reason);
 }
 
-/** お客様が選んだ別途見積の商品・選択肢・外壁の面（DB の configuration_por_selections の 1 行） */
+/** 編集画面の行の初期値：備考に状態の印があれば、状態と理由・メモに分ける（備考は空にする） */
+export function splitQuoteLineStateRemark(remark: string | null | undefined): {
+  line_state: QuoteLineState | null;
+  line_state_reason: string;
+  remark: string;
+} {
+  const parsed = parseQuoteLineState(remark);
+  if (parsed) return { line_state: parsed.state, line_state_reason: parsed.reason, remark: '' };
+  return { line_state: null, line_state_reason: '', remark: remark ?? '' };
+}
+
+/** 見積書・明細の表の金額欄：対象外の行は「対象外」と出す（0 円の確定と区別する）。印が無ければ null */
+export function quoteLineStateAmountLabel(remark: string | null | undefined): string | null {
+  const parsed = parseQuoteLineState(remark);
+  if (!parsed) return null;
+  return parsed.state === 'excluded' ? '対象外' : '0円確定';
+}
+
+/** 明細の配列に applyQuoteLineStateInput をかけ、保存する明細にする（line_state は備考の印になる） */
+export function applyQuoteLineStates<T extends QuoteLineStateInput>(
+  rows: T[]
+): (Omit<T, 'line_state' | 'line_state_reason'> & { remark: string | null })[] {
+  return rows.map((row) => {
+    const { line_state: _state, line_state_reason: _reason, ...rest } = row;
+    return { ...rest, remark: applyQuoteLineStateInput(row) };
+  });
+}
+
+/** DB の quote_line_state_guard と同じ（ローカル検証モードの保存境界）。問題があれば文面を返す */
+export function quoteLineStateGuardError(line: {
+  name: string;
+  remark?: string | null;
+  unit_price?: number | null;
+  amount?: number | null;
+  price_mode?: string | null;
+}): string | null {
+  if (!isReservedLineStateRemark(line.remark)) return null;
+  if ((line.unit_price ?? 0) !== 0 || (line.amount ?? 0) !== 0) {
+    return `「対象外」「0円確定」の明細（${line.name}）は 0 円にしてください`;
+  }
+  if ((line.remark ?? '').startsWith(ZERO_CONFIRMED_PREFIX) && !/^［0円確定］：\s*\S/.test(line.remark ?? '')) {
+    return `0円確定の明細（${line.name}）は理由を入力してください`;
+  }
+  if (line.price_mode && line.price_mode !== 'manual') {
+    return `「対象外」「0円確定」の明細（${line.name}）は、価格の決め方を「金額を入力」にしてください`;
+  }
+  return null;
+}
+
+/** DB の quote_line_por_marked と同じ。別途見積（価格未確定）の目印がある明細か */
+export function isPorMarkedLine(line: { description?: string | null; remark?: string | null; optionIsPor?: boolean }): boolean {
+  const remark = btrim(line.remark);
+  return (
+    btrim(line.description) === POR_DESCRIPTION ||
+    (POR_REMARKS as readonly string[]).includes(remark) ||
+    remark.startsWith(POR_FACE_REMARK_PREFIX) ||
+    Boolean(line.optionIsPor)
+  );
+}
+
+/** 0 円の判定から外す区分（本体は本体 Revision から、経費は経費の決まりで扱う） */
+const ZERO_RULE_EXEMPT_KINDS = new Set(['base', 'base_expense', 'interior_exterior_expense', 'option_expense', 'discount']);
+
+export interface QuoteLineCheckInput {
+  kind: string;
+  unit_price: number | null | undefined;
+  description?: string | null;
+  remark?: string | null;
+  /** 商品台帳の別途見積の商品を指す行か */
+  optionIsPor?: boolean;
+  /** 商品台帳で正式に 0 円の商品（別途見積でない）を指す行か */
+  optionIsCatalogZero?: boolean;
+  /** 自動計算の行か（標準見積から作る下書きの price_mode = 'auto'） */
+  calculated?: boolean;
+  /** 前の版に、別途見積でも状態の印つきでもない 0 円の同じ明細があるか */
+  unchangedZero?: boolean;
+}
+
+/**
+ * DB の quote_line_unresolved と同じ。正式発行を止める金額未確定の明細か。
+ * 0 円で別途見積の目印がある行（前の版から変えていなくても）と、0 円の内外装・オプション・別途工事・フリー商品の行のうち
+ * 商品台帳で正式に 0 円の商品・自動計算の行・前の版の同じ 0 円の明細のどれでもない行。状態の印がある行は止めない。
+ */
+export function isUnresolvedQuoteLine(line: QuoteLineCheckInput): boolean {
+  if (parseQuoteLineState(line.remark)) return false;
+  if ((line.unit_price ?? 0) !== 0) return false;
+  if (isPorMarkedLine(line)) return true;
+  if (ZERO_RULE_EXEMPT_KINDS.has(line.kind)) return false;
+  if (line.calculated) return false;
+  if (line.optionIsCatalogZero) return false;
+  if (line.unchangedZero) return false;
+  return true;
+}
+
+/** 前の版と同じ明細かを比べるキー（区分・品名・説明） */
+export function quoteLineIdentityKey(line: { kind: string; name: string; description?: string | null }): string {
+  return `${line.kind}\u0000${line.name}\u0000${line.description ?? ''}`;
+}
+
+export interface QuoteLineCheckLine {
+  line_key?: string | null;
+  kind: string;
+  name: string;
+  description?: string | null;
+  remark?: string | null;
+  unit_price: number | null | undefined;
+  option_id?: string | null;
+  /** 標準見積から作る下書きの価格の決め方（auto は自動計算の行） */
+  price_mode?: string | null;
+  /** 編集中の画面の明示の選択（保存前。保存すると備考の印になる） */
+  line_state?: QuoteLineState | null;
+}
+
+export interface QuoteLineCheckContext {
+  /** 前の版の明細（初回は空） */
+  parentLines?: QuoteLineCheckLine[];
+  /** 商品台帳の商品（option_id から、別途見積の商品か・台帳の価格を引く） */
+  options?: ReadonlyMap<string, { price: number; price_on_request: boolean }>;
+  /** 下書き（quote_draft_items）は、前の版と明細のキーでも突き合わせる（DB の assert_quote_draft_lines_resolved と同じ） */
+  matchLineKey?: boolean;
+}
+
+/**
+ * 発行する版の明細が金額未確定かを判定する関数を作る（DB の assert_quote_lines_resolved・assert_quote_draft_lines_resolved と同じ決まり）。
+ * 前の版の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい。
+ */
+export function createUnresolvedLineCheck(context: QuoteLineCheckContext = {}): (line: QuoteLineCheckLine) => boolean {
+  const optionOf = (id: string | null | undefined) => (id ? context.options?.get(id) : undefined);
+  const keyOf = (line: QuoteLineCheckLine): string | null => {
+    if (!context.matchLineKey) return quoteLineIdentityKey(line);
+    return line.line_key ? `${line.line_key}\u0000${quoteLineIdentityKey(line)}` : null;
+  };
+  const zeroKeys = new Set(
+    (context.parentLines ?? [])
+      .filter(
+        (line) =>
+          (line.unit_price ?? 0) === 0 &&
+          !parseQuoteLineState(line.remark) &&
+          !isPorMarkedLine({ ...line, optionIsPor: Boolean(optionOf(line.option_id)?.price_on_request) })
+      )
+      .map(keyOf)
+      .filter((key): key is string => key !== null)
+  );
+  return (line) => {
+    if (line.line_state) return false;
+    const option = optionOf(line.option_id);
+    const key = keyOf(line);
+    return isUnresolvedQuoteLine({
+      kind: line.kind,
+      unit_price: line.unit_price,
+      description: line.description,
+      remark: line.remark,
+      optionIsPor: Boolean(option?.price_on_request),
+      optionIsCatalogZero: Boolean(option && option.price === 0 && !option.price_on_request),
+      calculated: line.price_mode === 'auto',
+      unchangedZero: key !== null && zeroKeys.has(key),
+    });
+  };
+}
+
+export const UNRESOLVED_LINES_MESSAGE =
+  '金額を入れるか、「0円確定（理由）」か「対象外」を選ぶか、明細から外してから発行してください';
+
+/** DB と同じ文面（ローカル検証モードの止めに使う） */
+export function unresolvedLinesError(names: string[], action: '発行' | '正式保存' = '発行'): string {
+  const message = UNRESOLVED_LINES_MESSAGE.replace('発行してください', `${action}してください`);
+  return `金額が未確定の明細が ${names.length} 行残っています（${names.join('、').slice(0, 200)}）。${message}`;
+}
+
 export interface QuotePorSelection {
   key: string;
   option_id: string;
@@ -61,18 +297,9 @@ export function porSelectionLabel(selection: QuotePorSelection): string {
   return selection.detail ? `${selection.name}（${selection.detail}）` : selection.name;
 }
 
-export const UNRESOLVED_POR_LINES_MESSAGE =
-  '売価を入力するか、0 円のままにする場合は備考に理由（ほかの明細に含む など）を書くか、明細から外してから発行してください';
-
-/** DB と同じ文面（ローカル検証モードの止めに使う） */
-export function unresolvedPorLinesError(names: string[], action: '発行' | '正式保存' = '発行'): string {
-  const message = UNRESOLVED_POR_LINES_MESSAGE.replace('発行してください', `${action}してください`);
-  return `別途見積（価格未確定）の明細が ${names.length} 行残っています（${names.join('、').slice(0, 200)}）。${message}`;
-}
-
 export function unconfirmedPorSelectionsError(selections: QuotePorSelection[]): string {
   const names = selections.map(porSelectionLabel).join('、').slice(0, 200);
-  return `お客様が選んだ別途見積の商品（${selections.length} 件：${names}）について、金額を明細に入れたか、お客様と合意のうえ対象外にしたことの確認が済んでいません。画面の「別途見積の確認」で確認してから発行してください`;
+  return `お客様が選んだ別途見積の商品（${selections.length} 件：${names}）について、金額を明細に入れたか、「0円確定」「対象外」にしたか、お客様と合意のうえ外したことの確認が済んでいません。画面の「金額未確定の確認」で確認してから発行してください`;
 }
 
 export interface PorSelectionCatalog {

@@ -4,19 +4,29 @@ import { useActionState, useMemo, useState } from 'react';
 import { formalizeLegacyAcceptedQuoteAction } from '@/lib/actions/legacy-accepted-formalization';
 import type { QuoteItem } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
-import { EMPTY_POR_SELECTION_STATE, isUnresolvedPorLine, type QuotePorSelectionState } from '@/lib/domain/quote-por';
-import { QuotePorReview, type QuotePorReviewRow } from './quote-por-review';
+import {
+  createUnresolvedLineCheck,
+  EMPTY_POR_SELECTION_STATE,
+  QUOTE_LINE_STATE_LABELS,
+  splitQuoteLineStateRemark,
+  type QuoteLineState,
+  type QuotePorSelectionState,
+} from '@/lib/domain/quote-por';
+import { QuotePorReview, type QuotePorReviewPatch, type QuotePorReviewRow } from './quote-por-review';
 
 interface InstallationRow {
   key: string;
   source_item_id: string | null;
-  /** 元の明細の説明（DB は元の明細の説明を新しい明細へ写す。別途見積の判定に使う） */
+  /** 元の明細の説明（DB は元の明細の説明を新しい明細へ写す。金額未確定の判定に使う） */
   description: string | null;
   name: string;
   unit: string;
   remark: string;
   unit_price: number;
   quantity: number;
+  /** 扱い（0円確定・対象外）。発行のときにサーバーが備考の印にする */
+  line_state: QuoteLineState | null;
+  line_state_reason: string;
 }
 
 const initialState = { ok: false } as const;
@@ -28,7 +38,7 @@ function initialRow(item: QuoteItem): InstallationRow {
     description: item.description ?? null,
     name: item.name,
     unit: item.unit ?? '式',
-    remark: item.remark ?? '',
+    ...splitQuoteLineStateRemark(item.remark),
     unit_price: item.unit_price,
     quantity: item.quantity,
   };
@@ -57,41 +67,52 @@ export function LegacyAcceptedFormalizationForm({
   const [rows, setRows] = useState<InstallationRow[]>(() => installationItems.map(initialRow));
   const [dealerNote, setDealerNote] = useState(defaultDealerNote ?? '');
 
-  // ---- 別途見積（POR）の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
+  // ---- 金額未確定の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
+  // 前の版（承諾済みの概算）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい
+  const isUnresolved = useMemo(
+    () => createUnresolvedLineCheck({ parentLines: [...carriedItems, ...installationItems] }),
+    [carriedItems, installationItems]
+  );
+  const checkRow = (row: InstallationRow) => isUnresolved({ ...row, kind: 'installation' });
   const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
   const [initialPorRowKeys] = useState(
-    () => new Set(installationItems.map(initialRow).filter((row) => isUnresolvedPorLine(row)).map((row) => row.key))
+    () => new Set(installationItems.map(initialRow).filter(checkRow).map((row) => row.key))
   );
   const porRows: QuotePorReviewRow[] = [
     ...carriedItems
-      .filter((item) => isUnresolvedPorLine(item))
+      .filter((item) => isUnresolved(item))
       .map((item) => ({
         key: item.id,
         name: item.name,
         sectionLabel: '施工以外',
         unitPrice: item.unit_price,
         remark: item.remark ?? '',
+        lineState: null,
+        lineStateReason: '',
         unresolved: true,
         editable: false,
         note: 'この画面では施工の金額だけを入れられるため、この明細は直せません。本部にご相談ください',
       })),
     ...rows
-      .filter((row) => initialPorRowKeys.has(row.key) || isUnresolvedPorLine(row))
+      .filter((row) => initialPorRowKeys.has(row.key) || row.line_state !== null || checkRow(row))
       .map((row) => ({
         key: row.key,
         name: row.name,
         sectionLabel: '施工',
         unitPrice: row.unit_price,
         remark: row.remark,
-        unresolved: isUnresolvedPorLine(row),
-        editable: false,
-        note: '上の施工明細の表で、単価か備考（0 円のままにする理由）を入れてください',
+        lineState: row.line_state,
+        lineStateReason: row.line_state_reason,
+        unresolved: checkRow(row),
+        editable: true,
       })),
   ];
   const porSelections = porState.available ? porState.selections : [];
   const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
+  const missingReasonCount = rows.filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim()).length;
   const porBlockers = [
-    ...(unresolvedPorCount > 0 ? [`別途見積（価格未確定）の明細が ${unresolvedPorCount} 行残っています`] : []),
+    ...(unresolvedPorCount > 0 ? [`金額が未確定の明細が ${unresolvedPorCount} 行残っています`] : []),
+    ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),
   ];
 
@@ -112,13 +133,25 @@ export function LegacyAcceptedFormalizationForm({
         remark: '',
         unit_price: 0,
         quantity: 1,
+        line_state: null,
+        line_state_reason: '',
       },
     ]);
   };
 
   const updateRow = (key: string, patch: Partial<InstallationRow>) => {
-    setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+    // 「0円確定」「対象外」を選んだ行は 0 円にする（戻したら金額を入れ直す）
+    setRows((current) =>
+      current.map((row) => (row.key === key ? { ...row, ...patch, ...(patch.line_state ? { unit_price: 0 } : {}) } : row))
+    );
   };
+  const updatePorRow = (key: string, patch: QuotePorReviewPatch) =>
+    updateRow(key, {
+      ...(patch.unitPrice !== undefined ? { unit_price: patch.unitPrice } : {}),
+      ...(patch.remark !== undefined ? { remark: patch.remark } : {}),
+      ...(patch.lineState !== undefined ? { line_state: patch.lineState } : {}),
+      ...(patch.lineStateReason !== undefined ? { line_state_reason: patch.lineStateReason } : {}),
+    });
 
   const removeRow = (key: string) => {
     setRows((current) => current.filter((row) => row.key !== key));
@@ -131,6 +164,8 @@ export function LegacyAcceptedFormalizationForm({
     remark: row.remark,
     unit_price: row.unit_price,
     quantity: row.quantity,
+    line_state: row.line_state,
+    line_state_reason: row.line_state ? row.line_state_reason : '',
   }));
 
   return (
@@ -166,14 +201,15 @@ export function LegacyAcceptedFormalizationForm({
                 <th className="w-20 px-2 py-1.5 text-left font-semibold">単位</th>
                 <th className="w-32 px-2 py-1.5 text-right font-semibold">単価</th>
                 <th className="w-32 px-2 py-1.5 text-right font-semibold">金額</th>
-                <th className="w-48 px-2 py-1.5 text-left font-semibold">備考</th>
+                <th className="w-28 px-2 py-1.5 text-left font-semibold">扱い</th>
+                <th className="w-48 px-2 py-1.5 text-left font-semibold">備考・理由</th>
                 <th className="w-16 px-2 py-1.5" aria-label="操作" />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                  <td colSpan={8} className="px-3 py-6 text-center text-muted">
                     施工明細はまだありません。追加金額がない場合は0件のまま確定見積を発行できます。
                   </td>
                 </tr>
@@ -211,26 +247,56 @@ export function LegacyAcceptedFormalizationForm({
                       />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100000000"
-                        step="1"
-                        value={row.unit_price}
-                        onChange={(event) => updateRow(row.key, { unit_price: Number(event.target.value) })}
-                        className="w-full rounded border border-line px-2 py-1.5 text-right tabular-nums"
-                        aria-label="施工単価"
-                      />
+                      {row.line_state ? (
+                        <span className="block px-2 py-1.5 text-right text-muted">{QUOTE_LINE_STATE_LABELS[row.line_state]}</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          max="100000000"
+                          step="1"
+                          value={row.unit_price}
+                          onChange={(event) => updateRow(row.key, { unit_price: Number(event.target.value) })}
+                          className="w-full rounded border border-line px-2 py-1.5 text-right tabular-nums"
+                          aria-label="施工単価"
+                        />
+                      )}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{formatYen(amountOf(row))}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                      {row.line_state === 'excluded' ? '対象外' : formatYen(amountOf(row))}
+                    </td>
+                    <td className={`px-2 py-1.5 ${!row.line_state && checkRow(row) ? 'bg-amber-50' : ''}`}>
+                      <select
+                        value={row.line_state ?? ''}
+                        onChange={(event) => updateRow(row.key, { line_state: (event.target.value || null) as QuoteLineState | null })}
+                        className="w-full rounded border border-line bg-white px-1.5 py-1.5"
+                        aria-label="施工の扱い"
+                        data-testid="formalization-line-state"
+                      >
+                        <option value="">{checkRow(row) ? '未確定' : '確定'}</option>
+                        <option value="zero_confirmed">0円確定</option>
+                        <option value="excluded">対象外</option>
+                      </select>
+                    </td>
                     <td className="px-2 py-1.5">
-                      <input
-                        value={row.remark}
-                        onChange={(event) => updateRow(row.key, { remark: event.target.value })}
-                        className="w-full rounded border border-line px-2 py-1.5"
-                        maxLength={200}
-                        aria-label="施工備考"
-                      />
+                      {row.line_state ? (
+                        <input
+                          value={row.line_state_reason}
+                          onChange={(event) => updateRow(row.key, { line_state_reason: event.target.value })}
+                          className="w-full rounded border border-line px-2 py-1.5"
+                          maxLength={150}
+                          placeholder={row.line_state === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
+                          aria-label={row.line_state === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'}
+                        />
+                      ) : (
+                        <input
+                          value={row.remark}
+                          onChange={(event) => updateRow(row.key, { remark: event.target.value })}
+                          className="w-full rounded border border-line px-2 py-1.5"
+                          maxLength={200}
+                          aria-label="施工備考"
+                        />
+                      )}
                     </td>
                     <td className="px-2 py-1.5 text-center">
                       <button
@@ -249,7 +315,7 @@ export function LegacyAcceptedFormalizationForm({
               <tr>
                 <td colSpan={4} className="px-3 py-2 text-right font-semibold text-muted">施工金額計</td>
                 <td className="px-2 py-2 text-right font-semibold tabular-nums">{formatYen(installationTotal)}</td>
-                <td colSpan={2} />
+                <td colSpan={3} />
               </tr>
             </tfoot>
           </table>
@@ -276,7 +342,7 @@ export function LegacyAcceptedFormalizationForm({
           selections={porSelections}
           confirmed={porConfirmed}
           onConfirmedChange={setPorConfirmed}
-          onUpdate={() => undefined}
+          onUpdate={updatePorRow}
         />
       </div>
 

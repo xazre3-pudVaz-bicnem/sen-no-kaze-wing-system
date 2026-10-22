@@ -270,6 +270,17 @@ export const assignDealerSchema = z.object({
   dealer_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.uuid().nullable()),
 });
 
+/**
+ * 明細の状態（画面の明示の選択。サーバーが備考に印を付ける。D1 までの暫定。lib/domain/quote-por.ts）。
+ * 空は「印なし」（金額確定、または金額未確定）
+ */
+export const quoteLineStateSchema = z.preprocess(
+  (v) => (v === '' || v == null ? null : v),
+  z.enum(['excluded', 'zero_confirmed']).nullable()
+);
+/** 0円確定の理由・対象外のメモ（印を足しても備考の 200 文字に収まる長さ） */
+export const quoteLineStateReasonSchema = z.preprocess((v) => (v == null ? '' : v), optional(150));
+
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({
   kind: z.enum([
@@ -291,6 +302,8 @@ export const dealerRevisionItemSchema = z.object({
   quantity: z.coerce.number().min(0.01).max(99_999),
   /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧用） */
   image_url: optional(500).nullable(),
+  line_state: quoteLineStateSchema.optional(),
+  line_state_reason: quoteLineStateReasonSchema.optional(),
 }).superRefine((row, ctx) => {
   if (row.unit_price < 0 && row.name !== '選択商品の変更差額') {
     ctx.addIssue({
@@ -345,6 +358,8 @@ export const quoteDraftSaveItemSchema = z.object({
     '数量は小数4桁以内で入力してください'
   ),
   image_url: optional(500).nullable(),
+  line_state: quoteLineStateSchema.optional(),
+  line_state_reason: quoteLineStateReasonSchema.optional(),
 }).superRefine((row, ctx) => {
   if (row.unit_price < 0) {
     ctx.addIssue({

@@ -202,7 +202,7 @@ describe('non-Web manual case application wiring', () => {
     expect(draftEditor).toContain('この内容を正式な${formalRevisionLabel}として発行します。発行後、この下書きは編集できません。');
     expect(draftEditor).toContain('dialogTitle={`正式な${formalRevisionLabel}を発行しますか？`}');
     // 未確定の別途見積の行が残る間も発行できない（D1 までの暫定。20261016111000）
-    expect(draftEditor).toContain('disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedPorNames.length > 0}');
+    expect(draftEditor).toContain('disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedNames.length > 0}');
     expect(draftEditor).not.toContain("window.alert('未保存の変更があります。先に下書きを保存してください。')");
     expect(draftEditor).toContain('下書き保存時に数量×単価・税額・合計を確認します。');
     expect(draftEditor).toContain('targetRevision = 1');
@@ -216,6 +216,6 @@ describe('non-Web manual case application wiring', () => {
     expect(draftEditor).toContain('if (editGeneration === submittedGeneration.current)');
     expect(draftEditor).toContain('setSavedGeneration(editGeneration);');
     // 未確定の別途見積の行が残る間も発行できない（D1 までの暫定。20261016111000）
-    expect(draftEditor).toContain('disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedPorNames.length > 0}');
+    expect(draftEditor).toContain('disabled={finalizePending || savePending || dirty || rows.length === 0 || !baseRevisionId || unresolvedNames.length > 0}');
   });
 });

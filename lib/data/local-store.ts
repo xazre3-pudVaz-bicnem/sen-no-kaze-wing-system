@@ -97,10 +97,11 @@ import { productLedgerState, productSimulatorVisibleSetting, type ProductLifecyc
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import {
   configurationPorSelections,
-  isUnresolvedPorLine,
+  createUnresolvedLineCheck,
+  quoteLineStateGuardError,
   samePorSelectionKeys,
   unconfirmedPorSelectionsError,
-  unresolvedPorLinesError,
+  unresolvedLinesError,
   type QuotePorSelection,
   type QuotePorSelectionState,
 } from '@/lib/domain/quote-por';
@@ -1813,21 +1814,20 @@ export class LocalStore implements DataStore {
         });
       }
 
-      // SQL と同じ止め（D1 までの暫定）：未解決の別途見積の行が残る、またはお客様が選んだ別途見積の商品を
-      // 発行する担当者が確認していなければ発行しない（例外で終わると、この変更は保存されない）
-      const optionPor = new Set(db.options.filter((o) => o.price_on_request).map((o) => o.id));
-      const unresolved = db.quoteItems
-        .filter((it) => it.quote_id === next.id)
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .filter((it) =>
-          isUnresolvedPorLine({
-            unit_price: it.unit_price,
-            description: it.description,
-            remark: it.remark,
-            optionIsPor: Boolean(it.option_id && optionPor.has(it.option_id)),
-          })
-        );
-      if (unresolved.length > 0) throw new StoreError('VALIDATION', unresolvedPorLinesError(unresolved.map((it) => it.name)));
+      // SQL と同じ止め（D1 までの暫定）：明細の表の保存境界（状態の印のある行は 0 円・0円確定は理由あり）、
+      // 金額未確定の明細が残る、またはお客様が選んだ別途見積の商品を発行する担当者が確認していなければ発行しない
+      // （例外で終わると、この変更は保存されない）
+      const newItems = db.quoteItems.filter((it) => it.quote_id === next.id).sort((a, b) => a.sort_order - b.sort_order);
+      for (const it of newItems) {
+        const guardError = quoteLineStateGuardError(it);
+        if (guardError) throw new StoreError('VALIDATION', guardError);
+      }
+      const isUnresolved = createUnresolvedLineCheck({
+        parentLines: db.quoteItems.filter((it) => it.quote_id === parent.id),
+        options: new Map(db.options.map((o) => [o.id, o])),
+      });
+      const unresolved = newItems.filter(isUnresolved);
+      if (unresolved.length > 0) throw new StoreError('VALIDATION', unresolvedLinesError(unresolved.map((it) => it.name)));
       const porSelections = LocalStore.porSelectionsForQuote(db, parent);
       if (!LocalStore.porSelectionsConfirmed(db, parent.id, actor.id, porSelections)) {
         throw new StoreError('VALIDATION', unconfirmedPorSelectionsError(porSelections));

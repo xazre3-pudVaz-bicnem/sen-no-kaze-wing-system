@@ -131,7 +131,7 @@ export default async function AdminQuoteDraftPage({
       {sp.created && <Alert tone="success">案件を登録しました。まだ正式見積は発行していません。この見積下書きを編集・保存してください。</Alert>}
       {sp.revisionDraft && <Alert tone="success">現在の発行済み見積をもとに、次の見積下書きを開きました。下書きを保存しても発行済み見積は変わりません。</Alert>}
 
-      <QuoteDraftEditor detail={detail} modelName={model?.name ?? '商品モデル'} canEditBase={canEditCatalog(actor.role)} estimates={estimates} products={products} targetRevision={targetRevision} />
+      <QuoteDraftEditor detail={detail} modelName={model?.name ?? '商品モデル'} canEditBase={canEditCatalog(actor.role)} estimates={estimates} products={products} targetRevision={targetRevision} parentItems={parentQuoteDetail?.items ?? []} />
     </div>
   );
 }

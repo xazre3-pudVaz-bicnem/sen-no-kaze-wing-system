@@ -16,6 +16,9 @@ const localStore = read('lib/data/local-store.ts');
 const store = read('lib/data/store.ts');
 const adminActions = read('lib/actions/admin.ts');
 const formalizationAction = read('lib/actions/legacy-accepted-formalization.ts');
+const standardActions = read('lib/actions/standard-quotes.ts');
+const standardEditor = read('components/admin/standard-quote-editor.tsx');
+const authoringGrid = read('components/admin/quote-authoring-ui.tsx');
 const dealerForms = read('components/admin/dealer-forms.tsx');
 const editPage = read('app/admin/quotes/[id]/edit/page.tsx');
 const formalizePage = read('app/admin/quotes/[id]/formalize/page.tsx');
@@ -30,12 +33,30 @@ function anchorText(index: number): string {
   return [...literal.matchAll(/E'((?:[^']|'')*)'/g)].map((m) => m[1].replace(/''/g, "'").replace(/\\n/g, '\n')).join('');
 }
 
-describe('正式見積の発行で未解決の別途見積（POR）を残さない止め（20261016111000）', () => {
-  it('適用の前に、前提の関数・列があり、まだ足していないことを確かめる', () => {
+describe('正式見積の発行で金額未確定の明細を残さない止め（20261016111000）', () => {
+  it('適用の前に、前提の関数・列があり、まだ足していないこと・既存の明細が状態の印を使っていないことを確かめる', () => {
     expect(migration).toContain("to_regprocedure('public.create_quote_revision(uuid, jsonb, text)') is null");
     expect(migration).toContain("to_regprocedure('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)') is null");
     expect(migration).toContain("column_name = 'price_mode'");
     expect(migration).toContain("to_regclass('public.quote_por_confirmations') is not null");
+    expect(migration).toContain("to_regprocedure('public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean)') is not null");
+    expect(migration).toContain("exists (select 1 from public.quote_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')");
+    expect(migration).toContain("exists (select 1 from public.quote_draft_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')");
+  });
+
+  it('明細の表のトリガーで、状態の印のある行は 0 円・0円確定は理由あり・価格の決め方は「金額を入力」を保証する', () => {
+    expect(migration).toContain('create trigger quote_items_line_state_guard\nbefore insert or update of remark, unit_price, amount on public.quote_items');
+    expect(migration).toContain(
+      'create trigger quote_draft_items_line_state_guard\nbefore insert or update of remark, unit_price, amount, price_mode on public.quote_draft_items'
+    );
+    expect(migration).toContain("v_price_mode text := to_jsonb(new) ->> 'price_mode';");
+  });
+
+  it('前の版との突き合わせ：発行する版は parent_quote_id の明細と、下書きは明細のキーも合わせて比べる', () => {
+    expect(migration).toContain('select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;');
+    expect(migration).toContain('select d.parent_quote_id into v_parent from public.quote_drafts d where d.id = p_draft_id;');
+    expect(migration).toContain('and p.line_key = i.line_key');
+    expect(migration).toContain("i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto',");
   });
 
   it('止めを足す目印は、適用済みの定義（元の migration）にそのままある', () => {
@@ -63,18 +84,21 @@ describe('正式見積の発行で未解決の別途見積（POR）を残さな�
     expect(migration).toContain('differs from the reviewed definition (anchor is not unique)');
     expect(migration).toContain('is already patched');
     expect(migration).toContain('owner / security definer / search_path / EXECUTE changed');
-    expect(migration).toContain("perform public.assert_quote_draft_lines_por_resolved(d.id);");
-    expect(migration).toContain('perform public.assert_quote_lines_por_resolved(v_new);');
+    expect(migration).toContain('perform public.assert_quote_draft_lines_resolved(d.id);');
+    expect(migration).toContain('perform public.assert_quote_lines_resolved(v_new);');
     expect(migration).toContain('perform public.assert_case_por_selections_confirmed(parent.id, v_uid);');
   });
 
   it('内部の部品は利用者から実行させず、画面用の 2 つの RPC だけをログインした利用者に開く', () => {
     for (const fn of [
-      'quote_line_is_unresolved_por(numeric, uuid, text, text)',
+      'quote_line_explicit_state(text)',
+      'quote_line_por_marked(uuid, text, text)',
+      'quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean)',
+      'quote_line_state_guard()',
       'configuration_por_selections(uuid)',
       'quote_por_selections_confirmed(uuid, uuid, jsonb)',
-      'assert_quote_lines_por_resolved(uuid)',
-      'assert_quote_draft_lines_por_resolved(uuid)',
+      'assert_quote_lines_resolved(uuid)',
+      'assert_quote_draft_lines_resolved(uuid)',
       'assert_case_por_selections_confirmed(uuid, uuid)',
     ]) {
       expect(migration).toContain(`revoke execute on function public.${fn} from public, anon, authenticated, service_role;`);
@@ -98,7 +122,7 @@ describe('正式見積の発行で未解決の別途見積（POR）を残さな�
     expect(check).toContain("import { runtimeQuoteFormalPorGuard } from './runtime-quote-formal-por-guard.mjs';");
     expect(check).toContain('runtime = mergeRuntime(runtime, await runtimeQuoteFormalPorGuard(client));');
     expect(runtime).toMatch(/^rollback;$/m);
-    expect((runtime.match(/'QPG-\d+ /g) ?? []).length).toBeGreaterThanOrEqual(37);
+    expect((runtime.match(/'QPG-\d+ /g) ?? []).length).toBeGreaterThanOrEqual(50);
   });
 });
 
@@ -111,7 +135,9 @@ describe('画面・データ層のつなぎ', () => {
     expect(supabaseStore).toContain("isMissingNamedFunction(error, 'get_quote_por_selections')");
     expect(localStore).toContain('async getQuotePorSelections(quoteId: string, actor: SessionUser)');
     expect(localStore).toContain('this.recordQuotePorConfirmation(id, input.por_confirmation_keys, actor);');
-    expect(localStore).toContain('unresolvedPorLinesError(unresolved.map((it) => it.name))');
+    expect(localStore).toContain('unresolvedLinesError(unresolved.map((it) => it.name))');
+    expect(localStore).toContain('const isUnresolved = createUnresolvedLineCheck({');
+    expect(localStore).toContain('const guardError = quoteLineStateGuardError(it);');
     expect(localStore).toContain('unconfirmedPorSelectionsError(porSelections)');
   });
 
@@ -138,7 +164,25 @@ describe('画面・データ層のつなぎ', () => {
   });
 
   it('Web 以外の下書きでも、未確定の行が残る間は正式見積を発行できない', () => {
-    expect(draftEditor).toContain('unresolvedPorNames.length > 0');
+    expect(draftEditor).toContain('unresolvedNames.length > 0');
     expect(draftEditor).toContain('data-testid="draft-por-blockers"');
+    expect(draftEditor).toContain('matchLineKey: true');
+  });
+
+  it('「対象外」「0円確定」は画面の明示の選択で、Server Action が備考の印にする（手入力の印は受け付けない）', () => {
+    // 改訂・手入力の下書き（新規・保存）
+    expect(adminActions.match(/applyQuoteLineStates\(parsed\.data\.items\)/g)).toHaveLength(3);
+    expect(adminActions).toContain('if (e instanceof QuoteLineStateInputError) return { ok: false, error: e.message };');
+    // 旧形式の確定見積・標準見積から作る下書き
+    expect(formalizationAction).toContain('installationItems = applyQuoteLineStates(parsed.data.items);');
+    expect(formalizationAction).toContain('p_installation_items: installationItems,');
+    expect(standardActions).toContain("cost_unit_price: line.price_mode === 'por' ? null : line_state === 'excluded' ? 0 : line.cost_unit_price,");
+    expect(standardActions).toContain("if (line_state && (line.section_code === 'base' || line.price_mode !== 'manual')) {");
+    // 画面：扱いの列・確認の欄・送信の値
+    expect(authoringGrid).toContain('data-testid="quote-line-state"');
+    expect(dealerForms).toContain('name={`items.${index}.line_state`}');
+    expect(dealerForms).toContain('showLineState');
+    expect(standardEditor).toContain("(['zero_confirmed', 'excluded'] as const)");
+    expect(formalizationForm).toContain('data-testid="formalization-line-state"');
   });
 });

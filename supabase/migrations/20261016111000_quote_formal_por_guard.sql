@@ -1,24 +1,33 @@
--- 正式見積の発行で、未解決の別途見積（POR）を残さない（D1 までの暫定。2026-10-19 の先方回答 ③）
+-- 正式見積の発行で、金額が未確定の明細を残さない（D1 までの暫定。2026-10-19 の先方回答 ③・2026-10-22 の確定事項 A-2-1）
 --
 -- 先方の方針
---   ・正式見積の発行には範囲と金額の確定が必要。未解決の POR が残る状態では正式見積を発行できない
---   ・Web での概算確認・見積依頼の受付・下書き保存は続けられる（この migration では変えない）
+--   ・正式見積には、今回の契約に含める範囲の金額が確定している必要がある。金額未確定を自動で 0 円の確定にしない
+--   ・明細の扱いは「金額確定／金額未確定／契約対象外／0円確定」を区別する。自由記述の備考の文章から状態を推測しない
+--   ・前の版から変えていない明細でも、価格未確定・別途見積のままなら正式発行を止める
+--   ・商品台帳で正式に 0 円の標準商品は従来どおり。新しく足した 0 円の直接入力行や 0 円に変えた明細は、
+--     「0円確定（理由必須）」か「契約対象外」を明示しない限り未確定
+--   ・契約対象外の明細があるだけで、本体のみなどの確定範囲の正式見積を止めない
+--   ・Web での概算・見積依頼の受付・下書き保存は続けられる（この migration では変えない）
 --
--- いまの作りでの POR の表し方（調べた結果）
---   ・Web の概算（create_quote_from_configuration）：POR の商品は 0 円で、説明「設置場所確認後に別途お見積り」。
---     標準見積から作る概算は、POR の明細を 0 円・備考「価格未確定（別途お見積り）」で写す。
---     お客様が選んだ POR の商品・選択肢は「選択商品の変更差額」に 0 円で含まれ、明細に出ないことがある
---   ・手入力の見積・改訂の画面：POR の商品は 0 円・備考「別途見積」で入る
---   ・標準見積から作る下書き：price_mode = 'por'（既存の確認で正式保存を止めている）
+-- 明細の状態の印（画面の明示の選択から、サーバーが備考に付ける。手入力の印はサーバーで拒否する）
+--   ・［今回の契約対象外］（続けて任意のメモ）…今回の契約に含めない。金額は 0 円
+--   ・［0円確定］：理由 …今回の契約に含め、追加請求額が 0 円と確定。理由は必須
+--   DB は、明細の表（quote_draft_items・quote_items）のトリガーで「印のある行は 0 円」「0円確定は理由あり」を保証し、
+--   発行の判定はこの印と次の決まった規則だけで行う（自由記述の備考の文章は見ない）
 --
--- 足す止め（正式見積を作る 4 つの関数）
---   1. 発行する明細に「未解決の POR の行」が残っていれば発行しない。未解決の POR の行は、0 円で次のどれかに当たる行
---        ・備考が POR の目印（「別途見積」「価格未確定（別途お見積り）」「別途見積項目あり…」）
---        ・備考が空で、説明が「設置場所確認後に別途お見積り」か、商品台帳の POR の商品を指している
---      解消のしかた：売価を入れる／0 円のままにするなら備考に理由（ほかの明細に含む など）を書く／明細から外す
---   2. Web の案件では、お客様が選んだ POR の商品・選択肢（外壁の面を含む）について、発行する担当者が
---      「金額を明細に入れたか、お客様と合意のうえ対象外にした」ことを確認した記録がなければ発行しない。
---      明細に出ない POR があるため。確認の記録は見積の版ごと・担当者ごとに残し、変えられない
+-- 金額が未確定の明細（正式発行を止める行）
+--   ・0 円で、別途見積の目印がある行（説明「設置場所確認後に別途お見積り」・備考「別途見積」「価格未確定（別途お見積り）」
+--     「別途見積項目あり…」・商品台帳の別途見積の商品）。前の版から変えていなくても止める
+--   ・0 円の内外装・オプション・別途工事・フリー商品の行のうち、次のどれにも当たらない行
+--       商品台帳で正式に 0 円の商品（別途見積でない）を指す行／自動計算の行（標準見積から作る下書き）／
+--       前の版にある、別途見積でも状態の印つきでもない 0 円の同じ明細（区分・品名・説明が同じ）
+--   ・本体・本体諸費用・内外装工事経費・オプション諸費用の行は対象外（本体は本体 Revision から、経費は経費の決まりで扱う）
+--   解消のしかた：金額を入れる／「0円確定（理由）」を選ぶ／「対象外」を選ぶ／明細から外す
+--
+-- お客様が選んだ別途見積の商品（Web の案件）
+--   お客様が選んだ POR の商品・選択肢（外壁の面を含む）は「選択商品の変更差額」に 0 円で含まれ、明細に出ないことがある。
+--   発行する担当者が「金額を明細に入れたか、0円確定・対象外にしたか、お客様と合意のうえ外した」ことを確認した記録が
+--   なければ発行しない。確認の記録は見積の版ごと・担当者ごとに残し、変えられない
 --
 -- 対象の関数
 --   ・finalize_quote_draft・finalize_quote_revision_draft（Web 以外の下書きの正式保存）
@@ -47,46 +56,127 @@ begin
     raise exception 'PRECONDITION: quote standard estimate money (20261013180000) must be applied first';
   end if;
   if to_regclass('public.quote_por_confirmations') is not null
-     or to_regprocedure('public.quote_line_is_unresolved_por(numeric, uuid, text, text)') is not null then
-    raise exception 'PRECONDITION: quote formal POR guard already exists; review before applying';
+     or to_regprocedure('public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean)') is not null then
+    raise exception 'PRECONDITION: quote formal line guard already exists; review before applying';
+  end if;
+  -- 状態の印は新しい決まり。既存の明細に同じ書き出しの備考があれば、意味が変わるので止める
+  if exists (select 1 from public.quote_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')
+     or exists (select 1 from public.quote_draft_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%') then
+    raise exception 'PRECONDITION: existing quote lines already use the line state markers; review before applying';
   end if;
 end;
 $preflight$;
 
--- ---------- 未解決の POR の行（SQL と lib/domain/quote-por.ts で同じ決まり） ----------
+-- ---------- 明細の状態（SQL と lib/domain/quote-por.ts で同じ決まり） ----------
 
-create function public.quote_line_is_unresolved_por(
+-- 備考の状態の印。印はサーバーが画面の明示の選択から付ける（自由記述の文章は見ない）
+create function public.quote_line_explicit_state(p_remark text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $function$
+  select case
+    when coalesce(p_remark, '') like '［今回の契約対象外］%' then 'excluded'
+    when coalesce(p_remark, '') ~ '^［0円確定］：\s*\S' then 'zero_confirmed'
+    else null
+  end;
+$function$;
+
+comment on function public.quote_line_explicit_state(text) is
+  '明細の備考にある状態の印（excluded＝今回の契約対象外、zero_confirmed＝0円確定（理由あり））。印が無ければ null。D1 までの暫定。';
+
+-- 別途見積（価格未確定）の目印がある行か（システムが付ける説明・備考、または商品台帳の別途見積の商品）
+create function public.quote_line_por_marked(p_option_id uuid, p_description text, p_remark text)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $function$
+  select btrim(coalesce(p_description, '')) = '設置場所確認後に別途お見積り'
+      or btrim(coalesce(p_remark, '')) in ('別途見積', '価格未確定（別途お見積り）')
+      or btrim(coalesce(p_remark, '')) like '別途見積項目あり%'
+      or exists (
+        select 1
+          from public.options o
+         where o.id = p_option_id
+           and o.price_on_request
+      );
+$function$;
+
+comment on function public.quote_line_por_marked(uuid, text, text) is
+  '別途見積（価格未確定）の目印がある明細か。説明「設置場所確認後に別途お見積り」、備考「別途見積」「価格未確定（別途お見積り）」「別途見積項目あり…」、または商品台帳の別途見積の商品を指す行。';
+
+-- 正式発行を止める「金額が未確定の明細」か
+--   p_calculated：自動計算の行（標準見積から作る下書きの price_mode = 'auto'）
+--   p_unchanged_zero：前の版に、別途見積でも状態の印つきでもない 0 円の同じ明細がある
+create function public.quote_line_unresolved(
+  p_kind text,
   p_unit_price numeric,
   p_option_id uuid,
   p_description text,
-  p_remark text
+  p_remark text,
+  p_calculated boolean,
+  p_unchanged_zero boolean
 )
 returns boolean
 language sql
 stable
 set search_path = ''
 as $function$
-  select coalesce(p_unit_price, 0) = 0
-     and (
-       btrim(coalesce(p_remark, '')) in ('別途見積', '価格未確定（別途お見積り）')
-       or btrim(coalesce(p_remark, '')) like '別途見積項目あり%'
-       or (
-         btrim(coalesce(p_remark, '')) = ''
-         and (
-           btrim(coalesce(p_description, '')) = '設置場所確認後に別途お見積り'
-           or exists (
-             select 1
-               from public.options o
-              where o.id = p_option_id
-                and o.price_on_request
-           )
-         )
-       )
-     );
+  select case
+    when public.quote_line_explicit_state(p_remark) is not null then false
+    when coalesce(p_unit_price, 0) <> 0 then false
+    when public.quote_line_por_marked(p_option_id, p_description, p_remark) then true
+    when p_kind in ('base', 'base_expense', 'interior_exterior_expense', 'option_expense', 'discount') then false
+    when coalesce(p_calculated, false) then false
+    when exists (
+      select 1
+        from public.options o
+       where o.id = p_option_id
+         and o.price = 0
+         and not o.price_on_request
+    ) then false
+    when coalesce(p_unchanged_zero, false) then false
+    else true
+  end;
 $function$;
 
-comment on function public.quote_line_is_unresolved_por(numeric, uuid, text, text) is
-  '正式見積の明細で未解決の別途見積（POR）とみなす行か（D1 までの暫定）。0 円で、備考が POR の目印、または備考が空で説明が「設置場所確認後に別途お見積り」か POR の商品を指す行。';
+comment on function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) is
+  '正式発行を止める金額未確定の明細か（D1 までの暫定）。0 円で別途見積の目印がある行（前の版から変えていなくても）と、0 円の内外装・オプション・別途工事・フリー商品の行のうち、商品台帳で正式に 0 円の商品・自動計算の行・前の版の同じ 0 円の明細のどれでもない行。状態の印（対象外・0円確定）がある行は止めない。';
+
+-- 明細の表の保存境界：状態の印のある行は 0 円、0円確定は理由あり（どの経路から書いても同じ）
+create function public.quote_line_state_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_remark text := coalesce(new.remark, '');
+  v_price_mode text := to_jsonb(new) ->> 'price_mode';
+begin
+  if v_remark like '［今回の契約対象外］%' or v_remark like '［0円確定］%' then
+    if coalesce(new.unit_price, 0) <> 0 or coalesce(new.amount, 0) <> 0 then
+      raise exception 'VALIDATION: 「対象外」「0円確定」の明細（%）は 0 円にしてください', new.name using errcode = 'P0001';
+    end if;
+    if v_remark like '［0円確定］%' and v_remark !~ '^［0円確定］：\s*\S' then
+      raise exception 'VALIDATION: 0円確定の明細（%）は理由を入力してください', new.name using errcode = 'P0001';
+    end if;
+    if v_price_mode is not null and v_price_mode <> 'manual' then
+      raise exception 'VALIDATION: 「対象外」「0円確定」の明細（%）は、価格の決め方を「金額を入力」にしてください', new.name using errcode = 'P0001';
+    end if;
+  end if;
+  return new;
+end;
+$function$;
+
+create trigger quote_items_line_state_guard
+before insert or update of remark, unit_price, amount on public.quote_items
+for each row execute function public.quote_line_state_guard();
+
+create trigger quote_draft_items_line_state_guard
+before insert or update of remark, unit_price, amount, price_mode on public.quote_draft_items
+for each row execute function public.quote_line_state_guard();
 
 -- ---------- お客様が選んだ POR の商品・選択肢（Web の案件） ----------
 
@@ -182,7 +272,7 @@ create index quote_por_confirmations_quote_idx
   on public.quote_por_confirmations (quote_id, confirmed_by);
 
 comment on table public.quote_por_confirmations is
-  'Web の案件で、発行する担当者が「お客様が選んだ別途見積の商品は、金額を明細に入れたか、お客様と合意のうえ対象外にした」と確認した記録（見積の版ごと）。変更・削除できない。D1 までの暫定。';
+  'Web の案件で、発行する担当者が「お客様が選んだ別途見積の商品は、金額を明細に入れたか、0円確定・対象外にしたか、お客様と合意のうえ外した」と確認した記録（見積の版ごと）。変更・削除できない。D1 までの暫定。';
 comment on column public.quote_por_confirmations.quote_id is '確認したときの見積（改訂・確定見積の元になる版）。';
 comment on column public.quote_por_confirmations.selections is '確認したときの別途見積の商品・選択肢の一覧（configuration_por_selections の結果）。';
 comment on column public.quote_por_confirmations.confirmed_by is '確認した利用者（auth.uid）。記録を変えないため外部キーにしない。';
@@ -332,48 +422,80 @@ $function$;
 
 -- ---------- 発行の関数の中から使う確認 ----------
 
--- 発行する版（quote_items）に、未解決の POR の行が残っていれば止める
-create function public.assert_quote_lines_por_resolved(p_quote_id uuid)
+-- 発行する版（quote_items）に、金額が未確定の明細が残っていれば止める（前の版＝parent_quote_id の明細と比べる）
+create function public.assert_quote_lines_resolved(p_quote_id uuid)
 returns void
 language plpgsql
 stable
 set search_path = ''
 as $function$
 declare
+  v_parent uuid;
   v_count integer;
   v_names text;
 begin
+  select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;
   select count(*), string_agg(i.name, '、' order by i.sort_order, i.id)
     into v_count, v_names
     from public.quote_items i
    where i.quote_id = p_quote_id
-     and public.quote_line_is_unresolved_por(i.unit_price, i.option_id, i.description, i.remark);
+     and public.quote_line_unresolved(
+           i.kind, i.unit_price, i.option_id, i.description, i.remark, false,
+           exists (
+             select 1
+               from public.quote_items p
+              where p.quote_id = v_parent
+                and p.kind = i.kind
+                and p.name = i.name
+                and coalesce(p.description, '') = coalesce(i.description, '')
+                and coalesce(p.unit_price, 0) = 0
+                and public.quote_line_explicit_state(p.remark) is null
+                and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
+           )
+         );
   if v_count > 0 then
-    raise exception 'VALIDATION: 別途見積（価格未確定）の明細が % 行残っています（%）。売価を入力するか、0 円のままにする場合は備考に理由（ほかの明細に含む など）を書くか、明細から外してから発行してください',
+    raise exception 'VALIDATION: 金額が未確定の明細が % 行残っています（%）。金額を入れるか、「0円確定（理由）」か「対象外」を選ぶか、明細から外してから発行してください',
       v_count, left(v_names, 200)
       using errcode = 'P0001';
   end if;
 end;
 $function$;
 
--- 正式保存する下書き（quote_draft_items）に、未解決の POR の行が残っていれば止める
-create function public.assert_quote_draft_lines_por_resolved(p_draft_id uuid)
+-- 正式保存する下書き（quote_draft_items）に、金額が未確定の明細が残っていれば止める
+-- （前の版＝下書きの parent_quote_id の明細と、明細のキーで比べる）
+create function public.assert_quote_draft_lines_resolved(p_draft_id uuid)
 returns void
 language plpgsql
 stable
 set search_path = ''
 as $function$
 declare
+  v_parent uuid;
   v_count integer;
   v_names text;
 begin
+  select d.parent_quote_id into v_parent from public.quote_drafts d where d.id = p_draft_id;
   select count(*), string_agg(i.name, '、' order by i.sort_order, i.id)
     into v_count, v_names
     from public.quote_draft_items i
    where i.draft_id = p_draft_id
-     and public.quote_line_is_unresolved_por(i.unit_price, i.option_id, i.description, i.remark);
+     and public.quote_line_unresolved(
+           i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto',
+           exists (
+             select 1
+               from public.quote_items p
+              where p.quote_id = v_parent
+                and p.line_key = i.line_key
+                and p.kind = i.kind
+                and p.name = i.name
+                and coalesce(p.description, '') = coalesce(i.description, '')
+                and coalesce(p.unit_price, 0) = 0
+                and public.quote_line_explicit_state(p.remark) is null
+                and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
+           )
+         );
   if v_count > 0 then
-    raise exception 'VALIDATION: 別途見積（価格未確定）の明細が % 行残っています（%）。売価を入力するか、0 円のままにする場合は備考に理由（ほかの明細に含む など）を書くか、明細から外してから正式保存してください',
+    raise exception 'VALIDATION: 金額が未確定の明細が % 行残っています（%）。金額を入れるか、「0円確定（理由）」か「対象外」を選ぶか、明細から外してから正式保存してください',
       v_count, left(v_names, 200)
       using errcode = 'P0001';
   end if;
@@ -405,7 +527,7 @@ begin
   select string_agg((e.value ->> 'name') || coalesce('（' || (e.value ->> 'detail') || '）', ''), '、' order by e.ordinality)
     into v_names
     from jsonb_array_elements(v_selections) with ordinality as e(value, ordinality);
-  raise exception 'VALIDATION: お客様が選んだ別途見積の商品（% 件：%）について、金額を明細に入れたか、お客様と合意のうえ対象外にしたことの確認が済んでいません。画面の「別途見積の確認」で確認してから発行してください',
+  raise exception 'VALIDATION: お客様が選んだ別途見積の商品（% 件：%）について、金額を明細に入れたか、「0円確定」「対象外」にしたか、お客様と合意のうえ外したことの確認が済んでいません。画面の「金額未確定の確認」で確認してから発行してください',
     jsonb_array_length(v_selections), left(v_names, 200)
     using errcode = 'P0001';
 end;
@@ -413,23 +535,29 @@ $function$;
 
 -- ---------- 権限 ----------
 
-alter function public.quote_line_is_unresolved_por(numeric, uuid, text, text) owner to postgres;
+alter function public.quote_line_explicit_state(text) owner to postgres;
+alter function public.quote_line_por_marked(uuid, text, text) owner to postgres;
+alter function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) owner to postgres;
+alter function public.quote_line_state_guard() owner to postgres;
 alter function public.configuration_por_selections(uuid) owner to postgres;
 alter function public.quote_por_confirmations_immutable() owner to postgres;
 alter function public.quote_por_selections_confirmed(uuid, uuid, jsonb) owner to postgres;
 alter function public.get_quote_por_selections(uuid) owner to postgres;
 alter function public.confirm_quote_por_selections(uuid, text[]) owner to postgres;
-alter function public.assert_quote_lines_por_resolved(uuid) owner to postgres;
-alter function public.assert_quote_draft_lines_por_resolved(uuid) owner to postgres;
+alter function public.assert_quote_lines_resolved(uuid) owner to postgres;
+alter function public.assert_quote_draft_lines_resolved(uuid) owner to postgres;
 alter function public.assert_case_por_selections_confirmed(uuid, uuid) owner to postgres;
 
--- 内部の部品は利用者から実行させない（発行の関数の中からだけ使う）
-revoke execute on function public.quote_line_is_unresolved_por(numeric, uuid, text, text) from public, anon, authenticated, service_role;
+-- 内部の部品は利用者から実行させない（発行の関数・トリガーの中からだけ使う）
+revoke execute on function public.quote_line_explicit_state(text) from public, anon, authenticated, service_role;
+revoke execute on function public.quote_line_por_marked(uuid, text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) from public, anon, authenticated, service_role;
+revoke execute on function public.quote_line_state_guard() from public, anon, authenticated, service_role;
 revoke execute on function public.configuration_por_selections(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.quote_por_confirmations_immutable() from public, anon, authenticated, service_role;
 revoke execute on function public.quote_por_selections_confirmed(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
-revoke execute on function public.assert_quote_lines_por_resolved(uuid) from public, anon, authenticated, service_role;
-revoke execute on function public.assert_quote_draft_lines_por_resolved(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.assert_quote_lines_resolved(uuid) from public, anon, authenticated, service_role;
+revoke execute on function public.assert_quote_draft_lines_resolved(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.assert_case_por_selections_confirmed(uuid, uuid) from public, anon, authenticated, service_role;
 
 revoke execute on function public.get_quote_por_selections(uuid) from public, anon, service_role;
@@ -488,18 +616,18 @@ begin
   ];
   v_to := array[
     v_from[1]
-    || E'  /* 0 円のまま残った別途見積（POR）の行も、正式保存では残さない（D1 までの暫定）。 */\n'
-    || E'  perform public.assert_quote_draft_lines_por_resolved(d.id);\n',
+    || E'  /* 0 円のまま残った金額未確定の明細も、正式保存では残さない（D1 までの暫定）。 */\n'
+    || E'  perform public.assert_quote_draft_lines_resolved(d.id);\n',
     v_from[2]
-    || E'  /* 0 円のまま残った別途見積（POR）の行も、正式保存では残さない（D1 までの暫定）。 */\n'
-    || E'  perform public.assert_quote_draft_lines_por_resolved(d.id);\n',
-    E'  /* 確定見積として発行する前に、未解決の別途見積（POR）が残っていないか確かめる（D1 までの暫定）。 */\n'
-    || E'  perform public.assert_quote_lines_por_resolved(v_new);\n'
+    || E'  /* 0 円のまま残った金額未確定の明細も、正式保存では残さない（D1 までの暫定）。 */\n'
+    || E'  perform public.assert_quote_draft_lines_resolved(d.id);\n',
+    E'  /* 確定見積として発行する前に、金額未確定の明細が残っていないか確かめる（D1 までの暫定）。 */\n'
+    || E'  perform public.assert_quote_lines_resolved(v_new);\n'
     || E'  perform public.assert_case_por_selections_confirmed(parent.id, v_uid);\n'
     || E'\n'
     || v_from[3],
-    E'  /* 確定見積として発行する前に、未解決の別途見積（POR）が残っていないか確かめる（D1 までの暫定）。 */\n'
-    || E'  perform public.assert_quote_lines_por_resolved(v_new);\n'
+    E'  /* 確定見積として発行する前に、金額未確定の明細が残っていないか確かめる（D1 までの暫定）。 */\n'
+    || E'  perform public.assert_quote_lines_resolved(v_new);\n'
     || E'  perform public.assert_case_por_selections_confirmed(parent.id, v_uid);\n'
     || E'\n'
     || v_from[4]
@@ -508,17 +636,17 @@ begin
   for v_index in 1 .. array_length(v_signatures, 1) loop
     v_oid := to_regprocedure(v_signatures[v_index]);
     if v_oid is null then
-      raise exception 'QUOTE_FORMAL_POR_GUARD: function % is missing', v_signatures[v_index] using errcode = 'P0001';
+      raise exception 'QUOTE_FORMAL_LINE_GUARD: function % is missing', v_signatures[v_index] using errcode = 'P0001';
     end if;
     select p.proowner, p.prosecdef, p.proconfig, p.proacl::text as acl into v_before
       from pg_catalog.pg_proc p
      where p.oid = v_oid;
     v_definition := pg_catalog.pg_get_functiondef(v_oid);
-    if strpos(v_definition, 'por_resolved(') > 0 or strpos(v_definition, 'por_selections_confirmed(') > 0 then
-      raise exception 'QUOTE_FORMAL_POR_GUARD: % is already patched', v_signatures[v_index] using errcode = 'P0001';
+    if strpos(v_definition, 'lines_resolved(') > 0 or strpos(v_definition, 'por_selections_confirmed(') > 0 then
+      raise exception 'QUOTE_FORMAL_LINE_GUARD: % is already patched', v_signatures[v_index] using errcode = 'P0001';
     end if;
     if (length(v_definition) - length(replace(v_definition, v_from[v_index], ''))) / length(v_from[v_index]) <> 1 then
-      raise exception 'QUOTE_FORMAL_POR_GUARD: % differs from the reviewed definition (anchor is not unique)', v_signatures[v_index]
+      raise exception 'QUOTE_FORMAL_LINE_GUARD: % differs from the reviewed definition (anchor is not unique)', v_signatures[v_index]
         using errcode = 'P0001';
     end if;
     v_expected := replace(v_definition, v_from[v_index], v_to[v_index]);
@@ -529,13 +657,13 @@ begin
       from pg_catalog.pg_proc p
      where p.oid = v_oid;
     if pg_catalog.pg_get_functiondef(v_oid) is distinct from v_expected then
-      raise exception 'QUOTE_FORMAL_POR_GUARD: % was not replaced as expected', v_signatures[v_index] using errcode = 'P0001';
+      raise exception 'QUOTE_FORMAL_LINE_GUARD: % was not replaced as expected', v_signatures[v_index] using errcode = 'P0001';
     end if;
     if v_after.proowner is distinct from v_before.proowner
        or v_after.prosecdef is distinct from v_before.prosecdef
        or v_after.proconfig is distinct from v_before.proconfig
        or v_after.acl is distinct from v_before.acl then
-      raise exception 'QUOTE_FORMAL_POR_GUARD: % owner / security definer / search_path / EXECUTE changed', v_signatures[v_index]
+      raise exception 'QUOTE_FORMAL_LINE_GUARD: % owner / security definer / search_path / EXECUTE changed', v_signatures[v_index]
         using errcode = 'P0001';
     end if;
   end loop;

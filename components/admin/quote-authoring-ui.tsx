@@ -865,7 +865,7 @@ export function QuoteAuthoringGrid({
                             <Input
                               value={row.lineStateReason ?? ''}
                               disabled={!lineStateEditable}
-                              maxLength={150}
+                              maxLength={190}
                               placeholder={row.lineState === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
                               data-quote-grid-col="remark"
                               onKeyDown={handleGridKeyDown}

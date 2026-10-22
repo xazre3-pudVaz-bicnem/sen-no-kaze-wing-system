@@ -279,7 +279,7 @@ export const quoteLineStateSchema = z.preprocess(
   z.enum(['excluded', 'zero_confirmed']).nullable()
 );
 /** 0円確定の理由・対象外のメモ（印を足しても備考の 200 文字に収まる長さ） */
-export const quoteLineStateReasonSchema = z.preprocess((v) => (v == null ? '' : v), optional(150));
+export const quoteLineStateReasonSchema = z.preprocess((v) => (v == null ? '' : v), optional(190));
 
 /** 代理店が入力する別途工事・フリー商品の 1 行 */
 export const dealerRevisionItemSchema = z.object({

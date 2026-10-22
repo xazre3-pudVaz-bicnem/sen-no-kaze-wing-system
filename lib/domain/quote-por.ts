@@ -23,8 +23,8 @@ export const EXCLUDED_MARKER = '［今回の契約対象外］';
 export const ZERO_CONFIRMED_PREFIX = '［0円確定］';
 /** 0円確定の印（この後に理由） */
 export const ZERO_CONFIRMED_MARKER = '［0円確定］：';
-/** 理由・メモの長さの上限（備考の 200 文字に印を足しても収まるように） */
-export const LINE_STATE_REASON_MAX = 150;
+/** 理由・メモの長さの上限（備考の 200 文字に印（10 文字・7 文字）を足しても収まるように） */
+export const LINE_STATE_REASON_MAX = 190;
 
 /** 明細の状態（印で表すもの）。金額確定・金額未確定は印を持たない */
 export type QuoteLineState = 'excluded' | 'zero_confirmed';
@@ -43,7 +43,7 @@ function btrim(value: string | null | undefined): string {
 export function parseQuoteLineState(remark: string | null | undefined): { state: QuoteLineState; reason: string } | null {
   const value = remark ?? '';
   if (value.startsWith(EXCLUDED_MARKER)) {
-    return { state: 'excluded', reason: value.slice(EXCLUDED_MARKER.length).replace(/^：/, '').trim() };
+    return { state: 'excluded', reason: value.slice(EXCLUDED_MARKER.length).trim() };
   }
   if (/^［0円確定］：\s*\S/.test(value)) {
     return { state: 'zero_confirmed', reason: value.slice(ZERO_CONFIRMED_MARKER.length).trim() };
@@ -118,7 +118,10 @@ export function splitQuoteLineStateRemark(remark: string | null | undefined): {
   return { line_state: null, line_state_reason: '', remark: remark ?? '' };
 }
 
-/** 扱いの理由・メモの初期値：今の備考（別途見積の目印でないもの）を入れておく（扱いを選んでも備考を黙って消さない） */
+/**
+ * 扱いの理由・メモの初期値：今の備考（別途見積の目印でないもの）を入れておく（扱いを選んでも備考を黙って消さない）。
+ * 備考は 200 文字まで、理由・メモは 190 文字までなので、190 文字を超える備考だけは超えた分が入らない
+ */
 export function lineStateReasonSeed(remark: string | null | undefined): string {
   const text = (remark ?? '').trim();
   if (!text || isReservedLineStateRemark(text) || isPorMarkedLine({ remark: text })) return '';

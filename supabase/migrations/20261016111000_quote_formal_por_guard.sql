@@ -63,7 +63,9 @@ begin
   end if;
   -- 状態の印は新しい決まり。既存の明細に同じ書き出しの備考があれば、意味が変わるので止める
   if exists (select 1 from public.quote_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')
-     or exists (select 1 from public.quote_draft_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%') then
+     or exists (select 1 from public.quote_draft_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')
+     or exists (select 1 from public.standard_estimate_revision_lines where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')
+     or exists (select 1 from public.base_master_revision_lines where remark like '［今回の契約対象外］%' or remark like '［0円確定］%') then
     raise exception 'PRECONDITION: existing quote lines already use the line state markers; review before applying';
   end if;
 end;
@@ -179,6 +181,30 @@ for each row execute function public.quote_line_state_guard();
 create trigger quote_draft_items_line_state_guard
 before insert or update of remark, unit_price, amount, price_mode on public.quote_draft_items
 for each row execute function public.quote_line_state_guard();
+
+-- 標準見積・本体の内訳の明細の備考は、見積の下書きへそのまま写る。状態の印の書き出しは使わせない
+-- （印は見積の明細で、画面の明示の選択からだけ付ける）
+create function public.quote_line_marker_master_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+begin
+  if coalesce(new.remark, '') like '［今回の契約対象外］%' or coalesce(new.remark, '') like '［0円確定］%' then
+    raise exception 'VALIDATION: 備考の書き出しに「［今回の契約対象外］」「［0円確定］」は使えません（見積の明細の扱いの印のため）（%）', new.name
+      using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$function$;
+
+create trigger standard_estimate_revision_lines_marker_guard
+before insert or update of remark on public.standard_estimate_revision_lines
+for each row execute function public.quote_line_marker_master_guard();
+
+create trigger base_master_revision_lines_marker_guard
+before insert or update of remark on public.base_master_revision_lines
+for each row execute function public.quote_line_marker_master_guard();
 
 -- ---------- お客様が選んだ POR の商品・選択肢（Web の案件） ----------
 
@@ -440,7 +466,7 @@ declare
 begin
   select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;
   with lines as (
-    select i.id, i.sort_order, i.kind, i.name, coalesce(i.description, '') as description_key,
+    select i.id, i.sort_order, i.kind, btrim(i.name) as name_key, i.name, btrim(coalesce(i.description, '')) as description_key,
            public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, false, false) as unresolved_alone,
            public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, false, true) as unresolved_even_if_unchanged
       from public.quote_items i
@@ -448,18 +474,18 @@ begin
   ),
   candidates as (
     select l.*,
-           row_number() over (partition by l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq
+           row_number() over (partition by l.kind, l.name_key, l.description_key order by l.sort_order, l.id) as seq
       from lines l
      where l.unresolved_alone and not l.unresolved_even_if_unchanged
   ),
   parent_zero as (
-    select p.kind, p.name, coalesce(p.description, '') as description_key, count(*) as line_count
+    select p.kind, btrim(p.name) as name_key, btrim(coalesce(p.description, '')) as description_key, count(*) as line_count
       from public.quote_items p
      where p.quote_id = v_parent
        and coalesce(p.unit_price, 0) = 0
        and public.quote_line_explicit_state(p.remark) is null
        and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
-     group by p.kind, p.name, coalesce(p.description, '')
+     group by p.kind, btrim(p.name), btrim(coalesce(p.description, ''))
   ),
   unresolved as (
     select l.id, l.sort_order, l.name from lines l where l.unresolved_even_if_unchanged
@@ -467,7 +493,7 @@ begin
     select c.id, c.sort_order, c.name
       from candidates c
       left join parent_zero z
-        on z.kind = c.kind and z.name = c.name and z.description_key = c.description_key
+        on z.kind = c.kind and z.name_key = c.name_key and z.description_key = c.description_key
      where c.seq > coalesce(z.line_count, 0)
   )
   select count(*), string_agg(u.name, '、' order by u.sort_order, u.id)
@@ -505,7 +531,7 @@ begin
     from public.quote_drafts d
    where d.id = p_draft_id;
   with lines as (
-    select i.id, i.sort_order, i.line_key, i.kind, i.name, coalesce(i.description, '') as description_key,
+    select i.id, i.sort_order, i.line_key, i.kind, btrim(i.name) as name_key, i.name, btrim(coalesce(i.description, '')) as description_key,
            public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark,
              i.price_mode = 'auto' and coalesce(c.line_role, 'line') = 'expense', false) as unresolved_alone,
            public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark,
@@ -518,14 +544,14 @@ begin
     select l.*,
            case when v_parent is not null then l.line_key end as match_key,
            row_number() over (
-             partition by case when v_parent is not null then l.line_key end, l.kind, l.name, l.description_key
+             partition by case when v_parent is not null then l.line_key end, l.kind, l.name_key, l.description_key
              order by l.sort_order, l.id
            ) as seq
       from lines l
      where l.unresolved_alone and not l.unresolved_even_if_unchanged
   ),
   baseline as (
-    select p.line_key as match_key, p.kind, p.name, coalesce(p.description, '') as description_key, count(*) as line_count
+    select p.line_key as match_key, p.kind, btrim(p.name) as name_key, btrim(coalesce(p.description, '')) as description_key, count(*) as line_count
       from public.quote_items p
      where v_parent is not null
        and p.quote_id = v_parent
@@ -533,11 +559,11 @@ begin
        and coalesce(p.unit_price, 0) = 0
        and public.quote_line_explicit_state(p.remark) is null
        and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
-     group by p.line_key, p.kind, p.name, coalesce(p.description, '')
+     group by p.line_key, p.kind, btrim(p.name), btrim(coalesce(p.description, ''))
     union all
     select null::uuid,
            case s.section_code when 'interior_exterior' then 'interior_exterior' when 'option' then 'option' else 'installation' end,
-           s.name, coalesce(s.group_label, ''), count(*)
+           btrim(s.name), btrim(coalesce(s.group_label, '')), count(*)
       from public.standard_estimate_revision_lines s
      where v_parent is null
        and v_standard is not null
@@ -545,7 +571,7 @@ begin
        and ((s.price_mode = 'auto' and coalesce(s.cost_unit_price, 0) = 0) or (s.price_mode = 'manual' and coalesce(s.unit_price, 0) = 0))
        and public.quote_line_explicit_state(s.remark) is null
        and not public.quote_line_por_marked(null, s.group_label, s.remark)
-     group by 2, s.name, coalesce(s.group_label, '')
+     group by 2, btrim(s.name), btrim(coalesce(s.group_label, ''))
   ),
   unresolved as (
     select l.id, l.sort_order, l.name from lines l where l.unresolved_even_if_unchanged
@@ -553,7 +579,7 @@ begin
     select c.id, c.sort_order, c.name
       from candidates c
       left join baseline z
-        on z.match_key is not distinct from c.match_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key
+        on z.match_key is not distinct from c.match_key and z.kind = c.kind and z.name_key = c.name_key and z.description_key = c.description_key
      where c.seq > coalesce(z.line_count, 0)
   )
   select count(*), string_agg(u.name, '、' order by u.sort_order, u.id)
@@ -604,6 +630,7 @@ alter function public.quote_line_explicit_state(text) owner to postgres;
 alter function public.quote_line_por_marked(uuid, text, text) owner to postgres;
 alter function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) owner to postgres;
 alter function public.quote_line_state_guard() owner to postgres;
+alter function public.quote_line_marker_master_guard() owner to postgres;
 alter function public.configuration_por_selections(uuid) owner to postgres;
 alter function public.quote_por_confirmations_immutable() owner to postgres;
 alter function public.quote_por_selections_confirmed(uuid, uuid, jsonb) owner to postgres;
@@ -618,6 +645,7 @@ revoke execute on function public.quote_line_explicit_state(text) from public, a
 revoke execute on function public.quote_line_por_marked(uuid, text, text) from public, anon, authenticated, service_role;
 revoke execute on function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) from public, anon, authenticated, service_role;
 revoke execute on function public.quote_line_state_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.quote_line_marker_master_guard() from public, anon, authenticated, service_role;
 revoke execute on function public.configuration_por_selections(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.quote_por_confirmations_immutable() from public, anon, authenticated, service_role;
 revoke execute on function public.quote_por_selections_confirmed(uuid, uuid, jsonb) from public, anon, authenticated, service_role;

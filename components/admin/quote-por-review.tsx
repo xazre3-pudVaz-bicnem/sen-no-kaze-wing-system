@@ -140,7 +140,7 @@ export function QuotePorReview({
                         {row.lineState ? (
                           <input
                             value={row.lineStateReason}
-                            maxLength={150}
+                            maxLength={190}
                             placeholder={row.lineState === 'zero_confirmed' ? '0円確定の理由（必須。例：電気設備工事に含む）' : 'メモ（任意。例：お客様手配）'}
                             onChange={(event) => onUpdate(row.key, { lineStateReason: event.target.value })}
                             className="w-full rounded border border-line px-2 py-1"

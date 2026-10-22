@@ -154,8 +154,8 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
     const copied = { kind: 'option', name: '特注の棚', unit_price: 0, option_id: null };
     expect(findUnresolvedLines([copied], { parentLines: porParent, options, ignoreLineOptions: true }).size).toBe(1);
     expect(findUnresolvedLines([copied], { parentLines: porParent, ignoreLineOptions: true }).size).toBe(0);
-    expect(migration).toContain('row_number() over (partition by l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
-    expect(migration).toContain('partition by case when v_parent is not null then l.line_key end, l.kind, l.name, l.description_key');
+    expect(migration).toContain('row_number() over (partition by l.kind, l.name_key, l.description_key order by l.sort_order, l.id) as seq');
+    expect(migration).toContain('partition by case when v_parent is not null then l.line_key end, l.kind, l.name_key, l.description_key');
     expect(migration.match(/where c\.seq > coalesce\(z\.line_count, 0\)/g)).toHaveLength(2);
   });
 
@@ -215,8 +215,8 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(() => applyQuoteLineStateInput({ kind: 'option_expense', name: '諸費用', unit_price: 0, line_state: 'zero_confirmed', line_state_reason: 'x' })).toThrow(
       '本体・経費の明細'
     );
-    expect(() => applyQuoteLineStateInput({ kind: 'installation', name: '給排水', unit_price: 0, line_state: 'excluded', line_state_reason: 'あ'.repeat(151) })).toThrow(
-      '150 文字以内'
+    expect(() => applyQuoteLineStateInput({ kind: 'installation', name: '給排水', unit_price: 0, line_state: 'excluded', line_state_reason: 'あ'.repeat(191) })).toThrow(
+      '190 文字以内'
     );
   });
 
@@ -244,6 +244,8 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
   it('印の読み取り・編集画面での分け方・金額欄の文言', () => {
     expect(parseQuoteLineState('［今回の契約対象外］お客様手配')).toEqual({ state: 'excluded', reason: 'お客様手配' });
     expect(parseQuoteLineState('［0円確定］：本体工事に含む')).toEqual({ state: 'zero_confirmed', reason: '本体工事に含む' });
+    // 対象外のメモは書いたとおり（読み書きしても変わらない）
+    expect(parseQuoteLineState('［今回の契約対象外］：お客様手配')).toEqual({ state: 'excluded', reason: '：お客様手配' });
     expect(parseQuoteLineState('［0円確定］：')).toBeNull();
     expect(parseQuoteLineState('別途見積')).toBeNull();
     expect(splitQuoteLineStateRemark('［0円確定］：本体工事に含む')).toEqual({ line_state: 'zero_confirmed', line_state_reason: '本体工事に含む', remark: '' });
@@ -263,7 +265,7 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(lineStateReasonSeed('価格未確定（別途お見積り）')).toBe('');
     expect(lineStateReasonSeed('別途見積項目あり・見積発行時点の面別外壁仕様')).toBe('');
     expect(lineStateReasonSeed('［今回の契約対象外］')).toBe('');
-    expect(lineStateReasonSeed('あ'.repeat(200))).toHaveLength(150);
+    expect(lineStateReasonSeed('あ'.repeat(200))).toHaveLength(190);
   });
 
   it('画面が送った別途見積の一覧の key の読み取り（形が違えば null）', () => {

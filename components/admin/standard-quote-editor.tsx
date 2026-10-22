@@ -227,7 +227,7 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
                           {line.line_state ? (
                             <Input
                               value={line.line_state_reason}
-                              maxLength={150}
+                              maxLength={190}
                               placeholder={line.line_state === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
                               aria-label={line.line_state === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'}
                               onChange={(e) => updateLine(index, { line_state_reason: e.target.value })}

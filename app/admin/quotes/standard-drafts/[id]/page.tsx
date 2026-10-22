@@ -60,16 +60,17 @@ export default async function StandardQuoteDraftPage({
   // 金額が未確定の行（POR と、0 円の内外装・オプション・別途工事の行のうち、自動計算・前の版と同じ 0 円・0円確定・対象外のどれでもない行）。
   // 止めるのは DB の正式保存（D1 までの暫定）。前の版の明細は明細のキーで突き合わせる
   // 改訂の下書きは前の版、初回は元の標準見積の版の 0 円の行と突き合わせる（DB の assert_quote_draft_lines_resolved と同じ）
-  const parentRead = parent
-    ? await supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
-    : { data: [], error: null };
-  const baselineRead =
+  const [parentRead, baselineRead] = await Promise.all([
+    parent
+      ? supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
+      : Promise.resolve({ data: [], error: null }),
     !parent && draft.standard_estimate_revision_id
-      ? await supabase
+      ? supabase
           .from('standard_estimate_revision_lines')
           .select('section_code, name, group_label, remark, price_mode, cost_unit_price, unit_price')
           .eq('revision_id', draft.standard_estimate_revision_id)
-      : { data: [], error: null };
+      : Promise.resolve({ data: [], error: null }),
+  ]);
   const parentReadFailed = Boolean(parentRead.error || baselineRead.error);
   const baselineLines: QuoteLineCheckLine[] = ((baselineRead.data ?? []) as StandardBaselineRow[])
     .filter((row) => (row.price_mode === 'auto' ? (row.cost_unit_price ?? 0) === 0 : row.price_mode === 'manual' && (row.unit_price ?? 0) === 0))

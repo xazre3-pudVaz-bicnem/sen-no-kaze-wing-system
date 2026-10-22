@@ -50,15 +50,19 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
       'create trigger quote_draft_items_line_state_guard\nbefore insert or update of remark, unit_price, amount, price_mode on public.quote_draft_items'
     );
     expect(migration).toContain("v_price_mode text := to_jsonb(new) ->> 'price_mode';");
+    // 標準見積・本体の内訳の明細の備考は見積の下書きへ写るので、印の書き出しを使わせない（適用前の確認でも止める）
+    expect(migration).toContain('create trigger standard_estimate_revision_lines_marker_guard\nbefore insert or update of remark on public.standard_estimate_revision_lines');
+    expect(migration).toContain('create trigger base_master_revision_lines_marker_guard\nbefore insert or update of remark on public.base_master_revision_lines');
+    expect(migration).toContain("or exists (select 1 from public.base_master_revision_lines where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')");
   });
 
   it('前の版との突き合わせ：発行する版は parent_quote_id の明細と、下書きは明細のキーも合わせて比べる', () => {
     expect(migration).toContain('select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;');
     expect(migration).toContain('select d.parent_quote_id, d.standard_estimate_revision_id');
-    expect(migration).toContain('on z.kind = c.kind and z.name = c.name and z.description_key = c.description_key');
+    expect(migration).toContain('on z.kind = c.kind and z.name_key = c.name_key and z.description_key = c.description_key');
     // 下書きの自動計算の行として外すのは経費の行だけ。標準見積から作った初回の下書きは元の標準見積の版と比べる
     expect(migration).toContain("left join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key");
-    expect(migration).toContain('on z.match_key is not distinct from c.match_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key');
+    expect(migration).toContain('on z.match_key is not distinct from c.match_key and z.kind = c.kind and z.name_key = c.name_key and z.description_key = c.description_key');
   });
 
   it('止めを足す目印は、適用済みの定義（元の migration）にそのままある', () => {
@@ -97,6 +101,7 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
       'quote_line_por_marked(uuid, text, text)',
       'quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean)',
       'quote_line_state_guard()',
+      'quote_line_marker_master_guard()',
       'configuration_por_selections(uuid)',
       'quote_por_selections_confirmed(uuid, uuid, jsonb)',
       'assert_quote_lines_resolved(uuid)',

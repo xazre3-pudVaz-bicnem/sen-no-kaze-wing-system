@@ -3,7 +3,7 @@
 --   npx supabase db query --linked --output-format json -f scripts/db-rehearsal/preflight-quote-formal-por-guard.sql
 --
 -- 止める条件：issuance_functions_present・draft_price_mode_present・confirmations_table_absent・guard_functions_absent の
--- どれかが false、または marker_quote_items・marker_draft_items が 0 でない（migration の preflight でも止まる）。
+-- どれかが false、または marker_quote_items・marker_draft_items・marker_master_lines が 0 でない（migration の preflight でも止まる）。
 -- issuance_function_attributes は適用後の postflight と比べる（owner・SECURITY DEFINER・search_path・EXECUTE が変わらないこと）。
 select
   to_regprocedure('public.finalize_quote_draft(uuid, integer)') is not null
@@ -21,6 +21,9 @@ select
     as guard_functions_absent,
   (select count(*) from public.quote_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%') as marker_quote_items,
   (select count(*) from public.quote_draft_items where remark like '［今回の契約対象外］%' or remark like '［0円確定］%') as marker_draft_items,
+  (select count(*) from public.standard_estimate_revision_lines where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')
+    + (select count(*) from public.base_master_revision_lines where remark like '［今回の契約対象外］%' or remark like '［0円確定］%')
+    as marker_master_lines,
   (select count(*) from public.quote_drafts) as open_drafts,
   (select count(*) from public.quotes where quote_kind = 'formal') as formal_quotes,
   (select json_agg(

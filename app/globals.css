@@ -232,3 +232,65 @@
 @media (prefers-reduced-motion: reduce) {
   .hero-slide { animation: none; }
 }
+
+/* 本体マスターの仕様マトリクス：横スクロール時も行の条件を見失わないよう、PC幅では左5列を固定する。 */
+@media (min-width: 1024px) {
+  table[class*='min-w-[118rem]'] thead th:nth-child(-n + 5),
+  table[class*='min-w-[118rem]'] tbody td:nth-child(-n + 5) {
+    position: sticky;
+  }
+
+  table[class*='min-w-[118rem]'] thead th:nth-child(-n + 5) {
+    z-index: 30;
+    background: #f1f5f9;
+  }
+
+  table[class*='min-w-[118rem]'] tbody td:nth-child(1),
+  table[class*='min-w-[118rem]'] tbody td:nth-child(2),
+  table[class*='min-w-[118rem]'] tbody td:nth-child(3),
+  table[class*='min-w-[118rem]'] tbody td:nth-child(5) {
+    z-index: 20;
+    background: #ffffff;
+  }
+
+  table[class*='min-w-[118rem]'] tbody td:nth-child(4) {
+    z-index: 20;
+    background: #ecfdf5;
+  }
+
+  table[class*='min-w-[118rem]'] th:nth-child(1),
+  table[class*='min-w-[118rem]'] td:nth-child(1) {
+    left: 0;
+    width: 6rem;
+    min-width: 6rem;
+  }
+
+  table[class*='min-w-[118rem]'] th:nth-child(2),
+  table[class*='min-w-[118rem]'] td:nth-child(2) {
+    left: 6rem;
+    width: 8rem;
+    min-width: 8rem;
+  }
+
+  table[class*='min-w-[118rem]'] th:nth-child(3),
+  table[class*='min-w-[118rem]'] td:nth-child(3) {
+    left: 14rem;
+    width: 8rem;
+    min-width: 8rem;
+  }
+
+  table[class*='min-w-[118rem]'] th:nth-child(4),
+  table[class*='min-w-[118rem]'] td:nth-child(4) {
+    left: 22rem;
+    width: 5rem;
+    min-width: 5rem;
+  }
+
+  table[class*='min-w-[118rem]'] th:nth-child(5),
+  table[class*='min-w-[118rem]'] td:nth-child(5) {
+    left: 27rem;
+    width: 5rem;
+    min-width: 5rem;
+    box-shadow: 4px 0 6px -4px rgb(15 23 42 / 0.35);
+  }
+}

@@ -266,31 +266,29 @@ export interface QuoteLineCheckContext {
 }
 
 /**
- * 発行する版の明細が金額未確定かを判定する関数を作る（DB の assert_quote_lines_resolved・assert_quote_draft_lines_resolved と同じ決まり）。
- * 前の版の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい。
+ * 発行する版の明細のうち、金額未確定の行を返す（DB の assert_quote_lines_resolved・assert_quote_draft_lines_resolved と同じ決まり）。
+ * 前の版の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい。ただし前の版の行の数まで
+ * （同じ明細をもう 1 行足したら、足した行は未確定。並び順で後ろの行から数える）。画面の明示の選択（line_state）がある行は確定。
  */
-export function createUnresolvedLineCheck(context: QuoteLineCheckContext = {}): (line: QuoteLineCheckLine) => boolean {
+export function findUnresolvedLines<T extends QuoteLineCheckLine>(lines: readonly T[], context: QuoteLineCheckContext = {}): Set<T> {
   const optionOf = (id: string | null | undefined) => (id ? context.options?.get(id) : undefined);
   const keyOf = (line: QuoteLineCheckLine): string | null => {
     if (!context.matchLineKey) return quoteLineIdentityKey(line);
     return line.line_key ? `${line.line_key}\u0000${quoteLineIdentityKey(line)}` : null;
   };
-  const zeroKeys = new Set(
-    (context.parentLines ?? [])
-      .filter(
-        (line) =>
-          (line.unit_price ?? 0) === 0 &&
-          !parseQuoteLineState(line.remark) &&
-          !isPorMarkedLine({ ...line, optionIsPor: Boolean(optionOf(line.option_id)?.price_on_request) })
-      )
-      .map(keyOf)
-      .filter((key): key is string => key !== null)
-  );
-  return (line) => {
-    if (line.line_state) return false;
-    const option = optionOf(line.option_id);
+  // 前の版の「変えていなければ 0 円のままでよい」明細の行の数
+  const remaining = new Map<string, number>();
+  for (const line of context.parentLines ?? []) {
+    if ((line.unit_price ?? 0) !== 0 || parseQuoteLineState(line.remark)) continue;
+    if (isPorMarkedLine({ ...line, optionIsPor: Boolean(optionOf(line.option_id)?.price_on_request) })) continue;
     const key = keyOf(line);
-    return isUnresolvedQuoteLine({
+    if (key !== null) remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
+  const unresolved = new Set<T>();
+  for (const line of lines) {
+    if (line.line_state) continue;
+    const option = optionOf(line.option_id);
+    const input: QuoteLineCheckInput = {
       kind: line.kind,
       unit_price: line.unit_price,
       description: line.description,
@@ -298,9 +296,22 @@ export function createUnresolvedLineCheck(context: QuoteLineCheckContext = {}): 
       optionIsPor: Boolean(option?.price_on_request),
       optionIsCatalogZero: Boolean(option && option.price === 0 && !option.price_on_request),
       calculated: line.price_mode === 'auto',
-      unchangedZero: key !== null && zeroKeys.has(key),
-    });
-  };
+    };
+    if (!isUnresolvedQuoteLine({ ...input, unchangedZero: false })) continue;
+    // 別途見積の目印がある行は、前の版と同じでも未確定
+    if (isUnresolvedQuoteLine({ ...input, unchangedZero: true })) {
+      unresolved.add(line);
+      continue;
+    }
+    const key = keyOf(line);
+    const left = key === null ? 0 : remaining.get(key) ?? 0;
+    if (key !== null && left > 0) {
+      remaining.set(key, left - 1);
+      continue;
+    }
+    unresolved.add(line);
+  }
+  return unresolved;
 }
 
 export const UNRESOLVED_LINES_MESSAGE =

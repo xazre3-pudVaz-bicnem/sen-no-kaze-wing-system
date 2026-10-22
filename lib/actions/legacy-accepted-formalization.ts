@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth/session';
-import { isLocalMode } from '@/lib/data/store';
+import { isLocalMode, StoreError } from '@/lib/data/store';
+import { assertQuoteLineGuardReady } from '@/lib/data/quote-line-guard';
 import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { isMissingNamedFunction } from '@/lib/data/schema-compat';
 import { flushNotificationsSafely } from '@/lib/mail/send';
@@ -95,15 +96,19 @@ export async function formalizeLegacyAcceptedQuoteAction(
   }
 
   const db = await createClient();
+  // DB の更新（20261016111000）が済むまで、旧い関数で確定見積を発行しない
+  try {
+    await assertQuoteLineGuardReady(db);
+  } catch (e) {
+    if (e instanceof StoreError) return { ok: false, error: e.message };
+    throw e;
+  }
   if (porKeys.length > 0) {
     const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
       p_quote_id: parsed.data.quote_id,
       p_selection_keys: porKeys,
     });
-    // migration の適用前は確認の仕組みが無い（従来どおり発行だけを行う）
-    if (confirmError && !isMissingNamedFunction(confirmError, 'confirm_quote_por_selections')) {
-      return { ok: false, error: userFacingRpcError(confirmError) };
-    }
+    if (confirmError) return { ok: false, error: userFacingRpcError(confirmError) };
   }
   const { data, error } = await db.rpc('create_formal_quote_from_accepted_preliminary', {
     p_quote_id: parsed.data.quote_id,

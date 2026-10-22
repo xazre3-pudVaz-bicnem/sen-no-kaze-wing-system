@@ -6,7 +6,7 @@ import type { QuoteItem } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   chooseQuoteLineState,
-  createUnresolvedLineCheck,
+  findUnresolvedLines,
   EMPTY_POR_SELECTION_STATE,
   QUOTE_LINE_STATE_LABELS,
   splitQuoteLineStateRemark,
@@ -70,15 +70,24 @@ export function LegacyAcceptedFormalizationForm({
 
   // ---- 金額未確定の確認（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する） ----
   // 前の版（承諾済みの概算）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい
-  const isUnresolved = useMemo(
-    () => createUnresolvedLineCheck({ parentLines: [...carriedItems, ...installationItems] }),
-    [carriedItems, installationItems]
-  );
-  const checkRow = (row: InstallationRow) => isUnresolved({ ...row, kind: 'installation' });
+  // 確定見積の明細＝施工以外の明細（そのまま写る）＋施工の明細。前の版の同じ 0 円の明細は前の版の行の数まで
+  const unresolvedKeysOf = (installationRows: InstallationRow[]) => {
+    const lines = [
+      ...carriedItems.map((item) => ({ ...item, key: item.id })),
+      ...installationRows.map((row) => ({ ...row, kind: 'installation' as const })),
+    ];
+    const unresolved = findUnresolvedLines(lines, { parentLines: [...carriedItems, ...installationItems] });
+    return new Set(lines.filter((line) => unresolved.has(line)).map((line) => line.key));
+  };
+  const unresolvedKeys = unresolvedKeysOf(rows);
+  const isUnresolved = (item: QuoteItem) => unresolvedKeys.has(item.id);
+  const checkRow = (row: InstallationRow) => unresolvedKeys.has(row.key);
   const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
-  const [initialPorRowKeys] = useState(
-    () => new Set(installationItems.map(initialRow).filter(checkRow).map((row) => row.key))
-  );
+  const [initialPorRowKeys] = useState(() => {
+    const initialRows = installationItems.map(initialRow);
+    const initialUnresolved = unresolvedKeysOf(initialRows);
+    return new Set(initialRows.filter((row) => initialUnresolved.has(row.key)).map((row) => row.key));
+  });
   const porRows: QuotePorReviewRow[] = [
     ...carriedItems
       .filter((item) => isUnresolved(item))
@@ -112,6 +121,8 @@ export function LegacyAcceptedFormalizationForm({
   const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
   const missingReasonCount = rows.filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim()).length;
   const porBlockers = [
+    // DB の更新（20261016111000）の前は確認の仕組みが無い。旧い関数で発行しないよう止める（発行の処理でも止める）
+    ...(!porState.available ? ['DB の更新（金額未確定の明細の確認）が済むまで発行できません'] : []),
     ...(unresolvedPorCount > 0 ? [`金額が未確定の明細が ${unresolvedPorCount} 行残っています`] : []),
     ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),

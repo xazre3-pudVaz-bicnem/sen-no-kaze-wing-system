@@ -8,7 +8,7 @@ import {
 } from '@/lib/actions/admin';
 import type { QuoteDraftDetail, QuoteDraftSaveItem } from '@/lib/data/store';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
-import { chooseQuoteLineState, createUnresolvedLineCheck, splitQuoteLineStateRemark, type QuoteLineState } from '@/lib/domain/quote-por';
+import { chooseQuoteLineState, findUnresolvedLines, splitQuoteLineStateRemark, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { QuoteItem, QuoteItemKind } from '@/lib/domain/types';
 import { Button, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from './forms';
@@ -115,16 +115,12 @@ export function QuoteDraftEditor({
   const [showPreview, setShowPreview] = useState(false);
 
   // 正式見積には、金額が未確定の明細を残せない（D1 までの暫定。発行を止めるのは DB で、ここでは先に案内する）
-  const isUnresolved = useMemo(
-    () =>
-      createUnresolvedLineCheck({
-        parentLines: parentItems,
-        options: new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
-        matchLineKey: true,
-      }),
-    [parentItems, products]
+  const productOptions = useMemo(
+    () => new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
+    [products]
   );
-  const unresolvedKeys = new Set(rows.filter(isUnresolved).map((row) => row.key));
+  const unresolvedRows = findUnresolvedLines(rows, { parentLines: parentItems, options: productOptions, matchLineKey: true });
+  const unresolvedKeys = new Set(rows.filter((row) => unresolvedRows.has(row)).map((row) => row.key));
   const unresolvedNames = rows.filter((row) => unresolvedKeys.has(row.key)).map((row) => row.name || '（品名なし）');
   const missingReasonNames = rows
     .filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim())

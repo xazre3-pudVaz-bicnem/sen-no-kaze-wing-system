@@ -97,7 +97,7 @@ import { productLedgerState, productSimulatorVisibleSetting, type ProductLifecyc
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import {
   configurationPorSelections,
-  createUnresolvedLineCheck,
+  findUnresolvedLines,
   quoteLineStateGuardError,
   samePorSelectionKeys,
   unconfirmedPorSelectionsError,
@@ -1822,11 +1822,11 @@ export class LocalStore implements DataStore {
         const guardError = quoteLineStateGuardError(it);
         if (guardError) throw new StoreError('VALIDATION', guardError);
       }
-      const isUnresolved = createUnresolvedLineCheck({
+      const unresolvedLines = findUnresolvedLines(newItems, {
         parentLines: db.quoteItems.filter((it) => it.quote_id === parent.id),
         options: new Map(db.options.map((o) => [o.id, o])),
       });
-      const unresolved = newItems.filter(isUnresolved);
+      const unresolved = newItems.filter((it) => unresolvedLines.has(it));
       if (unresolved.length > 0) throw new StoreError('VALIDATION', unresolvedLinesError(unresolved.map((it) => it.name)));
       const porSelections = LocalStore.porSelectionsForQuote(db, parent);
       if (!LocalStore.porSelectionsConfirmed(db, parent.id, actor.id, porSelections)) {

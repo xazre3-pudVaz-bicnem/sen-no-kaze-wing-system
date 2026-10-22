@@ -13,7 +13,7 @@ import {
   lineStateReasonSeed,
   parsePorSelectionKeys,
   configurationPorSelections,
-  createUnresolvedLineCheck,
+  findUnresolvedLines,
   isUnresolvedQuoteLine,
   parseQuoteLineState,
   porSelectionLabel,
@@ -25,6 +25,7 @@ import {
   unresolvedLinesError,
   type PorSelectionCatalog,
   type QuoteLineCheckInput,
+  type QuoteLineCheckLine,
 } from '@/lib/domain/quote-por';
 import type { Configuration, ConfigurationItem, Quote, QuoteItem, QuoteRequest } from '@/lib/domain/types';
 
@@ -90,7 +91,8 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
       ['o-por', { price: 0, price_on_request: true }],
       ['o-zero', { price: 0, price_on_request: false }],
     ]);
-    const check = createUnresolvedLineCheck({ parentLines, options });
+    // 1 行ずつ確かめる（同じ明細を並べたときの数え方は次のテスト）
+    const check = (line: QuoteLineCheckLine) => findUnresolvedLines([line], { parentLines, options }).has(line);
     expect(check({ kind: 'installation', name: '養生', description: null, unit_price: 0 })).toBe(false);
     expect(check({ kind: 'installation', name: '養生', description: '変更', unit_price: 0 })).toBe(true);
     expect(check({ kind: 'free', name: '養生', unit_price: 0 })).toBe(true);
@@ -105,16 +107,42 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
     expect(check({ kind: 'option', name: '無償の部材', unit_price: 0, option_id: 'o-zero' })).toBe(false);
     expect(check({ kind: 'installation', name: '追加の運搬', unit_price: 0, line_state: 'excluded' })).toBe(false);
 
-    const draftCheck = createUnresolvedLineCheck({
-      parentLines: [{ line_key: 'k1', kind: 'installation', name: '養生', remark: null, unit_price: 0 }],
-      matchLineKey: true,
-    });
+    const draftCheck = (line: QuoteLineCheckLine) =>
+      findUnresolvedLines([line], {
+        parentLines: [{ line_key: 'k1', kind: 'installation', name: '養生', remark: null, unit_price: 0 }],
+        matchLineKey: true,
+      }).has(line);
     expect(draftCheck({ line_key: 'k1', kind: 'installation', name: '養生', unit_price: 0 })).toBe(false);
     expect(draftCheck({ line_key: 'k2', kind: 'installation', name: '養生', unit_price: 0 })).toBe(true);
     expect(draftCheck({ line_key: null, kind: 'installation', name: '養生', unit_price: 0 })).toBe(true);
     // 標準見積から作る下書きの自動計算の行
     expect(draftCheck({ line_key: 'k3', kind: 'option', name: '洗面器', unit_price: 0, price_mode: 'auto' })).toBe(false);
     expect(draftCheck({ line_key: 'k3', kind: 'option', name: '洗面器', unit_price: 0, price_mode: 'manual' })).toBe(true);
+  });
+
+  it('前の版の同じ 0 円の明細は、前の版の行の数までしか「変えていない」とみなさない（実 DB の QPG-22・35・59・60 と同じ）', () => {
+    const parentLines = [{ kind: 'installation', name: '養生', description: null, remark: null, unit_price: 0 }];
+    const first = { kind: 'installation', name: '養生', description: null, remark: null, unit_price: 0 };
+    const second = { kind: 'installation', name: '養生', description: null, remark: null, unit_price: 0 };
+    // 同じ明細をもう 1 行足すと、後ろの 1 行が未確定
+    expect([...findUnresolvedLines([first, second], { parentLines })]).toEqual([second]);
+    // 対象外の行（印あり・画面の選択）は数に入れない
+    const excluded = { kind: 'installation', name: '養生', description: null, remark: '［今回の契約対象外］', unit_price: 0 };
+    const chosen = { ...second, remark: null, line_state: 'excluded' as const };
+    expect(findUnresolvedLines([excluded, first], { parentLines }).size).toBe(0);
+    expect(findUnresolvedLines([chosen, first], { parentLines }).size).toBe(0);
+    // 金額の入った同じ品名の行も数に入れない
+    expect(findUnresolvedLines([{ ...second, unit_price: 5000 }, first], { parentLines }).size).toBe(0);
+    // 前の版にも 2 行あれば、2 行ともそのまま
+    expect(findUnresolvedLines([first, second], { parentLines: [...parentLines, { ...parentLines[0] }] }).size).toBe(0);
+    // 下書きは明細のキーごと（同じキーの行は下書きの中で 1 つだけ）
+    const draftParent = [{ line_key: 'k1', kind: 'installation', name: '養生', remark: null, unit_price: 0 }];
+    const kept = { line_key: 'k1', kind: 'installation', name: '養生', unit_price: 0 };
+    const added = { line_key: 'k9', kind: 'installation', name: '養生', unit_price: 0 };
+    expect([...findUnresolvedLines([kept, added], { parentLines: draftParent, matchLineKey: true })]).toEqual([added]);
+    expect(migration).toContain('row_number() over (partition by l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
+    expect(migration).toContain('row_number() over (partition by l.line_key, l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
+    expect(migration.match(/where c\.seq > coalesce\(z\.line_count, 0\)/g)).toHaveLength(2);
   });
 
   it('目印・状態の印の文言は migration と同じ', () => {
@@ -461,6 +489,14 @@ describe('ローカル検証モードの改訂（確定見積）でも同じ止�
     await expect(
       store.createDealerRevision(quote.id, { items: items(lighting.name, zeroConfirmed, { elec: { unit_price: 0 } }), dealer_note: null, por_confirmation_keys: keys }, dealer)
     ).rejects.toThrow('金額が未確定の明細が 1 行残っています（電気設備工事）');
+    // 前の版に 1 行の養生と同じものをもう 1 行足すと、足した 1 行は未確定（前の版の行の数まで）
+    await expect(
+      store.createDealerRevision(
+        quote.id,
+        { items: [...base, { kind: 'installation', name: '養生', description: null, unit: '式', remark: null, unit_price: 0, quantity: 1 }], dealer_note: null, por_confirmation_keys: keys },
+        dealer
+      )
+    ).rejects.toThrow('金額が未確定の明細が 1 行残っています（養生）');
     // 養生の説明を変えると、前の版と同じ明細ではなくなる
     await expect(
       store.createDealerRevision(quote.id, { items: items(lighting.name, zeroConfirmed, { cure: { description: '範囲を変更' } }), dealer_note: null, por_confirmation_keys: keys }, dealer)

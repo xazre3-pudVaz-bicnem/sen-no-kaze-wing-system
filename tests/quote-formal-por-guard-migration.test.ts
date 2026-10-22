@@ -55,8 +55,8 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
   it('前の版との突き合わせ：発行する版は parent_quote_id の明細と、下書きは明細のキーも合わせて比べる', () => {
     expect(migration).toContain('select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;');
     expect(migration).toContain('select d.parent_quote_id into v_parent from public.quote_drafts d where d.id = p_draft_id;');
-    expect(migration).toContain('and p.line_key = i.line_key');
-    expect(migration).toContain("i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto',");
+    expect(migration).toContain('on z.line_key = c.line_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key');
+    expect(migration).toContain("public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto', false) as unresolved_alone");
   });
 
   it('止めを足す目印は、適用済みの定義（元の migration）にそのままある', () => {
@@ -136,7 +136,7 @@ describe('画面・データ層のつなぎ', () => {
     expect(localStore).toContain('async getQuotePorSelections(quoteId: string, actor: SessionUser)');
     expect(localStore).toContain('this.recordQuotePorConfirmation(id, input.por_confirmation_keys, actor);');
     expect(localStore).toContain('unresolvedLinesError(unresolved.map((it) => it.name))');
-    expect(localStore).toContain('const isUnresolved = createUnresolvedLineCheck({');
+    expect(localStore).toContain('const unresolvedLines = findUnresolvedLines(newItems, {');
     expect(localStore).toContain('const guardError = quoteLineStateGuardError(it);');
     expect(localStore).toContain('unconfirmedPorSelectionsError(porSelections)');
   });

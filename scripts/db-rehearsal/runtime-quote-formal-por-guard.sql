@@ -84,6 +84,7 @@ declare
   q2 constant uuid := '7a700000-0000-4000-8000-000000000002';
   q3 constant uuid := '7a700000-0000-4000-8000-000000000003';
   q4 constant uuid := '7a700000-0000-4000-8000-000000000004';
+  q5 constant uuid := '7a700000-0000-4000-8000-000000000005';
   qd constant uuid := '7a800000-0000-4000-8000-000000000001';
   qd2 constant uuid := '7a800000-0000-4000-8000-000000000002';
   i4_inst constant uuid := '7a900000-0000-4000-8000-000000000001';
@@ -319,58 +320,68 @@ begin
   perform pg_temp.qpg_expect_error('QPG-21 新しく足した 0 円の行は未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（追加の運搬）',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1,
       (v_items_priced::jsonb || jsonb_build_array(jsonb_build_object('kind', 'installation', 'name', '追加の運搬', 'unit_price', 0, 'quantity', 1)))::text)));
-  perform pg_temp.qpg_expect_error('QPG-22 0 円に変えた明細は未確定（前の版では 80,000 円）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（電気設備工事）',
+  perform pg_temp.qpg_expect_error('QPG-22 前の版にある 0 円の明細（養生 1 行）と同じものをもう 1 行足すと、足した 1 行は未確定（同じ数まで）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（養生）',
+    pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1,
+      (v_items_priced::jsonb || jsonb_build_array(jsonb_build_object('kind', 'installation', 'name', '養生', 'unit_price', 0, 'quantity', 1)))::text)));
+  perform pg_temp.qpg_expect_error('QPG-23 0 円に変えた明細は未確定（前の版では 80,000 円）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（電気設備工事）',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1,
       jsonb_build_array(
         jsonb_build_object('kind', 'option', 'name', '検査の別途見積の商品', 'description', '設置場所確認後に別途お見積り', 'unit_price', 50000, 'quantity', 1),
         jsonb_build_object('kind', 'option', 'name', '検査の通常の商品（色：特注色）', 'description', 'POR 検査の商品', 'unit_price', 12000, 'quantity', 1),
         jsonb_build_object('kind', 'installation', 'name', '養生', 'unit_price', 0, 'quantity', 1),
         jsonb_build_object('kind', 'installation', 'name', '電気設備工事', 'unit_price', 0, 'quantity', 1))::text)));
-  perform pg_temp.qpg_expect_error('QPG-23 状態の印のある行に金額を入れて送っても保存しない（RPC を直接呼んでも同じ）', 'P0001', 'VALIDATION: 「対象外」「0円確定」の明細（検査の別途見積の商品）は 0 円にしてください',
+  perform pg_temp.qpg_expect_error('QPG-24 状態の印のある行に金額を入れて送っても保存しない（RPC を直接呼んでも同じ）', 'P0001', 'VALIDATION: 「対象外」「0円確定」の明細（検査の別途見積の商品）は 0 円にしてください',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1,
       (jsonb_build_array(jsonb_build_object('kind', 'option', 'name', '検査の別途見積の商品', 'remark', '［今回の契約対象外］', 'unit_price', 5000, 'quantity', 1)) || v_rest)::text)));
-  perform pg_temp.qpg_expect_error('QPG-24 金額を入れても、お客様が選んだ POR を担当者が確認していなければ発行しない', 'P0001', 'VALIDATION: お客様が選んだ別途見積の商品（3 件',
+  perform pg_temp.qpg_expect_error('QPG-25 金額を入れても、お客様が選んだ POR を担当者が確認していなければ発行しない', 'P0001', 'VALIDATION: お客様が選んだ別途見積の商品（3 件',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1, v_items_priced)));
-  perform pg_temp.qpg_expect_eq('QPG-25 止めた改訂では版が増えず、元の版は発行中のまま', '1/issued',
+  perform pg_temp.qpg_expect_eq('QPG-26 止めた改訂では版が増えず、元の版は発行中のまま', '1/issued',
     (select count(*)::text from public.quotes where quote_request_id = qr) || '/' || (select status from public.quotes where id = q1));
 
   select string_agg(e ->> 'key', ',') into v_keys from jsonb_array_elements(public.configuration_por_selections(cfg)) e;
-  perform pg_temp.qpg_expect_error('QPG-26 担当外の代理店は確認を記録できない', '42501', 'FORBIDDEN',
+  perform pg_temp.qpg_expect_error('QPG-27 担当外の代理店は確認を記録できない', '42501', 'FORBIDDEN',
     pg_temp.qpg_run_as('authenticated', u_dealer2, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', q1, v_keys)));
-  perform pg_temp.qpg_expect_error('QPG-27 画面に出した一覧と今の一覧が違えば、確認を記録しない', 'P0001', 'LOCKED',
+  perform pg_temp.qpg_expect_error('QPG-28 画面に出した一覧と今の一覧が違えば、確認を記録しない', 'P0001', 'LOCKED',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, array[%L])::text', q1, 'product:' || o_por)));
-  perform pg_temp.qpg_expect_error('QPG-28 POR を選んでいない案件では確認はない', 'P0001', 'VALIDATION',
+  perform pg_temp.qpg_expect_error('QPG-29 POR を選んでいない案件では確認はない', 'P0001', 'VALIDATION',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, array[]::text[])::text', q2)));
 
   -- 本部の確認は、発行する担当代理店の確認の代わりにならない
   v_out := pg_temp.qpg_run_as('authenticated', u_admin, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', q1, v_keys));
-  perform pg_temp.qpg_expect_eq('QPG-29 本部は確認を記録できる', 'true', (v_out ~ '^[0-9a-f-]{36}$')::text);
-  perform pg_temp.qpg_expect_error('QPG-30 発行する担当者自身の確認がなければ、本部の確認があっても発行しない', 'P0001', 'VALIDATION: お客様が選んだ別途見積の商品',
+  perform pg_temp.qpg_expect_eq('QPG-30 本部は確認を記録できる', 'true', (v_out ~ '^[0-9a-f-]{36}$')::text);
+  perform pg_temp.qpg_expect_error('QPG-31 発行する担当者自身の確認がなければ、本部の確認があっても発行しない', 'P0001', 'VALIDATION: お客様が選んだ別途見積の商品',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1, v_items_priced)));
 
   v_confirm := pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', q1, v_keys));
   v_out := pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', q1, v_keys));
-  perform pg_temp.qpg_expect_eq('QPG-31 担当代理店の確認を記録し、同じ一覧の確認は二重に残さない', 'true/true/1',
+  perform pg_temp.qpg_expect_eq('QPG-32 担当代理店の確認を記録し、同じ一覧の確認は二重に残さない', 'true/true/1',
     (v_confirm ~ '^[0-9a-f-]{36}$')::text || '/' || (v_out = v_confirm)::text || '/'
     || (select count(*)::text from public.quote_por_confirmations c where c.quote_id = q1 and c.confirmed_by = u_dealer));
-  perform pg_temp.qpg_expect_eq('QPG-32 確認の後は、一覧の取得でも確認済みと分かる', 'true',
+  perform pg_temp.qpg_expect_eq('QPG-33 確認の後は、一覧の取得でも確認済みと分かる', 'true',
     pg_temp.qpg_run_as('authenticated', u_dealer, format($q$ select j ->> 'confirmed' from public.get_quote_por_selections(%L) j $q$, q1)));
-  perform pg_temp.qpg_expect_error('QPG-33 確認の後でも、別途見積の行を 0 円のまま残せば発行しない', 'P0001', 'VALIDATION: 金額が未確定の明細',
+  perform pg_temp.qpg_expect_error('QPG-34 確認の後でも、別途見積の行を 0 円のまま残せば発行しない', 'P0001', 'VALIDATION: 金額が未確定の明細',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1, v_items_por_left)));
 
-  v_new := pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1, v_items_zero_confirmed));
-  perform pg_temp.qpg_expect_eq('QPG-34 確認済みで、別途見積の行を「0円確定（理由）」にすれば 0 円のまま発行できる（前の版と同じ 0 円の養生もそのまま）', 'true', (v_new ~ '^[0-9a-f-]{36}$')::text);
-  perform pg_temp.qpg_expect_eq('QPG-35 発行した改訂が案件の現在の見積になり、元の版は置き換わる。0円確定の印は明細に残る', '2/superseded/issued/' || v_new || '/［0円確定］：電気設備工事に含む',
+  perform pg_temp.qpg_expect_error('QPG-35 確認済みでも、同じ 0 円の明細（養生）をもう 1 行足した改訂は発行しない', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（養生）',
+    pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1,
+      (v_items_zero_confirmed::jsonb || jsonb_build_array(jsonb_build_object('kind', 'installation', 'name', '養生', 'unit_price', 0, 'quantity', 1)))::text)));
+  perform pg_temp.qpg_expect_eq('QPG-36 止めた改訂では版が増えない', '1/issued',
+    (select count(*)::text from public.quotes where quote_request_id = qr) || '/' || (select status from public.quotes where id = q1));
+
+  v_new := pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', q1,
+    (v_items_zero_confirmed::jsonb || jsonb_build_array(jsonb_build_object('kind', 'installation', 'name', '養生', 'remark', '［今回の契約対象外］', 'unit_price', 0, 'quantity', 1)))::text));
+  perform pg_temp.qpg_expect_eq('QPG-37 確認済みで、別途見積の行を「0円確定（理由）」にすれば 0 円のまま発行できる（前の版と同じ 0 円の養生はそのまま。同じ品名の対象外の行は数に入れない）', 'true', (v_new ~ '^[0-9a-f-]{36}$')::text);
+  perform pg_temp.qpg_expect_eq('QPG-38 発行した改訂が案件の現在の見積になり、元の版は置き換わる。0円確定の印は明細に残る', '2/superseded/issued/' || v_new || '/［0円確定］：電気設備工事に含む',
     (select count(*)::text from public.quotes where quote_request_id = qr) || '/' || (select status from public.quotes where id = q1) || '/'
     || coalesce((select status from public.quotes where id::text = v_new), '-') || '/' || (select quote_id::text from public.quote_requests where id = qr) || '/'
     || coalesce((select i.remark from public.quote_items i where i.quote_id::text = v_new and i.name = '検査の別途見積の商品'), '-'));
-  perform pg_temp.qpg_expect_eq('QPG-36 新しい版では、もう一度確認が要る（確認は版ごと）', 'false',
+  perform pg_temp.qpg_expect_eq('QPG-39 新しい版では、もう一度確認が要る（確認は版ごと）', 'false',
     pg_temp.qpg_run_as('authenticated', u_dealer, format($q$ select j ->> 'confirmed' from public.get_quote_por_selections(%L) j $q$, v_new)));
-  perform pg_temp.qpg_expect_error('QPG-37 置き換わった版には確認を記録できない', 'P0001', 'LOCKED',
+  perform pg_temp.qpg_expect_error('QPG-40 置き換わった版には確認を記録できない', 'P0001', 'LOCKED',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', q1, v_keys)));
-  perform pg_temp.qpg_expect_error('QPG-38 確認の記録は DB の管理者でも書き換えられない', 'P0001', 'IMMUTABLE',
+  perform pg_temp.qpg_expect_error('QPG-41 確認の記録は DB の管理者でも書き換えられない', 'P0001', 'IMMUTABLE',
     pg_temp.qpg_try(format('update public.quote_por_confirmations set confirmed_at = now() where quote_id = %L returning ''updated''', q1)));
-  perform pg_temp.qpg_expect_error('QPG-39 確認の記録は DB の管理者でも削除できない', 'P0001', 'IMMUTABLE',
+  perform pg_temp.qpg_expect_error('QPG-42 確認の記録は DB の管理者でも削除できない', 'P0001', 'IMMUTABLE',
     pg_temp.qpg_try(format('delete from public.quote_por_confirmations where quote_id = %L returning ''deleted''', q1)));
 
   -- 対象外の明細があっても、確定した範囲の正式見積は止めない
@@ -379,27 +390,27 @@ begin
     (jsonb_build_array(
        jsonb_build_object('kind', 'option', 'name', '検査の別途見積の商品', 'description', '設置場所確認後に別途お見積り', 'remark', '［今回の契約対象外］お客様手配', 'unit_price', 0, 'quantity', 1),
        jsonb_build_object('kind', 'installation', 'name', '給排水工事', 'remark', '［今回の契約対象外］', 'unit_price', 0, 'quantity', 1)) || v_rest)::text));
-  perform pg_temp.qpg_expect_eq('QPG-40 「対象外」の明細があるだけでは止めない（確定した範囲で発行できる）', 'true/3', (v_v3 ~ '^[0-9a-f-]{36}$')::text || '/'
+  perform pg_temp.qpg_expect_eq('QPG-43 「対象外」の明細があるだけでは止めない（確定した範囲で発行できる）', 'true/3', (v_v3 ~ '^[0-9a-f-]{36}$')::text || '/'
     || coalesce((select q.revision::text from public.quotes q where q.id::text = v_v3), '-'));
   perform pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, string_to_array(%L, '',''))::text', v_v3, v_keys));
-  perform pg_temp.qpg_expect_error('QPG-41 前の版で対象外だった明細を、印を外して 0 円のまま含めると未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（給排水工事）',
+  perform pg_temp.qpg_expect_error('QPG-44 前の版で対象外だった明細を、印を外して 0 円のまま含めると未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（給排水工事）',
     pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.create_quote_revision(%L, %L::jsonb, null)::text', v_v3,
       (jsonb_build_array(
          jsonb_build_object('kind', 'option', 'name', '検査の別途見積の商品', 'description', '設置場所確認後に別途お見積り', 'remark', '［今回の契約対象外］お客様手配', 'unit_price', 0, 'quantity', 1),
          jsonb_build_object('kind', 'installation', 'name', '給排水工事', 'unit_price', 0, 'quantity', 1)) || v_rest)::text)));
 
   v_out := pg_temp.qpg_run_as('authenticated', u_dealer, format($q$ select public.create_quote_revision(%L, '[{"kind":"installation","name":"基礎工事","unit_price":300000,"quantity":1}]'::jsonb, null)::text $q$, q2));
-  perform pg_temp.qpg_expect_eq('QPG-42 POR を選んでいない案件は、確認なしで従来どおり改訂できる', 'true', (v_out ~ '^[0-9a-f-]{36}$')::text);
+  perform pg_temp.qpg_expect_eq('QPG-45 POR を選んでいない案件は、確認なしで従来どおり改訂できる', 'true', (v_out ~ '^[0-9a-f-]{36}$')::text);
 
   -- ---------- 承諾済みの概算からの確定見積（旧形式の互換） ----------
   v_out := pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, array[%L])::text', q3, 'product:' || o_por));
-  perform pg_temp.qpg_expect_eq('QPG-43 承諾済みの概算にも確認を記録できる', 'true', (v_out ~ '^[0-9a-f-]{36}$')::text);
-  perform pg_temp.qpg_expect_error('QPG-44 施工以外の別途見積の行（この画面では直せない）が残る概算からは確定見積を作らない', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行',
+  perform pg_temp.qpg_expect_eq('QPG-46 承諾済みの概算にも確認を記録できる', 'true', (v_out ~ '^[0-9a-f-]{36}$')::text);
+  perform pg_temp.qpg_expect_error('QPG-47 施工以外の別途見積の行（この画面では直せない）が残る概算からは確定見積を作らない', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行',
     pg_temp.qpg_run_as('authenticated', u_dealer, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, '[]'::jsonb, null)::text $q$, q3)));
-  perform pg_temp.qpg_expect_error('QPG-45 施工の別途見積の行を 0 円・状態なしで残せば確定見積を作らない（備考の自由記述でも同じ）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行',
+  perform pg_temp.qpg_expect_error('QPG-48 施工の別途見積の行を 0 円・状態なしで残せば確定見積を作らない（備考の自由記述でも同じ）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行',
     pg_temp.qpg_run_as('authenticated', u_dealer, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, %L::jsonb, null)::text $q$, q4,
       jsonb_build_array(jsonb_build_object('source_item_id', i4_inst, 'name', '検査の別途見積の工事', 'remark', '基礎工事に含む', 'unit_price', 0, 'quantity', 1)))));
-  perform pg_temp.qpg_expect_error('QPG-46 施工の金額を入れても、担当者の確認がなければ確定見積を作らない', 'P0001', 'VALIDATION: お客様が選んだ別途見積の商品（1 件',
+  perform pg_temp.qpg_expect_error('QPG-49 施工の金額を入れても、担当者の確認がなければ確定見積を作らない', 'P0001', 'VALIDATION: お客様が選んだ別途見積の商品（1 件',
     pg_temp.qpg_run_as('authenticated', u_dealer, format($q$ select public.create_formal_quote_from_accepted_preliminary(%L, %L::jsonb, null)::text $q$, q4,
       jsonb_build_array(jsonb_build_object('source_item_id', i4_inst, 'name', '検査の別途見積の工事', 'unit_price', 80000, 'quantity', 1)))));
   perform pg_temp.qpg_run_as('authenticated', u_dealer, format('select public.confirm_quote_por_selections(%L, array[%L])::text', q4, 'product:' || o_inst));
@@ -407,43 +418,61 @@ begin
     jsonb_build_array(
       jsonb_build_object('source_item_id', i4_inst, 'name', '検査の別途見積の工事', 'unit_price', 80000, 'quantity', 1),
       jsonb_build_object('name', '外構工事', 'remark', '［今回の契約対象外］', 'unit_price', 0, 'quantity', 1))));
-  perform pg_temp.qpg_expect_eq('QPG-47 確認済みで施工の金額を入れれば、対象外の施工があっても確定見積を作れる', 'true/formal/80000',
+  perform pg_temp.qpg_expect_eq('QPG-50 確認済みで施工の金額を入れれば、対象外の施工があっても確定見積を作れる', 'true/formal/80000',
     (v_out ~ '^[0-9a-f-]{36}$')::text || '/' || coalesce((select q.quote_kind from public.quotes q where q.id::text = v_out), '-') || '/'
     || coalesce((select q.installation_subtotal::text from public.quotes q where q.id::text = v_out), '-'));
 
   -- ---------- Web 以外の下書きの正式保存 ----------
-  perform pg_temp.qpg_expect_error('QPG-48 下書きに 0 円の別途見積の商品の行が残っていれば、正式保存の前の確認で止める', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（検査の別途見積の商品）',
+  perform pg_temp.qpg_expect_error('QPG-51 下書きに 0 円の別途見積の商品の行が残っていれば、正式保存の前の確認で止める', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（検査の別途見積の商品）',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
   update public.quote_draft_items set remark = 'サービス' where id = d_line;
-  perform pg_temp.qpg_expect_error('QPG-49 備考の自由記述（サービス など）では止めを解かない', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行',
+  perform pg_temp.qpg_expect_error('QPG-52 備考の自由記述（サービス など）では止めを解かない', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
   update public.quote_draft_items set remark = '［0円確定］：サービス' where id = d_line;
-  perform pg_temp.qpg_expect_eq('QPG-50 「0円確定（理由）」にすれば止めない', 'ok',
+  perform pg_temp.qpg_expect_eq('QPG-53 「0円確定（理由）」にすれば止めない', 'ok',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
-  perform pg_temp.qpg_expect_error('QPG-51 0円確定の行に金額を入れる更新は保存しない（表の保存境界）', 'P0001', 'VALIDATION: 「対象外」「0円確定」の明細',
+  perform pg_temp.qpg_expect_error('QPG-54 0円確定の行に金額を入れる更新は保存しない（表の保存境界）', 'P0001', 'VALIDATION: 「対象外」「0円確定」の明細',
     pg_temp.qpg_try(format('update public.quote_draft_items set unit_price = 1000, amount = 1000 where id = %L returning ''updated''', d_line)));
   insert into public.quote_draft_items (id, draft_id, line_key, kind, name, remark, unit_price, quantity, amount, sort_order, price_mode)
   values (d_new, qd, gen_random_uuid(), 'installation', '追加の運搬', null, 0, 1, 0, 2, 'manual');
-  perform pg_temp.qpg_expect_error('QPG-52 初回の下書きに足した 0 円の直接入力の行は未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（追加の運搬）',
+  perform pg_temp.qpg_expect_error('QPG-55 初回の下書きに足した 0 円の直接入力の行は未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（追加の運搬）',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
   update public.quote_draft_items set remark = '［今回の契約対象外］' where id = d_new;
   insert into public.quote_draft_items (draft_id, line_key, kind, option_id, name, remark, unit_price, quantity, amount, sort_order, price_mode)
   values (qd, gen_random_uuid(), 'option', o_ext, '検査の外壁', null, 0, 1, 0, 3, 'manual'),
          (qd, gen_random_uuid(), 'option', null, '自動計算の行', null, 0, 1, 0, 4, 'auto');
-  perform pg_temp.qpg_expect_eq('QPG-53 対象外の行・台帳の 0 円の商品・自動計算の行は止めない', 'ok',
+  perform pg_temp.qpg_expect_eq('QPG-56 対象外の行・台帳の 0 円の商品・自動計算の行は止めない', 'ok',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
-  perform pg_temp.qpg_expect_eq('QPG-54 改訂の下書き：前の版の同じ明細（明細のキー・区分・品名・説明が同じ 0 円）はそのまま', 'ok',
+  perform pg_temp.qpg_expect_eq('QPG-57 改訂の下書き：前の版の同じ明細（明細のキー・区分・品名・説明が同じ 0 円）はそのまま', 'ok',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd2)));
   insert into public.quote_draft_items (id, draft_id, line_key, kind, name, remark, unit_price, quantity, amount, sort_order, price_mode)
   values (d2_other, qd2, gen_random_uuid(), 'installation', '養生', null, 0, 1, 0, 2, 'manual');
-  perform pg_temp.qpg_expect_error('QPG-55 改訂の下書き：品名が同じでも明細のキーが違う 0 円の行は未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（養生）',
+  perform pg_temp.qpg_expect_error('QPG-58 改訂の下書き：品名が同じでも明細のキーが違う 0 円の行は未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（養生）',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd2)));
-  perform pg_temp.qpg_expect_eq('QPG-56 正式保存の 2 つの関数は、既存の POR の確認の直後にこの確認を呼ぶ', 'true/true',
+  set local session_replication_role = replica;
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, revision, parent_quote_id)
+  values (q5, 'RT-QPG-5', qr2, cfg2, u_cust, u_dealer, 'issued', now() + interval '30 days', 'お客様', 'POR 検査用モデル', 1000000, 0, 0, 1000000, 0.10, 100000, 1100000, 9, q2);
+  insert into public.quote_items (quote_id, kind, name, description, remark, unit_price, quantity, amount, sort_order)
+  values (q5, 'installation', '養生', null, null, 0, 1, 0, 1),
+         (q5, 'installation', '養生', null, null, 0, 1, 0, 2),
+         (q5, 'installation', '養生', null, '［今回の契約対象外］', 0, 1, 0, 3);
+  set local session_replication_role = origin;
+  perform pg_temp.qpg_expect_error('QPG-59 発行する版の判定：前の版に 1 行の 0 円の明細が、新しい版に 2 行あれば 1 行は未確定（対象外の行は数えない）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（養生）',
+    pg_temp.qpg_try(format('select public.assert_quote_lines_resolved(%L)::text || ''ok''', q5)));
+  set local session_replication_role = replica;
+  insert into public.quote_items (quote_id, kind, name, description, remark, unit_price, quantity, amount, sort_order)
+  values (q2, 'installation', '養生', null, null, 0, 1, 0, 2002);
+  set local session_replication_role = origin;
+  perform pg_temp.qpg_expect_eq('QPG-60 前の版にも同じ 0 円の明細が 2 行あれば、2 行ともそのまま', 'ok',
+    pg_temp.qpg_try(format('select public.assert_quote_lines_resolved(%L)::text || ''ok''', q5)));
+  perform pg_temp.qpg_expect_eq('QPG-61 正式保存の 2 つの関数は、既存の POR の確認の直後にこの確認を呼ぶ', 'true/true',
     (select (strpos(d, '価格未確定（POR）の明細が残っています') between 1 and strpos(d, 'perform public.assert_quote_draft_lines_resolved(d.id);'))::text
        from pg_catalog.pg_get_functiondef('public.finalize_quote_draft(uuid, integer)'::regprocedure) d) || '/' ||
     (select (strpos(d, '価格未確定（POR）の明細が残っています') between 1 and strpos(d, 'perform public.assert_quote_draft_lines_resolved(d.id);'))::text
        from pg_catalog.pg_get_functiondef('public.finalize_quote_revision_draft(uuid, integer)'::regprocedure) d));
-  perform pg_temp.qpg_expect_eq('QPG-57 止めを足した 4 つの関数は、owner・SECURITY DEFINER・EXECUTE が従来どおり', 'postgres/true/true/false',
+  perform pg_temp.qpg_expect_eq('QPG-62 止めを足した 4 つの関数は、owner・SECURITY DEFINER・EXECUTE が従来どおり', 'postgres/true/true/false',
     (select string_agg(distinct pg_catalog.pg_get_userbyid(p.proowner), ',') from pg_catalog.pg_proc p where p.oid = any(v_sigs.oids)) || '/'
     || (select bool_and(p.prosecdef)::text from pg_catalog.pg_proc p where p.oid = any(v_sigs.oids)) || '/'
     || (select bool_and(has_function_privilege('authenticated', p.oid, 'execute'))::text from pg_catalog.pg_proc p where p.oid = any(v_sigs.oids)) || '/'

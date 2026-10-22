@@ -20,7 +20,8 @@
 --     「別途見積項目あり…」・商品台帳の別途見積の商品）。前の版から変えていなくても止める
 --   ・0 円の内外装・オプション・別途工事・フリー商品の行のうち、次のどれにも当たらない行
 --       商品台帳で正式に 0 円の商品（別途見積でない）を指す行／自動計算の行（標準見積から作る下書き）／
---       前の版にある、別途見積でも状態の印つきでもない 0 円の同じ明細（区分・品名・説明が同じ）
+--       前の版にある、別途見積でも状態の印つきでもない 0 円の同じ明細（区分・品名・説明が同じ。下書きは明細のキーも。
+--       前の版の行の数まで。同じ明細をもう 1 行足したら、足した行は未確定）
 --   ・本体・本体諸費用・内外装工事経費・オプション諸費用の行は対象外（本体は本体 Revision から、経費は経費の決まりで扱う）
 --   解消のしかた：金額を入れる／「0円確定（理由）」を選ぶ／「対象外」を選ぶ／明細から外す
 --
@@ -422,7 +423,9 @@ $function$;
 
 -- ---------- 発行の関数の中から使う確認 ----------
 
--- 発行する版（quote_items）に、金額が未確定の明細が残っていれば止める（前の版＝parent_quote_id の明細と比べる）
+-- 発行する版（quote_items）に、金額が未確定の明細が残っていれば止める（前の版＝parent_quote_id の明細と比べる）。
+-- 前の版の同じ 0 円の明細（区分・品名・説明が同じ。印なし・別途見積の目印なし）は、前の版の行の数までしか「変えていない」とみなさない
+-- （同じ明細をもう 1 行足したら、足した行は未確定。並び順で後ろの行から数える）
 create function public.assert_quote_lines_resolved(p_quote_id uuid)
 returns void
 language plpgsql
@@ -435,24 +438,40 @@ declare
   v_names text;
 begin
   select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;
-  select count(*), string_agg(i.name, '、' order by i.sort_order, i.id)
+  with lines as (
+    select i.id, i.sort_order, i.kind, i.name, coalesce(i.description, '') as description_key,
+           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, false, false) as unresolved_alone,
+           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, false, true) as unresolved_even_if_unchanged
+      from public.quote_items i
+     where i.quote_id = p_quote_id
+  ),
+  candidates as (
+    select l.*,
+           row_number() over (partition by l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq
+      from lines l
+     where l.unresolved_alone and not l.unresolved_even_if_unchanged
+  ),
+  parent_zero as (
+    select p.kind, p.name, coalesce(p.description, '') as description_key, count(*) as line_count
+      from public.quote_items p
+     where p.quote_id = v_parent
+       and coalesce(p.unit_price, 0) = 0
+       and public.quote_line_explicit_state(p.remark) is null
+       and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
+     group by p.kind, p.name, coalesce(p.description, '')
+  ),
+  unresolved as (
+    select l.id, l.sort_order, l.name from lines l where l.unresolved_even_if_unchanged
+    union all
+    select c.id, c.sort_order, c.name
+      from candidates c
+      left join parent_zero z
+        on z.kind = c.kind and z.name = c.name and z.description_key = c.description_key
+     where c.seq > coalesce(z.line_count, 0)
+  )
+  select count(*), string_agg(u.name, '、' order by u.sort_order, u.id)
     into v_count, v_names
-    from public.quote_items i
-   where i.quote_id = p_quote_id
-     and public.quote_line_unresolved(
-           i.kind, i.unit_price, i.option_id, i.description, i.remark, false,
-           exists (
-             select 1
-               from public.quote_items p
-              where p.quote_id = v_parent
-                and p.kind = i.kind
-                and p.name = i.name
-                and coalesce(p.description, '') = coalesce(i.description, '')
-                and coalesce(p.unit_price, 0) = 0
-                and public.quote_line_explicit_state(p.remark) is null
-                and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
-           )
-         );
+    from unresolved u;
   if v_count > 0 then
     raise exception 'VALIDATION: 金額が未確定の明細が % 行残っています（%）。金額を入れるか、「0円確定（理由）」か「対象外」を選ぶか、明細から外してから発行してください',
       v_count, left(v_names, 200)
@@ -462,7 +481,8 @@ end;
 $function$;
 
 -- 正式保存する下書き（quote_draft_items）に、金額が未確定の明細が残っていれば止める
--- （前の版＝下書きの parent_quote_id の明細と、明細のキーで比べる）
+-- （前の版＝下書きの parent_quote_id の明細と、明細のキー・区分・品名・説明で比べる。前の版の行の数まで。
+--   下書きの明細のキーは下書きの中で一意なので、新しく足した行は前の版と突き合わない）
 create function public.assert_quote_draft_lines_resolved(p_draft_id uuid)
 returns void
 language plpgsql
@@ -475,25 +495,41 @@ declare
   v_names text;
 begin
   select d.parent_quote_id into v_parent from public.quote_drafts d where d.id = p_draft_id;
-  select count(*), string_agg(i.name, '、' order by i.sort_order, i.id)
+  with lines as (
+    select i.id, i.sort_order, i.line_key, i.kind, i.name, coalesce(i.description, '') as description_key,
+           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto', false) as unresolved_alone,
+           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto', true) as unresolved_even_if_unchanged
+      from public.quote_draft_items i
+     where i.draft_id = p_draft_id
+  ),
+  candidates as (
+    select l.*,
+           row_number() over (partition by l.line_key, l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq
+      from lines l
+     where l.unresolved_alone and not l.unresolved_even_if_unchanged
+  ),
+  parent_zero as (
+    select p.line_key, p.kind, p.name, coalesce(p.description, '') as description_key, count(*) as line_count
+      from public.quote_items p
+     where p.quote_id = v_parent
+       and p.line_key is not null
+       and coalesce(p.unit_price, 0) = 0
+       and public.quote_line_explicit_state(p.remark) is null
+       and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
+     group by p.line_key, p.kind, p.name, coalesce(p.description, '')
+  ),
+  unresolved as (
+    select l.id, l.sort_order, l.name from lines l where l.unresolved_even_if_unchanged
+    union all
+    select c.id, c.sort_order, c.name
+      from candidates c
+      left join parent_zero z
+        on z.line_key = c.line_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key
+     where c.seq > coalesce(z.line_count, 0)
+  )
+  select count(*), string_agg(u.name, '、' order by u.sort_order, u.id)
     into v_count, v_names
-    from public.quote_draft_items i
-   where i.draft_id = p_draft_id
-     and public.quote_line_unresolved(
-           i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto',
-           exists (
-             select 1
-               from public.quote_items p
-              where p.quote_id = v_parent
-                and p.line_key = i.line_key
-                and p.kind = i.kind
-                and p.name = i.name
-                and coalesce(p.description, '') = coalesce(i.description, '')
-                and coalesce(p.unit_price, 0) = 0
-                and public.quote_line_explicit_state(p.remark) is null
-                and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
-           )
-         );
+    from unresolved u;
   if v_count > 0 then
     raise exception 'VALIDATION: 金額が未確定の明細が % 行残っています（%）。金額を入れるか、「0円確定（理由）」か「対象外」を選ぶか、明細から外してから正式保存してください',
       v_count, left(v_names, 200)

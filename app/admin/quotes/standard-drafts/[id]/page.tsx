@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
-import { createUnresolvedLineCheck, type QuoteLineCheckLine } from '@/lib/domain/quote-por';
+import { findUnresolvedLines, type QuoteLineCheckLine } from '@/lib/domain/quote-por';
 import { standardQuoteStateFromPayload, type StandardQuoteDraftPayload } from '@/lib/domain/standard-quote-view';
 import { createClient } from '@/lib/supabase/server';
 import { Alert, Badge } from '@/components/ui';
@@ -52,9 +52,9 @@ export default async function StandardQuoteDraftPage({
     ? (((await supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)).data ??
         []) as QuoteLineCheckLine[])
     : [];
-  const isUnresolved = createUnresolvedLineCheck({ parentLines: parentItems, matchLineKey: true });
+  const unresolvedItems = findUnresolvedLines(payload.items, { parentLines: parentItems, matchLineKey: true });
   const savedUnresolvedNames = payload.items
-    .filter((item) => item.price_mode === 'por' || isUnresolved(item))
+    .filter((item) => item.price_mode === 'por' || unresolvedItems.has(item))
     .map((item) => item.name);
   const customer = request.contact?.full_name ?? '';
   const targetRevision = parent ? parent.revision + 1 : 1;

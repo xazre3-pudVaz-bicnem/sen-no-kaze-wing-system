@@ -79,7 +79,8 @@ import {
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
-import { EMPTY_POR_SELECTION_STATE, type QuotePorSelection, type QuotePorSelectionState } from '@/lib/domain/quote-por';
+import { EMPTY_POR_SELECTION_STATE, isReservedLineStateRemark, type QuotePorSelection, type QuotePorSelectionState } from '@/lib/domain/quote-por';
+import { assertQuoteLineGuardReady } from './quote-line-guard';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -714,6 +715,8 @@ export class SupabaseStore implements DataStore {
 
   async createManualQuoteDraftWithItems(_actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
     const db = await this.db();
+    // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
+    if (input.items.some((item) => isReservedLineStateRemark(item.remark))) await assertQuoteLineGuardReady(db);
     const { data, error } = await db.rpc('create_manual_quote_draft_with_items', {
       p_case_name: input.case_name,
       p_contact: {
@@ -788,6 +791,8 @@ export class SupabaseStore implements DataStore {
 
   async saveQuoteDraft(id: string, input: QuoteDraftSaveInput, _actor: SessionUser): Promise<number> {
     const db = await this.db();
+    // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
+    if (input.items.some((item) => isReservedLineStateRemark(item.remark))) await assertQuoteLineGuardReady(db);
     const { data, error } = await db.rpc('save_quote_draft', {
       p_draft_id: id,
       p_expected_lock_version: input.expected_lock_version,
@@ -807,6 +812,8 @@ export class SupabaseStore implements DataStore {
     if (!detail) throw new StoreError('NOT_FOUND', 'Draftが見つかりません');
 
     const db = await this.db();
+    // DB の更新（20261016111000）が済むまで、旧い関数で正式見積を発行しない
+    await assertQuoteLineGuardReady(db);
     const { data, error } = detail.draft.parent_quote_id
       ? await db.rpc('finalize_quote_revision_draft', {
           p_draft_id: id,
@@ -999,14 +1006,15 @@ export class SupabaseStore implements DataStore {
 
   async createDealerRevision(id: string, input: DealerRevisionInput) {
     const db = await this.db();
-    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる）。
-    // migration の適用前は確認の仕組みが無いので、従来どおり発行だけを行う
+    // DB の更新（20261016111000）が済むまで、旧い関数で正式見積（改訂）を発行しない
+    await assertQuoteLineGuardReady(db);
+    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる）
     if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
       const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
         p_quote_id: id,
         p_selection_keys: input.por_confirmation_keys,
       });
-      if (confirmError && !isMissingNamedFunction(confirmError, 'confirm_quote_por_selections')) mapPgError(confirmError);
+      if (confirmError) mapPgError(confirmError);
     }
     const { data, error } = await db.rpc('create_quote_revision', {
       p_quote_id: id,
@@ -1024,7 +1032,7 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { data, error } = await db.rpc('get_quote_por_selections', { p_quote_id: quoteId });
     if (error) {
-      // migration の適用前は確認の仕組みが無い（画面は確認欄を出さず、発行は従来どおり）
+      // migration の適用前は確認の仕組みが無い（画面は発行のボタンを止め、発行の処理も止める）
       if (isMissingNamedFunction(error, 'get_quote_por_selections')) return EMPTY_POR_SELECTION_STATE;
       mapPgError(error);
     }

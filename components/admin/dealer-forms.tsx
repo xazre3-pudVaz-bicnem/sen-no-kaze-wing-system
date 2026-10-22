@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useActionState, useMemo, useState } from 'react';
+import { Fragment, useActionState, useState } from 'react';
 import { X } from 'lucide-react';
 import { assignQuoteDealerAction, createDealerRevisionAction, updateUserRoleAction } from '@/lib/actions/admin';
 import { formatYen } from '@/lib/domain/pricing';
@@ -8,7 +8,7 @@ import { ROLE_LABELS, type Profile, type Quote, type QuoteItem, type RoleCode } 
 import type { RevisionItemKind } from '@/lib/data/store';
 import {
   chooseQuoteLineState,
-  createUnresolvedLineCheck,
+  findUnresolvedLines,
   EMPTY_POR_SELECTION_STATE,
   LINE_STATE_KINDS,
   splitQuoteLineStateRemark,
@@ -168,9 +168,15 @@ export function DealerRevisionForm({
   // 前の版（いまの発行済み見積）の「0 円・印なし・別途見積の目印なし」の同じ明細は、変えていなければ 0 円のままでよい。
   // 改訂の明細には商品台帳の紐付け（option_id）を残さないため、DB と同じく台帳の 0 円・別途見積の商品では判定しない
   // （台帳から足した別途見積の商品は備考「別途見積」で未確定になる。台帳の 0 円の商品を新しく足したときは「0円確定」を選ぶ）
-  const isUnresolved = useMemo(() => createUnresolvedLineCheck({ parentLines: items }), [items]);
+  // 発行する版の明細＝参照のみの行（そのまま写る）＋編集中の行。前の版の同じ 0 円の明細は前の版の行の数まで
+  const unresolvedLines = findUnresolvedLines<QuoteItem | Row>([...lockedItems, ...rows], { parentLines: items });
+  const isUnresolved = (line: QuoteItem | Row) => unresolvedLines.has(line);
   // 最初に未確定だった行は、金額・扱いを入れた後も欄に残す（何を確定したかを見返せるように）
-  const [initialPorRowKeys] = useState(() => new Set(buildInitialRows().filter(isUnresolved).map((row) => row.key)));
+  const [initialPorRowKeys] = useState(() => {
+    const initialRows = buildInitialRows();
+    const initialUnresolved = findUnresolvedLines<QuoteItem | Row>([...lockedItems, ...initialRows], { parentLines: items });
+    return new Set(initialRows.filter((row) => initialUnresolved.has(row)).map((row) => row.key));
+  });
   const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
   const porRows: QuotePorReviewRow[] = [
     ...items
@@ -206,6 +212,8 @@ export function DealerRevisionForm({
   const unresolvedPorCount = porRows.filter((row) => row.unresolved).length;
   const missingReasonCount = rows.filter((row) => row.line_state === 'zero_confirmed' && !row.line_state_reason.trim()).length;
   const porBlockers = [
+    // DB の更新（20261016111000）の前は確認の仕組みが無い。旧い関数で発行しないよう止める（発行の処理でも止める）
+    ...(!porState.available ? ['DB の更新（金額未確定の明細の確認）が済むまで発行できません'] : []),
     ...(unresolvedPorCount > 0 ? [`金額が未確定の明細が ${unresolvedPorCount} 行残っています`] : []),
     ...(missingReasonCount > 0 ? [`「0円確定」の理由が入っていない明細が ${missingReasonCount} 行あります`] : []),
     ...(porSelections.length > 0 && !porConfirmed ? ['お客様が選んだ別途見積の商品の確認にチェックを入れてください'] : []),

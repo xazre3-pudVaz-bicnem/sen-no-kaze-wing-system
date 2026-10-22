@@ -16,14 +16,17 @@ describe('お客様選択：選択肢ごとの追加金額入力の見える化'
     expect(choices).toContain('選択肢を追加（追加金額も入力）');
   });
 
-  it('既存の選択肢の追加金額欄は折り畳まず表示し、0円も明示する', () => {
+  it('既存選択肢の概要に追加金額（0円を含む）を明示し、編集時だけ入力欄を開く', () => {
     const existingEditor = choices.slice(choices.indexOf('if (isNew) return'), choices.indexOf('export function OptionVariantManager'));
     expect(existingEditor).toContain('data-testid="variant-choice-price-editor"');
-    expect(existingEditor).not.toContain('<details');
+    expect(existingEditor).toContain('<details');
+    expect(existingEditor).toContain('<summary');
+    expect(existingEditor).toContain('choice.extra_price.toLocaleString');
+    expect(existingEditor).toContain("choice.price_on_request ? '別途見積'");
+    expect(existingEditor).toContain('編集 <span aria-hidden="true">▾</span>');
     expect(choices).toContain('label="追加金額（税別・円）"');
     expect(choices).toContain('name="extra_price"');
     expect(choices).toContain('defaultValue={choice?.extra_price ?? 0}');
-    expect(choices).toContain('追加金額 ¥{choice.extra_price.toLocaleString');
     expect(choices).toContain('追加がなければ0円です。');
     expect(choices).toContain('表示などの詳細設定');
   });

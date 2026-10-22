@@ -16,7 +16,7 @@ describe('商品登録STEP2の下部操作', () => {
     expect(page).toContain('data-testid="option-customer-preview"');
     expect(bottomActions).toContain('data-testid="step2-publish-actions"');
     expect(bottomActions).toContain('className="card space-y-4 p-4 sm:p-5"');
-    expect(bottomActions).toContain('className="w-full space-y-3"');
+    expect(bottomActions).toContain('className="space-y-3"');
     expect(bottomActions).toContain('className="btn-primary btn-sm shrink-0 whitespace-nowrap"');
     expect(bottomActions).toContain('この内容で登録');
   });

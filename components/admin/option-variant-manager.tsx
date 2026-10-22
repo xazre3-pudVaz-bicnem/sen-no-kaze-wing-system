@@ -200,6 +200,14 @@ function ChoiceEditor({
   }, [selectedImage]);
   const e = state.fieldErrors ?? {};
   const isNew = !choice;
+  const editorDetailsRef = useRef<HTMLDetailsElement>(null);
+
+  // 保存結果（エラーを含む）は折り畳まれたまま隠さない。
+  useEffect(() => {
+    if ((state.ok || state.error || Object.keys(state.fieldErrors ?? {}).length > 0) && editorDetailsRef.current) {
+      editorDetailsRef.current.open = true;
+    }
+  }, [state]);
 
   const onImageUrlChange = (value: string) => {
     // URL とファイルの二重指定を避ける。行は既存の choice ID と紐づけたまま。
@@ -396,20 +404,31 @@ function ChoiceEditor({
   if (isNew) return <div className="rounded-xl border border-dashed border-line bg-white p-4">{form}</div>;
 
   return (
-    <div className="rounded-xl border border-line bg-white" data-testid="variant-choice-price-editor">
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <span className="min-w-0">
-          <span className="font-semibold text-ink">{choice.name}</span>
-          {choice.kind === 'standard' && <span className="ml-2 text-xs text-success">標準</span>}
-          {!choice.price_on_request && (
-            <span className="ml-2 text-xs text-ink-soft">追加金額 ¥{choice.extra_price.toLocaleString('ja-JP')}（税別）</span>
-          )}
-          {choice.price_on_request && <span className="ml-2 text-xs text-warn">別途見積</span>}
+    <details
+      ref={editorDetailsRef}
+      className="rounded-lg border border-line bg-white"
+      data-testid="variant-choice-price-editor"
+    >
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown [&::-webkit-details-marker]:hidden">
+        {choice.image_url ? (
+          <span className="relative size-9 shrink-0 overflow-hidden rounded-md border border-line bg-white">
+            <SmartImage src={choice.image_url} alt="" fill sizes="36px" className="object-contain" />
+          </span>
+        ) : (
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-md border border-line bg-ivory/40 text-xs text-muted">画像</span>
+        )}
+        <span className="min-w-0 flex-[1_1_8rem] break-words text-sm font-semibold text-ink">{choice.name}</span>
+        <span className="shrink-0 text-xs font-medium text-ink-soft">
+          {choice.price_on_request ? '別途見積' : `追加金額 ¥${choice.extra_price.toLocaleString('ja-JP')}（税別）`}
         </span>
-        <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? 'お客様に表示' : '非表示'}</span>
-      </div>
-      <div className="border-t border-line p-4">{form}</div>
-    </div>
+        <span className="shrink-0 text-xs text-muted">
+          {choice.kind === 'standard' ? '標準' : choice.kind === 'fixed' ? '固定' : '追加'}
+          {choice.status === 'draft' ? '・非表示' : ''}
+        </span>
+        <span className="ml-auto shrink-0 text-xs font-semibold text-brown">編集 <span aria-hidden="true">▾</span></span>
+      </summary>
+      <div className="border-t border-line p-3 sm:p-4">{form}</div>
+    </details>
   );
 }
 
@@ -472,10 +491,20 @@ export function OptionVariantManager({
               .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
             const firstChoice = groupChoices.length === 0;
             return (
-              <article key={group.id} className="card space-y-4 p-4 sm:p-5">
-                <ProductVariantGroupHeading group={group} choiceCount={groupChoices.length} />
-
-                <div className="space-y-2">
+              <details
+                key={group.id}
+                className="card overflow-hidden"
+                data-testid="variant-group-compact"
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown sm:px-5 [&::-webkit-details-marker]:hidden">
+                  <span aria-hidden="true" className="text-brown">▸</span>
+                  <span className="min-w-0 flex-1 break-words font-semibold text-ink">{group.name}</span>
+                  <span className="text-xs text-muted">{groupChoices.length}選択肢</span>
+                  <span className="text-xs text-muted">{group.status === 'published' ? 'お客様に表示' : '非表示'}{group.is_required ? '・必須' : ''}</span>
+                </summary>
+                <div className="space-y-3 border-t border-line px-3 py-3 sm:px-5">
+                  <ProductVariantGroupHeading group={group} choiceCount={groupChoices.length} />
+                  <div className="space-y-2">
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
                       key={`${choice.id}:${choice.image_url ?? ''}`}
@@ -506,8 +535,9 @@ export function OptionVariantManager({
                   <div className="mt-4">
                     <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
                   </div>
-                </details>
-              </article>
+                  </details>
+                </div>
+              </details>
             );
           })}
         </div>

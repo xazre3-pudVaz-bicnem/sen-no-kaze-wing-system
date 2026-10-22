@@ -32,7 +32,7 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(variants).not.toContain("const QUICK_GROUPS = ['カラー', '柄', 'サイズ']");
     expect(finalRefinements).toContain('＋ 選択項目を追加');
     expect(finalRefinements).toContain('選択項目名');
-    expect(finalRefinements).toContain('（標準を1つ選択）');
+    expect(finalRefinements).toContain('（標準を1つ選択・追加金額は税別円）');
     expect(finalRefinements).toContain('＋ 選択肢を追加');
     expect(finalRefinements).toContain('name="standard_choice_index"');
     expect(finalRefinements).toContain('name="first_choice_name"');
@@ -132,7 +132,8 @@ describe('商品登録のお客様選択・価格UI', () => {
     expect(finalRefinements).toContain("setChoiceImageUrls((urls) => ({ ...urls, [rowId]: '' }))");
     expect(finalRefinements).toContain('const clearChoiceMedia = (rowId: number) => {');
     expect(finalRefinements).toContain('delete next[rowId];');
-    expect(finalRefinements).toContain('clearChoiceMedia(choiceRowIds[index])');
+    expect(finalRefinements).toContain('const removedRowId = choiceRowIds[index]');
+    expect(finalRefinements).toContain('clearChoiceMedia(removedRowId)');
   });
 
   it('URLも元の行番号で保存し、不正URLとファイル同時指定を拒否する', () => {

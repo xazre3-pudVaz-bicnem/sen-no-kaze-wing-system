@@ -80,6 +80,13 @@ declare
   qr3 constant uuid := '7a600000-0000-4000-8000-000000000003';
   qr4 constant uuid := '7a600000-0000-4000-8000-000000000004';
   qr5 constant uuid := '7a600000-0000-4000-8000-000000000005';
+  qr6 constant uuid := '7a600000-0000-4000-8000-000000000006';
+  se_rev constant uuid := '7a650000-0000-4000-8000-000000000001';
+  qd3 constant uuid := '7a800000-0000-4000-8000-000000000003';
+  k3_std constant uuid := '7a930000-0000-4000-8000-000000000001';
+  k3_exp constant uuid := '7a930000-0000-4000-8000-000000000002';
+  k3_new constant uuid := '7a930000-0000-4000-8000-000000000003';
+  k3_dup constant uuid := '7a930000-0000-4000-8000-000000000004';
   q1 constant uuid := '7a700000-0000-4000-8000-000000000001';
   q2 constant uuid := '7a700000-0000-4000-8000-000000000002';
   q3 constant uuid := '7a700000-0000-4000-8000-000000000003';
@@ -439,9 +446,8 @@ begin
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
   update public.quote_draft_items set remark = '［今回の契約対象外］' where id = d_new;
   insert into public.quote_draft_items (draft_id, line_key, kind, option_id, name, remark, unit_price, quantity, amount, sort_order, price_mode)
-  values (qd, gen_random_uuid(), 'option', o_ext, '検査の外壁', null, 0, 1, 0, 3, 'manual'),
-         (qd, gen_random_uuid(), 'option', null, '自動計算の行', null, 0, 1, 0, 4, 'auto');
-  perform pg_temp.qpg_expect_eq('QPG-56 対象外の行・台帳の 0 円の商品・自動計算の行は止めない', 'ok',
+  values (qd, gen_random_uuid(), 'option', o_ext, '検査の外壁', null, 0, 1, 0, 3, 'manual');
+  perform pg_temp.qpg_expect_eq('QPG-56 対象外の行・台帳の 0 円の商品は止めない（経費の行は標準見積の下書きの検査で確かめる）', 'ok',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd)));
   perform pg_temp.qpg_expect_eq('QPG-57 改訂の下書き：前の版の同じ明細（明細のキー・区分・品名・説明が同じ 0 円）はそのまま', 'ok',
     pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd2)));
@@ -467,12 +473,46 @@ begin
   set local session_replication_role = origin;
   perform pg_temp.qpg_expect_eq('QPG-60 前の版にも同じ 0 円の明細が 2 行あれば、2 行ともそのまま', 'ok',
     pg_temp.qpg_try(format('select public.assert_quote_lines_resolved(%L)::text || ''ok''', q5)));
-  perform pg_temp.qpg_expect_eq('QPG-61 正式保存の 2 つの関数は、既存の POR の確認の直後にこの確認を呼ぶ', 'true/true',
+  -- 標準見積から作った初回の下書き（元の標準見積の版の 0 円の行と比べる。自動計算として外すのは経費の行だけ）
+  set local session_replication_role = replica;
+  insert into public.quote_requests (id, status, contact) values (qr6, 'new', '{}'::jsonb);
+  insert into public.standard_estimate_revision_lines (revision_id, line_key, section_code, name, quantity, unit, price_mode, cost_unit_price, cost_amount, unit_price, amount, sort_order)
+  values (se_rev, gen_random_uuid(), 'sitework', '標準の0円の工事', 1, '式', 'auto', 0, 0, 0, 0, 1);
+  insert into public.quote_drafts (id, quote_request_id, base_model_id, spec_code, quote_kind, tax_rate, lock_version, source_kind, standard_estimate_revision_id, finish_level)
+  values (qd3, qr6, m_model, 'base', 'formal', 0.10, 0, 'standard_estimate', se_rev, 'full');
+  insert into public.quote_draft_items (draft_id, line_key, kind, name, remark, unit_price, quantity, amount, sort_order, price_mode)
+  values (qd3, k3_std, 'installation', '標準の0円の工事', null, 0, 1, 0, 1, 'auto'),
+         (qd3, k3_exp, 'installation', '別途工事経費', null, 0, 1, 0, 2, 'auto');
+  insert into public.quote_draft_item_costs (draft_id, line_key, section_code, line_role, base_unit_cost, cost_unit_price, cost_amount)
+  values (qd3, k3_std, 'sitework', 'line', null, 0, 0),
+         (qd3, k3_exp, 'sitework', 'expense', null, 450, 450);
+  set local session_replication_role = origin;
+  perform pg_temp.qpg_expect_eq('QPG-61 標準見積から作った初回の下書き：元の標準見積の版の 0 円の行と、作り直す経費の行は止めない', 'ok',
+    pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd3)));
+  set local session_replication_role = replica;
+  insert into public.quote_draft_items (draft_id, line_key, kind, name, remark, unit_price, quantity, amount, sort_order, price_mode)
+  values (qd3, k3_new, 'installation', '追加の運搬', null, 0, 1, 0, 3, 'auto');
+  insert into public.quote_draft_item_costs (draft_id, line_key, section_code, line_role, base_unit_cost, cost_unit_price, cost_amount)
+  values (qd3, k3_new, 'sitework', 'line', null, 0, 0);
+  set local session_replication_role = origin;
+  perform pg_temp.qpg_expect_error('QPG-62 自動計算でも、新しく足した原価 0 円（売価 0 円）の行は未確定', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（追加の運搬）',
+    pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd3)));
+  set local session_replication_role = replica;
+  delete from public.quote_draft_item_costs where draft_id = qd3 and line_key = k3_new;
+  delete from public.quote_draft_items where draft_id = qd3 and line_key = k3_new;
+  insert into public.quote_draft_items (draft_id, line_key, kind, name, remark, unit_price, quantity, amount, sort_order, price_mode)
+  values (qd3, k3_dup, 'installation', '標準の0円の工事', null, 0, 1, 0, 4, 'auto');
+  insert into public.quote_draft_item_costs (draft_id, line_key, section_code, line_role, base_unit_cost, cost_unit_price, cost_amount)
+  values (qd3, k3_dup, 'sitework', 'line', null, 0, 0);
+  set local session_replication_role = origin;
+  perform pg_temp.qpg_expect_error('QPG-63 元の標準見積の版の 0 円の行と同じ行は、版の行の数まで（もう 1 行は未確定）', 'P0001', 'VALIDATION: 金額が未確定の明細が 1 行残っています（標準の0円の工事）',
+    pg_temp.qpg_try(format('select public.assert_quote_draft_lines_resolved(%L)::text || ''ok''', qd3)));
+  perform pg_temp.qpg_expect_eq('QPG-64 正式保存の 2 つの関数は、既存の POR の確認の直後にこの確認を呼ぶ', 'true/true',
     (select (strpos(d, '価格未確定（POR）の明細が残っています') between 1 and strpos(d, 'perform public.assert_quote_draft_lines_resolved(d.id);'))::text
        from pg_catalog.pg_get_functiondef('public.finalize_quote_draft(uuid, integer)'::regprocedure) d) || '/' ||
     (select (strpos(d, '価格未確定（POR）の明細が残っています') between 1 and strpos(d, 'perform public.assert_quote_draft_lines_resolved(d.id);'))::text
        from pg_catalog.pg_get_functiondef('public.finalize_quote_revision_draft(uuid, integer)'::regprocedure) d));
-  perform pg_temp.qpg_expect_eq('QPG-62 止めを足した 4 つの関数は、owner・SECURITY DEFINER・EXECUTE が従来どおり', 'postgres/true/true/false',
+  perform pg_temp.qpg_expect_eq('QPG-65 止めを足した 4 つの関数は、owner・SECURITY DEFINER・EXECUTE が従来どおり', 'postgres/true/true/false',
     (select string_agg(distinct pg_catalog.pg_get_userbyid(p.proowner), ',') from pg_catalog.pg_proc p where p.oid = any(v_sigs.oids)) || '/'
     || (select bool_and(p.prosecdef)::text from pg_catalog.pg_proc p where p.oid = any(v_sigs.oids)) || '/'
     || (select bool_and(has_function_privilege('authenticated', p.oid, 'execute'))::text from pg_catalog.pg_proc p where p.oid = any(v_sigs.oids)) || '/'

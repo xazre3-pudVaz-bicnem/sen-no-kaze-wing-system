@@ -19,7 +19,8 @@
 --   ・0 円で、別途見積の目印がある行（説明「設置場所確認後に別途お見積り」・備考「別途見積」「価格未確定（別途お見積り）」
 --     「別途見積項目あり…」・商品台帳の別途見積の商品）。前の版から変えていなくても止める
 --   ・0 円の内外装・オプション・別途工事・フリー商品の行のうち、次のどれにも当たらない行
---       商品台帳で正式に 0 円の商品（別途見積でない）を指す行／自動計算の行（標準見積から作る下書き）／
+--       商品台帳で正式に 0 円の商品（別途見積でない）を指す行／保存のたびに作り直す経費の行（標準見積から作る下書き）／
+--       標準見積から作った初回の下書きで、元の標準見積の版の 0 円の行と同じ明細（区分・品名・説明。版の行の数まで）／
 --       前の版にある、別途見積でも状態の印つきでもない 0 円の同じ明細（区分・品名・説明が同じ。下書きは明細のキーも。
 --       前の版の行の数まで。同じ明細をもう 1 行足したら、足した行は未確定）
 --   ・本体・本体諸費用・内外装工事経費・オプション諸費用の行は対象外（本体は本体 Revision から、経費は経費の決まりで扱う）
@@ -109,7 +110,7 @@ comment on function public.quote_line_por_marked(uuid, text, text) is
   '別途見積（価格未確定）の目印がある明細か。説明「設置場所確認後に別途お見積り」、備考「別途見積」「価格未確定（別途お見積り）」「別途見積項目あり…」、または商品台帳の別途見積の商品を指す行。';
 
 -- 正式発行を止める「金額が未確定の明細」か
---   p_calculated：自動計算の行（標準見積から作る下書きの price_mode = 'auto'）
+--   p_calculated：保存のたびに作り直す経費の行（標準見積から作る下書きの price_mode = 'auto' かつ line_role = 'expense'）
 --   p_unchanged_zero：前の版に、別途見積でも状態の印つきでもない 0 円の同じ明細がある
 create function public.quote_line_unresolved(
   p_kind text,
@@ -480,9 +481,13 @@ begin
 end;
 $function$;
 
--- 正式保存する下書き（quote_draft_items）に、金額が未確定の明細が残っていれば止める
--- （前の版＝下書きの parent_quote_id の明細と、明細のキー・区分・品名・説明で比べる。前の版の行の数まで。
---   下書きの明細のキーは下書きの中で一意なので、新しく足した行は前の版と突き合わない）
+-- 正式保存する下書き（quote_draft_items）に、金額が未確定の明細が残っていれば止める。
+--   ・自動計算の行として外すのは、保存のたびに作り直す経費の行（quote_draft_item_costs.line_role = 'expense'）だけ。
+--     自動計算でも原価 0 円で売価 0 円の行は、ほかの 0 円の行と同じに扱う（新しく足した行は明示しない限り未確定）
+--   ・改訂の下書きは、前の版（parent_quote_id）の同じ 0 円の明細と、明細のキー・区分・品名・説明で比べる。前の版の行の数まで
+--     （下書きの明細のキーは下書きの中で一意なので、新しく足した行は前の版と突き合わない）
+--   ・標準見積から作った初回の下書きは、元の標準見積の版の 0 円の行（別途見積でないもの）と、区分・品名・説明で比べる。
+--     標準見積の版の行の数まで（明細のキーは持ち越さないため）
 create function public.assert_quote_draft_lines_resolved(p_draft_id uuid)
 returns void
 language plpgsql
@@ -491,40 +496,64 @@ set search_path = ''
 as $function$
 declare
   v_parent uuid;
+  v_standard uuid;
   v_count integer;
   v_names text;
 begin
-  select d.parent_quote_id into v_parent from public.quote_drafts d where d.id = p_draft_id;
+  select d.parent_quote_id, d.standard_estimate_revision_id
+    into v_parent, v_standard
+    from public.quote_drafts d
+   where d.id = p_draft_id;
   with lines as (
     select i.id, i.sort_order, i.line_key, i.kind, i.name, coalesce(i.description, '') as description_key,
-           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto', false) as unresolved_alone,
-           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto', true) as unresolved_even_if_unchanged
+           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark,
+             i.price_mode = 'auto' and coalesce(c.line_role, 'line') = 'expense', false) as unresolved_alone,
+           public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark,
+             i.price_mode = 'auto' and coalesce(c.line_role, 'line') = 'expense', true) as unresolved_even_if_unchanged
       from public.quote_draft_items i
+      left join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key
      where i.draft_id = p_draft_id
   ),
   candidates as (
     select l.*,
-           row_number() over (partition by l.line_key, l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq
+           case when v_parent is not null then l.line_key end as match_key,
+           row_number() over (
+             partition by case when v_parent is not null then l.line_key end, l.kind, l.name, l.description_key
+             order by l.sort_order, l.id
+           ) as seq
       from lines l
      where l.unresolved_alone and not l.unresolved_even_if_unchanged
   ),
-  parent_zero as (
-    select p.line_key, p.kind, p.name, coalesce(p.description, '') as description_key, count(*) as line_count
+  baseline as (
+    select p.line_key as match_key, p.kind, p.name, coalesce(p.description, '') as description_key, count(*) as line_count
       from public.quote_items p
-     where p.quote_id = v_parent
+     where v_parent is not null
+       and p.quote_id = v_parent
        and p.line_key is not null
        and coalesce(p.unit_price, 0) = 0
        and public.quote_line_explicit_state(p.remark) is null
        and not public.quote_line_por_marked(p.option_id, p.description, p.remark)
      group by p.line_key, p.kind, p.name, coalesce(p.description, '')
+    union all
+    select null::uuid,
+           case s.section_code when 'interior_exterior' then 'interior_exterior' when 'option' then 'option' else 'installation' end,
+           s.name, coalesce(s.group_label, ''), count(*)
+      from public.standard_estimate_revision_lines s
+     where v_parent is null
+       and v_standard is not null
+       and s.revision_id = v_standard
+       and ((s.price_mode = 'auto' and coalesce(s.cost_unit_price, 0) = 0) or (s.price_mode = 'manual' and coalesce(s.unit_price, 0) = 0))
+       and public.quote_line_explicit_state(s.remark) is null
+       and not public.quote_line_por_marked(null, s.group_label, s.remark)
+     group by 2, s.name, coalesce(s.group_label, '')
   ),
   unresolved as (
     select l.id, l.sort_order, l.name from lines l where l.unresolved_even_if_unchanged
     union all
     select c.id, c.sort_order, c.name
       from candidates c
-      left join parent_zero z
-        on z.line_key = c.line_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key
+      left join baseline z
+        on z.match_key is not distinct from c.match_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key
      where c.seq > coalesce(z.line_count, 0)
   )
   select count(*), string_agg(u.name, '、' order by u.sort_order, u.id)

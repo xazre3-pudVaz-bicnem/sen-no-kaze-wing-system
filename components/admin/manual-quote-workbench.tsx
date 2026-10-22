@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useActionState, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createManualQuoteWorkbenchAction } from '@/lib/actions/admin';
 import { quoteLineAmount } from '@/lib/domain/quote-amount';
-import { chooseQuoteLineState, findUnresolvedLines, type QuoteLineState } from '@/lib/domain/quote-por';
+import { chooseQuoteLineState, findUnresolvedLines, quoteOptionFlagMap, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { Button, Input, Select, Textarea } from '@/components/ui';
 import { Status, SubmitButton } from '@/components/admin/forms';
@@ -166,10 +166,7 @@ export function ManualQuoteWorkbench({
   );
 
   // 金額が未確定の明細の案内（登録は止めない。正式発行のときに DB が止める。D1 までの暫定）
-  const productOptions = useMemo(
-    () => new Map(products.map((product) => [product.id, { price: product.price, price_on_request: product.priceOnRequest }])),
-    [products]
-  );
+  const productOptions = useMemo(() => quoteOptionFlagMap(products), [products]);
   const unresolvedRows = findUnresolvedLines(rows, { options: productOptions, matchLineKey: true });
 
   // 明細額は DB と同じ trunc（新しい見積下書きは切り捨て）

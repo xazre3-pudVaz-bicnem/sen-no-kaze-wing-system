@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { quoteLineGuardError } from '@/lib/data/quote-line-guard';
-import { applyQuoteLineStateInput, LINE_STATE_REASON_MAX, QuoteLineStateInputError } from '@/lib/domain/quote-por';
+import { applyQuoteLineStateInput, QuoteLineStateInputError } from '@/lib/domain/quote-por';
+import { quoteLineStateReasonSchema, quoteLineStateSchema } from '@/lib/validation';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -38,8 +39,8 @@ const lineSchema = z.object({
   unit_price: z.number().int().min(0).nullable(),
   remark: z.string().trim().max(200).nullable(),
   /** 明細の状態（画面の明示の選択。サーバーが備考に印を付ける。D1 までの暫定） */
-  line_state: z.enum(['excluded', 'zero_confirmed']).nullable().optional(),
-  line_state_reason: z.string().trim().max(LINE_STATE_REASON_MAX, `理由・メモは ${LINE_STATE_REASON_MAX} 文字以内で入力してください`).nullable().optional(),
+  line_state: quoteLineStateSchema.optional(),
+  line_state_reason: quoteLineStateReasonSchema.optional(),
 });
 
 const saveSchema = z.object({

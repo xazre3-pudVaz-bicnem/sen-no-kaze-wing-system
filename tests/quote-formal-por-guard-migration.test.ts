@@ -54,9 +54,11 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
 
   it('前の版との突き合わせ：発行する版は parent_quote_id の明細と、下書きは明細のキーも合わせて比べる', () => {
     expect(migration).toContain('select q.parent_quote_id into v_parent from public.quotes q where q.id = p_quote_id;');
-    expect(migration).toContain('select d.parent_quote_id into v_parent from public.quote_drafts d where d.id = p_draft_id;');
-    expect(migration).toContain('on z.line_key = c.line_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key');
-    expect(migration).toContain("public.quote_line_unresolved(i.kind, i.unit_price, i.option_id, i.description, i.remark, i.price_mode = 'auto', false) as unresolved_alone");
+    expect(migration).toContain('select d.parent_quote_id, d.standard_estimate_revision_id');
+    expect(migration).toContain('on z.kind = c.kind and z.name = c.name and z.description_key = c.description_key');
+    // 下書きの自動計算の行として外すのは経費の行だけ。標準見積から作った初回の下書きは元の標準見積の版と比べる
+    expect(migration).toContain("left join public.quote_draft_item_costs c on c.draft_id = i.draft_id and c.line_key = i.line_key");
+    expect(migration).toContain('on z.match_key is not distinct from c.match_key and z.kind = c.kind and z.name = c.name and z.description_key = c.description_key');
   });
 
   it('止めを足す目印は、適用済みの定義（元の migration）にそのままある', () => {

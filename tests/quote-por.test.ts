@@ -116,8 +116,9 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
     expect(draftCheck({ line_key: 'k1', kind: 'installation', name: '養生', unit_price: 0 })).toBe(false);
     expect(draftCheck({ line_key: 'k2', kind: 'installation', name: '養生', unit_price: 0 })).toBe(true);
     expect(draftCheck({ line_key: null, kind: 'installation', name: '養生', unit_price: 0 })).toBe(true);
-    // 標準見積から作る下書きの自動計算の行
-    expect(draftCheck({ line_key: 'k3', kind: 'option', name: '洗面器', unit_price: 0, price_mode: 'auto' })).toBe(false);
+    // 標準見積から作る下書き：保存のたびに作り直す経費の行は外す。自動計算でも原価 0 円で売価 0 円の行は、ほかの 0 円の行と同じ
+    expect(draftCheck({ line_key: 'k3', kind: 'installation', name: '別途工事経費', unit_price: 0, price_mode: 'auto', line_role: 'expense' })).toBe(false);
+    expect(draftCheck({ line_key: 'k3', kind: 'option', name: '洗面器', unit_price: 0, price_mode: 'auto', line_role: 'line' })).toBe(true);
     expect(draftCheck({ line_key: 'k3', kind: 'option', name: '洗面器', unit_price: 0, price_mode: 'manual' })).toBe(true);
   });
 
@@ -154,8 +155,24 @@ describe('金額未確定の明細（SQL の quote_line_unresolved と同じ決�
     expect(findUnresolvedLines([copied], { parentLines: porParent, options, ignoreLineOptions: true }).size).toBe(1);
     expect(findUnresolvedLines([copied], { parentLines: porParent, ignoreLineOptions: true }).size).toBe(0);
     expect(migration).toContain('row_number() over (partition by l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
-    expect(migration).toContain('row_number() over (partition by l.line_key, l.kind, l.name, l.description_key order by l.sort_order, l.id) as seq');
+    expect(migration).toContain('partition by case when v_parent is not null then l.line_key end, l.kind, l.name, l.description_key');
     expect(migration.match(/where c\.seq > coalesce\(z\.line_count, 0\)/g)).toHaveLength(2);
+  });
+
+  it('標準見積から作った初回の下書きは、元の標準見積の版の 0 円の行と区分・品名・説明で突き合わせる（版の行の数まで。実 DB の QPG と同じ）', () => {
+    const baselineLines = [{ kind: 'installation', name: '標準の0円の工事', description: null, remark: null, unit_price: 0 }];
+    const standard = { line_key: 'k1', kind: 'installation', name: '標準の0円の工事', unit_price: 0, price_mode: 'auto', line_role: 'line' };
+    const expense = { line_key: 'k2', kind: 'installation', name: '別途工事経費', unit_price: 0, price_mode: 'auto', line_role: 'expense' };
+    const added = { line_key: 'k3', kind: 'installation', name: '追加の運搬', unit_price: 0, price_mode: 'auto', line_role: 'line' };
+    const duplicate = { ...standard, line_key: 'k4' };
+    expect(findUnresolvedLines([standard, expense], { baselineLines, matchLineKey: true }).size).toBe(0);
+    expect([...findUnresolvedLines([standard, expense, added], { baselineLines, matchLineKey: true })]).toEqual([added]);
+    expect([...findUnresolvedLines([standard, duplicate], { baselineLines, matchLineKey: true })]).toEqual([duplicate]);
+    // 品名・説明の前後の空白は DB に保存するときに除くので、比べるときも除く
+    expect(findUnresolvedLines([{ ...standard, name: ' 標準の0円の工事 ' }], { baselineLines, matchLineKey: true }).size).toBe(0);
+    expect(migration).toContain("i.price_mode = 'auto' and coalesce(c.line_role, 'line') = 'expense', false) as unresolved_alone");
+    expect(migration).toContain('from public.standard_estimate_revision_lines s');
+    expect(migration).toContain("and ((s.price_mode = 'auto' and coalesce(s.cost_unit_price, 0) = 0) or (s.price_mode = 'manual' and coalesce(s.unit_price, 0) = 0))");
   });
 
   it('目印・状態の印の文言は migration と同じ', () => {

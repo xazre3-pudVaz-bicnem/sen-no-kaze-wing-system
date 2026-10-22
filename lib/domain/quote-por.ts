@@ -215,7 +215,7 @@ export interface QuoteLineCheckInput {
   optionIsPor?: boolean;
   /** 商品台帳で正式に 0 円の商品（別途見積でない）を指す行か */
   optionIsCatalogZero?: boolean;
-  /** 自動計算の行か（標準見積から作る下書きの price_mode = 'auto'） */
+  /** 保存のたびに作り直す経費の行か（標準見積から作る下書きの price_mode = 'auto' かつ line_role = 'expense'） */
   calculated?: boolean;
   /** 前の版に、別途見積でも状態の印つきでもない 0 円の同じ明細があるか */
   unchangedZero?: boolean;
@@ -239,7 +239,7 @@ export function isUnresolvedQuoteLine(line: QuoteLineCheckInput): boolean {
 
 /** 前の版と同じ明細かを比べるキー（区分・品名・説明） */
 export function quoteLineIdentityKey(line: { kind: string; name: string; description?: string | null }): string {
-  return `${line.kind}\u0000${line.name}\u0000${line.description ?? ''}`;
+  return `${line.kind}\u0000${line.name.trim()}\u0000${(line.description ?? '').trim()}`;
 }
 
 export interface QuoteLineCheckLine {
@@ -252,6 +252,8 @@ export interface QuoteLineCheckLine {
   option_id?: string | null;
   /** 標準見積から作る下書きの価格の決め方（auto は自動計算の行） */
   price_mode?: string | null;
+  /** 標準見積から作る下書きの行の役割（expense は保存のたびに作り直す経費の行） */
+  line_role?: string | null;
   /** 編集中の画面の明示の選択（保存前。保存すると備考の印になる） */
   line_state?: QuoteLineState | null;
 }
@@ -259,6 +261,11 @@ export interface QuoteLineCheckLine {
 export interface QuoteLineCheckContext {
   /** 前の版の明細（初回は空） */
   parentLines?: QuoteLineCheckLine[];
+  /**
+   * 標準見積から作った初回の下書き：元の標準見積の版の 0 円の行（別途見積でないもの）。
+   * 明細のキーは持ち越さないので、区分・品名・説明で突き合わせる（版の行の数まで。DB の assert_quote_draft_lines_resolved と同じ）
+   */
+  baselineLines?: QuoteLineCheckLine[];
   /** 商品台帳の商品（option_id から、別途見積の商品か・台帳の価格を引く） */
   options?: ReadonlyMap<string, { price: number; price_on_request: boolean }>;
   /** 下書き（quote_draft_items）は、前の版と明細のキーでも突き合わせる（DB の assert_quote_draft_lines_resolved と同じ） */
@@ -289,13 +296,22 @@ export function findUnresolvedLines<T extends QuoteLineCheckLine>(lines: readonl
     if (!context.matchLineKey) return quoteLineIdentityKey(line);
     return line.line_key ? `${line.line_key}\u0000${quoteLineIdentityKey(line)}` : null;
   };
-  // 前の版の「変えていなければ 0 円のままでよい」明細の行の数
+  // 前の版（と標準見積の版）の「変えていなければ 0 円のままでよい」明細の行の数
+  const isBaseZero = (line: QuoteLineCheckLine) =>
+    (line.unit_price ?? 0) === 0 &&
+    !parseQuoteLineState(line.remark) &&
+    !isPorMarkedLine({ ...line, optionIsPor: Boolean(optionOf(line.option_id)?.price_on_request) });
   const remaining = new Map<string, number>();
   for (const line of context.parentLines ?? []) {
-    if ((line.unit_price ?? 0) !== 0 || parseQuoteLineState(line.remark)) continue;
-    if (isPorMarkedLine({ ...line, optionIsPor: Boolean(optionOf(line.option_id)?.price_on_request) })) continue;
+    if (!isBaseZero(line)) continue;
     const key = keyOf(line);
     if (key !== null) remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
+  const baselineRemaining = new Map<string, number>();
+  for (const line of context.baselineLines ?? []) {
+    if (!isBaseZero(line)) continue;
+    const key = quoteLineIdentityKey(line);
+    baselineRemaining.set(key, (baselineRemaining.get(key) ?? 0) + 1);
   }
   const unresolved = new Set<T>();
   for (const line of lines) {
@@ -308,7 +324,7 @@ export function findUnresolvedLines<T extends QuoteLineCheckLine>(lines: readonl
       remark: line.remark,
       optionIsPor: Boolean(option?.price_on_request),
       optionIsCatalogZero: Boolean(option && option.price === 0 && !option.price_on_request),
-      calculated: line.price_mode === 'auto',
+      calculated: line.price_mode === 'auto' && line.line_role === 'expense',
     };
     if (!isUnresolvedQuoteLine({ ...input, unchangedZero: false })) continue;
     // 別途見積の目印がある行は、前の版と同じでも未確定
@@ -320,6 +336,12 @@ export function findUnresolvedLines<T extends QuoteLineCheckLine>(lines: readonl
     const left = key === null ? 0 : remaining.get(key) ?? 0;
     if (key !== null && left > 0) {
       remaining.set(key, left - 1);
+      continue;
+    }
+    const baselineKey = quoteLineIdentityKey(line);
+    const baselineLeft = baselineRemaining.get(baselineKey) ?? 0;
+    if (baselineLeft > 0) {
+      baselineRemaining.set(baselineKey, baselineLeft - 1);
       continue;
     }
     unresolved.add(line);

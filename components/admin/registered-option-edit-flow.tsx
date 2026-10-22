@@ -200,10 +200,10 @@ export function RegisteredOptionEditFlow({
   const editGallery = (id: string, change: Partial<{ removed: boolean; caption: string; order: string }>) => {
     const original = galleryImages.find((image) => image.id === id);
     if (!original) return;
-    setGalleryEdits((draft) => ({
-      ...draft,
-      [id]: { removed: false, caption: original.caption ?? '', order: String(original.sort_order), ...draft[id], ...change },
-    }));
+    setGalleryEdits((draft) => {
+      const previous = draft[id] ?? { removed: false, caption: original.caption ?? '', order: String(original.sort_order) };
+      return { ...draft, [id]: { ...previous, ...change } };
+    });
   };
 
   const computeMediaDiffs = (): DiffItem[] => {

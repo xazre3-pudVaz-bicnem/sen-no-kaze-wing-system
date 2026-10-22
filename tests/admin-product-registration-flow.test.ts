@@ -6,6 +6,10 @@ const forms = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/forms.tsx'),
   'utf8'
 );
+const categoryGuidance = fs.readFileSync(
+  path.resolve(process.cwd(), 'components/admin/product-category-guidance.tsx'),
+  'utf8'
+);
 const identityView = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/product-identity-status.tsx'),
   'utf8'
@@ -203,16 +207,16 @@ describe('商品登録管理画面の業務フロー', () => {
 
   it('カテゴリーに応じてメーカー・商品名・主要仕様の入力を支援する', () => {
     expect(forms).toContain('productRegistrationGuidance');
-    expect(forms).toContain("ub: {");
-    expect(forms).toContain("manufacturers: ['TOTO', 'LIXIL', 'Panasonic'");
-    expect(forms).toContain("boiler: {");
-    expect(forms).toContain("manufacturers: ['リンナイ', 'ノーリツ', 'パロマ']");
-    expect(forms).toContain("aircon: {");
-    expect(forms).toContain("'2.2kW（6畳程度）'");
-    expect(forms).toContain("'9.0kW（29畳程度）'");
+    expect(categoryGuidance).toContain("ub: {");
+    expect(categoryGuidance).toContain("manufacturers: ['TOTO', 'LIXIL', 'Panasonic'");
+    expect(categoryGuidance).toContain("boiler: {");
+    expect(categoryGuidance).toContain("manufacturers: ['リンナイ', 'ノーリツ', 'パロマ']");
+    expect(categoryGuidance).toContain("aircon: {");
+    expect(categoryGuidance).toContain("'2.2kW（6畳程度）'");
+    expect(categoryGuidance).toContain("'9.0kW（29畳程度）'");
     expect(forms).toContain('option-product-name-suggestions');
     expect(forms).toContain('option-size-note-suggestions');
-    expect(forms).toContain('category-registration-guidance');
+    expect(categoryGuidance).toContain('category-registration-guidance');
     expect(forms).toContain('カテゴリー別の入力候補');
     expect(forms).toContain('カテゴリー別候補＋登録済みメーカー');
     expect(forms).toContain('カテゴリー・メーカー・商品名に合う既存値');
@@ -231,23 +235,23 @@ describe('商品登録管理画面の業務フロー', () => {
       'furniture: {',
       'smartlock: {',
     ]) {
-      expect(forms).toContain(categoryCode);
+      expect(categoryGuidance).toContain(categoryCode);
     }
-    expect(forms).toContain("manufacturers: ['ケイミュー', 'アイジー工業', 'セキノ興産', '稲垣商事']");
-    expect(forms).toContain("'金属屋根'");
-    expect(forms).toContain('屋根材は外壁と分けて登録します。');
+    expect(categoryGuidance).toContain("manufacturers: ['ケイミュー', 'アイジー工業', 'セキノ興産', '稲垣商事']");
+    expect(categoryGuidance).toContain("'金属屋根'");
+    expect(categoryGuidance).toContain('屋根材は外壁と分けて登録します。');
     expect(catalogSeed).toContain("roof: cid(23)");
     expect(catalogSeed).toContain("cat(C.roof, 'roof', '屋根'");
     expect(catalogSeed).toContain('外壁とは別に商品を選択します');
     expect(roofCategoryMigration).toContain("'roof'");
     expect(roofCategoryMigration).toContain("'20000000-0000-4000-8000-000000000023'::uuid");
     expect(roofCategoryMigration).toContain("where code = 'exterior-wall'");
-    expect(forms).toContain("manufacturers: ['ニチハ', 'ケイミュー', 'アイジー工業', '旭トステム外装']");
-    expect(forms).toContain("manufacturers: ['DAIKEN', '朝日ウッドテック', 'Panasonic', 'LIXIL', 'EIDAI', 'ウッドワン']");
-    expect(forms).toContain("manufacturers: ['サンゲツ', 'リリカラ', 'シンコール', 'トキワ', 'ルノン', 'DAIKEN']");
-    expect(forms).toContain("manufacturers: ['LIXIL', 'YKK AP', '三協アルミ']");
-    expect(forms).toContain("'片開き'");
-    expect(forms).toContain('玄関ドアはサッシ・室内建具と分けて登録します。');
+    expect(categoryGuidance).toContain("manufacturers: ['ニチハ', 'ケイミュー', 'アイジー工業', '旭トステム外装']");
+    expect(categoryGuidance).toContain("manufacturers: ['DAIKEN', '朝日ウッドテック', 'Panasonic', 'LIXIL', 'EIDAI', 'ウッドワン']");
+    expect(categoryGuidance).toContain("manufacturers: ['サンゲツ', 'リリカラ', 'シンコール', 'トキワ', 'ルノン', 'DAIKEN']");
+    expect(categoryGuidance).toContain("manufacturers: ['LIXIL', 'YKK AP', '三協アルミ']");
+    expect(categoryGuidance).toContain("'片開き'");
+    expect(categoryGuidance).toContain('玄関ドアはサッシ・室内建具と分けて登録します。');
     expect(catalogSeed).toContain("entranceDoor: cid(24)");
     expect(catalogSeed).toContain("cat(C.entranceDoor, 'entrance-door', '玄関ドア'");
     expect(catalogSeed).toContain("is_required: false");
@@ -255,16 +259,16 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(entranceDoorCategoryMigration).toContain("'20000000-0000-4000-8000-000000000024'::uuid");
     expect(entranceDoorCategoryMigration).toContain("'single'");
     expect(entranceDoorCategoryMigration).toContain("'shell'");
-    expect(forms).toContain("manufacturers: ['Panasonic', 'オーデリック', 'コイズミ照明', '大光電機', '東芝ライテック']");
-    expect(forms).toContain("manufacturers: ['LIXIL', 'YKK AP', '美和ロック', 'GOAL', 'SwitchBot']");
-    expect(forms).toContain("'窯業系サイディング'");
-    expect(forms).toContain("'複合フローリング'");
-    expect(forms).toContain("'ビニル壁紙'");
-    expect(forms).toContain("'引違い窓'");
-    expect(forms).toContain("'開き戸'");
-    expect(forms).toContain("'ダウンライト'");
-    expect(forms).toContain("'対応扉厚35〜55mm'");
-    expect(forms).toContain('現在のサッシカテゴリーはお客様画面非表示');
+    expect(categoryGuidance).toContain("manufacturers: ['Panasonic', 'オーデリック', 'コイズミ照明', '大光電機', '東芝ライテック']");
+    expect(categoryGuidance).toContain("manufacturers: ['LIXIL', 'YKK AP', '美和ロック', 'GOAL', 'SwitchBot']");
+    expect(categoryGuidance).toContain("'窯業系サイディング'");
+    expect(categoryGuidance).toContain("'複合フローリング'");
+    expect(categoryGuidance).toContain("'ビニル壁紙'");
+    expect(categoryGuidance).toContain("'引違い窓'");
+    expect(categoryGuidance).toContain("'開き戸'");
+    expect(categoryGuidance).toContain("'ダウンライト'");
+    expect(categoryGuidance).toContain("'対応扉厚35〜55mm'");
+    expect(categoryGuidance).toContain('現在のサッシカテゴリーはお客様画面非表示');
   });
 
   it('商品特定は既存値を候補として使える', () => {
@@ -274,7 +278,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('現在の商品マスターではシリーズ名と型番・品番を1項目で管理します');
     expect(forms).toContain('シリーズ・型番／品番');
     expect(forms).toContain('productSizeMeta');
-    expect(forms).toContain('このカテゴリーの入力目安');
+    expect(categoryGuidance).toContain('このカテゴリーの入力目安');
     expect(forms).toContain('商品管理番号');
     expect(forms).toContain('保存時に自動採番');
     expect(identityView).toContain('PRD-000001形式');

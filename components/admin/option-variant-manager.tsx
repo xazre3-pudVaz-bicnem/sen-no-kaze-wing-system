@@ -426,7 +426,7 @@ export function OptionVariantManager({
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 
   return (
-    <section id="customer-selection" className="space-y-5 scroll-mt-6">
+    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
       <ProductSectionHeading
         label="5. お客様選択"
         description="お客様が選べる部位・色・仕様などがある場合だけ設定します。"

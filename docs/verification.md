@@ -11,6 +11,7 @@
 | DB リハーサル（空の DB） | `npm run db:rehearse -- --keep` → `node scripts/db-rehearsal/check.mjs --db-url … --runtime` | 90/90 本適用・静的検査すべて通過・実行時検査 552/552（この PR の分 67 件） |
 | 本番と同じ状態からの適用 | `--applied-through 20261016110000 --prod-catalog <10/21 に取得した本番カタログ>` | 適用済み 89 本を再現した時点で差分 0 件。続けて 20261016111000 を適用し、実行時検査 552/552。適用後の確認 SQL（`postflight-quote-formal-por-guard.sql`）もすべて合格 |
 | 予定順の合算 | #529・#537・#502〜#506・v2.5 を合わせた一時ブランチ（push していない） | 空の DB・本番と同じ状態とも 99/99 本・実行時検査 895/895 |
+| 10/23 の main の取り込み後 | `npm run verify`・`npm run test:e2e` | 187 ファイル・1,491 件 passed／ビルド成功、E2E 61 件すべて passed（取り込みは衝突なし）。10/23 に取り直した本番カタログは 10/21 と完全に一致 |
 | 本番（読み取りの集計だけ） | `migration list`・`db push --dry-run`・`preflight-quote-formal-por-guard.sql`・`backups list` | 適用済み 89 本・未適用はこの 1 本だけ（dry-run も同じ）。preflight 合格（印と同じ書き出しの備考は明細・下書き・標準見積・本体の内訳とも 0 件、進行中の下書き 0 件、正式見積 0 件）。PITR は無効・日次の物理バックアップのみ |
 
 ### 同名の 0 円明細（先方の追加確認）

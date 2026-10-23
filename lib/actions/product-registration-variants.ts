@@ -6,6 +6,7 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { flattenErrors, variantChoiceSchema, variantGroupSchema, type FieldErrors } from '@/lib/validation';
+import { parseChoiceExtraPrice } from '@/lib/domain/product-variant-creation-prices';
 
 export interface ProductVariantCreateState {
   ok: boolean;
@@ -94,16 +95,35 @@ export async function createVariantGroupWithFirstChoiceAction(
       return { ok: false, fieldErrors: { _form: ['標準の選択肢を確認してください。'] } };
     }
 
-    // 画像は画面上の元の行番号で受け取る。標準を切り替えても名称と画像を取り違えない。
+    // 価格・画像は画面上の元の行番号で受け取る。標準を切り替えても選択肢と取り違えない。
+    const choicePrices = Array.from({ length: additionalChoiceNames.length + 1 }, (_, index) =>
+      parseChoiceExtraPrice(formData, index)
+    );
+    const invalidPriceIndex = choicePrices.findIndex((price) => price === null);
+    if (invalidPriceIndex >= 0) {
+      return {
+        ok: false,
+        fieldErrors: {
+          _form: [`選択肢${invalidPriceIndex + 1}の追加金額は、0〜100,000,000円の整数で入力してください。`],
+        },
+      };
+    }
+
+    // 画像と追加金額は画面上の元の行番号で受け取る。
     const additionalInputs = additionalChoiceNames
       .map((raw, index) => ({
         name: String(raw).trim(),
         choiceIndex: index >= standardIndex ? index + 1 : index,
       }));
     if (additionalInputs.some((row) => !row.name && (
-      selectedChoiceImage(formData, row.choiceIndex) || selectedChoiceImageUrl(formData, row.choiceIndex)
+      selectedChoiceImage(formData, row.choiceIndex) ||
+      selectedChoiceImageUrl(formData, row.choiceIndex) ||
+      choicePrices[row.choiceIndex] !== 0
     ))) {
-      return { ok: false, fieldErrors: { additional_choice_name: ['画像を付けた選択肢には名前を入力してください。'] } };
+      return {
+        ok: false,
+        fieldErrors: { additional_choice_name: ['画像または追加金額を指定した選択肢には名前を入力してください。'] },
+      };
     }
     const choiceInputs = [
       {
@@ -112,6 +132,7 @@ export async function createVariantGroupWithFirstChoiceAction(
         sortOrder: 0,
         fieldKey: 'first_choice_name',
         choiceIndex: standardIndex,
+        extraPrice: choicePrices[standardIndex]!,
       },
       ...additionalInputs.filter((row) => row.name).map((row, index) => ({
         name: row.name,
@@ -119,6 +140,7 @@ export async function createVariantGroupWithFirstChoiceAction(
         sortOrder: index + 1,
         fieldKey: 'additional_choice_name',
         choiceIndex: row.choiceIndex,
+        extraPrice: choicePrices[row.choiceIndex]!,
       })),
     ];
 
@@ -156,7 +178,7 @@ export async function createVariantGroupWithFirstChoiceAction(
         code: `vc-${randomUUID()}`,
         name: input.name,
         kind: input.kind,
-        extra_price: 0,
+        extra_price: input.extraPrice,
         price_on_request: false,
         image_url: selectedChoiceImageUrl(formData, input.choiceIndex) || null,
         note: null,

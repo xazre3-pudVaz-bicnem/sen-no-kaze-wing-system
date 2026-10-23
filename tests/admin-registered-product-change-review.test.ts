@@ -148,7 +148,7 @@ describe('登録済み商品の変更確認フロー', () => {
     expect(edit).not.toContain('<details');
     expect(edit).not.toContain('<summary');
     expect(edit).toContain('className="space-y-4" noValidate');
-    expect(edit).toContain('className="grid gap-3 sm:grid-cols-2"');
+    expect(edit).toContain('className="grid gap-4 sm:grid-cols-2"');
     expect(edit).toContain('data-testid="registered-option-pending-subedit"');
     expect(edit).toContain('data-testid="registered-option-current-choices"');
     expect(edit).toContain('data-testid="registered-product-display-settings"');

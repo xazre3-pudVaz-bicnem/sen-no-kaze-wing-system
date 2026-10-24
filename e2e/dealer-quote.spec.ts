@@ -9,6 +9,7 @@ import {
   logout,
   openRevisionEditor,
   requestQuoteAsCustomer,
+  resolveUnresolvedPorRows,
   revisionRowNumber,
   revisionTotal,
   signInOrRegister as signIn,
@@ -91,6 +92,68 @@ test.describe('代理店による確定見積（改訂版）', () => {
       expect(pdf.status()).toBe(200);
       expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
     }
+    await logout(page);
+  });
+
+  test('金額未確定の明細が残る間は確定見積を発行できず、金額・0円確定（理由）・対象外と確認で発行できる（D1 までの暫定）', async ({ page }) => {
+    const customer = uniqueEmail('por');
+    const { quoteId } = await requestQuoteAsCustomer(page, customer, '別途見積のテスト');
+    await logout(page);
+
+    await signIn(page, ADMIN, '/admin', '管理者');
+    const form = await openRevisionEditor(page, quoteId);
+    const review = form.getByTestId('por-review');
+    await expect(review).toBeVisible();
+    // 標準で選ばれる照明・別途工事（別途見積）は、0 円のまま未確定の行として示される
+    const rows = review.getByTestId('por-review-row');
+    const lightingRow = rows.filter({ hasText: '照明器具 ダウンライト一式' });
+    const electricRow = rows.filter({ hasText: '電気設備工事' });
+    await expect(lightingRow.getByText('未確定', { exact: true })).toBeVisible();
+    await expect(electricRow.getByText('未確定', { exact: true })).toBeVisible();
+    await expect(review.getByTestId('por-selections')).toContainText('照明器具 ダウンライト一式');
+    const issue = form.getByRole('button', { name: /版を発行/ });
+    await expect(issue).toBeDisabled();
+    await expect(form.getByTestId('por-blockers')).toContainText('金額が未確定の明細が');
+    const before = await revisionTotal(form);
+
+    // 現地確認で決まった金額を入れる（電気設備工事）
+    await electricRow.getByTestId('por-review-price').fill('120000');
+    await expect(electricRow.getByText('確定', { exact: true })).toBeVisible();
+    expect(await revisionTotal(form)).toBeGreaterThan(before);
+    // 備考に理由を書いただけでは解消しない（自由記述から状態を推測しない）
+    await lightingRow.getByTestId('por-review-remark').fill('電気設備工事に含む');
+    await expect(lightingRow.getByText('未確定', { exact: true })).toBeVisible();
+    // 照明は「0円確定」を選ぶ。今の備考は理由の欄に入る（黙って消さない）。理由が空の間は発行できない
+    await lightingRow.getByTestId('por-review-state').selectOption('zero_confirmed');
+    await expect(lightingRow).toHaveAttribute('data-line-state', 'zero_confirmed');
+    await expect(lightingRow.getByTestId('por-review-reason')).toHaveValue('電気設備工事に含む');
+    await lightingRow.getByTestId('por-review-reason').fill('');
+    await expect(form.getByTestId('por-blockers')).toContainText('理由が入っていない明細');
+    await lightingRow.getByTestId('por-review-reason').fill('電気設備工事に含む');
+    await expect(form.getByTestId('por-blockers')).not.toContainText('理由が入っていない明細');
+    await expect(form.getByTestId('por-blockers')).toContainText('金額が未確定の明細が');
+    // 表の「扱い」の列にも同じ状態が出る
+    await expect(form.locator('[data-testid="quote-line-state-cell"][data-line-state="zero_confirmed"]').first()).toBeVisible();
+
+    // 残りの未確定の行は「対象外」（今回の契約に含めない）にすると、お客様が選んだ別途見積の商品の確認だけが残る
+    await resolveUnresolvedPorRows(form, 'お客様と合意のうえ今回は対象外', 'excluded');
+    await expect(form.getByTestId('por-blockers')).not.toContainText('明細が');
+    await expect(form.getByTestId('por-blockers')).toContainText('確認にチェック');
+    await expect(issue).toBeDisabled();
+    await review.getByTestId('por-confirm').check();
+    await expect(issue).toBeEnabled();
+    await expect(form.getByTestId('por-blockers')).toHaveCount(0);
+
+    const secondQuoteId = await issueRevision(page, form);
+    expect(secondQuoteId).not.toBe(quoteId);
+    await logout(page);
+
+    // お客様の画面：新しい版に、決めた金額と 0円確定の理由が載る
+    await signIn(page, customer, '/mypage', 'テスト 太郎');
+    await page.goto(`/mypage/quotes/${secondQuoteId}`);
+    await expect(page.getByTestId('quote-table')).toContainText('電気設備工事');
+    await expect(page.getByTestId('quote-table')).toContainText('120,000');
+    await expect(page.getByTestId('quote-table')).toContainText('［0円確定］：電気設備工事に含む');
     await logout(page);
   });
 

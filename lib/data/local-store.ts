@@ -95,6 +95,16 @@ import {
 } from './store';
 import { productLedgerState, productSimulatorVisibleSetting, type ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
+import {
+  configurationPorSelections,
+  findUnresolvedLines,
+  quoteLineStateGuardError,
+  samePorSelectionKeys,
+  unconfirmedPorSelectionsError,
+  unresolvedLinesError,
+  type QuotePorSelection,
+  type QuotePorSelectionState,
+} from '@/lib/domain/quote-por';
 
 const nowIso = () => new Date().toISOString();
 /** SQL（save_configuration_atomic / create_quote_from_configuration）と同じ、版が一致しないときの文言 */
@@ -1631,7 +1641,79 @@ export class LocalStore implements DataStore {
     });
   }
 
+  /** SQL の get_quote_por_selections と同じ：見積を改訂・確定できる人（本部、または担当の代理店・総代理店）だけ */
+  private static assertCanHandleQuotePor(quote: Quote, actor: SessionUser) {
+    if (!(actor.role === 'admin' || (hasRoleAtLeast(actor.role, 'dealer') && quote.dealer_id === actor.id))) {
+      throw new StoreError('FORBIDDEN', 'この案件の別途見積を確認できません');
+    }
+  }
+
+  /** SQL の configuration_por_selections と同じ一覧（Web の案件だけ） */
+  private static porSelectionsForQuote(db: LocalDb, quote: Quote): QuotePorSelection[] {
+    if (!quote.configuration_id) return [];
+    const cfg = db.configurations.find((c) => c.id === quote.configuration_id);
+    if (!cfg) return [];
+    return configurationPorSelections(
+      {
+        items: db.configurationItems.filter((item) => item.configuration_id === cfg.id),
+        exteriorFaces: (cfg as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces ?? [],
+      },
+      { options: db.options, categories: db.categories, variantGroups: db.variantGroups, variantChoices: db.variantChoices }
+    );
+  }
+
+  private static porSelectionsConfirmed(db: LocalDb, quoteId: string, userId: string, selections: QuotePorSelection[]) {
+    if (selections.length === 0) return true;
+    return (db.quotePorConfirmations ?? []).some(
+      (c) =>
+        c.quote_id === quoteId &&
+        c.confirmed_by === userId &&
+        selections.every((selection) => c.selections.some((confirmed) => confirmed.key === selection.key))
+    );
+  }
+
+  async getQuotePorSelections(quoteId: string, actor: SessionUser): Promise<QuotePorSelectionState> {
+    return this.read((db) => {
+      const quote = db.quotes.find((q) => q.id === quoteId);
+      if (!quote) throw new StoreError('NOT_FOUND', '見積が見つかりません');
+      LocalStore.assertCanHandleQuotePor(quote, actor);
+      const selections = LocalStore.porSelectionsForQuote(db, quote);
+      return { selections, confirmed: LocalStore.porSelectionsConfirmed(db, quote.id, actor.id, selections), available: true };
+    });
+  }
+
+  /** SQL の confirm_quote_por_selections と同じ（発行とは別に記録する。発行が止まっても記録は残る） */
+  private recordQuotePorConfirmation(quoteId: string, keys: string[], actor: SessionUser) {
+    this.mutate((db) => {
+      const quote = db.quotes.find((q) => q.id === quoteId);
+      if (!quote) throw new StoreError('NOT_FOUND', '見積が見つかりません');
+      LocalStore.assertCanHandleQuotePor(quote, actor);
+      if (!quote.configuration_id) {
+        throw new StoreError('VALIDATION', 'Web の見積依頼の案件ではないため、別途見積の商品の確認はありません');
+      }
+      const request = db.quoteRequests.find((r) => r.id === quote.quote_request_id);
+      if (request?.quote_id !== quote.id || !['issued', 'accepted'].includes(quote.status)) {
+        throw new StoreError('LOCKED', 'この見積は最新の版ではありません。画面を再読み込みしてください');
+      }
+      const selections = LocalStore.porSelectionsForQuote(db, quote);
+      if (selections.length === 0) throw new StoreError('VALIDATION', '確認が必要な別途見積の商品はありません');
+      if (!samePorSelectionKeys(keys, selections)) {
+        throw new StoreError('LOCKED', '別途見積の商品が、画面を開いた後に変わりました。画面を再読み込みして確認し直してください');
+      }
+      db.quotePorConfirmations = db.quotePorConfirmations ?? [];
+      const same = db.quotePorConfirmations.some(
+        (c) => c.quote_id === quote.id && c.confirmed_by === actor.id && JSON.stringify(c.selections) === JSON.stringify(selections)
+      );
+      if (!same) {
+        db.quotePorConfirmations.push({ id: randomUUID(), quote_id: quote.id, selections, confirmed_by: actor.id, confirmed_at: nowIso() });
+      }
+    });
+  }
+
   async createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser) {
+    if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
+      this.recordQuotePorConfirmation(id, input.por_confirmation_keys, actor);
+    }
     return this.mutate((db) => {
       const parent = db.quotes.find((x) => x.id === id);
       if (!parent) throw new StoreError('NOT_FOUND', '見積が見つかりません');
@@ -1730,6 +1812,27 @@ export class LocalStore implements DataStore {
           image_url: it.image_url ?? null,
           sort_order: ++sort,
         });
+      }
+
+      // SQL と同じ止め（D1 までの暫定）：明細の表の保存境界（状態の印のある行は 0 円・0円確定は理由あり）、
+      // 金額未確定の明細が残る、またはお客様が選んだ別途見積の商品を発行する担当者が確認していなければ発行しない
+      // （例外で終わると、この変更は保存されない）
+      const newItems = db.quoteItems.filter((it) => it.quote_id === next.id).sort((a, b) => a.sort_order - b.sort_order);
+      for (const it of newItems) {
+        const guardError = quoteLineStateGuardError(it);
+        if (guardError) throw new StoreError('VALIDATION', guardError);
+      }
+      // 改訂の明細は DB と同じく台帳の紐付けで判定しない（create_quote_revision は新しい版の行に option_id を写さない）
+      const unresolvedLines = findUnresolvedLines(newItems, {
+        parentLines: db.quoteItems.filter((it) => it.quote_id === parent.id),
+        options: new Map(db.options.map((o) => [o.id, o])),
+        ignoreLineOptions: true,
+      });
+      const unresolved = newItems.filter((it) => unresolvedLines.has(it));
+      if (unresolved.length > 0) throw new StoreError('VALIDATION', unresolvedLinesError(unresolved.map((it) => it.name)));
+      const porSelections = LocalStore.porSelectionsForQuote(db, parent);
+      if (!LocalStore.porSelectionsConfirmed(db, parent.id, actor.id, porSelections)) {
+        throw new StoreError('VALIDATION', unconfirmedPorSelectionsError(porSelections));
       }
 
       this.pushNotification(db, {

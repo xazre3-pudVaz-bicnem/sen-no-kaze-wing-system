@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { finalizeStandardQuoteDraftAction, saveStandardQuoteDraftAction } from '@/lib/actions/standard-quotes';
 import { formatYen } from '@/lib/domain/pricing';
+import { chooseQuoteLineState, QUOTE_LINE_STATE_LABELS, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { ExpenseMethod, PriceMode } from '@/lib/domain/standard-estimate-money';
 import { PRICE_MODE_LABEL, STANDARD_SECTION_LABEL, type StandardSectionCode } from '@/lib/domain/standard-estimate-view';
 import {
@@ -21,14 +22,17 @@ type Props = {
   draftId: string;
   lockVersion: number;
   taxRate: string;
-  /** 保存済みの明細に価格未確定（POR）が残っているか（残っていれば発行できない） */
-  savedHasPor: boolean;
+  /** 保存済みの明細のうち、金額が未確定の行の品名（残っていれば発行できない。POR を含む） */
+  savedUnresolvedNames: string[];
   initial: StandardQuoteEditorState;
 };
 
 const pct = (value: string) => `${Math.round(Number(value) * 10000) / 100}%`;
 
-export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor, initial }: Props) {
+/** 価格の決め方の選択肢。「0円確定」「対象外」は本体以外の区分だけ（price_mode は manual・売価 0 円） */
+type PriceChoice = PriceMode | QuoteLineState;
+
+export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnresolvedNames, initial }: Props) {
   const router = useRouter();
   const [state, setState] = useState(initial);
   const [dirty, setDirty] = useState(false);
@@ -49,7 +53,7 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
       ...current,
       lines: [
         ...current.lines,
-        { line_key: null, section_code: section, name: '', description: null, quantity: '1', unit: '式', price_mode: 'auto', base_unit_cost: null, cost_unit_price: 0, unit_price: null, remark: null },
+        { line_key: null, section_code: section, name: '', description: null, quantity: '1', unit: '式', price_mode: 'auto', base_unit_cost: null, cost_unit_price: 0, unit_price: null, remark: null, line_state: null, line_state_reason: '' },
       ],
     }));
     setDirty(true);
@@ -59,6 +63,18 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
     setDirty(true);
   };
   const intOrNull = (value: string) => (value.trim() === '' ? null : Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : null);
+  // 「0円確定」「対象外」は「金額を入力」の 0 円の行にし、理由・メモが空なら今の備考を入れておく
+  const choosePrice = (index: number, choice: PriceChoice) => {
+    setState((current) => ({
+      ...current,
+      lines: current.lines.map((line, i) => {
+        if (i !== index) return line;
+        if (choice === 'excluded' || choice === 'zero_confirmed') return { ...chooseQuoteLineState(line, choice), price_mode: 'manual' };
+        return { ...line, price_mode: choice, line_state: null };
+      }),
+    }));
+    setDirty(true);
+  };
 
   const save = () =>
     startTransition(async () => {
@@ -83,7 +99,7 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
       if (result && !result.ok) setNotice({ tone: 'danger', text: result.error });
     });
 
-  const blockFinalize = dirty || savedHasPor;
+  const blockFinalize = dirty || savedUnresolvedNames.length > 0;
 
   return (
     <div className="space-y-5" data-testid="standard-quote-editor">
@@ -159,10 +175,14 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
                           <Input value={line.unit ?? ''} aria-label="単位" className="w-16" onChange={(e) => updateLine(index, { unit: e.target.value || null })} />
                         </td>
                         <td className="px-2 py-1">
-                          <Select value={line.price_mode} aria-label="価格の決め方" onChange={(e) => updateLine(index, { price_mode: e.target.value as PriceMode })}>
+                          <Select value={line.line_state ?? line.price_mode} aria-label="価格の決め方" onChange={(e) => choosePrice(index, e.target.value as PriceChoice)}>
                             {(Object.keys(PRICE_MODE_LABEL) as PriceMode[]).map((mode) => (
                               <option key={mode} value={mode}>{PRICE_MODE_LABEL[mode]}</option>
                             ))}
+                            {section !== 'base' &&
+                              (['zero_confirmed', 'excluded'] as const).map((state) => (
+                                <option key={state} value={state}>{QUOTE_LINE_STATE_LABELS[state]}</option>
+                              ))}
                           </Select>
                         </td>
                         <td className="px-2 py-1 text-right tabular-nums">
@@ -173,8 +193,9 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
                             </span>
                           ) : (
                             <Input
-                              value={line.cost_unit_price === null ? '' : String(line.cost_unit_price)}
-                              disabled={line.price_mode === 'por'}
+                              value={line.line_state === 'excluded' ? '0' : line.cost_unit_price === null ? '' : String(line.cost_unit_price)}
+                              disabled={line.price_mode === 'por' || line.line_state === 'excluded'}
+                              title={line.line_state === 'excluded' ? '対象外の行は今回の契約に含めないため、原価も 0 円です' : undefined}
                               aria-label="原価単価"
                               className="w-28 text-right"
                               inputMode="numeric"
@@ -183,7 +204,9 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
                           )}
                         </td>
                         <td className="px-2 py-1 text-right tabular-nums">
-                          {line.price_mode === 'manual' ? (
+                          {line.line_state ? (
+                            <span className="text-muted">{QUOTE_LINE_STATE_LABELS[line.line_state]}</span>
+                          ) : line.price_mode === 'manual' ? (
                             <Input
                               value={line.unit_price === null ? '' : String(line.unit_price)}
                               aria-label="売価単価"
@@ -197,9 +220,21 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
                             <span className="text-warn">未確定</span>
                           )}
                         </td>
-                        <td className="px-2 py-1 text-right tabular-nums">{lineMoney && lineMoney.saleAmount !== null ? formatYen(lineMoney.saleAmount) : '—'}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">
+                          {line.line_state === 'excluded' ? '対象外' : lineMoney && lineMoney.saleAmount !== null ? formatYen(lineMoney.saleAmount) : '—'}
+                        </td>
                         <td className="px-2 py-1">
-                          <Input value={line.remark ?? ''} aria-label="備考" onChange={(e) => updateLine(index, { remark: e.target.value || null })} />
+                          {line.line_state ? (
+                            <Input
+                              value={line.line_state_reason}
+                              maxLength={190}
+                              placeholder={line.line_state === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
+                              aria-label={line.line_state === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'}
+                              onChange={(e) => updateLine(index, { line_state_reason: e.target.value })}
+                            />
+                          ) : (
+                            <Input value={line.remark ?? ''} aria-label="備考" onChange={(e) => updateLine(index, { remark: e.target.value || null })} />
+                          )}
                         </td>
                         <td className="px-2 py-1">
                           <Button type="button" variant="ghost" size="sm" onClick={() => removeLine(index)}>
@@ -284,7 +319,12 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedHasPor
             </ConfirmActionButton>
           </div>
           {dirty && <span className="text-xs text-muted">保存していない変更があります。発行の前に保存してください。</span>}
-          {!dirty && savedHasPor && <span className="text-xs text-warn">価格未確定の行があるため発行できません。自動か売価の入力で価格を確定して保存してください。</span>}
+          {!dirty && savedUnresolvedNames.length > 0 && (
+            <span className="max-w-md text-right text-xs text-warn" data-testid="standard-quote-unresolved">
+              金額が未確定の行があるため発行できません（{savedUnresolvedNames.join('、')}）。自動か売価の入力で金額を確定するか、
+              「0円確定」（理由が必要）か「対象外」を選んで保存してください。
+            </span>
+          )}
         </div>
       </section>
       <p className="text-xs text-muted">

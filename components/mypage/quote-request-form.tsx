@@ -67,7 +67,25 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
     || (!addressReadFromForm && sameContactAndSiteAddress(v.address, v.site_address))
     || (!addressReadFromForm && state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE);
   return (
-    <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form">
+    <form
+      action={action}
+      className="card space-y-5 p-6 sm:p-8"
+      noValidate
+      data-testid="quote-request-form"
+      onSubmitCapture={(event) => {
+        // サイレントなブラウザ自動入力でも、送信時のDOM値を最終確認する。
+        const data = new FormData(event.currentTarget);
+        const contact = String(data.get('address') ?? '');
+        const site = String(data.get('site_address') ?? '');
+        if (sameContactAndSiteAddress(contact, site)
+          && data.get(SAME_SITE_ADDRESS_CONFIRMATION_FIELD) !== 'on') {
+          event.preventDefault();
+          setObservedAddresses({ contact, site });
+          setAddressReadFromForm(true);
+          setSameAddressConfirmed(false);
+        }
+      }}
+    >
       <input type="hidden" name="configuration_id" value={configurationId} />
       <input type="hidden" name="expected_lock_version" value={lockVersion ?? ''} />
       <input type="hidden" name="site_profile_lock_version" value={v.site_profile_lock_version ?? ''} />

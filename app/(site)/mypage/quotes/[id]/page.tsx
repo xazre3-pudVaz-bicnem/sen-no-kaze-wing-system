@@ -35,6 +35,16 @@ export default async function QuoteDetailPage({
   const detail = await store.getQuote(id, user);
   if (!detail) notFound();
   const { quote, items, request } = detail;
+  // ここは発行済みQuoteのSnapshotとは別の、現在の保存プランの設置予定地域。
+  // 旧見積や非Web案件にConfigurationがなくても見積の閲覧を妨げない。
+  const savedPlan = quote.configuration_id
+    ? await store.getConfiguration(quote.configuration_id, user)
+    : null;
+  const savedPlanSiteArea = savedPlan
+    ? savedPlan.configuration.site_location_undecided
+      ? '未定'
+      : [savedPlan.configuration.site_prefecture, savedPlan.configuration.site_municipality].filter(Boolean).join(' ') || '未選択'
+    : null;
   const isFormal = isFormalQuote(quote);
   const canAccept = isQuoteAcceptanceEligible(quote, request);
   const canDecline = isQuoteDeclineEligible(quote, request);
@@ -298,9 +308,36 @@ export default async function QuoteDetailPage({
             </div>
             <div className="card p-6 text-sm">
               <p className="font-semibold">ご依頼内容</p>
-              <dl className="mt-2 space-y-1 text-ink-soft">
-                <div><dt className="inline text-muted">設置予定地：</dt><dd className="inline">{request?.contact.site_address || '未記入'}</dd></div>
-                <div><dt className="inline text-muted">ご要望：</dt><dd className="inline whitespace-pre-wrap">{request?.message || '—'}</dd></div>
+              <dl className="mt-2 space-y-3 text-ink-soft" data-testid="quote-request-address-details">
+                <div data-testid="quote-contact-address">
+                  <dt className="text-xs text-muted">お客様の連絡先住所（見積依頼時）</dt>
+                  <dd className="mt-1 whitespace-pre-wrap">{request?.contact.address || '未記入'}</dd>
+                </div>
+                {savedPlanSiteArea !== null && (
+                  <div data-testid="quote-saved-plan-site-area">
+                    <dt className="text-xs text-muted">保存プランの設置予定地域（現在の設定）</dt>
+                    <dd className="mt-1">{savedPlanSiteArea}</dd>
+                  </div>
+                )}
+                <div data-testid="quote-request-site-address">
+                  <dt className="text-xs text-muted">見積依頼時の設置先情報（詳しい住所・希望地域）</dt>
+                  <dd className="mt-1 whitespace-pre-wrap">{request?.contact.site_address || '未記入'}</dd>
+                </div>
+                {savedPlanSiteArea !== null && (
+                  <p className="text-xs leading-relaxed text-muted">
+                    設置予定地域は現在の保存プランの設定です。見積発行時点の地域情報を保証するものではありません。
+                  </p>
+                )}
+                {request?.contact.address && request?.contact.site_address
+                  && request.contact.address.trim() === request.contact.site_address.trim() && (
+                    <p className="text-xs leading-relaxed text-muted" data-testid="quote-site-address-same-as-contact">
+                      連絡先住所と設置先情報に同じ住所が登録されています。設置場所が異なる場合は担当者へお伝えください。
+                    </p>
+                  )}
+                <div>
+                  <dt className="text-xs text-muted">ご要望</dt>
+                  <dd className="mt-1 whitespace-pre-wrap">{request?.message || '—'}</dd>
+                </div>
               </dl>
             </div>
           </div>

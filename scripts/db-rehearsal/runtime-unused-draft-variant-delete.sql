@@ -21,7 +21,7 @@ begin
   end;
   reset role;
   perform pg_catalog.set_config('request.jwt.claims', '', true);
-  return pg_catalog.coalesce(v_out, '(null)');
+  return coalesce(v_out, '(null)');
 end;
 $fn$;
 

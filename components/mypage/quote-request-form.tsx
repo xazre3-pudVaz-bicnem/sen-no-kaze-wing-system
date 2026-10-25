@@ -19,6 +19,8 @@ interface Props {
   siteProfile?: SiteProfile | null;
   /** シミュレーターで選んだ地域（希望地域の初期値） */
   siteArea?: string;
+  /** 保存されたシミュレーターの地域（未定・未選択も区別して表示） */
+  selectedSiteAreaLabel: string;
   defaults: {
     full_name: string;
     company_name: string;
@@ -34,7 +36,7 @@ const initial: QuoteRequestState = { ok: false };
 
 const CONFIGURATION_CONFLICT_MESSAGE = '他の画面でこのプランが更新されています';
 
-export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], today, siteProfile = null, siteArea, defaults }: Props) {
+export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], today, siteProfile = null, siteArea, selectedSiteAreaLabel, defaults }: Props) {
   const [state, action, pending] = useActionState(requestQuoteAction, initial);
   const v: Record<string, string | undefined> = { ...defaults, ...(state.values ?? {}) };
   const isConflict = Boolean(state.error?.includes(CONFIGURATION_CONFLICT_MESSAGE));
@@ -84,7 +86,11 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
       <Field label="ご住所" htmlFor="address" required errors={state.fieldErrors?.address}>
         <Input id="address" name="address" defaultValue={v.address} autoComplete="street-address" required />
       </Field>
-      <Field label="設置予定地" htmlFor="site_address" hint="分かる範囲で構いません。土地をお持ちなら住所・地番まで（例：石川県七尾市○○ 海沿いの傾斜地）" errors={state.fieldErrors?.site_address}>
+      <div className="rounded-lg border border-line bg-sand/50 px-4 py-3" data-testid="quote-request-selected-site-area">
+        <p className="text-xs text-ink-soft">シミュレーターで選択した設置予定地</p>
+        <p className="mt-1 text-sm font-semibold text-ink">{selectedSiteAreaLabel}</p>
+      </div>
+      <Field label="詳しい設置住所・地番（任意）" htmlFor="site_address" hint="分かる場合だけ入力してください。設置場所が未定でも見積依頼できます。" errors={state.fieldErrors?.site_address}>
         <Input id="site_address" name="site_address" defaultValue={v.site_address} />
       </Field>
       <fieldset className="space-y-4 rounded-lg border border-line p-4" data-testid="quote-request-site-profile">

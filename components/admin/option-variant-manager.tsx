@@ -76,6 +76,15 @@ function GroupFields({
         />
       </Field>
 
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-ivory/20 px-3 py-2" data-testid="variant-group-visibility">
+        <Checkbox
+          checked={customerVisible}
+          onChange={(event) => setCustomerVisible(event.target.checked)}
+          label="お客様に表示する"
+        />
+        <p className="text-xs text-muted">不要ならチェックを外して「選択項目を保存」（履歴は保持）。</p>
+      </div>
+
       <details className="rounded-xl border border-line bg-ivory/30 p-4">
         <summary className="cursor-pointer text-sm font-semibold">詳細設定</summary>
         <p className="mt-2 text-xs text-muted">
@@ -92,13 +101,6 @@ function GroupFields({
                 defaultValue={group?.sort_order ?? groups.length}
               />
             </Field>
-            <div className="flex items-end">
-              <Checkbox
-                checked={customerVisible}
-                onChange={(event) => setCustomerVisible(event.target.checked)}
-                label="お客様に表示する"
-              />
-            </div>
           </div>
 
           <Field label="補足" htmlFor={`variant-group-note-${group?.id ?? 'new'}`} hint="お客様画面の選択項目の下に表示します" errors={e.note}>
@@ -294,6 +296,15 @@ function ChoiceEditor({
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-ivory/20 px-3 py-2" data-testid="variant-choice-visibility">
+          <Checkbox
+            checked={customerVisible}
+            onChange={(event) => setCustomerVisible(event.target.checked)}
+            label="お客様に表示する"
+          />
+          <span className="text-xs text-muted">不要ならチェックを外して「選択肢を保存」（履歴は保持）。</span>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2" data-testid="draft-choice-image-row">
           <label className="sr-only" htmlFor={`variant-choice-image-url-${choice?.id ?? group.id}`}>画像URL（任意）</label>
           <Input
@@ -357,11 +368,6 @@ function ChoiceEditor({
         </p>
         <div className="mt-4 space-y-4">
           <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl border border-line bg-white px-4 py-3">
-            <Checkbox
-              checked={customerVisible}
-              onChange={(event) => setCustomerVisible(event.target.checked)}
-              label="お客様に表示する"
-            />
             <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
           </div>
 
@@ -535,7 +541,7 @@ export function OptionVariantManager({
                 </div>
 
                 <details className="rounded-xl border border-line bg-ivory/30 p-4">
-                  <summary className="cursor-pointer text-sm font-semibold">この項目の名前・詳細設定</summary>
+                  <summary className="cursor-pointer text-sm font-semibold">この項目の名前・詳細設定（非表示もここで設定）</summary>
                   <div className="mt-4">
                     <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
                   </div>
@@ -548,7 +554,7 @@ export function OptionVariantManager({
       )}
 
       <p className="text-xs text-muted">
-        使用済みの見積・保存仕様との整合を守るため、物理削除は行いません。不要になった項目や選択肢は「お客様に表示する」をOFFにして管理します。
+        選択項目や選択肢は、履歴を守るため削除せず非表示にします。編集画面の「お客様に表示する」をOFFにして保存してください。
       </p>
     </section>
   );

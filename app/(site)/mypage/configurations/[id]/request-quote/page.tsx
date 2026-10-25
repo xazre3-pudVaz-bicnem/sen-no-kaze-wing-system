@@ -35,6 +35,10 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   const siteArea = configuration.site_location_undecided
     ? ''
     : [configuration.site_prefecture, configuration.site_municipality].filter(Boolean).join('');
+  // 表示用には区切りを入れる。未定・未選択は、詳細な住所を入力した扱いにしない。
+  const selectedSiteAreaLabel = configuration.site_location_undecided
+    ? '未定'
+    : [configuration.site_prefecture, configuration.site_municipality].filter(Boolean).join(' ') || '未選択';
   const dealers = (await caseFlow.listPublishedDealerProfiles())
     .filter((dealer) => dealerServesArea(dealer, configuration.site_prefecture ?? null, configuration.site_municipality ?? null))
     .map((dealer) => ({ id: dealer.dealer_id, name: dealer.display_name }));
@@ -67,6 +71,7 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
             today={todayInJapan()}
             siteProfile={siteProfile}
             siteArea={siteArea}
+            selectedSiteAreaLabel={selectedSiteAreaLabel}
             defaults={{
               full_name: profile?.full_name ?? '',
               company_name: profile?.company_name ?? '',

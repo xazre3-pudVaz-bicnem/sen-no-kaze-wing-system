@@ -67,17 +67,9 @@ export function RegisterForm({ next }: { next: string }) {
       <Field label="法人名" htmlFor="company_name" errors={state.fieldErrors?.company_name}>
         <Input id="company_name" name="company_name" autoComplete="organization" defaultValue={v.company_name} />
       </Field>
-      <Field label="電話番号" htmlFor="phone" required errors={state.fieldErrors?.phone}>
-        <Input id="phone" name="phone" type="tel" autoComplete="tel" inputMode="tel" defaultValue={v.phone} required />
-      </Field>
-      <div className="grid gap-5 sm:grid-cols-[10rem_1fr]">
-        <Field label="郵便番号" htmlFor="postal_code" errors={state.fieldErrors?.postal_code}>
-          <Input id="postal_code" name="postal_code" autoComplete="postal-code" inputMode="numeric" defaultValue={v.postal_code} placeholder="123-4567" />
-        </Field>
-        <Field label="住所" htmlFor="address" required errors={state.fieldErrors?.address}>
-          <Input id="address" name="address" autoComplete="street-address" defaultValue={v.address} required />
-        </Field>
-      </div>
+      <p className="text-sm leading-relaxed text-ink-soft">
+        電話番号・ご住所は、見積依頼をする際に入力していただきます。
+      </p>
       <div>
         <Checkbox
           name="agree"

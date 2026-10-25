@@ -20,17 +20,18 @@ export function ProfileForm({ defaults }: Props) {
       <Field label="法人名" htmlFor="company_name" errors={state.fieldErrors?.company_name}>
         <Input id="company_name" name="company_name" defaultValue={v.company_name} />
       </Field>
-      <Field label="電話番号" htmlFor="phone" required errors={state.fieldErrors?.phone}>
-        <Input id="phone" name="phone" type="tel" defaultValue={v.phone} required />
+      <Field label="電話番号（任意）" htmlFor="phone" errors={state.fieldErrors?.phone}>
+        <Input id="phone" name="phone" type="tel" defaultValue={v.phone} />
       </Field>
       <div className="grid gap-5 sm:grid-cols-[10rem_1fr]">
         <Field label="郵便番号" htmlFor="postal_code" errors={state.fieldErrors?.postal_code}>
           <Input id="postal_code" name="postal_code" defaultValue={v.postal_code} />
         </Field>
-        <Field label="住所" htmlFor="address" required errors={state.fieldErrors?.address}>
-          <Input id="address" name="address" defaultValue={v.address} required />
+        <Field label="住所（任意）" htmlFor="address" errors={state.fieldErrors?.address}>
+          <Input id="address" name="address" defaultValue={v.address} />
         </Field>
       </div>
+      <p className="text-sm text-ink-soft">電話番号・住所は、見積依頼時に入力できます。</p>
       <Button type="submit" disabled={pending}>
         {pending && <Spinner />}
         保存する

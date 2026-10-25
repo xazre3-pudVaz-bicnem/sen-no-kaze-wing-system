@@ -35,7 +35,7 @@ function notConfigured(): AuthFormState {
 }
 
 export async function signUpAction(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const keys = ['email', 'full_name', 'company_name', 'phone', 'postal_code', 'address'];
+  const keys = ['email', 'full_name', 'company_name'];
   const parsed = signUpSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error), values: valuesOf(formData, keys) };
   const { agree, ...input } = parsed.data;
@@ -44,7 +44,7 @@ export async function signUpAction(_prev: AuthFormState, formData: FormData): Pr
 
   if (isLocalMode()) {
     const { localSignUp } = await import('@/lib/auth/local-auth');
-    const r = await localSignUp(input);
+    const r = await localSignUp({ ...input, phone: null, postal_code: null, address: null });
     if (!r.ok) return { ok: false, error: r.error, values: valuesOf(formData, keys) };
     redirect(next);
   }
@@ -59,9 +59,6 @@ export async function signUpAction(_prev: AuthFormState, formData: FormData): Pr
       data: {
         full_name: input.full_name,
         company_name: input.company_name ?? '',
-        phone: input.phone,
-        postal_code: input.postal_code ?? '',
-        address: input.address,
       },
     },
   });

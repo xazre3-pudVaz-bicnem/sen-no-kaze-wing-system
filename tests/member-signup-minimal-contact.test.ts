@@ -83,6 +83,7 @@ describe('会員登録の最小入力と見積依頼での連絡先取得', () =
     expect(quoteRequestSchema.safeParse({ ...quote, phone: '' }).success).toBe(false);
     expect(quoteRequestSchema.safeParse({ ...quote, address: '' }).success).toBe(false);
     expect(quoteForm).toContain('label="電話番号" htmlFor="phone" required');
-    expect(quoteForm).toContain('label="ご住所" htmlFor="address" required');
+    expect(quoteForm).toContain('label="お客様のご住所（連絡先）" htmlFor="address"');
+    expect(quoteForm).toContain('name="address" defaultValue={v.address} autoComplete="street-address" required');
   });
 });

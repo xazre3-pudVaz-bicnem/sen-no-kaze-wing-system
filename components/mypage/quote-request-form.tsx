@@ -83,7 +83,7 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
           <Input id="phone" name="phone" type="tel" defaultValue={v.phone} autoComplete="tel" required />
         </Field>
       </div>
-      <Field label="ご住所" htmlFor="address" required errors={state.fieldErrors?.address}>
+      <Field label="お客様のご住所（連絡先）" htmlFor="address" hint="Wingの設置予定地とは異なる住所でも構いません。" required errors={state.fieldErrors?.address}>
         <Input id="address" name="address" defaultValue={v.address} autoComplete="street-address" required />
       </Field>
       <div className="rounded-lg border border-line bg-sand/50 px-4 py-3" data-testid="quote-request-selected-site-area">

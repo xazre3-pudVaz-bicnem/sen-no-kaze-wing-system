@@ -117,52 +117,52 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
         </summary>
         <fieldset className="min-w-0 space-y-4 border-t border-line p-4" data-testid="quote-request-preferences">
           <legend className="sr-only">打合せのご希望（任意）</legend>
-        {dealers.length > 0 && (
-          <Field label="相談したい代理店" htmlFor="preferred_dealer_id" hint="設置予定地に対応している代理店です。本部が担当を決めるときの参考にします">
-            <Select id="preferred_dealer_id" name="preferred_dealer_id" defaultValue={v.preferred_dealer_id ?? ''}>
-              <option value="">指定しない</option>
-              {dealers.map((dealer) => (
-                <option key={dealer.id} value={dealer.id}>
-                  {dealer.name}
+          {dealers.length > 0 && (
+            <Field label="相談したい代理店" htmlFor="preferred_dealer_id" hint="設置予定地に対応している代理店です。本部が担当を決めるときの参考にします">
+              <Select id="preferred_dealer_id" name="preferred_dealer_id" defaultValue={v.preferred_dealer_id ?? ''}>
+                <option value="">指定しない</option>
+                {dealers.map((dealer) => (
+                  <option key={dealer.id} value={dealer.id}>
+                    {dealer.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field label="打合せの方法" htmlFor="meeting_method">
+            <Select id="meeting_method" name="meeting_method" defaultValue={v.meeting_method ?? ''}>
+              <option value="">おまかせ</option>
+              {MEETING_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {MEETING_METHOD_LABELS[method]}
                 </option>
               ))}
             </Select>
           </Field>
-        )}
-        <Field label="打合せの方法" htmlFor="meeting_method">
-          <Select id="meeting_method" name="meeting_method" defaultValue={v.meeting_method ?? ''}>
-            <option value="">おまかせ</option>
-            {MEETING_METHODS.map((method) => (
-              <option key={method} value={method}>
-                {MEETING_METHOD_LABELS[method]}
-              </option>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">打合せの希望日（3 つまで）</p>
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="grid grid-cols-[1fr_9rem] gap-2">
+                <Input
+                  type="date"
+                  name={`slot_${n}_date`}
+                  min={today}
+                  defaultValue={v[`slot_${n}_date`]}
+                  aria-label={`第${n}希望の日付`}
+                />
+                <Select name={`slot_${n}_period`} defaultValue={v[`slot_${n}_period`] ?? 'any'} aria-label={`第${n}希望の時間帯`}>
+                  {SLOT_PERIODS.map((period) => (
+                    <option key={period} value={period}>
+                      {SLOT_PERIOD_LABELS[period]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             ))}
-          </Select>
-        </Field>
-        <div className="space-y-2">
-          <p className="text-sm font-medium">打合せの希望日（3 つまで）</p>
-          {[1, 2, 3].map((n) => (
-            <div key={n} className="grid grid-cols-[1fr_9rem] gap-2">
-              <Input
-                type="date"
-                name={`slot_${n}_date`}
-                min={today}
-                defaultValue={v[`slot_${n}_date`]}
-                aria-label={`第${n}希望の日付`}
-              />
-              <Select name={`slot_${n}_period`} defaultValue={v[`slot_${n}_period`] ?? 'any'} aria-label={`第${n}希望の時間帯`}>
-                {SLOT_PERIODS.map((period) => (
-                  <option key={period} value={period}>
-                    {SLOT_PERIOD_LABELS[period]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          ))}
-        </div>
-        <Field label="日程のご要望" htmlFor="schedule_note">
-          <Textarea id="schedule_note" name="schedule_note" defaultValue={v.schedule_note} placeholder="平日の夕方以降が都合が良い、など" rows={2} />
-        </Field>
+          </div>
+          <Field label="日程のご要望" htmlFor="schedule_note">
+            <Textarea id="schedule_note" name="schedule_note" defaultValue={v.schedule_note} placeholder="平日の夕方以降が都合が良い、など" rows={2} />
+          </Field>
         </fieldset>
       </details>
       <Button type="submit" size="lg" className="w-full" disabled={pending} data-testid="submit-quote-request">

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
 import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth/session';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
@@ -82,7 +83,7 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
               site_profile_lock_version: siteProfile ? String(siteProfile.lock_version) : '',
             }}
           />
-          <aside className="card h-fit overflow-hidden lg:sticky lg:top-24">
+          <aside className="card h-fit overflow-hidden lg:sticky lg:top-24" data-testid="quote-request-price-summary">
             {configuration.preview_image_url && (
               <div className="relative aspect-[16/10] bg-sand">
                 <SmartImage src={configuration.preview_image_url} alt="完成イメージ" fill sizes="(min-width: 1024px) 22rem, 100vw" className="object-cover" />
@@ -91,18 +92,38 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
             <div className="p-5">
               <p className="font-semibold">{configuration.name}</p>
               <p className="text-xs text-muted">{bundle.model.name}</p>
-              <dl className="mt-3 space-y-1 text-sm">
-                <div className="flex justify-between"><dt className="text-ink-soft">本体一式</dt><dd>{formatYen(pricing.base_price)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted">本体諸費用</dt><dd className="text-muted">{formatYen(pricing.base_expense)}</dd></div>
-                {optionLines.map((l) => (
-                  <div key={l.code} className="flex justify-between gap-2"><dt className="text-ink-soft">{l.name}</dt><dd className="shrink-0">{l.price_on_request ? '別途' : formatYen(l.amount)}</dd></div>
-                ))}
-                <div className="flex justify-between"><dt className="text-muted">オプション諸費用</dt><dd className="text-muted">{formatYen(pricing.option_expense)}</dd></div>
-                {siteworkLines.length > 0 && <div className="flex justify-between"><dt className="text-muted">別途工事（{siteworkLines.length}項目）</dt><dd className="text-muted">別途</dd></div>}
-                <div className="flex justify-between border-t border-line pt-2"><dt>税抜請負額</dt><dd>{formatYen(pricing.subtotal)}</dd></div>
-                <div className="flex justify-between"><dt>消費税</dt><dd>{formatYen(pricing.tax)}</dd></div>
-                <div className="flex items-baseline justify-between pt-1"><dt className="font-semibold">合計（税込）</dt><dd className="font-serif text-2xl">{formatYen(pricing.total)}</dd></div>
-              </dl>
+              <div className="mt-4 rounded-lg bg-sand/60 px-4 py-3" data-testid="quote-request-total">
+                <p className="text-xs font-semibold text-ink-soft">概算合計（税込）</p>
+                <p className="mt-1 font-serif text-2xl font-semibold tabular-nums text-ink">{formatYen(pricing.total)}</p>
+              </div>
+              {(siteworkLines.length > 0 || optionLines.some((l) => l.price_on_request)) && (
+                <p className="mt-2 text-xs leading-relaxed text-ink-soft" data-testid="quote-request-excluded-work">
+                  別途見積・別途工事の内容や金額は、設置条件の確認後にご案内します。
+                </p>
+              )}
+              <details className="group mt-4 rounded-lg border border-line" data-testid="quote-request-price-breakdown">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-3 py-3 text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden">
+                  <span>商品明細・金額の内訳を見る</span>
+                  <ChevronDown className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <dl className="space-y-2 border-t border-line px-3 py-3 text-sm" data-testid="quote-request-full-breakdown">
+                  <div className="flex justify-between gap-2"><dt className="min-w-0 text-ink-soft">本体一式</dt><dd className="shrink-0 tabular-nums">{formatYen(pricing.base_price)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt className="min-w-0 text-muted">本体諸費用</dt><dd className="shrink-0 tabular-nums text-muted">{formatYen(pricing.base_expense)}</dd></div>
+                  {optionLines.map((l) => (
+                    <div key={l.code} className="flex justify-between gap-2">
+                      <dt className="min-w-0 break-words text-ink-soft">{l.name}</dt>
+                      <dd className="shrink-0 tabular-nums">{l.price_on_request ? '別途' : formatYen(l.amount)}</dd>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-2"><dt className="min-w-0 text-muted">オプション諸費用</dt><dd className="shrink-0 tabular-nums text-muted">{formatYen(pricing.option_expense)}</dd></div>
+                  {siteworkLines.length > 0 && (
+                    <div className="flex justify-between gap-2"><dt className="min-w-0 text-muted">別途工事（{siteworkLines.length}項目）</dt><dd className="shrink-0 text-muted">別途</dd></div>
+                  )}
+                  <div className="flex justify-between gap-2 border-t border-line pt-3"><dt>税抜請負額</dt><dd className="shrink-0 tabular-nums">{formatYen(pricing.subtotal)}</dd></div>
+                  <div className="flex justify-between gap-2"><dt>消費税</dt><dd className="shrink-0 tabular-nums">{formatYen(pricing.tax)}</dd></div>
+                  <div className="flex justify-between gap-2 border-t border-line pt-2 font-semibold"><dt>合計（税込）</dt><dd className="shrink-0 tabular-nums">{formatYen(pricing.total)}</dd></div>
+                </dl>
+              </details>
               <p className="mt-3 text-xs text-muted">{PRICE_DISCLAIMER}</p>
               <Link href={`/simulator/${slug}?c=${configuration.id}`} className="btn-ghost btn-sm mt-4 w-full">仕様を変更する</Link>
             </div>

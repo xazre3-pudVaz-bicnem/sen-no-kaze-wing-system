@@ -33,6 +33,10 @@ describe('見積依頼：連絡先住所と設置住所が同一の場合の誤�
     expect(form).toContain('onFocus={(event) => refreshAddressesFromForm(event.currentTarget.form)}');
     expect(form).toContain('onInput={(event) => refreshAddressesFromForm(event.currentTarget.form)}');
     expect(form).toContain('!addressReadFromForm && state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE');
+    expect(form).toContain('onSubmitCapture={(event) => {');
+    expect(form).toContain("data.get(SAME_SITE_ADDRESS_CONFIRMATION_FIELD) !== 'on'");
+    expect(form).toContain('event.preventDefault();');
+    expect(form).toContain('setObservedAddresses({ contact, site });');
     expect(form).toContain('name={SAME_SITE_ADDRESS_CONFIRMATION_FIELD}');
     expect(form).toContain('checked={sameAddressConfirmed}');
     expect(form).toContain('setSameAddressConfirmed(false)');

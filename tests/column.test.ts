@@ -125,8 +125,11 @@ describe('記事の読み込み', () => {
   });
 
   it('公開記事は出典と本文の条件を満たしている', () => {
-    for (const a of getPublishedColumnArticles()) {
-      const others = getPublishedColumnArticles().filter((x) => x.slug !== a.slug);
+    // 記事は毎日 1 本ずつ増える。ループの中で毎回読み直すと記事数の 2 乗でファイルを読むことになり、
+    // 並列実行中の CI で 5 秒の制限を超えるため、一覧は 1 回だけ読む
+    const published = getPublishedColumnArticles();
+    for (const a of published) {
+      const others = published.filter((x) => x.slug !== a.slug);
       const r = validateArticle(a, others.filter((x) => x.title !== a.title));
       expect(r.errors, `${a.slug}: ${r.errors.join(' / ')}`).toEqual([]);
       expect(bodyLength(a.body)).toBeGreaterThan(900);

@@ -98,7 +98,7 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
               </div>
               {(siteworkLines.length > 0 || optionLines.some((l) => l.price_on_request)) && (
                 <p className="mt-2 text-xs leading-relaxed text-ink-soft" data-testid="quote-request-excluded-work">
-                  別途見積・別途工事の金額は、上記の合計に含まれません。
+                  別途見積・別途工事の内容や金額は、設置条件の確認後にご案内します。
                 </p>
               )}
               <details className="group mt-4 rounded-lg border border-line" data-testid="quote-request-price-breakdown">

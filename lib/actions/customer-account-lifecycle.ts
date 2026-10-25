@@ -14,6 +14,10 @@ export async function requestCustomerWithdrawalAction(formData: FormData): Promi
   const user = await getSessionUser();
   if (!user) redirect('/login?next=/mypage/withdrawal');
   if (user.role !== 'customer') redirect('/mypage?forbidden=1');
+  // getSessionUser はprofile欠落時にcustomerを仮定するため、DB上の役割も照合してfail closed。
+  const store = await getStore();
+  const profile = await store.getProfile(user.id);
+  if (!profile || profile.role_code !== 'customer') redirect(`${withdrawalPath}?error=blocked`);
   if (formData.get('confirmed') !== 'yes') redirect(`${withdrawalPath}?error=invalid`);
 
   // アカウント削除やAuth Admin APIを直接呼ばない。本人確認と受付はDB側で最終保証する。

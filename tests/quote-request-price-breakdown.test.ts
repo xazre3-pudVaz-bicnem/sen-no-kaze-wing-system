@@ -39,7 +39,7 @@ describe('見積依頼：合計を先に表示し明細を折り畳む', () => {
     }
     expect(detail).toContain('siteworkLines.length > 0');
     expect(page).toContain('data-testid="quote-request-excluded-work"');
-    expect(page).toContain('別途見積・別途工事の金額は、上記の合計に含まれません。');
+    expect(page).toContain('別途見積・別途工事の内容や金額は、設置条件の確認後にご案内します。');
   });
 
   it('価格計算と見積依頼フロー・仕様変更リンク・免責表示を変更しない', () => {

@@ -87,6 +87,15 @@ describe('管理画面の色・仕様管理', () => {
     expect(actions).not.toContain('deleteVariantGroupAction');
   });
 
+  it('非表示の切り替えは折り畳みの詳細設定より手前に置く', () => {
+    const groupForm = manager.slice(manager.indexOf('function GroupFields('), manager.indexOf('function ChoiceEditor('));
+    const choiceForm = manager.slice(manager.indexOf('function ChoiceEditor('), manager.indexOf('if (isNew) return'));
+    expect(groupForm.indexOf('data-testid="variant-group-visibility"')).toBeLessThan(groupForm.indexOf('通常は変更不要です。'));
+    expect(choiceForm.indexOf('data-testid="variant-choice-visibility"')).toBeLessThan(choiceForm.indexOf('data-testid="draft-choice-image-row"'));
+    expect(groupForm).toContain('不要ならチェックを外して「選択項目を保存」');
+    expect(choiceForm).toContain('不要ならチェックを外して「選択肢を保存」');
+  });
+
   it('既存のサーバー保存機能を使って選択肢画像を任意登録し、既存画像を保持・解除できる', () => {
     expect(manager).toContain('name="image_file"');
     expect(manager).toContain('name="image_url"');

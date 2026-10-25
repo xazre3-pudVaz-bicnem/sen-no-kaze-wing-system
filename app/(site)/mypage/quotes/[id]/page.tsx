@@ -323,22 +323,22 @@ export default async function QuoteDetailPage({
                   <dt className="text-xs text-muted">見積依頼時の設置先情報（詳しい住所・希望地域）</dt>
                   <dd className="mt-1 whitespace-pre-wrap">{request?.contact.site_address || '未記入'}</dd>
                 </div>
-                {savedPlanSiteArea !== null && (
-                  <p className="text-xs leading-relaxed text-muted">
-                    設置予定地域は現在の保存プランの設定です。見積発行時点の地域情報を保証するものではありません。
-                  </p>
-                )}
-                {request?.contact.address && request?.contact.site_address
-                  && request.contact.address.trim() === request.contact.site_address.trim() && (
-                    <p className="text-xs leading-relaxed text-muted" data-testid="quote-site-address-same-as-contact">
-                      連絡先住所と設置先情報に同じ住所が登録されています。設置場所が異なる場合は担当者へお伝えください。
-                    </p>
-                  )}
                 <div>
                   <dt className="text-xs text-muted">ご要望</dt>
                   <dd className="mt-1 whitespace-pre-wrap">{request?.message || '—'}</dd>
                 </div>
               </dl>
+              {savedPlanSiteArea !== null && (
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  設置予定地域は現在の保存プランの設定です。見積発行時点の地域情報を保証するものではありません。
+                </p>
+              )}
+              {request?.contact.address && request?.contact.site_address
+                && request.contact.address.trim() === request.contact.site_address.trim() && (
+                  <p className="mt-2 text-xs leading-relaxed text-muted" data-testid="quote-site-address-same-as-contact">
+                    連絡先住所と設置先情報に同じ住所が登録されています。設置場所が異なる場合は担当者へお伝えください。
+                  </p>
+                )}
             </div>
           </div>
         </div>

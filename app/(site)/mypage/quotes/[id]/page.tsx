@@ -141,7 +141,7 @@ export default async function QuoteDetailPage({
         <div className="card mt-5 space-y-1 p-5" data-testid="quote-issued-total">
           <p className="text-sm font-semibold text-ink-soft">{isFormal ? '確定見積金額（税込）' : '概算見積金額（税込）'}</p>
           <p className="font-serif text-3xl tabular-nums" data-testid="quote-issued-total-value">{formatYen(quote.total)}</p>
-          <p className="text-xs text-muted">発行済み見積書の金額です。契約金額は見積の種類・現地条件により異なります。</p>
+          <p className="text-xs text-muted">発行済み見積書の記録です。含まれる工事・別途費用については見積書の注記をご確認ください。</p>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
@@ -255,26 +255,26 @@ export default async function QuoteDetailPage({
             <ChevronDown className="size-4 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
           </summary>
           <div className="card mt-3 overflow-hidden">
-          {quote.preview_image_url && (
-            <div className="relative aspect-[16/7] bg-sand">
-              <SmartImage src={quote.preview_image_url} alt="完成イメージ" fill sizes="(min-width: 896px) 56rem, 100vw" className="object-cover" />
-              <span className="absolute bottom-3 left-3 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">完成イメージ（参考）</span>
+            {quote.preview_image_url && (
+              <div className="relative aspect-[16/7] bg-sand">
+                <SmartImage src={quote.preview_image_url} alt="完成イメージ" fill sizes="(min-width: 896px) 56rem, 100vw" className="object-cover" />
+                <span className="absolute bottom-3 left-3 rounded-full bg-ink/70 px-3 py-1 text-xs text-white">完成イメージ（参考）</span>
+              </div>
+            )}
+            <div className="grid gap-6 p-6 sm:grid-cols-2 sm:p-8">
+              <div>
+                <p className="text-xs text-muted">お客様</p>
+                <p className="text-lg">
+                  {quote.customer_company && <span className="block">{quote.customer_company}</span>}
+                  {quote.customer_name} 様
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">件名</p>
+                <p className="text-lg">折り畳み式木造コンテナ {quote.base_model_name} 一式（工場生産分）</p>
+              </div>
             </div>
-          )}
-          <div className="grid gap-6 p-6 sm:grid-cols-2 sm:p-8">
-            <div>
-              <p className="text-xs text-muted">お客様</p>
-              <p className="text-lg">
-                {quote.customer_company && <span className="block">{quote.customer_company}</span>}
-                {quote.customer_name} 様
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">件名</p>
-              <p className="text-lg">折り畳み式木造コンテナ {quote.base_model_name} 一式（工場生産分）</p>
-            </div>
-          </div>
-          <QuoteTable quote={quote} items={items} />
+            <QuoteTable quote={quote} items={items} />
           </div>
         </details>
 

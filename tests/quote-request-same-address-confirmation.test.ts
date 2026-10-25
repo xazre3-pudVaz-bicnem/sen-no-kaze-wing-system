@@ -25,8 +25,18 @@ describe('見積依頼：連絡先住所と設置住所が同一の場合の誤�
   });
 
   it('同じ住所のときだけ確認UIを出し、入力欄の意味・項目名を保つ', () => {
-    expect(form).toContain('sameContactAndSiteAddress(contactAddress, siteAddress)');
+    expect(form).toContain('sameContactAndSiteAddress(observedAddresses.contact, observedAddresses.site)');
     expect(form).toContain('data-testid="quote-request-same-address-confirmation"');
+    expect(form).toContain('new FormData(form)');
+    expect(form).toContain("contact: String(data.get('address') ?? '')");
+    expect(form).toContain("site: String(data.get('site_address') ?? '')");
+    expect(form).toContain('onFocus={(event) => refreshAddressesFromForm(event.currentTarget.form)}');
+    expect(form).toContain('onInput={(event) => refreshAddressesFromForm(event.currentTarget.form)}');
+    expect(form).toContain('!addressReadFromForm && state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE');
+    expect(form).toContain('onSubmitCapture={(event) => {');
+    expect(form).toContain("data.get(SAME_SITE_ADDRESS_CONFIRMATION_FIELD) !== 'on'");
+    expect(form).toContain('event.preventDefault();');
+    expect(form).toContain('setObservedAddresses({ contact, site });');
     expect(form).toContain('name={SAME_SITE_ADDRESS_CONFIRMATION_FIELD}');
     expect(form).toContain('checked={sameAddressConfirmed}');
     expect(form).toContain('setSameAddressConfirmed(false)');

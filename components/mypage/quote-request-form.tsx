@@ -6,7 +6,7 @@ import { requestQuoteAction, type QuoteRequestState } from '@/lib/actions/config
 import { MEETING_METHODS, MEETING_METHOD_LABELS, SLOT_PERIODS, SLOT_PERIOD_LABELS, type SiteProfile } from '@/lib/domain/case-flow';
 import { Alert, Button, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { SiteProfileFields } from '@/components/case-flow/site-profile-fields';
-import { SAME_SITE_ADDRESS_CONFIRMATION_FIELD, sameContactAndSiteAddress } from '@/lib/domain/quote-contact-site-address';
+import { SAME_SITE_ADDRESS_CONFIRMATION_FIELD, SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE, sameContactAndSiteAddress } from '@/lib/domain/quote-contact-site-address';
 
 interface Props {
   configurationId: string;
@@ -41,15 +41,47 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
   const [state, action, pending] = useActionState(requestQuoteAction, initial);
   const v: Record<string, string | undefined> = { ...defaults, ...(state.values ?? {}) };
   const isConflict = Boolean(state.error?.includes(CONFIGURATION_CONFLICT_MESSAGE));
-  const [contactAddress, setContactAddress] = useState(v.address ?? '');
-  const [siteAddress, setSiteAddress] = useState(v.site_address ?? '');
-  const [addressEdited, setAddressEdited] = useState(false);
+  const [observedAddresses, setObservedAddresses] = useState({
+    contact: v.address ?? '',
+    site: v.site_address ?? '',
+  });
+  const [addressReadFromForm, setAddressReadFromForm] = useState(false);
   const [sameAddressConfirmed, setSameAddressConfirmed] = useState(false);
-  // サーバーで差し戻された値も確認できるようにする（ブラウザの自動入力対応）。
-  const matchingAddresses = sameContactAndSiteAddress(contactAddress, siteAddress)
-    || (!addressEdited && sameContactAndSiteAddress(v.address, v.site_address));
+
+  // ブラウザのオートフィルでDOMの入力値だけ変わる場合、Reactの初期stateとずれる。
+  // 入力またはフォーカス時に、連絡先と設置先を必ず同じフォームの実際の値から読み取る。
+  function refreshAddressesFromForm(form: HTMLFormElement | null) {
+    if (!form) return;
+    const data = new FormData(form);
+    setObservedAddresses({
+      contact: String(data.get('address') ?? ''),
+      site: String(data.get('site_address') ?? ''),
+    });
+    setAddressReadFromForm(true);
+    setSameAddressConfirmed(false);
+  }
+
+  // ブラウザ側で自動入力を検知できなかった場合も、
+  // サーバーが差し戻した入力値から確認欄を復元できるようにする。
+  const matchingAddresses = sameContactAndSiteAddress(observedAddresses.contact, observedAddresses.site)
+    || (!addressReadFromForm && sameContactAndSiteAddress(v.address, v.site_address))
+    || (!addressReadFromForm && state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE);
   return (
-    <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form">
+    <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form"
+      onSubmitCapture={(event) => {
+        // サイレントなブラウザ自動入力でも、送信時のDOM値を最終確認する。
+        const data = new FormData(event.currentTarget);
+        const contact = String(data.get('address') ?? '');
+        const site = String(data.get('site_address') ?? '');
+        if (sameContactAndSiteAddress(contact, site)
+          && data.get(SAME_SITE_ADDRESS_CONFIRMATION_FIELD) !== 'on') {
+          event.preventDefault();
+          setObservedAddresses({ contact, site });
+          setAddressReadFromForm(true);
+          setSameAddressConfirmed(false);
+        }
+      }}
+    >
       <input type="hidden" name="configuration_id" value={configurationId} />
       <input type="hidden" name="expected_lock_version" value={lockVersion ?? ''} />
       <input type="hidden" name="site_profile_lock_version" value={v.site_profile_lock_version ?? ''} />
@@ -92,22 +124,20 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
         </Field>
       </div>
       <Field label="お客様のご住所（連絡先）" htmlFor="address" hint="Wingの設置予定地とは異なる住所でも構いません。" required errors={state.fieldErrors?.address}>
-        <Input id="address" name="address" defaultValue={v.address} autoComplete="street-address" required onInput={(event) => {
-          setContactAddress(event.currentTarget.value);
-          setAddressEdited(true);
-          setSameAddressConfirmed(false);
-        }} />
+        <Input id="address" name="address" defaultValue={v.address} autoComplete="street-address" required
+          onFocus={(event) => refreshAddressesFromForm(event.currentTarget.form)}
+          onInput={(event) => refreshAddressesFromForm(event.currentTarget.form)}
+        />
       </Field>
       <div className="rounded-lg border border-line bg-sand/50 px-4 py-3" data-testid="quote-request-selected-site-area">
         <p className="text-xs text-ink-soft">シミュレーターで選択した設置予定地</p>
         <p className="mt-1 text-sm font-semibold text-ink">{selectedSiteAreaLabel}</p>
       </div>
       <Field label="詳しい設置住所・地番（任意）" htmlFor="site_address" hint="以前入力した土地情報がある場合は初期表示されます。設置場所が未定なら空欄にしてください。" errors={state.fieldErrors?.site_address}>
-        <Input id="site_address" name="site_address" defaultValue={v.site_address} autoComplete="off" onInput={(event) => {
-          setSiteAddress(event.currentTarget.value);
-          setAddressEdited(true);
-          setSameAddressConfirmed(false);
-        }} />
+        <Input id="site_address" name="site_address" defaultValue={v.site_address} autoComplete="off"
+          onFocus={(event) => refreshAddressesFromForm(event.currentTarget.form)}
+          onInput={(event) => refreshAddressesFromForm(event.currentTarget.form)}
+        />
       </Field>
       {matchingAddresses && (
         <div className="rounded-lg border border-line bg-sand/60 p-4 text-sm" role="group" aria-label="連絡先住所と設置住所の確認" data-testid="quote-request-same-address-confirmation">

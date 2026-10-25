@@ -15,6 +15,7 @@ import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { RegisteredOptionEditFlow } from '@/components/admin/registered-option-edit-flow';
+import { PublishedOptionDeleteControl } from '@/components/admin/published-option-delete-control';
 import {
   ProductPriceUnitPublishedCard,
   ProductPriceUnitRegistrationField,
@@ -113,7 +114,8 @@ export default async function EditOptionPage({
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
         {canEditThisOption ? (
-          <RegisteredOptionEditFlow
+          <>
+            <RegisteredOptionEditFlow
             key={option.updated_at}
             option={option}
             categories={registrationDisplayCategories}
@@ -144,6 +146,8 @@ export default async function EditOptionPage({
               </>
             }
           />
+            {catalogEditor && <PublishedOptionDeleteControl optionId={id} />}
+          </>
         ) : (
           <>
             {hqCostAccess.available && hqCostAccess.canView && (

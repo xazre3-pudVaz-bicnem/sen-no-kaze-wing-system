@@ -67,11 +67,7 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
     || (!addressReadFromForm && sameContactAndSiteAddress(v.address, v.site_address))
     || (!addressReadFromForm && state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE);
   return (
-    <form
-      action={action}
-      className="card space-y-5 p-6 sm:p-8"
-      noValidate
-      data-testid="quote-request-form"
+    <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form"
       onSubmitCapture={(event) => {
         // サイレントなブラウザ自動入力でも、送信時のDOM値を最終確認する。
         const data = new FormData(event.currentTarget);

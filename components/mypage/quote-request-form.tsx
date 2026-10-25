@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useState } from 'react';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import { requestQuoteAction, type QuoteRequestState } from '@/lib/actions/configurations';
 import { MEETING_METHODS, MEETING_METHOD_LABELS, SLOT_PERIODS, SLOT_PERIOD_LABELS, type SiteProfile } from '@/lib/domain/case-flow';
@@ -47,7 +47,6 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
   });
   const [addressReadFromForm, setAddressReadFromForm] = useState(false);
   const [sameAddressConfirmed, setSameAddressConfirmed] = useState(false);
-  const [serverRequestedConfirmation, setServerRequestedConfirmation] = useState(false);
 
   // ブラウザのオートフィルでDOMの入力値だけ変わる場合、Reactの初期stateとずれる。
   // 入力またはフォーカス時に、連絡先と設置先を必ず同じフォームの実際の値から読み取る。
@@ -60,17 +59,13 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
     });
     setAddressReadFromForm(true);
     setSameAddressConfirmed(false);
-    setServerRequestedConfirmation(false);
   }
 
-  // ブラウザ側の確認が出なかった場合も、サーバーが拒否した後はチェック欄を出す。
-  useEffect(() => {
-    setServerRequestedConfirmation(state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE);
-  }, [state.error]);
-
+  // ブラウザ側で自動入力を検知できなかった場合も、
+  // サーバーが差し戻した入力値から確認欄を復元できるようにする。
   const matchingAddresses = sameContactAndSiteAddress(observedAddresses.contact, observedAddresses.site)
     || (!addressReadFromForm && sameContactAndSiteAddress(v.address, v.site_address))
-    || serverRequestedConfirmation;
+    || (!addressReadFromForm && state.error === SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE);
   return (
     <form action={action} className="card space-y-5 p-6 sm:p-8" noValidate data-testid="quote-request-form">
       <input type="hidden" name="configuration_id" value={configurationId} />

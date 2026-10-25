@@ -125,7 +125,7 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
             <span>連絡先住所と設置住所は同じ場所で間違いありません</span>
           </label>
         </div>
-      )>
+      )}
       <details
         className="group rounded-lg border border-line"
         data-testid="quote-request-site-profile-disclosure"

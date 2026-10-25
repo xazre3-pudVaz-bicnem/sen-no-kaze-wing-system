@@ -10,6 +10,8 @@ import { formatYen } from '@/lib/domain/pricing';
 import { formatDate } from '@/lib/utils';
 import { AdminPage, BackLink, Table, Td, Th } from '@/components/admin/ui';
 import { Badge } from '@/components/ui';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
+import { deleteUnusedCustomerAccountAction } from '@/lib/actions/customer-account-lifecycle';
 
 function caseStatus(customerCase: AccessibleCustomerCase): string {
   if (customerCase.latest_quote) return QUOTE_STATUS_LABELS[customerCase.latest_quote.status];
@@ -103,11 +105,14 @@ function CaseTable({
 
 export default async function AdminCustomerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const actor = await requireStaff('/admin/customer-management');
   const { id } = await params;
+  const sp = await searchParams;
   const store = await getStore();
   const detailResult = await store.getAccessibleCustomerDetail(id, actor);
 
@@ -250,6 +255,41 @@ export default async function AdminCustomerDetailPage({
           </div>
         </div>
       </section>
+
+      {actor.role === 'admin' && (
+        <section className="card p-4 sm:p-5" data-testid="admin-customer-account-delete-entry" aria-labelledby="customer-account-operations-heading">
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold" id="customer-account-operations-heading">
+              会員アカウントの操作（本部管理者のみ）
+            </summary>
+            <div className="mt-4 space-y-3 border-t border-line pt-4">
+              <p className="text-xs leading-6 text-ink-soft">
+                これは顧客情報・認証アカウントの削除操作です。案件・見積・契約・請求・履歴など、
+                関連データが一つでもある場合は削除できません。表示中の案件件数だけで未使用と判定しません。
+              </p>
+              <form action={deleteUnusedCustomerAccountAction}>
+                <input type="hidden" name="customer_id" value={profile.id} />
+                <ConfirmSubmit
+                  className="btn-ghost btn-sm text-danger"
+                  message={`会員「${profile.full_name || profile.email}」の認証アカウントを完全に削除しますか？ 関連記録が一つもなく、DBで安全に確認できたときだけ削除します。`}
+                >
+                  未使用会員を削除
+                </ConfirmSubmit>
+              </form>
+              {sp.member_delete_error === 'unavailable' && (
+                <p role="alert" className="text-sm text-danger">
+                  会員削除用のDB機能は未適用、または安全確認できませんでした。会員は削除されていません。
+                </p>
+              )}
+              {sp.member_delete_error === 'blocked' && (
+                <p role="alert" className="text-sm text-danger">
+                  関連する案件・見積・履歴がある、または安全確認ができないため削除できませんでした。
+                </p>
+              )}
+            </div>
+          </details>
+        </section>
+      )}
 
       <section className="space-y-3" aria-labelledby="ongoing-cases-heading">
         <div className="flex flex-wrap items-end justify-between gap-2">

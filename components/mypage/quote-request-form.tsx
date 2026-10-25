@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { ChevronDown, RefreshCw } from 'lucide-react';
 import { requestQuoteAction, type QuoteRequestState } from '@/lib/actions/configurations';
 import { MEETING_METHODS, MEETING_METHOD_LABELS, SLOT_PERIODS, SLOT_PERIOD_LABELS, type SiteProfile } from '@/lib/domain/case-flow';
 import { Alert, Button, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
@@ -93,15 +93,30 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
       <Field label="詳しい設置住所・地番（任意）" htmlFor="site_address" hint="分かる場合だけ入力してください。設置場所が未定でも見積依頼できます。" errors={state.fieldErrors?.site_address}>
         <Input id="site_address" name="site_address" defaultValue={v.site_address} />
       </Field>
-      <fieldset className="space-y-4 rounded-lg border border-line p-4" data-testid="quote-request-site-profile">
-        <legend className="px-1 text-sm font-semibold">土地について（任意）</legend>
-        <SiteProfileFields profile={siteProfile} values={state.values} includeAddress={false} defaultDesiredArea={siteArea} idPrefix="request-land" />
-      </fieldset>
+      <details
+        className="group rounded-lg border border-line"
+        data-testid="quote-request-site-profile-disclosure"
+        open={Boolean(state.error?.startsWith('設置予定地・土地：'))}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden">
+          <span>土地について（任意）</span>
+          <ChevronDown className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <fieldset className="min-w-0 space-y-4 border-t border-line p-4" data-testid="quote-request-site-profile">
+          <legend className="sr-only">土地について（任意）</legend>
+          <SiteProfileFields profile={siteProfile} values={state.values} includeAddress={false} defaultDesiredArea={siteArea} idPrefix="request-land" />
+        </fieldset>
+      </details>
       <Field label="ご要望・ご質問" htmlFor="message" errors={state.fieldErrors?.message}>
         <Textarea id="message" name="message" defaultValue={v.message} placeholder="搬入路の状況、希望時期、確認申請の要否など" />
       </Field>
-      <fieldset className="space-y-4 rounded-lg border border-line p-4" data-testid="quote-request-preferences">
-        <legend className="px-1 text-sm font-semibold">打合せのご希望（任意）</legend>
+      <details className="group rounded-lg border border-line" data-testid="quote-request-preferences-disclosure">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold [&::-webkit-details-marker]:hidden">
+          <span>打合せのご希望（任意）</span>
+          <ChevronDown className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <fieldset className="min-w-0 space-y-4 border-t border-line p-4" data-testid="quote-request-preferences">
+          <legend className="sr-only">打合せのご希望（任意）</legend>
         {dealers.length > 0 && (
           <Field label="相談したい代理店" htmlFor="preferred_dealer_id" hint="設置予定地に対応している代理店です。本部が担当を決めるときの参考にします">
             <Select id="preferred_dealer_id" name="preferred_dealer_id" defaultValue={v.preferred_dealer_id ?? ''}>
@@ -148,7 +163,8 @@ export function QuoteRequestForm({ configurationId, lockVersion, dealers = [], t
         <Field label="日程のご要望" htmlFor="schedule_note">
           <Textarea id="schedule_note" name="schedule_note" defaultValue={v.schedule_note} placeholder="平日の夕方以降が都合が良い、など" rows={2} />
         </Field>
-      </fieldset>
+        </fieldset>
+      </details>
       <Button type="submit" size="lg" className="w-full" disabled={pending} data-testid="submit-quote-request">
         {pending && <Spinner />}
         {pending ? '送信中…' : 'この仕様で見積を依頼する'}

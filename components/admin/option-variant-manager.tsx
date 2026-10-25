@@ -554,7 +554,7 @@ export function OptionVariantManager({
       )}
 
       <p className="text-xs text-muted">
-        選択項目や選択肢は、履歴を守るため削除せず非表示にします。編集画面の「お客様に表示する」をOFFにして保存してください。
+        選択項目や選択肢の物理削除は行いません。不要なら「お客様に表示する」をOFFにして保存してください（履歴は保持）。
       </p>
     </section>
   );

@@ -4,6 +4,8 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { SmartImage } from '@/components/ui/smart-image';
 import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import { ProductSectionHeading } from '@/components/admin/product-section-heading';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
+import { deleteUnusedDraftVariantAction } from '@/lib/actions/unused-draft-variant-delete';
 import {
   saveVariantChoiceAction,
   saveVariantGroupAction,
@@ -437,7 +439,21 @@ function ChoiceEditor({
         </span>
         <span className="ml-auto shrink-0 text-xs font-semibold text-brown">編集 <span aria-hidden="true">▾</span></span>
       </summary>
-      <div className="border-t border-line p-3 sm:p-4">{form}</div>
+      <div className="border-t border-line p-3 sm:p-4">
+        {form}
+        <form action={deleteUnusedDraftVariantAction} className="mt-4 border-t border-line pt-3" data-testid="delete-unused-variant-choice">
+          <input type="hidden" name="option_id" value={optionId} />
+          <input type="hidden" name="group_id" value={group.id} />
+          <input type="hidden" name="choice_id" value={choice.id} />
+          <input type="hidden" name="target" value="choice" />
+          <ConfirmSubmit
+            className="btn-ghost btn-sm text-danger"
+            message={`選択肢「${choice.name}」を完全に削除しますか？ 未使用とDBが確認できた場合だけ削除します。使用済みなら削除できません。`}
+          >
+            削除（未使用のみ）
+          </ConfirmSubmit>
+        </form>
+      </div>
     </details>
   );
 }
@@ -544,6 +560,17 @@ export function OptionVariantManager({
                   <summary className="cursor-pointer text-sm font-semibold">この項目の名前・詳細設定（非表示もここで設定）</summary>
                   <div className="mt-4">
                     <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
+                    <form action={deleteUnusedDraftVariantAction} className="mt-4 border-t border-line pt-3" data-testid="delete-unused-variant-group">
+                      <input type="hidden" name="option_id" value={option.id} />
+                      <input type="hidden" name="group_id" value={group.id} />
+                      <input type="hidden" name="target" value="group" />
+                      <ConfirmSubmit
+                        className="btn-ghost btn-sm text-danger"
+                        message={`選択項目「${group.name}」と中の選択肢すべてを削除しますか？ 未使用の場合のみ削除し、依存・履歴があれば中止します。`}
+                      >
+                        この選択項目を削除（未使用のみ）
+                      </ConfirmSubmit>
+                    </form>
                   </div>
                   </details>
                 </div>
@@ -554,7 +581,7 @@ export function OptionVariantManager({
       )}
 
       <p className="text-xs text-muted">
-        選択項目や選択肢の物理削除は行いません。不要なら「お客様に表示する」をOFFにして保存してください（履歴は保持）。
+        未使用なら「削除（未使用のみ）」を選べます。履歴・参照がある場合は物理削除を行いません。「お客様に表示する」をOFFにして保存してください。
       </p>
     </section>
   );

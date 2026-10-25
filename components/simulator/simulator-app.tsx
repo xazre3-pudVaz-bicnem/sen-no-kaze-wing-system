@@ -1289,7 +1289,7 @@ export function SimulatorApp({
       </div>
 
       {/* SP: 固定フッター */}
-      <div className="sticky bottom-0 z-30 border-t border-line bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="sticky bottom-0 z-30 border-t border-line bg-white/95 px-4 py-3 backdrop-blur xl:hidden">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[0.7rem] text-muted">概算合計（税込）</p>

@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
 import type { Configuration, QuoteContact } from '@/lib/domain/types';
+import { SAME_SITE_ADDRESS_CONFIRMATION_FIELD, SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE, sameContactAndSiteAddress } from '@/lib/domain/quote-contact-site-address';
 import { quoteRequestSchema, saveConfigurationSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 
 export type SaveErrorCode = 'UNAUTHENTICATED' | 'VALIDATION' | 'LOCKED' | 'FORBIDDEN' | 'NOT_FOUND' | 'INTERNAL';
@@ -79,6 +80,12 @@ export async function requestQuoteAction(_prev: QuoteRequestState, formData: For
   const parsed = quoteRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error), values };
   const { configuration_id, message, expected_lock_version, ...contact } = parsed.data;
+  // 書き込み前に確認。自動入力などで連絡先住所が設置先にも入った場合、
+  // お客様が明示的に同一住所と確認していない限り見積を発行しない。
+  if (sameContactAndSiteAddress(contact.address, contact.site_address)
+    && formData.get(SAME_SITE_ADDRESS_CONFIRMATION_FIELD) !== 'on') {
+    return { ok: false, error: SAME_SITE_ADDRESS_CONFIRMATION_MESSAGE, values };
+  }
   // 設置予定地・土地（フェーズ3・任意）。見積依頼を送る前に保存し、形が違うときは送る前に知らせる
   const land = await saveSiteProfileFromForm(user, configuration_id, formData);
   if (land.error) return { ok: false, error: `設置予定地・土地：${land.error}`, values };

@@ -32,7 +32,7 @@ describe('見積依頼：任意項目を折り畳んでも入力と送信を維�
 
   it('打合せの代理店・方法・希望日3件・要望欄を保持する', () => {
     const start = form.indexOf('data-testid="quote-request-preferences-disclosure"');
-    const meeting = form.slice(start, form.indexOf('data-testid="submit-quote-request"'));
+    const meeting = form.slice(start, form.indexOf('      </details>', start));
     expect(meeting).toContain('data-testid="quote-request-preferences"');
     for (const name of ['preferred_dealer_id', 'meeting_method', 'slot_${n}_date', 'slot_${n}_period', 'schedule_note']) {
       expect(meeting).toContain(name);

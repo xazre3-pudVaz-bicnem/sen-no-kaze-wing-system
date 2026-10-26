@@ -49,7 +49,6 @@ export function summarizePlanChanges(
   baseline: PlanSelections
 ): PlanChangeSummary {
   const knownOptions = new Map(catalog.options.map((o) => [o.id, o]));
-  const groups = new Map(catalog.variantGroups.map((g) => [g.id, g]));
   const choices = new Map(catalog.variantChoices.map((c) => [c.id, c]));
   const allIds = [...current.optionIds, ...baseline.optionIds];
   const allChoices = [

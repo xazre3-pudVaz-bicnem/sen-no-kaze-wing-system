@@ -23,6 +23,8 @@ import {
   PASSWORD_RESET_STALE_PAGE,
   PASSWORD_UPDATE_SIGNED_OUT,
   authLinkErrorPath,
+  firstParam,
+  loggableAuthErrorCode,
   passwordResetRedirect,
   passwordResetCanonicalUrl,
   passwordUpdateErrorMessage,
@@ -91,6 +93,14 @@ describe('パスワード再設定：申し込みとメールのリンクの戻�
     expect(requestHost(new Headers({ host: 'a.example', 'x-forwarded-host': 'B.example, c.example' }))).toBe('b.example');
     expect(requestHost(new Headers({ host: 'a.example' }))).toBe('a.example');
     expect(requestHost(new Headers())).toBeNull();
+  });
+
+  it('URL の値が重なっても（配列）、開き直しの印・理由を 1 つの値として読む', async () => {
+    expect(firstParam(['1', '1'])).toBe('1');
+    expect(firstParam('link')).toBe('link');
+    expect(firstParam(undefined)).toBeUndefined();
+    mocks.headers.mockResolvedValue(requestHeaders(CUSTOM));
+    await expect(ResetPasswordPage({ searchParams: Promise.resolve({ moved: ['1', '1'] }) })).resolves.toBeTruthy();
   });
 
   it('開き直しは 1 回まで（ドメインの転送の設定と食い違っても、行ったり来たりしない）', () => {
@@ -184,10 +194,22 @@ describe('メールのリンクを確かめられなかったときは、理由�
     );
     expect(expired.headers.get('location')).toBe(`${VERCEL}/reset-password?error=link`);
     expect(log).toHaveBeenCalledWith('[auth/callback] link error', { code: 'otp_expired' });
+    // 記録するのは決まった形のコードだけ（任意の文字列は other）
+    expect(loggableAuthErrorCode('otp_expired')).toBe('otp_expired');
+    expect(loggableAuthErrorCode('[password-reset] fake log line')).toBe('other');
+    expect(loggableAuthErrorCode('a'.repeat(65))).toBe('other');
+    expect(loggableAuthErrorCode(null)).toBeNull();
   });
 });
 
 describe('新しいパスワードの設定', () => {
+  it('新しいパスワードの画面でも、proxy がログインを更新する（転送はしない）', async () => {
+    const fs = await import('node:fs');
+    const proxy = fs.readFileSync('proxy.ts', 'utf8');
+    expect(proxy).toContain("const refreshesSession = pathname === '/reset-password/update';");
+    expect(proxy).toContain('if (!isProtected && !isAuthPage && !refreshesSession) return NextResponse.next();');
+  });
+
   it('更新の失敗は日本語で出す（Supabase の英語のメッセージを出さない）', async () => {
     expect(passwordUpdateErrorMessage({ code: 'same_password' })).toBe('新しいパスワードが今のパスワードと同じです。別のパスワードを入力してください。');
     expect(passwordUpdateErrorMessage({ code: 'weak_password' })).toContain('このパスワードは使えません');

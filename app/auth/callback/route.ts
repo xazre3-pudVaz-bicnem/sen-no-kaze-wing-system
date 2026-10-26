@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { authLinkErrorPath } from '@/lib/auth/password-reset';
+import { authLinkErrorPath, loggableAuthErrorCode } from '@/lib/auth/password-reset';
 import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/utils';
 
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get('code');
   const next = safeNextPath(url.searchParams.get('next'), '/mypage');
   // 期限切れ・使用済みのリンクは、Supabase が code の代わりにエラーのコードを付けて戻す（理由のコードだけを記録する）
-  const linkError = url.searchParams.get('error_code') ?? url.searchParams.get('error');
+  const linkError = loggableAuthErrorCode(url.searchParams.get('error_code') ?? url.searchParams.get('error'));
   if (linkError) console.error('[auth/callback] link error', { code: linkError });
   if (code && hasSupabaseEnv()) {
     const supabase = await createClient();

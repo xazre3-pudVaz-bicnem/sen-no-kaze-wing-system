@@ -23,6 +23,17 @@ export const PASSWORD_RESET_STALE_PAGE =
 export const AUTH_LINK_ERROR =
   'メールのリンクを確認できませんでした。リンクの有効期限が切れたか、すでに使われた可能性があります。もう一度お試しください。';
 
+/** URL の値（同じ名前が重なると配列になる）を 1 つにする */
+export function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/** サーバーの記録に残すエラーのコード（英小文字・数字・_ の 64 文字まで。それ以外は other にして、任意の文字列を残さない） */
+export function loggableAuthErrorCode(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return /^[a-z0-9_]{1,64}$/.test(value) ? value : 'other';
+}
+
 /** リクエストのホスト（転送のヘッダーに複数の値があれば先頭）。判断できなければ null */
 export function requestHost(headers: { get(name: string): string | null }): string | null {
   const host = (headers.get('x-forwarded-host') ?? headers.get('host'))?.split(',')[0]?.trim().toLowerCase();

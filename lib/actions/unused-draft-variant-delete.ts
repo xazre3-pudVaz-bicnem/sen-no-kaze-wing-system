@@ -26,6 +26,11 @@ export async function deleteUnusedDraftVariantAction(formData: FormData): Promis
     redirect('/admin/options?error=' + encodeURIComponent('削除対象を特定できませんでした。'));
   }
 
+  // DB未適用時・本番設定欠落時・ローカルではfail closed。画面から直接DELETEしない。
+  if (isDemoFallback() || isLocalMode()) {
+    redirect(errorPath('安全削除のDB機能が利用できません。削除せず、非表示にしてください。'));
+  }
+
   const store = await getStore();
   const option = await store.getOption(optionId);
   if (!option || option.status !== 'draft') {
@@ -36,11 +41,6 @@ export async function deleteUnusedDraftVariantAction(formData: FormData): Promis
   const group = variants.groups.find((g) => g.id === groupId);
   const choice = variants.choices.find((c) => c.id === choiceId && c.group_id === groupId);
   if (!group || (target === 'choice' && !choice)) redirect(errorPath('対象の選択項目・選択肢が見つかりません。'));
-
-  // DB未適用時・本番設定欠落時・ローカルではfail closed。画面から直接DELETEしない。
-  if (isDemoFallback() || isLocalMode()) {
-    redirect(errorPath('安全削除のDB機能が利用できません。削除せず、非表示にしてください。'));
-  }
 
   const db = await createClient();
   const result = target === 'choice'

@@ -13,6 +13,17 @@ async function waitForLockWait(observer, pid, timeoutMs = 1500) {
   return false;
 }
 
+/** 指定の接続が、表の lock を取り直す間の待ち（pg_sleep）に入ったことを確かめる */
+async function waitForRetrySleep(observer, pid, timeoutMs = 1500) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const res = await observer.query("select exists (select 1 from pg_stat_activity where pid = $1 and wait_event = 'PgSleep') as ok", [pid]);
+    if (res.rows[0]?.ok) return true;
+    await delay(20);
+  }
+  return false;
+}
+
 async function beginAs(client, userId) {
   await client.query('begin');
   await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: 'authenticated', sub: userId })]);
@@ -36,6 +47,8 @@ const describe = (r) => (r.ok ? 'success' : `${r.code ?? 'error'} ${r.message}`.
  * - 削除の途中の公開・選択肢の追加・表示条件の変更は、削除の完了を待つ（同時には書けない）
  * - 公開の途中の削除は、公開の完了を待ってから「下書き商品だけ」で止まる
  * - 同じ選択肢の二重の削除は、後の方が NOT_FOUND で止まる
+ * - 別の下書き商品の削除と重なると、後の方は表の lock を取り直して完了する。互いの確認が同じ瞬間に重なって
+ *   DB が deadlock と判断したときは、片方を「重なりました」（LOCKED）で止め、何も消さない
  */
 export async function runtimeUnusedDraftVariantRace({ connectionString }) {
   if (!connectionString) {
@@ -49,8 +62,10 @@ export async function runtimeUnusedDraftVariantRace({ connectionString }) {
     p1: id(511), p2: id(512), p3: id(513), p4: id(514),
     g1: id(521), g2: id(522), g3color: id(523), g3size: id(524), g3other: id(525), g4: id(526),
     c1: id(531), c2: id(532), c3red: id(533), c3small: id(534), c3new: id(535), c4a: id(536),
+    // VR-7：別の下書き商品の削除の重なり
+    p5: id(515), p6: id(516), g5: id(527), g6: id(528), c5a: id(537), c5b: id(538), c6a: id(539), c6b: id(540),
   };
-  const products = [ids.p1, ids.p2, ids.p3, ids.p4];
+  const products = [ids.p1, ids.p2, ids.p3, ids.p4, ids.p5, ids.p6];
   const setup = new pg.Client({ connectionString });
   const observer = new pg.Client({ connectionString });
   const deleter = new pg.Client({ connectionString });
@@ -119,6 +134,26 @@ export async function runtimeUnusedDraftVariantRace({ connectionString }) {
          ($4::uuid, $9::uuid, 'small', '小', 'published'),
          ($5::uuid, $10::uuid, 'a', 'A', 'published')`,
       [ids.c1, ids.c2, ids.c3red, ids.c3small, ids.c4a, ids.g1, ids.g2, ids.g3color, ids.g3size, ids.g4]
+    );
+    await setup.query(
+      `insert into public.options (id, category_id, code, name, status, product_no) values
+         ($1::uuid, $3::uuid, 'runtime-variant-race-5', '同時実行の下書き 5', 'draft', 'PRD-999985'),
+         ($2::uuid, $3::uuid, 'runtime-variant-race-6', '同時実行の下書き 6', 'draft', 'PRD-999986')`,
+      [ids.p5, ids.p6, ids.category]
+    );
+    await setup.query(
+      `insert into public.option_variant_groups (id, option_id, code, name, status) values
+         ($1::uuid, $3::uuid, 'color', '色', 'published'),
+         ($2::uuid, $4::uuid, 'color', '色', 'published')`,
+      [ids.g5, ids.g6, ids.p5, ids.p6]
+    );
+    await setup.query(
+      `insert into public.option_variant_choices (id, group_id, code, name, status) values
+         ($1::uuid, $5::uuid, 'blue', '青', 'published'),
+         ($2::uuid, $5::uuid, 'red', '赤', 'published'),
+         ($3::uuid, $6::uuid, 'blue', '青', 'published'),
+         ($4::uuid, $6::uuid, 'red', '赤', 'published')`,
+      [ids.c5a, ids.c5b, ids.c6a, ids.c6b, ids.g5, ids.g6]
     );
     await setup.query('commit');
   };
@@ -253,6 +288,50 @@ export async function runtimeUnusedDraftVariantRace({ connectionString }) {
       await setup.query('delete from public.option_variant_cost_versions where variant_choice_id = $1::uuid', [ids.c2]);
       await setup.query('commit');
     }
+
+    // VR-7a：別の下書き商品の削除と互いに待つ（deadlock）と、DB は後から待ちに入った側を止める。
+    //        RPC が後になった場合は「重なりました」（LOCKED）で止まり、何も消さない。
+    //        RPC を参照の確認の途中（表を SHARE で持った後）で止めるため、確認の最後に読む表を一時的に排他で押さえる。
+    //        その間に、別の削除（表を SHARE で持ち、DELETE で待つ）を手動の lock で作ってから、押さえを外す
+    await writer.query('begin');
+    await writer.query('lock table public.option_conflicts in access exclusive mode');
+    await beginAs(deleter2, ids.admin);
+    const victimPromise = outcome(deleteChoice(deleter2, ids.p6, ids.c6a));
+    const victimHeld = await waitForLockWait(observer, deleter2Pid);
+    await deleter.query('begin');
+    await deleter.query('lock table public.option_variant_choices in share mode');
+    const otherPromise = outcome(deleter.query('delete from public.option_variant_choices where id = $1::uuid', [ids.c5a]));
+    const otherWaits = await waitForLockWait(observer, deleterPid);
+    await writer.query('commit');
+    const victim = await victimPromise;
+    await deleter2.query('rollback').catch(() => {});
+    const otherDelete = await otherPromise;
+    await deleter.query('commit').catch(() => {});
+    record(
+      'VR-7a 別の削除と互いに待つと、後から待ちに入った RPC は「重なりました」で止まり、選択肢は残る（別の削除は完了）',
+      'true/true/P0001/LOCKED/success/true/false',
+      `${victimHeld}/${otherWaits}/${victim.code}/${victim.message.startsWith('LOCKED') ? 'LOCKED' : victim.message}/${describe(otherDelete)}/${await exists(
+        'select 1 from public.option_variant_choices where id = $1::uuid',
+        [ids.c6a]
+      )}/${await exists('select 1 from public.option_variant_choices where id = $1::uuid', [ids.c5a])}`
+    );
+
+    // VR-7b：別の下書き商品の削除が終わる前に次の削除を始めると、次の削除は表の lock を取り直して（0.1 秒おき・最大 1.5 秒）完了する
+    await beginAs(deleter, ids.admin);
+    const firstOther = await outcome(deleteChoice(deleter, ids.p5, ids.c5b));
+    await beginAs(deleter2, ids.admin);
+    const nextPromise = outcome(deleteChoice(deleter2, ids.p6, ids.c6a));
+    const nextRetries = await waitForRetrySleep(observer, deleter2Pid);
+    await deleter.query('commit');
+    const next = await nextPromise;
+    await deleter2.query(next.ok ? 'commit' : 'rollback').catch(() => {});
+    record(
+      'VR-7b 別の商品の削除の完了前に始めた削除は、lock を取り直して完了する',
+      'true/success/success/false/false',
+      `${nextRetries}/${describe(firstOther)}/${describe(next)}/${await exists('select 1 from public.option_variant_choices where id = $1::uuid', [
+        ids.c5b,
+      ])}/${await exists('select 1 from public.option_variant_choices where id = $1::uuid', [ids.c6a])}`
+    );
   } catch (error) {
     results.push({ step: 'variant-delete race（実行時の例外）', expected: 'no error', actual: error.message ?? String(error), ok: false });
   } finally {

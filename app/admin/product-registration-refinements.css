@@ -96,6 +96,11 @@
   line-height: 1.25rem;
 }
 
+/* 登録済みの商品は、未使用でも選択項目・選択肢を削除できない（削除のボタンも出さない）。 */
+.registration-step1-sections #customer-selection:not([data-option-status='draft']) > p.text-xs.text-muted::after {
+  content: '登録済みの商品の選択項目・選択肢は削除できません。「お客様に表示する」をOFFにして管理します。';
+}
+
 /* 商品登録は、枠を増やすより入力場所と説明の文字差で読みやすくする。 */
 .registration-step1-sections {
   gap: 1.25rem !important;

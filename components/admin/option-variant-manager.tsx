@@ -476,7 +476,7 @@ export function OptionVariantManager({
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 
   return (
-    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-option-status={option.status}>
       <ProductSectionHeading
         label="5. お客様選択"
         description="部位・色・仕様などの選択項目を作り、各選択肢に追加金額（税別）を入力できます。"

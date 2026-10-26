@@ -19,6 +19,11 @@ export function variantDeleteErrorMessage(error: { code?: string | null; message
   if (message.startsWith('VALIDATION') && message.includes('下書き商品だけ')) {
     return '下書き商品以外の選択肢は、この画面から削除できません。';
   }
+  // 商品自体の使用履歴・Preset の形式の異常など、そのほかの理由は DB の文（画面向けの決まった文）を見せる
+  if (message.startsWith('VALIDATION:')) {
+    const reason = message.replace(/^VALIDATION:\s*/, '').trim();
+    if (reason) return `${reason}${reason.endsWith('。') ? '' : '。'}不要なら「お客様に表示する」をOFFにしてください。`;
+  }
   if (code === '23503' || code === 'P0001') {
     return '保存済み仕様・見積・履歴・原価の記録で使用中、または安全確認ができないため削除できません。非表示にしてください。';
   }

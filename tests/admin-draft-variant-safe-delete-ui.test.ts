@@ -20,6 +20,14 @@ describe('未使用の下書き選択肢・選択項目の削除（DB適用待�
     expect(ui).toContain('登録済みの商品の選択項目・選択肢は削除できません');
   });
 
+  it('STEP 1 の短い案内も、登録済みの商品では「削除できません」にする（CSS が本文を置き換えるため）', () => {
+    const css = read('app/admin/product-registration-refinements.css');
+    expect(ui).toContain('className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-option-status={option.status}>');
+    expect(css.replace(/\r\n/g, '\n')).toContain(
+      ".registration-step1-sections #customer-selection:not([data-option-status='draft']) > p.text-xs.text-muted::after {\n  content: '登録済みの商品の選択項目・選択肢は削除できません。「お客様に表示する」をOFFにして管理します。';"
+    );
+  });
+
   it('商品全体の削除経路を流用しない', () => {
     expect(action).not.toContain('delete_unused_published_option');
     expect(action).toContain("target === 'choice'");

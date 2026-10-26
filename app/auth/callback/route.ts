@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const next = safeNextPath(url.searchParams.get('next'), '/mypage');
+  // 期限切れ・使用済みのリンクは、Supabase が code の代わりにエラーのコードを付けて戻す（理由のコードだけを記録する）
+  const linkError = url.searchParams.get('error_code') ?? url.searchParams.get('error');
+  if (linkError) console.error('[auth/callback] link error', { code: linkError });
   if (code && hasSupabaseEnv()) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);

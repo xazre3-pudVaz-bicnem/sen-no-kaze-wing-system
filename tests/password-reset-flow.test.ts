@@ -23,6 +23,7 @@ import {
   authLinkErrorPath,
   passwordResetCanonicalUrl,
   passwordUpdateErrorMessage,
+  requestHost,
 } from '@/lib/auth/password-reset';
 import { requestPasswordResetAction, updatePasswordAction } from '@/lib/actions/auth';
 import { GET as authCallback } from '@/app/auth/callback/route';
@@ -69,18 +70,24 @@ afterEach(() => {
 });
 
 describe('パスワード再設定：申し込みとメールのリンクの戻り先を同じオリジンにする（2026-10-26）', () => {
-  it('戻り先（NEXT_PUBLIC_SITE_URL）と違うオリジンで開いたら、戻り先のオリジンで開き直す', () => {
-    expect(passwordResetCanonicalUrl(VERCEL, CUSTOM)).toBe(`${VERCEL}/reset-password`);
-    expect(passwordResetCanonicalUrl(`${CUSTOM}/`, VERCEL)).toBe(`${CUSTOM}/reset-password`);
-    expect(passwordResetCanonicalUrl('https://www.sen-no-kaze.com', 'http://www.sen-no-kaze.com')).toBe(`${CUSTOM}/reset-password`);
+  it('戻り先（NEXT_PUBLIC_SITE_URL）と違うホストで開いたら、戻り先のホストで開き直す', () => {
+    expect(passwordResetCanonicalUrl(VERCEL, 'www.sen-no-kaze.com')).toBe(`${VERCEL}/reset-password`);
+    expect(passwordResetCanonicalUrl(`${CUSTOM}/`, 'sen-no-kaze-wing-system.vercel.app')).toBe(`${CUSTOM}/reset-password`);
   });
 
-  it('同じオリジン・設定なし・判断できないときは開き直さない', () => {
-    expect(passwordResetCanonicalUrl(CUSTOM, CUSTOM)).toBeNull();
-    expect(passwordResetCanonicalUrl(`${CUSTOM}/path`, CUSTOM)).toBeNull();
-    expect(passwordResetCanonicalUrl(null, CUSTOM)).toBeNull();
+  it('同じホスト（http と https の違いは見ない）・設定なし・判断できないときは開き直さない（開き直しを繰り返さない）', () => {
+    expect(passwordResetCanonicalUrl(CUSTOM, 'www.sen-no-kaze.com')).toBeNull();
+    expect(passwordResetCanonicalUrl('http://www.sen-no-kaze.com', 'WWW.SEN-NO-KAZE.COM')).toBeNull();
+    expect(passwordResetCanonicalUrl(`${CUSTOM}/path`, 'www.sen-no-kaze.com')).toBeNull();
+    expect(passwordResetCanonicalUrl(null, 'www.sen-no-kaze.com')).toBeNull();
     expect(passwordResetCanonicalUrl(CUSTOM, null)).toBeNull();
-    expect(passwordResetCanonicalUrl('not a url', CUSTOM)).toBeNull();
+    expect(passwordResetCanonicalUrl('not a url', 'www.sen-no-kaze.com')).toBeNull();
+  });
+
+  it('ホストは転送のヘッダーを優先し、複数の値なら先頭を使う', () => {
+    expect(requestHost(new Headers({ host: 'a.example', 'x-forwarded-host': 'B.example, c.example' }))).toBe('b.example');
+    expect(requestHost(new Headers({ host: 'a.example' }))).toBe('a.example');
+    expect(requestHost(new Headers())).toBeNull();
   });
 
   it('独自ドメインで申し込みの画面を開くと、戻り先のオリジンへ移す（ローカル検証モードと同じオリジンでは移さない）', async () => {
@@ -121,7 +128,9 @@ describe('メールのリンクを確かめられなかったときは、理由�
     expect(authLinkErrorPath('/reset-password/update')).toBe('/reset-password?error=link');
     expect(authLinkErrorPath('/reset-password')).toBe('/reset-password?error=link');
     expect(authLinkErrorPath('/mypage')).toBe('/login?error=link');
-    expect(authLinkErrorPath('/reset-passwordx')).toBe('/login?error=link');
+    // ログイン画面へ戻すときは、元の行き先を残す
+    expect(authLinkErrorPath('/mypage/configurations/1/request-quote')).toBe('/login?error=link&next=%2Fmypage%2Fconfigurations%2F1%2Frequest-quote');
+    expect(authLinkErrorPath('/reset-passwordx')).toBe('/login?error=link&next=%2Freset-passwordx');
   });
 
   it('申し込んだブラウザの Cookie が無いと交換に失敗し、申し込みの画面へ戻す（理由の記録にコードだけ残す）', async () => {
@@ -139,6 +148,14 @@ describe('メールのリンクを確かめられなかったときは、理由�
 
     const noCode = await authCallback(new NextRequest(`${VERCEL}/auth/callback?next=%2Fmypage`));
     expect(noCode.headers.get('location')).toBe(`${VERCEL}/login?error=link`);
+
+    // 期限切れ・使用済みのリンク（code の代わりにエラーのコード）も、理由のコードを記録して申し込みの画面へ戻す
+    log.mockClear();
+    const expired = await authCallback(
+      new NextRequest(`${VERCEL}/auth/callback?error=access_denied&error_code=otp_expired&next=${encodeURIComponent('/reset-password/update')}`)
+    );
+    expect(expired.headers.get('location')).toBe(`${VERCEL}/reset-password?error=link`);
+    expect(log).toHaveBeenCalledWith('[auth/callback] link error', { code: 'otp_expired' });
   });
 });
 
@@ -146,6 +163,10 @@ describe('新しいパスワードの設定', () => {
   it('更新の失敗は日本語で出す（Supabase の英語のメッセージを出さない）', async () => {
     expect(passwordUpdateErrorMessage({ code: 'same_password' })).toBe('新しいパスワードが今のパスワードと同じです。別のパスワードを入力してください。');
     expect(passwordUpdateErrorMessage({ code: 'weak_password' })).toContain('このパスワードは使えません');
+    // 弱いパスワードは、Supabase が返す理由ごとに文を変える（漏えい・文字の種類・長さ）
+    expect(passwordUpdateErrorMessage({ code: 'weak_password', reasons: ['pwned'] })).toContain('漏えいが知られている');
+    expect(passwordUpdateErrorMessage({ code: 'weak_password', reasons: ['characters'] })).toContain('決められた種類の文字');
+    expect(passwordUpdateErrorMessage({ name: 'AuthWeakPasswordError', reasons: ['length'] })).toContain('短すぎます');
     expect(passwordUpdateErrorMessage({ name: 'AuthSessionMissingError' })).toBe(PASSWORD_RESET_LINK_ERROR);
     expect(passwordUpdateErrorMessage({ code: 'session_expired' })).toBe(PASSWORD_RESET_LINK_ERROR);
     expect(passwordUpdateErrorMessage({ code: 'unexpected_failure' })).toBe('パスワードを更新できませんでした。時間をおいてもう一度お試しください。');

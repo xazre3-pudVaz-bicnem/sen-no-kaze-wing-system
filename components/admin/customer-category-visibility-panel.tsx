@@ -115,10 +115,10 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
         </p>
       )}
       <div className="max-h-[36rem] overflow-y-auto rounded-lg border border-line">
-        {grouped.map((group, groupIndex) => {
+        {grouped.map((group) => {
           const hasActiveEditor = group.categories.some((category) => category.id === editingCategoryId);
           const forceOpen = search.trim().length > 0 || filter !== 'all' || hasActiveEditor;
-          const open = forceOpen || (expandedGroups[group.key] ?? groupIndex === 0);
+          const open = forceOpen || (expandedGroups[group.key] ?? true);
           const hidden = group.categories.filter((category) => !isVisible(category)).length;
           return (
             <section key={group.key} className="border-b border-line last:border-b-0">

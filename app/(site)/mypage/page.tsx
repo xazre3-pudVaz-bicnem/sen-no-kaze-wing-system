@@ -4,6 +4,11 @@ import { requireUser } from '@/lib/auth/session';
 import { signOutAction } from '@/lib/actions/auth';
 import { duplicateConfigurationAction } from '@/lib/actions/configurations';
 import { getStore } from '@/lib/data/store';
+import { getExteriorFaces } from '@/lib/data/exterior-faces';
+import { buildEstimateSpecSelection } from '@/lib/domain/estimate-template';
+import { defaultVariantIdsFor } from '@/lib/domain/preset';
+import { summarizePlanChanges, type PlanChangeSummary } from '@/lib/domain/plan-change-summary';
+import type { CatalogBundle } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
 import {
   ROLE_LABELS,
@@ -203,6 +208,54 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
     (configuration) => configuration.status === 'draft' && !quoteByConfig.has(configuration.id)
   );
 
+  // 保存時の標準Revisionではなく「現在の標準選択」との表示用比較。
+  // モデル・仕様ごとの読込を共用し、プラン保存や金額正本には触れない。
+  const bundleRequests = new Map<string, Promise<CatalogBundle | null>>();
+  const templateRequests = new Map<string, ReturnType<typeof store.getEstimateTemplateBundle>>();
+  const planChangeEntries = await Promise.all(savedPlans.map(async (configuration) => {
+    try {
+      const modelId = configuration.base_model_id;
+      const specCode = configuration.spec_code ?? 'base';
+      if (!bundleRequests.has(modelId)) {
+        bundleRequests.set(modelId, store.getCatalogBundle(modelId, { includeDraft: false }));
+      }
+      const templateKey = `${modelId}:${specCode}`;
+      if (!templateRequests.has(templateKey)) {
+        templateRequests.set(templateKey, store.getEstimateTemplateBundle(modelId, specCode));
+      }
+      const [bundle, template, saved, exteriorFaces] = await Promise.all([
+        bundleRequests.get(modelId)!,
+        templateRequests.get(templateKey)!,
+        store.getConfiguration(configuration.id, user),
+        getExteriorFaces(configuration.id),
+      ]);
+      if (!bundle || !saved) return [configuration.id, null] as const;
+      const ctx = {
+        options: bundle.options,
+        categories: bundle.categories,
+        dependencies: bundle.dependencies,
+        conflicts: bundle.conflicts,
+        customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
+      };
+      const baselineIds = buildEstimateSpecSelection(ctx, bundle.model, specCode, template?.baseline_option_ids ?? []);
+      const baselineVariants = defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);
+      const summary = summarizePlanChanges(
+        bundle,
+        {
+          optionIds: saved.items.map((item) => item.option_id),
+          variantChoiceIds: saved.items.flatMap((item) => item.variant_choice_ids ?? []),
+          exteriorFaces,
+        },
+        { optionIds: baselineIds, variantChoiceIds: baselineVariants }
+      );
+      return [configuration.id, summary] as const;
+    } catch (error) {
+      console.error('[wing] saved plan change summary unavailable', error);
+      return [configuration.id, null] as const;
+    }
+  }));
+  const changeByConfiguration = new Map<string, PlanChangeSummary | null>(planChangeEntries);
+
   return (
     <Section className="py-10 sm:py-14">
       <Container>
@@ -394,6 +447,7 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
             <ul className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3" data-testid="configuration-list">
               {savedPlans.map((configuration) => {
                 const slug = slugOf.get(configuration.base_model_id) ?? '';
+                const changes = changeByConfiguration.get(configuration.id);
                 return (
                   <li key={configuration.id} className="card flex flex-col overflow-hidden" data-testid="configuration-card">
                     <div className="relative aspect-[16/10] bg-sand">
@@ -415,6 +469,23 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
                     <div className="flex flex-1 flex-col p-5">
                       <h3 className="truncate text-lg" title={configuration.name}>{configuration.name}</h3>
                       <p className="text-xs text-muted">{nameOf.get(configuration.base_model_id)}</p>
+                      <div className="mt-2 text-xs text-ink-soft" data-testid="saved-plan-changes">
+                        {changes ? (
+                          <>
+                            <p className="font-medium text-ink">
+                              {changes.items.length > 0
+                                ? `現在の標準から${changes.items.length}項目変更${changes.complete ? '' : '（一部未確認）'}`
+                                : changes.complete ? '現在の標準仕様のまま' : '現在の標準との比較は未確認'}
+                            </p>
+                            {changes.items.length > 0 && (
+                              <p className="mt-1 leading-relaxed">
+                                {changes.items.map((item) => `${item.category}（${item.detail ?? item.kind}）`).join('・')}
+                              </p>
+                            )}
+                          </>
+                        ) : <p>標準との差分を確認できません</p>}
+                        <p className="mt-1 text-[0.68rem] text-muted">現在の標準選択との比較です（保存時点の標準ではありません）。</p>
+                      </div>
                       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-ink-soft">
                         <dt>設置場所</dt>
                         <dd className="text-right">{siteLocationLabel(configuration)}</dd>

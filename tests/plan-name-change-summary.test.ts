@@ -7,19 +7,19 @@ const cats = [
   { id: 'wall', code: 'exterior-wall', name: '外壁', group_sort: 1, sort_order: 1 },
   { id: 'door', code: 'entrance-door', name: '玄関ドア', group_sort: 2, sort_order: 1 },
   { id: 'bath', code: 'unit-bath', name: 'ユニットバス', group_sort: 3, sort_order: 1 },
-] as OptionCategory[];
+] as unknown as OptionCategory[];
 const options = [
   { id: 'wall-1', category_id: 'wall', name: '標準外壁' },
   { id: 'wall-2', category_id: 'wall', name: '別の外壁' },
   { id: 'door-1', category_id: 'door', name: '玄関ドア' },
   { id: 'bath-1', category_id: 'bath', name: '標準UB' },
   { id: 'bath-2', category_id: 'bath', name: '変更UB' },
-] as ProductOption[];
-const variantGroups = [{ id: 'door-color', option_id: 'door-1', name: '扉色' }] as OptionVariantGroup[];
+] as unknown as ProductOption[];
+const variantGroups = [{ id: 'door-color', option_id: 'door-1', name: '扉色' }] as unknown as OptionVariantGroup[];
 const variantChoices = [
   { id: 'color-white', group_id: 'door-color', name: '白' },
   { id: 'color-black', group_id: 'door-color', name: '黒' },
-] as OptionVariantChoice[];
+] as unknown as OptionVariantChoice[];
 const catalog: Pick<CatalogBundle, 'options' | 'categories' | 'variantGroups' | 'variantChoices'> =
   { options, categories: cats, variantGroups, variantChoices };
 const baseline: PlanSelections = {

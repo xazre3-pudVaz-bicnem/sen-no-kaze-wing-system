@@ -201,11 +201,15 @@ describe('画面・データ層のつなぎ', () => {
     }
   });
 
-  it('対象外の行は、管理画面の明細の表でも金額欄を「対象外」と出す（0 円の確定と区別する）', () => {
-    expect(read('components/admin/case-estimate-review.tsx')).toContain("const excluded = quoteLineStateAmountLabel(item.remark) === '対象外';");
-    expect(read('components/admin/case-workspace.tsx')).toContain(
-      "{quoteLineStateAmountLabel(item.remark) === '対象外' ? '対象外' : formatYen(item.amount)}"
-    );
+  it('対象外の行は、管理画面の明細の表でも金額欄を「対象外」と出し、PDF の商品画像の一覧には出さない（判定は印で行う）', () => {
+    expect(read('components/admin/case-estimate-review.tsx')).toContain('const excluded = isExcludedLineRemark(item.remark);');
+    expect(read('components/admin/case-workspace.tsx')).toContain("{isExcludedLineRemark(item.remark) ? '対象外' : formatYen(item.amount)}");
+    const pdf = read('lib/pdf/quote-pdf.tsx');
+    expect(pdf).toContain('productImages.get(i.id) && !isExcludedLineRemark(i.remark)');
+    // 表示の文言（「対象外」）で判定しない
+    for (const file of ['components/admin/case-estimate-review.tsx', 'components/admin/case-workspace.tsx', 'components/mypage/quote-table.tsx', 'lib/pdf/quote-pdf.tsx']) {
+      expect(read(file)).not.toContain("=== '対象外'");
+    }
   });
 
   it('標準見積の版の区分は、内外装・オプション・別途工事だけを明示して突き合わせる（SQL と画面で同じ）', () => {

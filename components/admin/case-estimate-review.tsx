@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS, type CaseDocument, type QuoteDraftItem } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
-import { quoteLineStateAmountLabel } from '@/lib/domain/quote-por';
+import { isExcludedLineRemark } from '@/lib/domain/quote-por';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -180,7 +180,7 @@ function DraftItemTable({ items }: { items: QuoteDraftItem[] }) {
             .map((item) => {
               const separate = item.unit_price === 0 && item.remark?.trim() === '別途見積';
               // 対象外の行は金額欄を「対象外」にする（0 円の確定と区別する。D1 までの暫定）
-              const excluded = quoteLineStateAmountLabel(item.remark) === '対象外';
+              const excluded = isExcludedLineRemark(item.remark);
               return (
                 <tr key={item.id} className="border-t border-line">
                   <td className="px-3 py-2 text-xs text-muted">{ITEM_KIND_LABELS[item.kind] ?? item.kind}</td>

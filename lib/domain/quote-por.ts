@@ -173,6 +173,11 @@ export function parsePorSelectionKeys(value: FormDataEntryValue | null): string[
   }
 }
 
+/** 今回の契約対象外の行か（備考の状態の印で判定する。表示の文言とは比べない） */
+export function isExcludedLineRemark(remark: string | null | undefined): boolean {
+  return parseQuoteLineState(remark)?.state === 'excluded';
+}
+
 /** 見積書・明細の表の金額欄：対象外の行は「対象外」と出す（0 円の確定と区別する）。印が無ければ null */
 export function quoteLineStateAmountLabel(remark: string | null | undefined): string | null {
   const parsed = parseQuoteLineState(remark);

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Fragment } from 'react';
 import { ArrowRight, ImageOff } from 'lucide-react';
 import { formatQty, formatYen } from '@/lib/domain/pricing';
-import { quoteLineStateAmountLabel } from '@/lib/domain/quote-por';
+import { isExcludedLineRemark } from '@/lib/domain/quote-por';
 import { type Quote, type QuoteItem } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 
@@ -47,7 +47,7 @@ function SubtotalRow({ label, amount }: { label: string; amount: string }) {
 
 function ItemRow({ it, showImage = false }: { it: QuoteItem; showImage?: boolean }) {
   // 対象外の行は金額欄を「対象外」にする（0 円の確定と区別する。D1 までの暫定）
-  const excluded = quoteLineStateAmountLabel(it.remark) === '対象外';
+  const excluded = isExcludedLineRemark(it.remark);
   return (
     <tr className="bg-white text-xs">
       <td className={td.name}>

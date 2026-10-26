@@ -20,6 +20,7 @@ import {
   parseQuoteLineState,
   porSelectionLabel,
   quoteLineStateAmountLabel,
+  isExcludedLineRemark,
   quoteLineStateGuardError,
   samePorSelectionKeys,
   splitQuoteLineStateRemark,
@@ -256,6 +257,11 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(quoteLineStateAmountLabel('［今回の契約対象外］')).toBe('対象外');
     expect(quoteLineStateAmountLabel('［0円確定］：サービス')).toBe('0円確定');
     expect(quoteLineStateAmountLabel('サービス')).toBeNull();
+    // 対象外の判定は印で行う（表示の文言とは比べない）
+    expect(isExcludedLineRemark('［今回の契約対象外］お客様手配')).toBe(true);
+    expect(isExcludedLineRemark('［0円確定］：サービス')).toBe(false);
+    expect(isExcludedLineRemark('今回の契約対象外')).toBe(false);
+    expect(isExcludedLineRemark(null)).toBe(false);
   });
 
   it('編集画面で扱いを選ぶと 0 円にし、対象外のメモが空なら今の備考を入れておく（別途見積の目印は入れない）。外すと備考は元のまま', () => {

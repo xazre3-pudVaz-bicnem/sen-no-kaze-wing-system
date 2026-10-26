@@ -630,7 +630,7 @@ export function DealerRevisionForm({
         onUpdate={updatePorRow}
         lockedNote={
           canEditBase
-            ? '本体の明細は、この画面では直せません。本体マスターの別途見積の行を見直してください'
+            ? '本体の明細は、この画面では直せません。本体に金額未確定の行が残る間は、この案件の改訂を発行できません'
             : '本体の明細は、この画面では直せません。本部・総代理店に依頼してください'
         }
       />

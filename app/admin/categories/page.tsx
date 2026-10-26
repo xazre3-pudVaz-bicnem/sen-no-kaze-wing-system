@@ -42,13 +42,13 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
             </div>
           </div>
           {editingCategory ? (
-            <CategoryForm key={editingCategory.id} category={editingCategory} />
+            <CategoryForm key={editingCategory.id + '-' + String(editingCategory.customer_visible)} category={editingCategory} />
           ) : creating ? (
             <CategoryForm key="create" category={null} />
           ) : (
             <div className="rounded-xl border border-line bg-white px-5 py-8 text-sm text-ink-soft">
-              左の一覧から「詳細編集」を選ぶと、この場所に対象のカテゴリーだけ表示されます。
-              表示・非表示の切り替えだけなら、左の一覧で完結します。
+              一覧から「詳細編集」を選ぶと、この場所に対象のカテゴリーだけ表示されます。
+              表示・非表示の切り替えだけなら、一覧で完結します。
             </div>
           )}
         </section>

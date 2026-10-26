@@ -49,7 +49,7 @@ import {
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
-import { canRestoreSimulatorDraft } from '@/lib/domain/simulator-draft-ownership';
+import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
 import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/domain/product-lifecycle';
 import { Alert, Button } from '@/components/ui';
@@ -373,7 +373,7 @@ export function SimulatorApp({
     try {
       const raw = window.localStorage.getItem(storageKey(model.slug));
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
-      if (!initial && draft && canRestoreSimulatorDraft(draft, user?.id ?? null)) {
+      if (!initial && !loadError && draft && canRestoreSimulatorSelection(draft, user?.id ?? null, resume)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
         const restoredSpec =
@@ -454,11 +454,8 @@ export function SimulatorApp({
         setSitePrefecture(draft.siteLocationUndecided ? null : (draft.sitePrefecture ?? null));
         setSiteMunicipality(draft.siteLocationUndecided ? null : (draft.siteMunicipality ?? null));
         if (draft.name) setName(draft.name);
-        if (draft.configId && user && draft.ownerId === user.id && !hasInvalidSpec) {
-          setConfigId(draft.configId);
-          // サーバーから読み込んだ版が無いとき（ログイン後の再開など）だけ、下書きに残した版を使う
-          if (!initial) setLockVersion(draft.lockVersion ?? null);
-        }
+        // ブラウザ内の保存済み ID・版は復元しない。
+        // 既存プランの編集は ?c= によりサーバーで状態・権限を確認した場合だけ行う。
         if (resume && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);

@@ -55,8 +55,13 @@ export function summarizePlanChanges(
     ...current.variantChoiceIds, ...baseline.variantChoiceIds,
     ...(current.exteriorFaces ?? []).flatMap((f) => f.variant_choice_ids),
   ];
-  const complete = allIds.every((id) => knownOptions.has(id)) &&
+  const complete = [
+    ...allIds,
+    ...(current.exteriorFaces ?? []).map((face) => face.option_id),
+  ].every((id) => knownOptions.has(id)) &&
     allChoices.every((id) => choices.has(id));
+  // カタログ外の商品を「削除した商品」と誤表示しない。比較不能なら項目数も表示しない。
+  if (!complete) return { items: [], complete: false };
   const selectedByCategory = (ids: string[], categoryId: string) =>
     ids.filter((id) => knownOptions.get(id)?.category_id === categoryId);
   const sortedCategories = [...catalog.categories].sort(

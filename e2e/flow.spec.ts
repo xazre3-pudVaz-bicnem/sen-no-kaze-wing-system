@@ -306,7 +306,8 @@ test.describe('顧客フロー', () => {
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
     await expect(page.locator('#site_address')).toHaveValue('石川県七尾市○○1-2');
     // 土地の情報は「土地について（任意）」を開いて入れる（#577〜#581 で折りたたみになった）
-    await page.getByTestId('quote-request-site-profile-disclosure').locator('summary').click();
+    const land = page.getByTestId('quote-request-site-profile-disclosure');
+    if ((await land.getAttribute('open')) === null) await land.locator('summary').click();
     await expect(page.getByTestId('land-status-owned')).toBeChecked();
     await page.getByTestId('land-status-none').check();
     await page.locator('#request-land-desired-area').fill('能登の海沿い');

@@ -16,7 +16,7 @@ test.describe('地域で抽出', () => {
     // 保存済み仕様の地域は、設置予定地が未登録なら会員の住所で判定する。会員登録では住所を聞かないので、プロフィールに入れる
     await page.goto('/mypage/profile');
     await page.locator('#address').fill('石川県七尾市1-1');
-    await page.getByRole('button', { name: '保存する' }).click();
+    await page.getByRole('button', { name: '保存する', exact: true }).click();
     await page.waitForURL(/\/mypage\?profile=updated/);
     await logout(page);
 

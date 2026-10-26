@@ -6,6 +6,7 @@ import { isLocalMode } from '@/lib/data/store';
 import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { resetRequestSchema, signInSchema, signUpSchema, updatePasswordSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 import { safeNextPath } from '@/lib/utils';
+import { passwordUpdateErrorMessage } from '@/lib/auth/password-reset';
 
 export interface AuthFormState {
   ok: boolean;
@@ -130,10 +131,11 @@ export async function requestPasswordResetAction(_prev: AuthFormState, formData:
   if (!hasSupabaseEnv()) return notConfigured();
   const supabase = await createClient();
   const origin = await originUrl();
-  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: `${origin}/auth/callback?next=${encodeURIComponent('/reset-password/update')}`,
   });
-  // 存在しないメールでも同じ応答（アカウント列挙防止）
+  // 存在しないメールでも同じ応答（アカウント列挙防止）。送れなかった理由はサーバーの記録にだけ残す（メールアドレスは残さない）
+  if (error) console.error('[password-reset] resetPasswordForEmail failed', { code: error.code ?? null, status: error.status ?? null });
   return { ok: true, sent: true };
 }
 
@@ -149,6 +151,6 @@ export async function updatePasswordAction(_prev: AuthFormState, formData: FormD
   if (!hasSupabaseEnv()) return notConfigured();
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) return { ok: false, error: `更新に失敗しました: ${error.message}` };
+  if (error) return { ok: false, error: passwordUpdateErrorMessage(error) };
   redirect('/mypage?password=updated');
 }

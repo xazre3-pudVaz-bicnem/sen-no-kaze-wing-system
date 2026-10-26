@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { authLinkErrorPath } from '@/lib/auth/password-reset';
 import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/utils';
 
@@ -11,6 +12,8 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(new URL(next, url.origin));
+    // 申し込んだブラウザの Cookie が無い（別のブラウザ・別のドメインで開いた）・期限切れ など。理由は戻した画面で案内する
+    console.error('[auth/callback] exchangeCodeForSession failed', { code: error.code ?? null, status: error.status ?? null });
   }
-  return NextResponse.redirect(new URL('/login?error=link', url.origin));
+  return NextResponse.redirect(new URL(authLinkErrorPath(next), url.origin));
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OptionCategory } from '@/lib/domain/types';
-import { customerCategoryVisibilityFormData } from '@/lib/domain/category-customer-visibility';
+import { customerCategoryVisibilityFormData, groupCustomerCategories } from '@/lib/domain/category-customer-visibility';
 
 const category: OptionCategory = {
   id: '29000000-0000-4000-8000-000000000002',
@@ -51,5 +51,42 @@ describe('カテゴリーのお客様表示切替用フォーム', () => {
       expect(data.get('code')).toBe(code);
       expect(data.get('customer_visible')).toBeNull();
     }
+  });
+});
+
+describe('お客様表示カテゴリーの表示用グループ', () => {
+  it('商品台帳と同じ並びで表示し、並び替えても元の配列と値を変えない', () => {
+    const items = [
+      { ...category, id: '1', code: 'smartlock', name: 'スマートロック・鍵', group_name: 'その他' },
+      { ...category, id: '2', code: 'wall-ceiling', name: '壁・天井' },
+      { ...category, id: '3', code: 'sash', name: 'サッシ' },
+      { ...category, id: '4', code: 'roof', name: '屋根' },
+      { ...category, id: '5', code: 'exterior-wall', name: '外壁' },
+    ];
+    const originalCodes = items.map((item) => item.code);
+    const groups = groupCustomerCategories(items);
+    expect(groups.map((g) => g.label)).toEqual(['本体・外装', '開口部・建具', '内装・造作', '電気・設備']);
+    expect(groups[0].categories.map((item) => item.code)).toEqual(['roof', 'exterior-wall']);
+    expect(items.map((item) => item.code)).toEqual(originalCodes);
+    expect(items[3].name).toBe('屋根');
+  });
+
+  it('未定義の新カテゴリーを欠落させず、最後にまとめる', () => {
+    const known = { ...category, id: 'known', code: 'roof', name: '屋根' };
+    const newCategory = { ...category, id: 'new', code: 'future-product', name: '将来の商品分類', group_name: '新規分類' };
+    const groups = groupCustomerCategories([newCategory, known]);
+    expect(groups.map((g) => g.label)).toEqual(['本体・外装', 'その他のカテゴリー']);
+    expect(groups[1].categories).toEqual([newCategory]);
+  });
+
+  it('検索・表示状態で絞られた配列のみでグループを構成できる', () => {
+    const filtered = [
+      { ...category, id: '1', code: 'insulation-wall', customer_visible: false },
+      { ...category, id: '2', code: 'insulation-ceiling', customer_visible: false },
+    ];
+    const groups = groupCustomerCategories(filtered);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].categories).toHaveLength(2);
+    expect(groups[0].categories.map((c) => c.code)).toEqual(['insulation-wall', 'insulation-ceiling']);
   });
 });

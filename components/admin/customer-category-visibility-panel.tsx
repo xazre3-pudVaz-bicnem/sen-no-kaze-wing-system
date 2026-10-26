@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveCategoryAction } from '@/lib/actions/admin';
-import { customerCategoryVisibilityFormData } from '@/lib/domain/category-customer-visibility';
+import { customerCategoryVisibilityFormData, groupCustomerCategories } from '@/lib/domain/category-customer-visibility';
 import type { OptionCategory } from '@/lib/domain/types';
 
 type VisibilityFilter = 'all' | 'visible' | 'hidden';
@@ -12,6 +12,7 @@ type VisibilityFilter = 'all' | 'visible' | 'hidden';
 export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId }: { categories: OptionCategory[]; editingCategoryId?: string | null }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<VisibilityFilter>('all');
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string, boolean>>({});
@@ -33,6 +34,7 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
     });
   }, [categories, filter, overrides, search]);
 
+  const grouped = useMemo(() => groupCustomerCategories(filtered), [filtered]);
   const visibleCount = categories.filter((category) => isVisible(category)).length;
 
   const saveVisibility = (category: OptionCategory, visible: boolean) => {
@@ -105,55 +107,85 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
       </div>
       <p className="text-xs text-muted">
         全 {categories.length} カテゴリー：表示 {visibleCount} 件／非表示 {categories.length - visibleCount} 件
+        <span className="ml-2">分類名を押すと一覧を開閉できます。</span>
       </p>
       {notice && (
         <p role="status" className={notice.error ? 'text-sm text-red-700' : 'text-sm text-emerald-800'}>
           {notice.text}
         </p>
       )}
-      <div className="max-h-[32rem] divide-y divide-line overflow-y-auto rounded-lg border border-line">
-        {filtered.map((category) => (
-          <div key={category.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{category.name}</p>
-              <p className="text-xs text-muted">
-                {category.group_name} / {category.code}
-                {category.status !== 'published' ? ' / 下書き' : ''}
-                {category.is_required ? ' / 必須カテゴリー' : ''}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draftVisible(category)}
-                  disabled={pending}
-                  onChange={(event) => setDrafts((current) => ({ ...current, [category.id]: event.target.checked }))}
-                  aria-label={category.name + ' をお客様のシミュレーターに表示'}
-                />
-                <span>{draftVisible(category) ? '表示する' : '表示しない'}</span>
-              </label>
+      <div className="max-h-[36rem] overflow-y-auto rounded-lg border border-line">
+        {grouped.map((group, groupIndex) => {
+          const hasActiveEditor = group.categories.some((category) => category.id === editingCategoryId);
+          const forceOpen = search.trim().length > 0 || filter !== 'all' || hasActiveEditor;
+          const open = forceOpen || (expandedGroups[group.key] ?? groupIndex === 0);
+          const hidden = group.categories.filter((category) => !isVisible(category)).length;
+          return (
+            <section key={group.key} className="border-b border-line last:border-b-0">
               <button
                 type="button"
-                className="rounded-md border border-line px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={pending || draftVisible(category) === isVisible(category)}
-                onClick={() => saveVisibility(category, draftVisible(category))}
+                className="flex w-full items-center justify-between gap-2 bg-sand/60 px-3 py-3 text-left hover:bg-sand sm:px-4"
+                aria-expanded={open}
+                aria-controls={'category-group-' + group.key}
+                onClick={() => setExpandedGroups((current) => ({ ...current, [group.key]: !open }))}
               >
-                {savingId === category.id ? '保存中…' : '保存'}
+                <span className="min-w-0 text-sm font-semibold text-ink">{group.label}</span>
+                <span className="flex shrink-0 items-center gap-2 text-xs text-ink-soft">
+                  <span>{group.categories.length}件</span>
+                  {hidden > 0 && <span className="rounded bg-white px-2 py-0.5">非表示 {hidden}件</span>}
+                  <span aria-hidden="true" className="text-base">{open ? '▴' : '▾'}</span>
+                </span>
               </button>
-              <Link
-                href={'/admin/categories?edit=' + encodeURIComponent(category.id) + '#category-editor'}
-                aria-current={editingCategoryId === category.id ? 'true' : undefined}
-                className={editingCategoryId === category.id
-                  ? 'rounded-md border border-ink bg-sand px-3 py-1 text-sm font-medium text-ink'
-                  : 'rounded-md border border-line px-3 py-1 text-sm font-medium text-ink-soft hover:bg-sand'}
-              >
-                詳細編集
-              </Link>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && <p className="px-4 py-5 text-sm text-muted">該当するカテゴリーはありません。</p>}
+              {open && (
+                <div id={'category-group-' + group.key} className="divide-y divide-line">
+                  {group.categories.map((category) => (
+                    <div key={category.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{category.name}</p>
+                        <p className="text-xs text-muted">
+                          {category.code}
+                          {group.key === 'other-unmapped' ? ' / ' + category.group_name : ''}
+                          {category.status !== 'published' ? ' / 下書き' : ''}
+                          {category.is_required ? ' / 必須カテゴリー' : ''}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <label className="flex cursor-pointer items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={draftVisible(category)}
+                            disabled={pending}
+                            onChange={(event) => setDrafts((current) => ({ ...current, [category.id]: event.target.checked }))}
+                            aria-label={category.name + ' をお客様のシミュレーターに表示'}
+                          />
+                          <span>{draftVisible(category) ? '表示する' : '表示しない'}</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="rounded-md border border-line px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={pending || draftVisible(category) === isVisible(category)}
+                          onClick={() => saveVisibility(category, draftVisible(category))}
+                        >
+                          {savingId === category.id ? '保存中…' : '保存'}
+                        </button>
+                        <Link
+                          href={'/admin/categories?edit=' + encodeURIComponent(category.id) + '#category-editor'}
+                          aria-current={editingCategoryId === category.id ? 'true' : undefined}
+                          className={editingCategoryId === category.id
+                            ? 'rounded-md border border-ink bg-sand px-3 py-1 text-sm font-medium text-ink'
+                            : 'rounded-md border border-line px-3 py-1 text-sm font-medium text-ink-soft hover:bg-sand'}
+                        >
+                          詳細編集
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+        {grouped.length === 0 && <p className="px-4 py-5 text-sm text-muted">該当するカテゴリーはありません。</p>}
       </div>
       <p className="text-xs text-muted">
         チェックを変更した後、その行の「保存」で反映します。必須カテゴリーや標準構成の商品を非表示にする前に、

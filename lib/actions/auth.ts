@@ -6,7 +6,8 @@ import { isLocalMode } from '@/lib/data/store';
 import { createClient, hasSupabaseEnv } from '@/lib/supabase/server';
 import { resetRequestSchema, signInSchema, signUpSchema, updatePasswordSchema, flattenErrors, type FieldErrors } from '@/lib/validation';
 import { safeNextPath } from '@/lib/utils';
-import { passwordUpdateErrorMessage } from '@/lib/auth/password-reset';
+import { PASSWORD_RESET_STALE_PAGE, passwordResetCanonicalUrl, passwordUpdateErrorMessage, requestHost } from '@/lib/auth/password-reset';
+import { getSiteUrl } from '@/lib/site';
 
 export interface AuthFormState {
   ok: boolean;
@@ -24,11 +25,13 @@ export interface AuthFormState {
 const valuesOf = (fd: FormData, keys: string[]) =>
   Object.fromEntries(keys.map((k) => [k, String(fd.get(k) ?? '')]).filter(([k]) => k !== 'password'));
 
+/** メールのリンクの戻り先のオリジン。NEXT_PUBLIC_SITE_URL（オリジンに正規化）があればそれ、無ければ今のリクエストから作る */
 async function originUrl(): Promise<string> {
+  const site = getSiteUrl();
+  if (site) return site;
   const h = await headers();
-  const proto = h.get('x-forwarded-proto') ?? 'http';
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
-  return process.env.NEXT_PUBLIC_SITE_URL?.trim() || `${proto}://${host}`;
+  const proto = h.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'http';
+  return `${proto}://${requestHost(h) ?? 'localhost:3000'}`;
 }
 
 function notConfigured(): AuthFormState {
@@ -129,6 +132,8 @@ export async function requestPasswordResetAction(_prev: AuthFormState, formData:
     return { ok: true, sent: true, devLink: r.devLink };
   }
   if (!hasSupabaseEnv()) return notConfigured();
+  // 申し込みの画面と戻り先のホストが違う（開き直す前の古い画面からの送信など）ときは送らない（送っても照合できないため）
+  if (passwordResetCanonicalUrl(getSiteUrl(), requestHost(await headers()))) return { ok: false, error: PASSWORD_RESET_STALE_PAGE };
   const supabase = await createClient();
   const origin = await originUrl();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
@@ -151,6 +156,10 @@ export async function updatePasswordAction(_prev: AuthFormState, formData: FormD
   if (!hasSupabaseEnv()) return notConfigured();
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) return { ok: false, error: passwordUpdateErrorMessage(error) };
+  if (error) {
+    // 理由のコードだけをサーバーの記録に残す（画面には日本語の文を出す）
+    console.error('[password-update] updateUser failed', { code: error.code ?? null, status: error.status ?? null });
+    return { ok: false, error: passwordUpdateErrorMessage(error) };
+  }
   redirect('/mypage?password=updated');
 }

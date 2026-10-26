@@ -11,6 +11,14 @@
 export const PASSWORD_RESET_LINK_ERROR =
   '再設定のリンクを確認できませんでした。リンクの有効期限が切れたか、すでに使われた可能性があります。お手数ですが、もう一度再設定メールを送ってください。メールのリンクは、再設定を申し込んだのと同じブラウザで開いてください。';
 
+/** 新しいパスワードの画面を、ログインしていない状態で開いたときの文 */
+export const PASSWORD_UPDATE_SIGNED_OUT =
+  'パスワードを変更するには、ログインしてから開くか、パスワード再設定のメールのリンクから開いてください。リンクの有効期限が切れた場合は、もう一度再設定メールを送ってください。';
+
+/** 申し込みの画面とリンクの戻り先のホストが違うまま送ろうとしたときの文（開き直す前の古い画面からの送信など） */
+export const PASSWORD_RESET_STALE_PAGE =
+  'この画面からは再設定メールを送れません。お手数ですが、パスワード再設定の画面を開き直してから、もう一度お試しください。';
+
 /** ログイン画面で出す文（パスワード再設定以外のメールのリンク） */
 export const AUTH_LINK_ERROR =
   'メールのリンクを確認できませんでした。リンクの有効期限が切れたか、すでに使われた可能性があります。もう一度お試しください。';
@@ -37,11 +45,27 @@ export function passwordResetCanonicalUrl(siteUrl: string | null | undefined, ho
 }
 
 /**
+ * 申し込みの画面を開き直す先（null なら開き直さない）。開き直した後（moved=1）は、ホストが違っても繰り返さない
+ * （ドメインの転送の設定と食い違ったときに、行ったり来たりしないように）
+ */
+export function passwordResetRedirect(
+  siteUrl: string | null | undefined,
+  host: string | null | undefined,
+  params: { moved?: string; error?: string }
+): string | null {
+  if (params.moved === '1') return null;
+  const canonical = passwordResetCanonicalUrl(siteUrl, host);
+  if (!canonical) return null;
+  return `${canonical}?moved=1${params.error === 'link' ? '&error=link' : ''}`;
+}
+
+/**
  * メールのリンクを確かめられなかったときの行き先。パスワード再設定なら申し込みの画面へ戻して理由を出す。
- * ほかはログイン画面へ戻し、元の行き先を残す（ログインした後に続きへ戻れるように）
+ * ほかはログイン画面へ戻し、元の行き先を残す（ログインした後に続きへ戻れるように）。行き先はパスで判定する
  */
 export function authLinkErrorPath(next: string): string {
-  if (next === '/reset-password' || next.startsWith('/reset-password/')) return '/reset-password?error=link';
+  const path = next.split(/[?#]/)[0];
+  if (path === '/reset-password' || path.startsWith('/reset-password/')) return '/reset-password?error=link';
   return next === '/mypage' ? '/login?error=link' : `/login?error=link&next=${encodeURIComponent(next)}`;
 }
 
@@ -63,6 +87,11 @@ export function passwordUpdateErrorMessage(error: { code?: string | null; name?:
     case 'session_not_found':
     case 'session_expired':
       return PASSWORD_RESET_LINK_ERROR;
+    case 'reauthentication_needed':
+    case 'reauthentication_not_valid':
+      return '安全のため、もう一度ログインしてから変更してください。パスワードを忘れた場合は、再設定メールから手続きしてください。';
+    case 'over_request_rate_limit':
+      return '短時間に操作が続いたため、受け付けられませんでした。しばらくしてからもう一度お試しください。';
   }
   if (error.name === 'AuthWeakPasswordError') return weakPasswordMessage(error.reasons);
   if (error.name === 'AuthSessionMissingError') return PASSWORD_RESET_LINK_ERROR;

@@ -20,7 +20,10 @@ vi.mock('@/lib/auth/session', () => ({ getSessionUser: mocks.getSessionUser }));
 
 import {
   PASSWORD_RESET_LINK_ERROR,
+  PASSWORD_RESET_STALE_PAGE,
+  PASSWORD_UPDATE_SIGNED_OUT,
   authLinkErrorPath,
+  passwordResetRedirect,
   passwordResetCanonicalUrl,
   passwordUpdateErrorMessage,
   requestHost,
@@ -90,11 +93,18 @@ describe('パスワード再設定：申し込みとメールのリンクの戻�
     expect(requestHost(new Headers())).toBeNull();
   });
 
+  it('開き直しは 1 回まで（ドメインの転送の設定と食い違っても、行ったり来たりしない）', () => {
+    expect(passwordResetRedirect(VERCEL, 'www.sen-no-kaze.com', {})).toBe(`${VERCEL}/reset-password?moved=1`);
+    expect(passwordResetRedirect(VERCEL, 'www.sen-no-kaze.com', { error: 'link' })).toBe(`${VERCEL}/reset-password?moved=1&error=link`);
+    expect(passwordResetRedirect(VERCEL, 'www.sen-no-kaze.com', { moved: '1' })).toBeNull();
+    expect(passwordResetRedirect(VERCEL, 'sen-no-kaze-wing-system.vercel.app', {})).toBeNull();
+  });
+
   it('独自ドメインで申し込みの画面を開くと、戻り先のオリジンへ移す（ローカル検証モードと同じオリジンでは移さない）', async () => {
     mocks.headers.mockResolvedValue(requestHeaders(CUSTOM));
-    await expect(ResetPasswordPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(`REDIRECT:${VERCEL}/reset-password`);
+    await expect(ResetPasswordPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(`REDIRECT:${VERCEL}/reset-password?moved=1`);
     await expect(ResetPasswordPage({ searchParams: Promise.resolve({ error: 'link' }) })).rejects.toThrow(
-      `REDIRECT:${VERCEL}/reset-password?error=link`
+      `REDIRECT:${VERCEL}/reset-password?moved=1&error=link`
     );
     mocks.headers.mockResolvedValue(requestHeaders(VERCEL));
     await expect(ResetPasswordPage({ searchParams: Promise.resolve({}) })).resolves.toBeTruthy();
@@ -111,6 +121,23 @@ describe('パスワード再設定：申し込みとメールのリンクの戻�
     expect(resetPasswordForEmail).toHaveBeenCalledWith('user@example.com', {
       redirectTo: `${VERCEL}/auth/callback?next=${encodeURIComponent('/reset-password/update')}`,
     });
+    // NEXT_PUBLIC_SITE_URL の末尾の / やパスは除いて作る
+    process.env.NEXT_PUBLIC_SITE_URL = `${VERCEL}/`;
+    await requestPasswordResetAction({ ok: false }, form({ email: 'user@example.com' }));
+    expect(resetPasswordForEmail).toHaveBeenLastCalledWith('user@example.com', {
+      redirectTo: `${VERCEL}/auth/callback?next=${encodeURIComponent('/reset-password/update')}`,
+    });
+  });
+
+  it('戻り先と違うホストの画面から送ろうとしたら、送らずに開き直しを案内する（送っても照合できない）', async () => {
+    const resetPasswordForEmail = vi.fn(async () => ({ data: {}, error: null }));
+    mocks.createClient.mockResolvedValue({ auth: { resetPasswordForEmail } });
+    mocks.headers.mockResolvedValue(requestHeaders(CUSTOM));
+    await expect(requestPasswordResetAction({ ok: false }, form({ email: 'user@example.com' }))).resolves.toEqual({
+      ok: false,
+      error: PASSWORD_RESET_STALE_PAGE,
+    });
+    expect(resetPasswordForEmail).not.toHaveBeenCalled();
   });
 
   it('送れなかったときも同じ応答（アカウント列挙を防ぐ）。理由はサーバーの記録に残し、メールアドレスは残さない', async () => {
@@ -127,6 +154,7 @@ describe('メールのリンクを確かめられなかったときは、理由�
   it('再設定は申し込みの画面へ、ほかはログインへ', () => {
     expect(authLinkErrorPath('/reset-password/update')).toBe('/reset-password?error=link');
     expect(authLinkErrorPath('/reset-password')).toBe('/reset-password?error=link');
+    expect(authLinkErrorPath('/reset-password/update?x=1')).toBe('/reset-password?error=link');
     expect(authLinkErrorPath('/mypage')).toBe('/login?error=link');
     // ログイン画面へ戻すときは、元の行き先を残す
     expect(authLinkErrorPath('/mypage/configurations/1/request-quote')).toBe('/login?error=link&next=%2Fmypage%2Fconfigurations%2F1%2Frequest-quote');
@@ -169,19 +197,27 @@ describe('新しいパスワードの設定', () => {
     expect(passwordUpdateErrorMessage({ name: 'AuthWeakPasswordError', reasons: ['length'] })).toContain('短すぎます');
     expect(passwordUpdateErrorMessage({ name: 'AuthSessionMissingError' })).toBe(PASSWORD_RESET_LINK_ERROR);
     expect(passwordUpdateErrorMessage({ code: 'session_expired' })).toBe(PASSWORD_RESET_LINK_ERROR);
+    expect(passwordUpdateErrorMessage({ code: 'reauthentication_needed' })).toContain('もう一度ログインしてから');
+    expect(passwordUpdateErrorMessage({ code: 'over_request_rate_limit' })).toContain('しばらくしてから');
     expect(passwordUpdateErrorMessage({ code: 'unexpected_failure' })).toBe('パスワードを更新できませんでした。時間をおいてもう一度お試しください。');
 
-    const updateUser = vi.fn(async () => ({ data: {}, error: { code: 'same_password', message: 'New password should be different from the old password.' } }));
+    const updateUser = vi.fn(async () => ({ data: {}, error: { code: 'same_password', status: 422, message: 'New password should be different from the old password.' } }));
     mocks.createClient.mockResolvedValue({ auth: { updateUser } });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     const result = await updatePasswordAction({ ok: false }, form({ password: 'Wing-Test2!', password_confirm: 'Wing-Test2!' }));
     expect(result).toEqual({ ok: false, error: '新しいパスワードが今のパスワードと同じです。別のパスワードを入力してください。' });
+    // 失敗の理由のコードだけを記録する
+    expect(log).toHaveBeenCalledWith('[password-update] updateUser failed', { code: 'same_password', status: 422 });
   });
 
-  it('ログインしていない（リンクを確かめられていない）ときは、入力欄を出さずに申し込みへ案内する', async () => {
+  it('ログインしていないときは、入力欄を出さずにログインか再設定メールへ案内する', async () => {
     const { default: UpdatePasswordPage } = await import('@/app/(site)/reset-password/update/page');
     mocks.getSessionUser.mockResolvedValue(null);
-    expect(textOf(await UpdatePasswordPage({ searchParams: Promise.resolve({}) }))).toContain(PASSWORD_RESET_LINK_ERROR);
+    const signedOut = textOf(await UpdatePasswordPage({ searchParams: Promise.resolve({}) }));
+    expect(signedOut).toContain(PASSWORD_UPDATE_SIGNED_OUT);
+    expect(signedOut).toContain('ログインして変更する');
+    expect(signedOut).toContain('再設定メールを送る');
     mocks.getSessionUser.mockResolvedValue({ id: 'u1', email: 'user@example.com', role: 'customer', full_name: '', company_name: null });
-    expect(textOf(await UpdatePasswordPage({ searchParams: Promise.resolve({}) }))).not.toContain(PASSWORD_RESET_LINK_ERROR);
+    expect(textOf(await UpdatePasswordPage({ searchParams: Promise.resolve({}) }))).not.toContain(PASSWORD_UPDATE_SIGNED_OUT);
   });
 });

@@ -30,9 +30,6 @@ export const signUpSchema = z.object({
   password: passwordSchema,
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
-  postal_code: optional(10),
-  address: trimmed(200).min(1, '住所を入力してください'),
   agree: z.literal('on', { error: '利用規約とプライバシーポリシーへの同意が必要です' }),
 });
 
@@ -54,9 +51,12 @@ export const updatePasswordSchema = z
 export const profileSchema = z.object({
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
+  phone: optional(20).refine(
+    (phone) => phone === null || /^[0-9+\-() ]+$/.test(phone),
+    '電話番号は数字とハイフンで入力してください'
+  ),
   postal_code: optional(10),
-  address: trimmed(200).min(1, '住所を入力してください'),
+  address: optional(200),
 });
 
 export const saveConfigurationSchema = z.object({

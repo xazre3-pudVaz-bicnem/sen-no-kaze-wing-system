@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   requestPasswordResetAction,
   signInAction,
@@ -43,6 +44,7 @@ export function LoginForm({ next }: { next: string }) {
 
 export function RegisterForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState(signUpAction, initial);
+  const [showPassword, setShowPassword] = useState(false);
   const v = state.values ?? {};
   if (state.ok && state.needsEmailConfirm) {
     return (
@@ -59,7 +61,28 @@ export function RegisterForm({ next }: { next: string }) {
         <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" defaultValue={v.email} required />
       </Field>
       <Field label="パスワード" htmlFor="password" required hint="8文字以上、英字と数字を含む" errors={state.fieldErrors?.password}>
-        <Input id="password" name="password" type="password" autoComplete="new-password" required minLength={8} />
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            className="pr-24"
+            required
+            minLength={8}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示する'}
+            aria-pressed={showPassword}
+            data-testid="register-password-visibility"
+            className="absolute inset-y-0 right-2 flex items-center gap-1 rounded-md px-2 text-xs text-ink-soft transition hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
+          >
+            {showPassword ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+            {showPassword ? '隠す' : '表示'}
+          </button>
+        </div>
       </Field>
       <Field label="氏名" htmlFor="full_name" required errors={state.fieldErrors?.full_name}>
         <Input id="full_name" name="full_name" autoComplete="name" defaultValue={v.full_name} required />
@@ -67,17 +90,9 @@ export function RegisterForm({ next }: { next: string }) {
       <Field label="法人名" htmlFor="company_name" errors={state.fieldErrors?.company_name}>
         <Input id="company_name" name="company_name" autoComplete="organization" defaultValue={v.company_name} />
       </Field>
-      <Field label="電話番号" htmlFor="phone" required errors={state.fieldErrors?.phone}>
-        <Input id="phone" name="phone" type="tel" autoComplete="tel" inputMode="tel" defaultValue={v.phone} required />
-      </Field>
-      <div className="grid gap-5 sm:grid-cols-[10rem_1fr]">
-        <Field label="郵便番号" htmlFor="postal_code" errors={state.fieldErrors?.postal_code}>
-          <Input id="postal_code" name="postal_code" autoComplete="postal-code" inputMode="numeric" defaultValue={v.postal_code} placeholder="123-4567" />
-        </Field>
-        <Field label="住所" htmlFor="address" required errors={state.fieldErrors?.address}>
-          <Input id="address" name="address" autoComplete="street-address" defaultValue={v.address} required />
-        </Field>
-      </div>
+      <p className="text-sm leading-relaxed text-ink-soft">
+        電話番号・ご住所は、見積依頼をする際に入力していただきます。
+      </p>
       <div>
         <Checkbox
           name="agree"

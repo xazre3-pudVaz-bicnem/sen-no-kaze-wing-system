@@ -13,11 +13,13 @@ export function CustomerCategoryVisibilityPanel({ categories }: { categories: Op
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<VisibilityFilter>('all');
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [drafts, setDrafts] = useState<Record<string, boolean>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const isVisible = (category: OptionCategory) => overrides[category.id] ?? category.customer_visible;
+  const draftVisible = (category: OptionCategory) => drafts[category.id] ?? isVisible(category);
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('ja-JP');
     return categories.filter((category) => {
@@ -45,6 +47,11 @@ export function CustomerCategoryVisibilityPanel({ categories }: { categories: Op
           throw new Error(result.error ?? firstFieldError ?? 'カテゴリー設定を保存できませんでした。');
         }
         setOverrides((current) => ({ ...current, [category.id]: visible }));
+        setDrafts((current) => {
+          const next = { ...current };
+          delete next[category.id];
+          return next;
+        });
         setNotice({ error: false, text: category.name + ' のお客様画面表示を変更しました。' });
         router.refresh();
       } catch (error) {
@@ -114,22 +121,32 @@ export function CustomerCategoryVisibilityPanel({ categories }: { categories: Op
                 {category.is_required ? ' / 必須カテゴリー' : ''}
               </p>
             </div>
-            <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isVisible(category)}
-                disabled={pending}
-                onChange={(event) => saveVisibility(category, event.target.checked)}
-                aria-label={category.name + ' をお客様のシミュレーターに表示'}
-              />
-              <span>{savingId === category.id ? '保存中…' : isVisible(category) ? '表示する' : '表示しない'}</span>
-            </label>
+            <div className="flex shrink-0 items-center gap-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draftVisible(category)}
+                  disabled={pending}
+                  onChange={(event) => setDrafts((current) => ({ ...current, [category.id]: event.target.checked }))}
+                  aria-label={category.name + ' をお客様のシミュレーターに表示'}
+                />
+                <span>{draftVisible(category) ? '表示する' : '表示しない'}</span>
+              </label>
+              <button
+                type="button"
+                className="rounded-md border border-line px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={pending || draftVisible(category) === isVisible(category)}
+                onClick={() => saveVisibility(category, draftVisible(category))}
+              >
+                {savingId === category.id ? '保存中…' : '保存'}
+              </button>
+            </div>
           </div>
         ))}
         {filtered.length === 0 && <p className="px-4 py-5 text-sm text-muted">該当するカテゴリーはありません。</p>}
       </div>
       <p className="text-xs text-muted">
-        スイッチを変更するとそのカテゴリーだけ保存します。必須カテゴリーや標準構成の商品を非表示にする前に、
+        チェックを変更した後、その行の「保存」で反映します。必須カテゴリーや標準構成の商品を非表示にする前に、
         シミュレーターの初期状態・見積金額・保存の動作を確認してください。
       </p>
     </section>

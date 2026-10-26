@@ -50,6 +50,8 @@ import {
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
 import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
+import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
+import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
 import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/domain/product-lifecycle';
 import { Alert, Button } from '@/components/ui';
@@ -666,6 +668,11 @@ export function SimulatorApp({
     () => defaultVariantIds(bundle, activeSpecSelection),
     [activeSpecSelection, bundle]
   );
+  const planChangeSummary = useMemo(() => summarizePlanChanges(
+    bundle,
+    { optionIds: selected, variantChoiceIds: variantIds, exteriorFaces },
+    { optionIds: activeSpecSelection, variantChoiceIds: baselineVariantIds }
+  ), [bundle, selected, variantIds, exteriorFaces, activeSpecSelection, baselineVariantIds]);
   const atStandardSpecSelection = sameSelection(
     selected,
     pruneToScope(activeSpecCtx, activeSpecSelection, finishLevel)
@@ -1342,10 +1349,15 @@ export function SimulatorApp({
       {dialog && (
         <SaveDialog
           mode={dialog}
-          initialName={name}
+          initialName={!configId && isLegacyAutomaticPlanName(name, displayModelName)
+            ? suggestPlanName(displayModelName, activePreset?.name ?? activeChoice?.name ?? specName ?? '本体のみ',
+                fireproofCat ? (fireproofChosen?.code === 'fire-proof' ? '防火' : fireproofChosen ? '非防火' : '防火未選択') : null,
+                new Date())
+            : name}
           saving={saving}
           error={saveError}
           total={pricing.total}
+          changeSummary={planChangeSummary}
           onClose={() => {
             setDialog(null);
             setSaveError(null);

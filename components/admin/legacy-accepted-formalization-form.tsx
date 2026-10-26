@@ -93,7 +93,8 @@ export function LegacyAcceptedFormalizationForm({
   const unresolvedKeys = unresolvedKeysOf(rows);
   const isUnresolved = (item: QuoteItem) => unresolvedKeys.has(item.id);
   const checkRow = (row: InstallationRow) => unresolvedKeys.has(row.key);
-  const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
+  // 確認のチェックは発行のたびに入れ直す（前に確認した記録があっても、明細を見直した後で改めて確認する）
+  const [porConfirmed, setPorConfirmed] = useState(false);
   const [initialPorRowKeys] = useState(() => {
     const initialRows = installationItems.map(initialRow);
     const initialUnresolved = unresolvedKeysOf(initialRows);

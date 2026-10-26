@@ -84,6 +84,7 @@ declare
   qr5 constant uuid := '7a600000-0000-4000-8000-000000000005';
   qr6 constant uuid := '7a600000-0000-4000-8000-000000000006';
   qr7 constant uuid := '7a600000-0000-4000-8000-000000000007';
+  qr8 constant uuid := '7a600000-0000-4000-8000-000000000008';
   se_rev constant uuid := '7a650000-0000-4000-8000-000000000001';
   qd3 constant uuid := '7a800000-0000-4000-8000-000000000003';
   k3_std constant uuid := '7a930000-0000-4000-8000-000000000001';
@@ -96,6 +97,9 @@ declare
   q4 constant uuid := '7a700000-0000-4000-8000-000000000004';
   q5 constant uuid := '7a700000-0000-4000-8000-000000000005';
   q7 constant uuid := '7a700000-0000-4000-8000-000000000007';
+  q8 constant uuid := '7a700000-0000-4000-8000-000000000008';
+  ct8 constant uuid := '7a950000-0000-4000-8000-000000000001';
+  mo8 constant uuid := '7a960000-0000-4000-8000-000000000001';
   k3_exc constant uuid := '7a930000-0000-4000-8000-000000000005';
   k3_cost constant uuid := '7a930000-0000-4000-8000-000000000006';
   qd constant uuid := '7a800000-0000-4000-8000-000000000001';
@@ -589,6 +593,38 @@ begin
       'public.finalize_quote_revision_draft(uuid, integer)'::regprocedure::oid,
       'public.create_quote_revision(uuid, jsonb, text)'::regprocedure::oid,
       'public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)'::regprocedure::oid] as oids) v_sigs;
+
+  -- 製造依頼の仕様スナップショット：今回の契約対象外の行は写さない（0円確定の行は契約に含まれるので写す）
+  set local session_replication_role = replica;
+  insert into public.quote_requests (id, configuration_id, user_id, quote_id, status)
+  values (qr8, cfg2, u_cust, q8, 'sent');
+  insert into public.quotes (id, quote_no, quote_request_id, configuration_id, user_id, dealer_id, status, valid_until,
+                             customer_name, base_model_name, base_price, option_subtotal, installation_subtotal,
+                             subtotal, tax_rate, tax, total, revision, parent_quote_id)
+  values (q8, 'RT-QPG-8', qr8, cfg2, u_cust, u_dealer, 'accepted', now() + interval '30 days', 'お客様', 'POR 検査用モデル', 1000000, 0, 80000, 1080000, 0.10, 108000, 1188000, 1, null);
+  insert into public.quote_items (quote_id, kind, name, description, remark, unit_price, quantity, amount, sort_order)
+  values (q8, 'base', '本体', null, null, 1000000, 1, 1000000, 1),
+         (q8, 'installation', '対象外の工事', null, '［今回の契約対象外］', 0, 1, 0, 2001),
+         (q8, 'installation', '0円確定の工事', null, '［0円確定］：サービスで施工', 0, 1, 0, 2002),
+         (q8, 'installation', '電気設備工事', null, null, 80000, 1, 80000, 2003);
+  insert into public.contracts (id, quote_request_id, quote_id, user_id, provider, status, signer_name, signer_email, contract_total,
+                                signed_at, signed_file_path)
+  values (ct8, qr8, q8, u_cust, 'paper', 'signed', 'お客様', 'qpg-cust@runtime.invalid', 1188000, now(), 'contracts/paper/qpg.pdf');
+  insert into public.case_workflows (quote_request_id, manufacturer_id) values (qr8, u_master);
+  insert into public.manufacturing_orders (id, quote_request_id, contract_id, quote_id, status, unit_count, created_by)
+  values (mo8, qr8, ct8, q8, 'draft', 1, u_admin);
+  set local session_replication_role = origin;
+  v_out := pg_temp.qpg_run_as('authenticated', u_admin, format('select public.send_manufacturing_order(%L, 1)::text', mo8));
+  perform pg_temp.qpg_expect_eq('QPG-75 製造依頼の仕様には、今回の契約対象外の行を写さない（0円確定の行は写す）', '2/本体,0円確定の工事,電気設備工事',
+    v_out || '/' || coalesce((select string_agg(t.e ->> 'name', ',' order by t.ord)
+                                from public.manufacturing_orders mo
+                                cross join lateral jsonb_array_elements(mo.spec_snapshot -> 'items') with ordinality as t(e, ord)
+                               where mo.id = mo8), '(なし)'));
+  perform pg_temp.qpg_expect_eq('QPG-76 製造依頼を送る関数も、owner・SECURITY DEFINER・search_path・EXECUTE が従来どおり', 'postgres/true/true/true/false',
+    (select pg_catalog.pg_get_userbyid(p.proowner) || '/' || p.prosecdef::text || '/' || (p.proconfig = array['search_path=""'])::text || '/'
+            || has_function_privilege('authenticated', p.oid, 'execute')::text || '/' || has_function_privilege('anon', p.oid, 'execute')::text
+       from pg_catalog.pg_proc p
+      where p.oid = 'public.send_manufacturing_order(uuid, integer)'::regprocedure));
 end;
 $test$;
 

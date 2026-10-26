@@ -78,6 +78,39 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
     expect(formalizationMigration).toContain('\n  return v_new;\nend;');
   });
 
+  it('製造依頼の仕様スナップショットは、今回の契約対象外の行を写さない（適用済みの定義の目印に 1 行足す）', () => {
+    const manufacturing = read('supabase/migrations/20261013234000_case_flow_manufacturing_schedule.sql');
+    expect(manufacturing.split('        from public.quote_items qi where qi.quote_id = q.id\n')).toHaveLength(2);
+    expect(migration).toContain("to_regprocedure('public.send_manufacturing_order(uuid, integer)')");
+    expect(migration).toContain("v_from constant text := E'        from public.quote_items qi where qi.quote_id = q.id\\n';");
+    expect(migration).toContain("and public.quote_line_explicit_state(qi.remark) is distinct from ''excluded''");
+    expect(migration).toContain('public.send_manufacturing_order is already patched');
+    expect(migration).toContain('public.send_manufacturing_order owner / security definer / search_path / EXECUTE changed');
+    // ローカル検証モードも同じ
+    expect(read('lib/data/case-flow/local.ts')).toContain("parseQuoteLineState(i.remark)?.state !== 'excluded'");
+  });
+
+  it('この後の migration が止めを足した関数を作り直すときは、止めと対象外の除外も含める（上書きで黙って外れないように）', () => {
+    const later = fs
+      .readdirSync(path.join(root, 'supabase/migrations'))
+      .filter((file) => file.endsWith('.sql') && file > '20261016111000_quote_formal_por_guard.sql');
+    const required: [string, string][] = [
+      ['send_manufacturing_order', "and public.quote_line_explicit_state(qi.remark) is distinct from 'excluded'"],
+      ['finalize_quote_draft', 'perform public.assert_quote_draft_lines_resolved(d.id);'],
+      ['finalize_quote_revision_draft', 'perform public.assert_quote_draft_lines_resolved(d.id);'],
+      ['create_quote_revision', 'perform public.assert_quote_lines_resolved(v_new);'],
+      ['create_formal_quote_from_accepted_preliminary', 'perform public.assert_quote_lines_resolved(v_new);'],
+    ];
+    for (const file of later) {
+      const sql = read(`supabase/migrations/${file}`);
+      for (const [fn, guard] of required) {
+        if (new RegExp(`create\\s+(or\\s+replace\\s+)?function\\s+public\\.${fn}\\s*\\(`, 'i').test(sql)) {
+          expect(sql, `${file} が作り直す ${fn} に止めが無い`).toContain(guard);
+        }
+      }
+    }
+  });
+
   it('4 つの関数の定義を確かめてから 1 箇所ずつ足し、owner・SECURITY DEFINER・search_path・EXECUTE が変わらないことを検算する', () => {
     for (const signature of [
       'public.finalize_quote_draft(uuid, integer)',
@@ -157,6 +190,27 @@ describe('画面・データ層のつなぎ', () => {
     // 金額は計算しない（発行の金額は DB が決める）。確認の有無は Server Action で読む
     expect(adminActions).toContain("const porConfirmed = formData.get('por_confirmed') === '1';");
     expect(adminActions).toContain('por_confirmation_keys: porConfirmed ? porKeys : null');
+    // 確認のチェックは、前に確認した記録があっても最初は外しておく（発行のたびに入れ直す）
+    for (const form of [dealerForms, formalizationForm]) {
+      expect(form).toContain('const [porConfirmed, setPorConfirmed] = useState(false);');
+      expect(form).not.toContain('useState(porState.confirmed)');
+    }
+  });
+
+  it('対象外の行は、管理画面の明細の表でも金額欄を「対象外」と出す（0 円の確定と区別する）', () => {
+    expect(read('components/admin/case-estimate-review.tsx')).toContain("const excluded = quoteLineStateAmountLabel(item.remark) === '対象外';");
+    expect(read('components/admin/case-workspace.tsx')).toContain(
+      "{quoteLineStateAmountLabel(item.remark) === '対象外' ? '対象外' : formatYen(item.amount)}"
+    );
+  });
+
+  it('標準見積の版の区分は、内外装・オプション・別途工事だけを明示して突き合わせる（SQL と画面で同じ）', () => {
+    expect(migration).toContain("case s.section_code when 'interior_exterior' then 'interior_exterior' when 'option' then 'option' when 'sitework' then 'installation' end,");
+    expect(migration).toContain("and s.section_code in ('interior_exterior', 'option', 'sitework')");
+    expect(migration).not.toContain("when 'option' then 'option' else 'installation' end");
+    const standardDraftPage = read('app/admin/quotes/standard-drafts/[id]/page.tsx');
+    expect(standardDraftPage).toContain("const baselineKind: Record<string, string> = { interior_exterior: 'interior_exterior', option: 'option', sitework: 'installation' };");
+    expect(standardDraftPage).toContain('.filter((row) => Object.hasOwn(baselineKind, row.section_code))');
   });
 
   it('承諾済みの概算から確定見積を作る画面も、確認を記録してから発行する（施工以外の未確定の行は直せないと示す）', () => {
@@ -190,6 +244,8 @@ describe('画面・データ層のつなぎ', () => {
     expect(dealerForms).toContain('name={`items.${index}.line_state`}');
     expect(dealerForms).toContain('showLineState');
     expect(standardEditor).toContain("(['zero_confirmed', 'excluded'] as const)");
+    // 扱いを外して価格の決め方に戻すときも、理由・メモを備考へ戻す（黙って消さない）
+    expect(standardEditor).toContain('return { ...chooseQuoteLineState(line, null), price_mode: choice };');
     expect(formalizationForm).toContain('data-testid="formalization-line-state"');
   });
 });

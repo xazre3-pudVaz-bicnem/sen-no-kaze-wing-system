@@ -3,7 +3,7 @@
 --   npx supabase db query --linked --output-format json -f scripts/db-rehearsal/postflight-quote-formal-por-guard.sql
 --
 -- 合格の条件：*_patched・triggers_enabled（トリガー 5 本）・rpc_authenticated_only・internal_functions_closed・confirmations_closed がすべて true、
--- confirmations_rows が 0、issuance_function_attributes が適用直前の preflight と同じ。
+-- confirmations_rows が 0、issuance_function_attributes・manufacturing_function_attributes が適用直前の preflight と同じ。
 select
   strpos(pg_catalog.pg_get_functiondef('public.finalize_quote_draft(uuid, integer)'::regprocedure),
          'perform public.assert_quote_draft_lines_resolved(d.id);') > 0 as finalize_draft_patched,
@@ -17,6 +17,8 @@ select
          'perform public.assert_quote_lines_resolved(v_new);') > 0
     and strpos(pg_catalog.pg_get_functiondef('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)'::regprocedure),
                'perform public.assert_case_por_selections_confirmed(parent.id, v_uid);') > 0 as formal_from_preliminary_patched,
+  strpos(pg_catalog.pg_get_functiondef('public.send_manufacturing_order(uuid, integer)'::regprocedure),
+         'and public.quote_line_explicit_state(qi.remark) is distinct from ''excluded''') > 0 as manufacturing_snapshot_patched,
   (select count(*) = 5 and bool_and(t.tgenabled = 'O')
      from pg_catalog.pg_trigger t
     where t.tgname in ('quote_items_line_state_guard', 'quote_draft_items_line_state_guard', 'quote_draft_item_costs_state_guard',
@@ -57,4 +59,8 @@ select
       to_regprocedure('public.finalize_quote_revision_draft(uuid, integer)'),
       to_regprocedure('public.create_quote_revision(uuid, jsonb, text)'),
       to_regprocedure('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)')
-    )) as issuance_function_attributes;
+    )) as issuance_function_attributes,
+  (select json_build_object('owner', pg_catalog.pg_get_userbyid(p.proowner), 'security_definer', p.prosecdef,
+                            'config', p.proconfig, 'acl', p.proacl::text)
+     from pg_catalog.pg_proc p
+    where p.oid = to_regprocedure('public.send_manufacturing_order(uuid, integer)')) as manufacturing_function_attributes;

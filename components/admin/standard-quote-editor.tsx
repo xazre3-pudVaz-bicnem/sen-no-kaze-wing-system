@@ -70,7 +70,7 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
       lines: current.lines.map((line, i) => {
         if (i !== index) return line;
         if (choice === 'excluded' || choice === 'zero_confirmed') return { ...chooseQuoteLineState(line, choice), price_mode: 'manual' };
-        return { ...line, price_mode: choice, line_state: null };
+        return { ...chooseQuoteLineState(line, null), price_mode: choice };
       }),
     }));
     setDirty(true);

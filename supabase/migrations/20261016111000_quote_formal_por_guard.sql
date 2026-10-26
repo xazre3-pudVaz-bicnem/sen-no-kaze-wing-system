@@ -607,12 +607,13 @@ begin
      group by p.line_key, p.kind, btrim(p.name), btrim(coalesce(p.description, ''))
     union all
     select null::uuid,
-           case s.section_code when 'interior_exterior' then 'interior_exterior' when 'option' then 'option' else 'installation' end,
+           case s.section_code when 'interior_exterior' then 'interior_exterior' when 'option' then 'option' when 'sitework' then 'installation' end,
            btrim(s.name), btrim(coalesce(s.group_label, '')), count(*)
       from public.standard_estimate_revision_lines s
      where v_parent is null
        and v_standard is not null
        and s.revision_id = v_standard
+       and s.section_code in ('interior_exterior', 'option', 'sitework')
        and ((s.price_mode = 'auto' and coalesce(s.cost_unit_price, 0) = 0) or (s.price_mode = 'manual' and coalesce(s.unit_price, 0) = 0))
        and public.quote_line_explicit_state(s.remark) is null
        and not public.quote_line_por_marked(null, s.group_label, s.remark)
@@ -709,6 +710,57 @@ comment on function public.get_quote_por_selections(uuid) is
   '改訂・確定見積の画面用。Web の案件でお客様が選んだ別途見積の商品・選択肢と、自分の確認が済んでいるか。本部と担当の代理店・総代理店だけ。';
 comment on function public.confirm_quote_por_selections(uuid, text[]) is
   '発行の前に、画面に出した別途見積の商品の一覧を確認したことを記録する。一覧が画面を開いた後に変わっていれば LOCKED。';
+
+-- ---------- 製造依頼の仕様スナップショット：今回の契約対象外の行は写さない ----------
+-- send_manufacturing_order は「契約した見積の明細」を製造仕様として総代理店へ渡す。
+-- 対象外の行は今回の契約に含まれないので、品目に入れない（0円確定の行は契約に含まれるので写す）。
+-- 既存の関数は、適用済みの定義の目印がちょうど 1 箇所あることを確かめてから 1 行足す（下の 4 つの関数と同じ方式）。
+
+do $patch_manufacturing$
+declare
+  v_oid oid := to_regprocedure('public.send_manufacturing_order(uuid, integer)');
+  v_from constant text := E'        from public.quote_items qi where qi.quote_id = q.id\n';
+  v_to constant text := E'        from public.quote_items qi where qi.quote_id = q.id\n'
+    || E'         /* 今回の契約対象外の行は、契約した品目ではないので製造仕様に写さない（D1 までの暫定）。 */\n'
+    || E'         and public.quote_line_explicit_state(qi.remark) is distinct from ''excluded''\n';
+  v_definition text;
+  v_expected text;
+  v_before record;
+  v_after record;
+begin
+  if v_oid is null then
+    raise exception 'QUOTE_FORMAL_LINE_GUARD: function public.send_manufacturing_order(uuid, integer) is missing' using errcode = 'P0001';
+  end if;
+  select p.proowner, p.prosecdef, p.proconfig, p.proacl::text as acl into v_before
+    from pg_catalog.pg_proc p
+   where p.oid = v_oid;
+  v_definition := pg_catalog.pg_get_functiondef(v_oid);
+  if strpos(v_definition, 'quote_line_explicit_state(') > 0 then
+    raise exception 'QUOTE_FORMAL_LINE_GUARD: public.send_manufacturing_order is already patched' using errcode = 'P0001';
+  end if;
+  if (length(v_definition) - length(replace(v_definition, v_from, ''))) / length(v_from) <> 1 then
+    raise exception 'QUOTE_FORMAL_LINE_GUARD: public.send_manufacturing_order differs from the reviewed definition (anchor is not unique)'
+      using errcode = 'P0001';
+  end if;
+  v_expected := replace(v_definition, v_from, v_to);
+
+  execute v_expected;
+
+  select p.proowner, p.prosecdef, p.proconfig, p.proacl::text as acl into v_after
+    from pg_catalog.pg_proc p
+   where p.oid = v_oid;
+  if pg_catalog.pg_get_functiondef(v_oid) is distinct from v_expected then
+    raise exception 'QUOTE_FORMAL_LINE_GUARD: public.send_manufacturing_order was not replaced as expected' using errcode = 'P0001';
+  end if;
+  if v_after.proowner is distinct from v_before.proowner
+     or v_after.prosecdef is distinct from v_before.prosecdef
+     or v_after.proconfig is distinct from v_before.proconfig
+     or v_after.acl is distinct from v_before.acl then
+    raise exception 'QUOTE_FORMAL_LINE_GUARD: public.send_manufacturing_order owner / security definer / search_path / EXECUTE changed'
+      using errcode = 'P0001';
+  end if;
+end;
+$patch_manufacturing$;
 
 -- ---------- 正式見積を作る 4 つの関数に止めを足す ----------
 

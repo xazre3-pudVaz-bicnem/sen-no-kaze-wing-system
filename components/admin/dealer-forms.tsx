@@ -193,7 +193,8 @@ export function DealerRevisionForm({
     });
     return new Set(initialRows.filter((row) => initialUnresolved.has(row)).map((row) => row.key));
   });
-  const [porConfirmed, setPorConfirmed] = useState(porState.confirmed);
+  // 確認のチェックは発行のたびに入れ直す（前に確認した記録があっても、明細を見直した後で改めて確認する）
+  const [porConfirmed, setPorConfirmed] = useState(false);
   const porRows: QuotePorReviewRow[] = [
     ...items
       .filter((item) => !editable(item.kind) && isUnresolved(item))

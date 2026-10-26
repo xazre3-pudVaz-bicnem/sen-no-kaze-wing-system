@@ -72,10 +72,12 @@ export default async function StandardQuoteDraftPage({
       : Promise.resolve({ data: [], error: null }),
   ]);
   const parentReadFailed = Boolean(parentRead.error || baselineRead.error);
+  const baselineKind: Record<string, string> = { interior_exterior: 'interior_exterior', option: 'option', sitework: 'installation' };
   const baselineLines: QuoteLineCheckLine[] = ((baselineRead.data ?? []) as StandardBaselineRow[])
+    .filter((row) => Object.hasOwn(baselineKind, row.section_code))
     .filter((row) => (row.price_mode === 'auto' ? (row.cost_unit_price ?? 0) === 0 : row.price_mode === 'manual' && (row.unit_price ?? 0) === 0))
     .map((row) => ({
-      kind: row.section_code === 'interior_exterior' ? 'interior_exterior' : row.section_code === 'option' ? 'option' : 'installation',
+      kind: baselineKind[row.section_code],
       name: row.name,
       description: row.group_label,
       remark: row.remark,

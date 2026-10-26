@@ -4,13 +4,15 @@
 --
 -- 止める条件：issuance_functions_present・draft_price_mode_present・confirmations_table_absent・guard_functions_absent の
 -- どれかが false、または marker_quote_items・marker_draft_items・marker_master_lines が 0 でない（migration の preflight でも止まる）。
--- issuance_function_attributes は適用後の postflight と比べる（owner・SECURITY DEFINER・search_path・EXECUTE が変わらないこと）。
+-- manufacturing_function_present が false でも止める（製造依頼の仕様スナップショットにも 1 行足すため）。
+-- issuance_function_attributes・manufacturing_function_attributes は適用後の postflight と比べる（owner・SECURITY DEFINER・search_path・EXECUTE が変わらないこと）。
 select
   to_regprocedure('public.finalize_quote_draft(uuid, integer)') is not null
     and to_regprocedure('public.finalize_quote_revision_draft(uuid, integer)') is not null
     and to_regprocedure('public.create_quote_revision(uuid, jsonb, text)') is not null
     and to_regprocedure('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)') is not null
     as issuance_functions_present,
+  to_regprocedure('public.send_manufacturing_order(uuid, integer)') is not null as manufacturing_function_present,
   exists (
     select 1 from information_schema.columns
      where table_schema = 'public' and table_name = 'quote_draft_items' and column_name = 'price_mode'
@@ -36,4 +38,8 @@ select
       to_regprocedure('public.finalize_quote_revision_draft(uuid, integer)'),
       to_regprocedure('public.create_quote_revision(uuid, jsonb, text)'),
       to_regprocedure('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)')
-    )) as issuance_function_attributes;
+    )) as issuance_function_attributes,
+  (select json_build_object('owner', pg_catalog.pg_get_userbyid(p.proowner), 'security_definer', p.prosecdef,
+                            'config', p.proconfig, 'acl', p.proacl::text)
+     from pg_catalog.pg_proc p
+    where p.oid = to_regprocedure('public.send_manufacturing_order(uuid, integer)')) as manufacturing_function_attributes;

@@ -271,6 +271,10 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     // 0円確定の理由は必須なので、今の備考・対象外のメモでは埋めない（前から 0円確定 の行の理由はそのまま）
     expect(chooseQuoteLineState(row, 'zero_confirmed')).toEqual({ remark: 'Panasonic ／ XYZ-1', unit_price: 0, line_state: 'zero_confirmed', line_state_reason: '' });
     expect(chooseQuoteLineState({ ...row, line_state: 'excluded' as const, line_state_reason: 'お客様手配' }, 'zero_confirmed').line_state_reason).toBe('');
+    // 保存済みの対象外の行（備考は空・メモあり）を 0円確定に変えると、メモは備考の欄に戻り、理由の欄の例に出る（黙って消さない）
+    const savedExcluded = { remark: '', unit_price: 0, line_state: 'excluded' as const, line_state_reason: 'お客様手配' };
+    expect(chooseQuoteLineState(savedExcluded, 'zero_confirmed')).toEqual({ remark: 'お客様手配', unit_price: 0, line_state: 'zero_confirmed', line_state_reason: '' });
+    expect(zeroConfirmedReasonPlaceholder(chooseQuoteLineState(savedExcluded, 'zero_confirmed').remark)).toBe('0円確定の理由（必須）。今の備考：お客様手配');
     expect(chooseQuoteLineState({ ...row, line_state: 'zero_confirmed' as const, line_state_reason: '電気設備工事に含む' }, 'zero_confirmed').line_state_reason).toBe('電気設備工事に含む');
     // 今の備考は理由の欄の例として出す（黙って消さない）
     expect(zeroConfirmedReasonPlaceholder('Panasonic ／ XYZ-1')).toBe('0円確定の理由（必須）。今の備考：Panasonic ／ XYZ-1');
@@ -372,6 +376,16 @@ describe('お客様が選んだ別途見積の商品（SQL の configuration_por
   it('面を選んでいない構成では、外壁の商品も商品として数える。別途見積を選んでいなければ空', () => {
     expect(configurationPorSelections({ items: [{ option_id: 'o-ext-por' }] }, catalog).map((s) => s.key)).toEqual(['product:o-ext-por']);
     expect(configurationPorSelections({ items: [{ option_id: 'o-plain', variant_choice_ids: ['vc-plain'] }] }, catalog)).toEqual([]);
+    // 同じ選択肢が重なっていても 1 件（DB は選択肢の表と結ぶので 1 件。面のキーも重ねない）
+    expect(configurationPorSelections({ items: [{ option_id: 'o-plain', variant_choice_ids: ['vc-por', 'vc-por'] }] }, catalog).map((s) => s.key)).toEqual([
+      'variant:o-plain:vc-por',
+    ]);
+    expect(
+      configurationPorSelections(
+        { items: [{ option_id: 'o-ext' }], exteriorFaces: [{ ...faces[0], variant_choice_ids: ['e-por', 'e-por'] }, ...faces.slice(1)] },
+        catalog
+      ).map((s) => s.key)
+    ).toEqual(['face:front:o-ext:e-por']);
     // ほかの商品の選択肢は数えない
     expect(configurationPorSelections({ items: [{ option_id: 'o-por', variant_choice_ids: ['e-por'] }] }, catalog).map((s) => s.key)).toEqual(['product:o-por']);
   });

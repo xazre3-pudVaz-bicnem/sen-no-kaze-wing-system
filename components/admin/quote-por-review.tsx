@@ -112,7 +112,7 @@ export function QuotePorReview({
                             max="100000000"
                             step="1"
                             value={row.unitPrice}
-                            onChange={(event) => onUpdate(row.key, { unitPrice: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })}
+                            onChange={(event) => onUpdate(row.key, { unitPrice: Math.trunc(Number(event.target.value) || 0) })}
                             className="w-full rounded border border-line px-2 py-1 text-right tabular-nums"
                             aria-label={`単価：${row.name}`}
                             data-testid="por-review-price"

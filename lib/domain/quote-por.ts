@@ -141,14 +141,14 @@ export function chooseQuoteLineState<
     const remark = (row.remark ?? '').trim() ? row.remark : row.line_state_reason.trim() || row.remark;
     return { ...row, line_state: null, remark };
   }
-  const reason =
-    state === 'zero_confirmed'
-      ? row.line_state === 'zero_confirmed'
-        ? row.line_state_reason
-        : ''
-      : row.line_state_reason.trim()
-        ? row.line_state_reason
-        : lineStateReasonSeed(row.remark);
+  if (state === 'zero_confirmed') {
+    if (row.line_state === 'zero_confirmed') return { ...row, unit_price: 0 };
+    // 対象外のメモは 0円確定の理由にしない。備考が空なら備考の欄に戻し、理由の欄の例として見せる
+    const memo = row.line_state === 'excluded' ? row.line_state_reason.trim() : '';
+    const remark = memo && !(row.remark ?? '').trim() ? row.line_state_reason : row.remark;
+    return { ...row, remark, line_state: state, unit_price: 0, line_state_reason: '' };
+  }
+  const reason = row.line_state_reason.trim() ? row.line_state_reason : lineStateReasonSeed(row.remark);
   return { ...row, line_state: state, unit_price: 0, line_state_reason: reason };
 }
 
@@ -457,7 +457,7 @@ export function configurationPorSelections(
     if (option.price_on_request) {
       rows.push({ key: `product:${option.id}`, option_id: option.id, name: option.name, detail: null, sort: [0, category.sort_order, option.sort_order, 0] });
     }
-    for (const choiceId of item.variant_choice_ids ?? []) {
+    for (const choiceId of new Set(item.variant_choice_ids ?? [])) {
       const choice = choiceById.get(choiceId);
       const group = choice ? groupById.get(choice.group_id) : undefined;
       if (!choice || !group || !choice.price_on_request || group.option_id !== option.id) continue;
@@ -475,7 +475,7 @@ export function configurationPorSelections(
     faces.forEach((face, index) => {
       const option = optionById.get(face.option_id);
       if (!option) return;
-      const porChoices = (face.variant_choice_ids ?? [])
+      const porChoices = [...new Set(face.variant_choice_ids ?? [])]
         .map((id) => choiceById.get(id))
         .filter((choice): choice is NonNullable<typeof choice> => Boolean(choice?.price_on_request))
         .map((choice) => ({ choice, group: groupById.get(choice.group_id) }))

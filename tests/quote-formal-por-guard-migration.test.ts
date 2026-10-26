@@ -152,6 +152,10 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
     expect(migration).toContain('before truncate on public.quote_por_confirmations\nfor each statement execute function public.quote_por_confirmations_immutable();');
     expect(migration).toContain('alter table public.quote_por_confirmations enable row level security;');
     expect(migration).toContain('before update or delete on public.quote_por_confirmations');
+    // 状態の検査のトリガーは所有者の権限で読む（呼び出した人の RLS で行が見えず、検査を素通りしないように）
+    for (const fn of ['quote_line_state_guard', 'quote_draft_item_cost_state_guard']) {
+      expect(migration).toContain(`create function public.${fn}()\nreturns trigger\nlanguage plpgsql\nsecurity definer\nset search_path = ''`);
+    }
   });
 
   it('確認は担当者ごと・版ごとで、画面に出した一覧と今の一覧が違えば記録しない', () => {
@@ -219,6 +223,8 @@ describe('画面・データ層のつなぎ', () => {
     const standardDraftPage = read('app/admin/quotes/standard-drafts/[id]/page.tsx');
     expect(standardDraftPage).toContain("const baselineKind: Record<string, string> = { interior_exterior: 'interior_exterior', option: 'option', sitework: 'installation' };");
     expect(standardDraftPage).toContain('.filter((row) => Object.hasOwn(baselineKind, row.section_code))');
+    // 明細が指す商品の別途見積の設定も渡す（DB の判定と同じ）
+    expect(standardDraftPage).toContain('options: optionFlags,');
   });
 
   it('承諾済みの概算から確定見積を作る画面も、確認を記録してから発行する（施工以外の未確定の行は直せないと示す）', () => {

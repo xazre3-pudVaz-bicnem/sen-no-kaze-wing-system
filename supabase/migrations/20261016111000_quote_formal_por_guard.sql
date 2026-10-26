@@ -157,6 +157,7 @@ comment on function public.quote_line_unresolved(text, numeric, uuid, text, text
 create function public.quote_line_state_guard()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $function$
 declare
@@ -195,6 +196,7 @@ $function$;
 create function public.quote_draft_item_cost_state_guard()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $function$
 declare

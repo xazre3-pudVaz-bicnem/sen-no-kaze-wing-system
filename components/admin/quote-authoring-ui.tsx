@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { Package, Search, X } from 'lucide-react';
 import type { QuoteItemKind } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
-import { EXCLUDED_MARKER, LINE_STATE_KINDS, QUOTE_LINE_STATE_LABELS, ZERO_CONFIRMED_MARKER, type QuoteLineState } from '@/lib/domain/quote-por';
+import {
+  EXCLUDED_MARKER,
+  LINE_STATE_KINDS,
+  QUOTE_LINE_STATE_LABELS,
+  ZERO_CONFIRMED_MARKER,
+  zeroConfirmedReasonPlaceholder,
+  type QuoteLineState,
+} from '@/lib/domain/quote-por';
 import { Button, Input } from '@/components/ui';
 import { EstimateRateControls } from '@/components/admin/estimate-workbench-shared';
 
@@ -593,7 +600,7 @@ export function QuoteAuthoringGrid({
               const isCollapsed = collapsed.has(section.key);
               const sectionEditable = editableSectionSet.has(section.key);
               const sectionSale = currentRows.reduce((sum, row) => sum + row.amount, 0);
-              const separate = currentRows.some((row) => row.unitPrice === 0 && row.remark?.trim() === '別途見積');
+              const separate = currentRows.some((row) => row.unitPrice === 0 && !row.lineState && row.remark?.trim() === '別途見積');
               const hasSeparatePrice = section.key === 'installation' && separate;
               const collapsedAmount = hasSeparatePrice ? '別途見積' : formatYen(sectionSale);
               const summaryRemark = hasSeparatePrice
@@ -866,7 +873,7 @@ export function QuoteAuthoringGrid({
                               value={row.lineStateReason ?? ''}
                               disabled={!lineStateEditable}
                               maxLength={190}
-                              placeholder={row.lineState === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
+                              placeholder={row.lineState === 'zero_confirmed' ? zeroConfirmedReasonPlaceholder(row.remark) : 'メモ（任意）'}
                               data-quote-grid-col="remark"
                               onKeyDown={handleGridKeyDown}
                               onChange={(event) => onUpdate(row.key, { lineStateReason: event.target.value })}

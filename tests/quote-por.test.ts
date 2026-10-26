@@ -10,6 +10,7 @@ import {
   applyQuoteLineStateInput,
   applyQuoteLineStates,
   chooseQuoteLineState,
+  zeroConfirmedReasonPlaceholder,
   lineStateReasonSeed,
   parsePorSelectionKeys,
   quoteOptionFlagMap,
@@ -257,11 +258,18 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(quoteLineStateAmountLabel('サービス')).toBeNull();
   });
 
-  it('編集画面で扱いを選ぶと 0 円にし、理由・メモが空なら今の備考を入れておく（別途見積の目印は入れない）。外すと備考は元のまま', () => {
+  it('編集画面で扱いを選ぶと 0 円にし、対象外のメモが空なら今の備考を入れておく（別途見積の目印は入れない）。外すと備考は元のまま', () => {
     const row = { remark: 'Panasonic ／ XYZ-1', unit_price: 12_000, line_state: null, line_state_reason: '' };
     expect(chooseQuoteLineState(row, 'excluded')).toEqual({ remark: 'Panasonic ／ XYZ-1', unit_price: 0, line_state: 'excluded', line_state_reason: 'Panasonic ／ XYZ-1' });
-    expect(chooseQuoteLineState({ ...row, line_state_reason: '入力済み' }, 'zero_confirmed').line_state_reason).toBe('入力済み');
-    expect(chooseQuoteLineState({ ...row, remark: '別途見積' }, 'zero_confirmed').line_state_reason).toBe('');
+    expect(chooseQuoteLineState({ ...row, remark: '別途見積' }, 'excluded').line_state_reason).toBe('');
+    // 0円確定の理由は必須なので、今の備考・対象外のメモでは埋めない（前から 0円確定 の行の理由はそのまま）
+    expect(chooseQuoteLineState(row, 'zero_confirmed')).toEqual({ remark: 'Panasonic ／ XYZ-1', unit_price: 0, line_state: 'zero_confirmed', line_state_reason: '' });
+    expect(chooseQuoteLineState({ ...row, line_state: 'excluded' as const, line_state_reason: 'お客様手配' }, 'zero_confirmed').line_state_reason).toBe('');
+    expect(chooseQuoteLineState({ ...row, line_state: 'zero_confirmed' as const, line_state_reason: '電気設備工事に含む' }, 'zero_confirmed').line_state_reason).toBe('電気設備工事に含む');
+    // 今の備考は理由の欄の例として出す（黙って消さない）
+    expect(zeroConfirmedReasonPlaceholder('Panasonic ／ XYZ-1')).toBe('0円確定の理由（必須）。今の備考：Panasonic ／ XYZ-1');
+    expect(zeroConfirmedReasonPlaceholder('別途見積', '例：電気設備工事に含む')).toBe('0円確定の理由（必須。例：電気設備工事に含む）');
+    expect(zeroConfirmedReasonPlaceholder(null)).toBe('0円確定の理由（必須）');
     expect(chooseQuoteLineState({ ...row, line_state: 'excluded' as const, unit_price: 0 }, null)).toEqual({ ...row, unit_price: 0 });
     // 保存済みの印の行（備考は空・メモあり）で扱いを外すと、メモを備考へ戻す
     expect(chooseQuoteLineState({ remark: '', unit_price: 0, line_state: 'excluded' as const, line_state_reason: 'お客様手配' }, null)).toEqual({

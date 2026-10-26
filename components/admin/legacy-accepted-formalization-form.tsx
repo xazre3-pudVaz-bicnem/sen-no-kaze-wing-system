@@ -12,6 +12,7 @@ import {
   QUOTE_LINE_STATE_LABELS,
   quoteOptionFlagMap,
   splitQuoteLineStateRemark,
+  zeroConfirmedReasonPlaceholder,
   type QuoteLineState,
   type QuoteOptionFlag,
   type QuotePorSelectionState,
@@ -315,7 +316,7 @@ export function LegacyAcceptedFormalizationForm({
                           onChange={(event) => updateRow(row.key, { line_state_reason: event.target.value })}
                           className="w-full rounded border border-line px-2 py-1.5"
                           maxLength={190}
-                          placeholder={row.line_state === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
+                          placeholder={row.line_state === 'zero_confirmed' ? zeroConfirmedReasonPlaceholder(row.remark) : 'メモ（任意）'}
                           aria-label={row.line_state === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'}
                         />
                       ) : (

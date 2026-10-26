@@ -129,7 +129,9 @@ export function lineStateReasonSeed(remark: string | null | undefined): string {
 }
 
 /**
- * 編集画面で扱いを選んだときの行。「0円確定」「対象外」は 0 円にし、理由・メモが空なら今の備考を入れておく。
+ * 編集画面で扱いを選んだときの行。「0円確定」「対象外」は 0 円にする。
+ * 「対象外」のメモが空なら今の備考を入れておく（備考を黙って消さない）。「0円確定」の理由は必須なので、今の備考では埋めない
+ * （前から 0円確定 の行の理由はそのまま。今の備考は理由の欄の例として出す：zeroConfirmedReasonPlaceholder）。
  * 扱いを外したときは備考を元のままにする（金額は入れ直す）。備考が空なら、理由・メモを備考へ戻す（黙って消さない）
  */
 export function chooseQuoteLineState<
@@ -139,12 +141,22 @@ export function chooseQuoteLineState<
     const remark = (row.remark ?? '').trim() ? row.remark : row.line_state_reason.trim() || row.remark;
     return { ...row, line_state: null, remark };
   }
-  return {
-    ...row,
-    line_state: state,
-    unit_price: 0,
-    line_state_reason: row.line_state_reason.trim() ? row.line_state_reason : lineStateReasonSeed(row.remark),
-  };
+  const reason =
+    state === 'zero_confirmed'
+      ? row.line_state === 'zero_confirmed'
+        ? row.line_state_reason
+        : ''
+      : row.line_state_reason.trim()
+        ? row.line_state_reason
+        : lineStateReasonSeed(row.remark);
+  return { ...row, line_state: state, unit_price: 0, line_state_reason: reason };
+}
+
+/** 「0円確定」の理由の欄の例。今の備考があれば添える（保存すると備考は理由に置き換わるため、黙って消さない） */
+export function zeroConfirmedReasonPlaceholder(remark: string | null | undefined, example?: string): string {
+  const current = lineStateReasonSeed(remark);
+  if (current) return `0円確定の理由（必須）。今の備考：${current}`;
+  return example ? `0円確定の理由（必須。${example}）` : '0円確定の理由（必須）';
 }
 
 /** 画面が送った別途見積の一覧の key（JSON の文字列の配列）。形が違えば null（Server Action で使う） */

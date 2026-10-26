@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { finalizeStandardQuoteDraftAction, saveStandardQuoteDraftAction } from '@/lib/actions/standard-quotes';
 import { formatYen } from '@/lib/domain/pricing';
-import { chooseQuoteLineState, QUOTE_LINE_STATE_LABELS, type QuoteLineState } from '@/lib/domain/quote-por';
+import { chooseQuoteLineState, QUOTE_LINE_STATE_LABELS, zeroConfirmedReasonPlaceholder, type QuoteLineState } from '@/lib/domain/quote-por';
 import type { ExpenseMethod, PriceMode } from '@/lib/domain/standard-estimate-money';
 import { PRICE_MODE_LABEL, STANDARD_SECTION_LABEL, type StandardSectionCode } from '@/lib/domain/standard-estimate-view';
 import {
@@ -228,7 +228,7 @@ export function StandardQuoteEditor({ draftId, lockVersion, taxRate, savedUnreso
                             <Input
                               value={line.line_state_reason}
                               maxLength={190}
-                              placeholder={line.line_state === 'zero_confirmed' ? '0円確定の理由（必須）' : 'メモ（任意）'}
+                              placeholder={line.line_state === 'zero_confirmed' ? zeroConfirmedReasonPlaceholder(line.remark) : 'メモ（任意）'}
                               aria-label={line.line_state === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'}
                               onChange={(e) => updateLine(index, { line_state_reason: e.target.value })}
                             />

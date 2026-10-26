@@ -628,7 +628,11 @@ export function DealerRevisionForm({
         confirmed={porConfirmed}
         onConfirmedChange={setPorConfirmed}
         onUpdate={updatePorRow}
-        lockedNote="本体の明細は、この画面では直せません。本部・総代理店に依頼してください"
+        lockedNote={
+          canEditBase
+            ? '本体の明細は、この画面では直せません。本体マスターの別途見積の行を見直してください'
+            : '本体の明細は、この画面では直せません。本部・総代理店に依頼してください'
+        }
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f7f9f8] px-3 py-2">

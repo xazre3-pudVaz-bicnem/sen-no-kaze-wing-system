@@ -242,11 +242,13 @@ export async function confirmPorBeforeIssue(form: Locator, reason = '現地確�
  */
 export async function resolveUnresolvedPorRows(form: Locator, reason: string, state: 'zero_confirmed' | 'excluded' = 'zero_confirmed') {
   const review = form.getByTestId('por-review');
-  const rows = review.locator('[data-testid="por-review-row"][data-line-state="unresolved"]');
+  // 扱いを選べる未確定の行だけ（本体の行など選べない行は飛ばす）
+  const rows = review
+    .locator('[data-testid="por-review-row"][data-line-state="unresolved"]')
+    .filter({ has: form.page().getByTestId('por-review-state') });
   // 扱いを選ぶと行の状態が変わり、未確定の一覧から外れる（選び終えるまで先頭の行を処理する。行は key で選び直す）
   for (let guard = 0; guard < 50 && (await rows.count()) > 0; guard += 1) {
     const first = rows.first();
-    if ((await first.getByTestId('por-review-state').count()) === 0) return;
     const key = await first.getAttribute('data-row-key');
     await first.getByTestId('por-review-state').selectOption(state);
     await review.locator(`[data-testid="por-review-row"][data-row-key="${key}"]`).getByTestId('por-review-reason').fill(reason);

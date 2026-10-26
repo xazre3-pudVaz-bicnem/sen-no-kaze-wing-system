@@ -145,7 +145,11 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
     }
     expect(migration).toContain('grant execute on function public.get_quote_por_selections(uuid) to authenticated;');
     expect(migration).toContain('grant execute on function public.confirm_quote_por_selections(uuid, text[]) to authenticated;');
-    expect(migration).toMatch(/revoke all privileges on table public\.quote_por_confirmations from public, anon, authenticated;/);
+    expect(migration).toContain('revoke all privileges on table public.quote_por_confirmations from public, anon, authenticated, service_role;');
+    // service_role は読むだけ。TRUNCATE も文ごとのトリガーで止める
+    expect(migration).toContain('grant select on table public.quote_por_confirmations to service_role;');
+    expect(migration).not.toMatch(/grant all privileges on table public\.quote_por_confirmations/);
+    expect(migration).toContain('before truncate on public.quote_por_confirmations\nfor each statement execute function public.quote_por_confirmations_immutable();');
     expect(migration).toContain('alter table public.quote_por_confirmations enable row level security;');
     expect(migration).toContain('before update or delete on public.quote_por_confirmations');
   });
@@ -244,6 +248,12 @@ describe('画面・データ層のつなぎ', () => {
     expect(dealerForms).toContain('name={`items.${index}.line_state`}');
     expect(dealerForms).toContain('showLineState');
     expect(standardEditor).toContain("(['zero_confirmed', 'excluded'] as const)");
+    // 0円確定の理由の欄は、今の備考を例として出す（理由は必ず入力。4 つの画面で同じ）
+    for (const form of [standardEditor, authoringGrid, formalizationForm, read('components/admin/quote-por-review.tsx')]) {
+      expect(form).toContain('zeroConfirmedReasonPlaceholder(');
+    }
+    // 別途見積の行に扱いを選んだら、区分の見出し・計の「別途見積」から外す
+    expect(authoringGrid).toContain("row.unitPrice === 0 && !row.lineState && row.remark?.trim() === '別途見積'");
     // 扱いを外して価格の決め方に戻すときも、理由・メモを備考へ戻す（黙って消さない）
     expect(standardEditor).toContain('return { ...chooseQuoteLineState(line, null), price_mode: choice };');
     expect(formalizationForm).toContain('data-testid="formalization-line-state"');

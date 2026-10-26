@@ -2,7 +2,7 @@
 --
 --   npx supabase db query --linked --output-format json -f scripts/db-rehearsal/postflight-quote-formal-por-guard.sql
 --
--- 合格の条件：*_patched・triggers_enabled（トリガー 5 本）・rpc_authenticated_only・internal_functions_closed・confirmations_closed がすべて true、
+-- 合格の条件：*_patched・triggers_enabled（トリガー 6 本）・rpc_authenticated_only・internal_functions_closed・confirmations_closed がすべて true、
 -- confirmations_rows が 0、issuance_function_attributes・manufacturing_function_attributes が適用直前の preflight と同じ。
 select
   strpos(pg_catalog.pg_get_functiondef('public.finalize_quote_draft(uuid, integer)'::regprocedure),
@@ -19,10 +19,11 @@ select
                'perform public.assert_case_por_selections_confirmed(parent.id, v_uid);') > 0 as formal_from_preliminary_patched,
   strpos(pg_catalog.pg_get_functiondef('public.send_manufacturing_order(uuid, integer)'::regprocedure),
          'and public.quote_line_explicit_state(qi.remark) is distinct from ''excluded''') > 0 as manufacturing_snapshot_patched,
-  (select count(*) = 5 and bool_and(t.tgenabled = 'O')
+  (select count(*) = 6 and bool_and(t.tgenabled = 'O')
      from pg_catalog.pg_trigger t
     where t.tgname in ('quote_items_line_state_guard', 'quote_draft_items_line_state_guard', 'quote_draft_item_costs_state_guard',
-                       'standard_estimate_revision_lines_marker_guard', 'base_master_revision_lines_marker_guard')
+                       'standard_estimate_revision_lines_marker_guard', 'base_master_revision_lines_marker_guard',
+                       'trg_quote_por_confirmations_no_truncate')
       and not t.tgisinternal) as triggers_enabled,
   has_function_privilege('authenticated', 'public.get_quote_por_selections(uuid)', 'execute')
     and has_function_privilege('authenticated', 'public.confirm_quote_por_selections(uuid, text[])', 'execute')
@@ -47,6 +48,10 @@ select
     and not has_table_privilege('authenticated', 'public.quote_por_confirmations', 'select')
     and not has_table_privilege('authenticated', 'public.quote_por_confirmations', 'insert')
     and not has_table_privilege('anon', 'public.quote_por_confirmations', 'select')
+    and not has_table_privilege('service_role', 'public.quote_por_confirmations', 'insert')
+    and not has_table_privilege('service_role', 'public.quote_por_confirmations', 'update')
+    and not has_table_privilege('service_role', 'public.quote_por_confirmations', 'delete')
+    and not has_table_privilege('service_role', 'public.quote_por_confirmations', 'truncate')
     as confirmations_closed,
   (select count(*) from public.quote_por_confirmations) as confirmations_rows,
   (select json_agg(

@@ -123,11 +123,11 @@ test.describe('代理店による確定見積（改訂版）', () => {
     // 備考に理由を書いただけでは解消しない（自由記述から状態を推測しない）
     await lightingRow.getByTestId('por-review-remark').fill('電気設備工事に含む');
     await expect(lightingRow.getByText('未確定', { exact: true })).toBeVisible();
-    // 照明は「0円確定」を選ぶ。今の備考は理由の欄に入る（黙って消さない）。理由が空の間は発行できない
+    // 照明は「0円確定」を選ぶ。理由は必須なので今の備考では埋めない（今の備考は欄の例に出す）。理由が空の間は発行できない
     await lightingRow.getByTestId('por-review-state').selectOption('zero_confirmed');
     await expect(lightingRow).toHaveAttribute('data-line-state', 'zero_confirmed');
-    await expect(lightingRow.getByTestId('por-review-reason')).toHaveValue('電気設備工事に含む');
-    await lightingRow.getByTestId('por-review-reason').fill('');
+    await expect(lightingRow.getByTestId('por-review-reason')).toHaveValue('');
+    await expect(lightingRow.getByTestId('por-review-reason')).toHaveAttribute('placeholder', /今の備考：電気設備工事に含む/);
     await expect(form.getByTestId('por-blockers')).toContainText('理由が入っていない明細');
     await lightingRow.getByTestId('por-review-reason').fill('電気設備工事に含む');
     await expect(form.getByTestId('por-blockers')).not.toContainText('理由が入っていない明細');

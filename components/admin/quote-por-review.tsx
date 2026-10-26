@@ -1,6 +1,6 @@
 'use client';
 
-import { porSelectionLabel, QUOTE_LINE_STATE_LABELS, type QuoteLineState, type QuotePorSelection } from '@/lib/domain/quote-por';
+import { porSelectionLabel, QUOTE_LINE_STATE_LABELS, zeroConfirmedReasonPlaceholder, type QuoteLineState, type QuotePorSelection } from '@/lib/domain/quote-por';
 
 /** 金額未確定の確認の欄の 1 行（改訂・確定見積の画面で、金額が未確定だった明細と、扱いを選んだ明細） */
 export interface QuotePorReviewRow {
@@ -141,7 +141,7 @@ export function QuotePorReview({
                           <input
                             value={row.lineStateReason}
                             maxLength={190}
-                            placeholder={row.lineState === 'zero_confirmed' ? '0円確定の理由（必須。例：電気設備工事に含む）' : 'メモ（任意。例：お客様手配）'}
+                            placeholder={row.lineState === 'zero_confirmed' ? zeroConfirmedReasonPlaceholder(row.remark, '例：電気設備工事に含む') : 'メモ（任意。例：お客様手配）'}
                             onChange={(event) => onUpdate(row.key, { lineStateReason: event.target.value })}
                             className="w-full rounded border border-line px-2 py-1"
                             aria-label={`${row.lineState === 'zero_confirmed' ? '0円確定の理由' : '対象外のメモ'}：${row.name}`}

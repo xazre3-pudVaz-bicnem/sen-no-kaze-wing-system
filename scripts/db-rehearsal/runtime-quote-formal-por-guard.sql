@@ -625,6 +625,16 @@ begin
             || has_function_privilege('authenticated', p.oid, 'execute')::text || '/' || has_function_privilege('anon', p.oid, 'execute')::text
        from pg_catalog.pg_proc p
       where p.oid = 'public.send_manufacturing_order(uuid, integer)'::regprocedure));
+
+  -- 確認の記録：TRUNCATE でも消せない。service_role は読むだけ
+  perform pg_temp.qpg_expect_error('QPG-77 確認の記録は DB の管理者でも TRUNCATE で消せない', 'P0001', 'IMMUTABLE',
+    pg_temp.qpg_try('truncate public.quote_por_confirmations'));
+  perform pg_temp.qpg_expect_eq('QPG-78 service_role は確認の記録を読むだけ（書き込み・変更・削除・TRUNCATE はできない）', 'true/false/false/false/false',
+    has_table_privilege('service_role', 'public.quote_por_confirmations', 'select')::text || '/'
+    || has_table_privilege('service_role', 'public.quote_por_confirmations', 'insert')::text || '/'
+    || has_table_privilege('service_role', 'public.quote_por_confirmations', 'update')::text || '/'
+    || has_table_privilege('service_role', 'public.quote_por_confirmations', 'delete')::text || '/'
+    || has_table_privilege('service_role', 'public.quote_por_confirmations', 'truncate')::text);
 end;
 $test$;
 

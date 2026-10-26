@@ -364,10 +364,16 @@ create trigger trg_quote_por_confirmations_immutable
 before update or delete on public.quote_por_confirmations
 for each row execute function public.quote_por_confirmations_immutable();
 
+-- 行ごとのトリガーは TRUNCATE では動かないため、文ごとのトリガーでも止める
+create trigger trg_quote_por_confirmations_no_truncate
+before truncate on public.quote_por_confirmations
+for each statement execute function public.quote_por_confirmations_immutable();
+
 alter table public.quote_por_confirmations enable row level security;
 
-revoke all privileges on table public.quote_por_confirmations from public, anon, authenticated;
-grant all privileges on table public.quote_por_confirmations to service_role;
+revoke all privileges on table public.quote_por_confirmations from public, anon, authenticated, service_role;
+-- service_role は読むだけ（記録は確認の RPC だけが書く。書き込み・変更・削除・TRUNCATE はさせない）
+grant select on table public.quote_por_confirmations to service_role;
 
 -- いまの一覧を、その担当者の確認の記録が覆っているか（一覧が空なら確認は要らない）
 create function public.quote_por_selections_confirmed(p_quote_id uuid, p_user_id uuid, p_selections jsonb)

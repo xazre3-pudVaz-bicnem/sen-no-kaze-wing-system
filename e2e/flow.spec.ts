@@ -305,6 +305,8 @@ test.describe('顧客フロー', () => {
     // 見積依頼の画面に引き継がれる。土地なしに変え、希望地域・予算を入れて依頼する
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
     await expect(page.locator('#site_address')).toHaveValue('石川県七尾市○○1-2');
+    // 土地の情報は「土地について（任意）」を開いて入れる（#577〜#581 で折りたたみになった）
+    await page.getByTestId('quote-request-site-profile-disclosure').locator('summary').click();
     await expect(page.getByTestId('land-status-owned')).toBeChecked();
     await page.getByTestId('land-status-none').check();
     await page.locator('#request-land-desired-area').fill('能登の海沿い');

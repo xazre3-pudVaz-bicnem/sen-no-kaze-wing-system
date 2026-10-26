@@ -5,7 +5,7 @@ import { ADMIN_EMAIL as ADMIN, logout, requestQuoteAsCustomer, signInOrRegister 
  * 管理画面の地域抽出。先方要望 2026-08-28。
  * - 案件一覧（/admin/quotes）：設置予定地の都道府県 → 市区町村（「詳細条件」の中）
  * - 保存済み仕様（/admin/configurations）：ブロック → 都道府県 → 市町村。設置予定地が未登録なら顧客住所で判定する
- *   （顧客の登録住所は helpers の register で「石川県七尾市1-1」＝中部になる）
+ *   （会員登録では住所を聞かない（#577〜#582）ため、この試験ではプロフィールに「石川県七尾市1-1」＝中部を入れる）
  */
 test.describe('地域で抽出', () => {
   test('案件一覧は県・市区町村で、保存済み仕様はブロック・県・市町村で絞り込める', async ({ page }) => {
@@ -13,6 +13,11 @@ test.describe('地域で抽出', () => {
     const configName = `地域抽出のテスト ${Date.now()}`;
     await requestQuoteAsCustomer(page, customer, configName, '石川県七尾市 海沿いの高台');
     const quoteNo = (await page.getByTestId('quote-no').textContent())!.trim();
+    // 保存済み仕様の地域は、設置予定地が未登録なら会員の住所で判定する。会員登録では住所を聞かないので、プロフィールに入れる
+    await page.goto('/mypage/profile');
+    await page.locator('#address').fill('石川県七尾市1-1');
+    await page.getByRole('button', { name: '保存する' }).click();
+    await page.waitForURL(/\/mypage\?profile=updated/);
     await logout(page);
 
     // ---- 案件一覧：設置予定地で絞る ----

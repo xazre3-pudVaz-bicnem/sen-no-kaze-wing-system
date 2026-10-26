@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
+import type { PlanChangeSummary } from '@/lib/domain/plan-change-summary';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
 
 interface Props {
@@ -11,13 +12,14 @@ interface Props {
   saving: boolean;
   error: string | null;
   total: number;
+  changeSummary: PlanChangeSummary;
   onClose: () => void;
   onSubmit: (name: string) => void;
 }
 
 const CONFIGURATION_CONFLICT_MESSAGE = '他の画面でこのプランが更新されています';
 
-export function SaveDialog({ mode, initialName, saving, error, total, onClose, onSubmit }: Props) {
+export function SaveDialog({ mode, initialName, saving, error, total, changeSummary, onClose, onSubmit }: Props) {
   const [name, setName] = useState(initialName);
   const ref = useRef<HTMLDialogElement>(null);
   const isSaveConflict = Boolean(error?.includes(CONFIGURATION_CONFLICT_MESSAGE));
@@ -61,9 +63,27 @@ export function SaveDialog({ mode, initialName, saving, error, total, onClose, o
             : 'マイページに保存すると、後から再編集・複製・見積依頼ができます。'}
         </p>
         <div className="mt-5">
-          <Field label="保存名" htmlFor="config-name" required>
+          <Field label="プラン名（変更できます）" htmlFor="config-name" required>
             <Input id="config-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} autoFocus required data-testid="config-name-input" />
           </Field>
+          <p className="mt-1 text-xs text-muted">マイページでプランを見分けるための名前です。</p>
+        </div>
+        <div className="mt-4 rounded-lg border border-line bg-sand/30 p-3 text-sm" data-testid="save-plan-changes">
+          <p className="font-semibold text-ink">現在の標準仕様からの変更</p>
+          {changeSummary.items.length ? (
+            <ul className="mt-2 space-y-1 text-xs text-ink-soft">
+              {changeSummary.items.map((item) => (
+                <li key={item.category} className="flex flex-wrap justify-between gap-x-2">
+                  <span>{item.category}</span>
+                  <span>{item.kind}{item.detail ? `（${item.detail}）` : ''}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-1 text-xs text-ink-soft">{changeSummary.complete ? '標準仕様のまま' : '現在の商品情報では比較できません'}</p>}
+          {!changeSummary.complete && changeSummary.items.length > 0 && (
+            <p className="mt-2 text-xs text-muted">現在の商品情報では一部比較できない項目があります。</p>
+          )}
+          <p className="mt-2 text-[0.7rem] text-muted">現在の標準選択と比較しています。保存時点の標準履歴ではありません。</p>
         </div>
         <p className="mt-4 flex items-baseline justify-between text-sm">
           <span className="text-muted">概算合計（税込）</span>

@@ -37,7 +37,7 @@ export function SaveDialog({ mode, initialName, saving, error, total, changeSumm
     <dialog
       ref={ref}
       onClose={onClose}
-      className="m-auto w-[min(92vw,28rem)] rounded-2xl p-0 shadow-lift backdrop:bg-ink/40"
+      className="m-auto max-h-[90dvh] w-[min(92vw,28rem)] overflow-y-auto rounded-2xl p-0 shadow-lift backdrop:bg-ink/40"
       aria-labelledby="save-dialog-title"
     >
       <form
@@ -69,9 +69,12 @@ export function SaveDialog({ mode, initialName, saving, error, total, changeSumm
           <p className="mt-1 text-xs text-muted">マイページでプランを見分けるための名前です。</p>
         </div>
         <div className="mt-4 rounded-lg border border-line bg-sand/30 p-3 text-sm" data-testid="save-plan-changes">
-          <p className="font-semibold text-ink">現在の標準仕様からの変更</p>
+          <p className="flex items-center justify-between gap-2 font-semibold text-ink">
+            <span>現在の標準仕様からの変更</span>
+            {changeSummary.complete && <span className="whitespace-nowrap text-xs">{changeSummary.items.length}項目</span>}
+          </p>
           {changeSummary.items.length ? (
-            <ul className="mt-2 space-y-1 text-xs text-ink-soft">
+            <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto text-xs text-ink-soft">
               {changeSummary.items.map((item) => (
                 <li key={item.category} className="flex flex-wrap justify-between gap-x-2">
                   <span>{item.category}</span>

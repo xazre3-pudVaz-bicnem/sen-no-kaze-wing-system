@@ -6,6 +6,7 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isDemoFallback, isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
+import { variantDeleteErrorMessage } from '@/lib/domain/variant-delete-errors';
 
 /**
  * 下書き商品限定。削除の可否はDB RPCが同一トランザクションで最終判断する。
@@ -47,17 +48,8 @@ export async function deleteUnusedDraftVariantAction(formData: FormData): Promis
     : await db.rpc('delete_unused_variant_group', { p_option_id: optionId, p_group_id: groupId });
 
   if (result.error) {
-    const code = result.error.code;
-    const error = code === 'PGRST202'
-      ? '安全削除のDB機能が未反映です。削除されていません。'
-      : code === '23503' || code === 'P0001'
-        ? '保存済み仕様・見積・履歴・依存関係で使用中、または安全確認ができないため削除できません。非表示にしてください。'
-        : code === '55P03' || code === '40P01'
-          ? 'ほかの保存処理と重なりました。削除していません。'
-          : code === '42501'
-            ? 'この選択肢を削除する権限がありません。'
-            : '安全確認ができないため削除されませんでした。';
-    redirect(errorPath(error));
+    // DB は理由を文の先頭（FORBIDDEN・LOCKED・NOT_FOUND・VALIDATION）で返す。すべてを「使用中」にまとめない
+    redirect(errorPath(variantDeleteErrorMessage(result.error)));
   }
 
   revalidatePath(`/admin/options/${optionId}`);

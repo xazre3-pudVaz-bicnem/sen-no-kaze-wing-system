@@ -53,7 +53,8 @@ describe('未使用の下書きバリエーションだけを安全に削除す�
     expect(action).toContain('await requireCatalogEditor()');
     expect(action).toContain("option.status !== 'draft'");
     expect(action).toContain('c.group_id === groupId');
-    expect(action).toContain("code === 'PGRST202'");
+    // DB 未適用（PGRST202）などの文は共通の決まり（lib/domain/variant-delete-errors.ts）で作る
+    expect(action).toContain('variantDeleteErrorMessage(result.error)');
     expect(action).toContain('isDemoFallback() || isLocalMode()');
     expect(action).not.toContain(".from('option_variant_choices').delete()");
     expect(action).not.toContain(".from('option_variant_groups').delete()");

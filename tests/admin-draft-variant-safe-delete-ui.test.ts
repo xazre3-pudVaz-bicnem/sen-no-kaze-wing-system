@@ -14,6 +14,12 @@ describe('未使用の下書き選択肢・選択項目の削除（DB適用待�
     expect(ui).toContain('未使用とDBが確認できた場合だけ削除');
   });
 
+  it('削除のボタンは下書きの商品にだけ出す（DB も下書きだけを削除する）', () => {
+    expect(ui).toContain("deletable={option.status === 'draft'}");
+    expect(ui).toContain("{option.status === 'draft' && (");
+    expect(ui).toContain('登録済みの商品の選択項目・選択肢は削除できません');
+  });
+
   it('商品全体の削除経路を流用しない', () => {
     expect(action).not.toContain('delete_unused_published_option');
     expect(action).toContain("target === 'choice'");
@@ -25,7 +31,7 @@ describe('未使用の下書き選択肢・選択項目の削除（DB適用待�
     expect(action).toContain('await requireCatalogEditor()');
     expect(action).toContain("option.status !== 'draft'");
     expect(action).toContain('isDemoFallback() || isLocalMode()');
-    expect(action).toContain("code === 'PGRST202'");
+    expect(action).toContain('variantDeleteErrorMessage(result.error)');
     expect(action).not.toContain(".from('option_variant_choices').delete()");
     expect(action).not.toContain(".from('option_variant_groups').delete()");
   });

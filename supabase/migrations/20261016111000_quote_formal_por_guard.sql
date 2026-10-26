@@ -149,7 +149,10 @@ $function$;
 comment on function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) is
   '正式発行を止める金額未確定の明細か（D1 までの暫定）。0 円で別途見積の目印がある行（前の版から変えていなくても）と、0 円の内外装・オプション・別途工事・フリー商品の行のうち、商品台帳で正式に 0 円の商品・自動計算の行・前の版の同じ 0 円の明細のどれでもない行。状態の印（対象外・0円確定）がある行は止めない。';
 
--- 明細の表の保存境界：状態の印のある行は 0 円、0円確定は理由あり（どの経路から書いても同じ）
+-- 明細の表の保存境界（どの経路から書いても同じ。画面で選べる操作と同じことしか通さない）
+--   ・印は内外装・オプション・別途工事・フリー商品の行だけ（本体・経費の行には付けない）
+--   ・印のある行は 0 円、0円確定は理由あり、価格の決め方は「金額を入力」
+--   ・対象外の行は、下書きの内部原価も 0 円（今回の契約に含めないので、経費・粗利・内部原価の記録に残さない）
 create function public.quote_line_state_guard()
 returns trigger
 language plpgsql
@@ -157,9 +160,13 @@ set search_path = ''
 as $function$
 declare
   v_remark text := coalesce(new.remark, '');
-  v_price_mode text := to_jsonb(new) ->> 'price_mode';
+  v_row jsonb := to_jsonb(new);
+  v_price_mode text := v_row ->> 'price_mode';
 begin
   if v_remark like '［今回の契約対象外］%' or v_remark like '［0円確定］%' then
+    if new.kind not in ('interior_exterior', 'option', 'installation', 'free') then
+      raise exception 'VALIDATION: 「対象外」「0円確定」は本体・経費の明細には使えません（%）', new.name using errcode = 'P0001';
+    end if;
     if coalesce(new.unit_price, 0) <> 0 or coalesce(new.amount, 0) <> 0 then
       raise exception 'VALIDATION: 「対象外」「0円確定」の明細（%）は 0 円にしてください', new.name using errcode = 'P0001';
     end if;
@@ -169,18 +176,55 @@ begin
     if v_price_mode is not null and v_price_mode <> 'manual' then
       raise exception 'VALIDATION: 「対象外」「0円確定」の明細（%）は、価格の決め方を「金額を入力」にしてください', new.name using errcode = 'P0001';
     end if;
+    if v_remark like '［今回の契約対象外］%' and tg_table_name = 'quote_draft_items' and exists (
+         select 1
+           from public.quote_draft_item_costs c
+          where c.draft_id = (v_row ->> 'draft_id')::uuid
+            and c.line_key = (v_row ->> 'line_key')::uuid
+            and (coalesce(c.cost_unit_price, 0) <> 0 or coalesce(c.cost_amount, 0) <> 0 or coalesce(c.base_unit_cost, 0) <> 0)
+       ) then
+      raise exception 'VALIDATION: 対象外の明細（%）は原価も 0 円にしてください', new.name using errcode = 'P0001';
+    end if;
+  end if;
+  return new;
+end;
+$function$;
+
+-- 下書きの内部原価の保存境界：対象外の行の原価は 0 円（標準見積から作る下書き。明細の行が先に入る）
+create function public.quote_draft_item_cost_state_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_name text;
+begin
+  if coalesce(new.cost_unit_price, 0) = 0 and coalesce(new.cost_amount, 0) = 0 and coalesce(new.base_unit_cost, 0) = 0 then
+    return new;
+  end if;
+  select i.name into v_name
+    from public.quote_draft_items i
+   where i.draft_id = new.draft_id
+     and i.line_key = new.line_key
+     and coalesce(i.remark, '') like '［今回の契約対象外］%';
+  if found then
+    raise exception 'VALIDATION: 対象外の明細（%）は原価も 0 円にしてください', v_name using errcode = 'P0001';
   end if;
   return new;
 end;
 $function$;
 
 create trigger quote_items_line_state_guard
-before insert or update of remark, unit_price, amount on public.quote_items
+before insert or update of remark, unit_price, amount, kind on public.quote_items
 for each row execute function public.quote_line_state_guard();
 
 create trigger quote_draft_items_line_state_guard
-before insert or update of remark, unit_price, amount, price_mode on public.quote_draft_items
+before insert or update of remark, unit_price, amount, price_mode, kind on public.quote_draft_items
 for each row execute function public.quote_line_state_guard();
+
+create trigger quote_draft_item_costs_state_guard
+before insert or update of cost_unit_price, cost_amount, base_unit_cost, line_key on public.quote_draft_item_costs
+for each row execute function public.quote_draft_item_cost_state_guard();
 
 -- 標準見積・本体の内訳の明細の備考は、見積の下書きへそのまま写る。状態の印の書き出しは使わせない
 -- （印は見積の明細で、画面の明示の選択からだけ付ける）
@@ -252,7 +296,7 @@ as $function$
       join public.option_variant_choices vc on vc.id = any(p.variant_choice_ids) and vc.price_on_request
       join public.option_variant_groups vg on vg.id = vc.group_id and vg.option_id = p.option_id
     union all
-    select 'face:' || fc.face_code || ':' || o.id::text, o.id, o.name,
+    select 'face:' || fc.face_code || ':' || o.id::text || coalesce(':' || por.choice_ids, ''), o.id, o.name,
            '外壁（' || case fc.face_code
                          when 'front' then '正面'
                          when 'right' then '右側面'
@@ -264,7 +308,8 @@ as $function$
       from faces fc
       join public.options o on o.id = fc.option_id
       left join lateral (
-        select string_agg(vg.name || '：' || vc.name, '／' order by vg.sort_order, vc.sort_order) as labels
+        select string_agg(vg.name || '：' || vc.name, '／' order by vg.sort_order, vc.sort_order) as labels,
+               string_agg(vc.id::text, ',' order by vc.id::text) as choice_ids
           from jsonb_array_elements_text(fc.variant_choice_ids) as j(choice_id)
           join public.option_variant_choices vc on vc.id = j.choice_id::uuid and vc.price_on_request
           join public.option_variant_groups vg on vg.id = vc.group_id and vg.option_id = o.id
@@ -631,6 +676,7 @@ alter function public.quote_line_por_marked(uuid, text, text) owner to postgres;
 alter function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) owner to postgres;
 alter function public.quote_line_state_guard() owner to postgres;
 alter function public.quote_line_marker_master_guard() owner to postgres;
+alter function public.quote_draft_item_cost_state_guard() owner to postgres;
 alter function public.configuration_por_selections(uuid) owner to postgres;
 alter function public.quote_por_confirmations_immutable() owner to postgres;
 alter function public.quote_por_selections_confirmed(uuid, uuid, jsonb) owner to postgres;
@@ -646,6 +692,7 @@ revoke execute on function public.quote_line_por_marked(uuid, text, text) from p
 revoke execute on function public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean) from public, anon, authenticated, service_role;
 revoke execute on function public.quote_line_state_guard() from public, anon, authenticated, service_role;
 revoke execute on function public.quote_line_marker_master_guard() from public, anon, authenticated, service_role;
+revoke execute on function public.quote_draft_item_cost_state_guard() from public, anon, authenticated, service_role;
 revoke execute on function public.configuration_por_selections(uuid) from public, anon, authenticated, service_role;
 revoke execute on function public.quote_por_confirmations_immutable() from public, anon, authenticated, service_role;
 revoke execute on function public.quote_por_selections_confirmed(uuid, uuid, jsonb) from public, anon, authenticated, service_role;

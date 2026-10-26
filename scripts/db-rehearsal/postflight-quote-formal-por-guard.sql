@@ -2,7 +2,7 @@
 --
 --   npx supabase db query --linked --output-format json -f scripts/db-rehearsal/postflight-quote-formal-por-guard.sql
 --
--- 合格の条件：*_patched・triggers_enabled・rpc_authenticated_only・internal_functions_closed・confirmations_closed がすべて true、
+-- 合格の条件：*_patched・triggers_enabled（トリガー 5 本）・rpc_authenticated_only・internal_functions_closed・confirmations_closed がすべて true、
 -- confirmations_rows が 0、issuance_function_attributes が適用直前の preflight と同じ。
 select
   strpos(pg_catalog.pg_get_functiondef('public.finalize_quote_draft(uuid, integer)'::regprocedure),
@@ -17,9 +17,9 @@ select
          'perform public.assert_quote_lines_resolved(v_new);') > 0
     and strpos(pg_catalog.pg_get_functiondef('public.create_formal_quote_from_accepted_preliminary(uuid, jsonb, text)'::regprocedure),
                'perform public.assert_case_por_selections_confirmed(parent.id, v_uid);') > 0 as formal_from_preliminary_patched,
-  (select count(*) = 4 and bool_and(t.tgenabled = 'O')
+  (select count(*) = 5 and bool_and(t.tgenabled = 'O')
      from pg_catalog.pg_trigger t
-    where t.tgname in ('quote_items_line_state_guard', 'quote_draft_items_line_state_guard',
+    where t.tgname in ('quote_items_line_state_guard', 'quote_draft_items_line_state_guard', 'quote_draft_item_costs_state_guard',
                        'standard_estimate_revision_lines_marker_guard', 'base_master_revision_lines_marker_guard')
       and not t.tgisinternal) as triggers_enabled,
   has_function_privilege('authenticated', 'public.get_quote_por_selections(uuid)', 'execute')
@@ -35,7 +35,7 @@ select
            unnest(array[
              'public.quote_line_explicit_state(text)', 'public.quote_line_por_marked(uuid, text, text)',
              'public.quote_line_unresolved(text, numeric, uuid, text, text, boolean, boolean)', 'public.quote_line_state_guard()',
-             'public.quote_line_marker_master_guard()',
+             'public.quote_line_marker_master_guard()', 'public.quote_draft_item_cost_state_guard()',
              'public.configuration_por_selections(uuid)', 'public.quote_por_selections_confirmed(uuid, uuid, jsonb)',
              'public.assert_quote_lines_resolved(uuid)', 'public.assert_quote_draft_lines_resolved(uuid)',
              'public.assert_case_por_selections_confirmed(uuid, uuid)']) as f(fn)

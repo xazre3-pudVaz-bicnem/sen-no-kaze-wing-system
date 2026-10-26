@@ -153,7 +153,8 @@ export function parsePorSelectionKeys(value: FormDataEntryValue | null): string[
   try {
     const parsed: unknown = JSON.parse(String(value));
     if (!Array.isArray(parsed) || parsed.length > 500) return null;
-    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 200)) return null;
+    // 外壁の面のキーは別途見積の選択肢の ID を含むので長くなる
+    if (!parsed.every((key) => typeof key === 'string' && key.length > 0 && key.length <= 1000)) return null;
     return parsed as string[];
   } catch {
     return null;
@@ -179,6 +180,7 @@ export function applyQuoteLineStates<T extends QuoteLineStateInput>(
 
 /** DB の quote_line_state_guard と同じ（ローカル検証モードの保存境界）。問題があれば文面を返す */
 export function quoteLineStateGuardError(line: {
+  kind: string;
   name: string;
   remark?: string | null;
   unit_price?: number | null;
@@ -186,6 +188,9 @@ export function quoteLineStateGuardError(line: {
   price_mode?: string | null;
 }): string | null {
   if (!isReservedLineStateRemark(line.remark)) return null;
+  if (!LINE_STATE_KINDS.has(line.kind)) {
+    return `「対象外」「0円確定」は本体・経費の明細には使えません（${line.name}）`;
+  }
   if ((line.unit_price ?? 0) !== 0 || (line.amount ?? 0) !== 0) {
     return `「対象外」「0円確定」の明細（${line.name}）は 0 円にしてください`;
   }
@@ -462,8 +467,10 @@ export function configurationPorSelections(
       if (!option.price_on_request && porChoices.length === 0) return;
       const label = exteriorFaceLabel(face.face_code);
       const labels = porChoices.map(({ group, choice }) => `${group.name}：${choice.name}`).join('／');
+      // キーには別途見積の選択肢の ID も入れる（DB と同じ。同じ面・同じ商品でも選択肢が変われば確認し直す）
+      const choiceIds = porChoices.map(({ choice }) => choice.id).sort();
       rows.push({
-        key: `face:${face.face_code}:${option.id}`,
+        key: `face:${face.face_code}:${option.id}${choiceIds.length > 0 ? `:${choiceIds.join(',')}` : ''}`,
         option_id: option.id,
         name: option.name,
         detail: `外壁（${label}）${labels ? `：${labels}` : ''}`,

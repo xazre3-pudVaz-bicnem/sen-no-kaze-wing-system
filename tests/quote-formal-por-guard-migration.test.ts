@@ -45,11 +45,11 @@ describe('正式見積の発行で金額未確定の明細を残さない止め�
   });
 
   it('明細の表のトリガーで、状態の印のある行は 0 円・0円確定は理由あり・価格の決め方は「金額を入力」を保証する', () => {
-    expect(migration).toContain('create trigger quote_items_line_state_guard\nbefore insert or update of remark, unit_price, amount on public.quote_items');
+    expect(migration).toContain('create trigger quote_items_line_state_guard\nbefore insert or update of remark, unit_price, amount, kind on public.quote_items');
     expect(migration).toContain(
-      'create trigger quote_draft_items_line_state_guard\nbefore insert or update of remark, unit_price, amount, price_mode on public.quote_draft_items'
+      'create trigger quote_draft_items_line_state_guard\nbefore insert or update of remark, unit_price, amount, price_mode, kind on public.quote_draft_items'
     );
-    expect(migration).toContain("v_price_mode text := to_jsonb(new) ->> 'price_mode';");
+    expect(migration).toContain("v_price_mode text := v_row ->> 'price_mode';");
     // 標準見積・本体の内訳の明細の備考は見積の下書きへ写るので、印の書き出しを使わせない（適用前の確認でも止める）
     expect(migration).toContain('create trigger standard_estimate_revision_lines_marker_guard\nbefore insert or update of remark on public.standard_estimate_revision_lines');
     expect(migration).toContain('create trigger base_master_revision_lines_marker_guard\nbefore insert or update of remark on public.base_master_revision_lines');

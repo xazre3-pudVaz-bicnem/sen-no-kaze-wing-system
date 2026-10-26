@@ -286,14 +286,22 @@ describe('明細の状態の印（画面の明示の選択から、サーバー�
     expect(parsePorSelectionKeys('not json')).toBeNull();
   });
 
-  it('表の保存境界（DB の quote_line_state_guard と同じ）：印のある行は 0 円、0円確定は理由あり、価格の決め方は「金額を入力」', () => {
-    expect(quoteLineStateGuardError({ name: '給排水', remark: '［今回の契約対象外］', unit_price: 0, amount: 0 })).toBeNull();
-    expect(quoteLineStateGuardError({ name: '給排水', remark: '［今回の契約対象外］', unit_price: 1000, amount: 1000 })).toContain('0 円にしてください');
-    expect(quoteLineStateGuardError({ name: '照明', remark: '［0円確定］', unit_price: 0, amount: 0 })).toContain('理由を入力してください');
-    expect(quoteLineStateGuardError({ name: '照明', remark: '［0円確定］：サービス', unit_price: 0, amount: 0, price_mode: 'auto' })).toContain('金額を入力');
-    expect(quoteLineStateGuardError({ name: '照明', remark: 'サービス', unit_price: 0, amount: 0, price_mode: 'auto' })).toBeNull();
+  it('表の保存境界（DB の quote_line_state_guard と同じ）：印は内外装・オプション・別途工事・フリー商品の行だけ、0 円、0円確定は理由あり、価格の決め方は「金額を入力」', () => {
+    expect(quoteLineStateGuardError({ kind: 'installation', name: '給排水', remark: '［今回の契約対象外］', unit_price: 0, amount: 0 })).toBeNull();
+    expect(quoteLineStateGuardError({ kind: 'installation', name: '給排水', remark: '［今回の契約対象外］', unit_price: 1000, amount: 1000 })).toContain('0 円にしてください');
+    expect(quoteLineStateGuardError({ kind: 'option', name: '照明', remark: '［0円確定］', unit_price: 0, amount: 0 })).toContain('理由を入力してください');
+    expect(quoteLineStateGuardError({ kind: 'option', name: '照明', remark: '［0円確定］：サービス', unit_price: 0, amount: 0, price_mode: 'auto' })).toContain('金額を入力');
+    expect(quoteLineStateGuardError({ kind: 'option', name: '照明', remark: 'サービス', unit_price: 0, amount: 0, price_mode: 'auto' })).toBeNull();
+    // 本体・経費の行には印を付けられない（RPC を直接呼んでも、画面で選べる操作と同じことしか通さない）
+    for (const kind of ['base', 'base_expense', 'interior_exterior_expense', 'option_expense', 'discount']) {
+      expect(quoteLineStateGuardError({ kind, name: '諸費用', remark: '［今回の契約対象外］', unit_price: 0, amount: 0 })).toContain('本体・経費の明細には使えません');
+    }
     expect(migration).toContain(`raise exception 'VALIDATION: 「対象外」「0円確定」の明細（%）は 0 円にしてください'`);
     expect(migration).toContain(`raise exception 'VALIDATION: 0円確定の明細（%）は理由を入力してください'`);
+    expect(migration).toContain(`if new.kind not in ('interior_exterior', 'option', 'installation', 'free') then`);
+    // 対象外の行の内部原価は 0 円（明細の表と内部原価の表の両方で保証）
+    expect(migration.match(/raise exception 'VALIDATION: 対象外の明細（%）は原価も 0 円にしてください'/g)).toHaveLength(2);
+    expect(migration).toContain('create trigger quote_draft_item_costs_state_guard');
   });
 });
 
@@ -342,7 +350,7 @@ describe('お客様が選んだ別途見積の商品（SQL の configuration_por
     expect(selections.map((s) => `${s.key}|${s.name}|${s.detail ?? ''}`)).toEqual([
       'product:o-por|検査の別途見積の商品|',
       'variant:o-plain:vc-por|検査の通常の商品|色：特注色',
-      'face:front:o-ext|検査の外壁|外壁（正面）：塗装：特注塗装',
+      'face:front:o-ext:e-por|検査の外壁|外壁（正面）：塗装：特注塗装',
     ]);
     expect(selections.map(porSelectionLabel)).toEqual(['検査の別途見積の商品', '検査の通常の商品（色：特注色）', '検査の外壁（外壁（正面）：塗装：特注塗装）']);
   });

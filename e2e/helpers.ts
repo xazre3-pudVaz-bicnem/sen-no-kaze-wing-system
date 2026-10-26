@@ -10,10 +10,24 @@ export async function fillRegisterForm(page: Page, email: string, name = 'テス
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(PASSWORD);
   await page.locator('#full_name').fill(name);
-  await page.locator('#phone').fill('090-0000-0000');
-  await page.locator('#address').fill('石川県七尾市1-1');
   await page.getByRole('checkbox', { name: /利用規約/ }).check();
   await page.getByRole('button', { name: '会員登録する' }).click();
+}
+
+/**
+ * 見積依頼の画面の連絡先（電話番号・ご住所）。会員登録では聞かないので、見積依頼のときに入れる（入っていれば変えない）。
+ * 連絡先の住所は、試験で使う設置予定地（石川県七尾市…）と違う住所にする（同じなら確認欄が出る）
+ */
+export async function fillQuoteRequestContact(page: Page) {
+  const form = page.getByTestId('quote-request-form');
+  await expect(form).toBeVisible();
+  for (const [selector, value] of [
+    ['#phone', '090-0000-0000'],
+    ['#address', '東京都千代田区丸の内1-1'],
+  ] as const) {
+    const input = form.locator(selector);
+    if (!(await input.inputValue()).trim()) await input.fill(value);
+  }
 }
 
 export async function register(page: Page, email: string, next = '/mypage', name = 'テスト 太郎') {
@@ -158,7 +172,7 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
   await page.waitForURL(/\?c=[0-9a-f-]{36}/);
   const configId = new URL(page.url()).searchParams.get('c')!;
   await page.goto(`/mypage/configurations/${configId}/request-quote`);
-  await expect(page.getByTestId('quote-request-form')).toBeVisible();
+  await fillQuoteRequestContact(page);
   if (siteAddress) await page.locator('#site_address').fill(siteAddress);
   await page.getByTestId('submit-quote-request').click();
   await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);

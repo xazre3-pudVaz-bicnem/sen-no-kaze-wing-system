@@ -10,6 +10,7 @@ import {
   signInOrRegister,
   uniqueEmail,
   waitForSimulator,
+  fillQuoteRequestContact,
 } from './helpers';
 
 // PR #500：商品の取扱終了・シミュレーター表示。
@@ -102,6 +103,7 @@ test.describe('商品の取扱終了・シミュレーター表示', () => {
 
     // 取扱終了が残ったままでは見積を依頼できない
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await expect(page.getByTestId('quote-request-form')).toContainText('取扱終了のため、この内容では見積を依頼できません');
     await expect(page).toHaveURL(/\/request-quote/);
@@ -125,6 +127,7 @@ test.describe('商品の取扱終了・シミュレーター表示', () => {
 
     // シミュレーター非表示の商品だけなら見積を依頼できる（見積不可ではない）
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
 

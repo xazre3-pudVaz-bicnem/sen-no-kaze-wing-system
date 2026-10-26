@@ -11,3 +11,16 @@ export function canRestoreSimulatorDraft(
   if (draft.ownerId != null) return draft.ownerId === viewerId;
   return !draft.configId;
 }
+
+/**
+ * 通常のシミュレーター入口は新しいプランとして開く。
+ * ブラウザ内の保存済み ID を新規画面へ復元しない（既存プランは ?c= からサーバーで取得する）。
+ * ログイン後の明示的な ?resume=1 は選択内容だけを復元できる。
+ */
+export function canRestoreSimulatorSelection(
+  draft: { ownerId?: string | null; configId?: string | null },
+  viewerId: string | null,
+  resume: boolean
+): boolean {
+  return canRestoreSimulatorDraft(draft, viewerId) && (!draft.configId || resume);
+}

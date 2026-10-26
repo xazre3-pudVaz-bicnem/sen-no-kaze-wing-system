@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { canRestoreSimulatorDraft } from '../lib/domain/simulator-draft-ownership';
+import { canRestoreSimulatorDraft, canRestoreSimulatorSelection } from '../lib/domain/simulator-draft-ownership';
 
 describe('シミュレーターの保存下書き・アカウント分離', () => {
   it('保存済みのプランは同じアカウントにだけ復元する', () => {
@@ -29,13 +29,29 @@ describe('シミュレーターの保存下書き・アカウント分離', () =
     expect(canRestoreSimulatorDraft(draft, null)).toBe(false);
   });
 
-  it('画面側が復元可否・保存ID・書込者を照合している', () => {
+  it('新規入口では前回の保存IDを継承せず、ログイン再開では選択のみ復元可能', () => {
+    const saved = { ownerId: 'customer-a', configId: 'previous-quoted-configuration' };
+    expect(canRestoreSimulatorSelection(saved, 'customer-a', false)).toBe(false);
+    expect(canRestoreSimulatorSelection(saved, 'customer-a', true)).toBe(true);
+    expect(canRestoreSimulatorSelection(saved, 'customer-b', true)).toBe(false);
+    expect(canRestoreSimulatorSelection(saved, null, true)).toBe(false);
+
+    const unsaved = { ownerId: 'customer-a', configId: null };
+    expect(canRestoreSimulatorSelection(unsaved, 'customer-a', false)).toBe(true);
+    expect(canRestoreSimulatorSelection({ ownerId: null, configId: null }, 'customer-a', true)).toBe(true);
+    expect(canRestoreSimulatorSelection({ configId: 'legacy-id' }, 'customer-a', true)).toBe(false);
+  });
+
+  it('画面側がアカウントを照合し、保存済みIDをブラウザから復元しない', () => {
     const app = fs.readFileSync(path.join(process.cwd(), 'components/simulator/simulator-app.tsx'), 'utf8');
-    expect(app).toContain('canRestoreSimulatorDraft(draft, user?.id ?? null)');
-    expect(app).toContain('draft.configId && user && draft.ownerId === user.id && !hasInvalidSpec');
+    expect(app).toContain('canRestoreSimulatorSelection(draft, user?.id ?? null, resume)');
+    expect(app).not.toContain('setConfigId(draft.configId)');
+    expect(app).toContain('!loadError');
     expect(app).toContain('ownerId: user?.id ?? null,');
     // 未ログインの見積依頼→ログイン画面→ログイン後の再開は残す
     expect(app).toContain("persistDraft({ pending });");
     expect(app).toContain('if (resume && user && draft.pending && !resumed.current)');
+    const page = fs.readFileSync(path.join(process.cwd(), 'app/(site)/simulator/[slug]/page.tsx'), 'utf8');
+    expect(page).toContain("key={c ? `configuration:${c}`");
   });
 });

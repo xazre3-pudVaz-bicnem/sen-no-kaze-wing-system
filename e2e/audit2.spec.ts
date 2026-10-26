@@ -119,8 +119,6 @@ test.describe('深掘りの点検', () => {
     await page.locator('#email').fill(email);
     await page.locator('#password').fill('Wing-Test1!');
     await page.locator('#full_name').fill('空 状態');
-    await page.locator('#phone').fill('090-0000-0000');
-    await page.locator('#address').fill('東京都1-1');
     await page.getByRole('checkbox', { name: /利用規約/ }).check();
     await page.getByRole('button', { name: '会員登録する' }).click();
     await page.waitForURL((u) => !u.pathname.startsWith('/register'));

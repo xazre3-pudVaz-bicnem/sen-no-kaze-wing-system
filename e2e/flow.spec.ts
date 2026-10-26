@@ -18,6 +18,7 @@ import {
   uniqueEmail,
   waitForSimulator,
   withExpenseAndTax,
+  fillQuoteRequestContact,
 } from './helpers';
 
 const DECK_PRICE = 450_000;
@@ -48,6 +49,7 @@ async function saveBaseOnlyAndRequestQuote(page: Page, slug: string) {
 
   // 見積依頼まで通り、見積書の金額はシミュレーターの概算と同じ
   await page.goto(`/mypage/configurations/${configId}/request-quote`);
+  await fillQuoteRequestContact(page);
   await page.getByTestId('submit-quote-request').click();
   await expect(page).toHaveURL(/\/mypage\/quotes\//);
   await expect(page.getByTestId('quote-table')).toContainText('【本体価格計】');
@@ -307,6 +309,7 @@ test.describe('顧客フロー', () => {
     await page.getByTestId('land-status-none').check();
     await page.locator('#request-land-desired-area').fill('能登の海沿い');
     await page.locator('#request-land-budget').selectOption('3m_5m');
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
 
@@ -366,6 +369,7 @@ test.describe('顧客フロー', () => {
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
     await expect(page.getByTestId('quote-request-form')).toBeVisible();
     await page.locator('#site_address').fill('石川県七尾市 海沿いの傾斜地');
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await expect(page).toHaveURL(/\/mypage\/quotes\/[0-9a-f-]{36}\?requested=1/);
     const quoteNo = (await page.getByTestId('quote-no').textContent())!.trim();

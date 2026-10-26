@@ -123,7 +123,7 @@ export function ResetRequestForm() {
     return (
       <div className="space-y-4">
         <Alert tone="success" title="再設定の案内を送信しました">
-          登録されているメールアドレスであれば、パスワード再設定のリンクをお送りしています。メールが届かない場合は迷惑メールフォルダをご確認ください。
+          登録されているメールアドレスであれば、パスワード再設定のリンクをお送りしています。メールのリンクは、この画面を開いているのと同じブラウザで開いてください。メールが届かない場合は迷惑メールフォルダをご確認ください。
         </Alert>
         {state.devLink && (
           <Alert tone="warn" title="ローカル検証モード">

@@ -60,7 +60,7 @@ export default async function StandardQuoteDraftPage({
   // 金額が未確定の行（POR と、0 円の内外装・オプション・別途工事の行のうち、自動計算・前の版と同じ 0 円・0円確定・対象外のどれでもない行）。
   // 止めるのは DB の正式保存（D1 までの暫定）。前の版の明細は明細のキーで突き合わせる
   // 改訂の下書きは前の版、初回は元の標準見積の版の 0 円の行と突き合わせる（DB の assert_quote_draft_lines_resolved と同じ）
-  const [parentRead, baselineRead, optionsRead] = await Promise.all([
+  const [parentRead, baselineRead] = await Promise.all([
     parent
       ? supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
       : Promise.resolve({ data: [], error: null }),
@@ -70,9 +70,15 @@ export default async function StandardQuoteDraftPage({
           .select('section_code, name, group_label, remark, price_mode, cost_unit_price, unit_price')
           .eq('revision_id', draft.standard_estimate_revision_id)
       : Promise.resolve({ data: [], error: null }),
-    // 明細が指す商品の別途見積の設定・台帳の価格（DB の判定と同じく、販売停止・非公開の商品も含む）
-    supabase.from('options').select('id, price, price_on_request'),
   ]);
+  // 前の版の明細が指す商品の別途見積の設定・台帳の価格（DB の判定と同じく、販売停止・非公開の商品も含む）。
+  // 件数の上限で取りこぼさないよう、明細が指す商品だけを読む
+  const parentOptionIds = [
+    ...new Set(((parentRead.data ?? []) as { option_id?: string | null }[]).map((row) => row.option_id).filter((value): value is string => Boolean(value))),
+  ];
+  const optionsRead = parentOptionIds.length
+    ? await supabase.from('options').select('id, price, price_on_request').in('id', parentOptionIds)
+    : { data: [], error: null };
   const parentReadFailed = Boolean(parentRead.error || baselineRead.error || optionsRead.error);
   const optionFlags = quoteOptionFlagMap(
     ((optionsRead.data ?? []) as { id: string; price: number; price_on_request: boolean }[]).map((option) => ({

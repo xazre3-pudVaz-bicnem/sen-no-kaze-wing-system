@@ -225,6 +225,8 @@ describe('画面・データ層のつなぎ', () => {
     expect(standardDraftPage).toContain('.filter((row) => Object.hasOwn(baselineKind, row.section_code))');
     // 明細が指す商品の別途見積の設定も渡す（DB の判定と同じ）
     expect(standardDraftPage).toContain('options: optionFlags,');
+    // 件数の上限で取りこぼさないよう、前の版の明細が指す商品だけを読む
+    expect(standardDraftPage).toContain(".in('id', parentOptionIds)");
   });
 
   it('承諾済みの概算から確定見積を作る画面も、確認を記録してから発行する（施工以外の未確定の行は直せないと示す）', () => {

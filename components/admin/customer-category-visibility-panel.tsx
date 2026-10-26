@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveCategoryAction } from '@/lib/actions/admin';
@@ -8,7 +9,7 @@ import type { OptionCategory } from '@/lib/domain/types';
 
 type VisibilityFilter = 'all' | 'visible' | 'hidden';
 
-export function CustomerCategoryVisibilityPanel({ categories }: { categories: OptionCategory[] }) {
+export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId }: { categories: OptionCategory[]; editingCategoryId?: string | null }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<VisibilityFilter>('all');
@@ -110,7 +111,7 @@ export function CustomerCategoryVisibilityPanel({ categories }: { categories: Op
           {notice.text}
         </p>
       )}
-      <div className="max-h-[30rem] divide-y divide-line overflow-y-auto rounded-lg border border-line">
+      <div className="max-h-[32rem] divide-y divide-line overflow-y-auto rounded-lg border border-line">
         {filtered.map((category) => (
           <div key={category.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
             <div className="min-w-0">
@@ -121,7 +122,7 @@ export function CustomerCategoryVisibilityPanel({ categories }: { categories: Op
                 {category.is_required ? ' / 必須カテゴリー' : ''}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -140,6 +141,15 @@ export function CustomerCategoryVisibilityPanel({ categories }: { categories: Op
               >
                 {savingId === category.id ? '保存中…' : '保存'}
               </button>
+              <Link
+                href={'/admin/categories?edit=' + encodeURIComponent(category.id) + '#category-editor'}
+                aria-current={editingCategoryId === category.id ? 'true' : undefined}
+                className={editingCategoryId === category.id
+                  ? 'rounded-md border border-ink bg-sand px-3 py-1 text-sm font-medium text-ink'
+                  : 'rounded-md border border-line px-3 py-1 text-sm font-medium text-ink-soft hover:bg-sand'}
+              >
+                詳細編集
+              </Link>
             </div>
           </div>
         ))}

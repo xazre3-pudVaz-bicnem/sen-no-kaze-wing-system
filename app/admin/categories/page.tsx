@@ -19,7 +19,7 @@ export default async function AdminCategoriesPage({ searchParams }: { searchPara
   return (
     <AdminPage
       title="カテゴリー・お客様表示設定"
-      lead="お客様向けシミュレーターの表示を一覧で管理します。詳細項目は編集するカテゴリーを選んだときだけ開きます。"
+      lead="お客様向けシミュレーターの表示を一覧で管理します。詳細項目は編集するカテゴリーを選んだときだけ開きます。防火仕様は商品カテゴリーではなく、標準見積・本体仕様の条件として管理します。"
       actions={<Link href="/admin/ledger" className="btn-secondary btn-sm">← 商品台帳に戻る</Link>}
     >
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">

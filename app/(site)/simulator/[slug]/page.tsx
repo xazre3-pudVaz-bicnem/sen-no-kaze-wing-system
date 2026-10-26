@@ -157,6 +157,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: `${model.name} 見積シミュレーター`, path: `/simulator/${model.slug}` }])} />
       <SimulatorCaseImagesProvider images={caseImages}>
         <SimulatorApp
+          key={c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new'}
           bundle={bundle}
           estimateTemplates={estimateTemplates}
           saleViews={saleViews}

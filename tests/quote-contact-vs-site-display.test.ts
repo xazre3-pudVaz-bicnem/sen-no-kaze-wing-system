@@ -11,7 +11,7 @@ const pdf = read('lib/pdf/quote-pdf.tsx');
 describe('連絡先住所と設置予定地の区別（見積依頼・発行後）', () => {
   it('見積依頼の連絡先住所は設置予定地とは別の入力で、既存の項目名を変えない', () => {
     expect(requestForm).toContain('label="お客様のご住所（連絡先）"');
-    expect(requestForm).toContain('Wingの設置予定地とは異なる住所でも構いません。');
+    expect(requestForm).toContain('設置予定地とは異なる住所でも構いません。');
     expect(requestForm).toContain('name="address" defaultValue={v.address}');
     expect(requestForm).toContain('name="site_address" defaultValue={v.site_address}');
     expect(requestForm).toContain('selectedSiteAreaLabel');

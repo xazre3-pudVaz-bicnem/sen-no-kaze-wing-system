@@ -447,6 +447,8 @@ interface OptionFormProps {
   conflicts: OptionConflict[];
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
+  /** 新しい下書きへ引き継ぐ表示情報。ID・画像・選択肢・履歴は引き継がない。 */
+  duplicateSource?: ProductOption | null;
   /** 必要に応じて商品情報の一部だけを編集するための表示モード */
   mode?: 'all' | 'product' | 'create' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
@@ -461,6 +463,7 @@ export function OptionForm({
   dependencies,
   conflicts,
   defaultCategoryId,
+  duplicateSource,
   mode = 'all',
   returnTo,
 }: OptionFormProps) {
@@ -479,12 +482,14 @@ export function OptionForm({
   const others = allOptions.filter((o) => o.id !== option?.id);
   const depMap = new Map(dependencies.map((d) => [d.requires_option_id, d]));
   const confMap = new Map(conflicts.map((c) => [c.conflicts_with_option_id, c]));
-  const initialCategoryId = option?.category_id ?? defaultCategoryId ?? '';
+  // 複製元は初期値にのみ使う。option は null のままなので既存商品の ID を保存しない。
+  const copySource = mode === 'create' && !option ? duplicateSource : null;
+  const initialCategoryId = option?.category_id ?? copySource?.category_id ?? defaultCategoryId ?? '';
   const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
-  const [manufacturerValue, setManufacturerValue] = useState(option?.manufacturer ?? '');
-  const [nameValue, setNameValue] = useState(option?.name ?? '');
-  const [modelNoValue, setModelNoValue] = useState(option?.model_no ?? '');
-  const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? '');
+  const [manufacturerValue, setManufacturerValue] = useState(option?.manufacturer ?? copySource?.manufacturer ?? '');
+  const [nameValue, setNameValue] = useState(option?.name ?? copySource?.name ?? '');
+  const [modelNoValue, setModelNoValue] = useState(option?.model_no ?? copySource?.model_no ?? '');
+  const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? copySource?.size_note ?? '');
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const categoryCode = selectedCategory?.code ?? '';
   const sizeMeta = productSizeMeta(categoryCode);
@@ -613,14 +618,21 @@ export function OptionForm({
 
   const createDefaults = mode === 'create' && !option ? (
     <>
-      <input type="hidden" name="base_model_id" value="" />
-      <input type="hidden" name="description" value="" />
-      <input type="hidden" name="highlight" value="" />
+      <input type="hidden" name="base_model_id" value={copySource?.base_model_id ?? ''} />
+      <input type="hidden" name="description" value={copySource?.description ?? ''} />
+      <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
+      {/* 画像・メーカー資料は複製元の Storage パスを流用せず、新商品で登録する。 */}
       <input type="hidden" name="image_url" value="" />
-      <input type="hidden" name="price" value="0" />
-      <input type="hidden" name="selection_type" value="radio" />
+      {copySource
+        ? <input type="hidden" name="price" value={copySource.price} />
+        : <input type="hidden" name="price" value="0" />}
+      {copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
+      {copySource
+        ? <input type="hidden" name="selection_type" value={copySource.selection_type} />
+        : <input type="hidden" name="selection_type" value="radio" />}
+      {copySource?.spec_codes.map((code) => <input key={code} type="hidden" name="spec_codes" value={code} />)}
       <input type="hidden" name="preview_key" value="" />
-      <input type="hidden" name="list_price" value="" />
+      <input type="hidden" name="list_price" value={copySource?.list_price ?? ''} />
       <input type="hidden" name="sort_order" value="0" />
       <input type="hidden" name="status" value="draft" />
     </>
@@ -671,7 +683,7 @@ export function OptionForm({
                 id={`manufacturer-${mode}`}
                 name="manufacturer"
                 list="option-manufacturer-suggestions"
-                defaultValue={option?.manufacturer ?? ''}
+                defaultValue={option?.manufacturer ?? copySource?.manufacturer ?? ''}
                 onChange={(event) => setManufacturerValue(event.target.value)}
                 placeholder="例：TOTO"
               />
@@ -684,7 +696,7 @@ export function OptionForm({
                 id={`name-${mode}`}
                 name="name"
                 list="option-product-name-suggestions"
-                defaultValue={option?.name}
+                defaultValue={option?.name ?? copySource?.name}
                 onChange={(event) => setNameValue(event.target.value)}
                 required
                 data-testid="option-name"
@@ -703,7 +715,7 @@ export function OptionForm({
                 id={`model_no-${mode}`}
                 name="model_no"
                 list="option-model-no-suggestions"
-                defaultValue={option?.model_no ?? ''}
+                defaultValue={option?.model_no ?? copySource?.model_no ?? ''}
                 onChange={(event) => setModelNoValue(event.target.value)}
                 placeholder="例：サザナ HTシリーズ / HTV1616"
               />

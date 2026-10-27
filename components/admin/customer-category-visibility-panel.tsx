@@ -114,7 +114,7 @@ export function CustomerCategoryVisibilityPanel({ categories, editingCategoryId 
           {notice.text}
         </p>
       )}
-      <div className="max-h-[36rem] overflow-y-auto rounded-lg border border-line">
+      <div className="rounded-lg border border-line">
         {grouped.map((group) => {
           const hasActiveEditor = group.categories.some((category) => category.id === editingCategoryId);
           const forceOpen = search.trim().length > 0 || filter !== 'all' || hasActiveEditor;

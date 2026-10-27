@@ -623,9 +623,13 @@ export function OptionForm({
       <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
       {/* 画像・メーカー資料は複製元の Storage パスを流用せず、新商品で登録する。 */}
       <input type="hidden" name="image_url" value="" />
-      <input type="hidden" name="price" value={copySource?.price ?? 0} />
+      {copySource
+        ? <input type="hidden" name="price" value={copySource.price} />
+        : <input type="hidden" name="price" value="0" />}
       {copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
-      <input type="hidden" name="selection_type" value={copySource?.selection_type ?? 'radio'} />
+      {copySource
+        ? <input type="hidden" name="selection_type" value={copySource.selection_type} />
+        : <input type="hidden" name="selection_type" value="radio" />}
       {copySource?.spec_codes.map((code) => <input key={code} type="hidden" name="spec_codes" value={code} />)}
       <input type="hidden" name="preview_key" value="" />
       <input type="hidden" name="list_price" value={copySource?.list_price ?? ''} />

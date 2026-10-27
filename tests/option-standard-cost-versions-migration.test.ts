@@ -148,7 +148,10 @@ describe('v2.5 PR-A1：標準原価の Version', () => {
     expect(card).toContain('data-testid="option-hq-standard-cost-version"');
     expect(card).toContain('過去の版は書き換えません');
     expect(card).not.toContain(' ／ version ');
-    expect((optionPage.match(/versions=\{hqCostAccess\.versions\}/g) ?? []).length).toBe(2);
+    // カードを出す場所（登録済みの編集・閲覧だけ・下書きの登録）のすべてで、Version の一覧を渡す
+    const cardUses = (optionPage.match(/<OptionHqStandardCostCard\b/g) ?? []).length;
+    expect(cardUses).toBeGreaterThan(0);
+    expect((optionPage.match(/versions=\{hqCostAccess\.versions\}/g) ?? []).length).toBe(cardUses);
   });
 
   it('実 DB の検査（1 接続・2 接続の競合）を check.mjs に登録し、1 接続の検査は rollback する', () => {

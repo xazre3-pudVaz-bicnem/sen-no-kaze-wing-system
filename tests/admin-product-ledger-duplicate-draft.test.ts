@@ -40,7 +40,10 @@ describe('商品台帳：元商品を維持した下書き複製', () => {
   it('説明・表示用価格・対象モデルを引き継ぎ、選択肢と関係設定はコピーしない', () => {
     expect(form).toContain('name="description" value={copySource?.description ?? \'\'}');
     expect(form).toContain('name="highlight" value={copySource?.highlight ?? \'\'}');
-    expect(form).toContain('name="price" value={copySource?.price ?? 0}');
+    expect(form).toContain('name="price" value={copySource.price}');
+    expect(form).toContain('name="price" value="0"');
+    expect(form).toContain('name="selection_type" value={copySource.selection_type}');
+    expect(form).toContain('name="selection_type" value="radio"');
     expect(form).toContain('name="list_price" value={copySource?.list_price ?? \'\'}');
     expect(form).toContain('name="base_model_id" value={copySource?.base_model_id ?? \'\'}');
     expect(form).toContain('copySource?.spec_codes.map');

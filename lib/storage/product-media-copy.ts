@@ -20,6 +20,7 @@ function safePath(encoded: string): string | null {
         part === '..' ||
         part.includes('/') ||
         part.includes('\\') ||
+        part.includes('%') ||
         /[\x00-\x1f]/.test(part)
       )
     ) return null;

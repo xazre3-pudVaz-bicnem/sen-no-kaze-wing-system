@@ -204,6 +204,38 @@ export async function setCaseManufacturerAction(formData: FormData): Promise<voi
   redirect(`/admin/quotes/${quoteId}?tab=site&done=manufacturer`);
 }
 
+// ---------- 営業担当組織・製造担当組織（本部だけ。20261016130000） ----------
+
+export async function setCaseSalesOrganizationAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const store = await getCaseFlowStore();
+    await store.setCaseSalesOrganization(user, requestId, optionalUuid(formData, 'organization_id'));
+    await flushNotificationsSafely();
+    revalidateCase(quoteId, requestId);
+  } catch (e) {
+    redirect(`/admin/quotes/${quoteId}?tab=site&error=${encodeURIComponent(errorMessage(e))}`);
+  }
+  redirect(`/admin/quotes/${quoteId}?tab=site&done=sales`);
+}
+
+export async function setCaseManufacturingOrganizationAction(formData: FormData): Promise<void> {
+  const user = await actor('/admin/quotes');
+  const quoteId = text(formData, 'quote_id');
+  try {
+    const requestId = uuid(formData, 'request_id');
+    const store = await getCaseFlowStore();
+    await store.setCaseManufacturingOrganization(user, requestId, optionalUuid(formData, 'organization_id'));
+    await flushNotificationsSafely();
+    revalidateCase(quoteId, requestId);
+  } catch (e) {
+    redirect(`/admin/quotes/${quoteId}?tab=site&error=${encodeURIComponent(errorMessage(e))}`);
+  }
+  redirect(`/admin/quotes/${quoteId}?tab=site&done=manufacturing`);
+}
+
 // ---------- 日程 ----------
 
 export async function proposeAppointmentAction(_prev: CaseFlowActionState, formData: FormData): Promise<CaseFlowActionState> {

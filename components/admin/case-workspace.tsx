@@ -199,7 +199,12 @@ export async function CaseWorkspace({
   const isAdmin = actor.role === 'admin';
   const canViewAllQuotes = isAdmin;
   const canEditBase = canEditCatalog(actor.role);
-  if (!canViewAllQuotes && quote.dealer_id !== actor.id) notFound();
+  // 営業担当組織の管理者は、自社の案件を見られる（編集は主担当者と本部だけ。20261016130000）
+  const isSalesManagerView =
+    !canViewAllQuotes &&
+    quote.dealer_id !== actor.id &&
+    (await (await getCaseFlowStore()).getCaseRole(actor, quote.quote_request_id)) === 'manager';
+  if (!canViewAllQuotes && quote.dealer_id !== actor.id && !isSalesManagerView) notFound();
 
   const canUseLegacyRevision =
     quote.configuration_id !== null &&

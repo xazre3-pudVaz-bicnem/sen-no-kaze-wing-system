@@ -88,6 +88,8 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
   const reportKinds: ProgressKind[] = access === 'manufacturer' ? MANUFACTURER_PROGRESS_KINDS : ['progress', 'completion', 'inspection', 'support'];
   const back = `/admin/quotes/${quoteId}?tab=production`;
   const progressFiles = files.filter((file) => file.context === 'progress');
+  // 送り先：組織の案件は製造担当組織、これまでの案件は本部が選んだ総代理店の利用者
+  const hasManufacturer = Boolean(workflow?.manufacturing_organization_id || workflow?.manufacturer_id);
 
   return (
     <div className="mt-2 space-y-2" id="case-flow-production">
@@ -152,10 +154,10 @@ export async function CaseProductionPanels({ quoteId, actor, flash }: { quoteId:
                   <input type="hidden" name="request_id" value={requestId} />
                   <input type="hidden" name="order_id" value={order.id} />
                   <input type="hidden" name="expected_lock_version" value={order.lock_version} />
-                  <button type="submit" className="btn-primary btn-sm" disabled={!workflow?.manufacturer_id}>
+                  <button type="submit" className="btn-primary btn-sm" disabled={!hasManufacturer}>
                     総代理店へ製造依頼を送る
                   </button>
-                  {!workflow?.manufacturer_id && <p className="mt-1 text-[0.65rem] text-muted">先に本部が「現地確認」タブで技術検討・製造の担当を決めてください。</p>}
+                  {!hasManufacturer && <p className="mt-1 text-[0.65rem] text-muted">先に本部が「現地確認」タブの「受付・担当」で製造担当（総代理店）を決めてください。</p>}
                 </form>
               )}
               {ORDER_NEXT.filter((step) => canChangeOrderStatus(access, order.status, step.to)).map((step) => (

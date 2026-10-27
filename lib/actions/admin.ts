@@ -349,10 +349,19 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   }
   if (createdId) {
     const returnTo = safeAdminReturnTo(formData.get('return_to'));
-    const params = new URLSearchParams({ step: 'info', created: '1' });
-    if (returnTo) params.set('return_to', returnTo);
-    if (copySkipped.length) params.set('copy_missing', copySkipped.join(','));
-    redirect('/admin/options/' + createdId + '?' + params.toString());
+    if (returnTo) {
+      const params = new URLSearchParams({
+        step: 'info',
+        created: '1',
+        return_to: returnTo,
+      });
+      if (copySkipped.length) params.set('copy_missing', copySkipped.join(','));
+      redirect('/admin/options/' + createdId + '?' + params.toString());
+    }
+    if (copySkipped.length) {
+      redirect('/admin/options/' + createdId + '?step=info&created=1&copy_missing=' + encodeURIComponent(copySkipped.join(',')));
+    }
+    redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
   return { ok: true, message: '保存しました', savedImageUrl: image_url };
 }

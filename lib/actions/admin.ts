@@ -37,6 +37,7 @@ import { withPlanDisplaySize } from '@/lib/domain/plan-display';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
 import {
   canEditCostField,
+  COST_ACCESS_ERROR_MESSAGE,
   costRecordingNotice,
   getCostRecordingAccess,
   recordPublishedChoiceCosts,
@@ -227,6 +228,8 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部だけが金額・別途見積の欄を変えられる。
   // それ以外の担当者の保存では、今の金額をそのまま保つ（画面にも欄を出さない）。フリー商品は従来どおり
   const costAccess = catalogEditor ? await getCostRecordingAccess() : { available: false, canManage: false };
+  // 権限を確認できないときは保存しない（本部の入力を、本部以外の保存として黙って捨てない）
+  if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
   let keepExistingPrice = false;
   if (catalogEditor && !canEditCostField(costAccess)) {
     const categories = await store.listCategories();
@@ -325,7 +328,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     if (!parsed.data.id) createdId = o.id;
     // 登録済みの商品は、本部が保存した金額を商品標準原価の Version に記録する（下書きは登録のときに記録する）
     if (o.status === 'published' && costAccess.available && costAccess.canManage) {
-      costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save'));
+      costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));
     }
   } catch (e) {
     return errState(e);
@@ -372,6 +375,17 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     );
   }
 
+  const costAccess = canEditCatalog(actor.role) ? await getCostRecordingAccess() : { available: false, canManage: false };
+  if (costAccess.error) redirect(previewUrl({ error: COST_ACCESS_ERROR_MESSAGE }));
+  if (
+    option.status !== 'published' &&
+    requiresZeroPriceConfirmation(option) &&
+    costAccess.available &&
+    !costAccess.canManage
+  ) {
+    redirect(previewUrl({ error: '商品標準原価が未登録です。本部が原価を登録してから登録（公開）します。' }));
+  }
+
   if (
     option.status !== 'published' &&
     requiresZeroPriceConfirmation(option) &&
@@ -403,8 +417,9 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
     // 本部の登録なら、確認した金額（確認済みの 0 円を含む）を原価の Version に記録する。失敗しても登録は済んでいる
-    const costResult = await recordPublishedOptionCost(optionId, 'publish');
-    const choiceResult = costResult.status === 'error' ? costResult : await recordPublishedChoiceCosts(optionId, 'publishChoice');
+    const costResult = await recordPublishedOptionCost(optionId, 'publish', costAccess);
+    const choiceResult =
+      costResult.status === 'error' ? costResult : await recordPublishedChoiceCosts(optionId, 'publishChoice', undefined, costAccess);
     costWarning = costRecordingNotice(costResult) ?? costRecordingNotice(choiceResult);
   }
 
@@ -523,6 +538,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     if (id && !existing) return { ok: false, error: '選択肢が見つかりません。' };
     // 原価差額（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部だけが金額・別途見積の欄を変えられる
     const costAccess = await getCostRecordingAccess();
+    if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
     const keepExistingPrice = !canEditCostField(costAccess);
 
     const file = formData.get('image_file');
@@ -609,7 +625,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     // 登録済みの商品なら、本部が保存した原価差額（0 円を含む）を Version に記録する
     const costNotice =
       option.status === 'published' && costAccess.available && costAccess.canManage
-        ? costRecordingNotice(await recordPublishedChoiceCosts(optionId, 'choice', [choiceId]))
+        ? costRecordingNotice(await recordPublishedChoiceCosts(optionId, 'choice', [choiceId], costAccess))
         : null;
     const savedMessage = parsed.data.id ? '選択肢を更新しました。' : '選択肢を追加しました。';
     return { ok: true, message: costNotice ? `${savedMessage}${costNotice}` : savedMessage };
@@ -1099,6 +1115,11 @@ function parseImportImages(value: FormDataEntryValue | null): ImportImageMetadat
 export async function importCatalogAction(_prev: ImportState, formData: FormData): Promise<ImportState> {
   const actor = await requireCatalogEditor();
   const apply = formData.get('mode') === 'apply';
+  const costAccess = await getCostRecordingAccess();
+  if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  if (costAccess.available && !costAccess.canManage) {
+    return { ok: false, error: '商品標準原価を含む一括登録は、本部だけが行えます。' };
+  }
 
   const sheetFile = formData.get('sheet');
   if (!(sheetFile instanceof File) || sheetFile.size === 0) {
@@ -1592,6 +1613,11 @@ export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: F
 /** 本体内訳マスターの一括管理表：オプション価格の一括保存（総代理店以上） */
 export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
+  const costAccess = await getCostRecordingAccess();
+  if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  if (costAccess.available && !costAccess.canManage) {
+    return { ok: false, error: '商品標準原価の一括更新は、本部だけが行えます。' };
+  }
   const rows: { id: string; price: FormDataEntryValue }[] = [];
   for (const [key, value] of formData.entries()) {
     const m = key.match(/^prices\.([0-9a-f-]{36})$/);

@@ -244,10 +244,13 @@ function VariantCreatePortal({
   target,
   optionId,
   categoryLabel,
+  canEditCost,
 }: {
   target: HTMLElement;
   optionId: string;
   categoryLabel: string;
+  /** 原価差額の欄を出す（原価の Version の仕組みがある間は本部だけ。v2.5 PR-A3） */
+  canEditCost: boolean;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -444,7 +447,7 @@ function VariantCreatePortal({
             </div>
 
             <div className="space-y-2" data-testid="compact-variant-choices">
-              <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択・追加金額は税別円）</span></p>
+              <p className="text-sm font-semibold">選択肢 <span className="text-red-700">必須</span> <span className="font-normal text-muted">（標準を1つ選択・原価差額は税別円）</span></p>
 
               <div className="space-y-1.5">
                 {choiceNames.map((value, index) => {
@@ -479,9 +482,10 @@ function VariantCreatePortal({
                           autoComplete="off"
                           required={isStandard}
                         />
+                        {canEditCost && (
                         <div className="w-36 shrink-0">
                           <label htmlFor={`registration-choice-price-${rowId}`} className="block text-xs font-semibold text-ink-soft">
-                            追加金額（税別・円）
+                            原価差額（税別・円）
                           </label>
                           <Input
                             id={`registration-choice-price-${rowId}`}
@@ -494,9 +498,10 @@ function VariantCreatePortal({
                             value={choicePrices[rowId] ?? '0'}
                             onChange={(event) => setChoicePrices((prices) => ({ ...prices, [rowId]: event.target.value }))}
                             disabled={pending}
-                            aria-label={`選択肢${index + 1}の追加金額（税別・円）`}
+                            aria-label={`選択肢${index + 1}の原価差額（税別・円）`}
                           />
                         </div>
+                        )}
                         <SuggestionButtons
                           title="選択肢の候補"
                           values={suggestions.choices}
@@ -563,7 +568,7 @@ function VariantCreatePortal({
                 >
                   ＋ 選択肢を追加
                 </button>
-                <p className="text-xs text-muted">追加金額がない選択肢は0円です。金額は選択肢名に書かず、右の入力欄へ入れてください。</p>
+                <p className="text-xs text-muted">標準と同じ選択肢は0円です。金額は選択肢名に書かず、右の入力欄へ入れてください。</p>
                 {(state.fieldErrors?.first_choice_name || state.fieldErrors?.additional_choice_name) && (
                   <p className="text-xs text-danger">
                     {[...(state.fieldErrors.first_choice_name ?? []), ...(state.fieldErrors.additional_choice_name ?? [])].join(' / ')}
@@ -593,6 +598,7 @@ export function ProductRegistrationFinalRefinements() {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [optionId, setOptionId] = useState('');
   const [categoryLabel, setCategoryLabel] = useState('');
+  const [canEditCost, setCanEditCost] = useState(true);
 
   useEffect(() => {
     let raf = 0;
@@ -621,6 +627,7 @@ export function ProductRegistrationFinalRefinements() {
         target.dataset.registrationCombinedCreate = 'true';
         setPortalTarget(target);
         setOptionId(optionInput.value);
+        setCanEditCost(target.closest<HTMLElement>('#customer-selection')?.dataset.canEditCost !== 'false');
         setCategoryLabel(categorySelect?.selectedOptions[0]?.textContent?.trim() ?? '');
       });
     };
@@ -647,6 +654,7 @@ export function ProductRegistrationFinalRefinements() {
       target={portalTarget}
       optionId={optionId}
       categoryLabel={categoryLabel}
+      canEditCost={canEditCost}
     />
   );
 }

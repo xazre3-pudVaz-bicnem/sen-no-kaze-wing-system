@@ -7,7 +7,7 @@ vi.mock('@/lib/data/store', () => ({ isLocalMode: vi.fn(() => true) }));
 
 import { costImportChoiceState, costImportProductState } from '@/lib/data/option-cost-import';
 import { canEditCostField, costRecordingNotice } from '@/lib/data/option-cost-recording';
-import { seedOptions } from '@/lib/seed/catalog';
+import { withoutChoiceCost, withoutOptionCost } from '@/lib/domain/option-cost-access';
 
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8').replace(/\r\n/g, '\n');
 const migration = read('supabase/migrations/20261027100000_v25_initial_cost_import.sql');
@@ -43,16 +43,19 @@ describe('v2.5 PR-A3：既存の商品価格・追加金額の初期の原価 Ve
     expect(sqlOnly).toContain('s.product_cost + s.min_total < 0');
   });
 
-  it('画面の一覧の状態：別途見積・0 円は取り込まない、8 月の仮商品と取扱終了は初期値で選ばない', () => {
-    const seedId = seedOptions[0].id;
-    const realId = '00000000-0000-4000-8000-0000000a3001';
-    expect(costImportProductState({ id: realId, priceOnRequest: true, amount: 1000, currentAmount: null, archived: false })).toBe('por');
-    expect(costImportProductState({ id: realId, priceOnRequest: false, amount: 0, currentAmount: null, archived: false })).toBe('zero');
-    expect(costImportProductState({ id: realId, priceOnRequest: false, amount: null, currentAmount: null, archived: false })).toBe('zero');
-    expect(costImportProductState({ id: realId, priceOnRequest: false, amount: 5000, currentAmount: 5000, archived: false })).toBe('same');
-    expect(costImportProductState({ id: seedId, priceOnRequest: false, amount: 5000, currentAmount: null, archived: false })).toBe('seed');
-    expect(costImportProductState({ id: realId, priceOnRequest: false, amount: 5000, currentAmount: null, archived: true })).toBe('archived');
-    expect(costImportProductState({ id: realId, priceOnRequest: false, amount: 5000, currentAmount: 4000, archived: false })).toBe('import');
+  it('画面の一覧の状態：別途見積・0 円は取り込まない、メーカー・型番なし（8 月の仮商品を含む）と取扱終了は初期値で選ばない', () => {
+    const maker = { manufacturer: 'メーカー', modelNo: 'AB-123' };
+    expect(costImportProductState({ ...maker, priceOnRequest: true, amount: 1000, currentAmount: null, archived: false })).toBe('por');
+    expect(costImportProductState({ ...maker, priceOnRequest: false, amount: 0, currentAmount: null, archived: false })).toBe('zero');
+    expect(costImportProductState({ ...maker, priceOnRequest: false, amount: null, currentAmount: null, archived: false })).toBe('zero');
+    expect(costImportProductState({ ...maker, priceOnRequest: false, amount: 5000, currentAmount: 5000, archived: false })).toBe('same');
+    // 2026-10-13 の先方の決まり：メーカー・型番が入っていて商品が確定しているものだけ原価として扱う
+    expect(costImportProductState({ manufacturer: null, modelNo: null, priceOnRequest: false, amount: 5000, currentAmount: null, archived: false })).toBe('no_model');
+    expect(costImportProductState({ manufacturer: 'メーカー', modelNo: '  ', priceOnRequest: false, amount: 5000, currentAmount: null, archived: false })).toBe('no_model');
+    expect(costImportProductState({ ...maker, priceOnRequest: false, amount: 5000, currentAmount: null, archived: true })).toBe('archived');
+    expect(costImportProductState({ ...maker, priceOnRequest: false, amount: 5000, currentAmount: 4000, archived: false })).toBe('import');
+    // 初期投入専用のシード（lib/seed/catalog.ts）を本番の判定に使わない（CLAUDE.md）
+    expect(read('lib/data/option-cost-import.ts')).not.toContain('lib/seed/catalog');
     // 選択肢は 0 円も「標準と同じ（差額 0 円）」として取り込む。別途見積は取り込まない
     expect(costImportChoiceState({ priceOnRequest: false, amount: 0, currentAmount: null })).toBe('import');
     expect(costImportChoiceState({ priceOnRequest: false, amount: 0, currentAmount: 0 })).toBe('same');
@@ -78,6 +81,63 @@ describe('v2.5 PR-A3：既存の商品価格・追加金額の初期の原価 Ve
     expect(page).toContain('value={`option:${product.id}:${product.amount}`}');
     expect(page).toContain("defaultChecked={product.state === 'import'}");
     expect(read('app/admin/ledger/page.tsx')).toContain('costAccess.available && costAccess.canManage && <Link href="/admin/options/cost-import"');
+  });
+});
+
+describe('v2.5 PR-A3：独立レビューの指摘への対応', () => {
+  it('権限の確認に失敗したら、原価の欄は隠し、保存は止める（本部の入力を本部以外の保存として捨てない）', () => {
+    expect(canEditCostField({ available: true, canManage: false, error: true })).toBe(false);
+    const recording = read('lib/data/option-cost-recording.ts');
+    expect(recording).toContain('if (manage.error) return { available: true, canManage: false, error: true };');
+    const actions = read('lib/actions/admin.ts');
+    expect(actions.split('if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };').length - 1).toBeGreaterThanOrEqual(4);
+    expect(actions).toContain('if (costAccess.error) redirect(previewUrl({ error: COST_ACCESS_ERROR_MESSAGE }));');
+    expect(read('lib/actions/product-registration-variants.ts')).toContain('if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };');
+  });
+
+  it('原価を出さない担当者へ渡すデータからも金額を外す（台帳・商品画面・新しい商品の画面・お客様表示の確認）', () => {
+    expect(withoutOptionCost({ price: 120000, list_price: 98000 })).toEqual({ price: 0, list_price: 98000 });
+    expect(withoutChoiceCost({ extra_price: 8000, name: '大' })).toEqual({ extra_price: 0, name: '大' });
+    const ledger = read('app/admin/ledger/page.tsx');
+    expect(ledger).toContain('options={showCost ? catalogOptions : catalogOptions.map(withoutOptionCost)}');
+    expect(ledger).toContain('choices: variants.choices.map(withoutChoiceCost)');
+    const optionPage = read('app/admin/options/[id]/page.tsx');
+    expect(optionPage).toContain('const clientOption = canEditCost ? option : withoutOptionCost(option);');
+    expect(optionPage).toContain('option={clientOption}');
+    expect(optionPage).toContain('allOptions={clientOptions}');
+    expect(optionPage).toContain('choices={clientChoices}');
+    expect(optionPage).toContain('showPrice={canEditCost}');
+    expect(read('app/admin/options/new/page.tsx')).toContain('allOptions={canEditCostField(costAccess) ? options : options.map(withoutOptionCost)}');
+    expect(read('components/admin/option-customer-preview.tsx')).toContain("? '本部が登録します'");
+  });
+
+  it('本部以外は原価 0 円（未登録）の商品を登録（公開）しない。商品の一括登録・価格の一括更新は本部だけ', () => {
+    const actions = read('lib/actions/admin.ts');
+    expect(actions).toContain("redirect(previewUrl({ error: '商品標準原価が未登録です。本部が原価を登録してから登録（公開）します。' }));");
+    expect(actions).toContain("return { ok: false, error: '商品標準原価を含む一括登録は、本部だけが行えます。' };");
+    expect(actions).toContain("return { ok: false, error: '商品標準原価の一括更新は、本部だけが行えます。' };");
+  });
+
+  it('「選択項目を追加」のダイアログも同じ決まり（本部以外の追加は 0 円・本部の追加は登録済みなら Version を記録）', () => {
+    const action = read('lib/actions/product-registration-variants.ts');
+    expect(action).toContain('canEditCost ? parseChoiceExtraPrice(formData, index) : 0');
+    expect(action).toContain("recordPublishedChoiceCosts(option.id, 'choice', savedChoiceIds, costAccess)");
+    const dialog = read('components/admin/product-registration-final-refinements.tsx');
+    expect(dialog).toContain("setCanEditCost(target.closest<HTMLElement>('#customer-selection')?.dataset.canEditCost !== 'false');");
+    expect(dialog).toContain('{canEditCost && (');
+    expect(read('components/admin/option-variant-manager.tsx')).toContain("data-can-edit-cost={canEditCost ? 'true' : 'false'}");
+  });
+
+  it('登録の後の戻り先でも、原価の記録の失敗を知らせる（共通の通知）', () => {
+    expect(read('components/admin/ui.tsx')).toContain('{sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}');
+  });
+
+  it('取り込みは、途中の状態でも原価が 0 円未満にならない順に記録する（選択肢の上げ → 商品 → 選択肢の下げ）', () => {
+    expect(sqlOnly).toContain("when (e ->> 'amount')::integer >= coalesce(cur.cost_adjustment, 0) then 1");
+    expect(sqlOnly).toContain("when e ->> 'kind' = 'option' then 2");
+    expect(sqlOnly).toContain("order by 2, (e ->> 'id')::uuid");
+    // 一覧は件数の上限で黙って切れないよう、ページに分けて読む
+    expect(read('lib/data/option-cost-import.ts')).toContain('.range(from, to)');
   });
 });
 
@@ -107,9 +167,9 @@ describe('v2.5 PR-A3：商品登録 STEP1 の商品標準原価・原価差額',
 
   it('登録済みの商品だけ、本部の保存・登録で原価の Version を作る（下書きは登録のときに作る）', () => {
     expect(actions).toContain("if (o.status === 'published' && costAccess.available && costAccess.canManage) {");
-    expect(actions).toContain("costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save'));");
-    expect(actions).toContain("const costResult = await recordPublishedOptionCost(optionId, 'publish');");
-    expect(actions).toContain("await recordPublishedChoiceCosts(optionId, 'publishChoice')");
+    expect(actions).toContain("costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save', costAccess));");
+    expect(actions).toContain("const costResult = await recordPublishedOptionCost(optionId, 'publish', costAccess);");
+    expect(actions).toContain("await recordPublishedChoiceCosts(optionId, 'publishChoice', undefined, costAccess)");
     const recording = read('lib/data/option-cost-recording.ts');
     expect(recording).toContain("if (!option || option.status !== 'published' || option.price_on_request) return { status: 'skipped' };");
     // 下書きの 0 円は価格未確認。登録のときの確認済みの 0 円だけ記録する

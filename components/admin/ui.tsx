@@ -25,6 +25,8 @@ export function FlashMessages({ sp }: { sp: Record<string, string | undefined> }
       {sp.deleted && <Alert tone="success">削除しました。</Alert>}
       {sp.image_deleted && <Alert tone="success">画像を削除しました。</Alert>}
       {sp.error && <Alert tone="danger">{sp.error}</Alert>}
+      {/* 商品の登録で原価の Version の記録に失敗したとき（v2.5 PR-A3）。登録は済んでいる */}
+      {sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}
     </>
   );
 }

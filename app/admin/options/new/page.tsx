@@ -1,6 +1,7 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { Alert } from '@/components/ui';
@@ -126,12 +127,12 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
             option={null}
             categories={categories}
             models={models}
-            allOptions={options}
+            allOptions={canEditCostField(costAccess) ? options : options.map(withoutOptionCost)}
             dependencies={[]}
             conflicts={[]}
             defaultCategoryId={defaultCategoryId}
             mode="create"
-            duplicateSource={copySource}
+            duplicateSource={copySource && !canEditCostField(costAccess) ? withoutOptionCost(copySource) : copySource}
             returnTo={returnTo}
             canEditCost={canEditCostField(costAccess)}
           />

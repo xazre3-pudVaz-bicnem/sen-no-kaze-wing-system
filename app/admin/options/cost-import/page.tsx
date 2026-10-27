@@ -16,14 +16,14 @@ export const metadata: Metadata = { title: '原価 Version の取り込み | 管
 
 const STATE_LABEL: Record<CostImportProductState, string> = {
   import: '取り込む',
-  seed: '8月の仮商品',
+  no_model: 'メーカー・型番なし',
   archived: '取扱終了',
   same: '記録済み',
   zero: '0円・未設定',
   por: '別途見積',
 };
 
-const SELECTABLE: CostImportProductState[] = ['import', 'seed', 'archived'];
+const SELECTABLE: CostImportProductState[] = ['import', 'no_model', 'archived'];
 const DEFAULT_REASON = '既存の商品価格・追加金額を初期の原価 Version へ取り込み（2026-10-27 方針）';
 
 function yen(value: number | null) {
@@ -74,7 +74,9 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
         <Alert tone="warn">
           {candidates.reason === 'forbidden'
             ? '原価の取り込みは本部だけが行えます。'
-            : '原価 Version の DB 機能が未反映です（ローカル検証モード、または v2.5 の migration が未適用）。'}
+            : candidates.reason === 'error'
+              ? '原価の権限を確認できませんでした。時間をおいて開き直してください。'
+              : '原価 Version の DB 機能が未反映です（ローカル検証モード、または v2.5 の migration が未適用）。'}
         </Alert>
       </AdminPage>
     );
@@ -103,7 +105,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
           <li>今の商品価格・追加金額の値と列はそのまま残します（旧シミュレーターは今までどおり）。</li>
           <li>対象は登録済みの商品とその選択肢です。下書きの商品は、登録（公開）のときに記録します。</li>
           <li>0円・未設定と別途見積の商品は取り込みません（価格未確認の0円と区別できないため）。</li>
-          <li>8月の初期データの仮の商品と取扱終了の商品は、初期値では選んでいません。必要なものだけ選んでください。</li>
+          <li>メーカー・型番が未登録の商品（8月の初期データの「エアコン」など総称の仮の商品を含む）と取扱終了の商品は、初期値では選んでいません（2026-10-13 の「メーカー・型番が入っていて商品が確定しているものだけ原価として扱う」と同じ基準）。必要なものだけ選んでください。</li>
           <li>選択肢の0円は「標準と同じ（差額0円）」として取り込みます。別途見積の選択肢は取り込みません。</li>
           <li>この画面を開いた後に金額が変わった商品・選択肢があると、取り込みは止まります（何も記録しません）。開き直してから実行してください。</li>
         </ul>
@@ -112,7 +114,7 @@ export default async function OptionCostImportPage({ searchParams }: { searchPar
       <section className="card p-4 sm:p-5" data-testid="cost-import-summary">
         <h2 className="font-semibold">件数</h2>
         <dl className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-          {(['import', 'seed', 'archived', 'same', 'zero', 'por'] as CostImportProductState[]).map((state) => (
+          {(['import', 'no_model', 'archived', 'same', 'zero', 'por'] as CostImportProductState[]).map((state) => (
             <div key={state} className="rounded-lg border border-line px-3 py-2">
               <dt className="text-xs text-muted">{STATE_LABEL[state]}</dt>
               <dd className="font-semibold tabular-nums">{count(state)} 件</dd>
@@ -179,7 +181,7 @@ function ProductRows({ product }: { product: CostImportProduct }) {
         </td>
         <td className="px-2 py-2">
           <p className="font-semibold">{product.name}</p>
-          <p className="text-xs text-muted">{[product.productNo, product.categoryName].filter(Boolean).join(' ／ ')}</p>
+          <p className="text-xs text-muted">{[product.productNo, product.categoryName, product.maker ?? 'メーカー・型番 未登録'].filter(Boolean).join(' ／ ')}</p>
         </td>
         <td className="px-2 py-2 text-right tabular-nums">{product.state === 'por' ? '別途見積' : yen(product.amount)}</td>
         <td className="px-2 py-2 text-right tabular-nums">{yen(product.currentAmount)}</td>

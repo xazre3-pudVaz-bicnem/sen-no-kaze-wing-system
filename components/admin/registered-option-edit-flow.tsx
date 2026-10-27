@@ -402,10 +402,11 @@ export function RegisteredOptionEditFlow({
                     option={review.option}
                     groups={variantGroups}
                     choices={variantChoices}
+                    showPrice={showCostFields}
                   />
                 </div>
                 <p className="text-xs leading-5 text-muted">
-                  実際のお客様画面と同じ内容で表示しています。追加金額や「この内容に変更する」操作は、実際の選択内容によって変わるため、この確認画面では表示していません。
+                  実際のお客様画面と同じ内容で表示しています。選択肢ごとの金額や「この内容に変更する」操作は、実際の選択内容によって変わるため、この確認画面では表示していません。
                 </p>
               </>
             ) : (

@@ -31,7 +31,8 @@ vi.mock('@/lib/mail/send', () => ({ flushNotificationsSafely: vi.fn() }));
 // 原価の Version の記録（v2.5 PR-A3）は、このテストでは「仕組みが無い」扱い（従来どおりの保存）
 vi.mock('@/lib/data/option-cost-recording', () => ({
   getCostRecordingAccess: vi.fn(async () => ({ available: false, canManage: false })),
-  canEditCostField: (access: { available: boolean; canManage: boolean }) => !access.available || access.canManage,
+  canEditCostField: (access: { available: boolean; canManage: boolean; error?: boolean }) => !access.error && (!access.available || access.canManage),
+  COST_ACCESS_ERROR_MESSAGE: '原価の権限を確認できませんでした。',
   recordPublishedOptionCost: vi.fn(async () => ({ status: 'unavailable' })),
   recordPublishedChoiceCosts: vi.fn(async () => ({ status: 'unavailable' })),
   costRecordingNotice: () => null,

@@ -10,6 +10,15 @@ const stubs = vi.hoisted(() => ({
 vi.mock('@/lib/auth/session', () => ({
   requireCatalogEditor: vi.fn(async () => ({})),
 }));
+// 原価の Version の記録（v2.5 PR-A3）は、このテストでは「仕組みが無い」扱い（従来どおりの保存）
+vi.mock('@/lib/data/option-cost-recording', () => ({
+  getCostRecordingAccess: vi.fn(async () => ({ available: false, canManage: false })),
+  canEditCostField: (access: { available: boolean; canManage: boolean; error?: boolean }) => !access.error && (!access.available || access.canManage),
+  recordPublishedOptionCost: vi.fn(async () => ({ status: 'unavailable' })),
+  recordPublishedChoiceCosts: vi.fn(async () => ({ status: 'unavailable' })),
+  costRecordingNotice: () => null,
+  COST_ACCESS_ERROR_MESSAGE: '原価の権限を確認できませんでした。',
+}));
 vi.mock('@/lib/data/store', () => ({
   getStore: vi.fn(async () => stubs),
   StoreError: class StoreError extends Error {},

@@ -11,9 +11,11 @@ type Props = {
   option: ProductOption;
   groups: OptionVariantGroup[];
   choices: OptionVariantChoice[];
+  /** 価格（旧シミュレーターの表示＝商品標準原価）を出す。原価を出さない担当者には出さない（v2.5 PR-A3） */
+  showPrice?: boolean;
 };
 
-export function OptionCustomerPreview({ category, option, groups, choices }: Props) {
+export function OptionCustomerPreview({ category, option, groups, choices, showPrice = true }: Props) {
   const preview = useMemo(() => {
     const publishedGroups = groups.filter((group) => group.status === 'published');
     const publishedChoices = choices.filter((choice) => choice.status === 'published');
@@ -42,7 +44,9 @@ export function OptionCustomerPreview({ category, option, groups, choices }: Pro
   const configuredChoiceGroups = preview.groups.filter((group) =>
     preview.choices.some((choice) => choice.group_id === group.id)
   );
-  const registrationPriceDisplay = option.price_on_request
+  const registrationPriceDisplay = !showPrice
+    ? '本部が登録します'
+    : option.price_on_request
     ? '別途見積'
     : `${formatPriceWithUnit(option.price, option.price_unit)}（税別）`;
   const manufacturerPriceDisplay = option.list_price == null

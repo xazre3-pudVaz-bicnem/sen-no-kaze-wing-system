@@ -9,6 +9,8 @@ import type {
   CaseOrganizations,
   CaseRole,
   SupervisedCaseDetail,
+  ManufacturingCaseDetail,
+  ManufacturingCaseSummary,
   SupervisedCaseSummary,
   CaseAppointment,
   CaseAppointmentInput,
@@ -112,6 +114,9 @@ export interface CaseFlowStore {
   /** 総代理店の配下の確認（直属の総代理店の管理者と本部）。顧客情報を含まない（20261016140000） */
   listSupervisedCases(actor: SessionUser): Promise<SupervisedCaseSummary[]>;
   getSupervisedCase(actor: SessionUser, requestId: string): Promise<SupervisedCaseDetail | null>;
+  /** 製造担当の案件（製造担当組織のメンバー・これまでの案件の製造担当・本部。お客様の情報・見積の金額を含まない） */
+  listManufacturingCases(actor: SessionUser): Promise<ManufacturingCaseSummary[]>;
+  getManufacturingCase(actor: SessionUser, requestId: string): Promise<ManufacturingCaseDetail | null>;
   /** お客様にも見せてよい進み具合 */
   getCaseProgress(actor: SessionUser, requestId: string): Promise<CaseProgress | null>;
 

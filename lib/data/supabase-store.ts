@@ -1284,6 +1284,7 @@ export class SupabaseStore implements DataStore {
     const pdfUrl = createJob(source.manufacturer_document_url, 'product-documents', 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
     if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
 
+    if (!jobs.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
     const db = await this.db();
     const copied: Copy[] = [];
     let changedDb = false;

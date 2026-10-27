@@ -1,4 +1,5 @@
 import 'server-only';
+import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type {
@@ -78,6 +79,7 @@ import {
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
+import { managedPublicObjectPath, safeCloneExtension, type ProductMediaCopySummary } from '@/lib/storage/product-media-copy';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1232,6 +1234,100 @@ export class SupabaseStore implements DataStore {
       .eq('id', optionId);
     if (error) mapPgError(error);
   }
+  async copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<ProductMediaCopySummary> {
+    if (sourceId === newDraftId) throw new StoreError('VALIDATION', '同じ商品へ複製できません。');
+    const [source, target] = await Promise.all([this.getOption(sourceId), this.getOption(newDraftId)]);
+    if (!source || !target) throw new StoreError('NOT_FOUND', '複製元または複製先の商品が見つかりません。');
+    if (target.status !== 'draft' || target.image_url || target.manufacturer_document_url || target.gallery_images?.length) {
+      throw new StoreError('VALIDATION', '複製先はメディア未登録の新しい下書きである必要があります。');
+    }
+    const galleries = source.gallery_images ?? [];
+    if (galleries.length > 30) throw new StoreError('VALIDATION', '追加画像は30枚以下の商品だけ複製できます。');
+    const admin = createAdminClient();
+    const imageBucket = admin.storage.from('product-images');
+    const docBucket = admin.storage.from('product-documents');
+    const imageProbe = imageBucket.getPublicUrl('__clone_probe__').data.publicUrl;
+    const pdfProbe = docBucket.getPublicUrl('__clone_probe__').data.publicUrl;
+    type Bucket = 'product-images' | 'product-documents';
+    type Copy = { bucket: Bucket; from: string; to: string; url: string };
+    const jobs: Copy[] = [];
+    const skipped: string[] = [];
+    const createJob = (
+      url: string | null | undefined,
+      bucket: Bucket,
+      kind: 'image' | 'pdf',
+      destFolder: string,
+      sourcePrefix?: string
+    ): string | null => {
+      if (!url) return null;
+      const from = managedPublicObjectPath(url, bucket === 'product-images' ? imageProbe : pdfProbe);
+      if (!from || (sourcePrefix && (!from.startsWith(sourcePrefix) || from.slice(sourcePrefix.length).includes('/')))) return null;
+      const ext = safeCloneExtension(from, kind);
+      if (!ext) return null;
+      const to = `${destFolder}${randomUUID()}.${ext}`;
+      const fileBucket = bucket === 'product-images' ? imageBucket : docBucket;
+      jobs.push({ bucket, from, to, url: fileBucket.getPublicUrl(to).data.publicUrl });
+      return jobs[jobs.length - 1].url;
+    };
+
+    const mainUrl = createJob(source.image_url, 'product-images', 'image', `option-${newDraftId}/main/`);
+    if (source.image_url && !mainUrl) skipped.push('メイン画像');
+    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = [];
+    for (const image of galleries) {
+      const cloned = createJob(image.url, 'product-images', 'image', optionMediaPrefix(newDraftId, 'gallery'), optionMediaPrefix(sourceId, 'gallery'));
+      if (cloned) {
+        galleryRows.push({ option_id: newDraftId, url: cloned, alt: image.alt, caption: image.caption, sort_order: image.sort_order });
+      } else {
+        skipped.push('追加画像');
+      }
+    }
+    const pdfUrl = createJob(source.manufacturer_document_url, 'product-documents', 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
+    if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
+
+    const db = await this.db();
+    const copied: Copy[] = [];
+    let changedDb = false;
+    try {
+      for (const job of jobs) {
+        const bucket = job.bucket === 'product-images' ? imageBucket : docBucket;
+        const { error } = await bucket.copy(job.from, job.to);
+        if (error) throw new StoreError('INTERNAL', `商品メディアのコピーに失敗しました: ${error.message}`);
+        copied.push(job);
+      }
+      // 顧客画面へは draft の間は公開されない。現行DBの保存境界でコピー先のみ更新する。
+      const { data: updated, error: updateError } = await db.from('options')
+        .update({ image_url: mainUrl, manufacturer_document_url: pdfUrl })
+        .eq('id', newDraftId).eq('status', 'draft').select('id');
+      if (updateError) mapPgError(updateError);
+      if (updated?.length !== 1) throw new StoreError('LOCKED', '複製先の商品が更新されたためコピーを中止しました。');
+      changedDb = true;
+      if (galleryRows.length) {
+        const { error: galleryError } = await db.from('option_images').insert(galleryRows);
+        if (galleryError) mapPgError(galleryError);
+      }
+      return { copiedMain: Boolean(mainUrl), copiedGallery: galleryRows.length, copiedPdf: Boolean(pdfUrl), skipped };
+    } catch (error) {
+      // DB更新後に失敗した場合はリンクを先に解除し、成功した場合のみ新規ファイルを削除する。
+      let rollbackOk = true;
+      if (changedDb) {
+        const clearGallery = await db.from('option_images').delete().eq('option_id', newDraftId);
+        const clearOption = await db.from('options').update({ image_url: null, manufacturer_document_url: null }).eq('id', newDraftId).eq('status', 'draft');
+        rollbackOk = !clearGallery.error && !clearOption.error;
+      }
+      if (rollbackOk) {
+        for (const bucketName of ['product-images', 'product-documents'] as const) {
+          const paths = copied.filter((job) => job.bucket === bucketName).map((job) => job.to);
+          if (!paths.length) continue;
+          const { error: removeError } = await admin.storage.from(bucketName).remove(paths);
+          if (removeError) console.error('[wing] failed to clean copied option media', removeError);
+        }
+      } else {
+        console.error('[wing] copied media DB rollback failed; preserve new files for recovery', newDraftId);
+      }
+      throw error;
+    }
+  }
+
   async setOptionRelations(
     optionId: string,
     dependencies: { requires_option_id: string; message: string | null }[],

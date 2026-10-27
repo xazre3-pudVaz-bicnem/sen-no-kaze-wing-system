@@ -1103,6 +1103,58 @@ begin
 end;
 $$;
 
+-- #529（20261016111000）は、製造依頼の関数に「今回の契約対象外の行は製造仕様に写さない」1 行を足している。
+-- 上の create or replace でその 1 行が消えるため、判定の関数（#529）がある DB では同じ目印で足し直す。
+-- #529 が無い DB では何もしない（#529 を後から適用すると、#529 が同じ目印でこの関数に足す）。
+do $carry_excluded_line$
+declare
+  v_oid oid := to_regprocedure('public.send_manufacturing_order(uuid, integer)');
+  v_from constant text := E'        from public.quote_items qi where qi.quote_id = q.id\n';
+  v_to constant text := E'        from public.quote_items qi where qi.quote_id = q.id\n'
+    || E'         /* 今回の契約対象外の行は、契約した品目ではないので製造仕様に写さない（D1 までの暫定）。 */\n'
+    || E'         and public.quote_line_explicit_state(qi.remark) is distinct from ''excluded''\n';
+  v_definition text;
+  v_expected text;
+  v_before record;
+  v_after record;
+begin
+  if to_regprocedure('public.quote_line_explicit_state(text)') is null then
+    raise notice 'send_manufacturing_order: 20261016111000 is not applied; it adds the excluded-line guard itself';
+    return;
+  end if;
+  if v_oid is null then
+    raise exception 'CASE_SALES_ORGANIZATION: function public.send_manufacturing_order(uuid, integer) is missing' using errcode = 'P0001';
+  end if;
+  select p.proowner, p.prosecdef, p.proconfig, p.proacl::text as acl into v_before
+    from pg_catalog.pg_proc p
+   where p.oid = v_oid;
+  v_definition := pg_catalog.pg_get_functiondef(v_oid);
+  if strpos(v_definition, 'quote_line_explicit_state(') > 0 then
+    raise exception 'CASE_SALES_ORGANIZATION: public.send_manufacturing_order is already patched' using errcode = 'P0001';
+  end if;
+  if (length(v_definition) - length(replace(v_definition, v_from, ''))) / length(v_from) <> 1 then
+    raise exception 'CASE_SALES_ORGANIZATION: public.send_manufacturing_order anchor is not unique' using errcode = 'P0001';
+  end if;
+  v_expected := replace(v_definition, v_from, v_to);
+
+  execute v_expected;
+
+  select p.proowner, p.prosecdef, p.proconfig, p.proacl::text as acl into v_after
+    from pg_catalog.pg_proc p
+   where p.oid = v_oid;
+  if pg_catalog.pg_get_functiondef(v_oid) is distinct from v_expected then
+    raise exception 'CASE_SALES_ORGANIZATION: public.send_manufacturing_order was not replaced as expected' using errcode = 'P0001';
+  end if;
+  if v_after.proowner is distinct from v_before.proowner
+     or v_after.prosecdef is distinct from v_before.prosecdef
+     or v_after.proconfig is distinct from v_before.proconfig
+     or v_after.acl is distinct from v_before.acl then
+    raise exception 'CASE_SALES_ORGANIZATION: public.send_manufacturing_order owner / security definer / search_path / EXECUTE changed'
+      using errcode = 'P0001';
+  end if;
+end;
+$carry_excluded_line$;
+
 -- これまでの「総代理店の利用者を製造の担当にする」は、営業担当組織が無い案件だけで使う
 create or replace function public.set_case_manufacturer(p_request_id uuid, p_manufacturer_id uuid)
 returns void

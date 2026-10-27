@@ -649,6 +649,7 @@ export function OptionForm({
     >
       <input type="hidden" name="id" value={option?.id ?? ''} />
       <input type="hidden" name="owner_id" value={option?.owner_id ?? ''} />
+      {copySource && <input type="hidden" name="copy_from" value={copySource.id} />}
       {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
       {preserveIdentifyFields}
       {preserveDetailFields}

@@ -7,8 +7,6 @@ const GROUPED_SELECT_SUFFIX = '-grouped';
 const GROUP_LABEL_PATTERN = /^【([^】]+)】\s*(.+)$/;
 const TARGET_MODEL_MARKER = 'registrationTargetModel';
 const DRAFT_STATUS_MARKER = 'registrationDraftStatus';
-const HIGHLIGHT_COUNTER_MARKER = 'registrationHighlightCounter';
-const HIGHLIGHT_MAX_LENGTH = 80;
 
 function directGridChild(element: HTMLElement): HTMLElement | null {
   const grid = element.closest('.grid');
@@ -304,7 +302,7 @@ function enhanceProductImages() {
   if (emptyState) emptyState.style.display = 'none';
 
   const uploadLabel = document.querySelector<HTMLLabelElement>('label[for="option-sub-image"]');
-  if (uploadLabel) setTextIfChanged(uploadLabel, '追加画像');
+  if (uploadLabel) setTextIfChanged(uploadLabel, 'または画像ファイルから登録');
 
   Array.from(subImages.querySelectorAll<HTMLButtonElement>('button')).forEach((button) => {
     if (button.textContent?.trim() === 'このサブ画像を削除') {
@@ -360,30 +358,6 @@ function enhanceCustomerSelection() {
   });
 }
 
-function enhanceHighlightField() {
-  document.querySelectorAll<HTMLInputElement>('input[name="highlight"]').forEach((input) => {
-    input.maxLength = HIGHLIGHT_MAX_LENGTH;
-
-    const existingCounter = input.parentElement?.querySelector<HTMLElement>('[data-registration-highlight-count="true"]');
-    if (input.dataset[HIGHLIGHT_COUNTER_MARKER] === 'true') {
-      if (existingCounter) setTextIfChanged(existingCounter, `${input.value.length}/${HIGHLIGHT_MAX_LENGTH}文字`);
-      return;
-    }
-
-    const counter = existingCounter ?? document.createElement('p');
-    if (!existingCounter) {
-      counter.className = 'mt-1 text-right text-xs text-muted';
-      counter.dataset.registrationHighlightCount = 'true';
-      input.insertAdjacentElement('afterend', counter);
-    }
-
-    const updateCounter = () => setTextIfChanged(counter, `${input.value.length}/${HIGHLIGHT_MAX_LENGTH}文字`);
-    input.addEventListener('input', updateCounter);
-    input.dataset[HIGHLIGHT_COUNTER_MARKER] = 'true';
-    updateCounter();
-  });
-}
-
 function hideCreateSizeField() {
   const input = document.getElementById('size_note-create');
   if (!(input instanceof HTMLElement)) return;
@@ -407,7 +381,6 @@ export function OptionRegistrationUiEnhancer({
       simplifyRegistrationGuidance();
       enhanceProductImages();
       enhanceCustomerSelection();
-      enhanceHighlightField();
       if (hideCreateSize) hideCreateSizeField();
     };
 

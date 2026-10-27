@@ -18,6 +18,7 @@ const control = fs.readFileSync(
   path.resolve(process.cwd(), 'components/admin/published-option-delete-control.tsx'),
   'utf8'
 );
+const editPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/options/[id]/page.tsx'), 'utf8');
 const layout = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/layout.tsx'), 'utf8');
 const dbCheck = fs.readFileSync(path.resolve(process.cwd(), 'scripts/db-rehearsal/check.mjs'), 'utf8');
 const runtimeSql = fs.readFileSync(
@@ -188,7 +189,9 @@ describe('登録済み未使用商品の安全削除', () => {
   it('登録済み商品の削除UIは商品編集権限がある場合だけ有効化される', () => {
     expect(control).toContain('登録済み商品の削除（未使用のみ）');
     expect(control).toContain('この商品を削除');
-    expect(layout).toContain('<PublishedOptionDeleteControl enabled={canEditCatalog(user.role)} />');
+    expect(editPage).toContain('{catalogEditor && <PublishedOptionDeleteControl optionId={id} />}');
+    expect(control).not.toContain('createPortal');
+    expect(layout).not.toContain('<PublishedOptionDeleteControl');
   });
 
   it('DB Rehearsalで主要な使用済み経路・ACL・fail-closedを実動作確認する', () => {

@@ -17,15 +17,21 @@ const remoteMedia = fs.readFileSync(
 
 describe('商品登録のメディアURL取込', () => {
   it('追加画像をURLから登録できる導線を表示する', () => {
-    expect(mediaManager).toContain('または画像URLから登録');
+    expect(mediaManager).toContain('画像URLから登録');
     expect(mediaManager).toContain('addOptionImageFromUrlAction');
-    expect(mediaManager).toContain('URL先の画像を取得し、千の風側のストレージへ保存します。');
+    expect(mediaManager).toContain('画像は千の風側へ保存します。');
+  });
+
+  it('追加画像とPDFのURL取込ボタンを入力欄の下に表示する', () => {
+    expect(mediaManager).toMatch(/id="option-sub-image-url"[\s\S]*?className="w-full sm:w-auto"/);
+    expect(mediaManager).toMatch(/id="manufacturer-document-url"[\s\S]*?className="w-full sm:w-auto"/);
+    expect(mediaManager).not.toContain('flex flex-col gap-2 sm:flex-row');
   });
 
   it('メーカーPDFを直接URLから登録できる導線を表示する', () => {
-    expect(mediaManager).toContain('またはPDFのURLから登録');
+    expect(mediaManager).toContain("'PDFのURLから登録'");
     expect(mediaManager).toContain('uploadOptionManufacturerDocumentFromUrlAction');
-    expect(mediaManager).toContain('カタログ閲覧ページではなく、PDF本体のURLを入力してください。');
+    expect(mediaManager).toContain('PDF本体のURLを入力してください。閲覧ページのURLでは登録できません。');
   });
 
   it('取得した画像とPDFを既存の自社ストレージ保存処理へ渡す', () => {
@@ -42,5 +48,9 @@ describe('商品登録のメディアURL取込', () => {
     expect(remoteMedia).toContain('readWithLimit(response, maxBytes)');
     expect(remoteMedia).toContain("detected !== 'application/pdf'");
     expect(remoteMedia).toContain("!IMAGE_TYPES.has(detected)");
+    expect(remoteMedia).toContain('MAX_TRANSPORT_ATTEMPTS = 2');
+    expect(remoteMedia).toContain('if (attempt > 1) await validatePublicHost(current)');
+    expect(remoteMedia).toContain("console.warn('[remote-media] URL取込の通信エラー'");
+    expect(remoteMedia).toContain('ファイルをPCに保存して');
   });
 });

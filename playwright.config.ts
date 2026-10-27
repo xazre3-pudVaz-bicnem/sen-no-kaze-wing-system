@@ -3,6 +3,9 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 // Next dev は localhost 以外のオリジンからの /_next/* を 403 にするため localhost を使う
 const baseURL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
+// ローカル DB の初期化は、この実行の中で 1 回だけ（開発サーバーが途中で再起動しても消さない）。
+// 公開カタログのキャッシュも実行ごとに分ける（lib/data/local-reset.ts）。ワーカーは親の値を引き継ぐ
+const LOCAL_RESET_ID = (process.env.WING_LOCAL_RESET_ID ??= `${Date.now()}-${process.pid}`);
 
 export default defineConfig({
   testDir: './e2e',
@@ -28,6 +31,7 @@ export default defineConfig({
           WING_LOCAL_MODE: '1',
           WING_LOCAL_DIR: '.wing-local/e2e',
           WING_LOCAL_RESET: '1',
+          WING_LOCAL_RESET_ID: LOCAL_RESET_ID,
           WING_LOCAL_ADMIN_EMAILS: 'admin@example.com',
           WING_LOCAL_MASTER_DEALER_EMAILS: 'master@example.com',
           WING_LOCAL_DEALER_EMAILS: 'dealer@example.com',

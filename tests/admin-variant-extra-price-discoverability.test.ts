@@ -35,7 +35,7 @@ describe('お客様選択：選択肢ごとの追加金額入力の見える化'
   it('既存extra_price保存経路を維持し、Version の記録は DB の RPC に任せる', () => {
     expect(choices).toContain('useActionState(saveVariantChoiceAction, initial)');
     expect(action).toContain("formData.get('extra_price') || 0");
-    expect(action).toContain("recordPublishedChoiceCosts(optionId, 'choice', [choiceId])");
+    expect(action).toContain("recordPublishedChoiceCosts(optionId, 'choice', [choiceId], costAccess)");
     expect(action).toContain('extra_price: parsed.data.extra_price');
     expect(choices).not.toContain('extra_price_adjusted');
     expect(choices).not.toContain('saveOptionAction(');

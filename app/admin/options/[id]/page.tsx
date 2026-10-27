@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getOptionHqStandardCostAccess } from '@/lib/data/option-hq-standard-cost';
 import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { withoutChoiceCost, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
@@ -62,8 +63,12 @@ export default async function EditOptionPage({
     getOptionHqStandardCostAccess(id),
     getCostRecordingAccess(),
   ]);
-  // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3）
+  // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3）。
+  // 出さない担当者には、クライアントへ渡す商品・選択肢からも金額を外す（サーバーの判定は元の値で行う）
   const canEditCost = canEditCostField(costAccess);
+  const clientOption = canEditCost ? option : withoutOptionCost(option);
+  const clientOptions = canEditCost ? options : options.map(withoutOptionCost);
+  const clientChoices = canEditCost ? variants.choices : variants.choices.map(withoutChoiceCost);
   const category = categories.find((row) => row.id === option.category_id);
   const registrationCategories = category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE
     ? categories.filter((row) => row.code === LEGACY_FIRE_SPEC_CATEGORY_CODE)
@@ -117,19 +122,18 @@ export default async function EditOptionPage({
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
-        {sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}
         {canEditThisOption ? (
           <>
             <RegisteredOptionEditFlow
             key={option.updated_at}
-            option={option}
+            option={clientOption}
             canEditCost={canEditCost}
             categories={registrationDisplayCategories}
             models={models}
             dependencies={deps}
             conflicts={confs}
             variantGroups={variants.groups}
-            variantChoices={variants.choices}
+            variantChoices={clientChoices}
             returnTo={returnTo}
             duplicateCandidates={catalogEditor ? duplicateCandidates.slice(0, 3).map(({ option: candidate, reason }) => ({
               id: candidate.id,
@@ -261,10 +265,10 @@ export default async function EditOptionPage({
 
               <OptionForm
                 mode="all"
-                option={option}
+                option={clientOption}
                 categories={registrationDisplayCategories}
                 models={models}
-                allOptions={options}
+                allOptions={clientOptions}
                 dependencies={deps}
                 conflicts={confs}
                 returnTo={returnTo}
@@ -285,7 +289,7 @@ export default async function EditOptionPage({
 
               {catalogEditor && (
                 <div className="registration-customer-selection" style={{ order: 40 }}>
-                  <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} canEditCost={canEditCost} />
+                  <OptionVariantManager option={clientOption} groups={variants.groups} choices={clientChoices} canEditCost={canEditCost} />
                 </div>
               )}
 
@@ -394,9 +398,10 @@ export default async function EditOptionPage({
               <OptionCustomerPreview
                 key={option.id}
                 category={category}
-                option={option}
+                option={clientOption}
                 groups={variants.groups}
-                choices={variants.choices}
+                choices={clientChoices}
+                showPrice={canEditCost}
               />
             ) : (
               <div className="card p-5 text-sm text-danger">商品カテゴリーが見つからないため、お客様表示を確認できません。</div>

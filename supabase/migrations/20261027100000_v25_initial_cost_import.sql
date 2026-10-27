@@ -46,6 +46,7 @@ declare
   v_reason text := pg_catalog.btrim(coalesce(p_change_reason, ''));
   v_count integer;
   v_option_ids uuid[];
+  v_row record;
   v_item jsonb;
   v_id uuid;
   v_amount integer;
@@ -148,93 +149,107 @@ begin
       message = pg_catalog.format('VALIDATION: 「%s」は選択肢の原価差額を足すと 0 円未満になる組み合わせがあります。この商品を外して取り込んでください', v_choice.name);
   end if;
 
-  -- 商品の標準原価
-  for v_item in
-    select e from pg_catalog.jsonb_array_elements(p_items) e where e ->> 'kind' = 'option' order by (e ->> 'id')::uuid
+  -- 1 本の loop で、途中の状態でも原価が 0 円未満にならない順に記録する（既存の RPC は 1 件ごとに、その時点の版で確かめるため）
+  --   1. 選択肢の原価差額のうち、今の版より上がる・同じもの（版が無ければ 0 円と比べる）
+  --   2. 商品の標準原価
+  --   3. 選択肢の原価差額のうち、今の版より下がるもの
+  -- 最後の状態は上の事前の確認で 0 円以上と分かっているので、この順なら途中の状態も 0 円以上のまま
+  for v_row in
+    select e,
+           case
+             when e ->> 'kind' = 'option' then 2
+             when (e ->> 'amount')::integer >= coalesce(cur.cost_adjustment, 0) then 1
+             else 3
+           end as phase
+      from pg_catalog.jsonb_array_elements(p_items) e
+      left join public.option_variant_cost_versions cur
+        on e ->> 'kind' = 'choice'
+       and cur.variant_choice_id = (e ->> 'id')::uuid
+       and cur.superseded_at is null
+     order by 2, (e ->> 'id')::uuid
   loop
+    v_item := v_row.e;
     v_id := (v_item ->> 'id')::uuid;
     v_amount := (v_item ->> 'amount')::integer;
-    select * into v_option from public.options o where o.id = v_id;
-    if not found then
-      raise exception using errcode = 'P0002', message = 'NOT_FOUND: 一覧の商品が見つかりません。一覧を開き直してください';
-    end if;
-    if v_option.status <> 'published' then
-      raise exception using errcode = 'P0001',
-        message = pg_catalog.format('VALIDATION: 「%s」は登録済みではありません（下書きは登録のときに原価を記録します）', v_option.name);
-    end if;
-    if v_option.price_on_request then
-      raise exception using errcode = 'P0001', message = pg_catalog.format('VALIDATION: 「%s」は別途見積のため取り込みません', v_option.name);
-    end if;
-    if v_amount <= 0 then
-      raise exception using errcode = 'P0001', message = pg_catalog.format('VALIDATION: 「%s」は 0 円・未設定のため取り込みません', v_option.name);
-    end if;
-    if v_option.price is distinct from v_amount then
-      raise exception using errcode = 'P0001',
-        message = pg_catalog.format('CONFLICT: 「%s」の金額が確認した後に変わりました。一覧を開き直してください', v_option.name);
-    end if;
 
-    select v.id, v.standard_cost, v.version_no into v_current_id, v_current_amount, v_version
-      from public.option_standard_cost_versions v
-     where v.option_id = v_id and v.superseded_at is null;
-    if v_current_id is not null and v_current_amount = v_amount then
-      kind := 'option'; target_id := v_id; result := 'unchanged'; version_no := v_version;
+    if v_item ->> 'kind' = 'option' then
+      -- 商品の標準原価
+      select * into v_option from public.options o where o.id = v_id;
+      if not found then
+        raise exception using errcode = 'P0002', message = 'NOT_FOUND: 一覧の商品が見つかりません。一覧を開き直してください';
+      end if;
+      if v_option.status <> 'published' then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('VALIDATION: 「%s」は登録済みではありません（下書きは登録のときに原価を記録します）', v_option.name);
+      end if;
+      if v_option.price_on_request then
+        raise exception using errcode = 'P0001', message = pg_catalog.format('VALIDATION: 「%s」は別途見積のため取り込みません', v_option.name);
+      end if;
+      if v_amount <= 0 then
+        raise exception using errcode = 'P0001', message = pg_catalog.format('VALIDATION: 「%s」は 0 円・未設定のため取り込みません', v_option.name);
+      end if;
+      if v_option.price is distinct from v_amount then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('CONFLICT: 「%s」の金額が確認した後に変わりました。一覧を開き直してください', v_option.name);
+      end if;
+
+      select v.id, v.standard_cost, v.version_no into v_current_id, v_current_amount, v_version
+        from public.option_standard_cost_versions v
+       where v.option_id = v_id and v.superseded_at is null;
+      if v_current_id is not null and v_current_amount = v_amount then
+        kind := 'option'; target_id := v_id; result := 'unchanged'; version_no := v_version;
+        return next;
+        continue;
+      end if;
+
+      select c.lock_version into v_copy_lock from public.option_hq_standard_costs c where c.option_id = v_id;
+      perform 1 from public.set_option_hq_standard_cost(v_id, v_amount, coalesce(v_copy_lock, 0), v_reason);
+      select v.version_no into v_version
+        from public.option_standard_cost_versions v
+       where v.option_id = v_id and v.superseded_at is null;
+      kind := 'option'; target_id := v_id; result := 'imported'; version_no := v_version;
       return next;
-      continue;
-    end if;
+    else
+      -- 選択肢の原価差額
+      select vc.id, vc.name, vc.extra_price, vc.price_on_request, o.status, o.name as option_name
+        into v_choice
+        from public.option_variant_choices vc
+        join public.option_variant_groups vg on vg.id = vc.group_id
+        join public.options o on o.id = vg.option_id
+       where vc.id = v_id;
+      if not found then
+        raise exception using errcode = 'P0002', message = 'NOT_FOUND: 一覧の選択肢が見つかりません。一覧を開き直してください';
+      end if;
+      if v_choice.status <> 'published' then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('VALIDATION: 「%s」の選択肢は、商品が登録済みではないため取り込みません', v_choice.option_name);
+      end if;
+      if v_choice.price_on_request then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('VALIDATION: 「%s」の選択肢「%s」は別途見積のため取り込みません', v_choice.option_name, v_choice.name);
+      end if;
+      if v_choice.extra_price is distinct from v_amount then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('CONFLICT: 「%s」の選択肢「%s」の金額が確認した後に変わりました。一覧を開き直してください', v_choice.option_name, v_choice.name);
+      end if;
 
-    select c.lock_version into v_copy_lock from public.option_hq_standard_costs c where c.option_id = v_id;
-    perform 1 from public.set_option_hq_standard_cost(v_id, v_amount, coalesce(v_copy_lock, 0), v_reason);
-    select v.version_no into v_version
-      from public.option_standard_cost_versions v
-     where v.option_id = v_id and v.superseded_at is null;
-    kind := 'option'; target_id := v_id; result := 'imported'; version_no := v_version;
-    return next;
-  end loop;
+      v_current_id := null;
+      select v.id, v.cost_adjustment, v.version_no into v_current_id, v_current_amount, v_version
+        from public.option_variant_cost_versions v
+       where v.variant_choice_id = v_id and v.superseded_at is null;
+      if v_current_id is not null and v_current_amount = v_amount then
+        kind := 'choice'; target_id := v_id; result := 'unchanged'; version_no := v_version;
+        return next;
+        continue;
+      end if;
 
-  -- 選択肢の原価差額
-  for v_item in
-    select e from pg_catalog.jsonb_array_elements(p_items) e where e ->> 'kind' = 'choice' order by (e ->> 'id')::uuid
-  loop
-    v_id := (v_item ->> 'id')::uuid;
-    v_amount := (v_item ->> 'amount')::integer;
-    select vc.id, vc.name, vc.extra_price, vc.price_on_request, o.status, o.name as option_name
-      into v_choice
-      from public.option_variant_choices vc
-      join public.option_variant_groups vg on vg.id = vc.group_id
-      join public.options o on o.id = vg.option_id
-     where vc.id = v_id;
-    if not found then
-      raise exception using errcode = 'P0002', message = 'NOT_FOUND: 一覧の選択肢が見つかりません。一覧を開き直してください';
-    end if;
-    if v_choice.status <> 'published' then
-      raise exception using errcode = 'P0001',
-        message = pg_catalog.format('VALIDATION: 「%s」の選択肢は、商品が登録済みではないため取り込みません', v_choice.option_name);
-    end if;
-    if v_choice.price_on_request then
-      raise exception using errcode = 'P0001',
-        message = pg_catalog.format('VALIDATION: 「%s」の選択肢「%s」は別途見積のため取り込みません', v_choice.option_name, v_choice.name);
-    end if;
-    if v_choice.extra_price is distinct from v_amount then
-      raise exception using errcode = 'P0001',
-        message = pg_catalog.format('CONFLICT: 「%s」の選択肢「%s」の金額が確認した後に変わりました。一覧を開き直してください', v_choice.option_name, v_choice.name);
-    end if;
-
-    v_current_id := null;
-    select v.id, v.cost_adjustment, v.version_no into v_current_id, v_current_amount, v_version
-      from public.option_variant_cost_versions v
-     where v.variant_choice_id = v_id and v.superseded_at is null;
-    if v_current_id is not null and v_current_amount = v_amount then
-      kind := 'choice'; target_id := v_id; result := 'unchanged'; version_no := v_version;
+      perform 1 from public.set_option_variant_cost_adjustment(v_id, v_amount, v_current_id, v_reason);
+      select v.version_no into v_version
+        from public.option_variant_cost_versions v
+       where v.variant_choice_id = v_id and v.superseded_at is null;
+      kind := 'choice'; target_id := v_id; result := 'imported'; version_no := v_version;
       return next;
-      continue;
     end if;
-
-    perform 1 from public.set_option_variant_cost_adjustment(v_id, v_amount, v_current_id, v_reason);
-    select v.version_no into v_version
-      from public.option_variant_cost_versions v
-     where v.variant_choice_id = v_id and v.superseded_at is null;
-    kind := 'choice'; target_id := v_id; result := 'imported'; version_no := v_version;
-    return next;
   end loop;
 end;
 $$;

@@ -68,6 +68,10 @@ declare
   c_a1 constant uuid := '27000000-0000-4000-8000-000000000502';
   c_apor constant uuid := '27000000-0000-4000-8000-000000000503';
   c_neg constant uuid := '27000000-0000-4000-8000-000000000504';
+  -- 取り込みの順序の確認（今の版：商品 1,000 円・選択肢 -800 円 → 台帳の 500 円・0 円を取り込む）
+  opt_ord constant uuid := '27000000-0000-4000-8000-000000000306';
+  g_ord constant uuid := '27000000-0000-4000-8000-000000000403';
+  c_ord constant uuid := '27000000-0000-4000-8000-000000000505';
   v_items text;
   v_audit_before bigint;
 begin
@@ -102,17 +106,20 @@ begin
     (opt_draft, cat_id, 'runtime-ici-draft', '取り込み下書き', 50000, false, 'draft', 'PRD-927002'),
     (opt_por, cat_id, 'runtime-ici-por', '取り込み別途見積', 0, true, 'published', 'PRD-927003'),
     (opt_zero, cat_id, 'runtime-ici-zero', '取り込み0円', 0, false, 'published', 'PRD-927004'),
-    (opt_neg, cat_id, 'runtime-ici-neg', '取り込みマイナス', 1000, false, 'published', 'PRD-927005');
+    (opt_neg, cat_id, 'runtime-ici-neg', '取り込みマイナス', 1000, false, 'published', 'PRD-927005'),
+    (opt_ord, cat_id, 'runtime-ici-ord', '取り込みの順序', 1000, false, 'published', 'PRD-927006');
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
   values
     (g_a, opt_a, 'size', 'サイズ', 1, true, 'published'),
-    (g_neg, opt_neg, 'size', 'サイズ', 1, true, 'published');
+    (g_neg, opt_neg, 'size', 'サイズ', 1, true, 'published'),
+    (g_ord, opt_ord, 'size', 'サイズ', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, extra_price, price_on_request, status)
   values
     (c_a0, g_a, 'std', '標準', 0, false, 'published'),
     (c_a1, g_a, 'large', '大', 8000, false, 'published'),
     (c_apor, g_a, 'custom', '特注', 0, true, 'published'),
-    (c_neg, g_neg, 'small', '小', 0, false, 'published');
+    (c_neg, g_neg, 'small', '小', 0, false, 'published'),
+    (c_ord, g_ord, 'small', '小', 0, false, 'published');
   set local session_replication_role = origin;
 
   v_items := format(
@@ -198,6 +205,21 @@ begin
   perform pg_temp.ici_expect_eq('金額を変えた後の取り込みは第 2 版になり、第 1 版は閉じる', '125000/2/1',
     (select standard_cost::text || '/' || version_no::text from public.option_standard_cost_versions where option_id = opt_a and superseded_at is null)
     || '/' || (select count(*)::text from public.option_standard_cost_versions where option_id = opt_a and superseded_at is not null));
+
+  -- 取り込みの順序：今の版（商品 1,000 円・選択肢 -800 円）から、台帳の 500 円・0 円へ。最後は 500 円で 0 円以上。
+  -- 商品を先に記録すると、その時点では 500 + (-800) < 0 で既存の RPC に止められる → 選択肢の上げを先にする
+  perform pg_temp.ici_run_as('authenticated', u_owner, format('select changed::text from public.set_option_hq_standard_cost(%L, 1000, 0, %L)', opt_ord, '検査の準備'));
+  perform pg_temp.ici_run_as('authenticated', u_owner, format('select changed::text from public.set_option_variant_cost_adjustment(%L, -800, null, %L)', c_ord, '検査の準備'));
+  set local session_replication_role = replica;
+  update public.options set price = 500 where id = opt_ord;
+  set local session_replication_role = origin;
+  perform pg_temp.ici_expect_eq('選択肢の版を上げてから商品を下げる順なら、途中で止まらずに取り込める', 'imported:2',
+    pg_temp.ici_run_as('authenticated', u_owner, format(
+      'select string_agg(distinct result, '','') || '':'' || count(*)::text from public.import_option_standard_costs(%L::jsonb, %L)',
+      format('[{"kind":"option","id":"%s","amount":500},{"kind":"choice","id":"%s","amount":0}]', opt_ord, c_ord), '検査（順序）')));
+  perform pg_temp.ici_expect_eq('取り込んだ後の版：商品 500 円・選択肢 0 円', '500/0',
+    (select standard_cost::text from public.option_standard_cost_versions where option_id = opt_ord and superseded_at is null) || '/' ||
+    (select cost_adjustment::text from public.option_variant_cost_versions where variant_choice_id = c_ord and superseded_at is null));
 end;
 $test$;
 

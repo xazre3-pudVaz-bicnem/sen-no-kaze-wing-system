@@ -4,6 +4,7 @@ import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-o
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
 import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { withoutChoiceCost, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
 import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
@@ -25,17 +26,18 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
   const editor = canEditCatalog(actor.role);
-  const [options, categories, models, configurationUsageCounts, lifecycleCapability] = await Promise.all([
+  const [options, categories, models, configurationUsageCounts, lifecycleCapability, costAccess] = await Promise.all([
     store.listOptions(),
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
     store.getProductLifecycleCapability(),
+    getCostRecordingAccess(),
   ]);
   // 取扱終了・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す
   const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
-  // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、原価を本部だけに出す
-  const costAccess = await getCostRecordingAccess();
+  // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、原価を本部だけに出す（クライアントへ渡すデータからも外す）
+  const showCost = canEditCostField(costAccess);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const ledgerCategories = catalogCategories.map((category) => {
     const displayGroup = productRegistrationCategoryGroup(category.code);
@@ -129,12 +131,16 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       canEdit={editor}
       lifecycleEnabled={lifecycleEnabled}
       categories={ledgerCategories}
-      options={catalogOptions}
+      options={showCost ? catalogOptions : catalogOptions.map(withoutOptionCost)}
       models={models}
-      variantsByOptionId={Object.fromEntries(rows)}
+      variantsByOptionId={
+        showCost
+          ? Object.fromEntries(rows)
+          : Object.fromEntries(rows.map(([id, variants]) => [id, { ...variants, choices: variants.choices.map(withoutChoiceCost) }]))
+      }
       configurationUsageCounts={configurationUsageCounts}
       hqStandardCosts={hqStandardCosts}
-      showCost={canEditCostField(costAccess)}
+      showCost={showCost}
       initiallySelectedId={selected}
     />
   </AdminPage>;

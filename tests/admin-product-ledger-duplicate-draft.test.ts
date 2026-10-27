@@ -20,7 +20,7 @@ describe('商品台帳：元商品を維持した下書き複製', () => {
     expect(newPage).toContain("typeof sp.copy_from === 'string'");
     expect(newPage).toContain('options.find((option) => option.id === sp.copy_from && categories.some((category) => category.id === option.category_id))');
     expect(newPage).toContain('if (copyRequested && !copySource)');
-    expect(newPage).toContain('duplicateSource={copySource}');
+    expect(newPage).toContain('duplicateSource={copySource && !canEditCostField(costAccess) ? withoutOptionCost(copySource) : copySource}');
     expect(newPage).toContain('商品管理番号・選択肢・画像・メーカーPDF・原価Version');
   });
 

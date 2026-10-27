@@ -7,6 +7,13 @@ import { getStore, StoreError } from '@/lib/data/store';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { flattenErrors, variantChoiceSchema, variantGroupSchema, type FieldErrors } from '@/lib/validation';
 import { parseChoiceExtraPrice } from '@/lib/domain/product-variant-creation-prices';
+import {
+  canEditCostField,
+  COST_ACCESS_ERROR_MESSAGE,
+  costRecordingNotice,
+  getCostRecordingAccess,
+  recordPublishedChoiceCosts,
+} from '@/lib/data/option-cost-recording';
 
 export interface ProductVariantCreateState {
   ok: boolean;
@@ -55,6 +62,10 @@ export async function createVariantGroupWithFirstChoiceAction(
 
   const optionId = String(formData.get('option_id') ?? '').trim();
   if (!optionId) return { ok: false, error: '商品が指定されていません。' };
+  // 原価差額（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部だけが金額を入れられる。それ以外の担当者の追加は 0 円
+  const costAccess = await getCostRecordingAccess();
+  if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  const canEditCost = canEditCostField(costAccess);
 
   try {
     const store = await getStore();
@@ -97,14 +108,14 @@ export async function createVariantGroupWithFirstChoiceAction(
 
     // 価格・画像は画面上の元の行番号で受け取る。標準を切り替えても選択肢と取り違えない。
     const choicePrices = Array.from({ length: additionalChoiceNames.length + 1 }, (_, index) =>
-      parseChoiceExtraPrice(formData, index)
+      canEditCost ? parseChoiceExtraPrice(formData, index) : 0
     );
     const invalidPriceIndex = choicePrices.findIndex((price) => price === null);
     if (invalidPriceIndex >= 0) {
       return {
         ok: false,
         fieldErrors: {
-          _form: [`選択肢${invalidPriceIndex + 1}の追加金額は、0〜100,000,000円の整数で入力してください。`],
+          _form: [`選択肢${invalidPriceIndex + 1}の原価差額は、0〜100,000,000円の整数で入力してください。`],
         },
       };
     }
@@ -122,7 +133,7 @@ export async function createVariantGroupWithFirstChoiceAction(
     ))) {
       return {
         ok: false,
-        fieldErrors: { additional_choice_name: ['画像または追加金額を指定した選択肢には名前を入力してください。'] },
+        fieldErrors: { additional_choice_name: ['画像または原価差額を指定した選択肢には名前を入力してください。'] },
       };
     }
     const choiceInputs = [
@@ -203,6 +214,7 @@ export async function createVariantGroupWithFirstChoiceAction(
     }
 
     let savedChoiceCount = 0;
+    const savedChoiceIds: string[] = [];
     try {
       for (const [index, choice] of choices.entries()) {
         const file = selectedChoiceImage(formData, choiceInputs[index].choiceIndex);
@@ -215,8 +227,9 @@ export async function createVariantGroupWithFirstChoiceAction(
               fileName: file.name,
             }, 'variant-choices');
           }
+          const choiceId = randomUUID();
           await store.upsertVariantChoice({
-            id: randomUUID(),
+            id: choiceId,
             group_id: choice.group_id,
             code: choice.code,
             name: choice.name,
@@ -229,6 +242,7 @@ export async function createVariantGroupWithFirstChoiceAction(
             status: choice.status,
           });
           savedChoiceCount += 1;
+          savedChoiceIds.push(choiceId);
         } catch (error) {
           // DB保存に失敗した場合、参照されないアップロード画像だけ回収する。
           if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
@@ -250,11 +264,17 @@ export async function createVariantGroupWithFirstChoiceAction(
     revalidatePath(`/admin/options/${option.id}`);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
+    // 登録済みの商品なら、本部が入れた原価差額（0 円を含む）を Version に記録する
+    const costNotice =
+      option.status === 'published' && costAccess.available && costAccess.canManage
+        ? costRecordingNotice(await recordPublishedChoiceCosts(option.id, 'choice', savedChoiceIds, costAccess))
+        : null;
+    const savedMessage = reusableGroup
+      ? `既存の選択項目へ選択肢${choices.length}件を追加しました。`
+      : `選択項目と選択肢${choices.length}件を追加しました。`;
     return {
       ok: true,
-      message: reusableGroup
-        ? `既存の選択項目へ選択肢${choices.length}件を追加しました。`
-        : `選択項目と選択肢${choices.length}件を追加しました。`,
+      message: costNotice ? `${savedMessage}${costNotice}` : savedMessage,
     };
   } catch (error) {
     return initialError(error);

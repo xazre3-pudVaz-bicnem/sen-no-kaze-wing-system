@@ -562,6 +562,8 @@ export interface DataStore {
   upsertOptionImage(input: OptionImageInput): Promise<OptionImage>;
   deleteOptionImage(id: string): Promise<OptionImage | null>;
   setOptionManufacturerDocument(optionId: string, url: string | null): Promise<void>;
+  /** 新規未使用下書き専用。Storage内の画像・PDFを別ファイルへコピーする。 */
+  copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<import('@/lib/storage/product-media-copy').ProductMediaCopySummary>;
   setOptionRelations(
     optionId: string,
     dependencies: { requires_option_id: string; message: string | null }[],

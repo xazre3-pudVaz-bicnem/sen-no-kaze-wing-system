@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { PRODUCT_PRICE_UNIT_OTHER } from '@/lib/domain/product-price-unit';
 
-const ZERO_PRICE_WARNING_TEXT = '商品価格が0円です。正式な0円の場合はSTEP 2で確認が必要です';
-const PRODUCT_UNIT_REQUIRED_TEXT = '商品価格の単位を選択してください';
+const ZERO_PRICE_WARNING_TEXT = '商品標準原価が0円です。正式な0円の場合はSTEP 2で確認が必要です';
+const PRODUCT_UNIT_REQUIRED_TEXT = '商品標準原価の単位を選択してください';
 const LIST_PRICE_UNIT_REQUIRED_TEXT = 'メーカー参考価格を入力した場合は、メーカー参考価格の単位を選択してください';
 const PRICE_UNIT_STATE_EVENT = 'product-price-unit-state-change';
 const OK_TEXT = '現在の入力内容に、公開前の要確認事項はありません。';
@@ -86,7 +86,7 @@ function syncRegistrationCheck(priceInput: HTMLInputElement) {
   const listPriceInput = document.querySelector<HTMLInputElement>('input[name="list_price"]');
   const productUnit = document.getElementById('product-price-unit') as HTMLSelectElement | null;
   const manufacturerUnit = document.getElementById('manufacturer-list-price-unit') as HTMLSelectElement | null;
-  const productUnitCustom = document.querySelector<HTMLInputElement>('input[aria-label="商品価格の単位 その他"]');
+  const productUnitCustom = document.querySelector<HTMLInputElement>('input[aria-label="商品標準原価の単位 その他"]');
   const manufacturerUnitCustom = document.querySelector<HTMLInputElement>('input[aria-label="メーカー参考価格の単位 その他"]');
 
   const price = Number(priceInput.value);
@@ -106,7 +106,7 @@ function syncRegistrationCheck(priceInput: HTMLInputElement) {
   let warningBox = issueBox(section, '確認してください');
   let zeroPriceItem = warningBox
     ? Array.from(warningBox.querySelectorAll<HTMLLIElement>('li')).find((item) =>
-        item.textContent?.includes('商品価格が0円です')
+        item.textContent?.includes('商品標準原価が0円です')
       ) ?? null
     : null;
 
@@ -163,7 +163,7 @@ export function OptionRegistrationPriceUiSync() {
     const priceInput = document.querySelector<HTMLInputElement>('[data-testid="option-price"]');
     if (!priceInput) return;
 
-    // 商品価格は1円単位で登録できる。8,800円などをHTML5のstepMismatchにしない。
+    // 商品標準原価は1円単位で登録できる。8,800円などをHTML5のstepMismatchにしない。
     priceInput.step = '1';
 
     const priceOnRequest = document.querySelector<HTMLInputElement>('input[name="price_on_request"]');

@@ -35,6 +35,13 @@ import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePreset
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 import { withPlanDisplaySize } from '@/lib/domain/plan-display';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
+import {
+  canEditCostField,
+  costRecordingNotice,
+  getCostRecordingAccess,
+  recordPublishedChoiceCosts,
+  recordPublishedOptionCost,
+} from '@/lib/data/option-cost-recording';
 
 export interface AdminFormState {
   ok: boolean;
@@ -217,6 +224,15 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     }
   }
 
+  // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部だけが金額・別途見積の欄を変えられる。
+  // それ以外の担当者の保存では、今の金額をそのまま保つ（画面にも欄を出さない）。フリー商品は従来どおり
+  const costAccess = catalogEditor ? await getCostRecordingAccess() : { available: false, canManage: false };
+  let keepExistingPrice = false;
+  if (catalogEditor && !canEditCostField(costAccess)) {
+    const categories = await store.listCategories();
+    keepExistingPrice = categories.find((row) => row.id === requestedCategoryId)?.code !== FREE_PRODUCT_CATEGORY_CODE;
+  }
+
   // options.code は既存Preset / Import互換の技術キー。登録担当者には入力させず、
   // 既存商品では必ず保持し、新規手入力商品だけ内部で一意な値を作る。
   const internalCode = existingOption?.code ?? `opt-${randomUUID()}`;
@@ -235,13 +251,13 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     code: internalCode,
     name: formData.get('name'),
     description: formData.get('description'),
-    price: formData.get('price'),
+    price: keepExistingPrice ? String(existingOption?.price ?? 0) : formData.get('price'),
     image_url,
     selection_type: formData.get('selection_type'),
     is_required: formData.get('is_required'),
     is_default: formData.get('is_default'),
     is_installation: formData.get('is_installation'),
-    price_on_request: formData.get('price_on_request'),
+    price_on_request: keepExistingPrice ? existingOption?.price_on_request === true : formData.get('price_on_request'),
     preview_key: formData.get('preview_key'),
     affects_views: formData.getAll('affects_views'),
     spec_codes: formData.getAll('spec_codes'),
@@ -296,6 +312,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
       message: nullableId(formData.get(`conflicts_message_${conflicts_with_option_id}`)),
     }));
   let createdId: string | null = null;
+  let costNotice: string | null = null;
   try {
     const o = await store.upsertOption(parsed.data);
     await store.setOptionRelations(
@@ -306,6 +323,10 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
     if (!parsed.data.id) createdId = o.id;
+    // 登録済みの商品は、本部が保存した金額を商品標準原価の Version に記録する（下書きは登録のときに記録する）
+    if (o.status === 'published' && costAccess.available && costAccess.canManage) {
+      costNotice = costRecordingNotice(await recordPublishedOptionCost(o.id, 'save'));
+    }
   } catch (e) {
     return errState(e);
   }
@@ -321,7 +342,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     }
     redirect('/admin/options/' + createdId + '?step=info&created=1');
   }
-  return { ok: true, message: '保存しました', savedImageUrl: image_url };
+  return { ok: true, message: costNotice ? `保存しました。${costNotice}` : '保存しました', savedImageUrl: image_url };
 }
 
 export async function publishOptionAction(formData: FormData): Promise<void> {
@@ -359,11 +380,12 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     redirect(
       previewUrl({
         error:
-          '商品価格が0円です。正式な0円として公開する場合は確認欄にチェックしてください。価格未確認なら商品情報へ戻り、価格確定後に公開してください。',
+          '商品標準原価が0円です。正式な0円として公開する場合は確認欄にチェックしてください。未確認なら商品情報へ戻り、金額を確定してから公開してください。',
       })
     );
   }
 
+  let costWarning: string | null = null;
   if (option.status !== 'published') {
     const {
       id: optionId,
@@ -380,15 +402,20 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     }
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
+    // 本部の登録なら、確認した金額（確認済みの 0 円を含む）を原価の Version に記録する。失敗しても登録は済んでいる
+    const costResult = await recordPublishedOptionCost(optionId, 'publish');
+    const choiceResult = costResult.status === 'error' ? costResult : await recordPublishedChoiceCosts(optionId, 'publishChoice');
+    costWarning = costRecordingNotice(costResult) ?? costRecordingNotice(choiceResult);
   }
 
   if (returnTo) {
     const returnUrl = new URL(returnTo, 'https://wing.local');
     returnUrl.searchParams.set('created_option', id);
+    if (costWarning) returnUrl.searchParams.set('cost_warning', costWarning);
     redirect(returnUrl.pathname + returnUrl.search + returnUrl.hash);
   }
 
-  redirect(previewUrl({ published: '1' }));
+  redirect(previewUrl(costWarning ? { published: '1', cost_warning: costWarning } : { published: '1' }));
 }
 
 export async function saveVariantGroupAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
@@ -494,6 +521,9 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     const id = nullableId(formData.get('id'));
     const existing = id ? variants.choices.find((choice) => choice.id === id && choice.group_id === group.id) : null;
     if (id && !existing) return { ok: false, error: '選択肢が見つかりません。' };
+    // 原価差額（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部だけが金額・別途見積の欄を変えられる
+    const costAccess = await getCostRecordingAccess();
+    const keepExistingPrice = !canEditCostField(costAccess);
 
     const file = formData.get('image_file');
     const imageUrlField = String(formData.get('image_url') ?? existing?.image_url ?? '').trim();
@@ -512,8 +542,8 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       code: `vc-${randomUUID()}`,
       name: formData.get('name'),
       kind: formData.get('kind') || 'option',
-      extra_price: formData.get('extra_price') || 0,
-      price_on_request: formData.get('price_on_request'),
+      extra_price: keepExistingPrice ? existing?.extra_price ?? 0 : formData.get('extra_price') || 0,
+      price_on_request: keepExistingPrice ? existing?.price_on_request === true : formData.get('price_on_request'),
       image_url: uploadedUrl ?? imageUrlField,
       note: formData.get('note'),
       sort_order: formData.get('sort_order') || 0,
@@ -559,8 +589,9 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       }
     }
 
+    const choiceId = parsed.data.id ?? randomUUID();
     await store.upsertVariantChoice({
-      id: parsed.data.id ?? randomUUID(),
+      id: choiceId,
       group_id: group.id,
       code: internalCode,
       name: parsed.data.name,
@@ -575,7 +606,13 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     revalidatePath(`/admin/options/${optionId}`);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
-    return { ok: true, message: parsed.data.id ? '選択肢を更新しました。' : '選択肢を追加しました。' };
+    // 登録済みの商品なら、本部が保存した原価差額（0 円を含む）を Version に記録する
+    const costNotice =
+      option.status === 'published' && costAccess.available && costAccess.canManage
+        ? costRecordingNotice(await recordPublishedChoiceCosts(optionId, 'choice', [choiceId]))
+        : null;
+    const savedMessage = parsed.data.id ? '選択肢を更新しました。' : '選択肢を追加しました。';
+    return { ok: true, message: costNotice ? `${savedMessage}${costNotice}` : savedMessage };
   } catch (e) {
     if (uploadedUrl) {
       try {

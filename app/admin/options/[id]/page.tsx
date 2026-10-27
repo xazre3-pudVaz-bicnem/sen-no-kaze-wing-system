@@ -4,6 +4,7 @@ import { deleteOptionAction, publishOptionAction } from '@/lib/actions/admin';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getOptionHqStandardCostAccess } from '@/lib/data/option-hq-standard-cost';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
@@ -53,13 +54,16 @@ export default async function EditOptionPage({
   const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
   const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
 
-  const [categories, models, options, variants, hqCostAccess] = await Promise.all([
+  const [categories, models, options, variants, hqCostAccess, costAccess] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
     store.getOptionVariants(id),
     getOptionHqStandardCostAccess(id),
+    getCostRecordingAccess(),
   ]);
+  // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3）
+  const canEditCost = canEditCostField(costAccess);
   const category = categories.find((row) => row.id === option.category_id);
   const registrationCategories = category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE
     ? categories.filter((row) => row.code === LEGACY_FIRE_SPEC_CATEGORY_CODE)
@@ -90,7 +94,7 @@ export default async function EditOptionPage({
   const registrationWarnings = [
     ...(duplicateCandidates.length > 0 ? ['既存商品に重複候補があります'] : []),
     ...(!option.manufacturer_document_url ? ['メーカー資料PDFが未登録です（原則登録）'] : []),
-    ...(!option.price_on_request && option.price === 0 ? ['商品価格が0円です。正式な0円の場合はSTEP 2で確認が必要です'] : []),
+    ...(!option.price_on_request && option.price === 0 ? ['商品標準原価が0円です。正式な0円の場合はSTEP 2で確認が必要です'] : []),
     ...incompleteVisibleGroups.map((group) => `「${group.name}」にお客様へ表示する選択肢がありません`),
   ];
 
@@ -113,11 +117,13 @@ export default async function EditOptionPage({
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
+        {sp.cost_warning && <Alert tone="warn">{sp.cost_warning}</Alert>}
         {canEditThisOption ? (
           <>
             <RegisteredOptionEditFlow
             key={option.updated_at}
             option={option}
+            canEditCost={canEditCost}
             categories={registrationDisplayCategories}
             models={models}
             dependencies={deps}
@@ -142,6 +148,8 @@ export default async function EditOptionPage({
                     canManage={hqCostAccess.canManage}
                     cost={hqCostAccess.cost}
                     versions={hqCostAccess.versions}
+                    ledgerCost={option.price_on_request ? null : option.price}
+                    isPublished={option.status === 'published'}
                   />
                 )}
               </>
@@ -157,6 +165,8 @@ export default async function EditOptionPage({
                 canManage={hqCostAccess.canManage}
                 cost={hqCostAccess.cost}
                 versions={hqCostAccess.versions}
+                ledgerCost={option.price_on_request ? null : option.price}
+                isPublished={option.status === 'published'}
               />
             )}
             <ProductPriceUnitPublishedCard optionId={id} />
@@ -258,6 +268,7 @@ export default async function EditOptionPage({
                 dependencies={deps}
                 conflicts={confs}
                 returnTo={returnTo}
+                canEditCost={canEditCost}
               />
 
               <ProductPriceUnitRegistrationField optionId={id} />
@@ -274,7 +285,7 @@ export default async function EditOptionPage({
 
               {catalogEditor && (
                 <div className="registration-customer-selection" style={{ order: 40 }}>
-                  <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} />
+                  <OptionVariantManager option={option} groups={variants.groups} choices={variants.choices} canEditCost={canEditCost} />
                 </div>
               )}
 
@@ -285,6 +296,8 @@ export default async function EditOptionPage({
                     canManage={hqCostAccess.canManage}
                     cost={hqCostAccess.cost}
                     versions={hqCostAccess.versions}
+                    ledgerCost={option.price_on_request ? null : option.price}
+                    isPublished={false}
                   />
                 </div>
               )}
@@ -427,9 +440,9 @@ export default async function EditOptionPage({
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
                   {needsZeroPriceConfirmation && (
                     <div className="max-w-xl rounded-xl border border-[#d9a441] bg-[#fff8e8] p-3 text-sm">
-                      <p className="font-semibold text-ink">商品価格が0円です</p>
+                      <p className="font-semibold text-ink">商品標準原価が0円です</p>
                       <p className="mt-1 text-xs leading-5 text-ink-soft">
-                        価格未確認の場合は登録せず、商品情報に戻って価格を確定してください。
+                        原価が未確認の場合は登録せず、商品情報に戻って金額を確定してください。
                         正式な0円商品として登録する場合だけ、次の確認欄にチェックしてください。
                       </p>
                       <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-ink">
@@ -439,7 +452,7 @@ export default async function EditOptionPage({
                           className="mt-0.5 h-4 w-4 rounded border-line"
                           required
                         />
-                        商品価格0円が正式な登録値であることを確認しました
+                        商品標準原価0円が正式な登録値であることを確認しました
                       </label>
                     </div>
                   )}

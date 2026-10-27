@@ -186,7 +186,7 @@ export async function requestQuoteAsCustomer(page: Page, email: string, configNa
 export async function applyRegisteredOptionPrice(page: Page, price: number) {
   await page.locator('#registered-price').fill(String(price));
   await page.getByRole('button', { name: '変更内容を確認' }).click();
-  await expect(page.getByTestId('registered-option-change-review')).toContainText('商品価格（税別）');
+  await expect(page.getByTestId('registered-option-change-review')).toContainText('商品標準原価（税別）');
   await page.getByRole('button', { name: 'この変更を反映' }).click();
   // 反映が済むと、最新の登録内容を読み直して編集画面へ戻る
   await expect(page.getByTestId('registered-option-edit-flow')).toBeVisible();

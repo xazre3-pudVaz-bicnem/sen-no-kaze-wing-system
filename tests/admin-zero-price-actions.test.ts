@@ -29,6 +29,14 @@ vi.mock('@/lib/data/public-catalog', () => ({
 vi.mock('@/lib/mail/send', () => ({
   flushNotificationsSafely: vi.fn(),
 }));
+// 原価の Version の記録（v2.5 PR-A3）は、このテストでは「仕組みが無い」扱い（従来どおりの保存）
+vi.mock('@/lib/data/option-cost-recording', () => ({
+  getCostRecordingAccess: vi.fn(async () => ({ available: false, canManage: false })),
+  canEditCostField: (access: { available: boolean; canManage: boolean }) => !access.available || access.canManage,
+  recordPublishedOptionCost: vi.fn(async () => ({ status: 'unavailable' })),
+  recordPublishedChoiceCosts: vi.fn(async () => ({ status: 'unavailable' })),
+  costRecordingNotice: () => null,
+}));
 vi.mock('@/lib/data/store', () => ({
   getStore: mocks.getStore,
   isLocalMode: vi.fn(() => false),
@@ -144,7 +152,7 @@ describe('0円商品のServer Actionガード', () => {
     await expect(publishOptionAction(fd)).rejects.toThrow('REDIRECT:');
     expect(store.upsertOption).not.toHaveBeenCalled();
     const redirectUrl = String(mocks.redirect.mock.calls[0]?.[0] ?? '');
-    expect(decodeURIComponent(redirectUrl)).toContain('商品価格が0円です');
+    expect(decodeURIComponent(redirectUrl)).toContain('商品標準原価が0円です');
   });
 
   it('publishOptionActionは明示確認済みの通常価格0円をPublishedにできる', async () => {

@@ -38,7 +38,7 @@ function editorValue(editor: EditorState): string {
 }
 
 /**
- * 「価格は別途見積」と商品価格入力を同期する。
+ * 「価格は別途見積」と商品標準原価の入力を同期する。
  * 新たにチェックしたときだけ価格を0円へ切り替え、同じ編集操作中に解除した場合は直前の価格へ戻す。
  * 既に別途見積で保存済みの商品を開いただけでは、既存の数値を勝手に書き換えない。
  */
@@ -280,10 +280,10 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
         <div className="grid gap-5 sm:col-span-2 sm:grid-cols-2" data-testid="product-price-unit-registration">
           <UnitEditor
             id="product-price-unit"
-            label="商品価格の単位"
+            label="商品標準原価の単位"
             hint={priceOnRequest
-              ? '「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。'
-              : '商品価格は、選択した単位1つあたりの税別価格として扱います。カテゴリーに応じた初期値は変更できます。'}
+              ? '「価格は別途見積」が選択されているため、商品標準原価とこの単位は編集できません。'
+              : '商品標準原価は、選択した単位1つあたりの税別の金額として扱います。カテゴリーに応じた初期値は変更できます。'}
             editor={priceEditor}
             disabled={priceOnRequest}
             onChange={(next) => {
@@ -297,7 +297,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
           <UnitEditor
             id="manufacturer-list-price-unit"
             label="メーカー参考価格の単位"
-            hint="メーカー資料の表記に合わせて選択してください。商品価格の単位と同じでなくても構いません。"
+            hint="メーカー資料の表記に合わせて選択してください。商品標準原価の単位と同じでなくても構いません。"
             editor={listEditor}
             onChange={(next) => {
               listTouchedRef.current = true;
@@ -347,14 +347,14 @@ export function ProductPriceUnitPublishedCard({ optionId }: { optionId: string }
     <section className="card space-y-4 p-4 sm:p-5" data-testid="product-price-unit-published-editor">
       <div>
         <h2 className="font-semibold">価格単位</h2>
-        <p className="mt-1 text-xs leading-5 text-muted">商品価格とメーカー参考価格は別々の単位を持てます。既存の保存値をカテゴリー既定値で自動上書きしません。</p>
+        <p className="mt-1 text-xs leading-5 text-muted">商品標準原価とメーカー参考価格は別々の単位を持てます。既存の保存値をカテゴリー既定値で自動上書きしません。</p>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <UnitEditor
           id="published-product-price-unit"
-          label="商品価格の単位"
+          label="商品標準原価の単位"
           hint={priceOnRequest
-            ? '「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。'
+            ? '「価格は別途見積」が選択されているため、商品標準原価とこの単位は編集できません。'
             : '例：台、ケース、㎡。未設定の既存商品はそのまま保持できます。'}
           editor={priceEditor}
           disabled={!editable || priceOnRequest}
@@ -428,7 +428,7 @@ export function ProductPriceUnitRouteSummary() {
   return (
     <section className="card p-4 sm:p-5" data-testid="product-price-unit-summary">
       <dl className="grid gap-2 text-sm sm:grid-cols-[11rem_1fr]">
-        <dt className="font-semibold text-muted">商品価格の単位</dt>
+        <dt className="font-semibold text-muted">商品標準原価の単位</dt>
         <dd className="font-semibold text-ink">{priceUnit}</dd>
         <dt className="font-semibold text-muted">メーカー参考価格の単位</dt>
         <dd className="font-semibold text-ink">{listPriceUnit}</dd>

@@ -1,5 +1,6 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { Alert } from '@/components/ui';
@@ -11,10 +12,11 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
   const actor = await requireStaff();
   const sp = await searchParams;
   const store = await getStore();
-  const [allCategories, models, options] = await Promise.all([
+  const [allCategories, models, options, costAccess] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
+    getCostRecordingAccess(),
   ]);
   const catalogEditor = canEditCatalog(actor.role);
   const registrationCategories = allCategories.filter((c) => c.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
@@ -131,6 +133,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
             mode="create"
             duplicateSource={copySource}
             returnTo={returnTo}
+            canEditCost={canEditCostField(costAccess)}
           />
 
           {lockedSections.map(([no, label, note]) => (

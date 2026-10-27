@@ -121,7 +121,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('既存商品に重複候補があります');
     expect(editPage).toContain('メイン画像を登録してください');
     expect(editPage).toContain('メーカー資料PDFが未登録です（原則登録）');
-    expect(editPage).toContain('商品価格が0円です');
+    expect(editPage).toContain('商品標準原価が0円です');
     expect(editPage).toContain('お客様へ表示する選択肢がありません');
   });
 
@@ -409,7 +409,7 @@ describe('商品登録管理画面の業務フロー', () => {
   it('商品価格と標準品との差額を混同しない', () => {
     expect(forms).toContain('価格・公開設定');
     expect(forms).toContain('商品価格（税別・円）');
-    expect(forms).toContain('標準品との差額は別途の計算で扱います');
+    expect(forms).toContain('売価は標準見積の販売費率・掛率・経費のルールで計算します');
   });
 
   it('価格未確認の0円と正式な0円・別途見積を公開時に区別する', () => {
@@ -417,7 +417,7 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(forms).toContain('単に価格が未確認なだけの場合は「別途見積」にせず');
     expect(editPage).toContain('requiresZeroPriceConfirmation(option)');
     expect(editPage).toContain('name="confirm_zero_price"');
-    expect(editPage).toContain('商品価格0円が正式な登録値であることを確認しました');
+    expect(editPage).toContain('商品標準原価0円が正式な登録値であることを確認しました');
     expect(adminActions).toContain("formData.get('confirm_zero_price') !== 'on'");
     expect(adminActions).toContain('introducesUnconfirmedZeroPrice(existingOption, parsed.data)');
     expect(adminActions).toContain('uploadedNewImage && image_url');

@@ -19,7 +19,7 @@ describe('商品登録の商品価格入力', () => {
   });
 
   it('価格入力と別途見積の変更に合わせて0円警告を即時同期する', () => {
-    expect(priceSync).toContain('商品価格が0円です。正式な0円の場合はSTEP 2で確認が必要です');
+    expect(priceSync).toContain('商品標準原価が0円です。正式な0円の場合はSTEP 2で確認が必要です');
     expect(priceSync).toContain("priceInput.addEventListener('input', sync);");
     expect(priceSync).toContain("priceOnRequest?.addEventListener('change', sync);");
     expect(priceSync).toContain("badge.textContent = '基本チェックOK';");

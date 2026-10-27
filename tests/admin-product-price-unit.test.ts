@@ -53,7 +53,7 @@ describe('商品登録 価格単位', () => {
   });
 
   it('STEP1で商品価格とメーカー参考価格の単位を別々に編集し、手動変更後はカテゴリー既定値で上書きしない', () => {
-    expect(field).toContain('商品価格の単位');
+    expect(field).toContain('商品標準原価の単位');
     expect(field).toContain('メーカー参考価格の単位');
     expect(field).toContain('priceTouchedRef.current = true');
     expect(field).toContain('listTouchedRef.current = true');
@@ -81,7 +81,7 @@ describe('商品登録 価格単位', () => {
   });
 
   it('登録前チェックで価格単位未選択を公開必須項目として扱う', () => {
-    expect(priceUiSync).toContain('商品価格の単位を選択してください');
+    expect(priceUiSync).toContain('商品標準原価の単位を選択してください');
     expect(priceUiSync).toContain('メーカー参考価格を入力した場合は、メーカー参考価格の単位を選択してください');
     expect(priceUiSync).toContain('shouldBlockProductUnit');
     expect(priceUiSync).toContain('shouldBlockManufacturerUnit');
@@ -102,7 +102,7 @@ describe('商品登録 価格単位', () => {
     expect(field).toContain('disabled={!editable || priceOnRequest}');
     expect(field).toContain('id="manufacturer-list-price-unit"');
     expect(field).toContain('id="published-manufacturer-list-price-unit"');
-    expect(field).toContain('「価格は別途見積」が選択されているため、商品価格とこの単位は編集できません。');
+    expect(field).toContain('「価格は別途見積」が選択されているため、商品標準原価とこの単位は編集できません。');
   });
 
   it('既に別途見積の商品を開いただけでは既存の価格数値を強制的に0円へ書き換えない', () => {
@@ -120,7 +120,7 @@ describe('商品登録 価格単位', () => {
     expect(host).toContain('<ProductPriceUnitRouteSummary />');
   });
 
-  it('商品台帳の一覧・カード・管理情報で商品価格の単位を表示する', () => {
+  it('商品台帳の一覧・カード・管理情報で商品標準原価の単位を表示する', () => {
     expect(ledger).toContain('formatPriceWithUnit(option.price, option.price_unit)');
     expect(ledger).toContain('メーカー参考価格（税別）');
     expect(ledger).toContain('formatPriceWithUnit(selected.list_price, selected.list_price_unit)');

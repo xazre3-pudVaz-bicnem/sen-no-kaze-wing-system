@@ -15,6 +15,7 @@ import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRunti
 import { runtimeConcurrency } from './runtime-concurrency.mjs';
 import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.mjs';
 import { runtimeOptionStandardCostVersions } from './runtime-option-standard-cost-versions.mjs';
+import { runtimeV25InitialCostImport } from './runtime-v25-initial-cost-import.mjs';
 import { runtimePricingV25 } from './runtime-pricing-v25.mjs';
 import { runtimeStandardEstimateV25 } from './runtime-standard-estimate-v25.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
@@ -52,6 +53,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeConcurrency({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionHqStandardCost(client, { connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeOptionStandardCostVersions(client, { connectionString: url }));
+    // 既存の商品価格・追加金額の初期の原価 Version への取り込み（v2.5 PR-A3）
+    runtime = mergeRuntime(runtime, await runtimeV25InitialCostImport(client));
     // 正式計算は DB の結果を、手で検算した値と TypeScript の同じ計算の両方と突き合わせる
     runtime = mergeRuntime(runtime, await runtimePricingV25(client));
     // 標準見積の v2.5 の Revision（公開と原価の切替・保存と公開の同時実行は 2 本の接続で確かめる）

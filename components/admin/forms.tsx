@@ -10,6 +10,7 @@ import {
   type AdminFormState,
 } from '@/lib/actions/admin';
 import {
+  FREE_PRODUCT_CATEGORY_CODE,
   VIEW_KEYS,
   VIEW_LABELS,
   type BaseModel,
@@ -453,6 +454,8 @@ interface OptionFormProps {
   mode?: 'all' | 'product' | 'create' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
   returnTo?: string;
+  /** 商品標準原価・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ。フリー商品は常に出す） */
+  canEditCost?: boolean;
 }
 
 export function OptionForm({
@@ -466,6 +469,7 @@ export function OptionForm({
   duplicateSource,
   mode = 'all',
   returnTo,
+  canEditCost = true,
 }: OptionFormProps) {
   const [state, action, pending] = useActionState(saveOptionAction, initial);
   const [autoSaveState, setAutoSaveState] = useState<AdminFormState>(initial);
@@ -492,6 +496,9 @@ export function OptionForm({
   const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? copySource?.size_note ?? '');
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const categoryCode = selectedCategory?.code ?? '';
+  // フリー商品は従来どおり「商品価格」。それ以外は千の風の調達想定の原価（v2.5 の正式計算の元）
+  const isFreeProduct = categoryCode === FREE_PRODUCT_CATEGORY_CODE;
+  const showCostFields = isFreeProduct || canEditCost;
   const sizeMeta = productSizeMeta(categoryCode);
   const guidance = productRegistrationGuidance(categoryCode);
   const categoryOptions = allOptions.filter((row) => !selectedCategoryId || row.category_id === selectedCategoryId);
@@ -597,8 +604,9 @@ export function OptionForm({
       {option.is_required && <input type="hidden" name="is_required" value="true" />}
       {option.is_installation && <input type="hidden" name="is_installation" value="true" />}
       <input type="hidden" name="list_price" value={option.list_price ?? ''} />
-      <input type="hidden" name="price" value={option.price} />
-      {option.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
+      {/* 原価の欄を出さない担当者には金額を渡さない（保存は今の金額を保つ。v2.5 PR-A3） */}
+      <input type="hidden" name="price" value={showCostFields ? option.price : 0} />
+      {showCostFields && option.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
       <input type="hidden" name="preview_key" value={option.preview_key ?? ''} />
       {option.affects_views.map((view) => <input key={`view-${view}`} type="hidden" name="affects_views" value={view} />)}
       {dependencies.map((dep) => (
@@ -623,10 +631,10 @@ export function OptionForm({
       <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
       {/* 画像・メーカー資料は複製元の Storage パスを流用せず、新商品で登録する。 */}
       <input type="hidden" name="image_url" value="" />
-      {copySource
+      {copySource && showCostFields
         ? <input type="hidden" name="price" value={copySource.price} />
         : <input type="hidden" name="price" value="0" />}
-      {copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
+      {showCostFields && copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
       {copySource
         ? <input type="hidden" name="selection_type" value={copySource.selection_type} />
         : <input type="hidden" name="selection_type" value="radio" />}
@@ -878,25 +886,49 @@ export function OptionForm({
         <section id="sales-settings" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
           <ProductSectionHeading
             label={mode === 'sales' ? '販売・詳細設定' : '6. 価格・対象モデル'}
-            description="商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。"
+            description={
+              isFreeProduct
+                ? '商品価格、対象モデル・公開状態を確認します。'
+                : '商品標準原価、対象モデル・公開状態を確認します。色・仕様ごとの原価差額は「5. お客様選択」で設定します。'
+            }
           />
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
-            <p className="font-semibold">価格</p>
+            <p className="font-semibold">{isFreeProduct ? '価格' : '原価'}</p>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。標準品との差額は別途の計算で扱います" errors={e.price}>
-                <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
-              </Field>
+              {showCostFields ? (
+                <Field
+                  label={isFreeProduct ? '商品価格（税別・円）' : '商品標準原価（税別・円）'}
+                  htmlFor={`price-${mode}`}
+                  required
+                  hint={
+                    isFreeProduct
+                      ? '価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。'
+                      : '千の風が商品を調達する想定の購入金額（税別）です。売価は標準見積の販売費率・掛率・経費のルールで計算します。未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します'
+                  }
+                  errors={e.price}
+                >
+                  <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
+                </Field>
+              ) : (
+                <div className="rounded-lg border border-line bg-ivory/30 p-3 text-xs leading-5 text-muted" data-testid="option-cost-hidden-note">
+                  商品標準原価と別途見積の設定は本部が登録します（原価は本部だけに表示します）。
+                </div>
+              )}
               <Field label="メーカー参考価格（税別・表示のみ）" htmlFor={`list_price-${mode}`} errors={e.list_price}>
                 <Input id={`list_price-${mode}`} name="list_price" type="number" min={0} step={1} defaultValue={option?.list_price ?? ''} />
               </Field>
             </div>
-            <div className="mt-4">
-              <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
-              <p className="mt-2 text-xs leading-5 text-muted">
-                単に価格が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。
-              </p>
-            </div>
+            {showCostFields && (
+              <div className="mt-4">
+                <Checkbox name="price_on_request" defaultChecked={option?.price_on_request} label="価格は別途見積（0円扱い）" />
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {isFreeProduct
+                    ? '単に価格が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。'
+                    : '単に原価が未確認なだけの場合は「別途見積」にせず、0円の下書きとして保存してください。'}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="option-normal-settings">

@@ -31,6 +31,8 @@ function safePath(encoded: string): string | null {
 
 /** publicUrlForProbe は同じ bucket の getPublicUrl('__clone_probe__') から取得する。 */
 export function managedPublicObjectPath(url: string, publicUrlForProbe: string): string | null {
+  // WHATWG URL は ../ や %2e%2e を正規化してしまうため、パース前に拒否する。
+  if (/%(?:2e|2f|5c)/i.test(url) || /\\/\.\\.{0,1}(?:\\/|$)/.test(url)) return null;
   try {
     const source = new URL(url);
     const probe = new URL(publicUrlForProbe);

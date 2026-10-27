@@ -27,6 +27,10 @@ import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCod
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
+import { ProductDetailsFields } from '@/components/admin/product-details-fields';
+import { productSizeMeta, productRegistrationGuidance, ProductCategoryGuidance } from '@/components/admin/product-category-guidance';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
+import { ProductDuplicateStatus, ProductManagementNumber } from '@/components/admin/product-identity-status';
 
 const initial: AdminFormState = { ok: false };
 
@@ -434,170 +438,6 @@ export function CategoryForm({ category }: { category: OptionCategory | null }) 
 
 /* ---------- オプション ---------- */
 
-function productSizeMeta(categoryCode: string): { label: string; placeholder: string } {
-  const values: Record<string, { label: string; placeholder: string }> = {
-    ub: { label: 'サイズ', placeholder: '例：1216' },
-    toilet: { label: '排水・主な仕様', placeholder: '例：床排水／排水芯120mm／手洗いなし' },
-    washbasin: { label: '間口・サイズ', placeholder: '例：600mm' },
-    kitchen: { label: '間口', placeholder: '例：1200mm' },
-    boiler: { label: '号数・ガス種・給湯機能・設置方式', placeholder: '例：16号／LPガス／給湯専用／屋外壁掛型' },
-    aircon: { label: '能力クラス・電源', placeholder: '例：2.2kW（6畳程度）／単相100V' },
-    roof: { label: '屋根材種類・主な仕様', placeholder: '例：金属屋根／ガルバリウム鋼板／立平葺き' },
-    'exterior-wall': { label: '種類・主な仕様', placeholder: '例：窯業系サイディング／16mm／ヨコ張り' },
-    floor: { label: '床材種類・主な仕様', placeholder: '例：複合フローリング／12mm／耐水' },
-    'wall-ceiling': { label: '内装材種類・主な仕様', placeholder: '例：ビニル壁紙／準不燃' },
-    'entrance-door': { label: 'サイズ・開き勝手・防火仕様', placeholder: '例：W900×H2000／右吊元／防火戸' },
-    sash: { label: '窓種・サイズ・呼称', placeholder: '例：引違い窓／16520／Low-E複層' },
-    'interior-door': { label: '建具種類・主な仕様', placeholder: '例：引戸／木質系／表示錠' },
-    lighting: { label: '照明種別・電源', placeholder: '例：ダウンライト／AC100V／電球色' },
-    furniture: { label: '寸法・設置方式', placeholder: '例：W1200×D450×H850／壁固定' },
-    smartlock: { label: '解錠方式・対応ドア', placeholder: '例：指紋・暗証番号／対応扉厚35〜55mm' },
-  };
-  return values[categoryCode] ?? { label: 'サイズ・仕様', placeholder: '主なサイズ・仕様を入力' };
-}
-
-type ProductRegistrationGuidance = {
-  manufacturers: string[];
-  sizeCandidates: string[];
-  example: string | null;
-  fixedInfo: string[];
-};
-
-function productRegistrationGuidance(categoryCode: string): ProductRegistrationGuidance {
-  const values: Record<string, ProductRegistrationGuidance> = {
-    ub: {
-      manufacturers: ['TOTO', 'LIXIL', 'Panasonic', 'タカラスタンダード', 'クリナップ', 'トクラス'],
-      sizeCandidates: ['1014', '1116', '1216'],
-      example: 'TOTO / サザナ / HTシリーズ / Sタイプ / 1216 / HTV1216USX1',
-      fixedInfo: ['浴槽材質', 'ドア種類', '換気設備', '設置方式'],
-    },
-    toilet: {
-      manufacturers: ['TOTO', 'LIXIL', 'Panasonic'],
-      sizeCandidates: ['床排水／排水芯120mm', '床排水／排水芯200mm'],
-      example: 'LIXIL / プレアス LSタイプ / CL6A / YBC-CL10SU + DT-CL116AU',
-      fixedInfo: ['排水方式', '排水芯', '手洗い', '洗浄方式'],
-    },
-    washbasin: {
-      manufacturers: ['TOTO', 'LIXIL', 'Panasonic', 'タカラスタンダード', 'クリナップ', 'KVK', 'SANEI', 'カクダイ'],
-      sizeCandidates: ['450mm', '500mm', '600mm', '750mm', '900mm', '1000mm', '1200mm'],
-      example: 'LIXIL / 洗面化粧台 / ピアラ / 600mm / 扉タイプ / 代表品番',
-      fixedInfo: ['ボウル材質', '水栓タイプ', '間口', 'ミラー構成'],
-    },
-    kitchen: {
-      manufacturers: ['LIXIL', 'Panasonic', 'タカラスタンダード', 'クリナップ', 'トクラス', 'TOTO'],
-      sizeCandidates: ['900mm', '1050mm', '1200mm', '1500mm', '1800mm'],
-      example: 'LIXIL / ミニキッチン / DMKシリーズ / 1200mm / I型 / 代表品番',
-      fixedInfo: ['間口', '天板材質', '水栓タイプ', '加熱機器'],
-    },
-    boiler: {
-      manufacturers: ['リンナイ', 'ノーリツ', 'パロマ'],
-      sizeCandidates: ['16号', '20号', '24号'],
-      example: 'リンナイ / RUX-Eシリーズ / 16号 / LPガス / 給湯専用 / 屋外壁掛型 / RUX-E1616W',
-      fixedInfo: ['号数', 'ガス種', '給湯機能', '設置方式'],
-    },
-    aircon: {
-      manufacturers: ['ダイキン', '三菱電機', 'Panasonic', '日立', 'シャープ', '富士通ゼネラル', '東芝'],
-      sizeCandidates: [
-        '2.2kW（6畳程度）',
-        '2.5kW（8畳程度）',
-        '2.8kW（10畳程度）',
-        '3.6kW（12畳程度）',
-        '4.0kW（14畳程度）',
-        '5.6kW（18畳程度）',
-        '6.3kW（20畳程度）',
-        '7.1kW（23畳程度）',
-        '8.0kW（26畳程度）',
-        '9.0kW（29畳程度）',
-      ],
-      example: 'ダイキン / ルームエアコン / Eシリーズ / 2.2kW（6畳程度） / 単相100V / S225ATES-W',
-      fixedInfo: ['能力クラス', '電源', '室内機・室外機', '寒冷地対応（必要な場合）'],
-    },
-    roof: {
-      manufacturers: ['ケイミュー', 'アイジー工業', 'セキノ興産', '稲垣商事'],
-      sizeCandidates: ['金属屋根', 'ガルバリウム鋼板', '立平葺き', 'スレート系'],
-      example: 'アイジー工業 / 屋根材シリーズ / 金属屋根 / ガルバリウム鋼板 / 代表品番',
-      fixedInfo: ['材質', '板厚', '葺き方', '表面処理', '防火性能', '寒冷地域対応'],
-    },
-    'exterior-wall': {
-      manufacturers: ['ニチハ', 'ケイミュー', 'アイジー工業', '旭トステム外装'],
-      sizeCandidates: ['窯業系サイディング', '金属サイディング', 'ガルバリウム鋼板'],
-      example: 'ニチハ / 外壁シリーズ / 窯業系 / 16mm / ヨコ張り / 代表品番',
-      fixedInfo: ['材質', '柄分類', '厚み', '張り方', '防火・耐火性能', '寒冷地域対応'],
-    },
-    floor: {
-      manufacturers: ['DAIKEN', '朝日ウッドテック', 'Panasonic', 'LIXIL', 'EIDAI', 'ウッドワン'],
-      sizeCandidates: ['複合フローリング', '無垢フローリング', 'クッションフロア', 'フロアタイル', 'シート床材'],
-      example: 'DAIKEN / 床材シリーズ / 複合フローリング / 12mm / 代表品番',
-      fixedInfo: ['材質', '厚み', '表面仕上げ', '耐水性'],
-    },
-    'wall-ceiling': {
-      manufacturers: ['サンゲツ', 'リリカラ', 'シンコール', 'トキワ', 'ルノン', 'DAIKEN'],
-      sizeCandidates: ['ビニル壁紙', '織物壁紙', 'パネル', '化粧板'],
-      example: 'サンゲツ / 壁紙シリーズ / ビニル壁紙 / 準不燃 / 代表品番',
-      fixedInfo: ['材質', '厚み', '防火性能', '表面仕上げ'],
-    },
-    'entrance-door': {
-      manufacturers: ['LIXIL', 'YKK AP', '三協アルミ'],
-      sizeCandidates: ['片開き', '親子ドア', '引戸', 'ガラス框ドア'],
-      example: 'LIXIL / 玄関ドアシリーズ / 片開き / W900×H2000 / 防火戸 / 代表品番',
-      fixedInfo: ['本体寸法', '開き勝手', '防火性能', '断熱性能', 'ハンドル・錠'],
-    },
-    sash: {
-      manufacturers: ['LIXIL', 'YKK AP', '三協アルミ'],
-      sizeCandidates: ['引違い窓', 'FIX窓', '縦すべり出し窓', '横すべり出し窓', '上げ下げ窓'],
-      example: 'YKK AP / サッシシリーズ / 引違い窓 / Low-E複層ガラス / 代表品番',
-      fixedInfo: ['窓種', 'ガラス仕様', '枠材質', '断熱性能', '呼称・サイズ'],
-    },
-    'interior-door': {
-      manufacturers: ['LIXIL', 'Panasonic', 'DAIKEN', 'EIDAI', 'ウッドワン'],
-      sizeCandidates: ['開き戸', '引戸', '折戸'],
-      example: 'Panasonic / 室内建具シリーズ / 引戸 / 木質系 / 代表品番',
-      fixedInfo: ['建具種類', '材質', '表面仕上げ', '錠', '開き勝手'],
-    },
-    lighting: {
-      manufacturers: ['Panasonic', 'オーデリック', 'コイズミ照明', '大光電機', '東芝ライテック'],
-      sizeCandidates: ['ダウンライト', 'シーリングライト', 'ブラケット', 'ポーチライト', '外灯'],
-      example: 'Panasonic / LED玄関外灯 / AC100V / 電球色・人感センサー / 代表品番',
-      fixedInfo: ['取付場所', '電源', '消費電力', '光色', '防水性能', 'センサー'],
-    },
-    furniture: {
-      manufacturers: ['Panasonic', 'DAIKEN', 'LIXIL', 'EIDAI', 'ウッドワン', '南海プライウッド'],
-      sizeCandidates: ['幅600mm', '幅750mm', '幅900mm', '幅1200mm'],
-      example: 'Panasonic / シューズボックス / 幅900mm / 壁固定 / 代表品番',
-      fixedInfo: ['本体寸法', '材質', '耐荷重', '設置方式', '扉・収納仕様'],
-    },
-    smartlock: {
-      manufacturers: ['LIXIL', 'YKK AP', '美和ロック', 'GOAL', 'SwitchBot'],
-      sizeCandidates: ['対応扉厚30〜45mm', '対応扉厚35〜55mm', '対応扉厚40〜60mm'],
-      example: 'メーカー / スマートロック / 指紋・暗証番号・ICカード / 対応扉厚35〜55mm / 代表品番',
-      fixedInfo: ['解錠方式', '対応扉厚', '電源', '通信方式', '取付方式'],
-    },
-  };
-  return values[categoryCode] ?? { manufacturers: [], sizeCandidates: [], example: null, fixedInfo: [] };
-}
-
-function categoryRegistrationHint(categoryCode: string): string | null {
-  const values: Record<string, string> = {
-    ub: '浴室サイズなど固定情報はここで入力し、壁色・浴槽色などお客様が選ぶ内容は下の「お客様選択」で登録します。',
-    toilet: '排水方式・排水芯など商品固有の固定情報を入力し、お客様が選べる色や機能だけを下の「お客様選択」で登録します。',
-    washbasin: '間口など固定情報はここで入力し、扉色・水栓など選択できる内容は下の「お客様選択」で登録します。',
-    kitchen: '間口など固定情報はここで入力し、扉色・ワークトップなど選択できる内容は下の「お客様選択」で登録します。',
-    boiler: '号数・ガス種・給湯機能・設置方式を確認し、この欄には商品を判別できる主要仕様をまとめて入力します。',
-    aircon: '能力クラスと電源を確認します。お客様が比較するときに必要な仕様を優先して入力します。',
-    roof: '屋根材は外壁と分けて登録します。材質・板厚・葺き方など固定情報を入力し、色などを選べる場合だけ下の「お客様選択」で登録します。',
-    'exterior-wall': '材質・厚み・張り方など施工判断に必要な固定情報を入力し、色・柄はお客様が選べる場合だけ下の「お客様選択」で登録します。',
-    floor: '床材種類・厚みなど固定情報を入力し、色・柄など選択できる内容は下の「お客様選択」で登録します。',
-    'wall-ceiling': '材質・防火性能など固定情報を入力し、色・柄など選択できる内容は下の「お客様選択」で登録します。',
-    'entrance-door': '玄関ドアはサッシ・室内建具と分けて登録します。色・ハンドルなどを選べる場合は下の「お客様選択」で登録し、スマートキーは別オプションとして扱います。',
-    sash: '窓種・呼称・ガラス仕様など固定情報を入力します。現在のサッシカテゴリーはお客様画面非表示のため、台帳・見積用の情報を優先します。',
-    'interior-door': '建具種類・材質・錠など固定情報を入力し、建具カラーやハンドルを選べる場合だけ下の「お客様選択」で登録します。',
-    lighting: '照明種別・電源・取付場所を確認します。屋外照明は防水性能やセンサー有無も確認します。',
-    furniture: '寸法・設置方式・耐荷重など、設置可否に関わる固定情報を優先して入力します。',
-    smartlock: '対応扉厚・取付方式・電源・通信方式を確認し、解錠方法の選択肢がある場合は下の「お客様選択」で登録します。',
-  };
-  return values[categoryCode] ?? null;
-}
-
 interface OptionFormProps {
   option: ProductOption | null;
   categories: OptionCategory[];
@@ -607,6 +447,8 @@ interface OptionFormProps {
   conflicts: OptionConflict[];
   /** 追加画面で最初に選ばれるカテゴリー（フリー商品からの導線で使う） */
   defaultCategoryId?: string;
+  /** 新しい下書きへ引き継ぐ表示情報。ID・画像・選択肢・履歴は引き継がない。 */
+  duplicateSource?: ProductOption | null;
   /** 必要に応じて商品情報の一部だけを編集するための表示モード */
   mode?: 'all' | 'product' | 'create' | 'identify' | 'details' | 'media' | 'pricing' | 'sales';
   /** 見積テンプレート等から商品登録へ移動した場合の戻り先 */
@@ -621,6 +463,7 @@ export function OptionForm({
   dependencies,
   conflicts,
   defaultCategoryId,
+  duplicateSource,
   mode = 'all',
   returnTo,
 }: OptionFormProps) {
@@ -639,16 +482,17 @@ export function OptionForm({
   const others = allOptions.filter((o) => o.id !== option?.id);
   const depMap = new Map(dependencies.map((d) => [d.requires_option_id, d]));
   const confMap = new Map(conflicts.map((c) => [c.conflicts_with_option_id, c]));
-  const initialCategoryId = option?.category_id ?? defaultCategoryId ?? '';
+  // 複製元は初期値にのみ使う。option は null のままなので既存商品の ID を保存しない。
+  const copySource = mode === 'create' && !option ? duplicateSource : null;
+  const initialCategoryId = option?.category_id ?? copySource?.category_id ?? defaultCategoryId ?? '';
   const [selectedCategoryId, setSelectedCategoryId] = useState(initialCategoryId);
-  const [manufacturerValue, setManufacturerValue] = useState(option?.manufacturer ?? '');
-  const [nameValue, setNameValue] = useState(option?.name ?? '');
-  const [modelNoValue, setModelNoValue] = useState(option?.model_no ?? '');
-  const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? '');
+  const [manufacturerValue, setManufacturerValue] = useState(option?.manufacturer ?? copySource?.manufacturer ?? '');
+  const [nameValue, setNameValue] = useState(option?.name ?? copySource?.name ?? '');
+  const [modelNoValue, setModelNoValue] = useState(option?.model_no ?? copySource?.model_no ?? '');
+  const [sizeNoteValue, setSizeNoteValue] = useState(option?.size_note ?? copySource?.size_note ?? '');
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
   const categoryCode = selectedCategory?.code ?? '';
   const sizeMeta = productSizeMeta(categoryCode);
-  const registrationHint = categoryRegistrationHint(categoryCode);
   const guidance = productRegistrationGuidance(categoryCode);
   const categoryOptions = allOptions.filter((row) => !selectedCategoryId || row.category_id === selectedCategoryId);
   const makerMatchedOptions = categoryOptions.filter(
@@ -774,14 +618,21 @@ export function OptionForm({
 
   const createDefaults = mode === 'create' && !option ? (
     <>
-      <input type="hidden" name="base_model_id" value="" />
-      <input type="hidden" name="description" value="" />
-      <input type="hidden" name="highlight" value="" />
+      <input type="hidden" name="base_model_id" value={copySource?.base_model_id ?? ''} />
+      <input type="hidden" name="description" value={copySource?.description ?? ''} />
+      <input type="hidden" name="highlight" value={copySource?.highlight ?? ''} />
+      {/* 画像・メーカー資料は複製元の Storage パスを流用せず、新商品で登録する。 */}
       <input type="hidden" name="image_url" value="" />
-      <input type="hidden" name="price" value="0" />
-      <input type="hidden" name="selection_type" value="radio" />
+      {copySource
+        ? <input type="hidden" name="price" value={copySource.price} />
+        : <input type="hidden" name="price" value="0" />}
+      {copySource?.price_on_request && <input type="hidden" name="price_on_request" value="true" />}
+      {copySource
+        ? <input type="hidden" name="selection_type" value={copySource.selection_type} />
+        : <input type="hidden" name="selection_type" value="radio" />}
+      {copySource?.spec_codes.map((code) => <input key={code} type="hidden" name="spec_codes" value={code} />)}
       <input type="hidden" name="preview_key" value="" />
-      <input type="hidden" name="list_price" value="" />
+      <input type="hidden" name="list_price" value={copySource?.list_price ?? ''} />
       <input type="hidden" name="sort_order" value="0" />
       <input type="hidden" name="status" value="draft" />
     </>
@@ -807,17 +658,15 @@ export function OptionForm({
       <Status state={displayState} />
 
       {showIdentify && (
-        <section id="product-identify" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">{mode === 'identify' ? '商品特定' : '基本情報'}</p>
-            <p className="mt-1 text-sm text-muted">
-              {mode === 'create'
-                ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
-                : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
-            </p>
-          </div>
+        <section id="product-identify" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+          <ProductSectionHeading
+            label={mode === 'identify' ? '商品特定' : '1. 基本情報'}
+            description={mode === 'create'
+              ? 'まず商品を特定する基本情報だけ入力します。「次へ」で商品を作成し、続けて画像・資料や価格を登録します。'
+              : 'カテゴリー、メーカー、商品名、シリーズ・型番／品番で商品を特定します。商品管理番号は保存時に自動で割り当てます。'}
+          />
 
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="カテゴリー" htmlFor={`category_id-${mode}`} required errors={e.category_id}>
               <Select
                 id={`category_id-${mode}`}
@@ -834,7 +683,7 @@ export function OptionForm({
                 id={`manufacturer-${mode}`}
                 name="manufacturer"
                 list="option-manufacturer-suggestions"
-                defaultValue={option?.manufacturer ?? ''}
+                defaultValue={option?.manufacturer ?? copySource?.manufacturer ?? ''}
                 onChange={(event) => setManufacturerValue(event.target.value)}
                 placeholder="例：TOTO"
               />
@@ -847,7 +696,7 @@ export function OptionForm({
                 id={`name-${mode}`}
                 name="name"
                 list="option-product-name-suggestions"
-                defaultValue={option?.name}
+                defaultValue={option?.name ?? copySource?.name}
                 onChange={(event) => setNameValue(event.target.value)}
                 required
                 data-testid="option-name"
@@ -866,7 +715,7 @@ export function OptionForm({
                 id={`model_no-${mode}`}
                 name="model_no"
                 list="option-model-no-suggestions"
-                defaultValue={option?.model_no ?? ''}
+                defaultValue={option?.model_no ?? copySource?.model_no ?? ''}
                 onChange={(event) => setModelNoValue(event.target.value)}
                 placeholder="例：サザナ HTシリーズ / HTV1616"
               />
@@ -912,61 +761,26 @@ export function OptionForm({
               </Field>
             )}
             {mode === 'all' && (
-              <div>
-                <p className="label">商品管理番号</p>
-                <div className="input flex min-h-11 items-center bg-sand/35 text-sm font-semibold text-ink-soft">
-                  {option ? option.product_no ?? '未採番' : '保存時に自動採番'}
-                </div>
-                <p className="mt-1 text-xs text-muted">PRD-000001形式で自動採番し、登録後は変更しません。</p>
-              </div>
+              <ProductManagementNumber
+                number={option?.product_no}
+                fallback={option ? '未採番' : '保存時に自動採番'}
+              />
             )}
           </div>
 
-          <div
-            className={`rounded-xl border px-4 py-3 ${duplicateCandidates.length > 0 ? 'border-[#d9a441] bg-[#fff8e8]' : 'border-line bg-ivory/30'}`}
-            data-testid="option-duplicate-status"
-            aria-live="polite"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-ink">既存商品チェック</p>
-              <span className={`text-xs font-semibold ${duplicateCandidates.length > 0 ? 'text-[#8a641d]' : 'text-muted'}`}>
-                {duplicateCandidates.length > 0
-                  ? '要確認：重複候補あり'
-                  : duplicateCheckReady
-                    ? '重複候補なし'
-                    : '確認に必要な情報を入力'}
-              </span>
-            </div>
-            {duplicateCandidates.length > 0 ? (
-              <div className="mt-2" data-testid="option-duplicate-warning">
-                <p className="text-xs leading-5 text-ink-soft">
-                  登録を止める判定ではありません。新規商品かどうかを確認してから保存してください。
-                </p>
-                <ul className="mt-3 space-y-2">
-                  {duplicateCandidates.map(({ option: candidate, reason }) => (
-                    <li key={candidate.id} className="rounded-lg border border-[#ead6a7] bg-white px-3 py-2 text-sm">
-                      <a href={`/admin/options/${candidate.id}`} className="font-semibold underline underline-offset-4 hover:text-brown">
-                        {candidate.name}
-                      </a>
-                      <span className="ml-2 text-xs text-muted">{candidate.product_no ?? '商品番号未反映'}</span>
-                      <p className="mt-1 text-xs text-muted">
-                        {reason === 'manufacturer-model'
-                          ? 'メーカー＋シリーズ・型番／品番が一致'
-                          : '同一カテゴリー＋メーカー＋商品名が一致'}
-                        {candidate.model_no ? ` ／ ${candidate.manufacturer ?? 'メーカー未設定'} ／ ${candidate.model_no}` : ''}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-muted">
-                {duplicateCheckReady
-                  ? 'メーカーと商品名・型番から、登録済み商品の重複候補は見つかっていません。'
-                  : 'メーカーと商品名または型番を入力すると、自動で重複候補を確認します。'}
-              </p>
-            )}
-          </div>
+          <ProductDuplicateStatus
+            testId="option-duplicate-status"
+            warningTestId="option-duplicate-warning"
+            ready={duplicateCheckReady}
+            candidates={duplicateCandidates.map(({ option: candidate, reason }) => ({
+              id: candidate.id,
+              name: candidate.name,
+              productNo: candidate.product_no ?? null,
+              reason,
+              modelNo: candidate.model_no,
+              manufacturer: candidate.manufacturer,
+            }))}
+          />
 
           {mode === 'create' && <SubmitButton pending={pending} label="次へ：画像・資料" />}
           {mode === 'identify' && <SubmitButton pending={pending} label="商品特定を保存" />}
@@ -974,69 +788,54 @@ export function OptionForm({
       )}
 
       {showDetails && (
-        <section id="product-details" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">商品の詳細</p>
-            <p className="mt-1 text-sm text-muted">サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。</p>
-          </div>
+        <section id="product-details" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+          <ProductSectionHeading
+            label="2. 商品の詳細"
+            description="サイズ、説明、メーカー資料に記載された特徴など、商品を理解するための情報を整理します。"
+          />
 
-          {(registrationHint || guidance.example || guidance.fixedInfo.length > 0) && (
-            <div className="rounded-xl border border-line bg-ivory/45 px-4 py-3 text-xs leading-5 text-ink-soft" data-testid="category-registration-guidance">
-              {registrationHint && (
-                <p><span className="font-semibold">このカテゴリーの入力目安：</span>{registrationHint}</p>
-              )}
-              {guidance.example && (
-                <p className={registrationHint ? 'mt-1' : undefined}>
-                  <span className="font-semibold">入力例：</span>{guidance.example}
-                </p>
-              )}
-              {guidance.fixedInfo.length > 0 && (
-                <p className="mt-1">
-                  <span className="font-semibold">確認ポイント：</span>{guidance.fixedInfo.join('・')}
-                </p>
-              )}
-            </div>
-          )}
+          <ProductCategoryGuidance categoryCode={categoryCode} />
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
-              <Input
-                id={`size_note-${mode}`}
-                name="size_note"
-                list="option-size-note-suggestions"
-                value={sizeNoteValue}
-                onChange={(event) => setSizeNoteValue(event.target.value)}
-                placeholder={sizeMeta.placeholder}
-              />
-              <datalist id="option-size-note-suggestions">
-                {sizeSuggestions.map((value) => <option key={value} value={value} />)}
-              </datalist>
-              {guidance.sizeCandidates.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
-                  {guidance.sizeCandidates.slice(0, 10).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
-                      onClick={() => {
-                        setSizeNoteValue(value);
-                        markOptionDirty();
-                      }}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </Field>
-            <Field label="メーカー記載の特徴（任意）" htmlFor={`highlight-${mode}`} hint="メーカー資料・カタログに明確な記載がある場合のみ入力。記載がなければ空欄で構いません。" errors={e.highlight}>
-              <Input id={`highlight-${mode}`} name="highlight" defaultValue={option?.highlight ?? ''} />
-            </Field>
-          </div>
-
-          <Field label="商品説明" htmlFor={`description-${mode}`} errors={e.description}>
-            <Textarea id={`description-${mode}`} name="description" defaultValue={option?.description ?? ''} className="min-h-28" />
-          </Field>
+          <ProductDetailsFields
+            sizeField={
+                <Field label={sizeMeta.label} htmlFor={`size_note-${mode}`} hint={sizeSuggestions.length > 0 ? '候補から選ぶか、そのまま自由入力できます' : undefined} errors={e.size_note}>
+                  <Input
+                    id={`size_note-${mode}`}
+                    name="size_note"
+                    list="option-size-note-suggestions"
+                    value={sizeNoteValue}
+                    onChange={(event) => setSizeNoteValue(event.target.value)}
+                    placeholder={sizeMeta.placeholder}
+                  />
+                  <datalist id="option-size-note-suggestions">
+                    {sizeSuggestions.map((value) => <option key={value} value={value} />)}
+                  </datalist>
+                  {guidance.sizeCandidates.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2" aria-label="カテゴリー別の入力候補">
+                      {guidance.sizeCandidates.slice(0, 10).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="rounded-full border border-line bg-white px-2.5 py-1 text-xs text-ink-soft hover:border-brown hover:text-ink"
+                          onClick={() => {
+                            setSizeNoteValue(value);
+                            markOptionDirty();
+                          }}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+            }
+            highlightId={`highlight-${mode}`}
+            highlight={option?.highlight ?? ''}
+            highlightErrors={e.highlight}
+            descriptionId={`description-${mode}`}
+            description={option?.description ?? ''}
+            descriptionErrors={e.description}
+          />
 
           <p className="text-xs text-muted">
             固定の商品構成・標準装備は、メーカー資料で確認できるものまで無理に個別登録する必要はありません。
@@ -1048,23 +847,23 @@ export function OptionForm({
       )}
 
       {showMedia && (
-        <section id="product-main-media" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">メイン画像</p>
-            <p className="mt-1 text-sm text-muted">ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。</p>
-          </div>
+        <section id="product-main-media" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+          <ProductSectionHeading
+            label="3. 商品画像"
+            description="ここでは商品一覧・商品詳細の先頭に表示するメイン画像を設定します。追加画像は下の専用欄で登録します。"
+          />
 
           <div className="rounded-xl border border-line bg-ivory/35 p-4 sm:p-5">
             <div>
               <p className="font-semibold">メイン画像</p>
               <p className="mt-1 text-xs text-muted">サブ画像とメーカーPDFは、この商品の「お客様資料」画面で続けて登録できます。</p>
             </div>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
-              <Field label="画像ファイル" htmlFor={`image_file-${mode}`}>
-                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
-              </Field>
-              <Field label="または画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="画像URL" htmlFor={`image_url-${mode}`} errors={e.image_url}>
                 <Input id={`image_url-${mode}`} name="image_url" defaultValue={option?.image_url ?? ''} />
+              </Field>
+              <Field label="または画像ファイル" htmlFor={`image_file-${mode}`}>
+                <Input id={`image_file-${mode}`} name="image_file" type="file" accept="image/*" className="py-2" />
               </Field>
             </div>
           </div>
@@ -1076,15 +875,15 @@ export function OptionForm({
       {mode === 'product' && <SubmitButton pending={pending} label="商品情報を保存" />}
 
       {showSales && (
-        <section id="sales-settings" className="card space-y-6 p-5 sm:p-6 scroll-mt-6">
-          <div>
-            <p className="text-lg font-semibold">{mode === 'sales' ? '販売・詳細設定' : '価格・公開設定'}</p>
-            <p className="mt-1 text-sm text-muted">商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。</p>
-          </div>
+        <section id="sales-settings" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+          <ProductSectionHeading
+            label={mode === 'sales' ? '販売・詳細設定' : '6. 価格・対象モデル'}
+            description="商品価格、対象モデル・公開状態を確認します。色・仕様ごとの価格も同じ商品情報画面で設定します。"
+          />
 
           <div className="rounded-xl border border-line bg-white p-4 sm:p-5">
             <p className="font-semibold">価格</p>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="商品価格（税別・円）" htmlFor={`price-${mode}`} required hint="価格未確認なら0円のまま下書き保存できます。0円で公開する場合はSTEP 2で確認します。標準品との差額は別途の計算で扱います" errors={e.price}>
                 <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
               </Field>
@@ -1105,7 +904,7 @@ export function OptionForm({
               <p className="font-semibold">通常設定</p>
               <p className="mt-1 text-xs text-muted">通常の商品登録では、対象モデルと公開状態だけ確認します。</p>
             </div>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="対象モデル" htmlFor={`base_model_id-${mode}`} hint="通常は全モデル共通。特定モデル専用の商品だけ変更します" errors={e.base_model_id}>
                 <Select id={`base_model_id-${mode}`} name="base_model_id" defaultValue={option?.base_model_id ?? ''}>
                   <option value="">全モデル共通</option>
@@ -1151,7 +950,7 @@ export function OptionForm({
                   <p className="font-semibold">シミュレーター表示条件</p>
                   <p className="mt-1 text-xs text-muted">通常は変更不要です。表示順・仕様限定・標準選択などを調整する場合だけ使用します。</p>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="表示順" htmlFor={`sort_order-${mode}`} errors={e.sort_order}>
                     <Input id={`sort_order-${mode}`} name="sort_order" type="number" defaultValue={option?.sort_order ?? 0} />
                   </Field>
@@ -1172,7 +971,7 @@ export function OptionForm({
                 </div>
               </section>
 
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="選択方式（表示）" htmlFor={`selection_type-${mode}`} errors={e.selection_type}>
                   <Select id={`selection_type-${mode}`} name="selection_type" defaultValue={option?.selection_type ?? 'checkbox'}>
                     <option value="checkbox">チェックボックス</option>

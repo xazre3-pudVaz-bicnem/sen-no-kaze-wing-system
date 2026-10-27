@@ -15,12 +15,14 @@ import { OptionHqStandardCostCard } from '@/components/admin/option-hq-standard-
 import { OptionMediaManager } from '@/components/admin/option-media-manager';
 import { OptionVariantManager } from '@/components/admin/option-variant-manager';
 import { RegisteredOptionEditFlow } from '@/components/admin/registered-option-edit-flow';
+import { PublishedOptionDeleteControl } from '@/components/admin/published-option-delete-control';
 import {
   ProductPriceUnitPublishedCard,
   ProductPriceUnitRegistrationField,
   ProductPriceUnitRouteSummary,
 } from '@/components/admin/product-price-unit';
 import { requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
+import { sekinoRegistrationWarnings } from '@/lib/domain/sekino-registration-check';
 import { findProductDuplicateCandidates } from '@/lib/domain/product-ledger';
 import {
   OptionRegistrationPreviewButton,
@@ -84,6 +86,7 @@ export default async function EditOptionPage({
   const registrationBlockingIssues = [
     ...(!option.image_url ? ['メイン画像を登録してください'] : []),
   ];
+  const sekinoWarnings = sekinoRegistrationWarnings(option, variants.groups, variants.choices);
   const registrationWarnings = [
     ...(duplicateCandidates.length > 0 ? ['既存商品に重複候補があります'] : []),
     ...(!option.manufacturer_document_url ? ['メーカー資料PDFが未登録です（原則登録）'] : []),
@@ -110,17 +113,9 @@ export default async function EditOptionPage({
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
         {sp.published && <Alert tone="success">商品を登録しました。</Alert>}
-        {hqCostAccess.available && hqCostAccess.canView && (
-          <OptionHqStandardCostCard
-            optionId={id}
-            canManage={hqCostAccess.canManage}
-            cost={hqCostAccess.cost}
-            versions={hqCostAccess.versions}
-          />
-        )}
-        <ProductPriceUnitPublishedCard optionId={id} />
         {canEditThisOption ? (
-          <RegisteredOptionEditFlow
+          <>
+            <RegisteredOptionEditFlow
             key={option.updated_at}
             option={option}
             categories={registrationDisplayCategories}
@@ -130,9 +125,43 @@ export default async function EditOptionPage({
             variantGroups={variants.groups}
             variantChoices={variants.choices}
             returnTo={returnTo}
+            duplicateCandidates={catalogEditor ? duplicateCandidates.slice(0, 3).map(({ option: candidate, reason }) => ({
+              id: candidate.id,
+              name: candidate.name,
+              productNo: candidate.product_no ?? null,
+              reason,
+              modelNo: candidate.model_no,
+              manufacturer: candidate.manufacturer,
+            })) : undefined}
+            financialTools={
+              <>
+                <ProductPriceUnitPublishedCard optionId={id} />
+                {hqCostAccess.available && hqCostAccess.canView && (
+                  <OptionHqStandardCostCard
+                    optionId={id}
+                    canManage={hqCostAccess.canManage}
+                    cost={hqCostAccess.cost}
+                    versions={hqCostAccess.versions}
+                  />
+                )}
+              </>
+            }
           />
+            {catalogEditor && <PublishedOptionDeleteControl optionId={id} />}
+          </>
         ) : (
-          <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>
+          <>
+            {hqCostAccess.available && hqCostAccess.canView && (
+              <OptionHqStandardCostCard
+                optionId={id}
+                canManage={hqCostAccess.canManage}
+                cost={hqCostAccess.cost}
+                versions={hqCostAccess.versions}
+              />
+            )}
+            <ProductPriceUnitPublishedCard optionId={id} />
+            <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>
+          </>
         )}
       </AdminPage>
     );
@@ -218,14 +247,6 @@ export default async function EditOptionPage({
                 .registration-step1-sections #product-details { order: 20; }
                 .registration-step1-sections #product-main-media { order: 30; }
                 .registration-step1-sections #sales-settings { order: 50; }
-                .registration-step1-sections #product-identify > div:first-child > p:first-child::before { content: '1. '; }
-                .registration-step1-sections #product-details > div:first-child > p:first-child::before { content: '2. '; }
-                .registration-step1-sections #product-main-media > div:first-child > p:first-child { font-size: 0; }
-                .registration-step1-sections #product-main-media > div:first-child > p:first-child::after { content: '3. 商品画像'; font-size: 1.125rem; line-height: 1.75rem; }
-                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2 { font-size: 0; }
-                .registration-step1-sections .registration-customer-selection #customer-selection > div:first-child > h2::after { content: '5. お客様選択'; font-size: 1.25rem; line-height: 1.75rem; }
-                .registration-step1-sections #sales-settings > div:first-child > p:first-child { font-size: 0; }
-                .registration-step1-sections #sales-settings > div:first-child > p:first-child::after { content: '6. 価格・対象モデル'; font-size: 1.125rem; line-height: 1.75rem; }
               `}</style>
 
               <OptionForm
@@ -366,6 +387,31 @@ export default async function EditOptionPage({
               />
             ) : (
               <div className="card p-5 text-sm text-danger">商品カテゴリーが見つからないため、お客様表示を確認できません。</div>
+            )}
+
+            {option.manufacturer?.includes('セキノ興産') && (
+              <section
+                data-testid="sekino-step2-color-code-check"
+                className="rounded-xl border border-[#ead6a7] bg-[#fff8e8] px-4 py-3 text-xs leading-5 text-ink-soft"
+              >
+                <h3 className="font-semibold text-[#7c5a18]">セキノ興産：メーカー表示条件の確認</h3>
+                <p className="mt-1">
+                  メーカー名・製品名・品番（色番号等）の表示が必要です。
+                  カラーの品番はメーカー資料と照合してください。
+                </p>
+                {sekinoWarnings.length > 0 ? (
+                  <ul className="mt-2 space-y-1" data-testid="sekino-step2-warnings">
+                    {sekinoWarnings.map((warning, index) => <li key={index}>・{warning}</li>)}
+                  </ul>
+                ) : (
+                  <p className="mt-2" data-testid="sekino-step2-manual-review">
+                    記載漏れの候補は検出されませんでした。品番の正確さは担当者が最終確認してください。
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] text-muted">
+                  文字列からの簡易チェックです。色番号が数字のみの場合などは注意が出る場合があります。公開を自動停止しません。
+                </p>
+              </section>
             )}
 
             <ProductPriceUnitRouteSummary />

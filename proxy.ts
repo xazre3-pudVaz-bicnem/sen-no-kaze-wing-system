@@ -14,6 +14,8 @@ export default async function proxy(request: NextRequest) {
   requestHeaders.set('x-wing-pathname', pathname);
   const isProtected = pathname.startsWith('/mypage') || pathname.startsWith('/admin');
   const isAuthPage = pathname === '/login' || pathname === '/register';
+  // 新しいパスワードの画面はログインした状態で使う。期限の切れたトークンをここで更新して Cookie に戻す（転送はしない）
+  const refreshesSession = pathname === '/reset-password/update';
 
   const hasSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   if (process.env.WING_LOCAL_MODE === '1' || !hasSupabase) {
@@ -27,7 +29,7 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  if (!isProtected && !isAuthPage) return NextResponse.next();
+  if (!isProtected && !isAuthPage && !refreshesSession) return NextResponse.next();
 
   let response = NextResponse.next({ request: { headers: requestHeaders } });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string, {

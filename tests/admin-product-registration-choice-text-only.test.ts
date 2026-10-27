@@ -17,15 +17,18 @@ describe('商品登録 お客様選択の簡潔化', () => {
 
   it('選択項目を作成した直後は最初の選択肢入力を開いて案内する', () => {
     expect(manager).toContain('const firstChoice = groupChoices.length === 0');
-    expect(manager).toContain("{firstChoice ? '最初の選択肢を追加' : '＋ 選択肢を追加'}");
+    expect(manager).toContain("{firstChoice ? '最初の選択肢を追加（追加金額も入力）' : '＋ 選択肢を追加（追加金額も入力）'}");
     expect(manager).toContain('open={firstChoice}');
   });
 
-  it('選択肢画像の新規登録UIを出さず、既存画像URLは保存時に保持する', () => {
-    expect(manager).not.toContain('name="image_file"');
-    expect(manager).not.toContain('SmartImage');
-    expect(manager).not.toContain('画像・表示などの詳細設定');
-    expect(manager).toContain('name="image_url" value={choice?.image_url ?? \'\'}');
+  it('色見本画像は任意で登録でき、既存URLの保持・解除を選べる', () => {
+    expect(manager).toContain('name="image_file"');
+    expect(manager).toContain('accept="image/jpeg,image/png,image/webp,image/avif"');
+    expect(manager).toContain('<SmartImage');
+    expect(manager).toContain('value={imageUrl}');
+    expect(manager).toContain('画像は任意');
+    expect(manager).toContain('解除');
+    expect(manager).toContain('元に戻す');
     expect(manager).toContain('表示などの詳細設定');
   });
 });

@@ -2160,6 +2160,7 @@ export class LocalStore implements DataStore {
     }
     const pdfUrl = createJob(source.manufacturer_document_url, 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
     if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
+    if (!jobs.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
     try {
       for (const job of jobs) {
         const from = path.resolve(root, ...job.from.split('/'));

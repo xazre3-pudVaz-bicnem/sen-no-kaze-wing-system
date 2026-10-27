@@ -200,6 +200,15 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   const copyFrom = String(formData.get('copy_from') ?? '').trim();
   if (copyFrom) {
     if (optionId || !catalogEditor) return { ok: false, error: '商品を複製する権限がありません。' };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(copyFrom)) {
+      return { ok: false, error: 'コピー元の商品IDが正しくありません。' };
+    }
+    // 複製元と別ファイルで作るため、初回フォームからの任意画像差し込みを拒否する。
+    const firstImageFile = formData.get('image_file');
+    if (String(formData.get('image_url') ?? '').trim() ||
+        (firstImageFile instanceof File && firstImageFile.size > 0)) {
+      return { ok: false, error: '商品複製時の画像は自動で複製します。画像変更は下書き作成後に行ってください。' };
+    }
     const source = await store.getOption(copyFrom);
     const categories = await store.listCategories();
     const sourceCategory = categories.find((category) => category.id === source?.category_id);

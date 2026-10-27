@@ -60,6 +60,7 @@ import {
   localCatalogImportUrl,
 } from '@/lib/import/catalog-import-images';
 import { assertOwnedLocalMediaPath, optionMediaPrefix } from '@/lib/storage/option-media';
+import { managedLocalObjectPath, safeCloneExtension, type ProductMediaCopySummary } from '@/lib/storage/product-media-copy';
 import { allocateLocalProductNo, filesDir, loadDb, saveDb, type LocalDb } from './local-db';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 import {
@@ -2126,6 +2127,69 @@ export class LocalStore implements DataStore {
       option.updated_at = nowIso();
     });
   }
+  async copyOptionMediaToNewDraft(sourceId: string, newDraftId: string): Promise<ProductMediaCopySummary> {
+    if (sourceId === newDraftId) throw new StoreError('VALIDATION', '同じ商品へ複製できません。');
+    const [source, target] = await Promise.all([this.getOption(sourceId), this.getOption(newDraftId)]);
+    if (!source || !target) throw new StoreError('NOT_FOUND', '複製元または複製先の商品が見つかりません。');
+    if (target.status !== 'draft' || target.image_url || target.manufacturer_document_url || target.gallery_images?.length) {
+      throw new StoreError('VALIDATION', '複製先はメディア未登録の新しい下書きである必要があります。');
+    }
+    const galleries = source.gallery_images ?? [];
+    if (galleries.length > 30) throw new StoreError('VALIDATION', '追加画像は30枚以下の商品だけ複製できます。');
+    const root = path.resolve(filesDir());
+    const copied: string[] = [];
+    const skipped: string[] = [];
+    const jobs: { from: string; to: string }[] = [];
+    const createJob = (url: string | null | undefined, kind: 'image' | 'pdf', destFolder: string, sourcePrefix?: string) => {
+      if (!url) return null;
+      const relative = managedLocalObjectPath(url);
+      if (!relative || (sourcePrefix && (!relative.startsWith(sourcePrefix) || relative.slice(sourcePrefix.length).includes('/')))) return null;
+      const ext = safeCloneExtension(relative, kind);
+      if (!ext) return null;
+      const to = `${destFolder}${randomUUID()}.${ext}`;
+      jobs.push({ from: relative, to });
+      return `/api/local-files/${to}`;
+    };
+    const mainUrl = createJob(source.image_url, 'image', `option-${newDraftId}/main/`);
+    if (source.image_url && !mainUrl) skipped.push('メイン画像');
+    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = [];
+    for (const image of galleries) {
+      const cloned = createJob(image.url, 'image', optionMediaPrefix(newDraftId, 'gallery'), optionMediaPrefix(sourceId, 'gallery'));
+      if (cloned) galleryRows.push({ option_id: newDraftId, url: cloned, alt: image.alt, caption: image.caption, sort_order: image.sort_order });
+      else skipped.push('追加画像');
+    }
+    const pdfUrl = createJob(source.manufacturer_document_url, 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
+    if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
+    try {
+      for (const job of jobs) {
+        const from = path.resolve(root, ...job.from.split('/'));
+        const to = path.resolve(root, ...job.to.split('/'));
+        if (!from.startsWith(`${root}${path.sep}`) || !to.startsWith(`${root}${path.sep}`)) {
+          throw new StoreError('FORBIDDEN', 'ファイルのコピー元またはコピー先が正しくありません。');
+        }
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.copyFileSync(from, to);
+        copied.push(to);
+      }
+      this.mutate((db) => {
+        const current = db.options.find((option) => option.id === newDraftId);
+        if (!current || current.status !== 'draft' || current.image_url || current.manufacturer_document_url || db.optionImages.some((row) => row.option_id === newDraftId)) {
+          throw new StoreError('LOCKED', '複製先の商品が更新されたためコピーを中止しました。');
+        }
+        current.image_url = mainUrl;
+        current.manufacturer_document_url = pdfUrl;
+        current.updated_at = nowIso();
+        for (const row of galleryRows) db.optionImages.push({ ...row, id: randomUUID(), created_at: nowIso() });
+      });
+      return { copiedMain: Boolean(mainUrl), copiedGallery: galleryRows.length, copiedPdf: Boolean(pdfUrl), skipped };
+    } catch (error) {
+      for (const file of copied) {
+        try { fs.rmSync(file, { force: true }); } catch (removeError) { console.error('[wing] copied local media cleanup failed', removeError); }
+      }
+      throw error;
+    }
+  }
+
   async setOptionRelations(
     optionId: string,
     dependencies: { requires_option_id: string; message: string | null }[],

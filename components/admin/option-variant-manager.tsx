@@ -1,6 +1,9 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
+import { SmartImage } from '@/components/ui/smart-image';
+import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import {
   saveVariantChoiceAction,
   saveVariantGroupAction,
@@ -73,6 +76,15 @@ function GroupFields({
         />
       </Field>
 
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-ivory/20 px-3 py-2" data-testid="variant-group-visibility">
+        <Checkbox
+          checked={customerVisible}
+          onChange={(event) => setCustomerVisible(event.target.checked)}
+          label="お客様に表示する"
+        />
+        <p className="text-xs text-muted">不要ならチェックを外して「選択項目を保存」（履歴は保持）。</p>
+      </div>
+
       <details className="rounded-xl border border-line bg-ivory/30 p-4">
         <summary className="cursor-pointer text-sm font-semibold">詳細設定</summary>
         <p className="mt-2 text-xs text-muted">
@@ -89,13 +101,6 @@ function GroupFields({
                 defaultValue={group?.sort_order ?? groups.length}
               />
             </Field>
-            <div className="flex items-end">
-              <Checkbox
-                checked={customerVisible}
-                onChange={(event) => setCustomerVisible(event.target.checked)}
-                label="お客様に表示する"
-              />
-            </div>
           </div>
 
           <Field label="補足" htmlFor={`variant-group-note-${group?.id ?? 'new'}`} hint="お客様画面の選択項目の下に表示します" errors={e.note}>
@@ -184,8 +189,69 @@ function ChoiceEditor({
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
   const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
   const [customerVisible, setCustomerVisible] = useState(choice?.status !== 'draft');
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [imageUrl, setImageUrl] = useState(choice?.image_url ?? '');
+  const [selectedImage, setSelectedImage] = useState<{ url: string; fileName: string } | null>(null);
+  const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const previewUrl = selectedImage?.url ?? (imageRemoved ? null : imageUrl.trim() || null);
+  useEffect(() => {
+    return () => {
+      if (selectedImage) URL.revokeObjectURL(selectedImage.url);
+    };
+  }, [selectedImage]);
   const e = state.fieldErrors ?? {};
   const isNew = !choice;
+  const editorDetailsRef = useRef<HTMLDetailsElement>(null);
+
+  // 保存結果（エラーを含む）は折り畳まれたまま隠さない。
+  useEffect(() => {
+    if (state.ok || state.error || Object.keys(state.fieldErrors ?? {}).length > 0) {
+      const editor = editorDetailsRef.current;
+      if (!editor) return;
+      editor.open = true;
+      const groupDetails = editor.closest<HTMLDetailsElement>('details[data-testid="variant-group-compact"]');
+      if (groupDetails) groupDetails.open = true;
+    }
+  }, [state]);
+
+  const onImageUrlChange = (value: string) => {
+    // URL とファイルの二重指定を避ける。行は既存の choice ID と紐づけたまま。
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    setSelectedImage(null);
+    setImageUrl(value);
+    setImageRemoved(!value.trim() && Boolean(choice?.image_url));
+    setFailedPreviewUrl(null);
+  };
+
+  const onImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setSelectedImage(null);
+      if (!imageUrl.trim() && !imageRemoved) {
+        setImageUrl(choice?.image_url ?? '');
+      }
+      return;
+    }
+    setImageUrl('');
+    setImageRemoved(false);
+    setFailedPreviewUrl(null);
+    setSelectedImage({ url: URL.createObjectURL(file), fileName: file.name });
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImageUrl('');
+    setImageRemoved(true);
+    setFailedPreviewUrl(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const restoreImage = () => {
+    clearImage();
+    setImageUrl(choice?.image_url ?? '');
+    setImageRemoved(false);
+  };
 
   const form = (
     <form action={action} className="space-y-4" noValidate>
@@ -193,37 +259,107 @@ function ChoiceEditor({
       <input type="hidden" name="option_id" value={optionId} />
       <input type="hidden" name="group_id" value={group.id} />
       <input type="hidden" name="status" value={customerVisible ? 'published' : 'draft'} />
-      <input type="hidden" name="image_url" value={choice?.image_url ?? ''} />
       <ActionStatus state={state} />
 
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
-        <Field label="選択肢名" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} hint="例：ホワイト／ベージュ／ブラック" required errors={e.name}>
-          <Input
-            id={`variant-choice-name-${choice?.id ?? group.id}`}
-            name="name"
-            defaultValue={choice?.name ?? ''}
-            placeholder="例：ホワイト"
-            required
-          />
-        </Field>
-        <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} errors={e.extra_price}>
-          <Input
-            id={`variant-choice-price-${choice?.id ?? group.id}`}
-            name="extra_price"
-            type="number"
-            min={0}
-            step={100}
-            defaultValue={choice?.extra_price ?? 0}
-          />
-        </Field>
-      </div>
+      <div className="space-y-2 border-b border-line/70 pb-3" data-testid="draft-choice-unified-two-row">
+        <div className="flex flex-wrap items-end gap-3" data-testid="draft-choice-main-row">
+          <div className="min-w-0 flex-[1_1_12rem]">
+            <Field label="選択肢名" htmlFor={`variant-choice-name-${choice?.id ?? group.id}`} hint="例：ホワイト／ベージュ／ブラック" required errors={e.name}>
+              <Input
+                id={`variant-choice-name-${choice?.id ?? group.id}`}
+                name="name"
+                defaultValue={choice?.name ?? ''}
+                placeholder="例：ホワイト"
+                required
+              />
+            </Field>
+          </div>
+          <div className="w-36 shrink-0">
+            <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} hint="選択肢ごとに設定します。追加がなければ0円です。" errors={e.extra_price}>
+              <Input
+                id={`variant-choice-price-${choice?.id ?? group.id}`}
+                name="extra_price"
+                type="number"
+                min={0}
+                step={100}
+                defaultValue={choice?.extra_price ?? 0}
+              />
+            </Field>
+          </div>
+          <div className="pb-2">
+            <Checkbox
+              checked={kind === 'standard'}
+              disabled={kind === 'fixed'}
+              onChange={(event) => setKind(event.target.checked ? 'standard' : 'option')}
+              label="標準の選択肢にする"
+            />
+          </div>
+        </div>
 
-      <Checkbox
-        checked={kind === 'standard'}
-        disabled={kind === 'fixed'}
-        onChange={(event) => setKind(event.target.checked ? 'standard' : 'option')}
-        label="標準の選択肢にする"
-      />
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-ivory/20 px-3 py-2" data-testid="variant-choice-visibility">
+          <Checkbox
+            checked={customerVisible}
+            onChange={(event) => setCustomerVisible(event.target.checked)}
+            label="お客様に表示する"
+          />
+          <span className="text-xs text-muted">不要ならチェックを外して「選択肢を保存」（履歴は保持）。</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2" data-testid="draft-choice-image-row">
+          <label className="sr-only" htmlFor={`variant-choice-image-url-${choice?.id ?? group.id}`}>画像URL（任意）</label>
+          <Input
+            id={`variant-choice-image-url-${choice?.id ?? group.id}`}
+            name="image_url"
+            value={imageUrl}
+            onChange={(event) => onImageUrlChange(event.target.value)}
+            placeholder="画像URL（https://...）"
+            className="min-w-0 max-w-[22rem] flex-[1_1_12rem]"
+            disabled={pending}
+          />
+          <label className="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink-soft hover:border-brown">
+            ファイル選択
+            <input
+              ref={imageInputRef}
+              id={`variant-choice-image-${choice?.id ?? group.id}`}
+              name="image_file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              onChange={onImageChange}
+              className="sr-only"
+              disabled={pending}
+            />
+          </label>
+          {previewUrl && (
+            <span className="relative size-11 shrink-0 overflow-hidden rounded border border-line bg-white" title="画像プレビュー">
+              {failedPreviewUrl === previewUrl ? (
+                <span className="flex h-full items-center justify-center text-[9px] text-muted">表示不可</span>
+              ) : (
+                <SmartImage
+                  src={previewUrl}
+                  alt={`${choice?.name ?? '選択肢'}の画像プレビュー`}
+                  fill
+                  sizes="44px"
+                  className="object-contain"
+                  onError={() => setFailedPreviewUrl(previewUrl)}
+                />
+              )}
+            </span>
+          )}
+          {(imageUrl.trim() || selectedImage) && (
+            <button type="button" className="text-xs text-brown underline underline-offset-2" disabled={pending} onClick={clearImage}>
+              解除
+            </button>
+          )}
+          {imageRemoved && choice?.image_url && (
+            <button type="button" className="text-xs text-brown underline underline-offset-2" disabled={pending} onClick={restoreImage}>
+              元に戻す
+            </button>
+          )}
+        </div>
+        {selectedImage && <p className="break-all text-xs text-muted">選択中：{selectedImage.fileName}（保存すると反映）</p>}
+        {imageRemoved && choice?.image_url && <p className="text-xs text-muted">保存すると画像の関連付けを解除します。</p>}
+        <p className="text-xs text-muted">画像は任意（JPEG / PNG / WebP / AVIF、10MB以下）。メーカーの掲載条件を確認してください。</p>
+      </div>
 
       <details className="rounded-xl border border-line bg-ivory/30 p-4">
         <summary className="cursor-pointer text-sm font-semibold">表示などの詳細設定</summary>
@@ -232,11 +368,6 @@ function ChoiceEditor({
         </p>
         <div className="mt-4 space-y-4">
           <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl border border-line bg-white px-4 py-3">
-            <Checkbox
-              checked={customerVisible}
-              onChange={(event) => setCustomerVisible(event.target.checked)}
-              label="お客様に表示する"
-            />
             <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
           </div>
 
@@ -283,19 +414,30 @@ function ChoiceEditor({
   if (isNew) return <div className="rounded-xl border border-dashed border-line bg-white p-4">{form}</div>;
 
   return (
-    <details className="rounded-xl border border-line bg-white">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
-        <span className="min-w-0">
-          <span className="font-semibold text-ink">{choice.name}</span>
-          {choice.kind === 'standard' && <span className="ml-2 text-xs text-success">標準</span>}
-          {!choice.price_on_request && choice.extra_price > 0 && (
-            <span className="ml-2 text-xs text-ink-soft">+¥{choice.extra_price.toLocaleString('ja-JP')}</span>
-          )}
-          {choice.price_on_request && <span className="ml-2 text-xs text-warn">別途見積</span>}
+    <details
+      ref={editorDetailsRef}
+      className="rounded-lg border border-line bg-white"
+      data-testid="variant-choice-price-editor"
+    >
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown [&::-webkit-details-marker]:hidden">
+        {choice.image_url ? (
+          <span className="relative size-9 shrink-0 overflow-hidden rounded-md border border-line bg-white">
+            <SmartImage src={choice.image_url} alt="" fill sizes="36px" className="object-contain" />
+          </span>
+        ) : (
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-md border border-line bg-ivory/40 text-xs text-muted">画像</span>
+        )}
+        <span className="min-w-0 flex-[1_1_8rem] break-words text-sm font-semibold text-ink">{choice.name}</span>
+        <span className="shrink-0 text-xs font-medium text-ink-soft">
+          {choice.price_on_request ? '別途見積' : `追加金額 ¥${choice.extra_price.toLocaleString('ja-JP')}（税別）`}
         </span>
-        <span className="shrink-0 text-xs text-muted">{choice.status === 'published' ? '表示' : '非表示'}・編集</span>
+        <span className="shrink-0 text-xs text-muted">
+          {choice.kind === 'standard' ? '標準' : choice.kind === 'fixed' ? '固定' : '追加'}
+          {choice.status === 'draft' ? '・非表示' : ''}
+        </span>
+        <span className="ml-auto shrink-0 text-xs font-semibold text-brown">編集 <span aria-hidden="true">▾</span></span>
       </summary>
-      <div className="border-t border-line p-4">{form}</div>
+      <div className="border-t border-line p-3 sm:p-4">{form}</div>
     </details>
   );
 }
@@ -313,17 +455,16 @@ export function OptionVariantManager({
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 
   return (
-    <section id="customer-selection" className="space-y-5 scroll-mt-6">
-      <div>
-        <h2 className="text-xl font-semibold">お客様選択</h2>
-        <p className="mt-1 text-sm text-muted">
-          お客様が選べる部位・色・仕様などがある場合だけ設定します。
-        </p>
-      </div>
+    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+      <ProductSectionHeading
+        label="5. お客様選択"
+        description="部位・色・仕様などの選択項目を作り、各選択肢に追加金額（税別）を入力できます。"
+        level="h2"
+      />
 
       <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="選択項目を追加">
         <p className="text-sm font-semibold">選択項目を追加</p>
-        <p className="mt-1 text-xs text-muted">例：床、カウンター、アクセントパネル、浴槽など</p>
+        <p className="mt-1 text-xs text-muted">① 選択項目（例：水栓位置）を作成 → ② 選択肢（例：左・右）を追加 → ③ 各選択肢の追加金額（税別・円）を入力します。</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="btn-secondary btn-sm" onClick={() => setNewGroupOpen(true)}>
             ＋ 選択項目を追加
@@ -350,7 +491,7 @@ export function OptionVariantManager({
 
       {orderedGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-white px-5 py-5 text-sm text-muted">
-          お客様が選ぶ項目はまだありません。必要な場合だけ上の「選択項目を追加」から登録してください。
+          お客様が選ぶ項目はまだありません。上の「選択項目を追加」で項目を作成すると、各選択肢の名前と「追加金額（税別・円）」を入力できます。
         </div>
       ) : (
         <div className="space-y-4">
@@ -360,23 +501,23 @@ export function OptionVariantManager({
               .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
             const firstChoice = groupChoices.length === 0;
             return (
-              <article key={group.id} className="card space-y-4 p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold">{group.name}</h3>
-                    <p className="mt-1 text-xs text-muted">
-                      {groupChoices.length}選択肢・{group.status === 'published' ? 'お客様に表示' : '非表示'}
-                    </p>
-                  </div>
-                  {group.depends_on_group_code && (
-                    <span className="rounded-full bg-ivory px-2.5 py-1 text-xs text-ink-soft">表示条件あり</span>
-                  )}
-                </div>
-
-                <div className="space-y-2">
+              <details
+                key={group.id}
+                className="card overflow-hidden"
+                data-testid="variant-group-compact"
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-4 py-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brown sm:px-5 [&::-webkit-details-marker]:hidden">
+                  <span aria-hidden="true" className="text-brown">▸</span>
+                  <span className="min-w-0 flex-1 break-words font-semibold text-ink">{group.name}</span>
+                  <span className="text-xs text-muted">{groupChoices.length}選択肢</span>
+                  <span className="text-xs text-muted">{group.status === 'published' ? 'お客様に表示' : '非表示'}{group.is_required ? '・必須' : ''}</span>
+                </summary>
+                <div className="space-y-3 border-t border-line px-3 py-3 sm:px-5">
+                  <ProductVariantGroupHeading group={group} choiceCount={groupChoices.length} />
+                  <div className="space-y-2">
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
-                      key={choice.id}
+                      key={`${choice.id}:${choice.image_url ?? ''}`}
                       optionId={option.id}
                       group={group}
                       choice={choice}
@@ -386,7 +527,7 @@ export function OptionVariantManager({
 
                   <details className="rounded-xl border border-dashed border-line bg-ivory/20" open={firstChoice}>
                     <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-                      {firstChoice ? '最初の選択肢を追加' : '＋ 選択肢を追加'}
+                      {firstChoice ? '最初の選択肢を追加（追加金額も入力）' : '＋ 選択肢を追加（追加金額も入力）'}
                     </summary>
                     <div className="border-t border-line p-4">
                       <ChoiceEditor
@@ -400,19 +541,20 @@ export function OptionVariantManager({
                 </div>
 
                 <details className="rounded-xl border border-line bg-ivory/30 p-4">
-                  <summary className="cursor-pointer text-sm font-semibold">この項目の名前・詳細設定</summary>
+                  <summary className="cursor-pointer text-sm font-semibold">この項目の名前・詳細設定（非表示もここで設定）</summary>
                   <div className="mt-4">
                     <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
                   </div>
-                </details>
-              </article>
+                  </details>
+                </div>
+              </details>
             );
           })}
         </div>
       )}
 
       <p className="text-xs text-muted">
-        使用済みの見積・保存仕様との整合を守るため、物理削除は行いません。不要になった項目や選択肢は「お客様に表示する」をOFFにして管理します。
+        選択項目や選択肢の物理削除は行いません。不要なら「お客様に表示する」をOFFにして保存してください（履歴は保持）。
       </p>
     </section>
   );

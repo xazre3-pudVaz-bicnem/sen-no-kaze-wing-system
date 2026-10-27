@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useActionState, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addOptionImageAction,
@@ -16,10 +16,14 @@ import {
 } from '@/lib/actions/product-media-url';
 import type { OptionImage, ProductOption } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
+import { ProductDocumentStatus, ProductGalleryCount, ProductGalleryThumbnail } from '@/components/admin/product-media-presentation';
+import { ProductSectionHeading } from '@/components/admin/product-section-heading';
 import { Alert, Button, Field, Input, Spinner } from '@/components/ui';
 import { useOptionRegistrationSave } from '@/components/admin/option-registration-save-boundary';
 
 const initial: AdminFormState = { ok: false };
+
+type ExpandedImage = { src: string; alt: string };
 
 function ActionStatus({ state }: { state: AdminFormState }) {
   if (state.error) return <Alert tone="danger">{state.error}</Alert>;
@@ -37,13 +41,26 @@ function PendingButton({ pending, children }: { pending: boolean; children: Reac
   );
 }
 
-function OptionImageEditor({ optionId, image }: { optionId: string; image: OptionImage }) {
+function OptionImageEditor({
+  optionId,
+  image,
+  onPreview,
+}: {
+  optionId: string;
+  image: OptionImage;
+  onPreview: (preview: ExpandedImage) => void;
+}) {
   const [state, action, pending] = useActionState(updateOptionImageAction, initial);
   return (
     <li className="overflow-hidden rounded-xl border border-line bg-white">
-      <div className="relative h-32 bg-sand sm:h-36">
-        <SmartImage src={image.url} alt={image.alt} fill sizes="160px" className="object-contain" />
-      </div>
+      <button
+        type="button"
+        className="block w-full cursor-zoom-in overflow-hidden rounded-t-xl bg-sand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+        aria-label={`${image.caption?.trim() || '追加画像'}を拡大表示`}
+        onClick={() => onPreview({ src: image.url, alt: image.alt || image.caption?.trim() || '追加画像' })}
+      >
+        <ProductGalleryThumbnail image={image} />
+      </button>
       <div className="space-y-2 p-3">
         <ActionStatus state={state} />
         <div className="flex items-start justify-between gap-2">
@@ -90,6 +107,9 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
   const [imageUrl, setImageUrl] = useState('');
   const [documentUrl, setDocumentUrl] = useState('');
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfReplaceOpen, setPdfReplaceOpen] = useState(false);
+  const [expandedImage, setExpandedImage] = useState<ExpandedImage | null>(null);
+  const imageCloseButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const section = document.getElementById('product-main-media');
@@ -104,8 +124,11 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
     preview.dataset.mainImageSelectionPreview = 'true';
     preview.className = 'mt-4 flex flex-wrap items-start gap-3';
 
-    const frame = document.createElement('div');
-    frame.className = 'flex h-40 w-56 items-center justify-center overflow-hidden rounded-lg border border-line bg-white';
+    const frame = document.createElement('button');
+    frame.type = 'button';
+    frame.disabled = true;
+    frame.setAttribute('aria-label', 'メイン画像を拡大表示');
+    frame.className = 'flex h-40 w-56 items-center justify-center overflow-hidden rounded-lg border border-line bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-default';
 
     const image = document.createElement('img');
     image.alt = 'メイン画像プレビュー';
@@ -152,6 +175,8 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       image.hidden = !normalized;
       empty.hidden = Boolean(normalized);
       clearButton.hidden = !isLocalSelection;
+      frame.disabled = !normalized;
+      frame.classList.toggle('cursor-zoom-in', Boolean(normalized));
       if (normalized) image.src = normalized;
       else image.removeAttribute('src');
     };
@@ -178,6 +203,12 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
+    const handleExpandMainImage = () => {
+      const src = image.getAttribute('src');
+      if (src && !frame.disabled) setExpandedImage({ src, alt: 'メイン画像' });
+    };
+
+    frame.addEventListener('click', handleExpandMainImage);
     fileInput.addEventListener('change', handleFileChange);
     urlInput.addEventListener('input', handleUrlInput);
     clearButton.addEventListener('click', handleClearSelection);
@@ -185,6 +216,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
     return () => {
       revokeObjectUrl();
+      frame.removeEventListener('click', handleExpandMainImage);
       fileInput.removeEventListener('change', handleFileChange);
       urlInput.removeEventListener('input', handleUrlInput);
       clearButton.removeEventListener('click', handleClearSelection);
@@ -200,6 +232,23 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pdfPreviewOpen]);
+
+  useEffect(() => {
+    if (!expandedImage) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setExpandedImage(null);
+      }
+    };
+    imageCloseButtonRef.current?.focus();
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      previouslyFocused?.focus();
+    };
+  }, [expandedImage]);
 
   const handleSubImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -307,7 +356,10 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       formData.set('file', file);
       const result = await uploadOptionManufacturerDocumentAction(initial, formData);
       setDocState(result);
-      if (result.ok) router.refresh();
+      if (result.ok) {
+        setPdfReplaceOpen(false);
+        router.refresh();
+      }
     } catch {
       setDocState({ ok: false, error: 'メーカー資料PDFの保存中にエラーが発生しました。' });
     } finally {
@@ -336,6 +388,7 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
       setDocState(result);
       if (result.ok) {
         setDocumentUrl('');
+        setPdfReplaceOpen(false);
         router.refresh();
       }
     } catch {
@@ -347,19 +400,19 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
   return (
     <div id="product-media" className="space-y-6">
-      <section id="product-sub-images" className="card space-y-5 p-5 sm:p-6 scroll-mt-6">
+      <section id="product-sub-images" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">サブ画像 <span className="text-xs font-normal text-muted">任意</span></h2>
             <p className="mt-1 text-xs text-muted">商品詳細で見せたい追加画像がある場合だけ登録します。</p>
           </div>
-          <span className="rounded-full bg-ivory px-3 py-1 text-xs font-semibold text-ink-soft">{images.length}枚</span>
+          <ProductGalleryCount count={images.length} />
         </div>
 
         {images.length > 0 ? (
           <ul className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
             {images.map((image) => (
-              <OptionImageEditor key={image.id} optionId={option.id} image={image} />
+              <OptionImageEditor key={image.id} optionId={option.id} image={image} onPreview={setExpandedImage} />
             ))}
           </ul>
         ) : (
@@ -370,32 +423,15 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
 
         <div className="border-t border-line pt-5">
           <ActionStatus state={imageState} />
-          <div className="mt-3">
-            <Field
-              label="サブ画像ファイル"
-              htmlFor="option-sub-image"
-              hint="複数選択可・1枚10MBまで。選択すると自動保存します。間違えた場合は登録後すぐ削除できます。"
-              errors={imageState.fieldErrors?.file}
-            >
-              <Input
-                id="option-sub-image"
-                name="file"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif"
-                className="py-2"
-                multiple
-                disabled={imagePending}
-                onChange={(event) => void handleSubImages(event)}
-              />
-            </Field>
-            <div className="mt-4 rounded-lg border border-line bg-ivory/30 p-3">
+          <div className="mt-3 grid gap-4 md:grid-cols-2 md:items-start" data-testid="additional-image-input-layout">
+            <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
               <Field
-                label="または画像URLから登録"
+                label="画像URLから登録"
                 htmlFor="option-sub-image-url"
-                hint="Excelの追加画像URLをそのまま貼り付けできます。URL先の画像を取得し、千の風側のストレージへ保存します。"
+                hint="Excelの追加画像URLを貼り付けて登録します。画像は千の風側へ保存します。"
                 errors={imageState.fieldErrors?.source_url}
               >
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="space-y-2">
                   <Input
                     id="option-sub-image-url"
                     type="url"
@@ -404,46 +440,58 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
                     placeholder="https://www.example.com/image.jpg"
                     disabled={imagePending}
                   />
-                  <Button type="button" disabled={imagePending || !imageUrl.trim()} onClick={() => void handleSubImageUrl()} className="shrink-0">
-                    {imagePending && <Spinner />}
-                    URLから登録
-                  </Button>
+                  <div className="flex justify-start">
+                    <Button type="button" disabled={imagePending || !imageUrl.trim()} onClick={() => void handleSubImageUrl()} className="w-full sm:w-auto">
+                      {imagePending && <Spinner />}
+                      URLから登録
+                    </Button>
+                  </div>
                 </div>
               </Field>
             </div>
-            {imagePending && (
-              <p className="mt-2 flex items-center gap-2 text-xs text-muted">
-                <Spinner />
-                追加画像を保存しています…
-              </p>
-            )}
+            <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
+              <Field
+                label="または画像ファイルから登録"
+                htmlFor="option-sub-image"
+                hint="複数選択可・1枚10MBまで。選択すると自動保存します。"
+                errors={imageState.fieldErrors?.file}
+              >
+                <Input
+                  id="option-sub-image"
+                  name="file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  className="py-2"
+                  multiple
+                  disabled={imagePending}
+                  onChange={(event) => void handleSubImages(event)}
+                />
+              </Field>
+            </div>
           </div>
+          {imagePending && (
+            <p className="mt-2 flex items-center gap-2 text-xs text-muted">
+              <Spinner />
+              追加画像を保存しています…
+            </p>
+          )}
         </div>
       </section>
 
-      <section id="manufacturer-documents" className="card space-y-5 p-5 sm:p-6 scroll-mt-6" data-testid="manufacturer-document-section">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">4. メーカー資料</h2>
-              <span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。
-            </p>
-          </div>
-          <span
-            data-testid="manufacturer-document-status"
-            data-registered={option.manufacturer_document_url ? 'true' : 'false'}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${option.manufacturer_document_url ? 'bg-[#eaf6f1] text-[#245a48]' : 'bg-[#fff8e8] text-[#7c5a18]'}`}
-          >
-            {option.manufacturer_document_url ? '登録済み' : '未登録'}
-          </span>
-        </div>
+      <section id="manufacturer-documents" className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-testid="manufacturer-document-section">
+        <ProductSectionHeading
+          label="4. メーカー資料"
+          description="商品の仕様・機能・色・柄などを確認するための資料です。原則1商品につき1PDFを登録します。"
+          level="h2"
+          badge={<span className="rounded-full bg-ivory px-2.5 py-1 text-[0.7rem] font-semibold text-brown">原則登録</span>}
+          trailing={<ProductDocumentStatus url={option.manufacturer_document_url} testId="manufacturer-document-status" />}
+        />
 
-        <p className="text-xs leading-5 text-ink-soft">
-          メーカー資料が用意されていない商品は未登録のまま進められます。その場合は登録前チェックで確認事項として表示します。
-        </p>
+        {!option.manufacturer_document_url && (
+          <p className="text-xs leading-5 text-ink-soft">
+            資料がない場合は未登録で進められます。登録前チェックに確認事項として表示します。
+          </p>
+        )}
 
         {option.manufacturer_document_url ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ivory/50 px-4 py-3">
@@ -472,45 +520,66 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
         )}
 
         <ActionStatus state={docState} />
-        <Field
-          label={option.manufacturer_document_url ? 'メーカー資料PDFを差し替える' : 'メーカー資料PDFを登録'}
-          htmlFor="manufacturer-document"
-          hint="PDFのみ・20MBまで。ファイルを選択すると自動保存します。"
-          errors={docState.fieldErrors?.file}
-        >
-          <Input
-            id="manufacturer-document"
-            name="file"
-            type="file"
-            accept="application/pdf,.pdf"
-            className="py-2"
+        {option.manufacturer_document_url && (
+          <button
+            type="button"
+            className="registration-pdf-replace-toggle"
+            aria-expanded={pdfReplaceOpen}
+            aria-controls="manufacturer-document-replace-fields"
             disabled={docPending}
-            onChange={(event) => void handleManufacturerDocument(event)}
-          />
-        </Field>
-
-        <div className="rounded-lg border border-line bg-ivory/30 p-3">
-          <Field
-            label={option.manufacturer_document_url ? 'またはPDFのURLから差し替える' : 'またはPDFのURLから登録'}
-            htmlFor="manufacturer-document-url"
-            hint="ExcelのメーカーPDF URLを貼り付けできます。カタログ閲覧ページではなく、PDF本体のURLを入力してください。"
-            errors={docState.fieldErrors?.source_url}
+            onClick={() => setPdfReplaceOpen((open) => !open)}
           >
-            <div className="flex flex-col gap-2 sm:flex-row">
+            {pdfReplaceOpen ? 'PDFの差し替えを閉じる' : 'PDFを差し替える'}
+          </button>
+        )}
+        <div
+          id="manufacturer-document-replace-fields"
+          className={option.manufacturer_document_url && !pdfReplaceOpen ? 'hidden' : 'grid gap-4 md:grid-cols-2 md:items-start'}
+          data-testid="manufacturer-pdf-input-layout"
+        >
+          <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
+            <Field
+              label={option.manufacturer_document_url ? 'PDFのURLから差し替える' : 'PDFのURLから登録'}
+              htmlFor="manufacturer-document-url"
+              hint="PDF本体のURLを入力してください。閲覧ページのURLでは登録できません。"
+              errors={docState.fieldErrors?.source_url}
+            >
+              <div className="space-y-2">
+                <Input
+                  id="manufacturer-document-url"
+                  type="url"
+                  value={documentUrl}
+                  onChange={(event) => setDocumentUrl(event.target.value)}
+                  placeholder="https://www.example.com/catalog.pdf"
+                  disabled={docPending}
+                />
+                <div className="flex justify-start">
+                  <Button type="button" disabled={docPending || !documentUrl.trim()} onClick={() => void handleManufacturerDocumentUrl()} className="w-full sm:w-auto">
+                    {docPending && <Spinner />}
+                    URLから登録
+                  </Button>
+                </div>
+              </div>
+            </Field>
+          </div>
+          <div className="min-w-0 rounded-lg border border-line bg-ivory/30 p-3">
+            <Field
+              label={option.manufacturer_document_url ? 'またはPDFファイルで差し替える' : 'またはPDFファイルから登録'}
+              htmlFor="manufacturer-document"
+              hint="PDFのみ・20MBまで。ファイルを選択すると自動保存します。"
+              errors={docState.fieldErrors?.file}
+            >
               <Input
-                id="manufacturer-document-url"
-                type="url"
-                value={documentUrl}
-                onChange={(event) => setDocumentUrl(event.target.value)}
-                placeholder="https://www.example.com/catalog.pdf"
+                id="manufacturer-document"
+                name="file"
+                type="file"
+                accept="application/pdf,.pdf"
+                className="py-2"
                 disabled={docPending}
+                onChange={(event) => void handleManufacturerDocument(event)}
               />
-              <Button type="button" disabled={docPending || !documentUrl.trim()} onClick={() => void handleManufacturerDocumentUrl()} className="shrink-0">
-                {docPending && <Spinner />}
-                URLから登録
-              </Button>
-            </div>
-          </Field>
+            </Field>
+          </div>
         </div>
 
         {docPending && (
@@ -520,6 +589,49 @@ export function OptionMediaManager({ option }: { option: ProductOption }) {
           </p>
         )}
       </section>
+
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="商品画像の拡大表示"
+          data-testid="product-image-lightbox"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setExpandedImage(null);
+          }}
+        >
+          <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+              <p className="truncate text-sm font-semibold text-ink">{expandedImage.alt}</p>
+              <button
+                ref={imageCloseButtonRef}
+                type="button"
+                aria-label="拡大画像を閉じる"
+                onClick={() => setExpandedImage(null)}
+                className="shrink-0 rounded-md border border-line px-3 py-1 text-sm font-semibold text-ink hover:bg-ivory"
+              >
+                閉じる
+              </button>
+            </div>
+            <button
+              type="button"
+              aria-label="拡大画像をクリックして閉じる"
+              onClick={() => setExpandedImage(null)}
+              className="relative block min-h-0 w-full flex-1 cursor-zoom-out bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+            >
+              <SmartImage
+                src={expandedImage.src}
+                alt={expandedImage.alt}
+                fill
+                sizes="(max-width: 640px) 95vw, 1024px"
+                className="object-contain p-3 sm:p-5"
+                unoptimized
+              />
+            </button>
+          </div>
+        </div>
+      )}
 
       {pdfPreviewOpen && option.manufacturer_document_url && (
         <div

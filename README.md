@@ -90,7 +90,7 @@ e2e/, tests/         Playwright / Vitest
 
 ## 現在のデプロイ
 
-- 本番: https://sen-no-kaze-wing-system.vercel.app （Vercel `cypress-projects1/sen-no-kaze-wing-system`、GitHub `xazre3-pudVaz-bicnem/sen-no-kaze-wing-system` の main に push で自動デプロイ）
+- 本番: https://www.sen-no-kaze.com （`sen-no-kaze.com` は www へ転送。Vercel の既定のドメイン https://sen-no-kaze-wing-system.vercel.app も同じ本番。Vercel `cypress-projects1/sen-no-kaze-wing-system`、GitHub `xazre3-pudVaz-bicnem/sen-no-kaze-wing-system` の main に push で自動デプロイ）
 - Supabase: `sen-no-kaze-wing-system`（ref `ljgbpbymdkrjcnezaqno`、Tokyo）。migrations 0001〜0012 適用済み・商品台帳投入済み
 
 > **✅ migrations 0001〜0012 は適用済みです。**
@@ -150,7 +150,7 @@ E2E は `playwright.config.ts` がローカルモードの dev サーバー（po
 
 1. リポジトリを Vercel に接続
 2. 環境変数（`.env.example` の Supabase 4 項目）を設定
-3. `NEXT_PUBLIC_SITE_URL` を本番 URL に設定（未設定だと noindex のまま）
+3. `NEXT_PUBLIC_SITE_URL` を本番 URL（`https://www.sen-no-kaze.com`）に設定（未設定だと noindex のまま。canonical・OGP・sitemap・メールのリンク・認証の戻り先はこの値から作る。docs/custom-domain-settings.md）
 4. Supabase Auth の Redirect URLs に `https://<domain>/auth/callback` を追加
 
 ## ドキュメント

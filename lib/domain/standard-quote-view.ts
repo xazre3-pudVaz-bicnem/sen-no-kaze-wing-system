@@ -5,6 +5,7 @@
  * - 本体マスター由来の行：原価単価 = trunc(基準原価単価 × 販売費率)。基準原価単価は DB の値で、保存では送らない
  * - 経費の行は画面で持たない。区分の明細小計（POR を除く）× 経費率で、保存のたびに DB が作り直す
  * - POR（価格未確定）は下書きでは使えるが、残っていると発行できない
+ * - 「0円確定」「対象外」は本体以外の「金額を入力」の 0 円の行。保存のときにサーバーが備考の印にする（対象外は原価も 0 円。D1 までの暫定）
  */
 import {
   assertRates,
@@ -20,6 +21,7 @@ import {
   type SectionMoney,
 } from './standard-estimate-money';
 import type { StandardSectionCode } from './standard-estimate-view';
+import { splitQuoteLineStateRemark, type QuoteLineState } from './quote-por';
 
 export const STANDARD_QUOTE_SECTIONS: StandardSectionCode[] = ['base', 'interior_exterior', 'option', 'sitework'];
 
@@ -44,6 +46,10 @@ export interface StandardQuoteLineInput {
   /** manual のときだけ使う売価単価 */
   unit_price: number | null;
   remark: string | null;
+  /** 扱い（0円確定・対象外）。price_mode は manual・売価は 0 円 */
+  line_state: QuoteLineState | null;
+  /** 0円確定の理由・対象外のメモ */
+  line_state_reason: string;
 }
 
 export interface StandardQuoteEditorState {
@@ -86,9 +92,18 @@ export function previewStandardQuote(state: StandardQuoteEditorState, taxRate: s
     try {
       if (!line.name.trim()) throw new Error('品名を入力してください');
       assertQuoteQuantity(line.quantity);
+      if (line.line_state && (line.section_code === 'base' || line.price_mode !== 'manual')) {
+        throw new Error('「0円確定」「対象外」は本体以外の「金額を入力」の行だけです');
+      }
+      if (line.line_state === 'zero_confirmed' && !line.line_state_reason.trim()) throw new Error('0円確定の理由を入力してください');
       const costUnitPrice =
-        line.base_unit_cost !== null && line.price_mode !== 'por' ? truncMul(line.base_unit_cost, rates.salesFeeRate) : line.cost_unit_price;
-      return lineMoney({ mode: line.price_mode, quantity: line.quantity, costUnitPrice, saleUnitPrice: line.unit_price }, rates);
+        line.line_state === 'excluded'
+          ? 0
+          : line.base_unit_cost !== null && line.price_mode !== 'por'
+            ? truncMul(line.base_unit_cost, rates.salesFeeRate)
+            : line.cost_unit_price;
+      const saleUnitPrice = line.line_state ? 0 : line.unit_price;
+      return lineMoney({ mode: line.price_mode, quantity: line.quantity, costUnitPrice, saleUnitPrice }, rates);
     } catch (e) {
       errors.push(`${index + 1}行目：${e instanceof Error ? e.message : String(e)}`);
       return null;
@@ -123,8 +138,10 @@ export function toStandardQuoteSaveLines(lines: StandardQuoteLineInput[]) {
     price_mode: line.price_mode,
     // 本体マスター由来の行の原価は DB が基準原価単価から計算する（画面からは送らない）
     cost_unit_price: line.price_mode === 'por' || line.base_unit_cost !== null ? null : line.cost_unit_price,
-    unit_price: line.price_mode === 'manual' ? line.unit_price : null,
+    unit_price: line.price_mode === 'manual' ? (line.line_state ? 0 : line.unit_price) : null,
     remark: line.remark,
+    line_state: line.line_state,
+    line_state_reason: line.line_state ? line.line_state_reason : null,
   }));
 }
 
@@ -204,7 +221,7 @@ export function standardQuoteStateFromPayload(payload: StandardQuoteDraftPayload
         base_unit_cost: item.base_unit_cost,
         cost_unit_price: item.base_unit_cost !== null ? null : item.cost_unit_price,
         unit_price: item.price_mode === 'manual' ? item.unit_price : null,
-        remark: item.remark,
+        ...splitQuoteLineStateRemark(item.remark),
       })),
   };
 }

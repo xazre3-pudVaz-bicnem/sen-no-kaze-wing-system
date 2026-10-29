@@ -41,6 +41,7 @@ import type {
   MatrixRow,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
+import type { QuotePorSelectionState } from '@/lib/domain/quote-por';
 
 export interface SessionUser {
   id: string;
@@ -227,6 +228,11 @@ export interface DealerRevisionItem {
 export interface DealerRevisionInput {
   items: DealerRevisionItem[];
   dealer_note: string | null;
+  /**
+   * お客様が選んだ別途見積の商品を確認した、として画面が送る一覧の key（確認欄にチェックがあるときだけ）。
+   * 発行の前に確認を記録する（DB の confirm_quote_por_selections と同じ。D1 までの暫定）
+   */
+  por_confirmation_keys?: string[] | null;
 }
 
 export interface ManualQuoteDraftInput {
@@ -486,6 +492,11 @@ export interface DataStore {
   listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]>;
   /** 代理店が別途工事・フリー商品を入れた確定見積（次の版）を発行する。元の版は改訂済みとして残る */
   createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser): Promise<Quote>;
+  /**
+   * 改訂・確定見積の画面用：Web の案件でお客様が選んだ別途見積の商品と、自分の確認が済んでいるか。
+   * 本部と担当の代理店・総代理店だけ（DB の get_quote_por_selections。D1 までの暫定）
+   */
+  getQuotePorSelections(quoteId: string, actor: SessionUser): Promise<QuotePorSelectionState>;
 
   /** 顧客が見積を承諾／辞退する */
   respondToQuote(id: string, status: 'accepted' | 'declined', actor: SessionUser): Promise<Quote>;

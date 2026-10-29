@@ -53,13 +53,14 @@ describe('商品登録 価格単位', () => {
   });
 
   it('STEP1で商品価格とメーカー参考価格の単位を別々に編集し、手動変更後はカテゴリー既定値で上書きしない', () => {
-    expect(field).toContain('商品標準原価の単位');
+    expect(field).toContain('label={`${priceLabel}の単位`}');
+    expect(field).toContain("priceLabel = '商品標準原価'");
     expect(field).toContain('メーカー参考価格の単位');
     expect(field).toContain('priceTouchedRef.current = true');
     expect(field).toContain('listTouchedRef.current = true');
     expect(field).toContain('if (!priceTouchedRef.current)');
     expect(field).toContain('if (!listTouchedRef.current)');
-    expect(host).toContain('<ProductPriceUnitRegistrationField optionId={id} />');
+    expect(host).toContain('<ProductPriceUnitRegistrationField optionId={id} priceLabel={priceLabel} />');
   });
 
   it('保存値がなくカテゴリー既定値を表示した場合も未保存変更として扱いSTEP2前に保存する', () => {
@@ -81,7 +82,7 @@ describe('商品登録 価格単位', () => {
   });
 
   it('登録前チェックで価格単位未選択を公開必須項目として扱う', () => {
-    expect(priceUiSync).toContain('商品標準原価の単位を選択してください');
+    expect(priceUiSync).toContain('const productUnitRequiredText = (priceLabel: string) => `${priceLabel}の単位を選択してください`;');
     expect(priceUiSync).toContain('メーカー参考価格を入力した場合は、メーカー参考価格の単位を選択してください');
     expect(priceUiSync).toContain('shouldBlockProductUnit');
     expect(priceUiSync).toContain('shouldBlockManufacturerUnit');
@@ -102,7 +103,7 @@ describe('商品登録 価格単位', () => {
     expect(field).toContain('disabled={!editable || priceOnRequest}');
     expect(field).toContain('id="manufacturer-list-price-unit"');
     expect(field).toContain('id="published-manufacturer-list-price-unit"');
-    expect(field).toContain('「価格は別途見積」が選択されているため、商品標準原価とこの単位は編集できません。');
+    expect(field).toContain('「価格は別途見積」が選択されているため、${priceLabel}とこの単位は編集できません。');
   });
 
   it('既に別途見積の商品を開いただけでは既存の価格数値を強制的に0円へ書き換えない', () => {
@@ -117,7 +118,7 @@ describe('商品登録 価格単位', () => {
     expect(preview).toContain('formatPriceWithUnit(option.price, option.price_unit)');
     expect(preview).toContain('formatPriceWithUnit(option.list_price, option.list_price_unit)');
     expect(preview).toContain('data-testid="registration-price-unit-summary"');
-    expect(host).toContain('<ProductPriceUnitRouteSummary />');
+    expect(host).toContain('<ProductPriceUnitRouteSummary priceLabel={priceLabel} />');
   });
 
   it('商品台帳の一覧・カード・管理情報で商品標準原価の単位を表示する', () => {
@@ -129,7 +130,7 @@ describe('商品登録 価格単位', () => {
   it('登録済み商品でも保存済み単位を個別編集できる', () => {
     expect(field).toContain('data-testid="product-price-unit-published-editor"');
     expect(field).toContain('既存の保存値をカテゴリー既定値で自動上書きしません');
-    expect(host).toContain('<ProductPriceUnitPublishedCard optionId={id} />');
+    expect(host).toContain('<ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />');
   });
 
   it('DB変更はnullable列の追加だけで既存商品・価格・履歴を書き換えない', () => {

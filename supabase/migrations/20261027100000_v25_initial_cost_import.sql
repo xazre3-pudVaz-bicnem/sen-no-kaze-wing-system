@@ -27,7 +27,8 @@ begin
      or to_regclass('public.option_variant_cost_versions') is null
      or to_regprocedure('public.set_option_hq_standard_cost(uuid, integer, integer, text)') is null
      or to_regprocedure('public.set_option_variant_cost_adjustment(uuid, integer, uuid, text)') is null
-     or to_regprocedure('public.option_variant_cost_min_total(uuid, uuid, integer)') is null then
+     or to_regprocedure('public.option_variant_cost_min_total(uuid, uuid, integer)') is null
+     or to_regprocedure('public.option_is_hq_cost_product(uuid)') is null then
     raise exception 'PRECONDITION: standard cost versions (20261016200000) must be applied first';
   end if;
   if to_regprocedure('public.import_option_standard_costs(jsonb, text)') is not null then
@@ -58,7 +59,6 @@ declare
   v_current_amount integer;
   v_min bigint;
   v_version integer;
-  v_category_code text;
 begin
   if v_actor is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -184,8 +184,7 @@ begin
         raise exception using errcode = 'P0001',
           message = pg_catalog.format('VALIDATION: 「%s」は登録済みではありません（下書きは登録のときに原価を記録します）', v_option.name);
       end if;
-      select c.code into v_category_code from public.option_categories c where c.id = v_option.category_id;
-      if v_category_code is not distinct from 'free-product' then
+      if not public.option_is_hq_cost_product(v_id) then
         raise exception using errcode = 'P0001',
           message = pg_catalog.format('VALIDATION: 「%s」は本部商品ではないため取り込みません（本部標準原価は本部商品だけ）', v_option.name);
       end if;
@@ -218,12 +217,11 @@ begin
       return next;
     else
       -- 選択肢の原価差額
-      select vc.id, vc.name, vc.extra_price, vc.price_on_request, o.status, o.name as option_name, oc.code as category_code
+      select vc.id, vc.name, vc.extra_price, vc.price_on_request, o.status, o.name as option_name, o.id as option_id
         into v_choice
         from public.option_variant_choices vc
         join public.option_variant_groups vg on vg.id = vc.group_id
         join public.options o on o.id = vg.option_id
-        left join public.option_categories oc on oc.id = o.category_id
        where vc.id = v_id;
       if not found then
         raise exception using errcode = 'P0002', message = 'NOT_FOUND: 一覧の選択肢が見つかりません。一覧を開き直してください';
@@ -232,7 +230,7 @@ begin
         raise exception using errcode = 'P0001',
           message = pg_catalog.format('VALIDATION: 「%s」の選択肢は、商品が登録済みではないため取り込みません', v_choice.option_name);
       end if;
-      if v_choice.category_code is not distinct from 'free-product' then
+      if not public.option_is_hq_cost_product(v_choice.option_id) then
         raise exception using errcode = 'P0001',
           message = pg_catalog.format('VALIDATION: 「%s」の選択肢は、本部商品ではないため取り込みません（本部標準原価は本部商品だけ）', v_choice.option_name);
       end if;

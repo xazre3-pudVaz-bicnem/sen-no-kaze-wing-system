@@ -68,7 +68,8 @@ export default async function EditOptionPage({
   // 出さない担当者には、クライアントへ渡す商品・選択肢からも金額を外す（サーバーの判定は元の値で行う）。
   // 本部商品の外（旧フリー商品）の金額は従来どおり
   const canEditCost = canEditProductCost(costAccess, category?.code);
-  const priceLabel = isHqCostProduct(category?.code) ? '商品標準原価' : '商品価格';
+  const hqCostProduct = isHqCostProduct(category?.code);
+  const priceLabel = hqCostProduct ? '商品標準原価' : '商品価格';
   const clientOption = canEditCost ? option : withoutOptionCost(option);
   const clientOptions = withoutHqOptionCosts(options, costAccess, new Map(categories.map((row) => [row.id, row.code])));
   const clientChoices = canEditCost ? variants.choices : variants.choices.map(withoutChoiceCost);
@@ -147,8 +148,8 @@ export default async function EditOptionPage({
             })) : undefined}
             financialTools={
               <>
-                <ProductPriceUnitPublishedCard optionId={id} />
-                {hqCostAccess.available && hqCostAccess.canView && (
+                <ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />
+                {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
                   <OptionHqStandardCostCard
                     optionId={id}
                     canManage={hqCostAccess.canManage}
@@ -165,7 +166,7 @@ export default async function EditOptionPage({
           </>
         ) : (
           <>
-            {hqCostAccess.available && hqCostAccess.canView && (
+            {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
               <OptionHqStandardCostCard
                 optionId={id}
                 canManage={hqCostAccess.canManage}
@@ -175,7 +176,7 @@ export default async function EditOptionPage({
                 isPublished={option.status === 'published'}
               />
             )}
-            <ProductPriceUnitPublishedCard optionId={id} />
+            <ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />
             <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>
           </>
         )}
@@ -277,7 +278,7 @@ export default async function EditOptionPage({
                 canEditCost={canEditCost}
               />
 
-              <ProductPriceUnitRegistrationField optionId={id} />
+              <ProductPriceUnitRegistrationField optionId={id} priceLabel={priceLabel} />
 
               {sp.created && (
                 <div id="basic-info-saved" className="w-full" style={{ order: 15 }}>
@@ -286,7 +287,7 @@ export default async function EditOptionPage({
               )}
 
               <div style={{ order: 35 }}>
-                <OptionMediaManager option={option} />
+                <OptionMediaManager option={clientOption} />
               </div>
 
               {catalogEditor && (
@@ -295,7 +296,7 @@ export default async function EditOptionPage({
                 </div>
               )}
 
-              {hqCostAccess.available && hqCostAccess.canView && (
+              {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
                 <div style={{ order: 55 }} data-testid="option-registration-hq-cost">
                   <OptionHqStandardCostCard
                     optionId={id}
@@ -434,7 +435,7 @@ export default async function EditOptionPage({
               </section>
             )}
 
-            <ProductPriceUnitRouteSummary />
+            <ProductPriceUnitRouteSummary priceLabel={priceLabel} />
 
             <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品登録">
               <div>

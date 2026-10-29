@@ -11,10 +11,10 @@ import {
   canEditCostField,
   COST_ACCESS_ERROR_MESSAGE,
   costRecordingNotice,
-  getCostRecordingAccess,
+  getCostAccessForProduct,
   recordPublishedChoiceCosts,
 } from '@/lib/data/option-cost-recording';
-import { isHqCostProduct } from '@/lib/domain/option-cost-access';
+import { newChoicePriceWithoutCost } from '@/lib/domain/option-cost-access';
 
 export interface ProductVariantCreateState {
   ok: boolean;
@@ -69,12 +69,7 @@ export async function createVariantGroupWithFirstChoiceAction(
     if (!option) return { ok: false, error: '商品が見つかりません。' };
     // 原価差額（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部商品の金額は本部だけが入れられる。それ以外の担当者の追加は 0 円。
     // 本部商品の外（旧フリー商品）は従来どおり
-    // カテゴリーは、原価の仕組みがある（または権限の確認に失敗した）ときだけ確かめる
-    const access = await getCostRecordingAccess();
-    const hqCostProduct =
-      (access.available || access.error === true) &&
-      isHqCostProduct((await store.listCategories()).find((row) => row.id === option.category_id)?.code);
-    const costAccess = hqCostProduct ? access : { available: false, canManage: false };
+    const costAccess = await getCostAccessForProduct(() => store.listCategories(), option.category_id);
     if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
     const canEditCost = canEditCostField(costAccess);
 
@@ -196,7 +191,8 @@ export async function createVariantGroupWithFirstChoiceAction(
         name: input.name,
         kind: input.kind,
         extra_price: input.extraPrice,
-        price_on_request: false,
+        // 本部以外が足す追加の選択肢は、原価差額が未登録（別途見積）。本部が原価差額を登録する
+        price_on_request: canEditCost ? false : newChoicePriceWithoutCost(input.kind).price_on_request,
         image_url: selectedChoiceImageUrl(formData, input.choiceIndex) || null,
         note: null,
         sort_order: input.sortOrder,

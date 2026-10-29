@@ -166,7 +166,7 @@ describe('商品の一括登録（Excel）：本部以外は本部商品の金�
     vi.clearAllMocks();
   });
 
-  it('既存の本部商品と選択肢は今の金額のまま、新しい本部商品は金額未登録の下書き、新しい選択肢は 0 円', async () => {
+  it('既存の本部商品と選択肢は今の金額のまま、新しい本部商品は金額未登録の下書き、新しい追加の選択肢は別途見積（原価差額が未登録）', async () => {
     const keptChoiceId = stableId('vchoice', 'HQ-1::サイズ::大');
     const existingChoice: OptionVariantChoice = {
       id: keptChoiceId,
@@ -204,7 +204,8 @@ describe('商品の一括登録（Excel）：本部以外は本部商品の金�
     const big = batch.variantChoices.find((row) => row.id === keptChoiceId);
     expect(big).toMatchObject({ extra_price: 8_000, price_on_request: false });
     const others = batch.variantChoices.filter((row) => row.id !== keptChoiceId);
-    expect(others.every((row) => row.extra_price === 0 && row.price_on_request === false)).toBe(true);
+    // 0 円で公開すると旧シミュレーターで追加料金なしで選べてしまうので、原価差額が未登録＝別途見積にする
+    expect(others.every((row) => row.extra_price === 0 && row.price_on_request === true)).toBe(true);
     // 今の選択肢の金額は、既存の本部商品だけ読む
     expect(store.getOptionVariants).toHaveBeenCalledTimes(1);
     expect(store.getOptionVariants).toHaveBeenCalledWith(EXISTING_ID);
@@ -248,9 +249,10 @@ describe('商品の一括登録（Excel）：本部以外は本部商品の金�
 describe('原価 Version の取り込み：本部商品だけ', () => {
   it('DB の関数は本部商品の外（旧フリー商品）の商品・選択肢を取り込まない', () => {
     const migration = read('supabase/migrations/20261027100000_v25_initial_cost_import.sql');
-    expect(migration).toContain("if v_category_code is not distinct from 'free-product' then");
-    expect(migration).toContain("if v_choice.category_code is not distinct from 'free-product' then");
-    expect(migration).toContain('left join public.option_categories oc on oc.id = o.category_id');
+    // 本部商品かどうかは A1 の option_is_hq_cost_product（RPC と同じ判定）
+    expect(migration).toContain('if not public.option_is_hq_cost_product(v_id) then');
+    expect(migration).toContain('if not public.option_is_hq_cost_product(v_choice.option_id) then');
+    expect(migration).toContain("to_regprocedure('public.option_is_hq_cost_product(uuid)') is null");
   });
 
   it('取り込みの一覧にも本部商品の外を出さない', () => {

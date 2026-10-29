@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { isMissingFunction, isMissingRelation } from '@/lib/data/schema-compat';
 import { isLocalMode } from '@/lib/data/store';
 export { canEditCostField, type CostRecordingAccess } from '@/lib/domain/option-cost-access';
-import type { CostRecordingAccess } from '@/lib/domain/option-cost-access';
+import { isHqCostProduct, type CostRecordingAccess } from '@/lib/domain/option-cost-access';
 
 /**
  * 商品標準原価・原価差額の Version の記録（v2.5 PR-A3）。
@@ -52,6 +52,24 @@ export async function getCostRecordingAccess(): Promise<CostRecordingAccess> {
   // 一時的な失敗を「本部ではない」と取り違えない（本部の入力が黙って捨てられるのを防ぐ）
   if (manage.error) return { available: true, canManage: false, error: true };
   return { available: true, canManage: manage.data === true };
+}
+
+/** 本部商品の外（旧フリー商品）と、商品台帳の編集者以外には原価の決まりを掛けない */
+export const NO_COST_RECORDING: CostRecordingAccess = { available: false, canManage: false };
+
+/**
+ * 商品の原価の権限。本部商品なら本部かどうかを返し、本部商品の外（旧フリー商品）には原価の決まりを掛けない。
+ * カテゴリーは、原価の仕組みがある（または権限の確認に失敗した）ときだけ確かめる（未適用の本番では読み取りが増えない）。
+ * 本部商品かどうかの決まりは isHqCostProduct（DB では option_is_hq_cost_product）と同じ。Server Action はすべてこれを使う
+ */
+export async function getCostAccessForProduct(
+  listCategories: () => Promise<{ id: string; code: string }[]>,
+  categoryId: string | null | undefined
+): Promise<CostRecordingAccess> {
+  const access = await getCostRecordingAccess();
+  if (!access.available && !access.error) return access;
+  const categoryCode = (await listCategories()).find((row) => row.id === categoryId)?.code;
+  return isHqCostProduct(categoryCode) ? access : NO_COST_RECORDING;
 }
 
 /** 登録済みの商品の商品標準原価を、今の商品価格の列と同じ金額で Version に記録する（本部だけ） */

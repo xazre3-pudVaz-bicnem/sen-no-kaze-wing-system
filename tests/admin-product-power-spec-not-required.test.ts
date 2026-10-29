@@ -37,9 +37,9 @@ describe('空調商品の電源仕様を専用の必須項目にしない', () =
     ]) {
       expect(fs.existsSync(path.join(root, file)), file).toBe(false);
     }
-    expect(editPage).toContain('<ProductPriceUnitRegistrationField optionId={id} />');
-    expect(editPage).toContain('<ProductPriceUnitPublishedCard optionId={id} />');
-    expect(editPage).toContain('<ProductPriceUnitRouteSummary />');
+    expect(editPage).toContain('<ProductPriceUnitRegistrationField optionId={id} priceLabel={priceLabel} />');
+    expect(editPage).toContain('<ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />');
+    expect(editPage).toContain('<ProductPriceUnitRouteSummary priceLabel={priceLabel} />');
   });
 
   it('アプリは power_spec 列を読み書きしない', () => {

@@ -5,7 +5,7 @@ import { PRODUCT_PRICE_UNIT_OTHER } from '@/lib/domain/product-price-unit';
 
 /** 本部商品は「商品標準原価」、本部商品の外（旧フリー商品）は「商品価格」（入力欄の data-price-label） */
 const zeroPriceWarningText = (priceLabel: string) => `${priceLabel}が0円です。正式な0円の場合はSTEP 2で確認が必要です`;
-const PRODUCT_UNIT_REQUIRED_TEXT = '商品標準原価の単位を選択してください';
+const productUnitRequiredText = (priceLabel: string) => `${priceLabel}の単位を選択してください`;
 const LIST_PRICE_UNIT_REQUIRED_TEXT = 'メーカー参考価格を入力した場合は、メーカー参考価格の単位を選択してください';
 const PRICE_UNIT_STATE_EVENT = 'product-price-unit-state-change';
 const OK_TEXT = '現在の入力内容に、公開前の要確認事項はありません。';
@@ -87,7 +87,8 @@ function syncRegistrationCheck(priceInput: HTMLInputElement) {
   const listPriceInput = document.querySelector<HTMLInputElement>('input[name="list_price"]');
   const productUnit = document.getElementById('product-price-unit') as HTMLSelectElement | null;
   const manufacturerUnit = document.getElementById('manufacturer-list-price-unit') as HTMLSelectElement | null;
-  const productUnitCustom = document.querySelector<HTMLInputElement>('input[aria-label="商品標準原価の単位 その他"]');
+  // 単位の「その他」の入力欄（名前は本部商品・旧フリー商品で変わるので、欄の場所で探す）
+  const productUnitCustom = document.querySelector<HTMLInputElement>('[data-testid="product-price-unit-field"] input');
   const manufacturerUnitCustom = document.querySelector<HTMLInputElement>('input[aria-label="メーカー参考価格の単位 その他"]');
 
   const price = Number(priceInput.value);
@@ -128,7 +129,7 @@ function syncRegistrationCheck(priceInput: HTMLInputElement) {
     blockingBox = ensureIssueBox(section, '公開に必要');
   }
   if (blockingBox) {
-    const productItem = ensureIssueItem(blockingBox, 'product-price-unit', PRODUCT_UNIT_REQUIRED_TEXT);
+    const productItem = ensureIssueItem(blockingBox, 'product-price-unit', productUnitRequiredText(priceInput.dataset.priceLabel ?? '商品標準原価'));
     const manufacturerItem = ensureIssueItem(blockingBox, 'manufacturer-list-price-unit', LIST_PRICE_UNIT_REQUIRED_TEXT);
     if (productItem) productItem.style.display = shouldBlockProductUnit ? '' : 'none';
     if (manufacturerItem) manufacturerItem.style.display = shouldBlockManufacturerUnit ? '' : 'none';

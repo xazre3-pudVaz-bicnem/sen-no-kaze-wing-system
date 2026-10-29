@@ -36,6 +36,15 @@ export function canEditProductCost(access: CostRecordingAccess, categoryCode: st
 }
 
 /**
+ * 本部以外が本部商品に新しく足す選択肢の金額（原価差額は本部が登録する）。
+ * 追加（option）の選択肢は、原価差額が未登録＝別途見積にする（0 円にすると、旧シミュレーターで追加料金なしで選べてしまうため）。
+ * 標準・固定の選択肢は標準との差が無いので 0 円
+ */
+export function newChoicePriceWithoutCost(kind: 'standard' | 'option' | 'fixed') {
+  return { extra_price: 0, price_on_request: kind === 'option' };
+}
+
+/**
  * 原価を出さない担当者のために、クライアントへ渡す商品から金額を外す（表示を隠すだけでなく、渡すデータにも残さない）。
  * 別途見積かどうか・メーカー参考価格は原価ではないので残す。
  */

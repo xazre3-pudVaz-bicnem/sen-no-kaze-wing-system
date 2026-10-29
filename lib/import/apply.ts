@@ -9,7 +9,7 @@ import {
   type ProductOption,
 } from '@/lib/domain/types';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
-import { isHqCostProduct } from '@/lib/domain/option-cost-access';
+import { isHqCostProduct, newChoicePriceWithoutCost } from '@/lib/domain/option-cost-access';
 import { slugify, type ImportPlan } from './catalog-import';
 
 /**
@@ -59,6 +59,10 @@ export interface ApplyResult {
   imagesLinked: number;
   skipped: string[];
   warnings: string[];
+  /** 取り込んだ本部商品（本部の一括登録で、登録済みなら原価の Version に記録する） */
+  hqOptionIds: string[];
+  /** 商品ごとの、取り込んだ選択肢 */
+  choiceIdsByOption: Record<string, string[]>;
 }
 
 interface ApplyOptions {
@@ -84,6 +88,8 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     imagesLinked: 0,
     skipped: [],
     warnings: [...plan.warnings],
+    hqOptionIds: [],
+    choiceIdsByOption: {},
   };
   let previousCatalogImportImageUrls: string[] = [];
   if (options.catalogImportUserId) {
@@ -147,8 +153,10 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
         `フリー商品の新規登録は終了しました。商品「${p.name}」はExcel一括登録から新規作成できません。`
       );
     }
+    const optionId = existing?.id ?? stableId('option', p.code);
     const protectCost = options.protectHqCost === true && isHqCostProduct(category.code);
-    if (protectCost) protectedOptionIds.add(existing?.id ?? stableId('option', p.code));
+    if (protectCost) protectedOptionIds.add(optionId);
+    if (isHqCostProduct(category.code) && !result.hqOptionIds.includes(optionId)) result.hqOptionIds.push(optionId);
     const importedPriceState = protectCost
       ? existing
         ? { price: existing.price, price_on_request: existing.price_on_request }
@@ -236,9 +244,9 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   const groupIdByKey = new Map<string, string>();
   // 金額を反映しない本部商品は、今の選択肢の金額を引き継ぐ（同じ Excel の行は同じ ID になる）
   const existingChoiceById = new Map<string, OptionVariantChoice>();
-  for (const optionId of protectedOptionIds) {
-    if (!existingOptions.some((row) => row.id === optionId)) continue;
-    for (const choice of (await store.getOptionVariants(optionId)).choices) existingChoiceById.set(choice.id, choice);
+  const existingProtectedIds = [...protectedOptionIds].filter((optionId) => existingOptions.some((row) => row.id === optionId));
+  for (const variants of await Promise.all(existingProtectedIds.map((optionId) => store.getOptionVariants(optionId)))) {
+    for (const choice of variants.choices) existingChoiceById.set(choice.id, choice);
   }
 
   for (const c of plan.choices) {
@@ -274,8 +282,11 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
 
     const choiceId = stableId('vchoice', `${key}::${c.choiceName}`);
     const keptChoice = protectedOptionIds.has(option.id) ? existingChoiceById.get(choiceId) : undefined;
+    // 金額を反映しない本部商品：今の選択肢は今の金額のまま、新しい選択肢は原価差額が未登録（追加の選択肢は別途見積・標準と固定は 0 円）
     const choicePrice = protectedOptionIds.has(option.id)
-      ? { extra_price: keptChoice?.extra_price ?? 0, price_on_request: keptChoice?.price_on_request ?? false }
+      ? keptChoice
+        ? { extra_price: keptChoice.extra_price, price_on_request: keptChoice.price_on_request }
+        : newChoicePriceWithoutCost(c.kind)
       : { extra_price: c.extraPrice ?? 0, price_on_request: c.extraPrice == null && c.kind === 'option' };
     const choice: OptionVariantChoice = {
       id: choiceId,
@@ -291,6 +302,7 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     };
     batch.variantChoices.push(choice);
     result.variantChoices++;
+    result.choiceIdsByOption[option.id] = [...(result.choiceIdsByOption[option.id] ?? []), choiceId];
   }
 
   try {

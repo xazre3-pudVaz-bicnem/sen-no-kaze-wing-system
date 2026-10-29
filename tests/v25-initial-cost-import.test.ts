@@ -121,9 +121,13 @@ describe('v2.5 PR-A3：独立レビューの指摘への対応', () => {
     const actions = read('lib/actions/admin.ts');
     expect(actions).toContain("redirect(previewUrl({ error: '本部商品の商品標準原価が未登録です。本部が原価を登録してから登録（公開）します。' }));");
     expect(actions).toContain("return { ok: false, error: '本部商品の商品標準原価の一括更新は、本部だけが行えます。' };");
+    // 一括更新の記録は、1 件目が失敗しても残りを続ける（??= で後続の呼び出しを飛ばさない）
+    expect(actions).not.toContain('costNotice ??=');
     // 判定は商品ごと（本部商品の外＝旧フリー商品には掛けない）
-    expect(actions).toContain('return isHqCostProduct(categoryCode) ? access : NO_COST_RECORDING;');
-    expect(actions).toContain("const costAccess = canEditCatalog(actor.role) ? await costAccessForProduct(store, option.category_id) : NO_COST_RECORDING;");
+    expect(read('lib/data/option-cost-recording.ts')).toContain('return isHqCostProduct(categoryCode) ? access : NO_COST_RECORDING;');
+    expect(actions).toContain('? await getCostAccessForProduct(() => store.listCategories(), option.category_id)');
+    // 「選択項目を追加」のダイアログも同じ判定を使う（判定は 1 か所）
+    expect(read('lib/actions/product-registration-variants.ts')).toContain('await getCostAccessForProduct(() => store.listCategories(), option.category_id);');
   });
 
   it('商品の一括登録（Excel）は本部以外も続けて使える。本部商品の金額だけ反映しない（2026-10-29 先方の回答）', () => {
@@ -136,8 +140,12 @@ describe('v2.5 PR-A3：独立レビューの指摘への対応', () => {
     // 既存の本部商品は今の金額のまま、新しい本部商品は金額未登録（0 円）の下書き
     expect(apply).toContain('? { price: existing.price, price_on_request: existing.price_on_request }');
     expect(apply).toContain(': { price: 0, price_on_request: false }');
-    // 選択肢も今の金額を引き継ぐ（新しい選択肢は 0 円）
-    expect(apply).toContain('{ extra_price: keptChoice?.extra_price ?? 0, price_on_request: keptChoice?.price_on_request ?? false }');
+    // 選択肢も今の金額を引き継ぐ（新しい追加の選択肢は原価差額が未登録＝別途見積）
+    expect(apply).toContain('? { extra_price: keptChoice.extra_price, price_on_request: keptChoice.price_on_request }');
+    expect(apply).toContain(': newChoicePriceWithoutCost(c.kind)');
+    // 本部の一括登録は、登録済みの本部商品の金額を原価の Version に記録する（選択肢は Excel にあったものだけ）
+    expect(actions).toContain('for (const optionId of importedHq.hqOptionIds) {');
+    expect(actions).toContain("await recordPublishedChoiceCosts(optionId, 'choice', choiceIds, costAccess)");
   });
 
   it('「選択項目を追加」のダイアログも同じ決まり（本部以外の追加は 0 円・本部の追加は登録済みなら Version を記録）', () => {
@@ -184,7 +192,8 @@ describe('v2.5 PR-A3：商品登録 STEP1 の商品標準原価・原価差額',
     expect(variants).toContain('{canEditCost && (');
     expect(registered).toContain('price: showCostFields ? numberOrNull(data.get(\'price\')) ?? 0 : option.price,');
     expect(actions).toContain("price: keepExistingPrice ? String(existingOption?.price ?? 0) : formData.get('price'),");
-    expect(actions).toContain("extra_price: keepExistingPrice ? existing?.extra_price ?? 0 : formData.get('extra_price') || 0,");
+    expect(actions).toContain("extra_price: keepExistingPrice ? keptChoicePrice.extra_price : formData.get('extra_price') || 0,");
+    expect(actions).toContain("price_on_request: keepExistingPrice ? keptChoicePrice.price_on_request : formData.get('price_on_request'),");
   });
 
   it('登録済みの商品だけ、本部の保存・登録で原価の Version を作る（下書きは登録のときに作る）', () => {

@@ -39,26 +39,13 @@ import {
   canEditCostField,
   COST_ACCESS_ERROR_MESSAGE,
   costRecordingNotice,
+  getCostAccessForProduct,
   getCostRecordingAccess,
+  NO_COST_RECORDING,
   recordPublishedChoiceCosts,
   recordPublishedOptionCost,
-  type CostRecordingAccess,
 } from '@/lib/data/option-cost-recording';
-import { isHqCostProduct } from '@/lib/domain/option-cost-access';
-
-/** 本部商品の外（旧フリー商品）と、商品台帳の編集者以外には原価の決まりを掛けない */
-const NO_COST_RECORDING: CostRecordingAccess = { available: false, canManage: false };
-
-/**
- * 商品の原価の権限（v2.5 PR-A3）。本部商品なら本部かどうかを返し、本部商品の外（旧フリー商品）には原価の決まりを掛けない。
- * カテゴリーは、原価の仕組みがある（または権限の確認に失敗した）ときだけ確かめる。
- */
-async function costAccessForProduct(store: Awaited<ReturnType<typeof getStore>>, categoryId: string | null | undefined): Promise<CostRecordingAccess> {
-  const access = await getCostRecordingAccess();
-  if (!access.available && !access.error) return access;
-  const categoryCode = (await store.listCategories()).find((row) => row.id === categoryId)?.code;
-  return isHqCostProduct(categoryCode) ? access : NO_COST_RECORDING;
-}
+import { isHqCostProduct, newChoicePriceWithoutCost } from '@/lib/domain/option-cost-access';
 const HQ_COST_IMPORT_NOTICE =
   '商品価格・追加金額の列は本部商品の原価のため、本部だけが反映できます。この一括登録では本部商品の金額を変えず、新しい本部商品は金額未登録の下書きで登録します（原価は本部が登録します）。';
 
@@ -245,7 +232,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
 
   // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部商品の金額・別途見積の欄は本部だけが変えられる。
   // それ以外の担当者の保存では、今の金額をそのまま保つ（画面にも欄を出さない）。本部商品の外（旧フリー商品）は従来どおり
-  const costAccess = catalogEditor ? await costAccessForProduct(store, requestedCategoryId) : NO_COST_RECORDING;
+  const costAccess = catalogEditor ? await getCostAccessForProduct(() => store.listCategories(), requestedCategoryId) : NO_COST_RECORDING;
   // 権限を確認できないときは保存しない（本部の入力を、本部以外の保存として黙って捨てない）
   if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
   const keepExistingPrice = !canEditCostField(costAccess);
@@ -391,7 +378,9 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
 
   // 本部商品の原価が未登録（0 円）のまま本部以外が登録しない（0 円の確認も原価の判断なので本部だけ）。
   // 本部商品の外（旧フリー商品）は従来どおり、登録する担当者が 0 円を確認して登録できる
-  const costAccess = canEditCatalog(actor.role) ? await costAccessForProduct(store, option.category_id) : NO_COST_RECORDING;
+  const costAccess = canEditCatalog(actor.role)
+    ? await getCostAccessForProduct(() => store.listCategories(), option.category_id)
+    : NO_COST_RECORDING;
   if (costAccess.error) redirect(previewUrl({ error: COST_ACCESS_ERROR_MESSAGE }));
   if (
     option.status !== 'published' &&
@@ -407,10 +396,13 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     requiresZeroPriceConfirmation(option) &&
     formData.get('confirm_zero_price') !== 'on'
   ) {
+    // 本部商品は「商品標準原価」、本部商品の外（旧フリー商品）は「商品価格」
+    const priceLabel = isHqCostProduct((await store.listCategories()).find((row) => row.id === option.category_id)?.code)
+      ? '商品標準原価'
+      : '商品価格';
     redirect(
       previewUrl({
-        error:
-          '商品標準原価が0円です。正式な0円として公開する場合は確認欄にチェックしてください。未確認なら商品情報へ戻り、金額を確定してから公開してください。',
+        error: `${priceLabel}が0円です。正式な0円として公開する場合は確認欄にチェックしてください。未確認なら商品情報へ戻り、金額を確定してから公開してください。`,
       })
     );
   }
@@ -554,9 +546,14 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     if (id && !existing) return { ok: false, error: '選択肢が見つかりません。' };
     // 原価差額（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部商品の金額・別途見積の欄は本部だけが変えられる。
     // 本部商品の外（旧フリー商品）は従来どおり
-    const costAccess = await costAccessForProduct(store, option.category_id);
+    const costAccess = await getCostAccessForProduct(() => store.listCategories(), option.category_id);
     if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
     const keepExistingPrice = !canEditCostField(costAccess);
+    // 本部以外が足す選択肢：追加の選択肢は原価差額が未登録（別途見積）、標準・固定は 0 円
+    const requestedKind = formData.get('kind');
+    const keptChoicePrice = existing
+      ? { extra_price: existing.extra_price, price_on_request: existing.price_on_request === true }
+      : newChoicePriceWithoutCost(requestedKind === 'standard' || requestedKind === 'fixed' ? requestedKind : 'option');
 
     const file = formData.get('image_file');
     const imageUrlField = String(formData.get('image_url') ?? existing?.image_url ?? '').trim();
@@ -575,8 +572,8 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
       code: `vc-${randomUUID()}`,
       name: formData.get('name'),
       kind: formData.get('kind') || 'option',
-      extra_price: keepExistingPrice ? existing?.extra_price ?? 0 : formData.get('extra_price') || 0,
-      price_on_request: keepExistingPrice ? existing?.price_on_request === true : formData.get('price_on_request'),
+      extra_price: keepExistingPrice ? keptChoicePrice.extra_price : formData.get('extra_price') || 0,
+      price_on_request: keepExistingPrice ? keptChoicePrice.price_on_request : formData.get('price_on_request'),
       image_url: uploadedUrl ?? imageUrlField,
       note: formData.get('note'),
       sort_order: formData.get('sort_order') || 0,
@@ -1201,7 +1198,13 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
         sample: plan.products.slice(0, 8).map((p) => ({
           name: p.manufacturer ? `${p.manufacturer} ${p.name}` : p.name,
           category: p.categoryName,
-          price: p.price == null ? '別途見積' : `¥${p.price.toLocaleString('ja-JP')}`,
+          // 本部以外の一括登録では、本部商品の金額は反映しない（旧フリー商品だけ Excel の金額を使う）
+          price:
+            protectHqCost && p.categoryName !== 'フリー商品'
+              ? '反映しない（本部が登録）'
+              : p.price == null
+                ? '別途見積'
+                : `¥${p.price.toLocaleString('ja-JP')}`,
           variants: groupsOf(p.code).join('／') || '—',
         })),
       },
@@ -1209,10 +1212,12 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
   }
 
   let applied: NonNullable<ImportState['applied']>;
+  let importedHq: { hqOptionIds: string[]; choiceIdsByOption: Record<string, string[]> } = { hqOptionIds: [], choiceIdsByOption: {} };
   try {
     const { applyImportPlan } = await import('@/lib/import/apply');
-    applied = await applyImportPlan(plan, images, { catalogImportUserId: actor.id, protectHqCost });
-    if (protectHqCost) applied = { ...applied, warnings: [HQ_COST_IMPORT_NOTICE, ...applied.warnings] };
+    const { hqOptionIds, choiceIdsByOption, ...result } = await applyImportPlan(plan, images, { catalogImportUserId: actor.id, protectHqCost });
+    applied = protectHqCost ? { ...result, warnings: [HQ_COST_IMPORT_NOTICE, ...result.warnings] } : result;
+    importedHq = { hqOptionIds, choiceIdsByOption };
   } catch (e) {
     if (uploadedUrls.length) {
       const store = await getStore();
@@ -1223,6 +1228,19 @@ export async function importCatalogAction(_prev: ImportState, formData: FormData
       return state;
     }
     return errState(e) as ImportState;
+  }
+  // 本部の一括登録：登録済みの本部商品は、取り込んだ金額を商品標準原価・原価差額の Version に記録する（画面の保存と同じ。
+  // 選択肢は Excel にあったものだけ）。取り込みは済んでいるので、記録に失敗しても案内だけする
+  if (costAccess.available && costAccess.canManage) {
+    let costNotice: string | null = null;
+    for (const optionId of importedHq.hqOptionIds) {
+      const productResult = await recordPublishedOptionCost(optionId, 'save', costAccess);
+      const choiceIds = importedHq.choiceIdsByOption[optionId] ?? [];
+      const choiceResult = choiceIds.length ? await recordPublishedChoiceCosts(optionId, 'choice', choiceIds, costAccess) : null;
+      const notice = costRecordingNotice(productResult) ?? (choiceResult ? costRecordingNotice(choiceResult) : null);
+      if (!costNotice && notice) costNotice = notice;
+    }
+    if (costNotice) applied = { ...applied, warnings: [costNotice, ...applied.warnings] };
   }
   revalidatePath('/', 'layout');
   updateTag(CATALOG_TAG);
@@ -1680,7 +1698,9 @@ export async function bulkUpdateOptionPricesAction(_prev: AdminFormState, formDa
     if (costAccess.available && costAccess.canManage) {
       for (const item of parsed.data.items) {
         if (existingById.get(item.id)?.status !== 'published' || !isHqItem(item.id)) continue;
-        costNotice ??= costRecordingNotice(await recordPublishedOptionCost(item.id, 'save', costAccess));
+        // 1 件目が失敗しても、残りの商品の記録は続ける（案内は最初の 1 件）
+        const notice = costRecordingNotice(await recordPublishedOptionCost(item.id, 'save', costAccess));
+        if (!costNotice && notice) costNotice = notice;
       }
     }
     const savedMessage = `価格を保存しました（${parsed.data.items.length} 件）。新しい見積から反映されます`;

@@ -13,8 +13,10 @@ import { Alert } from '@/components/ui';
 
 /** 商品の状態を変えた後のお知らせ（lib/actions/product-lifecycle.ts の DONE） */
 const PRODUCT_LIFECYCLE_DONE: Record<string, string> = {
-  retired: '取扱を終了しました。新しい見積・シミュレーターの候補から外れます。保存済みの内容や発行済みの見積は変わりません。',
-  resumed: '取扱を再開しました。シミュレーター表示の設定は以前の値のままです。',
+  retired: '販売を停止しました。新しい見積・シミュレーターの候補から外れます。標準構成で使っている仕様は新しい受付を止めます。保存済みの内容や発行済みの見積は変わりません。',
+  resumed: '販売を再開しました。シミュレーター表示の設定は以前の値のままです。',
+  discontinued: '廃番にしました。廃番の商品は販売を再開できません（誤操作は本部の管理者が取り消せます）。',
+  restored: '廃番を取り消しました。販売停止に戻っています（販売の再開は別の操作です）。',
   simulator_shown: 'シミュレーターに表示する設定にしました。',
   simulator_hidden: 'シミュレーターに表示しない設定にしました。見積では引き続き選べます。',
 };
@@ -31,8 +33,9 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
     store.getProductLifecycleCapability(),
   ]);
-  // 取扱終了・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す
+  // 販売停止・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す。廃番は 20261016112000 の適用後だけ
   const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
+  const discontinueEnabled = lifecycleEnabled && Boolean(lifecycleCapability.discontinue);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const ledgerCategories = catalogCategories.map((category) => {
     const displayGroup = productRegistrationCategoryGroup(category.code);
@@ -119,11 +122,13 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
     <FlashMessages sp={sp} />
     {sp.lifecycle && PRODUCT_LIFECYCLE_DONE[sp.lifecycle] && <Alert tone="success">{PRODUCT_LIFECYCLE_DONE[sp.lifecycle]}</Alert>}
     {editor && !lifecycleEnabled && (
-      <Alert tone="info">取扱終了・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
+      <Alert tone="info">販売停止・シミュレーター表示の設定は、DB の更新（migration）が済むまで使えません。</Alert>
     )}
     <ProductLedgerClient
       canEdit={editor}
       lifecycleEnabled={lifecycleEnabled}
+      discontinueEnabled={discontinueEnabled}
+      canRestoreDiscontinued={actor.role === 'admin'}
       categories={ledgerCategories}
       options={catalogOptions}
       models={models}

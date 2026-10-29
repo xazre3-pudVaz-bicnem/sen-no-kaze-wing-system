@@ -41,9 +41,9 @@ export function Status({ state }: { state: AdminFormState }) {
   return null;
 }
 
-export function SubmitButton({ pending, label = '保存する' }: { pending: boolean; label?: string }) {
+export function SubmitButton({ pending, label = '保存する', disabled = false }: { pending: boolean; label?: string; disabled?: boolean }) {
   return (
-    <Button type="submit" disabled={pending} data-testid="admin-submit">
+    <Button type="submit" disabled={pending || disabled} data-testid="admin-submit">
       {pending && <Spinner />}
       {label}
     </Button>

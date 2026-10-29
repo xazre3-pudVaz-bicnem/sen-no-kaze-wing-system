@@ -29,7 +29,7 @@ describe('商品の取扱終了：見積・標準見積の画面', () => {
     expect(editor).toContain('candidates.filter((row) => !row.retired)');
     expect(editor).toContain('{candidate?.retired && (');
     expect(editor).toContain('<option value={candidate.id} disabled>');
-    expect(editor).toContain('{candidate.name}（取扱終了）');
+    expect(editor).toContain('{candidate.name}（販売停止）');
   });
 
   it('発行済みの見積の確認画面は、取扱終了の商品も表示に使う（履歴から消さない）', () => {

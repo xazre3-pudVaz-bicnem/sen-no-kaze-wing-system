@@ -5,6 +5,7 @@ import { getStore } from '@/lib/data/store';
 import { canEditCatalog } from '@/lib/domain/types';
 import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
 import { formatYen } from '@/lib/domain/pricing';
+import { EMPTY_POR_SELECTION_STATE } from '@/lib/domain/quote-por';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
 import { DealerRevisionForm } from '@/components/admin/dealer-forms';
 import { Badge } from '@/components/ui';
@@ -29,9 +30,12 @@ export default async function AdminQuoteRevisionEditPage({
 
   if (!isLegacyWebRevision) notFound();
 
-  const [categories, options] = await Promise.all([
+  const [categories, options, porState] = await Promise.all([
     store.listCategories(),
     store.listOptions(),
+    // お客様が選んだ別途見積の商品と、自分の確認が済んでいるか（D1 までの暫定。発行時に DB が確かめる）。
+    // 読み込めないときは画面を落とさず、発行を止めて再読み込みを案内する
+    store.getQuotePorSelections(quote.id, actor).catch(() => ({ ...EMPTY_POR_SELECTION_STATE, loadError: true })),
   ]);
 
   const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
@@ -108,6 +112,8 @@ export default async function AdminQuoteRevisionEditPage({
           products={products}
           baseModelId={quote.base_model_id ?? ''}
           specCode={quote.spec_code ?? ''}
+          porState={porState}
+          optionFlags={options.map((option) => ({ id: option.id, price: option.price, priceOnRequest: option.price_on_request }))}
           sheetMode
         />
       </section>

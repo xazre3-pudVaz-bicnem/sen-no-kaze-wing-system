@@ -380,8 +380,10 @@ export interface ProductOption {
   status: PublishStatus;
   /** 登録済み商品をシミュレーターの新しい選択肢に出すか（20261015110000。migration 前は未取得＝表示）。見積の可否とは別 */
   simulator_visible?: boolean;
-  /** 取扱終了の日時（NULL＝取扱中。20261015110000）。取扱終了でも履歴は残し、新しい見積・シミュレーターでは選べない */
+  /** 販売停止の日時（NULL＝販売中。20261015110000。#500 の「取扱終了」）。販売停止でも履歴は残し、新しい見積・シミュレーターでは選べない */
   archived_at?: string | null;
+  /** 廃番の日時（20261016112000。廃番は販売停止の商品だけ）。原則再開しない。本部の管理者が理由を記録して取り消すと販売停止に戻る */
+  discontinued_at?: string | null;
   created_at: string;
   updated_at: string;
 }

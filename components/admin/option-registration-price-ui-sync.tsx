@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import { PRODUCT_PRICE_UNIT_OTHER } from '@/lib/domain/product-price-unit';
 
-const ZERO_PRICE_WARNING_TEXT = '商品標準原価が0円です。正式な0円の場合はSTEP 2で確認が必要です';
+/** 本部商品は「商品標準原価」、本部商品の外（旧フリー商品）は「商品価格」（入力欄の data-price-label） */
+const zeroPriceWarningText = (priceLabel: string) => `${priceLabel}が0円です。正式な0円の場合はSTEP 2で確認が必要です`;
 const PRODUCT_UNIT_REQUIRED_TEXT = '商品標準原価の単位を選択してください';
 const LIST_PRICE_UNIT_REQUIRED_TEXT = 'メーカー参考価格を入力した場合は、メーカー参考価格の単位を選択してください';
 const PRICE_UNIT_STATE_EVENT = 'product-price-unit-state-change';
@@ -106,7 +107,7 @@ function syncRegistrationCheck(priceInput: HTMLInputElement) {
   let warningBox = issueBox(section, '確認してください');
   let zeroPriceItem = warningBox
     ? Array.from(warningBox.querySelectorAll<HTMLLIElement>('li')).find((item) =>
-        item.textContent?.includes('商品標準原価が0円です')
+        /(商品標準原価|商品価格)が0円です/.test(item.textContent ?? '')
       ) ?? null
     : null;
 
@@ -116,7 +117,7 @@ function syncRegistrationCheck(priceInput: HTMLInputElement) {
     if (list) {
       zeroPriceItem = document.createElement('li');
       zeroPriceItem.dataset.registrationZeroPriceWarning = 'true';
-      zeroPriceItem.textContent = `・${ZERO_PRICE_WARNING_TEXT}`;
+      zeroPriceItem.textContent = `・${zeroPriceWarningText(priceInput.dataset.priceLabel ?? '商品標準原価')}`;
       list.appendChild(zeroPriceItem);
     }
   }

@@ -9,6 +9,7 @@
 --
 -- 取り込みの決まり（画面の一覧と同じ）
 -- * 対象は登録済み（公開中）の商品と、その選択肢だけ。下書きの商品は、登録（STEP 2 の公開）のときに Version を作る
+-- * 本部標準原価は本部商品だけ。本部商品の外（旧フリー商品＝代理店が登録した商品）は取り込まない（2026-10-29 先方の回答）
 -- * 商品：別途見積は取り込まない。0 円・未設定は取り込まない（価格未確認の 0 円と区別できないため。一覧で別に確認する）
 -- * 選択肢：別途見積は取り込まない。0 円は「標準と同じ（差額 0 円）」として取り込む（v2.5 は Version の無い選択肢を原価未設定として扱う）
 -- * 確かめた後に金額が変わっていたら止める（後勝ちにしない）。同じ金額の Version がすでにあれば何も作らない
@@ -57,6 +58,7 @@ declare
   v_current_amount integer;
   v_min bigint;
   v_version integer;
+  v_category_code text;
 begin
   if v_actor is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -182,6 +184,11 @@ begin
         raise exception using errcode = 'P0001',
           message = pg_catalog.format('VALIDATION: 「%s」は登録済みではありません（下書きは登録のときに原価を記録します）', v_option.name);
       end if;
+      select c.code into v_category_code from public.option_categories c where c.id = v_option.category_id;
+      if v_category_code is not distinct from 'free-product' then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('VALIDATION: 「%s」は本部商品ではないため取り込みません（本部標準原価は本部商品だけ）', v_option.name);
+      end if;
       if v_option.price_on_request then
         raise exception using errcode = 'P0001', message = pg_catalog.format('VALIDATION: 「%s」は別途見積のため取り込みません', v_option.name);
       end if;
@@ -211,11 +218,12 @@ begin
       return next;
     else
       -- 選択肢の原価差額
-      select vc.id, vc.name, vc.extra_price, vc.price_on_request, o.status, o.name as option_name
+      select vc.id, vc.name, vc.extra_price, vc.price_on_request, o.status, o.name as option_name, oc.code as category_code
         into v_choice
         from public.option_variant_choices vc
         join public.option_variant_groups vg on vg.id = vc.group_id
         join public.options o on o.id = vg.option_id
+        left join public.option_categories oc on oc.id = o.category_id
        where vc.id = v_id;
       if not found then
         raise exception using errcode = 'P0002', message = 'NOT_FOUND: 一覧の選択肢が見つかりません。一覧を開き直してください';
@@ -223,6 +231,10 @@ begin
       if v_choice.status <> 'published' then
         raise exception using errcode = 'P0001',
           message = pg_catalog.format('VALIDATION: 「%s」の選択肢は、商品が登録済みではないため取り込みません', v_choice.option_name);
+      end if;
+      if v_choice.category_code is not distinct from 'free-product' then
+        raise exception using errcode = 'P0001',
+          message = pg_catalog.format('VALIDATION: 「%s」の選択肢は、本部商品ではないため取り込みません（本部標準原価は本部商品だけ）', v_choice.option_name);
       end if;
       if v_choice.price_on_request then
         raise exception using errcode = 'P0001',

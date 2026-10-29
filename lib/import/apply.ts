@@ -9,6 +9,7 @@ import {
   type ProductOption,
 } from '@/lib/domain/types';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';
+import { isHqCostProduct } from '@/lib/domain/option-cost-access';
 import { slugify, type ImportPlan } from './catalog-import';
 
 /**
@@ -62,6 +63,12 @@ export interface ApplyResult {
 
 interface ApplyOptions {
   catalogImportUserId?: string;
+  /**
+   * 本部商品の金額（商品価格・追加金額・別途見積）を Excel から反映しない（v2.5 PR-A3：本部商品の原価は本部だけ）。
+   * 既存の本部商品と選択肢は今の金額のまま、新しい本部商品は金額未登録（0 円）の下書き、新しい選択肢は 0 円にする。
+   * 本部商品の外（旧フリー商品）は従来どおり Excel の金額を使う
+   */
+  protectHqCost?: boolean;
 }
 
 /**
@@ -112,6 +119,8 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   }
 
   const batch: CatalogImportBatch = { options: [], variantGroups: [], variantChoices: [] };
+  /** 金額を Excel から反映しない本部商品（protectHqCost のとき） */
+  const protectedOptionIds = new Set<string>();
 
   for (const p of plan.products) {
     const category = resolveCategory(p.categoryName);
@@ -138,10 +147,16 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
         `フリー商品の新規登録は終了しました。商品「${p.name}」はExcel一括登録から新規作成できません。`
       );
     }
-    const importedPriceState = {
-      price: p.price ?? 0,
-      price_on_request: p.price == null,
-    };
+    const protectCost = options.protectHqCost === true && isHqCostProduct(category.code);
+    if (protectCost) protectedOptionIds.add(existing?.id ?? stableId('option', p.code));
+    const importedPriceState = protectCost
+      ? existing
+        ? { price: existing.price, price_on_request: existing.price_on_request }
+        : { price: 0, price_on_request: false }
+      : {
+          price: p.price ?? 0,
+          price_on_request: p.price == null,
+        };
 
     // Excel一括登録でも、Published商品を新たに「通常価格0円」へ移行させない。
     // 既存Published商品を自動でDraftへ落とすと公開中カタログを突然非公開にするため、
@@ -161,7 +176,9 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
       requiresZeroConfirmation && existing?.status !== 'published' ? 'draft' : 'published';
     if (status === 'draft') {
       result.warnings.push(
-        `商品「${p.name}」は通常価格0円のため下書きで登録しました。STEP 2で0円が正式価格であることを確認してから公開してください。`
+        protectCost
+          ? `商品「${p.name}」は商品標準原価が未登録のため下書きで登録しました。本部が原価を登録してから登録（公開）します。`
+          : `商品「${p.name}」は通常価格0円のため下書きで登録しました。STEP 2で0円が正式価格であることを確認してから公開してください。`
       );
     }
 
@@ -217,6 +234,12 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   };
 
   const groupIdByKey = new Map<string, string>();
+  // 金額を反映しない本部商品は、今の選択肢の金額を引き継ぐ（同じ Excel の行は同じ ID になる）
+  const existingChoiceById = new Map<string, OptionVariantChoice>();
+  for (const optionId of protectedOptionIds) {
+    if (!existingOptions.some((row) => row.id === optionId)) continue;
+    for (const choice of (await store.getOptionVariants(optionId)).choices) existingChoiceById.set(choice.id, choice);
+  }
 
   for (const c of plan.choices) {
     const option = optionByCode.get(slugify(c.productCode, c.productCode));
@@ -249,14 +272,18 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
     if (c.imageFile && !url) result.warnings.push(`画像「${c.imageFile}」が見つかりませんでした（${c.choiceName}）。`);
     if (url) result.imagesLinked++;
 
+    const choiceId = stableId('vchoice', `${key}::${c.choiceName}`);
+    const keptChoice = protectedOptionIds.has(option.id) ? existingChoiceById.get(choiceId) : undefined;
+    const choicePrice = protectedOptionIds.has(option.id)
+      ? { extra_price: keptChoice?.extra_price ?? 0, price_on_request: keptChoice?.price_on_request ?? false }
+      : { extra_price: c.extraPrice ?? 0, price_on_request: c.extraPrice == null && c.kind === 'option' };
     const choice: OptionVariantChoice = {
-      id: stableId('vchoice', `${key}::${c.choiceName}`),
+      id: choiceId,
       group_id: groupId,
       code: uniqueCode(choiceCodeUsed, groupId, slugify(c.choiceName, `c${result.variantChoices + 1}`)),
       name: c.choiceName,
       kind: c.kind,
-      extra_price: c.extraPrice ?? 0,
-      price_on_request: c.extraPrice == null && c.kind === 'option',
+      ...choicePrice,
       image_url: url,
       note: c.note,
       sort_order: c.sortOrder || result.variantChoices + 1,

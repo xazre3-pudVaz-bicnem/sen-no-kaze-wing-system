@@ -908,7 +908,7 @@ export function OptionForm({
                   }
                   errors={e.price}
                 >
-                  <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" />
+                  <Input id={`price-${mode}`} name="price" type="number" min={0} step={1000} defaultValue={option?.price ?? 0} required data-testid="option-price" data-price-label={isFreeProduct ? '商品価格' : '商品標準原価'} />
                 </Field>
               ) : (
                 <div className="rounded-lg border border-line bg-ivory/30 p-3 text-xs leading-5 text-muted" data-testid="option-cost-hidden-note">

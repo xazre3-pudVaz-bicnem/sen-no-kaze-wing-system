@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
 import { isLocalMode } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
+import { findUnresolvedLines, quoteOptionFlagMap, type QuoteLineCheckLine } from '@/lib/domain/quote-por';
 import { standardQuoteStateFromPayload, type StandardQuoteDraftPayload } from '@/lib/domain/standard-quote-view';
 import { createClient } from '@/lib/supabase/server';
 import { Alert, Badge } from '@/components/ui';
@@ -12,6 +13,17 @@ import { StandardQuoteEditor } from '@/components/admin/standard-quote-editor';
 
 export const metadata: Metadata = { title: '標準見積から作成した見積下書き | 管理画面', robots: { index: false } };
 export const dynamic = 'force-dynamic';
+
+/** 元の標準見積の版の明細（初回の下書きの金額未確定の判定に使う列だけ） */
+type StandardBaselineRow = {
+  section_code: string;
+  name: string;
+  group_label: string | null;
+  remark: string | null;
+  price_mode: string;
+  cost_unit_price: number | null;
+  unit_price: number | null;
+};
 
 /** 標準見積から作成した見積下書き（本部だけ）。率・内部原価は DB の RPC から読み、表へ直接は書き込まない */
 export default async function StandardQuoteDraftPage({
@@ -45,7 +57,58 @@ export default async function StandardQuoteDraftPage({
   if (!data) notFound();
   const payload = data as StandardQuoteDraftPayload;
   const { draft, request, standard_estimate: source, parent, internals } = payload;
-  const savedHasPor = payload.items.some((item) => item.price_mode === 'por');
+  // 金額が未確定の行（POR と、0 円の内外装・オプション・別途工事の行のうち、自動計算・前の版と同じ 0 円・0円確定・対象外のどれでもない行）。
+  // 止めるのは DB の正式保存（D1 までの暫定）。前の版の明細は明細のキーで突き合わせる
+  // 改訂の下書きは前の版、初回は元の標準見積の版の 0 円の行と突き合わせる（DB の assert_quote_draft_lines_resolved と同じ）
+  const [parentRead, baselineRead] = await Promise.all([
+    parent
+      ? supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
+      : Promise.resolve({ data: [], error: null }),
+    !parent && draft.standard_estimate_revision_id
+      ? supabase
+          .from('standard_estimate_revision_lines')
+          .select('section_code, name, group_label, remark, price_mode, cost_unit_price, unit_price')
+          .eq('revision_id', draft.standard_estimate_revision_id)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  // 前の版の明細が指す商品の別途見積の設定・台帳の価格（DB の判定と同じく、販売停止・非公開の商品も含む）。
+  // 件数の上限で取りこぼさないよう、明細が指す商品だけを読む
+  const parentOptionIds = [
+    ...new Set(((parentRead.data ?? []) as { option_id?: string | null }[]).map((row) => row.option_id).filter((value): value is string => Boolean(value))),
+  ];
+  const optionsRead = parentOptionIds.length
+    ? await supabase.from('options').select('id, price, price_on_request').in('id', parentOptionIds)
+    : { data: [], error: null };
+  const parentReadFailed = Boolean(parentRead.error || baselineRead.error || optionsRead.error);
+  const optionFlags = quoteOptionFlagMap(
+    ((optionsRead.data ?? []) as { id: string; price: number; price_on_request: boolean }[]).map((option) => ({
+      id: option.id,
+      price: option.price,
+      priceOnRequest: option.price_on_request,
+    }))
+  );
+  const baselineKind: Record<string, string> = { interior_exterior: 'interior_exterior', option: 'option', sitework: 'installation' };
+  const baselineLines: QuoteLineCheckLine[] = ((baselineRead.data ?? []) as StandardBaselineRow[])
+    .filter((row) => Object.hasOwn(baselineKind, row.section_code))
+    .filter((row) => (row.price_mode === 'auto' ? (row.cost_unit_price ?? 0) === 0 : row.price_mode === 'manual' && (row.unit_price ?? 0) === 0))
+    .map((row) => ({
+      kind: baselineKind[row.section_code],
+      name: row.name,
+      description: row.group_label,
+      remark: row.remark,
+      unit_price: 0,
+    }));
+  const unresolvedItems = parentReadFailed
+    ? new Set<StandardQuoteDraftPayload['items'][number]>()
+    : findUnresolvedLines(payload.items, {
+        parentLines: (parentRead.data ?? []) as QuoteLineCheckLine[],
+        baselineLines,
+        options: optionFlags,
+        matchLineKey: true,
+      });
+  const savedUnresolvedNames = payload.items
+    .filter((item) => item.price_mode === 'por' || unresolvedItems.has(item))
+    .map((item) => item.name);
   const customer = request.contact?.full_name ?? '';
   const targetRevision = parent ? parent.revision + 1 : 1;
 
@@ -85,8 +148,11 @@ export default async function StandardQuoteDraftPage({
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted">価格未確定の行</p>
-          <p>{savedHasPor ? <Badge tone="warn">あり（発行できません）</Badge> : 'なし'}</p>
+          <p className="text-xs text-muted">金額未確定の行</p>
+          <p>
+            {savedUnresolvedNames.length > 0 ? <Badge tone="warn">{savedUnresolvedNames.length} 行（発行できません）</Badge> : 'なし'}
+            {parentReadFailed && <span className="block text-xs text-muted">前の版・元の標準見積の明細を読み取れなかったため、発行の可否は発行のときに確かめます</span>}
+          </p>
         </div>
         {parent && (
           <p className="text-xs text-muted sm:col-span-4">
@@ -101,7 +167,7 @@ export default async function StandardQuoteDraftPage({
         draftId={draft.id}
         lockVersion={draft.lock_version}
         taxRate={String(draft.tax_rate)}
-        savedHasPor={savedHasPor}
+        savedUnresolvedNames={savedUnresolvedNames}
         initial={standardQuoteStateFromPayload(payload)}
       />
     </AdminPage>

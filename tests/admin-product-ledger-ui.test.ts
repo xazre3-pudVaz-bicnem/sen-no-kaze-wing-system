@@ -38,7 +38,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('すべて <span');
     expect(client).toContain('登録済み <span');
     expect(client).toContain('下書き <span');
-    expect(client).toContain('取扱終了 <span');
+    expect(client).toContain('販売停止・廃番 <span');
     expect(client).toContain('aria-label="商品状態"');
     expect(client).not.toContain('aria-label="公開状態"');
     expect(client).not.toContain('要確認のみ');
@@ -177,7 +177,7 @@ describe('商品台帳の入口', () => {
   it('お客様表示はシミュレーター共通ProductDetailをそのまま使う', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain("import { ProductDetail } from '@/components/simulator/product-detail'");
-    expect(client).toContain('商品詳細の確認画面です。取扱終了・シミュレーター非表示の商品も商品台帳では確認できます。');
+    expect(client).toContain('商品詳細の確認画面です。販売停止・廃番・シミュレーター非表示の商品も商品台帳では確認できます。');
     expect(client).toContain('defaultVariantIdsFor');
     expect(client).toContain('pruneHiddenVariantChoices');
     expect(client).toContain('<ProductDetail key={selected.id} category={category} option={selected}');
@@ -211,7 +211,7 @@ describe('商品台帳の入口', () => {
     expect(client).toContain('min-[900px]:grid-cols-2');
   });
 
-  it('利用者向けの商品状態は下書き・登録済み・取扱終了に統一する', () => {
+  it('利用者向けの商品状態は下書き・登録済み・販売停止・廃番に統一する', () => {
     const client = fs.readFileSync(path.resolve(process.cwd(), 'components/admin/product-ledger-client.tsx'), 'utf8');
     expect(client).toContain('productLedgerStateLabel(selected)');
     expect(client).toContain("productLedgerState(selected) === 'registered'");

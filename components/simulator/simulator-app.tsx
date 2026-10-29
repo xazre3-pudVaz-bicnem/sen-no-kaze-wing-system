@@ -13,6 +13,7 @@ import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices, re
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
+  estimateSpecStoppedProductNames,
   finishLevelForEstimateSpec,
   ruleContextForSpec,
   simulatorEstimateChoices,
@@ -330,6 +331,11 @@ export function SimulatorApp({
     );
   });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
+  // 仕様の標準構成に販売停止・廃番の商品があれば、その仕様は新しい受付を止める（自動で別の商品に替えない。見積依頼は DB でも止める）
+  const specStoppedNames = useMemo(
+    () => estimateSpecStoppedProductNames(ctx, model, specCode, estimateTemplateByCode.get(specCode)?.baseline_option_ids ?? []),
+    [ctx, estimateTemplateByCode, model, specCode]
+  );
   const [sitePrefecture, setSitePrefecture] = useState<string | null>(initial?.site_prefecture ?? null);
   const [siteMunicipality, setSiteMunicipality] = useState<string | null>(initial?.site_municipality ?? null);
   const [siteLocationUndecided, setSiteLocationUndecided] = useState(initial?.site_location_undecided ?? false);
@@ -1253,6 +1259,17 @@ export function SimulatorApp({
                       </button>
                     ))}
                   </div>
+
+                  {specStoppedNames.length > 0 && (
+                    <p
+                      className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[0.78rem] leading-relaxed text-amber-900"
+                      role="status"
+                      data-testid="spec-acceptance-stopped"
+                    >
+                      この仕様の標準の商品構成に、販売停止の商品（{specStoppedNames.join('・')}）が含まれるため、現在は新しいご依頼を受け付けていません。
+                      プランの確認・保存はできます。再開まで担当からのご案内をお待ちください。
+                    </p>
+                  )}
 
                   <div className="mt-3">
                     <SiteLocationPicker

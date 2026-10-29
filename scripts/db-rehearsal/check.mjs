@@ -24,6 +24,8 @@ import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-publis
 import { runtimeConfigurationVariantAssignment } from './runtime-configuration-variant-assignment.mjs';
 import { runtimeProductLifecycle } from './runtime-product-lifecycle.mjs';
 import { runtimeLifecycleConcurrency } from './runtime-product-lifecycle-concurrency.mjs';
+import { runtimeQuoteFormalPorGuard } from './runtime-quote-formal-por-guard.mjs';
+import { runtimeProductSalesStop } from './runtime-product-sales-stop.mjs';
 import { runtimeConfigurationSpecGuard } from './runtime-configuration-spec-guard.mjs';
 
 const argv = process.argv.slice(2);
@@ -64,6 +66,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeProductLifecycle(client));
     // 取扱終了と保存・提出・発行の同時実行は 2 本の接続が必要なため、別の接続で実行する
     runtime = mergeRuntime(runtime, await runtimeLifecycleConcurrency({ connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeQuoteFormalPorGuard(client));
+    runtime = mergeRuntime(runtime, await runtimeProductSalesStop(client));
     // #389 の安全機構（本体分類表・明細の保護）を今のマトリクス方式で確かめる。同時実行は 2 本の接続を使う
     runtime = mergeRuntime(runtime, await runtimeConfigurationSpecGuard(client, { connectionString: url }));
     printRuntime(runtime);

@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
+import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getStore } from '@/lib/data/store';
+import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
+import { v25ConfigurationPricing } from '@/lib/domain/standard-estimate-sale-view';
 import { CONFIGURATION_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
@@ -18,7 +21,16 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
   const { configuration: c, items } = found;
   const [bundle, profile] = await Promise.all([store.getCatalogBundle(c.base_model_id, { includeDraft: true }), store.getProfile(c.user_id)]);
   if (!bundle) notFound();
-  const current = computePricing(bundle.model, bundle.options, bundle.categories, items.map((i) => ({ option_id: i.option_id, quantity: i.quantity })));
+  // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）ではなく v2.5 の標準見積の売価で計算し直す（DB の保存と同じ）
+  const sale = await getSimulatorSaleViews(bundle.model.id, { preview: false });
+  const current = sale.v25
+    ? v25ConfigurationPricing(bundle, sale.saleViews, {
+        specCode: c.spec_code ?? null,
+        optionIds: items.map((i) => i.option_id),
+        variantChoiceIds: items.flatMap((i) => i.variant_choice_ids ?? []),
+        exteriorFaces: await getExteriorFaces(c.id),
+      })
+    : computePricing(bundle.model, bundle.options, bundle.categories, items.map((i) => ({ option_id: i.option_id, quantity: i.quantity })));
   const priceChanged = current.total !== c.total;
 
   return (

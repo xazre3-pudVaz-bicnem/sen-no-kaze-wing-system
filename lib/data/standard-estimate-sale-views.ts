@@ -33,6 +33,30 @@ export const getStandardEstimateSaleViews = unstable_cache(fetchStandardEstimate
 });
 
 /**
+ * 公開中の v2.5 の標準見積を、売価だけの形（選択肢の組み合わせごとの売価の表つき）で取得する（get_simulator_v25_sale_views。v2.5 PR-C1）。
+ * 原価・率・原価の Version は含まれない。サーバー側（service role）だけが呼べる。
+ * 関数が無い DB（20261029100000 が未適用）では null（v2.5 以前の売価の取得を使う）
+ */
+async function fetchSimulatorV25SaleViews(baseModelId: string): Promise<StandardEstimateSaleView[] | null> {
+  if (isLocalMode()) return null;
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  const db = createAdminClient();
+  const { data, error } = await db.rpc('get_simulator_v25_sale_views', { p_base_model_id: baseModelId });
+  if (error) {
+    if (isMissingNamedFunction(error, 'get_simulator_v25_sale_views')) return null;
+    throw new Error(`simulator v2.5 sale views: ${error.message}`);
+  }
+  return (data ?? []) as StandardEstimateSaleView[];
+}
+
+/** 標準見積の公開・原価の変更（商品の保存）で updateTag(CATALOG_TAG) により破棄される */
+export const getSimulatorV25SaleViews = unstable_cache(fetchSimulatorV25SaleViews, ['simulator-v25-sale-views-v1'], {
+  tags: [CATALOG_TAG],
+  revalidate: 300,
+});
+
+/**
  * シミュレーターの新価格へ切り替えるスイッチ（20261013210000）。本部が入れるまでは false（現在のサイト価格を維持する）。
  * スイッチの関数が無い DB（migration 未適用）では、20261013200000 の時点の動き（標準状態の商品があれば新しい計算）に合わせず、
  * 安全側の false にする（サイトの新価格への切り替えは、先方の最終確認のあとに本部が明示的に行う）。
@@ -61,12 +85,16 @@ export const getSimulatorStandardPricingEnabled = unstable_cache(
  * シミュレーターに渡す売価（新しい標準見積）。
  * - スイッチが入っていれば、お客様にも新しい標準見積の価格を使う
  * - スイッチが切れている間は空（現在のサイト価格）。本部のプレビュー（preview）だけ、切り替え前の確認用に新しい価格を使う
+ * - v2.5 の売価の取得（20261029100000）がある DB では、v2.5 の標準見積だけを使う（v25: true）。
+ *   v2.5 以前の標準見積は商品価格の列（今は原価）で差額を出すため使わない。画面へ渡すカタログからは原価を外す（ページ側）
  */
 export async function getSimulatorSaleViews(
   baseModelId: string,
   opts: { preview: boolean }
-): Promise<{ saleViews: StandardEstimateSaleView[]; switchedOn: boolean }> {
+): Promise<{ saleViews: StandardEstimateSaleView[]; switchedOn: boolean; v25: boolean }> {
   const switchedOn = await getSimulatorStandardPricingEnabled();
-  if (!switchedOn && !opts.preview) return { saleViews: [], switchedOn };
-  return { saleViews: await getStandardEstimateSaleViews(baseModelId), switchedOn };
+  if (!switchedOn && !opts.preview) return { saleViews: [], switchedOn, v25: false };
+  const v25Views = await getSimulatorV25SaleViews(baseModelId);
+  if (v25Views !== null) return { saleViews: v25Views, switchedOn, v25: true };
+  return { saleViews: await getStandardEstimateSaleViews(baseModelId), switchedOn, v25: false };
 }

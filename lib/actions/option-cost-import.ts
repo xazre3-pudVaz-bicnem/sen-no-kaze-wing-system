@@ -1,8 +1,9 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
+import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
 
@@ -44,5 +45,7 @@ export async function importOptionCostsAction(formData: FormData): Promise<void>
   const unchanged = rows.filter((row) => row.result === 'unchanged').length;
   revalidatePath(PAGE);
   revalidatePath('/admin/ledger');
+  // シミュレーターの v2.5 の売価の表は今の原価の Version から作る（v2.5 PR-C1）
+  if (imported > 0) updateTag(CATALOG_TAG);
   redirect(`${PAGE}?imported=${imported}&unchanged=${unchanged}`);
 }

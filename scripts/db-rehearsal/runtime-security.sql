@@ -828,9 +828,17 @@ begin
               pg_temp.run_as('authenticated', u_cust_x, $q$ select count(*)::text from public.app_settings $q$));
             -- 切り替えと監査ログの確認は別の文にする（同じ文の中からは、その文の中で書いた行が見えない）
             v_switch_text := pg_temp.run_as('authenticated', u_admin, $q$ select public.set_simulator_standard_pricing(true)::text $q$);
-            perform pg_temp.expect_eq('18-5 本部はシミュレーターの価格を切り替えられ、監査ログに残る', 'true/true',
-              v_switch_text || '/' ||
-              exists (select 1 from public.audit_logs a where a.entity = 'app_settings' and a.summary like '%新しい標準見積に切り替え%')::text);
+            if to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null then
+              -- v2.5 PR-C1 の後は、公開中の版が v2.5 でない標準見積が有効なままでは、本部も切り替えられない。
+              -- 以降の 17 の検査は、スイッチを入れた状態（設定の表を直接変える）で、v2.5 以前の標準見積を使わないことを確かめる
+              perform pg_temp.expect_eq('18-5 公開中の版が v2.5 でない標準見積が有効なままでは、本部も切り替えられない（v2.5 PR-C1）', 'true/false',
+                (v_switch_text like 'ERROR P0001: VALIDATION:%')::text || '/' || public.simulator_standard_pricing_enabled()::text);
+              update public.app_settings set value = jsonb_build_object('enabled', true) where key = 'simulator_standard_pricing';
+            else
+              perform pg_temp.expect_eq('18-5 本部はシミュレーターの価格を切り替えられ、監査ログに残る', 'true/true',
+                v_switch_text || '/' ||
+                exists (select 1 from public.audit_logs a where a.entity = 'app_settings' and a.summary like '%新しい標準見積に切り替え%')::text);
+            end if;
           end if;
 
           -- recalculate_configuration は保存処理（save_configuration_atomic）の中から呼ぶ内部の関数（API からは実行できない）。
@@ -839,14 +847,15 @@ begin
           perform public.recalculate_configuration(c_s);
           perform public.recalculate_configuration(c_s2);
           perform set_config('request.jwt.claims', '', true);
-          perform pg_temp.expect_eq('17-1 標準見積で計算する（本体は標準見積の売価、オプションは 3 個 − 標準状態 2 個の差額 12,000 円と経費 1,800 円）',
-            '467376/70106/12000/1800/0/551282/55128/606410',
+          -- v2.5 PR-C1 の後は、v2.5 以前の標準見積（商品価格の列で差額を出す）を使わず、v2.5 の版が無い仕様は金額を未確定（0 円）にする
+          perform pg_temp.expect_eq('17-1 標準見積で計算する（本体は標準見積の売価、オプションは 3 個 − 標準状態 2 個の差額 12,000 円と経費 1,800 円。C1 の後は v2.5 の版が無いので 0 円）',
+            case when to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null then '0/0/0/0/0/0/0/0' else '467376/70106/12000/1800/0/551282/55128/606410' end,
             coalesce((select c.base_price || '/' || c.base_expense || '/' || c.option_subtotal || '/' || c.option_expense || '/' ||
                              c.adjustment || '/' || c.subtotal || '/' || c.tax || '/' || c.total
                         from public.configurations c where c.id = c_s), '(なし)'));
           -- これまでの計算：本体内訳の無いモデルは本体価格（前の検査で 1 円上げた値）
-          perform pg_temp.expect_eq('17-2 使える標準見積が無い仕様は、これまでの計算のまま（本体はモデルの本体価格）',
-            (select m.base_price::text from public.base_models m where m.id = v_model),
+          perform pg_temp.expect_eq('17-2 使える標準見積が無い仕様は、これまでの計算のまま（本体はモデルの本体価格。C1 の後は商品価格の列で計算せず 0 円）',
+            case when to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null then '0' else (select m.base_price::text from public.base_models m where m.id = v_model) end,
             coalesce((select c.base_price::text from public.configurations c where c.id = c_s2), '(なし)'));
 
           -- 見積の明細：本体・本体諸費用・オプションの変更差額・オプション諸費用。合計は税抜（調整前）と一致する
@@ -858,7 +867,8 @@ begin
                   467376, 12000, 0, 551282, 0.10, 55128, 606410);
           set local session_replication_role = origin;
           perform public.write_standard_estimate_quote_items(c_s, q_s);
-          perform pg_temp.expect_eq('17-3 見積の明細は標準見積から作り、合計は税抜（調整前）と一致する', '4/551282/12000',
+          perform pg_temp.expect_eq('17-3 見積の明細は標準見積から作り、合計は税抜（調整前）と一致する（C1 の後は v2.5 の版が無いので別途お見積りの 1 行）',
+            case when to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null then '1/0/0' else '4/551282/12000' end,
             (select count(*)::text || '/' || coalesce(sum(qi.amount), 0)::text || '/' ||
                     coalesce(max(qi.amount) filter (where qi.name = '選択商品の変更差額'), 0)::text
                from public.quote_items qi where qi.quote_id = q_s));

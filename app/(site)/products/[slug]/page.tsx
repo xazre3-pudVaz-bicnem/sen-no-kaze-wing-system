@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ArrowRight, Check } from 'lucide-react';
 import { getPublicBundleBySlug } from '@/lib/data/public-catalog';
+import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { baseTotalOf, formatManYen, formatYen } from '@/lib/domain/pricing';
+import { pickSaleView, v25DisplayCatalog } from '@/lib/domain/standard-estimate-sale-view';
 import { IMAGE_KIND_LABELS, type ProductImageKind } from '@/lib/domain/types';
 import { breadcrumbJsonLd, buildMetadata, productJsonLd } from '@/lib/seo';
 import { PRICE_DISCLAIMER } from '@/lib/site';
@@ -48,9 +50,20 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const galleryKinds: ProductImageKind[] = ['exterior', 'interior', 'floorplan', 'transport'];
   const gallery = bundle.images.filter((i) => galleryKinds.includes(i.kind) && i.url !== hero?.url);
   const interior = bundle.images.find((i) => i.kind === 'interior') ?? null;
+  // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）を出さず、シミュレーターが最初に開く仕様の v2.5 の売価を出す
+  // （その仕様の v2.5 の標準見積が無ければ要見積）
+  const sale = await getSimulatorSaleViews(model.id, { preview: false });
+  const shownOptions = sale.v25
+    ? v25DisplayCatalog(
+        bundle.options,
+        bundle.variantGroups,
+        bundle.variantChoices,
+        pickSaleView(sale.saleViews, model.slug, model.presets?.[0]?.code ?? 'base', false)
+      ).options
+    : bundle.options;
   const optionsByCategory = bundle.categories
     .filter((c) => c.code !== 'sitework')
-    .map((c) => ({ category: c, options: bundle.options.filter((o) => o.category_id === c.id && isSimulatorSelectableProduct(o)) }))
+    .map((c) => ({ category: c, options: shownOptions.filter((o) => o.category_id === c.id && isSimulatorSelectableProduct(o)) }))
     .filter((g) => g.options.length);
 
   return (

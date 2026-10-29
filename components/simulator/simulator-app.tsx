@@ -26,6 +26,9 @@ import {
 } from '@/lib/domain/standard-estimate-pricing';
 import {
   computeSaleViewPricing,
+  isV25SaleView,
+  pendingSaleViewPricing,
+  v25DisplayCatalog,
   isFireProofSelected,
   pickSaleView,
   type StandardEstimateSaleView,
@@ -45,6 +48,7 @@ import {
   type ConfigurationStatus,
   type EstimateTemplateBundle,
   type FinishLevel,
+  type ProductOption,
   type ViewKey,
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
@@ -99,6 +103,11 @@ interface Props {
    * 保存・見積依頼はできない（DB 側はスイッチが入るまでこれまでの計算のため、保存すると金額が食い違う）。
    */
   pricingPreview?: boolean;
+  /**
+   * v2.5 の標準見積の売価を使う（v2.5 PR-C1）。カタログの商品価格の列（原価）は受け取らず、
+   * 画面に出す商品価格・選択肢の差額は売価の表から作る。v2.5 の標準見積が無い仕様は価格を準備中として出す
+   */
+  v25Pricing?: boolean;
   /** 本体切り替え用（タイトル横のセレクト。先方指示「ここで本体を変える」） */
   models: { slug: string; name: string }[];
   /** 立面図（モデル共通の図面。現状は Wing のみ） */
@@ -156,6 +165,7 @@ export function SimulatorApp({
   estimateTemplates,
   saleViews = [],
   pricingPreview = false,
+  v25Pricing = false,
   models,
   elevations,
   initial,
@@ -560,12 +570,27 @@ export function SimulatorApp({
     () => pickSaleView(saleViews, model.slug, specCode, fireSelected),
     [fireSelected, model.slug, saleViews, specCode]
   );
-  /** 新しい標準見積が無ければ、Excelの標準見積（旧）を基準価格にし、商品変更分だけ差額反映する。 */
+  /** v2.5 の売価を使う間に、この仕様の v2.5 の標準見積が無い（価格は準備中・見積依頼でお見積り） */
+  const v25PricePending = v25Pricing && !activeSaleView;
+  /** v2.5 の売価：画面に出す商品価格・選択肢の差額（原価は使わない。合計は computeSaleViewPricing で売価の表から計算） */
+  const displayCatalog = useMemo(
+    () => (v25Pricing ? v25DisplayCatalog(bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView) : null),
+    [v25Pricing, bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView]
+  );
+  const displayOptionById = useMemo(
+    () => (displayCatalog ? new Map(displayCatalog.options.map((option) => [option.id, option] as const)) : null),
+    [displayCatalog]
+  );
+  const displayVariantChoices = displayCatalog?.choices ?? bundle.variantChoices;
+  /**
+   * 新しい標準見積が無ければ、Excelの標準見積（旧）を基準価格にし、商品変更分だけ差額反映する。
+   * v2.5 の売価を使う間は、旧テンプレートでは計算しない（商品価格の列で差額を出すため。v2.5 の標準見積が無い仕様は準備中）
+   */
   const standardEstimatePricing = useMemo<StandardEstimatePricingResult | null>(
     () =>
       activeSaleView
         ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces)
-        : activeEstimateTemplate
+        : activeEstimateTemplate && !v25Pricing
           ? computeStandardEstimatePricing(
               bundle,
               activeEstimateTemplate,
@@ -575,15 +600,15 @@ export function SimulatorApp({
               finishLevel
             )
           : null,
-    [activeEstimateTemplate, activeSaleView, bundle, exteriorFaces, finishLevel, selected, variantIds]
+    [activeEstimateTemplate, activeSaleView, bundle, exteriorFaces, finishLevel, selected, variantIds, v25Pricing]
   );
   /** 標準見積未登録の仕様だけ従来計算へフォールバックする。 */
   const baseOverride = useMemo(
     () => (activeSaleView || activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
     [activeEstimateTemplate, activeSaleView, bundle, specCode]
   );
-  const pricing = useMemo(
-    () =>
+  const pricing = useMemo(() => {
+    const result =
       standardEstimatePricing?.pricing ??
       computePricing(
         model,
@@ -594,9 +619,17 @@ export function SimulatorApp({
         { groups: bundle.variantGroups, choices: bundle.variantChoices },
         baseOverride,
         exteriorFaces
-      ),
-    [model, bundle, selected, variantIds, baseOverride, exteriorFaces, standardEstimatePricing]
+      );
+    // v2.5 の標準見積が無い仕様は、原価から金額を出さない（価格は準備中・見積依頼でお見積り。DB の保存・見積依頼も同じ）
+    return v25PricePending ? pendingSaleViewPricing(result) : result;
+  }, [model, bundle, selected, variantIds, baseOverride, exteriorFaces, standardEstimatePricing, v25PricePending]);
+  /** v2.5 の売価を使う間は、画面に出す商品を、商品価格を売価にしたものに差し替える（原価は受け取っていない） */
+  const withDisplayPrices = useCallback(
+    (options: ProductOption[]) => (displayOptionById ? options.map((option) => displayOptionById.get(option.id) ?? option) : options),
+    [displayOptionById]
   );
+  const displayScopedOptions = useMemo(() => withDisplayPrices(scopedOptions), [withDisplayPrices, scopedOptions]);
+  const displayAllOptions = useMemo(() => withDisplayPrices(bundle.options), [withDisplayPrices, bundle.options]);
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
   const levelTotals = useMemo(() => {
     const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
@@ -604,6 +637,21 @@ export function SimulatorApp({
     const out: Partial<Record<FinishLevel, number>> = {};
     for (const lv of FINISH_LEVELS) {
       const ids = pruneToScope(activeSpecCtx, lv === finishLevel ? selected : base, lv);
+      // v2.5 の売価：標準見積の売価の表で計算する（原価は使わない）。v2.5 の標準見積が無い仕様は準備中（0 円）。
+      // 売価は選択肢の組み合わせで決まるので、今の注文範囲は今の選択肢、ほかは標準の選択肢で計算する
+      if (v25Pricing) {
+        out[lv] =
+          activeSaleView && isV25SaleView(activeSaleView)
+            ? computeSaleViewPricing(
+                bundle,
+                activeSaleView,
+                ids,
+                lv === finishLevel ? variantIds : defaultVariantIds(bundle, ids),
+                lv === finishLevel ? exteriorFaces : []
+              ).pricing.total
+            : 0;
+        continue;
+      }
       out[lv] = computePricing(
         model,
         bundle.options,
@@ -616,7 +664,7 @@ export function SimulatorApp({
       ).total;
     }
     return out;
-  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces]);
+  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds]);
 
   const independentInsulationCategoryIds = useMemo(
     () =>
@@ -1194,6 +1242,11 @@ export function SimulatorApp({
           )}
         </div>
 
+        {v25PricePending && (
+          <div className="mt-4" data-testid="price-pending-banner">
+            <Alert tone="info">この仕様の価格は準備中です。見積依頼をいただければ、担当者がお見積りします。</Alert>
+          </div>
+        )}
         {pricingPreview && (
           <div className="mt-4" data-testid="pricing-preview-banner">
             <Alert tone="info">
@@ -1259,13 +1312,13 @@ export function SimulatorApp({
       <div className="container-x max-w-5xl space-y-4 pt-3 pb-2">
         <EquipmentBoard
           categories={specCategories}
-          options={scopedOptions}
+          options={displayScopedOptions}
           selected={selected}
           baselineSelected={activeSpecSelection}
           selectedVariantIds={variantIds}
           baselineVariantIds={baselineVariantIds}
           variantGroups={bundle.variantGroups}
-          variantChoices={bundle.variantChoices}
+          variantChoices={displayVariantChoices}
           readOnly={readOnly}
           onPickCategory={openPicker}
         />
@@ -1288,7 +1341,7 @@ export function SimulatorApp({
           pricing={pricing}
           standardEstimate={standardEstimatePricing}
           categories={bundle.categories}
-          options={bundle.options}
+          options={displayAllOptions}
           readOnly={readOnly}
           onPickCategory={openPicker}
           showDealerFinder
@@ -1319,12 +1372,12 @@ export function SimulatorApp({
       {picker && (
         <OptionPickerDialog
           category={bundle.categories.find((c) => c.id === picker)!}
-          options={scopedOptions.filter((o) => o.category_id === picker)}
+          options={displayScopedOptions.filter((o) => o.category_id === picker)}
           selectedIds={selected}
           baselineSelectedIds={activeSpecSelection}
           blocked={blocked}
           variantGroups={bundle.variantGroups}
-          variantChoices={bundle.variantChoices}
+          variantChoices={displayVariantChoices}
           selectedVariantIds={variantIds}
           baselineVariantIds={baselineVariantIds}
           onClose={() => setPicker(null)}
@@ -1334,10 +1387,10 @@ export function SimulatorApp({
       {exteriorFacePicker && exteriorWallCat && (
         <ExteriorWallFacesDialog
           category={exteriorWallCat}
-          options={allExteriorWallOptions}
-          selectableOptions={exteriorWallOptions}
+          options={withDisplayPrices(allExteriorWallOptions)}
+          selectableOptions={withDisplayPrices(exteriorWallOptions)}
           variantGroups={bundle.variantGroups}
-          variantChoices={bundle.variantChoices}
+          variantChoices={displayVariantChoices}
           selectedOptionIds={selected}
           selectedVariantIds={variantIds}
           current={exteriorFaces}

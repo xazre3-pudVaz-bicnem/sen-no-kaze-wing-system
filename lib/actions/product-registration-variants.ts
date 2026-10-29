@@ -6,6 +6,7 @@ import { requireCatalogEditor } from '@/lib/auth/session';
 import { getStore, StoreError } from '@/lib/data/store';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { flattenErrors, variantChoiceSchema, variantGroupSchema, type FieldErrors } from '@/lib/validation';
+import { parseChoiceExtraPrice } from '@/lib/domain/product-variant-creation-prices';
 
 export interface ProductVariantCreateState {
   ok: boolean;
@@ -21,6 +22,30 @@ const initialError = (error: unknown): ProductVariantCreateState => {
 };
 
 const normalizedName = (value: unknown) => String(value ?? '').trim().toLocaleLowerCase('ja-JP');
+
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+function selectedChoiceImage(formData: FormData, choiceIndex: number): File | null {
+  const value = formData.get(`choice_image_file_${choiceIndex}`);
+  return value instanceof File && value.size > 0 ? value : null;
+}
+
+function selectedChoiceImageUrl(formData: FormData, choiceIndex: number): string {
+  return String(formData.get(`choice_image_url_${choiceIndex}`) ?? '').trim();
+}
+
+// 外部 URL はサーバー側で取得せず、表示用 URL として保存する。
+function isAllowedChoiceImageUrl(value: string): boolean {
+  if (!value || value.length > 1000) return false;
+  if (value.startsWith('/images/')) return !/[\\\s<>]/.test(value);
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
 
 export async function createVariantGroupWithFirstChoiceAction(
   _prev: ProductVariantCreateState,
@@ -64,24 +89,77 @@ export async function createVariantGroupWithFirstChoiceAction(
     });
     if (!group.success) return { ok: false, fieldErrors: flattenErrors(group.error) };
 
-    const additionalChoiceNames = formData
-      .getAll('additional_choice_name')
-      .map((value) => String(value).trim())
-      .filter(Boolean);
+    const standardIndex = Number(formData.get('standard_choice_index') ?? 0);
+    const additionalChoiceNames = formData.getAll('additional_choice_name');
+    if (!Number.isSafeInteger(standardIndex) || standardIndex < 0 || standardIndex > additionalChoiceNames.length) {
+      return { ok: false, fieldErrors: { _form: ['標準の選択肢を確認してください。'] } };
+    }
+
+    // 価格・画像は画面上の元の行番号で受け取る。標準を切り替えても選択肢と取り違えない。
+    const choicePrices = Array.from({ length: additionalChoiceNames.length + 1 }, (_, index) =>
+      parseChoiceExtraPrice(formData, index)
+    );
+    const invalidPriceIndex = choicePrices.findIndex((price) => price === null);
+    if (invalidPriceIndex >= 0) {
+      return {
+        ok: false,
+        fieldErrors: {
+          _form: [`選択肢${invalidPriceIndex + 1}の追加金額は、0〜100,000,000円の整数で入力してください。`],
+        },
+      };
+    }
+
+    // 画像と追加金額は画面上の元の行番号で受け取る。
+    const additionalInputs = additionalChoiceNames
+      .map((raw, index) => ({
+        name: String(raw).trim(),
+        choiceIndex: index >= standardIndex ? index + 1 : index,
+      }));
+    if (additionalInputs.some((row) => !row.name && (
+      selectedChoiceImage(formData, row.choiceIndex) ||
+      selectedChoiceImageUrl(formData, row.choiceIndex) ||
+      choicePrices[row.choiceIndex] !== 0
+    ))) {
+      return {
+        ok: false,
+        fieldErrors: { additional_choice_name: ['画像または追加金額を指定した選択肢には名前を入力してください。'] },
+      };
+    }
     const choiceInputs = [
       {
         name: formData.get('first_choice_name'),
         kind: 'standard' as const,
         sortOrder: 0,
         fieldKey: 'first_choice_name',
+        choiceIndex: standardIndex,
+        extraPrice: choicePrices[standardIndex]!,
       },
-      ...additionalChoiceNames.map((name, index) => ({
-        name,
+      ...additionalInputs.filter((row) => row.name).map((row, index) => ({
+        name: row.name,
         kind: 'option' as const,
         sortOrder: index + 1,
         fieldKey: 'additional_choice_name',
+        choiceIndex: row.choiceIndex,
+        extraPrice: choicePrices[row.choiceIndex]!,
       })),
     ];
+
+    for (const input of choiceInputs) {
+      const file = selectedChoiceImage(formData, input.choiceIndex);
+      const imageUrl = selectedChoiceImageUrl(formData, input.choiceIndex);
+      if (file && imageUrl) {
+        return { ok: false, fieldErrors: { _form: ['画像URLとファイルはどちらか一方だけ指定してください。'] } };
+      }
+      if (imageUrl && !isAllowedChoiceImageUrl(imageUrl)) {
+        return { ok: false, fieldErrors: { _form: ['画像URLはHTTPS、または /images/ で始まるパスを入力してください。'] } };
+      }
+      if (file && (!IMAGE_TYPES.has(file.type) || file.size > MAX_IMAGE_SIZE)) {
+        return {
+          ok: false,
+          fieldErrors: { _form: ['色見本画像はJPEG / PNG / WebP / AVIF、1枚10MB以下にしてください。'] },
+        };
+      }
+    }
 
     const normalizedChoiceNames = choiceInputs.map((row) => normalizedName(row.name));
     if (new Set(normalizedChoiceNames).size !== normalizedChoiceNames.length) {
@@ -100,9 +178,9 @@ export async function createVariantGroupWithFirstChoiceAction(
         code: `vc-${randomUUID()}`,
         name: input.name,
         kind: input.kind,
-        extra_price: 0,
+        extra_price: input.extraPrice,
         price_on_request: false,
-        image_url: null,
+        image_url: selectedChoiceImageUrl(formData, input.choiceIndex) || null,
         note: null,
         sort_order: input.sortOrder,
         status: 'published',
@@ -126,21 +204,36 @@ export async function createVariantGroupWithFirstChoiceAction(
 
     let savedChoiceCount = 0;
     try {
-      for (const choice of choices) {
-        await store.upsertVariantChoice({
-          id: randomUUID(),
-          group_id: choice.group_id,
-          code: choice.code,
-          name: choice.name,
-          kind: choice.kind,
-          extra_price: choice.extra_price,
-          price_on_request: choice.price_on_request,
-          image_url: choice.image_url,
-          note: choice.note,
-          sort_order: choice.sort_order,
-          status: choice.status,
-        });
-        savedChoiceCount += 1;
+      for (const [index, choice] of choices.entries()) {
+        const file = selectedChoiceImage(formData, choiceInputs[index].choiceIndex);
+        let uploadedUrl: string | null = null;
+        try {
+          if (file) {
+            uploadedUrl = await store.uploadImage({
+              bytes: new Uint8Array(await file.arrayBuffer()),
+              contentType: file.type,
+              fileName: file.name,
+            }, 'variant-choices');
+          }
+          await store.upsertVariantChoice({
+            id: randomUUID(),
+            group_id: choice.group_id,
+            code: choice.code,
+            name: choice.name,
+            kind: choice.kind,
+            extra_price: choice.extra_price,
+            price_on_request: choice.price_on_request,
+            image_url: uploadedUrl ?? choice.image_url,
+            note: choice.note,
+            sort_order: choice.sort_order,
+            status: choice.status,
+          });
+          savedChoiceCount += 1;
+        } catch (error) {
+          // DB保存に失敗した場合、参照されないアップロード画像だけ回収する。
+          if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
+          throw error;
+        }
       }
     } catch (error) {
       console.error('[wing] product variant choice create error', error);

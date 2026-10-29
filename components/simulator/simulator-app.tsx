@@ -50,6 +50,9 @@ import {
 } from '@/lib/domain/types';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { customerPlanName, planDisplaySizeFromSpecs } from '@/lib/domain/plan-display';
+import { canRestoreSimulatorSelection } from '@/lib/domain/simulator-draft-ownership';
+import { suggestPlanName, isLegacyAutomaticPlanName } from '@/lib/domain/plan-name';
+import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeWashbasinSelection } from '@/lib/domain/washbasin-selection';
 import { isSimulatorSelectableProduct, simulatorChoiceOptions } from '@/lib/domain/product-lifecycle';
 import { Alert, Button } from '@/components/ui';
@@ -120,6 +123,8 @@ interface Draft {
   siteLocationUndecided?: boolean;
   name: string;
   configId: string | null;
+  /** この端末で最後に保存したユーザー。旧形式の下書きでは未設定 */
+  ownerId?: string | null;
   /** configId のプランを読み込んだ（または最後に保存した）時点の版 */
   lockVersion?: number | null;
   pending: 'save' | 'quote' | null;
@@ -376,7 +381,7 @@ export function SimulatorApp({
     try {
       const raw = window.localStorage.getItem(storageKey(model.slug));
       const draft: Draft | null = raw ? JSON.parse(raw) : null;
-      if (!initial && draft) {
+      if (!initial && !loadError && draft && canRestoreSimulatorSelection(draft, user?.id ?? null, resume)) {
         const hasInvalidSpec =
           Boolean(draft.spec) && !specSelections.some((row) => row.code === draft.spec);
         const restoredSpec =
@@ -457,11 +462,8 @@ export function SimulatorApp({
         setSitePrefecture(draft.siteLocationUndecided ? null : (draft.sitePrefecture ?? null));
         setSiteMunicipality(draft.siteLocationUndecided ? null : (draft.siteMunicipality ?? null));
         if (draft.name) setName(draft.name);
-        if (draft.configId && !hasInvalidSpec) {
-          setConfigId(draft.configId);
-          // サーバーから読み込んだ版が無いとき（ログイン後の再開など）だけ、下書きに残した版を使う
-          if (!initial) setLockVersion(draft.lockVersion ?? null);
-        }
+        // ブラウザ内の保存済み ID・版は復元しない。
+        // 既存プランの編集は ?c= によりサーバーで状態・権限を確認した場合だけ行う。
         if (resume && user && draft.pending && !resumed.current) {
           resumed.current = true;
           setDialog(draft.pending);
@@ -491,6 +493,7 @@ export function SimulatorApp({
         siteLocationUndecided,
         name,
         configId,
+        ownerId: user?.id ?? null,
         lockVersion,
         pending: null,
         savedAt: Date.now(),
@@ -498,7 +501,7 @@ export function SimulatorApp({
       };
       window.localStorage.setItem(storageKey(model.slug), JSON.stringify(draft));
     },
-    [selected, variantIds, exteriorFaces, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, model.slug]
+    [selected, variantIds, exteriorFaces, finishLevel, specCode, sitePrefecture, siteMunicipality, siteLocationUndecided, name, configId, lockVersion, user?.id, model.slug]
   );
 
   useEffect(() => {
@@ -671,6 +674,11 @@ export function SimulatorApp({
     () => defaultVariantIds(bundle, activeSpecSelection),
     [activeSpecSelection, bundle]
   );
+  const planChangeSummary = useMemo(() => summarizePlanChanges(
+    bundle,
+    { optionIds: selected, variantChoiceIds: variantIds, exteriorFaces },
+    { optionIds: activeSpecSelection, variantChoiceIds: baselineVariantIds }
+  ), [bundle, selected, variantIds, exteriorFaces, activeSpecSelection, baselineVariantIds]);
   const atStandardSpecSelection = sameSelection(
     selected,
     pruneToScope(activeSpecCtx, activeSpecSelection, finishLevel)
@@ -1306,7 +1314,7 @@ export function SimulatorApp({
       </div>
 
       {/* SP: 固定フッター */}
-      <div className="sticky bottom-0 z-30 border-t border-line bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+      <div className="sticky bottom-0 z-30 border-t border-line bg-white/95 px-4 py-3 backdrop-blur xl:hidden">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[0.7rem] text-muted">概算合計（税込）</p>
@@ -1358,10 +1366,15 @@ export function SimulatorApp({
       {dialog && (
         <SaveDialog
           mode={dialog}
-          initialName={name}
+          initialName={!configId && isLegacyAutomaticPlanName(name, displayModelName)
+            ? suggestPlanName(displayModelName, activePreset?.name ?? activeChoice?.name ?? specName ?? '本体のみ',
+                fireproofCat ? (fireproofChosen?.code === 'fire-proof' ? '防火' : fireproofChosen ? '非防火' : '防火未選択') : null,
+                new Date())
+            : name}
           saving={saving}
           error={saveError}
           total={pricing.total}
+          changeSummary={planChangeSummary}
           onClose={() => {
             setDialog(null);
             setSaveError(null);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PRODUCT_HIGHLIGHT_MAX_LENGTH } from '@/lib/domain/product-highlight';
 import { VIEW_KEYS } from '@/lib/domain/types';
 import { PREFECTURES } from '@/lib/domain/address';
 import { contactTopics } from '@/data/site-content';
@@ -29,9 +30,6 @@ export const signUpSchema = z.object({
   password: passwordSchema,
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
-  postal_code: optional(10),
-  address: trimmed(200).min(1, '住所を入力してください'),
   agree: z.literal('on', { error: '利用規約とプライバシーポリシーへの同意が必要です' }),
 });
 
@@ -53,9 +51,12 @@ export const updatePasswordSchema = z
 export const profileSchema = z.object({
   full_name: trimmed(60).min(1, '氏名を入力してください'),
   company_name: optional(100),
-  phone: trimmed(20).min(1, '電話番号を入力してください').regex(/^[0-9+\-() ]+$/, '電話番号は数字とハイフンで入力してください'),
+  phone: optional(20).refine(
+    (phone) => phone === null || /^[0-9+\-() ]+$/.test(phone),
+    '電話番号は数字とハイフンで入力してください'
+  ),
   postal_code: optional(10),
-  address: trimmed(200).min(1, '住所を入力してください'),
+  address: optional(200),
 });
 
 export const saveConfigurationSchema = z.object({
@@ -187,7 +188,7 @@ export const optionSchema = z.object({
   model_no: optional(80).nullable(),
   size_note: optional(120).nullable(),
   list_price: z.preprocess((v) => (v === '' || v === undefined || v === null ? null : v), z.coerce.number().int().min(0).max(100_000_000).nullable()),
-  highlight: optional(80).nullable(),
+  highlight: optional(PRODUCT_HIGHLIGHT_MAX_LENGTH).nullable(),
 });
 
 export const variantGroupSchema = z.object({

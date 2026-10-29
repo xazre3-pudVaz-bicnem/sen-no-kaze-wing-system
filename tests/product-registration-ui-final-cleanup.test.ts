@@ -19,15 +19,34 @@ describe('商品登録UIの最終整理', () => {
     expect(preview).not.toContain('商品追加額・仕様追加額・合計追加額');
   });
 
-  it('画像URLは通常時に隠し、必要なときだけ開ける', () => {
-    expect(finalEnhancer).toContain('URLで画像を指定');
-    expect(finalEnhancer).toContain("wrapper.style.display = open ? '' : 'none'");
-    expect(finalEnhancer).toContain("button.setAttribute('aria-expanded', String(open))");
+  it('メイン画像URL欄は初期状態から常に表示する', () => {
+    expect(finalEnhancer).toContain("input[name=\"image_url\"]");
+    expect(finalEnhancer).toContain("wrapper.style.removeProperty('display')");
+    expect(finalEnhancer).not.toContain("wrapper.style.display = open ? '' : 'none'");
+    expect(finalEnhancer).not.toContain('URLで画像を指定');
   });
 
   it('重複する現在STEP表示と空状態の説明を簡略化する', () => {
     expect(finalEnhancer).toContain("startsWith('現在：STEP')");
     expect(finalEnhancer).toContain('現在、選択項目はありません。');
+  });
+
+  it('保存済み下書きの簡潔な案内は残し、入力項目へのジャンプメニューは作らない', () => {
+    expect(finalEnhancer).toContain('商品を編集中');
+    expect(finalEnhancer).toContain('registration-compact-step-flow');
+    expect(finalEnhancer).toContain('simplifyRegistrationInfoHeading');
+    expect(finalEnhancer).toContain('変更はSTEP 2へ進むときと、画像・資料の登録前に保存されます。');
+    expect(finalEnhancer).not.toContain('registrationSectionNav');
+    expect(finalEnhancer).not.toContain("nav.setAttribute('aria-label', '入力項目へ移動')");
+  });
+
+  it('登録前チェックは該当入力欄へ移動できる', () => {
+    expect(finalEnhancer).toContain("message.includes('メイン画像')");
+    expect(finalEnhancer).toContain("message.includes('メーカー資料')");
+    expect(finalEnhancer).toContain("message.includes('商品価格')");
+    expect(finalEnhancer).toContain("message.includes('選択肢')");
+    expect(finalEnhancer).toContain("link.dataset.registrationCheckLink = 'true'");
+    expect(finalEnhancer).toContain("item.append(' ', link)");
   });
 
   it('STEP2の案内と0円・選択項目表示を簡潔にする', () => {

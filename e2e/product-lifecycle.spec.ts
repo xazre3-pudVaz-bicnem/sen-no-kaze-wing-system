@@ -10,6 +10,7 @@ import {
   signInOrRegister,
   uniqueEmail,
   waitForSimulator,
+  fillQuoteRequestContact,
 } from './helpers';
 
 // PR #500：商品の取扱終了（2026-10-19 の先方回答で「販売停止」と呼ぶ）・シミュレーター表示。20261016112000：廃番・受付停止。
@@ -115,6 +116,7 @@ test.describe('商品の販売停止・廃番・シミュレーター表示', ()
 
     // 販売停止が残ったままでは見積を依頼できない
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await expect(page.getByTestId('quote-request-form')).toContainText('販売停止中のため、この内容では見積を依頼できません');
     await expect(page).toHaveURL(/\/request-quote/);
@@ -138,6 +140,7 @@ test.describe('商品の販売停止・廃番・シミュレーター表示', ()
 
     // シミュレーター非表示の商品だけなら見積を依頼できる（見積不可ではない）
     await page.goto(`/mypage/configurations/${configId}/request-quote`);
+    await fillQuoteRequestContact(page);
     await page.getByTestId('submit-quote-request').click();
     await page.waitForURL(/\/mypage\/quotes\/[0-9a-f-]{36}/);
 

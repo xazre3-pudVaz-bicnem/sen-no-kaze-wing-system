@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 
 const MAX_REDIRECTS = 4;
 const FETCH_TIMEOUT_MS = 15_000;
+const MAX_TRANSPORT_ATTEMPTS = 2;
 const USER_AGENT = 'SenNoKazeProductMediaImporter/1.0';
 
 export type RemoteMediaKind = 'image' | 'pdf';
@@ -176,20 +177,43 @@ export async function fetchRemoteMedia(
 
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
     await validatePublicHost(current);
-    let response: Response;
-    try {
-      response = await fetch(current, {
-        cache: 'no-store',
-        redirect: 'manual',
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        headers: {
-          'user-agent': USER_AGENT,
-          accept: kind === 'image' ? 'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.2' : 'application/pdf,*/*;q=0.2',
-        },
-      });
-    } catch {
-      throw new Error('URLからファイルを取得できませんでした。');
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= MAX_TRANSPORT_ATTEMPTS; attempt += 1) {
+      // 一時的な通信障害だけ再試行する。再試行時も公開接続先の検査を省かない。
+      if (attempt > 1) await validatePublicHost(current);
+      try {
+        response = await fetch(current, {
+          cache: 'no-store',
+          redirect: 'manual',
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          headers: {
+            'user-agent': USER_AGENT,
+            accept: kind === 'image' ? 'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.2' : 'application/pdf,*/*;q=0.2',
+          },
+        });
+        break;
+      } catch (error) {
+        const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        const cause = error instanceof Error ? error.cause : null;
+        const causeCode = cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string'
+          ? cause.code
+          : undefined;
+        // URL全文（クエリに含まれる認証情報等）は記録しない。
+        console.warn('[remote-media] URL取込の通信エラー', {
+          host: current.hostname,
+          kind,
+          attempt,
+          reason: timeout ? 'timeout' : 'connection',
+          causeCode,
+        });
+        if (attempt === MAX_TRANSPORT_ATTEMPTS) {
+          throw new Error(timeout
+            ? 'URLからの取得がタイムアウトしました。ファイルをPCに保存して、ファイル選択から登録してください。'
+            : 'URLからファイルを取得できませんでした。提供元サイトが外部サーバーからの取得を制限している可能性があります。ファイルをPCに保存して登録してください。');
+        }
+      }
     }
+    if (!response) throw new Error('URLからファイルを取得できませんでした。');
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');

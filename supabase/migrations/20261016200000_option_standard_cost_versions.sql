@@ -191,6 +191,26 @@ as $$
     ) g;
 $$;
 
+-- ---------- 本部商品かどうか（本部標準原価の対象） ----------
+
+-- 本部標準原価（商品標準原価・選択肢の調整額）は本部商品だけに持つ（2026-10-29 先方の回答）。
+-- いまの作りでは、本部商品の外は旧フリー商品（カテゴリー free-product・代理店が登録した商品）だけ。
+-- 所有組織（総代理店商品・代理店商品）の区分を足すときは、この関数で本部商品の外にする（画面の isHqCostProduct と同じ決まり）。
+-- カテゴリーが分からない商品は本部商品として扱う（原価の決まりを掛ける側）。商品が無ければ false
+create function public.option_is_hq_cost_product(p_option_id uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce((
+    select c.code is distinct from 'free-product'
+      from public.options o
+      left join public.option_categories c on c.id = o.category_id
+     where o.id = p_option_id
+  ), false);
+$$;
+
 -- ---------- 本部商品基準原価の設定（同じ呼び出し方のまま、新しい Version を作る） ----------
 
 create or replace function public.set_option_hq_standard_cost(
@@ -256,6 +276,9 @@ begin
   end if;
   if v_option.status not in ('draft', 'published') then
     raise exception using errcode = 'P0001', message = 'VALIDATION: この状態の商品には本部商品基準原価を設定できません';
+  end if;
+  if not public.option_is_hq_cost_product(p_option_id) then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: 本部商品ではないため本部商品基準原価を設定できません';
   end if;
 
   select *
@@ -467,6 +490,9 @@ begin
   if v_option.status not in ('draft', 'published') then
     raise exception using errcode = 'P0001', message = 'VALIDATION: この状態の商品には標準原価調整額を設定できません';
   end if;
+  if not public.option_is_hq_cost_product(v_option_id) then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: 本部商品ではないため標準原価調整額を設定できません';
+  end if;
 
   select *
     into v_current
@@ -555,11 +581,13 @@ $$;
 
 alter function public.standard_cost_version_immutable() owner to postgres;
 alter function public.option_variant_cost_min_total(uuid, uuid, integer) owner to postgres;
+alter function public.option_is_hq_cost_product(uuid) owner to postgres;
 alter function public.set_option_hq_standard_cost(uuid, integer, integer, text) owner to postgres;
 alter function public.set_option_variant_cost_adjustment(uuid, integer, uuid, text) owner to postgres;
 
 revoke all on function public.standard_cost_version_immutable() from public, anon, authenticated, service_role;
 revoke all on function public.option_variant_cost_min_total(uuid, uuid, integer) from public, anon, authenticated, service_role;
+revoke all on function public.option_is_hq_cost_product(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.set_option_hq_standard_cost(uuid, integer, integer, text) from public, anon, authenticated, service_role;
 revoke all on function public.set_option_variant_cost_adjustment(uuid, integer, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.set_option_hq_standard_cost(uuid, integer, integer, text) to authenticated;
@@ -612,7 +640,7 @@ begin
     select p.oid, p.proname, p.prosecdef, pg_get_userbyid(p.proowner) as owner_name, p.proconfig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and p.proname in ('standard_cost_version_immutable', 'option_variant_cost_min_total',
+       and p.proname in ('standard_cost_version_immutable', 'option_variant_cost_min_total', 'option_is_hq_cost_product',
                          'set_option_hq_standard_cost', 'set_option_variant_cost_adjustment')
   loop
     if v_fn.owner_name <> 'postgres' then

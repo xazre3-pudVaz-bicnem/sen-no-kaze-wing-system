@@ -7,7 +7,8 @@ import { requireAdmin, requireCatalogEditor, requireStaff } from '@/lib/auth/ses
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, ROLE_LABELS, type PreviewImageRule } from '@/lib/domain/types';
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
-import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput, type SessionUser } from '@/lib/data/store';
+import { getStore, isLocalMode, StoreError, type DealerRevisionItem, type EstimateTemplateImportInput, type QuoteDraftSaveItem, type SessionUser } from '@/lib/data/store';
+import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError } from '@/lib/domain/quote-por';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
@@ -1017,6 +1018,8 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
       unit_price: formData.get(`items.${i}.unit_price`) || 0,
       quantity: formData.get(`items.${i}.quantity`) || 1,
       image_url: formData.get(`items.${i}.image_url`) ?? '',
+      line_state: formData.get(`items.${i}.line_state`),
+      line_state_reason: formData.get(`items.${i}.line_state_reason`),
     });
   }
   const parsed = dealerRevisionSchema.safeParse({
@@ -1025,12 +1028,27 @@ export async function createDealerRevisionAction(_prev: AdminFormState, formData
     dealer_note: formData.get('dealer_note'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  // 明細の状態（対象外・0円確定）は画面の明示の選択から備考に印を付ける。手入力の印は受け付けない（D1 までの暫定）
+  let revisionItems: DealerRevisionItem[];
+  try {
+    revisionItems = applyQuoteLineStates(parsed.data.items);
+  } catch (e) {
+    if (e instanceof QuoteLineStateInputError) return { ok: false, error: e.message };
+    throw e;
+  }
+  // お客様が選んだ別途見積の商品（画面に出した一覧）。確認欄にチェックがあるときだけ確認として送る（D1 までの暫定）
+  const porKeys = parsePorSelectionKeys(formData.get('por_keys'));
+  if (porKeys === null) return { ok: false, error: '金額未確定の確認の内容を読み取れませんでした。画面を再読み込みしてください。' };
+  const porConfirmed = formData.get('por_confirmed') === '1';
+  if (porKeys.length > 0 && !porConfirmed) {
+    return { ok: false, error: 'お客様が選んだ別途見積の商品について、「金額未確定の確認」にチェックを入れてから発行してください。' };
+  }
   let newId: string | null = null;
   try {
     const store = await getStore();
     const quote = await store.createDealerRevision(
       parsed.data.quote_id,
-      { items: parsed.data.items, dealer_note: parsed.data.dealer_note },
+      { items: revisionItems, dealer_note: parsed.data.dealer_note, por_confirmation_keys: porConfirmed ? porKeys : null },
       actor
     );
     newId = quote.id;
@@ -1322,6 +1340,13 @@ export async function createManualQuoteWorkbenchAction(
     adjustment_reason: formData.get('adjustment_reason'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  let items: QuoteDraftSaveItem[];
+  try {
+    items = applyQuoteLineStates(parsed.data.items);
+  } catch (e) {
+    if (e instanceof QuoteLineStateInputError) return { ok: false, error: e.message };
+    throw e;
+  }
 
   try {
     const store = await getStore();
@@ -1335,7 +1360,7 @@ export async function createManualQuoteWorkbenchAction(
       finish_level: parsed.data.finish_level,
       memo: parsed.data.memo || null,
       base_master_revision_id: parsed.data.base_master_revision_id,
-      items: parsed.data.items,
+      items,
       adjustment: parsed.data.adjustment,
       adjustment_reason: parsed.data.adjustment_reason ?? null,
     });
@@ -1399,6 +1424,13 @@ export async function saveQuoteDraftAction(
     notes: formData.get('notes'),
   });
   if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  let items: QuoteDraftSaveItem[];
+  try {
+    items = applyQuoteLineStates(parsed.data.items);
+  } catch (e) {
+    if (e instanceof QuoteLineStateInputError) return { ok: false, error: e.message };
+    throw e;
+  }
 
   try {
     const store = await getStore();
@@ -1407,7 +1439,7 @@ export async function saveQuoteDraftAction(
       {
         expected_lock_version: parsed.data.expected_lock_version,
         base_master_revision_id: parsed.data.base_master_revision_id,
-        items: parsed.data.items,
+        items,
         adjustment: parsed.data.adjustment,
         adjustment_reason: parsed.data.adjustment_reason ?? null,
         dealer_note: parsed.data.dealer_note ?? null,

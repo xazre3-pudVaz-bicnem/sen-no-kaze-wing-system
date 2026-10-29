@@ -5,7 +5,7 @@ import {
   productSpecCodesAllow,
 } from './customer-category-applicability';
 import type { BaseModel, EstimateTemplateBundle, ModelPreset, ProductOption } from './types';
-import { isQuoteSelectableProduct } from './product-lifecycle';
+import { isQuoteSelectableProduct, stoppedBaselineProducts } from './product-lifecycle';
 
 /** 「本体のみ」の標準見積コード。用途別 preset とは独立して扱う。 */
 export const BASE_ESTIMATE_SPEC_CODE = 'base';
@@ -223,14 +223,16 @@ export function buildEstimateSpecSelection(
     specCtx.options.some((option) => option.id === id && isQuoteSelectableProduct(option))
   );
   const optionByCode = new Map(specCtx.options.map((option) => [option.code, option.id]));
-  const sourceIds =
-    validSavedIds.length > 0
-      ? validSavedIds
-      : estimateBaselineOptionCodes(model, specCode)
-          .map((code) => optionByCode.get(code))
-          .filter((id): id is string => Boolean(id));
+  const presetIds = estimateBaselineOptionCodes(model, specCode)
+    .map((code) => optionByCode.get(code))
+    .filter((id): id is string => Boolean(id));
+  const sourceIds = validSavedIds.length > 0 ? validSavedIds : presetIds;
+  // 販売停止・廃番の標準構成の商品のカテゴリーは、既定値で補わない（未承認の自動の差し替えをしない。その仕様は受付停止）
+  const stoppedCategoryIds = new Set(
+    stoppedBaselineProducts(ctx.options, savedBaselineIds.length > 0 ? savedBaselineIds : presetIds).map((option) => option.category_id)
+  );
 
-  // 標準構成の商品は、シミュレーター非表示でも標準として入れる（取扱終了は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。
+  // 標準構成の商品は、シミュレーター非表示でも標準として入れる（販売停止・廃番は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。
   // 外すと、UI の標準状態と差額計算の基準状態がずれる
   const baselineCtx: RuleContext = { ...specCtx, canSelectNew: isQuoteSelectableProduct };
   let cur: string[] = [];
@@ -243,6 +245,7 @@ export function buildEstimateSpecSelection(
   for (const optionId of defaultSelection(specCtx, level)) {
     if (cur.includes(optionId)) continue;
     const option = specCtx.options.find((row) => row.id === optionId);
+    if (option && stoppedCategoryIds.has(option.category_id)) continue;
     const category = specCtx.categories.find((row) => row.id === option?.category_id);
     const hasCategory = cur.some(
       (id) => specCtx.options.find((row) => row.id === id)?.category_id === category?.id
@@ -254,6 +257,23 @@ export function buildEstimateSpecSelection(
   }
 
   return [...new Set(pruneToScope(specCtx, cur, level))];
+}
+
+/**
+ * 仕様の標準構成（標準見積・Excel 標準見積の基準商品、無ければ本体の仕様）にある販売停止・廃番の商品の名前。
+ * 1 つでもあれば、その仕様は新しい受付を止める（DB の quote_requests_baseline_lifecycle_guard と同じ考え方。2026-10-19 の先方回答 ③ の ①）
+ */
+export function estimateSpecStoppedProductNames(
+  ctx: RuleContext,
+  model: Pick<BaseModel, 'slug' | 'presets'>,
+  specCode: string,
+  savedBaselineIds: string[] = []
+): string[] {
+  const optionByCode = new Map(ctx.options.map((option) => [option.code, option.id]));
+  const presetIds = estimateBaselineOptionCodes(model, specCode)
+    .map((code) => optionByCode.get(code))
+    .filter((id): id is string => Boolean(id));
+  return stoppedBaselineProducts(ctx.options, [...savedBaselineIds, ...presetIds]).map((option) => option.name);
 }
 
 export function buildEstimateBaselineSelection(

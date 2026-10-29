@@ -175,11 +175,11 @@ export function EquipmentBoard({
           ? '追加費用なし'
           : null;
 
-    // 保存済みの選択として残っている、新しくは選べない商品（取扱終了・シミュレーター非表示）。標準構成の非表示の商品は標準として扱う
+    // 保存済みの選択として残っている、新しくは選べない商品（販売停止・廃番・シミュレーター非表示）。標準構成の非表示の商品は標準として扱う
     const retained = chosen.find((option) => !isSimulatorSelectableProduct(option) && !baselineSelected.includes(option.id)) ?? null;
     const retainedLabel = retained
       ? productLedgerState(retained) === 'retired'
-        ? '取扱終了の商品（保存済みの選択）'
+        ? `${retained.discontinued_at ? '廃番' : '販売停止'}の商品（保存済みの選択）`
         : '新しくは選べない商品（保存済みの選択）'
       : null;
 

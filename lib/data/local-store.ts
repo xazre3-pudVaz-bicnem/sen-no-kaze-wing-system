@@ -44,7 +44,7 @@ import {
 import { categoriesInScope, validateSelection, type RuleContext } from '@/lib/domain/rules';
 import { buildCustomerCategoryMatrix, effectiveCustomerSpecCodes } from '@/lib/domain/customer-category-applicability';
 import { ruleContextForSpec } from '@/lib/domain/estimate-template';
-import { hasRoleAtLeast } from '@/lib/domain/types';
+import { canEditCatalog, hasRoleAtLeast } from '@/lib/domain/types';
 import { buildCustomerManagementView } from '@/lib/domain/customer-management';
 import {
   isCurrentIssuedQuote,
@@ -92,6 +92,7 @@ import {
   type MatrixRowCreateInput,
   type MatrixRowUpdateInput,
   type ProductLifecycleAction,
+  type SpecAcceptanceState,
 } from './store';
 import { productLedgerState, productSimulatorVisibleSetting, type ProductLifecycleCapability } from '@/lib/domain/product-lifecycle';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
@@ -172,7 +173,7 @@ export class LocalStore implements DataStore {
 
   /** 商品価格の一括更新。価格変更は監査ログに残す */
   async getProductLifecycleCapability(): Promise<ProductLifecycleCapability> {
-    return { columns: true, guards: true };
+    return { columns: true, guards: true, discontinue: true };
   }
   async setProductLifecycle({ id, action, expectedUpdatedAt }: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }) {
     return this.mutate((db) => {
@@ -183,39 +184,91 @@ export class LocalStore implements DataStore {
       }
       const state = productLedgerState(option);
       if (action === 'retire') {
-        // DB の options_lifecycle_guard と同じ参照保護（標準見積はローカルに無い）
-        if (state !== 'registered') throw new StoreError('VALIDATION', state === 'retired' ? 'この商品はすでに取扱終了です' : '取扱終了にできるのは登録済みの商品だけです。下書きは不要なら削除してください');
-        if (db.estimateTemplates.some((t) => (t.baseline_option_ids ?? []).includes(id))) {
-          throw new StoreError('LOCKED', 'Excel 標準見積の基準商品として使われているため、取扱終了にできません。先に基準商品から外してください');
-        }
+        // DB の options_lifecycle_guard と同じ（20261016112000）：標準見積・Excel 標準見積・本体の仕様で使用中でも販売停止にできる
+        // （その仕様は新しい受付を止める）。必須・初期選択・前提商品は、先に設定を見直す
+        if (state !== 'registered') throw new StoreError('VALIDATION', state === 'retired' ? 'この商品はすでに販売停止です' : '販売停止にできるのは登録済みの商品だけです。下書きは不要なら削除してください');
         if (option.is_required || option.is_default) {
-          throw new StoreError('LOCKED', '必須・初期選択の商品は取扱終了にできません。先に必須・初期選択の設定を外してください');
+          throw new StoreError('LOCKED', '必須・初期選択の商品は販売停止にできません。先に必須・初期選択の設定を外してください');
         }
         const dependent = db.dependencies
           .filter((d) => d.requires_option_id === id && d.option_id !== id)
           .map((d) => db.options.find((o) => o.id === d.option_id))
           .find((o) => o && productLedgerState(o) === 'registered');
-        if (dependent) throw new StoreError('LOCKED', `「${dependent.name}」の前提商品として使われているため、取扱終了にできません。先に前提の設定を見直してください`);
-        if (db.models.some((m) => (option.base_model_id === null || option.base_model_id === m.id) && (m.presets ?? []).some((p) => p.option_codes.includes(option.code)))) {
-          throw new StoreError('LOCKED', '本体の仕様（標準の商品構成）で使われているため、取扱終了にできません。先に仕様の商品構成から外してください');
-        }
+        if (dependent) throw new StoreError('LOCKED', `「${dependent.name}」の前提商品として使われているため、販売停止にできません。先に前提の設定を見直してください`);
         option.archived_at = nowIso();
       } else if (action === 'resume') {
-        if (state !== 'retired') throw new StoreError('VALIDATION', 'この商品は取扱終了ではありません');
+        if (state !== 'retired') throw new StoreError('VALIDATION', 'この商品は販売停止ではありません');
+        if (option.discontinued_at) {
+          throw new StoreError('LOCKED', '廃番の商品は販売を再開できません。誤って廃番にした場合は、本部の管理者が廃番を取り消してください（取り消すと販売停止に戻ります）');
+        }
         option.archived_at = null;
       } else {
-        if (state !== 'registered') throw new StoreError('VALIDATION', 'シミュレーター表示は、取扱中の登録済み商品だけで設定できます');
+        if (state !== 'registered') throw new StoreError('VALIDATION', 'シミュレーター表示は、販売中の登録済み商品だけで設定できます');
         option.simulator_visible = action === 'show_in_simulator';
       }
       option.updated_at = nowIso();
       this.pushAudit(db, null, {
-        action: 'update',
+        action: 'lifecycle',
         entity: 'option',
         entity_id: option.id,
-        summary: `商品の状態を変更：${option.name}（${{ retire: '取扱終了', resume: '取扱再開', show_in_simulator: 'シミュレーターに表示', hide_from_simulator: 'シミュレーターに表示しない' }[action]}）`,
+        summary: `${{ retire: '販売を停止', resume: '販売を再開', show_in_simulator: 'シミュレーターに表示', hide_from_simulator: 'シミュレーターに表示しない' }[action]}：${option.name}`,
       });
       return { updated_at: option.updated_at };
     });
+  }
+
+  /** DB の set_option_discontinued・options_lifecycle_guard と同じ（20261016112000） */
+  async setProductDiscontinued(
+    { id, discontinued, reason, expectedUpdatedAt }: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string },
+    actor: SessionUser
+  ) {
+    return this.mutate((db) => {
+      if (!canEditCatalog(actor.role) || (!discontinued && actor.role !== 'admin')) {
+        throw new StoreError('FORBIDDEN', 'この操作の権限がありません');
+      }
+      const note = reason.trim();
+      if (!note || note.length > 500) throw new StoreError('VALIDATION', '理由を 500 文字以内で入力してください');
+      const option = db.options.find((o) => o.id === id);
+      if (!option) throw new StoreError('NOT_FOUND', '商品が見つかりません');
+      if (option.updated_at !== expectedUpdatedAt || Boolean(option.discontinued_at) === discontinued) {
+        throw new StoreError('LOCKED', '他の画面で商品が更新されたため、操作できませんでした。再読み込みしてから、もう一度操作してください');
+      }
+      if (discontinued) {
+        if (productLedgerState(option) !== 'retired') {
+          throw new StoreError('VALIDATION', '廃番にできるのは販売停止の商品だけです。先に販売を停止してください');
+        }
+        option.discontinued_at = nowIso();
+      } else {
+        // 取り消しても販売は再開しない（販売停止に戻る）
+        option.discontinued_at = null;
+      }
+      option.updated_at = nowIso();
+      this.pushAudit(db, actor, {
+        action: 'lifecycle',
+        entity: 'option',
+        entity_id: option.id,
+        summary: `${discontinued ? '廃番にした' : '廃番を取り消した（販売停止に戻した）'}：${option.name}（理由：${note}）`,
+      });
+      return { updated_at: option.updated_at };
+    });
+  }
+
+  /** DB の get_spec_acceptance_state と同じ：標準構成（Excel 標準・本体の仕様。標準見積はローカルに無い）に販売停止・廃番の商品があるか */
+  async getSpecAcceptanceState(modelId: string, specCode: string | null): Promise<SpecAcceptanceState> {
+    return this.read((db) => {
+      const model = db.models.find((m) => m.id === modelId);
+      if (!model) return { accepting: true, stoppedNames: [], available: true };
+      const stoppedNames = LocalStore.stoppedBaselineNames(db, model, specCode);
+      return { accepting: stoppedNames.length === 0, stoppedNames, available: true };
+    });
+  }
+
+  private static stoppedBaselineNames(db: LocalDb, model: BaseModel, specCode: string | null): string[] {
+    const baseline = LocalStore.lifecycleBaselineIds(db, model, specCode);
+    return db.options
+      .filter((o) => baseline.has(o.id) && productLedgerState(o) === 'retired')
+      .sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id))
+      .map((o) => o.name);
   }
   async updateOptionPrices(items: { id: string; price: number }[]) {
     this.mutate((db) => {
@@ -1014,7 +1067,7 @@ export class LocalStore implements DataStore {
         if (baseline.has(optionId)) return;
         throw new StoreError('VALIDATION', `${label}「${option.name}」はシミュレーターでは新しく選べない商品です`);
       }
-      throw new StoreError('VALIDATION', `${label}「${option.name}」は取扱終了のため新しく選べません。取扱の再開を待つか、別の商品へ変更してください`);
+      throw new StoreError('VALIDATION', `${label}「${option.name}」は販売停止中のため新しく選べません。販売の再開を待つか、別の商品へ変更してください`);
     };
     const pool = [...previousItems];
     for (const item of items) {
@@ -1030,7 +1083,7 @@ export class LocalStore implements DataStore {
     }
   }
 
-  /** 取扱終了の商品が残っていれば止める（見積依頼。DB の quote_requests_lifecycle_guard と同じ） */
+  /** 販売停止の商品が残っていれば止める（見積依頼。DB の quote_requests_lifecycle_guard と同じ） */
   private static assertNoRetired(db: LocalDb, optionIds: string[], message: (names: string) => string) {
     const names = optionIds
       .map((id) => db.options.find((o) => o.id === id))
@@ -1280,11 +1333,21 @@ export class LocalStore implements DataStore {
         ? LocalStore.ruleContextFor(db, cfgModel, cfg.spec_code ?? null)
         : { options: db.options, categories: db.categories, dependencies: db.dependencies, conflicts: db.conflicts };
       const itemOptionIds = items.map((i) => i.option_id);
-      // 取扱終了の商品が残っている構成からは見積を依頼しない（シミュレーター非表示だけなら依頼できる）
+      // 仕様の標準構成に販売停止・廃番の商品があれば、新しい受付を止める（DB の quote_requests_baseline_lifecycle_guard と同じ。20261016112000）
+      if (cfgModel) {
+        const stopped = LocalStore.stoppedBaselineNames(db, cfgModel, cfg.spec_code ?? null);
+        if (stopped.length > 0) {
+          throw new StoreError(
+            'VALIDATION',
+            `この仕様の標準の商品構成に、販売停止の商品（${stopped.join('・')}）が含まれるため、現在は新しいご依頼を受け付けていません。担当からのご案内をお待ちください`
+          );
+        }
+      }
+      // 販売停止の商品が残っている構成からは見積を依頼しない（シミュレーター非表示だけなら依頼できる）
       LocalStore.assertNoRetired(
         db,
         [...itemOptionIds, ...(((cfg as Configuration & { exterior_faces?: ExteriorFaceSelection[] }).exterior_faces ?? []) as ExteriorFaceSelection[]).map((f) => f.option_id)],
-        (names) => `${names} は取扱終了のため、この内容では見積を依頼できません。取扱の再開を待つか、別の商品へ変更してください`
+        (names) => `${names} は販売停止中のため、この内容では見積を依頼できません。販売の再開を待つか、別の商品へ変更してください`
       );
       LocalStore.assertSelectableForSpec(ruleCtx, itemOptionIds, cfgModel ? (cfg.spec_code ?? null) : null);
       const issues = validateSelection(ruleCtx, itemOptionIds, cfg.finish_level ?? 'full');
@@ -2126,14 +2189,15 @@ export class LocalStore implements DataStore {
   }
   async upsertOption(input: OptionInput): Promise<ProductOption> {
     return this.mutate((db) => {
-      // 取扱終了・シミュレーター表示は setProductLifecycle だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
+      // 販売停止・廃番・シミュレーター表示は setProductLifecycle・setProductDiscontinued だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
       const {
         id,
         product_no: _productNo,
         simulator_visible: _simulatorVisible,
         archived_at: _archivedAt,
+        discontinued_at: _discontinuedAt,
         ...rest
-      } = input as OptionInput & Pick<ProductOption, 'simulator_visible' | 'archived_at'>;
+      } = input as OptionInput & Pick<ProductOption, 'simulator_visible' | 'archived_at' | 'discontinued_at'>;
       if (db.options.some((o) => o.code === rest.code && o.id !== id)) {
         throw new StoreError('VALIDATION', `コード「${rest.code}」は既に使われています`);
       }
@@ -2146,6 +2210,7 @@ export class LocalStore implements DataStore {
             product_no: allocateLocalProductNo(db),
             simulator_visible: true,
             archived_at: null,
+            discontinued_at: null,
             created_at: nowIso(),
             updated_at: nowIso(),
           };

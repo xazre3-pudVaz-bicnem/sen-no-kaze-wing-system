@@ -75,6 +75,7 @@ import {
   type MatrixRowCreateInput,
   type MatrixRowUpdateInput,
   type ProductLifecycleAction,
+  type SpecAcceptanceState,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
@@ -259,7 +260,9 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const capability = await db.rpc('product_lifecycle_capability');
     if (!capability.error && capability.data) {
-      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards) };
+      // 廃番の印（20261016112000）があるか。無ければ廃番の操作は出さない
+      const discontinue = await db.from('options').select('id, discontinued_at').limit(1);
+      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards), discontinue: !discontinue.error };
     }
     const columns = await db.from('options').select('id, archived_at, simulator_visible').limit(1);
     return { columns: !columns.error, guards: false };
@@ -285,6 +288,38 @@ export class SupabaseStore implements DataStore {
       throw new StoreError('LOCKED', '他の画面で商品が更新されたため、操作できませんでした。再読み込みしてから、もう一度操作してください');
     }
     return { updated_at: rows[0].updated_at };
+  }
+  /** 廃番にする・取り消す（判定・権限・変更履歴は DB の set_option_discontinued とトリガーが行う） */
+  async setProductDiscontinued(input: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string }) {
+    const db = await this.db();
+    const { data, error } = await db.rpc('set_option_discontinued', {
+      p_option_id: input.id,
+      p_expected_updated_at: input.expectedUpdatedAt,
+      p_discontinued: input.discontinued,
+      p_reason: input.reason,
+    });
+    if (error) {
+      if (isMissingNamedFunction(error, 'set_option_discontinued')) {
+        throw new StoreError('VALIDATION', '廃番の機能は、DB の更新が済むまで使えません。');
+      }
+      mapPgError(error);
+    }
+    return { updated_at: String(data) };
+  }
+  /** 仕様で新しい受付ができるか。migration の適用前は判定せず受け付ける（従来どおり） */
+  async getSpecAcceptanceState(modelId: string, specCode: string | null): Promise<SpecAcceptanceState> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_spec_acceptance_state', { p_model_id: modelId, p_spec_code: specCode });
+    if (error) {
+      if (isMissingNamedFunction(error, 'get_spec_acceptance_state')) return { accepting: true, stoppedNames: [], available: false };
+      mapPgError(error);
+    }
+    const value = (data ?? {}) as { accepting?: boolean; stopped_names?: string[] };
+    return {
+      accepting: value.accepting !== false,
+      stoppedNames: Array.isArray(value.stopped_names) ? value.stopped_names : [],
+      available: true,
+    };
   }
   /** 商品価格の一括更新（監査ログは DB トリガーが記録する） */
   async updateOptionPrices(items: { id: string; price: number }[]) {
@@ -1232,9 +1267,9 @@ export class SupabaseStore implements DataStore {
     };
   }
   async upsertOption(input: OptionInput) {
-    // 取扱終了・シミュレーター表示は setProductLifecycle だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
-    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, ...rest } = input as OptionInput &
-      Pick<ProductOption, 'simulator_visible' | 'archived_at'>;
+    // 販売停止・廃番・シミュレーター表示は setProductLifecycle・setProductDiscontinued だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
+    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, discontinued_at: _discontinuedAt, ...rest } = input as OptionInput &
+      Pick<ProductOption, 'simulator_visible' | 'archived_at' | 'discontinued_at'>;
     return this.upsert<ProductOption>('options', rest);
   }
   async deleteOption(id: string) {

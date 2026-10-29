@@ -358,10 +358,19 @@ export interface UploadInput {
 
 export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
 export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
-// 取扱終了・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle だけで変える）
-export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at'> & { id?: string | null };
+// 販売停止・廃番・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle・setProductDiscontinued だけで変える）
+export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at' | 'discontinued_at'> & { id?: string | null };
 
-/** 商品の状態の変更（20261015113000）。取扱終了・取扱再開・シミュレーターに表示する・表示しない */
+/** 仕様（モデル・仕様コード）で新しい受付ができるか。標準構成に販売停止・廃番の商品があれば受け付けない（20261016112000） */
+export interface SpecAcceptanceState {
+  accepting: boolean;
+  /** 標準構成にある販売停止・廃番の商品の名前 */
+  stoppedNames: string[];
+  /** DB に判定の仕組みがあるか（migration の適用前は false。画面は案内を出さず、依頼は従来どおり） */
+  available: boolean;
+}
+
+/** 商品の状態の変更（20261015113000）。retire＝販売停止（#500 の取扱終了）・resume＝販売の再開・シミュレーターに表示する・表示しない */
 export type ProductLifecycleAction = 'retire' | 'resume' | 'show_in_simulator' | 'hide_from_simulator';
 export type OptionImageInput = Omit<OptionImage, 'id' | 'created_at'> & { id?: string | null };
 export type PreviewRuleInput = Omit<PreviewImageRule, 'id'> & { id?: string | null };
@@ -507,6 +516,16 @@ export interface DataStore {
    * 0 件なら失敗にする（古い画面の操作を成功扱いにしない）。参照保護などの判定は DB のトリガーが行う（20261015113000）
    */
   setProductLifecycle(input: { id: string; action: ProductLifecycleAction; expectedUpdatedAt: string }): Promise<{ updated_at: string }>;
+  /**
+   * 廃番にする（販売停止の商品だけ・商品台帳を編集できる人）／取り消す（本部の管理者だけ・販売停止に戻る）。理由は必須で、変更履歴に残す。
+   * 画面が読んだ版（updated_at）でなければ失敗にする（DB の set_option_discontinued。20261016112000）
+   */
+  setProductDiscontinued(
+    input: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string },
+    actor: SessionUser
+  ): Promise<{ updated_at: string }>;
+  /** 仕様で新しい受付ができるか（標準構成に販売停止・廃番の商品があれば受け付けない。DB の get_spec_acceptance_state） */
+  getSpecAcceptanceState(modelId: string, specCode: string | null): Promise<SpecAcceptanceState>;
   /** 商品の状態の機能を使えるか（20261015110000 と 20261015113000 が適用済みか） */
   getProductLifecycleCapability(): Promise<ProductLifecycleCapability>;
 

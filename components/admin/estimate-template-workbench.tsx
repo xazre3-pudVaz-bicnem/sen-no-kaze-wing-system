@@ -78,7 +78,8 @@ const SECTION_PRODUCT_CATEGORY_CODES: Record<SectionCode, readonly string[]> = {
 
 export function EstimateTemplateWorkbench({
   templateId,
-  role,
+  // 本部だけが開く参照用の画面になったため、権限による表示の出し分けは無い（呼び出し側の互換のため受け取る）
+  role: _role,
   baseLines,
   baseTotal,
   initialLines,

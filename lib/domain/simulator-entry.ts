@@ -1,4 +1,4 @@
-import { normalizeExteriorFaces, type ExteriorFaceSelection } from './exterior-wall';
+import { CURRENT_EXTERIOR_CODES, LEGACY_EXTERIOR_CODES, normalizeExteriorFaces, type ExteriorFaceSelection } from './exterior-wall';
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
@@ -8,6 +8,7 @@ import {
 } from './estimate-template';
 import { buildPresetSelection, defaultVariantIdsFor } from './preset';
 import { defaultSelection, pruneToScope, type RuleContext } from './rules';
+import { v25SimulatorStandardState } from './simulator-standard-state';
 import type { CatalogBundle, EstimateTemplateBundle, FinishLevel } from './types';
 import { normalizeWashbasinSelection } from './washbasin-selection';
 
@@ -18,15 +19,6 @@ export interface SimulatorEntryState {
   variant_choice_ids: string[];
   exterior_faces: ExteriorFaceSelection[];
 }
-
-const LEGACY_EXTERIOR_CODES = new Set(['exterior-galnote', 'exterior-wood']);
-const CURRENT_EXTERIOR_CODES = new Set([
-  'exterior-nichiha-st-u18',
-  'exterior-nichiha-ns-premium18',
-  'exterior-nichiha-m-flat-premium18',
-  'exterior-wood-accent-100',
-  'exterior-current-gl-bare',
-]);
 
 /**
  * /plans などから仕様を指定してシミュレーターへ入るときの初期状態。
@@ -58,24 +50,37 @@ export function buildSimulatorEntryState(
     conflicts: bundle.conflicts,
     customerCategoryMatrix: bundle.customerCategoryMatrix ?? null,
   };
-  const defaults = defaultSelection(ctx);
+  const variantIdsFor = (optionIds: string[]) =>
+    standardVariantIds
+      ? standardVariantIds(choice.code, optionIds)
+      : defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
+
+  // v2.5：シミュレーターの新しいプラン・仕様の読み込みと同じ関数で、公開中の版の選択枠から標準状態を作る
   const slotOptionIds = standardOptionIds?.(choice.code) ?? null;
-  const baselineIds = slotOptionIds
-    ? buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, null)
-    : choice.template
-      ? buildEstimateBaselineSelection(ctx, model, choice.template)
-      : choice.preset
-        ? buildPresetSelection(ctx, choice.preset, defaults)
-        : buildEstimateSpecSelection(ctx, model, choice.code);
+  if (slotOptionIds) {
+    const state = v25SimulatorStandardState(bundle, choice.code, buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, null), variantIdsFor);
+    return {
+      spec_code: choice.code,
+      finish_level: state.finishLevel,
+      option_ids: state.optionIds,
+      variant_choice_ids: state.variantChoiceIds,
+      exterior_faces: state.exteriorFaces,
+    };
+  }
+
+  const defaults = defaultSelection(ctx);
+  const baselineIds = choice.template
+    ? buildEstimateBaselineSelection(ctx, model, choice.template)
+    : choice.preset
+      ? buildPresetSelection(ctx, choice.preset, defaults)
+      : buildEstimateSpecSelection(ctx, model, choice.code);
   const finishLevel = finishLevelForEstimateSpec(choice.code);
   const optionIds = normalizeWashbasinSelection(
     bundle.options,
     pruneToScope(ctx, baselineIds, finishLevel),
     baselineIds
   );
-  const variantChoiceIds = standardVariantIds
-    ? standardVariantIds(choice.code, optionIds)
-    : defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
+  const variantChoiceIds = variantIdsFor(optionIds);
 
   const exteriorWallCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options

@@ -503,8 +503,9 @@ comment on function public.get_public_v25_base_totals() is
 -- * 外壁は front / right / back / left の 4 面を個別に変えられるので、外壁の選択枠は数量 4（面）
 -- * それ以外の選択枠は数量 1。お客様が個別に変えるもの（サッシ①・②など）は選択対象ごとに別の選択枠にし、
 --   お客様が個別に選ばない数量の明細は、選択枠ではなく明細にする（数量 2 以上の選択枠は、具体例が出たときに改めて決める）
--- * 1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターは 1 つしか選べないので、標準構成を再現できない）
+-- * 1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターは 1 つしか選べないので、標準構成を再現できない。エアコンもシミュレーターは 1 つにまとめる）
 -- 公開中の版の選択枠をシミュレーターの初期構成にするため、標準構成のままなら公開した版の標準価格になるよう、公開とスイッチで確かめる。
+-- カテゴリーは商品の今のカテゴリーで見る（保存したときの写しではなく、編集画面の表示と同じ）。
 -- 問題が無ければ null、あれば内容の文。内部の部品
 create function public.standard_estimate_v25_slot_rule_issues(p_revision_id uuid)
 returns text
@@ -512,31 +513,31 @@ language sql
 stable
 set search_path = ''
 as $slot_rules$
+  with slots as (
+    select bi.option_name_snapshot as name, bi.quantity, c.id as category_id, c.name as category_name, c.code as category_code,
+           (c.selection_mode = 'single' or c.code = 'aircon') as single_select
+      from public.standard_estimate_revision_baseline_items bi
+      join public.options o on o.id = bi.option_id
+      join public.option_categories c on c.id = o.category_id
+     where bi.revision_id = p_revision_id
+  )
   select nullif(pg_catalog.concat_ws('／',
-    (select '外壁の選択枠は数量 4（面）にしてください：' || string_agg(distinct '「' || bi.option_name_snapshot || '」', '・')
-       from public.standard_estimate_revision_baseline_items bi
-      where bi.revision_id = p_revision_id
-        and bi.selection_target_code = 'exterior-wall'
-        and bi.quantity <> 4),
+    (select '外壁の選択枠は数量 4（面）にしてください：' || string_agg(distinct '「' || s.name || '」', '・')
+       from slots s where s.category_code = 'exterior-wall' and s.quantity <> 4),
     (select '外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：'
-            || string_agg(distinct '「' || bi.option_name_snapshot || '」', '・')
-       from public.standard_estimate_revision_baseline_items bi
-      where bi.revision_id = p_revision_id
-        and bi.selection_target_code <> 'exterior-wall'
-        and bi.quantity <> 1),
-    (select '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：' || string_agg('「' || x.name || '」', '・' order by x.name)
-       from (select c.name
-               from public.standard_estimate_revision_baseline_items bi
-               join public.option_categories c on c.id = bi.option_category_id
-              where bi.revision_id = p_revision_id
-                and c.selection_mode = 'single'
-              group by c.id, c.name
+            || string_agg(distinct '「' || s.name || '」', '・')
+       from slots s where s.category_code <> 'exterior-wall' and s.quantity <> 1),
+    (select '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：' || string_agg('「' || x.category_name || '」', '・' order by x.category_name)
+       from (select s.category_id, s.category_name
+               from slots s
+              where s.single_select
+              group by s.category_id, s.category_name
              having count(*) > 1) x)
   ), '');
 $slot_rules$;
 
 comment on function public.standard_estimate_v25_slot_rule_issues(uuid) is
-  'v2.5 の版の選択枠が、シミュレーターと連携する決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠）に合うか。合わなければ内容の文。内部の部品。';
+  'v2.5 の版の選択枠が、シミュレーターと連携する決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリー・エアコンは 1 枠。カテゴリーは商品の今のカテゴリー）に合うか。合わなければ内容の文。内部の部品。';
 
 -- v2.5 の版の公開で確かめる（公開した版は変えられないため。スイッチが入った後に公開する版も同じ）
 create function public.standard_estimate_v25_publish_slot_rule_guard()

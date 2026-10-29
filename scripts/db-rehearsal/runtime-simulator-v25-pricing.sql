@@ -80,6 +80,8 @@ declare
   v_i integer;
   v_j integer;
   v_choice uuid;
+  v_wall_cat uuid;
+  v_aircon_cat uuid;
 begin
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
@@ -300,14 +302,20 @@ begin
     pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text'));
   set local session_replication_role = replica;
   update public.standard_estimate_masters set status = 'archived' where id = v_master_hotel;
-  -- 外壁の選択枠の数量が 4 でない版があると切り替えられない（試験のため、選択枠の対象を外壁に書き換えて確かめ、元に戻す）
-  update public.standard_estimate_revision_baseline_items set selection_target_code = 'exterior-wall' where revision_id = v_rev and option_id = p1;
+  -- 外壁の選択枠の数量が 4 でない版があると切り替えられない（試験のため、商品1 を外壁のカテゴリーへ移して確かめ、元に戻す。
+  -- 判定は商品の今のカテゴリーで行う。外壁のカテゴリーが無い DB では作る）
+  select id into v_wall_cat from public.option_categories where code = 'exterior-wall';
+  if v_wall_cat is null then
+    insert into public.option_categories (id, code, name, status) values ('29000000-0000-4000-8000-000000000402', 'exterior-wall', '外壁（検査）', 'published');
+    v_wall_cat := '29000000-0000-4000-8000-000000000402';
+  end if;
+  update public.options set category_id = v_wall_cat where id = p1;
   set local session_replication_role = origin;
   v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
   perform pg_temp.svp_expect_eq('外壁の選択枠の数量が 4（面）でない標準見積があると、スイッチを入れられない', 'true',
     (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積があるため切り替えられません（%外壁の選択枠は数量 4（面）にしてください：「C1 商品1（選択肢あり）」%')::text);
   set local session_replication_role = replica;
-  update public.standard_estimate_revision_baseline_items set selection_target_code = 'runtime-svp-category' where revision_id = v_rev and option_id = p1;
+  update public.options set category_id = cat_opt where id = p1;
   -- 外壁以外の選択枠の数量が 1 でない版（試験のため、公開した版の数量を書き換えて確かめ、元に戻す）
   update public.standard_estimate_revision_baseline_items set quantity = 2 where revision_id = v_rev and option_id = p2;
   set local session_replication_role = origin;
@@ -324,6 +332,20 @@ begin
     (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「C1 検査」%')::text);
   set local session_replication_role = replica;
   update public.option_categories set selection_mode = 'multi' where id = cat_opt;
+  -- エアコンはシミュレーターが 1 つにまとめるので、「複数選べる」でも選択枠は 1 つ（試験のため、商品1・2 をエアコンのカテゴリーへ移して確かめ、元に戻す）
+  select id into v_aircon_cat from public.option_categories where code = 'aircon';
+  if v_aircon_cat is null then
+    insert into public.option_categories (id, code, name, selection_mode, status) values ('29000000-0000-4000-8000-000000000403', 'aircon', '空調（検査）', 'multi', 'published');
+    v_aircon_cat := '29000000-0000-4000-8000-000000000403';
+  end if;
+  update public.option_categories set selection_mode = 'multi' where id = v_aircon_cat;
+  update public.options set category_id = v_aircon_cat where id in (p1, p2);
+  set local session_replication_role = origin;
+  v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
+  perform pg_temp.svp_expect_eq('エアコンのカテゴリーに選択枠が 2 つある標準見積があると、スイッチを入れられない（複数選べる設定でも）', 'true',
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「%')::text);
+  set local session_replication_role = replica;
+  update public.options set category_id = cat_opt where id in (p1, p2);
   set local session_replication_role = origin;
   perform pg_temp.svp_expect_eq('有効な標準見積がすべて v2.5 なら、本部はスイッチを入れられる', 'true',
     pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text'));

@@ -57,6 +57,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const [sale, baseTotals] = await Promise.all([getSimulatorSaleViews(model.id, { preview: false }), getPublicBaseTotals([model])]);
   /** 本体価格計（本体一式＋諸費用・税別）。商品一覧・SEO と同じ価格元。null は金額を出さない */
   const baseTotal = baseTotals[model.id] ?? null;
+  const productLd = productJsonLd(model, [hero?.url, ...gallery.map((g) => g.url)].filter((u): u is string => Boolean(u)), baseTotal);
   const specCandidates = [...(model.presets ?? []).map((preset) => preset.code), ...sale.saleViews.map((view) => view.spec_code)];
   const productView = sale.v25
     ? (specCandidates.map((code) => pickSaleView(sale.saleViews, model.slug, code, false)).find((view) => view !== null) ?? null)
@@ -71,7 +72,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
 
   return (
     <>
-      <JsonLd data={productJsonLd(model, [hero?.url, ...gallery.map((g) => g.url)].filter((u): u is string => Boolean(u)), baseTotal)} />
+      {productLd && <JsonLd data={productLd} />}
       <JsonLd data={breadcrumbJsonLd([{ name: 'ホーム', path: '/' }, { name: '商品一覧', path: '/products' }, { name: model.name, path: `/products/${model.slug}` }])} />
 
       {/* 全幅ヒーロー */}

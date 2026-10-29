@@ -177,6 +177,11 @@ export function v25SlotOptionIds(view: StandardEstimateSaleView | null): string[
   return [...new Set(view.baseline.map((item) => item.option_id))];
 }
 
+/** シミュレーターの仕様・防火の条件で使う v2.5 の版（pickSaleView）の選択枠の商品。シミュレーターと /plans の入口で同じ決め方にする */
+export function v25SlotOptionIdsFor(views: StandardEstimateSaleView[], modelSlug: string, specCode: string, fire: boolean): string[] | null {
+  return v25SlotOptionIds(pickSaleView(views, modelSlug, specCode, fire));
+}
+
 /**
  * v2.5 の標準見積での「標準の選択肢」：版の選択枠に同じ商品があれば、その選択枠の選択肢（標準のままなら差額 0）。
  * 無ければ商品の標準の選択肢（defaultVariantIdsFor）。view が v2.5 でなければ商品の標準の選択肢だけ

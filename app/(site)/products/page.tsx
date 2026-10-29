@@ -1,5 +1,5 @@
 import { getPublicCatalog } from '@/lib/data/public-catalog';
-import { getPublicBaseTotals } from '@/lib/data/standard-estimate-sale-views';
+import { loadPublicBaseTotalSource, publicBaseTotalsFor } from '@/lib/data/standard-estimate-sale-views';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { Breadcrumbs, Container, JsonLd } from '@/components/ui';
 import { Reveal } from '@/components/ui/reveal';
@@ -13,9 +13,9 @@ export const metadata = buildMetadata({
 });
 
 export default async function ProductsPage() {
-  const { models, bundles } = await getPublicCatalog();
-  // 本体価格計は商品ページ・SEO と同じ価格元（スイッチの後は公開中の v2.5 の標準見積）
-  const baseTotals = await getPublicBaseTotals(models);
+  // 本体価格計は商品ページ・SEO と同じ価格元（スイッチの後は公開中の v2.5 の標準見積）。価格元はカタログと並べて読む
+  const [{ models, bundles }, baseSource] = await Promise.all([getPublicCatalog(), loadPublicBaseTotalSource()]);
+  const baseTotals = await publicBaseTotalsFor(models, baseSource);
   const listingImageBySlug: Record<string, { url: string; alt: string }> = {
     'wing-01': {
       url: '/images/cases/box-lakeside-family.jpg',

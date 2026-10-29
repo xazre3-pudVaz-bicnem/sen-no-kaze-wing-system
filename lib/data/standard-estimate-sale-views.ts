@@ -1,14 +1,14 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { baseTotalOf } from '@/lib/domain/pricing';
-import { v25BaseTotalFrom, type V25BaseTotalRow } from '@/lib/domain/public-base-price';
+import { offeredSaleViewSpecCodes, v25BaseTotalFrom, type V25BaseTotalRow } from '@/lib/domain/public-base-price';
 import type { V25MissingUnit } from '@/lib/domain/standard-estimate-pricing';
 import { v25ConfigurationPricing, v25UnitKey, type StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
 import type { BaseModel, CatalogBundle, PricingResult } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { CATALOG_TAG } from './public-catalog';
 import { isMissingNamedFunction } from './schema-compat';
-import { isLocalMode } from './store';
+import { getStore, isLocalMode } from './store';
 
 /**
  * 公開中の新しい標準見積を、売価だけの形で取得する（get_standard_estimate_sale_views。原価・社内の率・備考は含まれない）。
@@ -156,20 +156,40 @@ export const getPublicV25BaseTotals = unstable_cache(fetchPublicV25BaseTotals, [
   revalidate: 300,
 });
 
+/** 本体価格計の価格元（スイッチが入っていて v2.5 の取得があれば、公開中の版の本体の合計。それ以外は null＝今の本体価格） */
+export interface PublicBaseTotalSource {
+  v25Rows: V25BaseTotalRow[] | null;
+}
+
+/** 本体価格計の価格元を読む。モデルを使わないので、カタログの取得と並べて呼べる */
+export async function loadPublicBaseTotalSource(): Promise<PublicBaseTotalSource> {
+  if (!(await getSimulatorStandardPricingEnabled())) return { v25Rows: null };
+  return { v25Rows: await getPublicV25BaseTotals() };
+}
+
+type BaseTotalModel = Pick<BaseModel, 'id' | 'slug' | 'presets' | 'base_price' | 'expense_rate'>;
+
 /**
  * 「本体価格計（本体一式＋諸費用・税別）〜」の金額（商品一覧・商品ページ・SEO で共通の価格元。2026-10-29 先方回答）。
  * - スイッチが切れている間：今の本体価格（base_price＋諸費用）
- * - 入っている間：公開中の v2.5 の標準見積の版の本体の合計の最小（下書きでは変わらず、公開で切り替わる）。
+ * - 入っている間：シミュレーターでお客様が選べる仕様の、公開中の v2.5 の標準見積の版の本体の合計の最小（下書きでは変わらず、公開で切り替わる）。
  *   使える版が無いモデルは null（金額を出さない）。v2.5 の取得が無い DB では今の本体価格
  */
-export async function getPublicBaseTotals(
-  models: Pick<BaseModel, 'id' | 'base_price' | 'expense_rate'>[]
-): Promise<Record<string, number | null>> {
-  const legacy = () => Object.fromEntries(models.map((model) => [model.id, baseTotalOf(model)]));
-  if (!(await getSimulatorStandardPricingEnabled())) return legacy();
-  const rows = await getPublicV25BaseTotals();
-  if (rows === null) return legacy();
-  return Object.fromEntries(models.map((model) => [model.id, v25BaseTotalFrom(rows, model.id)]));
+export async function publicBaseTotalsFor(models: BaseTotalModel[], source: PublicBaseTotalSource): Promise<Record<string, number | null>> {
+  const rows = source.v25Rows;
+  if (rows === null) return Object.fromEntries(models.map((model) => [model.id, baseTotalOf(model)]));
+  const store = await getStore();
+  const templates = await Promise.all(models.map((model) => store.listEstimateTemplates(model.id)));
+  return Object.fromEntries(
+    models.map((model, index) => [
+      model.id,
+      v25BaseTotalFrom(rows, model.id, offeredSaleViewSpecCodes(model, templates[index].map((template) => template.spec_code))),
+    ])
+  );
+}
+
+export async function getPublicBaseTotals(models: BaseTotalModel[]): Promise<Record<string, number | null>> {
+  return publicBaseTotalsFor(models, await loadPublicBaseTotalSource());
 }
 
 /**

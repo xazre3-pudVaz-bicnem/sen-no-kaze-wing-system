@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildEstimateSpecSelection, buildV25SpecSelection } from '@/lib/domain/estimate-template';
-import { v25BaseTotalFrom, type V25BaseTotalRow } from '@/lib/domain/public-base-price';
+import { offeredSaleViewSpecCodes, v25BaseTotalFrom, type V25BaseTotalRow } from '@/lib/domain/public-base-price';
 import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
+import { v25SimulatorStandardState } from '@/lib/domain/simulator-standard-state';
 import { v25SlotOptionIds, type StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
 import { standardSlotQuantity, v25SlotRuleIssues } from '@/lib/domain/standard-estimate-v25-workbench';
 import type { RuleContext } from '@/lib/domain/rules';
@@ -142,9 +143,53 @@ describe('v2.5：公開中の版の選択枠をシミュレーターの標準構
     expect(legacy?.option_ids).toContain('light-b');
   });
 
+  it('標準状態は 1 つの関数で作る：洗面の正規化、外壁の 4 面はシミュレーター非表示の標準の商品も使う。/plans の入口も同じ状態になる', () => {
+    const wallCategories = [
+      ...categories,
+      category('exterior-wall', { name: '外壁', selection_mode: 'single', is_required: true }),
+      category('washbasin', { name: '洗面' }),
+    ];
+    const wallOptions = [
+      ...options,
+      option('wall-shown', 'exterior-wall', { sort_order: 1, is_default: true }),
+      option('wall-hidden', 'exterior-wall', { sort_order: 2, simulator_visible: false }),
+      option('washbasin-kb', 'washbasin', { code: 'washbasin-kb' }),
+      option('faucet-kb', 'washbasin', { code: 'faucet-kb' }),
+    ];
+    const bundle = {
+      model,
+      options: wallOptions,
+      categories: wallCategories,
+      dependencies: [],
+      conflicts: [],
+      customerCategoryMatrix: null,
+      variantGroups: [],
+      variantChoices: [],
+    } as unknown as CatalogBundle;
+    const wallCtx: RuleContext = { options: wallOptions, categories: wallCategories, dependencies: [], conflicts: [] };
+    // 選択枠：シミュレーター非表示の外壁と、洗面器だけ（混合水栓は洗面の正規化で足される）
+    const slots = ['light-a', 'wall-hidden', 'washbasin-kb'];
+    const state = v25SimulatorStandardState(bundle, 'office', buildV25SpecSelection(wallCtx, model, 'office', slots, null), () => []);
+    expect(state.optionIds).toEqual(expect.arrayContaining(['light-a', 'wall-hidden', 'washbasin-kb', 'faucet-kb']));
+    expect(state.exteriorFaces.map((face) => face.option_id)).toEqual(['wall-hidden', 'wall-hidden', 'wall-hidden', 'wall-hidden']);
+    const entry = buildSimulatorEntryState(bundle, [], 'office', () => [], () => slots);
+    expect(entry).toEqual({
+      spec_code: 'office',
+      finish_level: state.finishLevel,
+      option_ids: state.optionIds,
+      variant_choice_ids: state.variantChoiceIds,
+      exterior_faces: state.exteriorFaces,
+    });
+  });
+
   it('シミュレーターは仕様・防火の条件ごとの標準構成を使い、防火の切り替えでは標準構成のままなら新しい条件の標準構成を読み込む', () => {
     const app = read('components/simulator/simulator-app.tsx');
+    expect(app).toContain('const slotOptionIds = v25Pricing ? v25SlotOptionIdsFor(saleViews, model.slug, choice.code, fire) : null;');
     expect(app).toContain('buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null)');
+    // 新しいプランの最初の状態・仕様の読み込み・防火の切り替えは同じ関数で標準状態を作る（「標準構成のまま」の判定がずれない）
+    expect(app).toContain('v25Pricing && !initial');
+    expect(app).toContain('if (v25InitialState) return v25InitialState.exteriorFaces;');
+    expect(app).toContain('const state = v25SimulatorStandardState(bundle, code, selection.ids, (optionIds) => standardVariantIdsFor(code, optionIds));');
     expect(app).toContain('const specSelections = fireSelected ? fireSpecSelections : nonFireSpecSelections;');
     // 仕様の読み込みは今の防火の条件の標準構成
     expect(app).toContain('const next = standardStateFor(code, fireSelected);');
@@ -153,9 +198,9 @@ describe('v2.5：公開中の版の選択枠をシミュレーターの標準構
     expect(app).toContain('if (atStandard && next && next.selection.includes(nextId)) {');
     expect(app).toContain('applyPicker(fireproofCategoryId, [nextId]);');
     // 受付停止の判定にも選択枠の商品を含める（DB の get_spec_acceptance_state と同じ）
-    expect(app).toContain('...((v25Pricing && v25SlotOptionIds(pickSaleView(saleViews, model.slug, specCode, fireSelected))) || []),');
+    expect(app).toContain('...((v25Pricing && v25SlotOptionIds(activeSaleView)) || []),');
     const page = read('app/(site)/simulator/[slug]/page.tsx');
-    expect(page).toContain('sale.v25 ? (specCode) => v25SlotOptionIds(pickSaleView(saleViews, model.slug, specCode, false)) : undefined');
+    expect(page).toContain('sale.v25 ? (specCode) => v25SlotOptionIdsFor(saleViews, model.slug, specCode, false) : undefined');
   });
 });
 
@@ -167,28 +212,42 @@ describe('本体価格計〜は公開中の v2.5 の版に統一する（2026-10
     { base_model_id: 'b', spec_code: 'office', fire_spec_code: 'non_fire', base_total: 150000, has_por: false },
   ];
 
-  it('モデルの公開中の版の本体の合計の最小。本体に価格未確定がある版は使わず、版が無ければ出さない', () => {
-    expect(v25BaseTotalFrom(rows, 'a')).toBe(403111);
-    expect(v25BaseTotalFrom(rows, 'b')).toBe(150000);
-    expect(v25BaseTotalFrom(rows, 'c')).toBeNull();
+  it('モデルの、お客様が選べる仕様の公開中の版の本体の合計の最小。本体に価格未確定がある版・選べない仕様の版は使わず、版が無ければ出さない', () => {
+    const offered = ['base', 'office', 'hotel'];
+    expect(v25BaseTotalFrom(rows, 'a', offered)).toBe(403111);
+    expect(v25BaseTotalFrom(rows, 'b', offered)).toBe(150000);
+    expect(v25BaseTotalFrom(rows, 'c', offered)).toBeNull();
+    // シミュレーターで選べない仕様（例：プリセットに無い用途）の版は、安くても使わない
+    expect(v25BaseTotalFrom([...rows, { base_model_id: 'a', spec_code: 'warehouse', fire_spec_code: 'non_fire', base_total: 1000, has_por: false }], 'a', offered)).toBe(403111);
   });
 
-  it('構造化データの価格も同じ値。金額を出さないときは価格（offers）を付けない', () => {
-    const withPrice = productJsonLd(model, [], 403111) as { offers?: { price: number } };
-    expect(withPrice.offers?.price).toBe(403111);
-    expect('offers' in productJsonLd(model, [], null)).toBe(false);
+  it('選べる仕様は、シミュレーターの仕様のボタン（本体のみ・プリセット・登録済みの Excel 標準見積）を標準見積の用途コードに寄せたもの', () => {
+    expect(offeredSaleViewSpecCodes(model, ['hotel'])).toEqual(['base', 'office', 'hotel']);
+    // BOX のホテル・単身者用（hotel-single）は、標準見積の hotel
+    expect(offeredSaleViewSpecCodes({ slug: 'box', presets: [] }, [])).toEqual(['base', 'hotel', 'water-kit']);
+  });
+
+  it('構造化データの価格も同じ値。金額を出さないときは Product の構造化データ自体を出さない（offers の無い Product は不正のため）', () => {
+    const withPrice = productJsonLd(model, [], 403111) as { offers?: { price: number } } | null;
+    expect(withPrice?.offers?.price).toBe(403111);
+    expect(productJsonLd(model, [], null)).toBeNull();
   });
 
   it('商品一覧・商品ページ（表示・説明文・構造化データ）は同じ価格元を使い、固定の金額を持たない', () => {
     const data = read('lib/data/standard-estimate-sale-views.ts');
-    expect(data).toContain('if (!(await getSimulatorStandardPricingEnabled())) return legacy();');
+    expect(data).toContain('if (!(await getSimulatorStandardPricingEnabled())) return { v25Rows: null };');
+    expect(data).toContain('if (rows === null) return Object.fromEntries(models.map((model) => [model.id, baseTotalOf(model)]));');
     expect(data).toContain("db.rpc('get_public_v25_base_totals')");
     const list = read('app/(site)/products/page.tsx');
-    expect(list).toContain('const baseTotals = await getPublicBaseTotals(models);');
+    // 価格元はカタログと並べて読む
+    expect(list).toContain('const [{ models, bundles }, baseSource] = await Promise.all([getPublicCatalog(), loadPublicBaseTotalSource()]);');
+    expect(list).toContain('const baseTotals = await publicBaseTotalsFor(models, baseSource);');
     expect(list).toContain('baseTotal: baseTotals[m.id] ?? null,');
+    expect(data).toContain('v25BaseTotalFrom(rows, model.id, offeredSaleViewSpecCodes(model, templates[index].map((template) => template.spec_code))),');
     const product = read('app/(site)/products/[slug]/page.tsx');
     expect(product).toContain('const baseTotal = (await getPublicBaseTotals([model]))[model.id] ?? null;');
-    expect(product).toContain('productJsonLd(model, [hero?.url, ...gallery.map((g) => g.url)].filter((u): u is string => Boolean(u)), baseTotal)');
+    expect(product).toContain('const productLd = productJsonLd(model, [hero?.url, ...gallery.map((g) => g.url)].filter((u): u is string => Boolean(u)), baseTotal);');
+    expect(product).toContain('{productLd && <JsonLd data={productLd} />}');
     expect(product).not.toContain('baseTotalOf');
     expect(read('components/sections/product-chapters.tsx')).not.toContain('baseTotalOf');
     expect(read('lib/seo.ts')).not.toContain('baseTotalOf');
@@ -261,6 +320,10 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
     expect(workbench).toContain("...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),");
     const migration = read('supabase/migrations/20261029100000_simulator_v25_pricing.sql');
     expect(migration).toContain('create function public.standard_estimate_v25_slot_rule_issues(p_revision_id uuid)');
+    // カテゴリーは商品の今のカテゴリー（編集画面と同じ）。エアコンもシミュレーターは 1 つにまとめる
+    expect(migration).toContain("      join public.options o on o.id = bi.option_id\n      join public.option_categories c on c.id = o.category_id");
+    expect(migration).toContain("(c.selection_mode = 'single' or c.code = 'aircon') as single_select");
+    expect(read('lib/data/standard-estimate-workspace.ts')).toContain("singleSelect: category?.selection_mode === 'single' || code === 'aircon',");
     expect(migration).toContain("when (new.status = 'published' and old.status is distinct from 'published' and new.pricing_model = 'v2.5')");
     expect(migration).toContain('cross join lateral (select public.standard_estimate_v25_slot_rule_issues(r.id) as issues) x');
   });

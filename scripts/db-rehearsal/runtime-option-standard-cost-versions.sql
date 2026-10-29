@@ -89,6 +89,11 @@ declare
   v_c_a1_v1 uuid;
   v_c_a1_v2 uuid;
   v_audit_before bigint;
+  -- 本部商品の外（旧フリー商品）：本部標準原価は本部商品だけ（2026-10-29 先方の回答）
+  opt_free constant uuid := '25000000-0000-4000-8000-000000000304';
+  g_free constant uuid := '25000000-0000-4000-8000-000000000405';
+  c_free constant uuid := '25000000-0000-4000-8000-000000000507';
+  v_free_cat uuid;
 begin
   set local session_replication_role = replica;
 
@@ -146,6 +151,18 @@ begin
     (c_a4, g_a2, 'simple', '簡易仕上げ', 'option', 0, 'published'),
     (c_b1, g_b1, 'small', '小', 'option', 0, 'published'),
     (c_c1, g_c1, 'small', '小', 'option', 0, 'published');
+
+  select id into v_free_cat from public.option_categories where code = 'free-product';
+  if v_free_cat is null then
+    v_free_cat := '25000000-0000-4000-8000-000000000202';
+    insert into public.option_categories (id, code, name, status) values (v_free_cat, 'free-product', 'フリー商品', 'published');
+  end if;
+  insert into public.options (id, category_id, code, name, price, status, product_no, owner_id)
+  values (opt_free, v_free_cat, 'runtime-scv-free', '標準原価Version旧フリー商品', 30000, 'published', 'PRD-925004', u_master);
+  insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
+  values (g_free, opt_free, 'size', 'サイズ', 1, true, 'published');
+  insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status)
+  values (c_free, g_free, 'large', '大', 'option', 2000, 'published');
 
   set local session_replication_role = origin;
 
@@ -357,6 +374,24 @@ begin
     (select count(*)::text from public.option_variant_choices where id = c_c1) || '/' ||
     (select count(*)::text from public.option_variant_cost_versions where variant_choice_id = c_c1) || '/' ||
     (select count(*)::text from public.option_standard_cost_versions where option_id = opt_a));
+
+  -- ---------- 本部商品の外（旧フリー商品）には本部標準原価を持たせない ----------
+
+  perform pg_temp.scv_expect_error('本部でも旧フリー商品には商品の標準原価を設定できない', 'P0001', 'VALIDATION',
+    pg_temp.scv_run_as('authenticated', u_owner, format(
+      'select changed::text from public.set_option_hq_standard_cost(%L,30000,0,''旧フリー商品'')', opt_free)));
+  perform pg_temp.scv_expect_error('本部でも旧フリー商品の選択肢には調整額を設定できない', 'P0001', 'VALIDATION',
+    pg_temp.scv_run_as('authenticated', u_owner, format(
+      'select changed::text from public.set_option_variant_cost_adjustment(%L,2000,null,''旧フリー商品'')', c_free)));
+  perform pg_temp.scv_expect_eq('旧フリー商品には版も写しもできない', '0/0/0',
+    (select count(*) from public.option_standard_cost_versions where option_id = opt_free)::text || '/' ||
+    (select count(*) from public.option_variant_cost_versions where variant_choice_id = c_free)::text || '/' ||
+    (select count(*) from public.option_hq_standard_costs where option_id = opt_free)::text);
+  perform pg_temp.scv_expect_eq('本部商品かどうかの判定（本部商品・旧フリー商品・存在しない商品）', 'true/false/false',
+    public.option_is_hq_cost_product(opt_b)::text || '/' || public.option_is_hq_cost_product(opt_free)::text || '/' ||
+    public.option_is_hq_cost_product('25000000-0000-4000-8000-0000000003ff')::text);
+  perform pg_temp.scv_expect_denied('本部商品かどうかの判定は authenticated から直接実行できない（内部の部品）', '42501',
+    pg_temp.scv_run_as('authenticated', u_owner, format('select public.option_is_hq_cost_product(%L)::text', opt_b)));
 
   -- ---------- 写しと現在の Version の一致（DB 全体） ----------
 

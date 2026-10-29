@@ -423,6 +423,12 @@ begin
     pg_temp.sev_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 9)).id::text', v_a2)));
   perform pg_temp.sev_expect_eq('要見直しで止めた公開では、下書きのまま変わらない', 'draft/9',
     (select r.status || '/' || r.lock_version from public.standard_estimate_revisions r where r.id = v_a2));
+  -- シミュレーターと連携する選択枠の決まり（20261029100000。外壁以外の選択枠は数量 1）を適用済みなら、公開の前に選択枠を数量 1 にする。
+  -- どちらの順で適用しても確かめられるよう、決まりの関数の有無で切り替える（公開の後の検査は数量によらない）
+  if to_regprocedure('public.standard_estimate_v25_slot_rule_issues(uuid)') is not null then
+    v_slots := (select jsonb_agg(jsonb_set(x.value, '{quantity}', '1'::jsonb) order by x.ordinality)
+                  from jsonb_array_elements(v_slots) with ordinality as x(value, ordinality));
+  end if;
   perform pg_temp.sev_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 9, %L::jsonb)).lock_version::text', v_a2,
     pg_temp.sev_payload(v_slots, v_lines, -1000, '端数調整')));
   perform pg_temp.sev_expect_eq('見直し済みにすると、公開できる状態になる', '0/true',

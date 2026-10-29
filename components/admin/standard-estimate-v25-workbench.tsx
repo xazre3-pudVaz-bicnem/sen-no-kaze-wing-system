@@ -31,6 +31,8 @@ import {
   rateToPercent,
   slotChoiceIds,
   slotIdentity,
+  standardSlotQuantity,
+  v25SlotRuleIssues,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -133,7 +135,12 @@ function WorkbenchBody({
   const unpricedKeys = useMemo(() => new Set(calc.unpriced), [calc.unpriced]);
   const unavailableCount = state.slots.filter((slot) => candidateById.get(slot.option_id)?.unavailable).length;
   const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
-  const blockers = v25PublishBlockers(preview, dirty);
+  // シミュレーターと連携する選択枠の決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠。DB も公開で止める）
+  const slotRuleIssues = useMemo(() => v25SlotRuleIssues(state.slots, (optionId) => candidateById.get(optionId)), [state.slots, candidateById]);
+  const blockers = [
+    ...v25PublishBlockers(preview, dirty),
+    ...(slotRuleIssues.length > 0 ? ['選択枠がシミュレーターと連携する決まりに合いません（表の下の案内を確認してください）'] : []),
+  ];
 
   useEffect(() => {
     if (!picker) return;
@@ -157,10 +164,13 @@ function WorkbenchBody({
     if (!picker) return;
     // 別途工事は販売費・経費・掛率を掛けない（自動にできない）。Web では金額を確定しないので別途見積にする
     const priceMode: V25SlotPriceMode = candidate.section === 'sitework' ? 'por' : 'auto';
+    // 選択枠の数量は、外壁は 4（面）、それ以外は 1（シミュレーターと連携する選択枠の決まり）
+    const quantity = String(standardSlotQuantity(candidate.categoryCode));
     if (picker.targetKey) {
       setSlot(picker.targetKey, {
         option_id: candidate.id,
         variant_choices: { ...candidate.defaultChoices },
+        quantity,
         ...(candidate.section === 'sitework' ? { price_mode: priceMode } : {}),
       });
     } else {
@@ -173,7 +183,7 @@ function WorkbenchBody({
             baseline_key: null,
             option_id: candidate.id,
             variant_choices: { ...candidate.defaultChoices },
-            quantity: '1',
+            quantity,
             price_mode: priceMode,
             manual_unit_price: '',
           },
@@ -564,6 +574,16 @@ function WorkbenchBody({
       )}
       {unavailableCount > 0 && (
         <Alert tone="danger">この仕様では選べなくなった商品の行が {unavailableCount} 件あります。削除するか、別の商品に変えてから保存してください。</Alert>
+      )}
+      {!readOnly && slotRuleIssues.length > 0 && (
+        <div data-testid="v25-wb-slot-rules">
+          <Alert tone="warn">
+            <p className="font-semibold">公開中の版の選択枠はシミュレーターの初期構成になるため、次の決まりに合わせてください（合わないと公開できません）</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {slotRuleIssues.map((issue) => <li key={issue}>{issue}</li>)}
+            </ul>
+          </Alert>
+        </div>
       )}
       {calc.incomplete.length > 0 && (
         <Alert tone="warn">

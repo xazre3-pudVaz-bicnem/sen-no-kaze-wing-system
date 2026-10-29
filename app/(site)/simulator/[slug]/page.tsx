@@ -10,6 +10,7 @@ import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
 import {
   isFireProofSelected,
   pickSaleView,
+  v25SlotOptionIds,
   v25StandardVariantIds,
   withoutCatalogCosts,
   withoutTemplatePrices,
@@ -152,7 +153,9 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
               pickSaleView(saleViews, model.slug, specCode, isFireProofSelected(bundle, optionIds)),
               optionIds
             )
-        : undefined
+        : undefined,
+      // v2.5：標準構成は公開中の v2.5 の版（非防火）の選択枠の商品（2026-10-29 先方回答）
+      sale.v25 ? (specCode) => v25SlotOptionIds(pickSaleView(saleViews, model.slug, specCode, false)) : undefined
     );
     if (entry) {
       initial = {

@@ -13,6 +13,7 @@ import { baseBreakdownTotal, defaultVariantIdsFor, pruneHiddenVariantChoices, re
 import {
   buildEstimateBaselineSelection,
   buildEstimateSpecSelection,
+  buildV25SpecSelection,
   estimateSpecStoppedProductNames,
   finishLevelForEstimateSpec,
   ruleContextForSpec,
@@ -28,10 +29,12 @@ import {
   type V25MissingUnit,
 } from '@/lib/domain/standard-estimate-pricing';
 import {
+  FIRE_PROOF_OPTION_CODE,
   computeSaleViewPricing,
   isV25SaleView,
   pendingSaleViewPricing,
   v25DisplayCatalog,
+  v25SlotOptionIds,
   v25StandardVariantIds,
   v25UnitKey,
   isFireProofSelected,
@@ -204,29 +207,46 @@ export function SimulatorApp({
   );
   const usesManagedEstimateChoices = simulatorSpecChoices.length > 0;
 
+  /** 防火仕様（防火構造）の商品。v2.5 の標準構成で防火の条件を表す */
+  const fireProofOptionId = useMemo(
+    () => bundle.options.find((option) => option.code === FIRE_PROOF_OPTION_CODE)?.id ?? null,
+    [bundle.options]
+  );
   /**
-   * 仕様を選んだときの標準商品構成。
-   * 標準価格はExcelが正本で、ここは商品変更差額・画像・設備選択の初期状態だけに使う。
+   * 仕様を選んだときの標準商品構成（防火の条件ごと）。
+   * v2.5 の売価を使う間は、公開中の v2.5 の標準見積の版の選択枠の商品（2026-10-29 先方回答：モデル・仕様・防火条件ごとの初期構成。
+   * 下書きの編集では変わらず、新しい版の公開で切り替わる）。v2.5 の版が無い仕様は旧来の標準構成（価格は準備中）。
+   * 旧来は、標準価格はExcelが正本で、ここは商品変更差額・画像・設備選択の初期状態だけに使う。
    * 管理画面から追加された仕様も estimate_templates の baseline_option_ids を使って自動反映する。
    */
-  const specSelections = useMemo(
-    () =>
-      simulatorSpecChoices.map((choice) => ({
-        code: choice.code,
-        ids: choice.template
-          ? buildEstimateBaselineSelection(ctx, model, choice.template)
-          : buildEstimateSpecSelection(ctx, model, choice.code),
-      })),
-    [ctx, model, simulatorSpecChoices]
+  const specSelectionsFor = useCallback(
+    (fire: boolean) =>
+      simulatorSpecChoices.map((choice) => {
+        const slotOptionIds = v25Pricing ? v25SlotOptionIds(pickSaleView(saleViews, model.slug, choice.code, fire)) : null;
+        return {
+          code: choice.code,
+          ids: slotOptionIds
+            ? buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null)
+            : choice.template
+              ? buildEstimateBaselineSelection(ctx, model, choice.template)
+              : buildEstimateSpecSelection(ctx, model, choice.code),
+        };
+      }),
+    [ctx, fireProofOptionId, model, saleViews, simulatorSpecChoices, v25Pricing]
+  );
+  const nonFireSpecSelections = useMemo(() => specSelectionsFor(false), [specSelectionsFor]);
+  const fireSpecSelections = useMemo(
+    () => (v25Pricing ? specSelectionsFor(true) : nonFireSpecSelections),
+    [nonFireSpecSelections, specSelectionsFor, v25Pricing]
   );
 
   const preferredPresetCode = model.presets?.[0]?.code;
   const managedDefaultSpecCode =
-    preferredPresetCode && specSelections.some((row) => row.code === preferredPresetCode)
+    preferredPresetCode && nonFireSpecSelections.some((row) => row.code === preferredPresetCode)
       ? preferredPresetCode
       : null;
   const validInitialSpecCode =
-    initial?.spec_code && specSelections.some((row) => row.code === initial.spec_code)
+    initial?.spec_code && nonFireSpecSelections.some((row) => row.code === initial.spec_code)
       ? initial.spec_code
       : null;
   const defaultSpecCode =
@@ -242,7 +262,7 @@ export function SimulatorApp({
     [ctx, defaultSpecCode, model.slug]
   );
   const initialBaselineIds =
-    specSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaultSelection(initialSpecCtx, initialLevel);
+    nonFireSpecSelections.find((row) => row.code === defaultSpecCode)?.ids ?? defaultSelection(initialSpecCtx, initialLevel);
   const preserveLegacyInitialSelection =
     Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);
   const preserveReadOnlyHistoricalSelection = Boolean(initial && initial.status !== 'draft');
@@ -331,10 +351,19 @@ export function SimulatorApp({
     );
   });
   const [specCode, setSpecCode] = useState<string>(defaultSpecCode);
-  // 仕様の標準構成に販売停止・廃番の商品があれば、その仕様は新しい受付を止める（自動で別の商品に替えない。見積依頼は DB でも止める）
+  /** 防火仕様（防火構造）を選んでいるか。v2.5 の売価を使う間は、使う標準見積の版と標準構成が防火の条件で変わる */
+  const fireSelected = isFireProofSelected(bundle, selected);
+  /** 今の防火の条件での、仕様ごとの標準商品構成 */
+  const specSelections = fireSelected ? fireSpecSelections : nonFireSpecSelections;
+  // 仕様の標準構成に販売停止・廃番の商品があれば、その仕様は新しい受付を止める（自動で別の商品に替えない。見積依頼は DB でも止める）。
+  // v2.5 の売価を使う間は、公開中の版の選択枠の商品も標準構成（DB の get_spec_acceptance_state と同じく両方を見る）
   const specStoppedNames = useMemo(
-    () => estimateSpecStoppedProductNames(ctx, model, specCode, estimateTemplateByCode.get(specCode)?.baseline_option_ids ?? []),
-    [ctx, estimateTemplateByCode, model, specCode]
+    () =>
+      estimateSpecStoppedProductNames(ctx, model, specCode, [
+        ...(estimateTemplateByCode.get(specCode)?.baseline_option_ids ?? []),
+        ...((v25Pricing && v25SlotOptionIds(pickSaleView(saleViews, model.slug, specCode, fireSelected))) || []),
+      ]),
+    [ctx, estimateTemplateByCode, fireSelected, model, saleViews, specCode, v25Pricing]
   );
   const [sitePrefecture, setSitePrefecture] = useState<string | null>(initial?.site_prefecture ?? null);
   const [siteMunicipality, setSiteMunicipality] = useState<string | null>(initial?.site_municipality ?? null);
@@ -591,7 +620,6 @@ export function SimulatorApp({
    * 新しい標準見積（標準状態の商品が登録された公開中のもの）が機種・用途・防火で 1 件に決まれば、それを基準価格にする。
    * 防火仕様を選んでいて防火の標準見積があれば防火の標準見積、無ければ非防火の標準見積（防火は別途見積のまま）。
    */
-  const fireSelected = isFireProofSelected(bundle, selected);
   const activeSaleView = useMemo(
     () => pickSaleView(saleViews, model.slug, specCode, fireSelected),
     [fireSelected, model.slug, saleViews, specCode]
@@ -819,14 +847,13 @@ export function SimulatorApp({
   };
 
   // ---- 操作 ----
-  const applyPreset = (code: string) => {
-    if (!hydrated || readOnly) return;
-    const selection = specSelections.find((row) => row.code === code);
-    const choice = simulatorSpecChoices.find((row) => row.code === code);
-    if (!selection || !choice) return;
-    const nextLevel = finishLevelForEstimateSpec(code);
+  /** 仕様・防火の条件の標準状態（注文範囲・商品・選択肢・外壁の 4 面）。仕様の読み込みと防火の切り替えで使う */
+  const standardStateFor = (code: string, fire: boolean) => {
+    const selection = (fire ? fireSpecSelections : nonFireSpecSelections).find((row) => row.code === code);
+    if (!selection) return null;
+    const level = finishLevelForEstimateSpec(code);
     const nextCtx = ruleContextForSpec(ctx, code, model.slug);
-    const nextSel = pruneToScope(nextCtx, selection.ids, nextLevel);
+    const nextSel = pruneToScope(nextCtx, selection.ids, level);
     const nextVariants = standardVariantIdsFor(code, nextSel);
     const nextExteriorOptions = nextCtx.options
       .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')
@@ -835,21 +862,57 @@ export function SimulatorApp({
     const selectableNextExteriorOptions = nextHasCurrentExteriorCatalog
       ? nextExteriorOptions.filter((option) => !legacyExteriorCodes.has(option.code))
       : nextExteriorOptions;
-    setSpecCode(code);
-    setFinishLevel(nextLevel);
-    setSelected(nextSel);
-    setVariantIds(nextVariants);
-    setExteriorFaces(
-      makeDefaultExteriorFaces(
-        selectableNextExteriorOptions,
-        bundle.variantGroups,
-        bundle.variantChoices,
-        nextSel,
-        nextVariants
-      )
+    const faces = makeDefaultExteriorFaces(
+      selectableNextExteriorOptions,
+      bundle.variantGroups,
+      bundle.variantChoices,
+      nextSel,
+      nextVariants
     );
+    return { level, selection: nextSel, variants: nextVariants, faces };
+  };
+
+  const applyPreset = (code: string) => {
+    if (!hydrated || readOnly) return;
+    const choice = simulatorSpecChoices.find((row) => row.code === code);
+    // v2.5 の売価を使う間は、今の防火の条件の標準構成を読み込む（旧来は防火で変わらない）
+    const next = standardStateFor(code, fireSelected);
+    if (!next || !choice) return;
+    setSpecCode(code);
+    setFinishLevel(next.level);
+    setSelected(next.selection);
+    setVariantIds(next.variants);
+    setExteriorFaces(next.faces);
     setDirty(true);
     pushToast(`「${choice.name}」の標準見積を読み込みました`, 'success');
+  };
+
+  /**
+   * 防火仕様の切り替え。v2.5 の売価を使う間は、今の仕様の標準構成のままなら、選んだ防火の条件の標準構成
+   * （公開中の版の選択枠の商品・選択肢）を読み込む（2026-10-29 先方回答：初期構成はモデル・仕様・防火条件ごと）。
+   * 標準構成から変えていれば、変えた内容を残して防火仕様だけを入れ替える（金額は v2.5 のルールで計算する）
+   */
+  const changeFireSpec = (fireproofCategoryId: string, nextId: string) => {
+    const nextFire = bundle.options.find((option) => option.id === nextId)?.code === FIRE_PROOF_OPTION_CODE;
+    if (v25Pricing && hydrated && !readOnly && nextFire !== fireSelected) {
+      const current = standardStateFor(specCode, fireSelected);
+      const next = standardStateFor(specCode, nextFire);
+      const atStandard =
+        current !== null &&
+        finishLevel === current.level &&
+        sameSelection(selected, current.selection) &&
+        sameSelection(variantIds, current.variants) &&
+        sameExteriorFaces(displayedExteriorFaces, current.faces);
+      if (atStandard && next && next.selection.includes(nextId)) {
+        setSelected(next.selection);
+        setVariantIds(next.variants);
+        setExteriorFaces(next.faces);
+        setDirty(true);
+        pushToast(`${nextFire ? '防火構造' : '非防火'}の標準構成を読み込みました`, 'success');
+        return;
+      }
+    }
+    applyPicker(fireproofCategoryId, [nextId]);
   };
 
   /**
@@ -1210,7 +1273,7 @@ export function SimulatorApp({
                           value={fireproofChosen?.id ?? ''}
                           onChange={(e) => {
                             const nextId = e.target.value;
-                            if (nextId && nextId !== fireproofChosen?.id) applyPicker(fireproofCat.id, [nextId]);
+                            if (nextId && nextId !== fireproofChosen?.id) changeFireSpec(fireproofCat.id, nextId);
                           }}
                           disabled={readOnly}
                           className="min-h-9 w-24 rounded-lg border border-line bg-white px-2 text-[0.85rem] text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:w-28 sm:px-3 sm:text-[0.95rem]"

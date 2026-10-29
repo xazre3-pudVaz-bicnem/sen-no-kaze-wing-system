@@ -169,6 +169,15 @@ function v25ApproxUnit(view: StandardEstimateSaleView, optionId: string, choiceI
 }
 
 /**
+ * v2.5 の標準見積の版の選択枠の商品。シミュレーターの仕様・防火条件の標準構成にする（2026-10-29 先方回答。
+ * 下書きは使わず、公開中の版だけ）。版が無い・v2.5 でなければ null（旧来の標準構成）
+ */
+export function v25SlotOptionIds(view: StandardEstimateSaleView | null): string[] | null {
+  if (!view || !isV25SaleView(view)) return null;
+  return [...new Set(view.baseline.map((item) => item.option_id))];
+}
+
+/**
  * v2.5 の標準見積での「標準の選択肢」：版の選択枠に同じ商品があれば、その選択枠の選択肢（標準のままなら差額 0）。
  * 無ければ商品の標準の選択肢（defaultVariantIdsFor）。view が v2.5 でなければ商品の標準の選択肢だけ
  */

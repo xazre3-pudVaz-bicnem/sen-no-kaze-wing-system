@@ -47,7 +47,9 @@ begin
     raise exception 'PRECONDITION: simulator standard estimate pricing (20261013200000・20261013210000) must be applied first';
   end if;
   if to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null
-     or to_regprocedure('public.get_simulator_v25_units(uuid, jsonb)') is not null then
+     or to_regprocedure('public.get_simulator_v25_units(uuid, jsonb)') is not null
+     or to_regprocedure('public.get_public_v25_base_totals()') is not null
+     or to_regprocedure('public.standard_estimate_v25_slot_rule_issues(uuid)') is not null then
     raise exception 'PRECONDITION: simulator v2.5 pricing functions already exist';
   end if;
 end;
@@ -468,6 +470,99 @@ $units$;
 comment on function public.get_simulator_v25_units(uuid, jsonb) is
   '公開中の v2.5 の標準見積で、表に無い「商品＋選択肢」の売価単価を返す（原価・率は返さない）。シミュレーターのサーバー側（service_role）だけが呼ぶ。';
 
+-- 「本体価格計（本体一式＋諸費用・税別）〜」の価格元（2026-10-29 先方回答：商品ページ・トップ・商品一覧・SEO の本体価格計を、
+-- 公開中の v2.5 の標準見積の版に統一する。下書きでは変わらず、新しい版の公開で切り替わる）。
+-- 有効な標準見積の公開中の v2.5 の版ごとに、本体の区分の合計（売価）を返す。原価・率は返さない。サーバー（service_role）だけが呼ぶ
+create function public.get_public_v25_base_totals()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $base_totals$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+           'base_model_id', m.base_model_id,
+           'spec_code', m.spec_code,
+           'fire_spec_code', bm.fire_spec_code,
+           'base_total', s.total,
+           'has_por', s.has_por
+         ) order by m.base_model_id, m.spec_code, bm.fire_spec_code), '[]'::jsonb)
+    from public.standard_estimate_masters m
+    join public.standard_estimate_revisions r on r.id = m.current_published_revision_id and r.status = 'published' and r.pricing_model = 'v2.5'
+    join public.standard_estimate_revision_sections s on s.revision_id = r.id and s.section_code = 'base'
+    join public.base_masters bm on bm.id = m.base_master_id
+    join public.base_models model on model.id = m.base_model_id and model.status = 'published'
+   where m.status = 'active';
+$base_totals$;
+
+comment on function public.get_public_v25_base_totals() is
+  '公開中の v2.5 の標準見積の版ごとの本体の合計（本体一式＋諸費用・税別。売価）。商品一覧・商品ページ・SEO の本体価格計の価格元。サーバー側（service_role）だけが呼ぶ。';
+
+-- ---------- シミュレーターと連携する選択枠の決まり（2026-10-29 先方回答） ----------
+
+-- * 外壁は front / right / back / left の 4 面を個別に変えられるので、外壁の選択枠は数量 4（面）
+-- * それ以外の選択枠は数量 1。お客様が個別に変えるもの（サッシ①・②など）は選択対象ごとに別の選択枠にし、
+--   お客様が個別に選ばない数量の明細は、選択枠ではなく明細にする（数量 2 以上の選択枠は、具体例が出たときに改めて決める）
+-- * 1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターは 1 つしか選べないので、標準構成を再現できない）
+-- 公開中の版の選択枠をシミュレーターの初期構成にするため、標準構成のままなら公開した版の標準価格になるよう、公開とスイッチで確かめる。
+-- 問題が無ければ null、あれば内容の文。内部の部品
+create function public.standard_estimate_v25_slot_rule_issues(p_revision_id uuid)
+returns text
+language sql
+stable
+set search_path = ''
+as $slot_rules$
+  select nullif(pg_catalog.concat_ws('／',
+    (select '外壁の選択枠は数量 4（面）にしてください：' || string_agg(distinct '「' || bi.option_name_snapshot || '」', '・')
+       from public.standard_estimate_revision_baseline_items bi
+      where bi.revision_id = p_revision_id
+        and bi.selection_target_code = 'exterior-wall'
+        and bi.quantity <> 4),
+    (select '外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：'
+            || string_agg(distinct '「' || bi.option_name_snapshot || '」', '・')
+       from public.standard_estimate_revision_baseline_items bi
+      where bi.revision_id = p_revision_id
+        and bi.selection_target_code <> 'exterior-wall'
+        and bi.quantity <> 1),
+    (select '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：' || string_agg('「' || x.name || '」', '・' order by x.name)
+       from (select c.name
+               from public.standard_estimate_revision_baseline_items bi
+               join public.option_categories c on c.id = bi.option_category_id
+              where bi.revision_id = p_revision_id
+                and c.selection_mode = 'single'
+              group by c.id, c.name
+             having count(*) > 1) x)
+  ), '');
+$slot_rules$;
+
+comment on function public.standard_estimate_v25_slot_rule_issues(uuid) is
+  'v2.5 の版の選択枠が、シミュレーターと連携する決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠）に合うか。合わなければ内容の文。内部の部品。';
+
+-- v2.5 の版の公開で確かめる（公開した版は変えられないため。スイッチが入った後に公開する版も同じ）
+create function public.standard_estimate_v25_publish_slot_rule_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $publish_guard$
+declare
+  v_issues text;
+begin
+  v_issues := public.standard_estimate_v25_slot_rule_issues(new.id);
+  if v_issues is not null then
+    raise exception using errcode = 'P0001',
+      message = 'LOCKED: シミュレーターの選択枠の決まりに合わないため公開できません（' || v_issues || '）';
+  end if;
+  return new;
+end;
+$publish_guard$;
+
+create trigger standard_estimate_v25_publish_slot_rule_guard
+before update of status on public.standard_estimate_revisions
+for each row
+when (new.status = 'published' and old.status is distinct from 'published' and new.pricing_model = 'v2.5')
+execute function public.standard_estimate_v25_publish_slot_rule_guard();
+
 -- ---------- 保存した仕様に使う v2.5 の版（内部の部品） ----------
 
 create function public.standard_estimate_v25_revision_for_configuration(p_configuration_id uuid)
@@ -821,7 +916,8 @@ end;
 $write_quote_items$;
 
 -- スイッチを入れられるのは、有効なすべての標準見積の公開中の版が v2.5 のときだけ（v2.5 以前の版は商品価格の列＝原価で差額を出すため）。
--- あわせて、外壁の選択枠の数量が 4（面）であること（シミュレーターは外壁を 1 面ずつ 4 面数えるので、1 のままだと標準のままでも 3 面分の差額が出る）
+-- あわせて、公開中の版の選択枠がシミュレーターと連携する決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーは 1 枠）に
+-- 合うこと（シミュレーターは外壁を 1 面ずつ 4 面数えるので、外壁が 1 のままだと標準のままでも 3 面分の差額が出る）
 create or replace function public.set_simulator_standard_pricing(p_enabled boolean)
 returns boolean
 language plpgsql
@@ -832,7 +928,7 @@ declare
   v_uid uuid := auth.uid();
   v_before boolean;
   v_legacy text;
-  v_wall text;
+  v_slot_issues text;
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -855,16 +951,15 @@ begin
       raise exception using errcode = 'P0001',
         message = 'VALIDATION: 公開中の版が v2.5 でない標準見積があるため切り替えられません（' || v_legacy || '）。v2.5 の版を公開してから切り替えてください';
     end if;
-    select string_agg(distinct m.name, '、' order by m.name) into v_wall
+    select string_agg(m.name || '：' || x.issues, '／' order by m.name) into v_slot_issues
       from public.standard_estimate_masters m
       join public.standard_estimate_revisions r on r.id = m.current_published_revision_id and r.status = 'published' and r.pricing_model = 'v2.5'
-      join public.standard_estimate_revision_baseline_items bi on bi.revision_id = r.id
+      cross join lateral (select public.standard_estimate_v25_slot_rule_issues(r.id) as issues) x
      where m.status = 'active'
-       and bi.selection_target_code = 'exterior-wall'
-       and bi.quantity <> 4;
-    if v_wall is not null then
+       and x.issues is not null;
+    if v_slot_issues is not null then
       raise exception using errcode = 'P0001',
-        message = 'VALIDATION: 外壁の選択枠の数量が 4（面）でない標準見積があるため切り替えられません（' || v_wall || '）。シミュレーターは外壁を 1 面ずつ 4 面数えるので、選択枠の数量を 4 にしてください';
+        message = 'VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積があるため切り替えられません（' || v_slot_issues || '）';
     end if;
   end if;
 
@@ -898,7 +993,13 @@ alter function public.get_simulator_v25_sale_views(uuid) owner to postgres;
 alter function public.get_simulator_v25_units(uuid, jsonb) owner to postgres;
 alter function public.standard_estimate_v25_revision_for_configuration(uuid) owner to postgres;
 alter function public.standard_estimate_v25_configuration_money(uuid, uuid) owner to postgres;
+alter function public.get_public_v25_base_totals() owner to postgres;
+alter function public.standard_estimate_v25_slot_rule_issues(uuid) owner to postgres;
+alter function public.standard_estimate_v25_publish_slot_rule_guard() owner to postgres;
 
+revoke all on function public.get_public_v25_base_totals() from public, anon, authenticated, service_role;
+revoke all on function public.standard_estimate_v25_slot_rule_issues(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.standard_estimate_v25_publish_slot_rule_guard() from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_selection_unit(uuid, uuid, uuid[]) from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_price_table(uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_sale_view(uuid, boolean) from public, anon, authenticated, service_role;
@@ -907,9 +1008,10 @@ revoke all on function public.get_simulator_v25_units(uuid, jsonb) from public, 
 revoke all on function public.standard_estimate_v25_revision_for_configuration(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_configuration_money(uuid, uuid) from public, anon, authenticated, service_role;
 
--- シミュレーターのページ（サーバー側）だけが売価を読む
+-- シミュレーター・商品のページ（サーバー側）だけが売価を読む
 grant execute on function public.get_simulator_v25_sale_views(uuid) to service_role;
 grant execute on function public.get_simulator_v25_units(uuid, jsonb) to service_role;
+grant execute on function public.get_public_v25_base_totals() to service_role;
 
 -- ---------- postconditions ----------
 
@@ -925,7 +1027,8 @@ begin
        and p.proname in ('standard_estimate_v25_selection_unit', 'standard_estimate_v25_price_table', 'standard_estimate_v25_sale_view',
                          'get_simulator_v25_sale_views', 'get_simulator_v25_units', 'standard_estimate_v25_revision_for_configuration',
                          'standard_estimate_v25_configuration_money', 'standard_estimate_sale_view_for_configuration',
-                         'apply_standard_estimate_to_configuration', 'write_standard_estimate_quote_items', 'set_simulator_standard_pricing')
+                         'apply_standard_estimate_to_configuration', 'write_standard_estimate_quote_items', 'set_simulator_standard_pricing',
+                         'get_public_v25_base_totals', 'standard_estimate_v25_slot_rule_issues', 'standard_estimate_v25_publish_slot_rule_guard')
   loop
     if v_fn.owner_name <> 'postgres' or not coalesce(v_fn.proconfig, '{}'::text[]) @> array['search_path=""']::text[] then
       raise exception 'POSTCONDITION: % must be owned by postgres with an empty search_path', v_fn.proname;
@@ -936,12 +1039,14 @@ begin
   end loop;
   foreach v_name in array array['public.standard_estimate_v25_selection_unit(uuid, uuid, uuid[])', 'public.standard_estimate_v25_price_table(uuid, uuid)',
                                 'public.standard_estimate_v25_sale_view(uuid, boolean)', 'public.standard_estimate_v25_revision_for_configuration(uuid)',
-                                'public.standard_estimate_v25_configuration_money(uuid, uuid)'] loop
+                                'public.standard_estimate_v25_configuration_money(uuid, uuid)', 'public.standard_estimate_v25_slot_rule_issues(uuid)',
+                                'public.standard_estimate_v25_publish_slot_rule_guard()'] loop
     if has_function_privilege('authenticated', v_name, 'EXECUTE') or has_function_privilege('service_role', v_name, 'EXECUTE') then
       raise exception 'POSTCONDITION: internal function % must not be executable by API roles', v_name;
     end if;
   end loop;
-  foreach v_name in array array['public.get_simulator_v25_sale_views(uuid)', 'public.get_simulator_v25_units(uuid, jsonb)'] loop
+  foreach v_name in array array['public.get_simulator_v25_sale_views(uuid)', 'public.get_simulator_v25_units(uuid, jsonb)',
+                                'public.get_public_v25_base_totals()'] loop
     if has_function_privilege('authenticated', v_name, 'EXECUTE') or not has_function_privilege('service_role', v_name, 'EXECUTE') then
       raise exception 'POSTCONDITION: % must be executable by service_role only', v_name;
     end if;
@@ -949,6 +1054,14 @@ begin
       raise exception 'POSTCONDITION: % must be SECURITY DEFINER', v_name;
     end if;
   end loop;
+  if not exists (
+    select 1 from pg_catalog.pg_trigger t
+     where t.tgrelid = 'public.standard_estimate_revisions'::regclass
+       and t.tgname = 'standard_estimate_v25_publish_slot_rule_guard'
+       and t.tgenabled = 'O'
+  ) then
+    raise exception 'POSTCONDITION: the v2.5 publish slot rule guard must be enabled';
+  end if;
   -- この migration はスイッチを入れない
   if public.simulator_standard_pricing_enabled() then
     raise exception 'POSTCONDITION: the simulator pricing switch must stay off';

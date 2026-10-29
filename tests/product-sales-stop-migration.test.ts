@@ -121,7 +121,10 @@ describe('画面・データ層のつなぎ（販売停止・廃番）', () => {
   });
 
   it('シミュレーターは、その仕様の標準構成に販売停止の商品があれば受付停止を案内する（ログイン前も）', () => {
-    expect(simulator).toContain('estimateSpecStoppedProductNames(ctx, model, specCode, estimateTemplateByCode.get(specCode)?.baseline_option_ids ?? [])');
+    expect(simulator).toContain('estimateSpecStoppedProductNames(ctx, model, specCode, [');
+    expect(simulator).toContain('...(estimateTemplateByCode.get(specCode)?.baseline_option_ids ?? []),');
+    // v2.5 の売価を使う間は、公開中の版の選択枠の商品も標準構成として見る（v2.5 PR-C1。DB の get_spec_acceptance_state と同じ）
+    expect(simulator).toContain('...((v25Pricing && v25SlotOptionIds(pickSaleView(saleViews, model.slug, specCode, fireSelected))) || []),');
     expect(simulator).toContain('data-testid="spec-acceptance-stopped"');
   });
 

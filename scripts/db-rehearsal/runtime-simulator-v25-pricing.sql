@@ -160,8 +160,24 @@ begin
       'lines', jsonb_build_array(
         jsonb_build_object('line_key', null, 'section_code', 'sitework', 'group_label', null, 'name', '設置工事', 'quantity', '1', 'unit', '式',
                            'price_mode', 'manual', 'unit_price', 50000, 'remark', null, 'review_required', false)))::text));
+  -- シミュレーターと連携する選択枠の決まり（2026-10-29 先方回答）：外壁以外の選択枠は数量 1。数量 2 の選択枠がある版は公開できない
   v_out := pg_temp.svp_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 3)).status', v_rev));
-  perform pg_temp.svp_expect_eq('前提：v2.5 の標準見積（事務所用）を公開できた（税込 782,667 円）', 'published/782667',
+  perform pg_temp.svp_expect_eq('外壁以外の選択枠が数量 1 でない版は公開できない（下書きのまま）', 'true/draft',
+    (v_out like 'ERROR P0001: LOCKED: シミュレーターの選択枠の決まりに合わないため公開できません（外壁以外の選択枠は数量 1 にしてください%「C1 商品2」%')::text
+    || '/' || (select status from public.standard_estimate_revisions where id = v_rev));
+  perform pg_temp.svp_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, 3, %L::jsonb)).lock_version::text', v_rev,
+    jsonb_build_object(
+      'rates', jsonb_build_object('sales_fee_rate', '1.07', 'markup_rate', '1.5', 'expense_rate', '0.15'),
+      'adjustment', 0, 'adjustment_reason', null,
+      'slots', jsonb_build_array(
+        jsonb_build_object('baseline_key', null, 'option_id', p1, 'variant_choice_ids', jsonb_build_array(c1), 'quantity', '1', 'price_mode', 'auto', 'manual_unit_price', null),
+        jsonb_build_object('baseline_key', null, 'option_id', p2, 'variant_choice_ids', '[]'::jsonb, 'quantity', '1', 'price_mode', 'auto', 'manual_unit_price', null)),
+      'lines', jsonb_build_array(
+        jsonb_build_object('line_key', null, 'section_code', 'sitework', 'group_label', null, 'name', '設置工事', 'quantity', '1', 'unit', '式',
+                           'price_mode', 'manual', 'unit_price', 50000, 'remark', null, 'review_required', false)))::text));
+  v_out := pg_temp.svp_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, 4)).status', v_rev));
+  -- 本体 29,211 × 12 ＝ 350,532 ＋ 経費 52,579、オプション 160,500 ＋ 32,100 ＝ 192,600 ＋ 経費 28,890、別途工事 50,000 → 税抜 674,601・税 67,460
+  perform pg_temp.svp_expect_eq('前提：選択枠を数量 1 に直した v2.5 の標準見積（事務所用）を公開できた（税込 742,061 円）', 'published/742061',
     v_out || '/' || (select total::text from public.standard_estimate_revisions where id = v_rev));
 
   -- ---------- シミュレーターの売価（売価だけ・service_role だけ） ----------
@@ -172,7 +188,7 @@ begin
   v_out := pg_temp.svp_run_as('service_role', null, format('select public.get_simulator_v25_sale_views(%L)::text', m_model));
   v_views := v_out::jsonb;
   v_view := v_views -> 0;
-  perform pg_temp.svp_expect_eq('公開中の v2.5 の版を 1 件、売価だけの形で返す', '1/v2.5/office/782667',
+  perform pg_temp.svp_expect_eq('公開中の v2.5 の版を 1 件、売価だけの形で返す', '1/v2.5/office/742061',
     jsonb_array_length(v_views)::text || '/' || (v_view ->> 'pricing_model') || '/' || (v_view ->> 'spec_code') || '/' || (v_view ->> 'total'));
   perform pg_temp.svp_expect_eq('原価・率・原価の Version は返さない', 'false',
     (v_out like '%standard_cost%' or v_out like '%cost_unit_price%' or v_out like '%selection_cost%'
@@ -213,6 +229,18 @@ begin
   perform pg_temp.svp_expect_eq('差額の基準（版の選択枠）は公開した版の売価', '160500/32100',
     (select string_agg(x.value ->> 'unit_price', '/' order by x.ordinality) from jsonb_array_elements(v_view -> 'baseline') with ordinality as x(value, ordinality)));
 
+  -- ---------- 本体価格計の価格元（2026-10-29 先方回答：公開中の v2.5 の版に統一。売価だけ・service_role だけ） ----------
+  perform pg_temp.svp_expect_denied('ログインしていない人は本体価格計の元を直接読めない', '42501',
+    pg_temp.svp_run_as('anon', null, 'select public.get_public_v25_base_totals()::text'));
+  perform pg_temp.svp_expect_denied('ログインした人も直接は読めない（商品のページのサーバーだけ）', '42501',
+    pg_temp.svp_run_as('authenticated', u_customer, 'select public.get_public_v25_base_totals()::text'));
+  v_out := pg_temp.svp_run_as('service_role', null, 'select public.get_public_v25_base_totals()::text');
+  perform pg_temp.svp_expect_eq('公開中の v2.5 の版の本体の合計（本体一式 350,532 ＋ 諸費用 52,579・税別）を返す', '1/office/non_fire/403111/false',
+    (select count(*)::text || '/' || min(x.value ->> 'spec_code') || '/' || min(x.value ->> 'fire_spec_code') || '/' || min(x.value ->> 'base_total') || '/' || min(x.value ->> 'has_por')
+       from jsonb_array_elements(v_out::jsonb) x(value) where x.value ->> 'base_model_id' = m_model::text));
+  perform pg_temp.svp_expect_eq('本体価格計の元に原価・率は含まない', 'false',
+    (v_out like '%standard_cost%' or v_out like '%sales_fee_rate%' or v_out like '%markup_rate%' or v_out like '%unit_price%')::text);
+
   -- ---------- 商品の売価単価：版の選択枠と同じなら固定した原価、それ以外は今の原価 ----------
   perform pg_temp.svp_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 110000, %s, ''原価の改定'')', p1,
     (select lock_version from public.option_hq_standard_costs where option_id = p1)));
@@ -235,23 +263,23 @@ begin
          (cfg_por, u_customer, m_model, '未確定の商品を含む', 'draft', 'office', 'full'),
          (cfg_nose, u_customer, m_model, '標準見積の無い仕様', 'draft', 'hotel', 'full');
   insert into public.configuration_items (configuration_id, option_id, quantity, variant_choice_ids)
-  values (cfg_same, p1, 1, array[c1]), (cfg_same, p2, 2, '{}'),
-         (cfg_changed, p1, 1, array[c2]), (cfg_changed, p2, 2, '{}'),
-         (cfg_por, p1, 1, array[c1]), (cfg_por, p2, 2, '{}'), (cfg_por, p3, 1, '{}'),
+  values (cfg_same, p1, 1, array[c1]), (cfg_same, p2, 1, '{}'),
+         (cfg_changed, p1, 1, array[c2]), (cfg_changed, p2, 1, '{}'),
+         (cfg_por, p1, 1, array[c1]), (cfg_por, p2, 1, '{}'), (cfg_por, p3, 1, '{}'),
          (cfg_nose, p2, 1, '{}');
   set local session_replication_role = origin;
 
   v_money := public.standard_estimate_v25_configuration_money(cfg_same, v_rev);
-  perform pg_temp.svp_expect_eq('標準のままの仕様は、公開した版の合計と同じ（差額 0）', '782667/0/false',
+  perform pg_temp.svp_expect_eq('標準のままの仕様は、公開した版の合計と同じ（差額 0）', '742061/0/false',
     (v_money ->> 'total') || '/' || (v_money #>> '{sections,option,delta_line}') || '/' || (v_money ->> 'has_por'));
   v_money := public.standard_estimate_v25_configuration_money(cfg_changed, v_rev);
-  -- オプション：224,700 ＋（184,575 − 160,500）＝ 248,775、経費 trunc(248,775 × 0.15) ＝ 37,316
-  perform pg_temp.svp_expect_eq('選択肢を変えた仕様は、差額と区分の経費を計算し直す', '24075/248775/37316',
+  -- オプション：192,600 ＋（184,575 − 160,500）＝ 216,675、経費 trunc(216,675 × 0.15) ＝ 32,501
+  perform pg_temp.svp_expect_eq('選択肢を変えた仕様は、差額と区分の経費を計算し直す', '24075/216675/32501',
     (v_money #>> '{sections,option,delta_line}') || '/' || (v_money #>> '{sections,option,line_subtotal}') || '/' || (v_money #>> '{sections,option,expense_amount}'));
-  perform pg_temp.svp_expect_eq('税抜・税・税込（本体と別途工事は版のまま）', '739202/73920/813122',
+  perform pg_temp.svp_expect_eq('税抜・税・税込（本体と別途工事は版のまま）', '702287/70228/772515',
     (v_money ->> 'subtotal') || '/' || (v_money ->> 'tax') || '/' || (v_money ->> 'total'));
   v_money := public.standard_estimate_v25_configuration_money(cfg_por, v_rev);
-  perform pg_temp.svp_expect_eq('価格未確定の商品は 0 円として合計し、未確定の印を付ける', '782667/true',
+  perform pg_temp.svp_expect_eq('価格未確定の商品は 0 円として合計し、未確定の印を付ける', '742061/true',
     (v_money ->> 'total') || '/' || (v_money ->> 'has_por'));
 
   -- ---------- スイッチ：切れている間はこれまでの計算・入れる前に v2.5 の版がそろっているか確かめる ----------
@@ -277,9 +305,25 @@ begin
   set local session_replication_role = origin;
   v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
   perform pg_temp.svp_expect_eq('外壁の選択枠の数量が 4（面）でない標準見積があると、スイッチを入れられない', 'true',
-    (v_out like 'ERROR P0001: VALIDATION: 外壁の選択枠の数量が 4（面）でない標準見積%')::text);
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積があるため切り替えられません（%外壁の選択枠は数量 4（面）にしてください：「C1 商品1（選択肢あり）」%')::text);
   set local session_replication_role = replica;
   update public.standard_estimate_revision_baseline_items set selection_target_code = 'runtime-svp-category' where revision_id = v_rev and option_id = p1;
+  -- 外壁以外の選択枠の数量が 1 でない版（試験のため、公開した版の数量を書き換えて確かめ、元に戻す）
+  update public.standard_estimate_revision_baseline_items set quantity = 2 where revision_id = v_rev and option_id = p2;
+  set local session_replication_role = origin;
+  v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
+  perform pg_temp.svp_expect_eq('外壁以外の選択枠の数量が 1 でない標準見積があると、スイッチを入れられない', 'true',
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%外壁以外の選択枠は数量 1 にしてください%「C1 商品2」%')::text);
+  set local session_replication_role = replica;
+  update public.standard_estimate_revision_baseline_items set quantity = 1 where revision_id = v_rev and option_id = p2;
+  -- 1 つだけ選べるカテゴリーに選択枠が 2 つある版（試験のため、カテゴリーを 1 つだけ選べるに書き換えて確かめ、元に戻す）
+  update public.option_categories set selection_mode = 'single' where id = cat_opt;
+  set local session_replication_role = origin;
+  v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
+  perform pg_temp.svp_expect_eq('1 つだけ選べるカテゴリーに選択枠が 2 つ以上ある標準見積があると、スイッチを入れられない', 'true',
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「C1 検査」%')::text);
+  set local session_replication_role = replica;
+  update public.option_categories set selection_mode = 'multi' where id = cat_opt;
   set local session_replication_role = origin;
   perform pg_temp.svp_expect_eq('有効な標準見積がすべて v2.5 なら、本部はスイッチを入れられる', 'true',
     pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text'));
@@ -287,13 +331,13 @@ begin
   -- ---------- スイッチが入っている間：保存した仕様と見積依頼の明細 ----------
   -- 関数の実行と結果の読み取りは別の文にする（同じ文の中の副問い合わせは、関数より前の時点で読まれる）
   v_out := public.apply_standard_estimate_to_configuration(cfg_same)::text;
-  perform pg_temp.svp_expect_eq('保存した仕様は v2.5 の版で計算する（合計は版と同じ）', 'true/782667',
+  perform pg_temp.svp_expect_eq('保存した仕様は v2.5 の版で計算する（合計は版と同じ）', 'true/742061',
     v_out || '/' || (select total::text from public.configurations where id = cfg_same));
   perform pg_temp.svp_expect_eq('見積依頼の税率・備考に使う入口は v2.5 の版を返す', 'v2.5/0.100000',
     (public.standard_estimate_sale_view_for_configuration(cfg_same) ->> 'pricing_model') || '/' ||
     (public.standard_estimate_sale_view_for_configuration(cfg_same) ->> 'tax_rate'));
   v_out := public.apply_standard_estimate_to_configuration(cfg_changed)::text;
-  perform pg_temp.svp_expect_eq('選択肢を変えた仕様の保存額', 'true/813122',
+  perform pg_temp.svp_expect_eq('選択肢を変えた仕様の保存額', 'true/772515',
     v_out || '/' || (select total::text from public.configurations where id = cfg_changed));
   -- 前提：v2.5 の版が無い仕様の保存額を、先に 0 円でない値にしておく（0 円にしたことを確かめるため）
   set local session_replication_role = replica;
@@ -316,7 +360,7 @@ begin
          (q_nose, 'RT-C1-2', q_nose, cfg_nose, u_customer, 'issued', now() + interval '30 days', '顧客', 'C1 検査モデル', 0, 0, 0, 0, 0.10, 0, 0);
   set local session_replication_role = origin;
   v_out := public.write_standard_estimate_quote_items(cfg_same, q_same)::text;
-  perform pg_temp.svp_expect_eq('見積依頼の明細は v2.5 の版の売価（明細の合計は税抜と同じ・本体・選択枠・明細・経費）', 'true/711516/1',
+  perform pg_temp.svp_expect_eq('見積依頼の明細は v2.5 の版の売価（明細の合計は税抜と同じ・本体・選択枠・明細・経費）', 'true/674601/1',
     v_out || '/' ||
     (select sum(amount)::text from public.quote_items where quote_id = q_same) || '/' ||
     (select count(*)::text from public.quote_items where quote_id = q_same and kind = 'base'));

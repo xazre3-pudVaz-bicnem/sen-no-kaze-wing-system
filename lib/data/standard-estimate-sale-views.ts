@@ -1,8 +1,10 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
+import { baseTotalOf } from '@/lib/domain/pricing';
+import { v25BaseTotalFrom, type V25BaseTotalRow } from '@/lib/domain/public-base-price';
 import type { V25MissingUnit } from '@/lib/domain/standard-estimate-pricing';
 import { v25ConfigurationPricing, v25UnitKey, type StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
-import type { CatalogBundle, PricingResult } from '@/lib/domain/types';
+import type { BaseModel, CatalogBundle, PricingResult } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { CATALOG_TAG } from './public-catalog';
 import { isMissingNamedFunction } from './schema-compat';
@@ -130,6 +132,45 @@ export const getSimulatorStandardPricingEnabled = unstable_cache(
   ['simulator-standard-pricing-enabled-v1'],
   { tags: [CATALOG_TAG], revalidate: 300 }
 );
+
+/**
+ * 公開中の v2.5 の標準見積の版の本体の合計（get_public_v25_base_totals。売価だけ。service_role だけが呼べる）。
+ * 関数が無い DB（20261029100000 が未適用）では null
+ */
+async function fetchPublicV25BaseTotals(): Promise<V25BaseTotalRow[] | null> {
+  if (isLocalMode()) return null;
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  const db = createAdminClient();
+  const { data, error } = await db.rpc('get_public_v25_base_totals');
+  if (error) {
+    if (isMissingNamedFunction(error, 'get_public_v25_base_totals')) return null;
+    throw new Error(`public v2.5 base totals: ${error.message}`);
+  }
+  return (Array.isArray(data) ? data : []) as V25BaseTotalRow[];
+}
+
+/** 標準見積の公開・スイッチの切り替えで updateTag(CATALOG_TAG) により破棄される */
+export const getPublicV25BaseTotals = unstable_cache(fetchPublicV25BaseTotals, ['public-v25-base-totals-v1'], {
+  tags: [CATALOG_TAG],
+  revalidate: 300,
+});
+
+/**
+ * 「本体価格計（本体一式＋諸費用・税別）〜」の金額（商品一覧・商品ページ・SEO で共通の価格元。2026-10-29 先方回答）。
+ * - スイッチが切れている間：今の本体価格（base_price＋諸費用）
+ * - 入っている間：公開中の v2.5 の標準見積の版の本体の合計の最小（下書きでは変わらず、公開で切り替わる）。
+ *   使える版が無いモデルは null（金額を出さない）。v2.5 の取得が無い DB では今の本体価格
+ */
+export async function getPublicBaseTotals(
+  models: Pick<BaseModel, 'id' | 'base_price' | 'expense_rate'>[]
+): Promise<Record<string, number | null>> {
+  const legacy = () => Object.fromEntries(models.map((model) => [model.id, baseTotalOf(model)]));
+  if (!(await getSimulatorStandardPricingEnabled())) return legacy();
+  const rows = await getPublicV25BaseTotals();
+  if (rows === null) return legacy();
+  return Object.fromEntries(models.map((model) => [model.id, v25BaseTotalFrom(rows, model.id)]));
+}
 
 /**
  * シミュレーターに渡す売価（新しい標準見積）。

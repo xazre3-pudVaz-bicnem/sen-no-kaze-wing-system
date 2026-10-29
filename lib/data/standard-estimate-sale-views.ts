@@ -97,7 +97,13 @@ export async function resolvedV25ConfigurationPricing(
 ): Promise<PricingResult> {
   const first = v25ConfigurationPricing(bundle, views, input);
   if (first.missing.length === 0) return first.pricing;
-  return v25ConfigurationPricing(bundle, views, input, await fetchSimulatorV25Units(first.missing)).pricing;
+  try {
+    return v25ConfigurationPricing(bundle, views, input, await fetchSimulatorV25Units(first.missing)).pricing;
+  } catch (error) {
+    // 表示用の金額なので、計算できなければ目安（1 か所ずつの差の足し算）のまま出す。保存・見積依頼の金額は DB で計算し直す
+    console.warn('[wing] v2.5 の売価の計算に失敗したため、目安の金額を表示します', error instanceof Error ? error.message : error);
+    return first.pricing;
+  }
 }
 
 /**

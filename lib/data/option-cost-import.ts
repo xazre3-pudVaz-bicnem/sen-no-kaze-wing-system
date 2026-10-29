@@ -1,10 +1,12 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { isHqCostProduct } from '@/lib/domain/option-cost-access';
 
 /**
  * 既存の商品価格・選択肢の追加金額を、初期の原価 Version へ取り込む前の一覧（v2.5 PR-A3）。本部だけ。
  * 決まりは import_option_standard_costs（20261027100000）と同じ。画面で確かめた金額を、そのまま RPC に渡す。
+ * 本部標準原価は本部商品だけなので、本部商品の外（旧フリー商品）は一覧に出さない。
  */
 
 export type CostImportProductState =
@@ -116,7 +118,7 @@ function readCandidates(db: Db) {
         .order('id')
         .range(from, to)
     ),
-    readAll<{ id: string; name: string }>((from, to) => db.from('option_categories').select('id, name').order('id').range(from, to)),
+    readAll<{ id: string; name: string; code: string }>((from, to) => db.from('option_categories').select('id, name, code').order('id').range(from, to)),
     readAll<GroupRow>((from, to) => db.from('option_variant_groups').select('id, option_id, name, sort_order').order('id').range(from, to)),
     readAll<ChoiceRow>((from, to) =>
       db.from('option_variant_choices').select('id, group_id, name, extra_price, price_on_request, sort_order').order('id').range(from, to)
@@ -142,8 +144,10 @@ export async function loadCostImportCandidates(): Promise<CostImportCandidates> 
   if (!access.canManage) return { available: false, reason: 'forbidden' };
 
   const db = await createClient();
-  const [optionRows, categories, groups, choices, productVersions, choiceVersions] = await readCandidates(db);
+  const [allOptionRows, categories, groups, choices, productVersions, choiceVersions] = await readCandidates(db);
 
+  const categoryCode = new Map(categories.map((row) => [row.id, row.code]));
+  const optionRows = allOptionRows.filter((row) => isHqCostProduct(categoryCode.get(row.category_id)));
   const optionIdSet = new Set(optionRows.map((row) => row.id));
   const groupRows = groups.filter((row) => optionIdSet.has(row.option_id));
   const groupById = new Map(groupRows.map((row) => [row.id, row]));

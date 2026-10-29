@@ -132,12 +132,22 @@ describe('v2.5 PR-A1：標準原価の Version', () => {
     expect(sqlOnly).toContain('grant execute on function public.set_option_variant_cost_adjustment(uuid, integer, uuid, text) to authenticated;');
     expect(sqlOnly).not.toMatch(/grant\s+execute\s+on\s+function\s+public\.option_variant_cost_min_total/i);
     expect(sqlOnly).not.toMatch(/grant\s+execute\s+on\s+function\s+public\.standard_cost_version_immutable/i);
-    for (const fn of ['standard_cost_version_immutable()', 'option_variant_cost_min_total(uuid, uuid, integer)',
+    for (const fn of ['standard_cost_version_immutable()', 'option_variant_cost_min_total(uuid, uuid, integer)', 'option_is_hq_cost_product(uuid)',
       'set_option_hq_standard_cost(uuid, integer, integer, text)', 'set_option_variant_cost_adjustment(uuid, integer, uuid, text)']) {
       expect(sqlOnly).toContain(`alter function public.${fn} owner to postgres;`);
       expect(sqlOnly).toContain(`revoke all on function public.${fn} from public, anon, authenticated, service_role;`);
     }
-    expect((sqlOnly.match(/set search_path = ''/g) ?? []).length).toBe(4);
+    expect(sqlOnly).not.toMatch(/grants+executes+ons+functions+public.option_is_hq_cost_product/i);
+    expect((sqlOnly.match(/set search_path = ''/g) ?? []).length).toBe(5);
+  });
+
+  it('本部標準原価は本部商品だけ（旧フリー商品には商品の原価・選択肢の調整額とも設定できない。2026-10-29 先方の回答）', () => {
+    const isHq = functionBody('option_is_hq_cost_product');
+    expect(isHq).toContain("select c.code is distinct from 'free-product'");
+    expect(isHq).toContain('left join public.option_categories c on c.id = o.category_id');
+    expect(isHq).not.toContain('security definer');
+    expect(functionBody('set_option_hq_standard_cost')).toContain('if not public.option_is_hq_cost_product(p_option_id) then');
+    expect(functionBody('set_option_variant_cost_adjustment')).toContain('if not public.option_is_hq_cost_product(v_option_id) then');
   });
 
   it('画面は現在の版と変更履歴を出し、Version の表が未適用でも現在値の表示・変更を壊さない', () => {

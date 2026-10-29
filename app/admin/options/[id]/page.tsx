@@ -4,8 +4,8 @@ import { deleteOptionAction, publishOptionAction } from '@/lib/actions/admin';
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { getOptionHqStandardCostAccess } from '@/lib/data/option-hq-standard-cost';
-import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
-import { withoutChoiceCost, withoutOptionCost } from '@/lib/domain/option-cost-access';
+import { getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { canEditProductCost, isHqCostProduct, withoutChoiceCost, withoutHqOptionCosts, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE, type OptionConflict, type OptionDependency } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
@@ -63,13 +63,16 @@ export default async function EditOptionPage({
     getOptionHqStandardCostAccess(id),
     getCostRecordingAccess(),
   ]);
-  // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3）。
-  // 出さない担当者には、クライアントへ渡す商品・選択肢からも金額を外す（サーバーの判定は元の値で行う）
-  const canEditCost = canEditCostField(costAccess);
-  const clientOption = canEditCost ? option : withoutOptionCost(option);
-  const clientOptions = canEditCost ? options : options.map(withoutOptionCost);
-  const clientChoices = canEditCost ? variants.choices : variants.choices.map(withoutChoiceCost);
   const category = categories.find((row) => row.id === option.category_id);
+  // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は、本部商品の原価は本部だけ（v2.5 PR-A3）。
+  // 出さない担当者には、クライアントへ渡す商品・選択肢からも金額を外す（サーバーの判定は元の値で行う）。
+  // 本部商品の外（旧フリー商品）の金額は従来どおり
+  const canEditCost = canEditProductCost(costAccess, category?.code);
+  const hqCostProduct = isHqCostProduct(category?.code);
+  const priceLabel = hqCostProduct ? '商品標準原価' : '商品価格';
+  const clientOption = canEditCost ? option : withoutOptionCost(option);
+  const clientOptions = withoutHqOptionCosts(options, costAccess, new Map(categories.map((row) => [row.id, row.code])));
+  const clientChoices = canEditCost ? variants.choices : variants.choices.map(withoutChoiceCost);
   const registrationCategories = category?.code === LEGACY_FIRE_SPEC_CATEGORY_CODE
     ? categories.filter((row) => row.code === LEGACY_FIRE_SPEC_CATEGORY_CODE)
     : category?.code === FREE_PRODUCT_CATEGORY_CODE
@@ -99,7 +102,7 @@ export default async function EditOptionPage({
   const registrationWarnings = [
     ...(duplicateCandidates.length > 0 ? ['既存商品に重複候補があります'] : []),
     ...(!option.manufacturer_document_url ? ['メーカー資料PDFが未登録です（原則登録）'] : []),
-    ...(!option.price_on_request && option.price === 0 ? ['商品標準原価が0円です。正式な0円の場合はSTEP 2で確認が必要です'] : []),
+    ...(!option.price_on_request && option.price === 0 ? [`${priceLabel}が0円です。正式な0円の場合はSTEP 2で確認が必要です`] : []),
     ...incompleteVisibleGroups.map((group) => `「${group.name}」にお客様へ表示する選択肢がありません`),
   ];
 
@@ -145,8 +148,8 @@ export default async function EditOptionPage({
             })) : undefined}
             financialTools={
               <>
-                <ProductPriceUnitPublishedCard optionId={id} />
-                {hqCostAccess.available && hqCostAccess.canView && (
+                <ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />
+                {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
                   <OptionHqStandardCostCard
                     optionId={id}
                     canManage={hqCostAccess.canManage}
@@ -163,7 +166,7 @@ export default async function EditOptionPage({
           </>
         ) : (
           <>
-            {hqCostAccess.available && hqCostAccess.canView && (
+            {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
               <OptionHqStandardCostCard
                 optionId={id}
                 canManage={hqCostAccess.canManage}
@@ -173,7 +176,7 @@ export default async function EditOptionPage({
                 isPublished={option.status === 'published'}
               />
             )}
-            <ProductPriceUnitPublishedCard optionId={id} />
+            <ProductPriceUnitPublishedCard optionId={id} priceLabel={priceLabel} />
             <section className="card p-5 text-sm text-muted">この商品は閲覧専用です。代理店が編集できるのは、自社で登録したフリー商品のみです。</section>
           </>
         )}
@@ -275,7 +278,7 @@ export default async function EditOptionPage({
                 canEditCost={canEditCost}
               />
 
-              <ProductPriceUnitRegistrationField optionId={id} />
+              <ProductPriceUnitRegistrationField optionId={id} priceLabel={priceLabel} />
 
               {sp.created && (
                 <div id="basic-info-saved" className="w-full" style={{ order: 15 }}>
@@ -284,7 +287,7 @@ export default async function EditOptionPage({
               )}
 
               <div style={{ order: 35 }}>
-                <OptionMediaManager option={option} />
+                <OptionMediaManager option={clientOption} />
               </div>
 
               {catalogEditor && (
@@ -293,7 +296,7 @@ export default async function EditOptionPage({
                 </div>
               )}
 
-              {hqCostAccess.available && hqCostAccess.canView && (
+              {hqCostAccess.available && hqCostAccess.canView && hqCostProduct && (
                 <div style={{ order: 55 }} data-testid="option-registration-hq-cost">
                   <OptionHqStandardCostCard
                     optionId={id}
@@ -432,7 +435,7 @@ export default async function EditOptionPage({
               </section>
             )}
 
-            <ProductPriceUnitRouteSummary />
+            <ProductPriceUnitRouteSummary priceLabel={priceLabel} />
 
             <section className="card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-label="商品登録">
               <div>
@@ -445,7 +448,7 @@ export default async function EditOptionPage({
                   {returnTo && <input type="hidden" name="return_to" value={returnTo} />}
                   {needsZeroPriceConfirmation && (
                     <div className="max-w-xl rounded-xl border border-[#d9a441] bg-[#fff8e8] p-3 text-sm">
-                      <p className="font-semibold text-ink">商品標準原価が0円です</p>
+                      <p className="font-semibold text-ink">{priceLabel}が0円です</p>
                       <p className="mt-1 text-xs leading-5 text-ink-soft">
                         原価が未確認の場合は登録せず、商品情報に戻って金額を確定してください。
                         正式な0円商品として登録する場合だけ、次の確認欄にチェックしてください。

@@ -102,20 +102,50 @@ describe('v2.5 PR-A3：独立レビューの指摘への対応', () => {
     expect(ledger).toContain('options={showCost ? catalogOptions : catalogOptions.map(withoutOptionCost)}');
     expect(ledger).toContain('choices: variants.choices.map(withoutChoiceCost)');
     const optionPage = read('app/admin/options/[id]/page.tsx');
+    expect(optionPage).toContain('const canEditCost = canEditProductCost(costAccess, category?.code);');
     expect(optionPage).toContain('const clientOption = canEditCost ? option : withoutOptionCost(option);');
+    expect(optionPage).toContain('const clientOptions = withoutHqOptionCosts(options, costAccess, new Map(categories.map((row) => [row.id, row.code])));');
     expect(optionPage).toContain('option={clientOption}');
     expect(optionPage).toContain('allOptions={clientOptions}');
     expect(optionPage).toContain('choices={clientChoices}');
     expect(optionPage).toContain('showPrice={canEditCost}');
-    expect(read('app/admin/options/new/page.tsx')).toContain('allOptions={canEditCostField(costAccess) ? options : options.map(withoutOptionCost)}');
+    expect(read('app/admin/options/new/page.tsx')).toContain('allOptions={withoutHqOptionCosts(options, costAccess, new Map(allCategories.map((category) => [category.id, category.code])))}');
+    // 商品一覧（本部商品だけが並ぶ）も、本部以外には商品標準原価の列を出さない
+    const list = read('app/admin/options/page.tsx');
+    expect(list).toContain('const showCost = canEditCostField(costAccess);');
+    expect(list).toContain('{showCost && <Th right>商品標準原価（税別）</Th>}');
     expect(read('components/admin/option-customer-preview.tsx')).toContain("? '本部が登録します'");
   });
 
-  it('本部以外は原価 0 円（未登録）の商品を登録（公開）しない。商品の一括登録・価格の一括更新は本部だけ', () => {
+  it('本部以外は、本部商品を原価 0 円（未登録）のまま登録（公開）しない。本部商品の商品標準原価の一括更新は本部だけ', () => {
     const actions = read('lib/actions/admin.ts');
-    expect(actions).toContain("redirect(previewUrl({ error: '商品標準原価が未登録です。本部が原価を登録してから登録（公開）します。' }));");
-    expect(actions).toContain("return { ok: false, error: '商品標準原価を含む一括登録は、本部だけが行えます。' };");
-    expect(actions).toContain("return { ok: false, error: '商品標準原価の一括更新は、本部だけが行えます。' };");
+    expect(actions).toContain("redirect(previewUrl({ error: '本部商品の商品標準原価が未登録です。本部が原価を登録してから登録（公開）します。' }));");
+    expect(actions).toContain("return { ok: false, error: '本部商品の商品標準原価の一括更新は、本部だけが行えます。' };");
+    // 一括更新の記録は、1 件目が失敗しても残りを続ける（??= で後続の呼び出しを飛ばさない）
+    expect(actions).not.toContain('costNotice ??=');
+    // 判定は商品ごと（本部商品の外＝旧フリー商品には掛けない）
+    expect(read('lib/data/option-cost-recording.ts')).toContain('return isHqCostProduct(categoryCode) ? access : NO_COST_RECORDING;');
+    expect(actions).toContain('? await getCostAccessForProduct(() => store.listCategories(), option.category_id)');
+    // 「選択項目を追加」のダイアログも同じ判定を使う（判定は 1 か所）
+    expect(read('lib/actions/product-registration-variants.ts')).toContain('await getCostAccessForProduct(() => store.listCategories(), option.category_id);');
+  });
+
+  it('商品の一括登録（Excel）は本部以外も続けて使える。本部商品の金額だけ反映しない（2026-10-29 先方の回答）', () => {
+    const actions = read('lib/actions/admin.ts');
+    expect(actions).not.toContain('商品標準原価を含む一括登録は、本部だけが行えます。');
+    expect(actions).toContain('const protectHqCost = !canEditCostField(costAccess);');
+    expect(actions).toContain('applyImportPlan(plan, images, { catalogImportUserId: actor.id, protectHqCost })');
+    const apply = read('lib/import/apply.ts');
+    expect(apply).toContain("const protectCost = options.protectHqCost === true && isHqCostProduct(category.code);");
+    // 既存の本部商品は今の金額のまま、新しい本部商品は金額未登録（0 円）の下書き
+    expect(apply).toContain('? { price: existing.price, price_on_request: existing.price_on_request }');
+    expect(apply).toContain(': { price: 0, price_on_request: false }');
+    // 選択肢も今の金額を引き継ぐ（新しい追加の選択肢は原価差額が未登録＝別途見積）
+    expect(apply).toContain('? { extra_price: keptChoice.extra_price, price_on_request: keptChoice.price_on_request }');
+    expect(apply).toContain(': newChoicePriceWithoutCost(c.kind)');
+    // 本部の一括登録は、登録済みの本部商品の金額を原価の Version に記録する（選択肢は Excel にあったものだけ）
+    expect(actions).toContain('for (const optionId of importedHq.hqOptionIds) {');
+    expect(actions).toContain("await recordPublishedChoiceCosts(optionId, 'choice', choiceIds, costAccess)");
   });
 
   it('「選択項目を追加」のダイアログも同じ決まり（本部以外の追加は 0 円・本部の追加は登録済みなら Version を記録）', () => {
@@ -162,7 +192,8 @@ describe('v2.5 PR-A3：商品登録 STEP1 の商品標準原価・原価差額',
     expect(variants).toContain('{canEditCost && (');
     expect(registered).toContain('price: showCostFields ? numberOrNull(data.get(\'price\')) ?? 0 : option.price,');
     expect(actions).toContain("price: keepExistingPrice ? String(existingOption?.price ?? 0) : formData.get('price'),");
-    expect(actions).toContain("extra_price: keepExistingPrice ? existing?.extra_price ?? 0 : formData.get('extra_price') || 0,");
+    expect(actions).toContain("extra_price: keepExistingPrice ? keptChoicePrice.extra_price : formData.get('extra_price') || 0,");
+    expect(actions).toContain("price_on_request: keepExistingPrice ? keptChoicePrice.price_on_request : formData.get('price_on_request'),");
   });
 
   it('登録済みの商品だけ、本部の保存・登録で原価の Version を作る（下書きは登録のときに作る）', () => {

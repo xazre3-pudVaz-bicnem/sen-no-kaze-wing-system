@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ProductDetail } from '@/components/simulator/product-detail';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import { formatPriceWithUnit } from '@/lib/domain/product-price-unit';
+import { isHqCostProduct } from '@/lib/domain/option-cost-access';
 import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
 
 type Props = {
@@ -44,6 +45,8 @@ export function OptionCustomerPreview({ category, option, groups, choices, showP
   const configuredChoiceGroups = preview.groups.filter((group) =>
     preview.choices.some((choice) => choice.group_id === group.id)
   );
+  // 本部商品の金額は商品標準原価（旧シミュレーターでは表示価格にも使う）。本部商品の外（旧フリー商品）は商品価格
+  const priceLabel = isHqCostProduct(category.code) ? '商品標準原価' : '商品価格';
   const registrationPriceDisplay = !showPrice
     ? '本部が登録します'
     : option.price_on_request
@@ -67,6 +70,7 @@ export function OptionCustomerPreview({ category, option, groups, choices, showP
     <div
       data-testid="simulator-product-detail-preview"
       data-registration-price-display={registrationPriceDisplay}
+      data-registration-price-label={`${priceLabel}（税別）`}
       data-registration-manufacturer={option.manufacturer?.trim() || '未設定'}
       data-registration-model-no={option.model_no?.trim() || '未設定'}
       data-registration-customer-choices={registrationCustomerChoices}
@@ -78,7 +82,7 @@ export function OptionCustomerPreview({ category, option, groups, choices, showP
           </div>
         </div>
         <div className="grid gap-2 border-b border-line bg-sand/30 px-4 py-3 text-xs sm:grid-cols-2 sm:px-5" data-testid="registration-price-unit-summary">
-          <p><span className="font-semibold text-muted">商品価格：</span><span className="font-semibold text-ink">{registrationPriceDisplay}</span></p>
+          <p><span className="font-semibold text-muted">{priceLabel}：</span><span className="font-semibold text-ink">{registrationPriceDisplay}</span></p>
           <p><span className="font-semibold text-muted">メーカー参考価格：</span><span className="font-semibold text-ink">{manufacturerPriceDisplay}</span></p>
         </div>
         <div className="px-4 py-3 sm:px-5 lg:h-[64vh] lg:max-h-[42rem] lg:overflow-hidden">

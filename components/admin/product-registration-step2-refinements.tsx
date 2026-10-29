@@ -77,7 +77,7 @@ function enhanceStep2() {
   const intro = heading?.parentElement?.querySelector<HTMLElement>('p') ?? null;
   setTextIfChanged(
     intro,
-    'メイン画像・商品価格・メーカー・型番・お客様選択をここで最終確認し、問題がなければ登録してください。'
+    'メイン画像・金額・メーカー・型番・お客様選択をここで最終確認し、問題がなければ登録してください。'
   );
 
   const summaryHost = heading?.parentElement;
@@ -95,8 +95,10 @@ function enhanceStep2() {
   const imageMissing = Array.from(preview.querySelectorAll<HTMLElement>('*')).some(
     (element) => element.children.length === 0 && element.textContent?.trim() === '画像なし'
   );
-  const zeroPriceNeedsConfirmation = registration.textContent?.includes('商品価格が0円です') ?? false;
+  const zeroPriceNeedsConfirmation = /(商品標準原価|商品価格)が0円です/.test(registration.textContent ?? '');
   const priceDisplay = productPreview?.dataset.registrationPriceDisplay ?? '未確認';
+  // 本部商品は「商品標準原価（税別）」、本部商品の外（旧フリー商品）は「商品価格（税別）」
+  const priceLabel = productPreview?.dataset.registrationPriceLabel ?? '商品価格（税別）';
   const manufacturer = productPreview?.dataset.registrationManufacturer ?? '未設定';
   const modelNo = productPreview?.dataset.registrationModelNo ?? '未設定';
   const customerChoices = productPreview?.dataset.registrationCustomerChoices ?? 'なし';
@@ -111,7 +113,7 @@ function enhanceStep2() {
   ensureCheckRow(
     checklist,
     'price',
-    '商品価格（税別）',
+    priceLabel,
     zeroPriceNeedsConfirmation ? `${priceDisplay}／0円の確認が必要` : priceDisplay,
     zeroPriceNeedsConfirmation ? 'warning' : 'normal'
   );

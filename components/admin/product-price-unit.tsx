@@ -156,7 +156,8 @@ function UnitEditor({
  * STEP1の価格欄へ専用の価格単位UIを差し込む。
  * カテゴリー既定値は保存済み単位が無い場合だけ初期表示し、利用者が一度変更した後はカテゴリー変更で上書きしない。
  */
-export function ProductPriceUnitRegistrationField({ optionId }: { optionId: string }) {
+/** priceLabel：本部商品は「商品標準原価」、本部商品の外（旧フリー商品）は「商品価格」 */
+export function ProductPriceUnitRegistrationField({ optionId, priceLabel = '商品標準原価' }: { optionId: string; priceLabel?: string }) {
   const { registerSaveHandler, markDirty } = useOptionRegistrationSave();
   const priceOnRequest = usePriceOnRequestLock('#option-main-form');
   const [target, setTarget] = useState<HTMLElement | null>(null);
@@ -280,10 +281,10 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
         <div className="grid gap-5 sm:col-span-2 sm:grid-cols-2" data-testid="product-price-unit-registration">
           <UnitEditor
             id="product-price-unit"
-            label="商品標準原価の単位"
+            label={`${priceLabel}の単位`}
             hint={priceOnRequest
-              ? '「価格は別途見積」が選択されているため、商品標準原価とこの単位は編集できません。'
-              : '商品標準原価は、選択した単位1つあたりの税別の金額として扱います。カテゴリーに応じた初期値は変更できます。'}
+              ? `「価格は別途見積」が選択されているため、${priceLabel}とこの単位は編集できません。`
+              : `${priceLabel}は、選択した単位1つあたりの税別の金額として扱います。カテゴリーに応じた初期値は変更できます。`}
             editor={priceEditor}
             disabled={priceOnRequest}
             onChange={(next) => {
@@ -297,7 +298,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
           <UnitEditor
             id="manufacturer-list-price-unit"
             label="メーカー参考価格の単位"
-            hint="メーカー資料の表記に合わせて選択してください。商品標準原価の単位と同じでなくても構いません。"
+            hint={`メーカー資料の表記に合わせて選択してください。${priceLabel}の単位と同じでなくても構いません。`}
             editor={listEditor}
             onChange={(next) => {
               listTouchedRef.current = true;
@@ -316,7 +317,7 @@ export function ProductPriceUnitRegistrationField({ optionId }: { optionId: stri
 }
 
 /** 登録済み商品でも、保存済み単位をカテゴリー既定値で上書きせず個別に編集できる。 */
-export function ProductPriceUnitPublishedCard({ optionId }: { optionId: string }) {
+export function ProductPriceUnitPublishedCard({ optionId, priceLabel = '商品標準原価' }: { optionId: string; priceLabel?: string }) {
   const router = useRouter();
   const priceOnRequest = usePriceOnRequestLock('[data-testid="registered-option-edit-flow"] form');
   const [state, setState] = useState<ProductPriceUnitState | null>(null);
@@ -347,14 +348,14 @@ export function ProductPriceUnitPublishedCard({ optionId }: { optionId: string }
     <section className="card space-y-4 p-4 sm:p-5" data-testid="product-price-unit-published-editor">
       <div>
         <h2 className="font-semibold">価格単位</h2>
-        <p className="mt-1 text-xs leading-5 text-muted">商品標準原価とメーカー参考価格は別々の単位を持てます。既存の保存値をカテゴリー既定値で自動上書きしません。</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{priceLabel}とメーカー参考価格は別々の単位を持てます。既存の保存値をカテゴリー既定値で自動上書きしません。</p>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <UnitEditor
           id="published-product-price-unit"
-          label="商品標準原価の単位"
+          label={`${priceLabel}の単位`}
           hint={priceOnRequest
-            ? '「価格は別途見積」が選択されているため、商品標準原価とこの単位は編集できません。'
+            ? `「価格は別途見積」が選択されているため、${priceLabel}とこの単位は編集できません。`
             : '例：台、ケース、㎡。未設定の既存商品はそのまま保持できます。'}
           editor={priceEditor}
           disabled={!editable || priceOnRequest}
@@ -408,7 +409,7 @@ export function ProductPriceUnitPublishedCard({ optionId }: { optionId: string }
 }
 
 /** STEP2では保存済みの価格単位だけを確認表示する。 */
-export function ProductPriceUnitRouteSummary() {
+export function ProductPriceUnitRouteSummary({ priceLabel = '商品標準原価' }: { priceLabel?: string } = {}) {
   const params = useParams<{ id?: string }>();
   const optionId = typeof params?.id === 'string' ? params.id : '';
   const [state, setState] = useState<ProductPriceUnitState | null>(null);
@@ -428,7 +429,7 @@ export function ProductPriceUnitRouteSummary() {
   return (
     <section className="card p-4 sm:p-5" data-testid="product-price-unit-summary">
       <dl className="grid gap-2 text-sm sm:grid-cols-[11rem_1fr]">
-        <dt className="font-semibold text-muted">商品標準原価の単位</dt>
+        <dt className="font-semibold text-muted">{priceLabel}の単位</dt>
         <dd className="font-semibold text-ink">{priceUnit}</dd>
         <dt className="font-semibold text-muted">メーカー参考価格の単位</dt>
         <dd className="font-semibold text-ink">{listPriceUnit}</dd>

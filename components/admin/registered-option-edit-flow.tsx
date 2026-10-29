@@ -690,7 +690,7 @@ export function RegisteredOptionEditFlow({
                   required
                   hint={isFreeProduct ? undefined : '千の風が商品を調達する想定の購入金額（税別）。保存すると新しい原価の Version を作ります'}
                 >
-                  <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required />
+                  <Input id="registered-price" name="price" type="number" min={0} step={1000} defaultValue={option.price} required data-price-label={isFreeProduct ? '商品価格' : '商品標準原価'} />
                 </Field>
               ) : (
                 <div className="rounded-lg border border-line bg-ivory/30 p-3 text-xs leading-5 text-muted" data-testid="registered-cost-hidden-note">

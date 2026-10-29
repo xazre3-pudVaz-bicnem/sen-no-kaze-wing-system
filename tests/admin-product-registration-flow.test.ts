@@ -121,7 +121,9 @@ describe('商品登録管理画面の業務フロー', () => {
     expect(editPage).toContain('既存商品に重複候補があります');
     expect(editPage).toContain('メイン画像を登録してください');
     expect(editPage).toContain('メーカー資料PDFが未登録です（原則登録）');
-    expect(editPage).toContain('商品標準原価が0円です');
+    expect(editPage).toContain('const hqCostProduct = isHqCostProduct(category?.code);');
+    expect(editPage).toContain("const priceLabel = hqCostProduct ? '商品標準原価' : '商品価格';");
+    expect(editPage).toContain('{priceLabel}が0円です');
     expect(editPage).toContain('お客様へ表示する選択肢がありません');
   });
 

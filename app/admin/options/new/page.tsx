@@ -1,7 +1,7 @@
 import { requireStaff } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
-import { withoutOptionCost } from '@/lib/domain/option-cost-access';
+import { withoutHqOptionCosts, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_CODE } from '@/lib/domain/types';
 import { productRegistrationCategoryDisplay } from '@/lib/domain/product-registration-category-display';
 import { Alert } from '@/components/ui';
@@ -127,7 +127,7 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
             option={null}
             categories={categories}
             models={models}
-            allOptions={canEditCostField(costAccess) ? options : options.map(withoutOptionCost)}
+            allOptions={withoutHqOptionCosts(options, costAccess, new Map(allCategories.map((category) => [category.id, category.code])))}
             dependencies={[]}
             conflicts={[]}
             defaultCategoryId={defaultCategoryId}

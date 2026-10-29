@@ -72,6 +72,11 @@ declare
   opt_ord constant uuid := '27000000-0000-4000-8000-000000000306';
   g_ord constant uuid := '27000000-0000-4000-8000-000000000403';
   c_ord constant uuid := '27000000-0000-4000-8000-000000000505';
+  -- 本部商品の外（旧フリー商品）：本部標準原価は本部商品だけなので取り込まない（2026-10-29 先方の回答）
+  opt_free constant uuid := '27000000-0000-4000-8000-000000000307';
+  g_free constant uuid := '27000000-0000-4000-8000-000000000404';
+  c_free constant uuid := '27000000-0000-4000-8000-000000000506';
+  v_free_cat uuid;
   v_items text;
   v_audit_before bigint;
 begin
@@ -108,18 +113,27 @@ begin
     (opt_zero, cat_id, 'runtime-ici-zero', '取り込み0円', 0, false, 'published', 'PRD-927004'),
     (opt_neg, cat_id, 'runtime-ici-neg', '取り込みマイナス', 1000, false, 'published', 'PRD-927005'),
     (opt_ord, cat_id, 'runtime-ici-ord', '取り込みの順序', 1000, false, 'published', 'PRD-927006');
+  select id into v_free_cat from public.option_categories where code = 'free-product';
+  if v_free_cat is null then
+    v_free_cat := '27000000-0000-4000-8000-000000000202';
+    insert into public.option_categories (id, code, name, status) values (v_free_cat, 'free-product', 'フリー商品', 'published');
+  end if;
+  insert into public.options (id, category_id, code, name, price, price_on_request, status, product_no, owner_id)
+  values (opt_free, v_free_cat, 'runtime-ici-free', '取り込みフリー商品', 30000, false, 'published', 'PRD-927007', u_master);
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
   values
     (g_a, opt_a, 'size', 'サイズ', 1, true, 'published'),
     (g_neg, opt_neg, 'size', 'サイズ', 1, true, 'published'),
-    (g_ord, opt_ord, 'size', 'サイズ', 1, true, 'published');
+    (g_ord, opt_ord, 'size', 'サイズ', 1, true, 'published'),
+    (g_free, opt_free, 'size', 'サイズ', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, extra_price, price_on_request, status)
   values
     (c_a0, g_a, 'std', '標準', 0, false, 'published'),
     (c_a1, g_a, 'large', '大', 8000, false, 'published'),
     (c_apor, g_a, 'custom', '特注', 0, true, 'published'),
     (c_neg, g_neg, 'small', '小', 0, false, 'published'),
-    (c_ord, g_ord, 'small', '小', 0, false, 'published');
+    (c_ord, g_ord, 'small', '小', 0, false, 'published'),
+    (c_free, g_free, 'large', '大', 2000, false, 'published');
   set local session_replication_role = origin;
 
   v_items := format(
@@ -149,6 +163,15 @@ begin
   perform pg_temp.ici_expect_error('別途見積の選択肢は取り込まない', 'P0001', 'VALIDATION',
     pg_temp.ici_run_as('authenticated', u_owner, format('select count(*)::text from public.import_option_standard_costs(%L::jsonb, %L)',
       format('[{"kind":"choice","id":"%s","amount":0}]', c_apor), '検査')));
+  perform pg_temp.ici_expect_error('本部商品の外（旧フリー商品）は取り込まない', 'P0001', 'VALIDATION',
+    pg_temp.ici_run_as('authenticated', u_owner, format('select count(*)::text from public.import_option_standard_costs(%L::jsonb, %L)',
+      format('[{"kind":"option","id":"%s","amount":30000}]', opt_free), '検査')));
+  perform pg_temp.ici_expect_error('本部商品の外（旧フリー商品）の選択肢も取り込まない', 'P0001', 'VALIDATION',
+    pg_temp.ici_run_as('authenticated', u_owner, format('select count(*)::text from public.import_option_standard_costs(%L::jsonb, %L)',
+      format('[{"kind":"choice","id":"%s","amount":2000}]', c_free), '検査')));
+  perform pg_temp.ici_expect_eq('旧フリー商品には原価の版を作らない', '0/0',
+    (select count(*) from public.option_standard_cost_versions where option_id = opt_free)::text || '/' ||
+    (select count(*) from public.option_variant_cost_versions where variant_choice_id = c_free)::text);
   perform pg_temp.ici_expect_error('確かめた後に金額が変わっていたら止める（後勝ちにしない）', 'P0001', 'CONFLICT',
     pg_temp.ici_run_as('authenticated', u_owner, format('select count(*)::text from public.import_option_standard_costs(%L::jsonb, %L)',
       format('[{"kind":"option","id":"%s","amount":119000}]', opt_a), '検査')));

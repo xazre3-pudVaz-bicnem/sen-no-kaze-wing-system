@@ -26,8 +26,11 @@ import {
 } from '@/lib/domain/standard-estimate-v25-view';
 import {
   calculateV25Workbench,
+  percentProblem,
   percentToRate,
   rateToPercent,
+  slotChoiceIds,
+  slotIdentity,
   type V25WorkbenchBaseLine,
   type V25WorkbenchCandidate,
   type V25WorkbenchCosts,
@@ -46,24 +49,9 @@ const newKey = (prefix: string) => `${prefix}-new-${(rowSeq += 1)}`;
 
 const yen = (value: number | null | undefined) => (value === null || value === undefined ? '—' : formatYen(value));
 
-/**
- * 見積書管理 ＞ 標準見積の Excel 風の画面（v2.5 の下書きの正式な編集画面。2026-10-27 先方方針）。
- * 本体（本体マスター）・内外装・オプション・別途の明細を 1 つの表で編集し、画面で試算する。
- * 保存・最新原価の取り込み・公開は DB の RPC（20261019100000）が行い、金額の正本は DB の計算。本部だけが使う。
- */
-export function StandardEstimateV25Workbench({
-  revisionId,
-  lockVersion,
-  readOnly,
-  baseLines,
-  candidates,
-  initial,
-  costs,
-  rule,
-  taxRule,
-  preview,
-  savedTotal,
-}: {
+type Notice = { tone: 'success' | 'danger'; text: string };
+
+type WorkbenchProps = {
   revisionId: string;
   lockVersion: number;
   readOnly: boolean;
@@ -76,7 +64,34 @@ export function StandardEstimateV25Workbench({
   preview: V25Preview | null;
   /** 保存済みの税込合計（DB の計算。未確定を含むなら null） */
   savedTotal: number | null;
-}) {
+};
+
+/**
+ * 見積書管理 ＞ 標準見積の Excel 風の画面（v2.5 の下書きの正式な編集画面。2026-10-27 先方方針）。
+ * 本体（本体マスター）・内外装・オプション・別途の明細を 1 つの表で編集し、画面で試算する。
+ * 保存・最新原価の取り込み・公開は DB の RPC（20261019100000）が行い、金額の正本は DB の計算。本部だけが使う。
+ * resetKey（版と lock_version）が変わると、保存済みの内容で作り直す。結果の案内は作り直しても残す
+ */
+export function StandardEstimateV25Workbench({ resetKey, ...props }: WorkbenchProps & { resetKey: string }) {
+  const [notice, setNotice] = useState<Notice | null>(null);
+  return <WorkbenchBody key={resetKey} {...props} notice={notice} onNotice={setNotice} />;
+}
+
+function WorkbenchBody({
+  revisionId,
+  lockVersion,
+  readOnly,
+  baseLines,
+  candidates,
+  initial,
+  costs,
+  rule,
+  taxRule,
+  preview,
+  savedTotal,
+  notice,
+  onNotice,
+}: WorkbenchProps & { notice: Notice | null; onNotice: (notice: Notice | null) => void }) {
   const router = useRouter();
   const [state, setState] = useState<V25EditorState>(initial);
   const [percents, setPercents] = useState(() => ({
@@ -89,7 +104,6 @@ export function StandardEstimateV25Workbench({
   const [picker, setPicker] = useState<{ section: StandardLineSectionCode; targetKey: string | null } | null>(null);
   const [pickerCategory, setPickerCategory] = useState('');
   const [pickerQuery, setPickerQuery] = useState('');
-  const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates]);
@@ -105,7 +119,19 @@ export function StandardEstimateV25Workbench({
   }, [calc.result]);
   const sectionResult = (code: string): PricingSectionResult | undefined => calc.result?.sections.find((section) => section.code === code);
   const incompleteKeys = useMemo(() => new Map(calc.incomplete.map((item) => [item.key, item.reason])), [calc.incomplete]);
-  const previewByKey = useMemo(() => new Map((preview?.slots ?? []).map((slot) => [slot.baseline_key, slot])), [preview]);
+  // 原価の状態は、保存済みの auto の選択枠と同じ「商品＋選択肢」の行にだけ出す（商品・選択肢を変えた行は、保存すると今の原価で固定する）
+  const previewByIdentity = useMemo(
+    () =>
+      new Map(
+        (preview?.slots ?? []).filter((slot) => slot.price_mode === 'auto').map((slot) => [
+          slotIdentity(slot.option_id, slot.variants.map((variant) => variant.variant_choice_id)),
+          slot,
+        ])
+      ),
+    [preview]
+  );
+  const unpricedKeys = useMemo(() => new Set(calc.unpriced), [calc.unpriced]);
+  const unavailableCount = state.slots.filter((slot) => candidateById.get(slot.option_id)?.unavailable).length;
   const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
   const blockers = v25PublishBlockers(preview, dirty);
 
@@ -182,14 +208,15 @@ export function StandardEstimateV25Workbench({
   const run = (task: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>) =>
     startTransition(async () => {
       const result = await task();
-      setNotice(result.ok ? { tone: 'success', text: result.message } : { tone: 'danger', text: result.error });
+      onNotice(result.ok ? { tone: 'success', text: result.message } : { tone: 'danger', text: result.error });
       if (result.ok) router.refresh();
     });
 
   const save = () => {
-    const problem = validateV25EditorState(state, sectionOf);
+    // 率は % で入力する。読めない入力は % の文で案内する（範囲は validateV25EditorState・DB で確かめる）
+    const problem = percentProblem(percents) ?? validateV25EditorState(state, sectionOf);
     if (problem) {
-      setNotice({ tone: 'danger', text: problem });
+      onNotice({ tone: 'danger', text: problem });
       return;
     }
     run(() => saveStandardEstimateV25DraftAction({ revision_id: revisionId, expected_lock_version: lockVersion, payload: buildV25SavePayload(state) }));
@@ -341,8 +368,8 @@ export function StandardEstimateV25Workbench({
                       const candidate = candidateById.get(slot.option_id);
                       const result = resultByKey.get(calc.lineKeyOf[slot.key] ?? '');
                       const missing = incompleteKeys.get(slot.key);
-                      const saved = slot.baseline_key ? previewByKey.get(slot.baseline_key) : undefined;
-                      const status: V25CostStatus | null = slot.price_mode !== 'auto' ? null : missing ? 'missing' : slotCostStatus(saved);
+                      const pinnedPreview = previewByIdentity.get(slotIdentity(slot.option_id, slotChoiceIds(slot)));
+                      const status: V25CostStatus | null = slot.price_mode !== 'auto' ? null : missing ? 'missing' : pinnedPreview ? slotCostStatus(pinnedPreview) : null;
                       rowNumber += 1;
                       return (
                         <tr key={slot.key} className="border-b border-slate-200 align-top" data-testid="v25-wb-slot">
@@ -352,7 +379,11 @@ export function StandardEstimateV25Workbench({
                             <div className="flex items-start gap-1">
                               <span className="flex-1 pt-0.5 font-medium text-ink">
                                 {candidate?.name ?? '（商品が見つかりません）'}
-                                {candidate?.retired && <Badge tone="warn">販売停止</Badge>}
+                                {candidate?.unavailable ? (
+                                  <Badge tone="danger">この仕様では選べない商品（削除してください）</Badge>
+                                ) : (
+                                  candidate?.retired && <Badge tone="warn">販売停止</Badge>
+                                )}
                               </span>
                               {!readOnly && (
                                 <button type="button" className="text-[0.7rem] text-navy underline" aria-label={`${candidate?.name ?? '商品'}を選び直す`}
@@ -402,7 +433,15 @@ export function StandardEstimateV25Workbench({
                             )}
                           </td>
                           <td className="border-r border-slate-200 px-2 pt-1.5 text-right tabular-nums">
-                            {slot.price_mode === 'por' ? <Badge tone="warn">未確定</Badge> : missing ? '—' : yen(result?.amount)}
+                            {slot.price_mode === 'por' ? (
+                              <Badge tone="warn">未確定</Badge>
+                            ) : unpricedKeys.has(slot.key) ? (
+                              <Badge tone="danger">売価未入力</Badge>
+                            ) : missing ? (
+                              '—'
+                            ) : (
+                              yen(result?.amount)
+                            )}
                           </td>
                           <td className="space-y-1 px-2 py-1">
                             {status && <Badge tone={COST_TONE[status]}>{V25_COST_STATUS_LABEL[status]}</Badge>}
@@ -459,7 +498,13 @@ export function StandardEstimateV25Workbench({
                             )}
                           </td>
                           <td className="border-r border-slate-200 px-2 pt-1.5 text-right tabular-nums">
-                            {line.price_mode === 'por' ? <Badge tone="warn">未確定</Badge> : yen(result?.amount)}
+                            {line.price_mode === 'por' ? (
+                              <Badge tone="warn">未確定</Badge>
+                            ) : unpricedKeys.has(line.key) ? (
+                              <Badge tone="danger">売価未入力</Badge>
+                            ) : (
+                              yen(result?.amount)
+                            )}
                           </td>
                           <td className="space-y-1 px-2 py-1">
                             {line.review_required &&
@@ -514,6 +559,12 @@ export function StandardEstimateV25Workbench({
       </div>
 
       {calc.error && <Alert tone="warn">画面の試算ができません：{calc.error}</Alert>}
+      {calc.unpriced.length > 0 && (
+        <Alert tone="warn">売価が未入力の行が {calc.unpriced.length} 件あります（金額に含めていません）。売価を整数円で入力するか、別途見積にしてください。</Alert>
+      )}
+      {unavailableCount > 0 && (
+        <Alert tone="danger">この仕様では選べなくなった商品の行が {unavailableCount} 件あります。削除するか、別の商品に変えてから保存してください。</Alert>
+      )}
       {calc.incomplete.length > 0 && (
         <Alert tone="warn">
           原価が未設定の商品が {calc.incomplete.length} 件あります（金額に含めていません）。商品台帳で商品標準原価・原価差額を登録するか、売価を入力・別途見積にしてください。

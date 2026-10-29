@@ -1,17 +1,17 @@
-import { requireCatalogEditor } from '@/lib/auth/session';
+import { requireAdmin } from '@/lib/auth/session';
 import { Badge } from '@/components/ui';
 import { AdminPage, BackLink } from '@/components/admin/ui';
 import { EstimateTemplateExcelDemo } from '@/components/admin/estimate-template-excel-demo';
 
 export default async function EstimateTemplateDemoPage() {
-  await requireCatalogEditor('/admin/estimate-templates/demo');
+  await requireAdmin('/admin/estimate-templates/demo');
 
   return (
     <AdminPage
       title="操作確認用 Wing ホテルUB 非防火"
       lead="本体マスターと見積テンプレートの見た目・操作感を揃えるためのDB非連動サンプルです。変更内容は保存されません。"
     >
-      <BackLink href="/admin/estimate-templates" label="見積書作成・管理へ戻る" />
+      <BackLink href="/admin/estimate-templates/legacy" label="旧テンプレート（参照）へ戻る" />
 
       <section className="card grid gap-4 p-5 text-sm sm:grid-cols-2 lg:grid-cols-5">
         <div>

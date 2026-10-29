@@ -7,6 +7,7 @@ import { calculatePricingV25, type PricingCalculationRule, type PricingTaxRule }
 import type { V25EditorState, V25Preview } from '@/lib/domain/standard-estimate-v25-view';
 import {
   calculateV25Workbench,
+  percentProblem,
   percentToRate,
   rateToPercent,
   slotCostForWorkbench,
@@ -55,10 +56,11 @@ const candidates: V25WorkbenchCandidate[] = [
 ];
 const sectionOf = (optionId: string) => candidates.find((candidate) => candidate.id === optionId)?.section;
 
+// 保存済みの auto の選択枠の固定した原価（DB の保存と同じく「商品｜選択肢」ごと）
 const costs: V25WorkbenchCosts = {
-  saved: {
-    b1: { option_id: 'p1', variant_choice_ids: ['c2'], standard_cost: 100_000, variant_adjustments: { c2: 20_000 } },
-    b2: { option_id: 'p2', variant_choice_ids: [], standard_cost: null, variant_adjustments: {} },
+  pinned: {
+    'p1|c2': { standard_cost: 100_000, variant_adjustments: { c2: 20_000 } },
+    'p2|': { standard_cost: null, variant_adjustments: {} },
   },
   currentProduct: { p1: 110_000, p2: 50_000, p3: 30_000 },
   currentChoice: { c1: 0, c2: 25_000 },
@@ -88,8 +90,12 @@ const initial: V25EditorState = {
 };
 
 describe('Excel 風の画面の試算（v2.5 の正式計算と同じ入力）', () => {
-  it('保存済みで商品・選択肢を変えていない行は固定した原価、変えた行・新しい行は今の原価', () => {
+  it('保存済みの auto の行と同じ「商品＋選択肢」は固定した原価、それ以外は今の原価（DB の保存と同じ決まり）', () => {
     expect(slotCostForWorkbench(initial.slots[0], costs)).toEqual({ status: 'ok', standard_cost: 100_000, variant_adjustment: 20_000, pinned: true });
+    // 行を消して同じ商品・選択肢を入れ直しても、DB は「商品＋選択肢」で固定した版を使い回す（行の key では決めない）
+    expect(slotCostForWorkbench({ option_id: 'p1', variant_choices: { g1: 'c2' } }, costs)).toEqual({
+      status: 'ok', standard_cost: 100_000, variant_adjustment: 20_000, pinned: true,
+    });
     // 選択肢を変えると今の版（保存すると DB が今の版で固定する）
     expect(slotCostForWorkbench({ ...initial.slots[0], variant_choices: { g1: 'c1' } }, costs)).toEqual({
       status: 'ok', standard_cost: 110_000, variant_adjustment: 0, pinned: false,
@@ -97,7 +103,7 @@ describe('Excel 風の画面の試算（v2.5 の正式計算と同じ入力）',
     // 固定した版が無い（原価未設定）行は 0 円にしない
     expect(slotCostForWorkbench(initial.slots[1], costs)).toEqual({ status: 'missing', reason: 'missing_standard_cost', pinned: true });
     // 今の版が無い選択肢も原価未設定
-    expect(slotCostForWorkbench({ ...initial.slots[0], baseline_key: null, variant_choices: { g1: 'c3' } }, costs)).toEqual({
+    expect(slotCostForWorkbench({ option_id: 'p1', variant_choices: { g1: 'c3' } }, costs)).toEqual({
       status: 'missing', reason: 'missing_variant_cost', pinned: false,
     });
   });
@@ -138,6 +144,18 @@ describe('Excel 風の画面の試算（v2.5 の正式計算と同じ入力）',
     expect(calc.error).toBeTruthy();
   });
 
+  it('売価入力の行で売価が未入力なら、0 円にせず計算から外す', () => {
+    const state: V25EditorState = {
+      ...initial,
+      lines: initial.lines.map((line) => (line.key === 'line-k2' ? { ...line, unit_price: '' } : line)),
+      slots: initial.slots.map((slot) => (slot.key === 'slot-b3' ? { ...slot, manual_unit_price: '' } : slot)),
+    };
+    const calc = calculateV25Workbench(rule, taxRule, state, baseLines, costs, sectionOf);
+    expect(calc.unpriced.sort()).toEqual(['line-k2', 'slot-b3']);
+    expect(calc.lineKeyOf['line-k2']).toBeUndefined();
+    expect(calc.result?.sections.find((section) => section.code === 'interior_exterior')?.lines).toEqual([]);
+  });
+
   it('率は画面では %、保存は小数（10 進のまま変換する）', () => {
     expect(rateToPercent('1.5')).toBe('150');
     expect(rateToPercent('0.15')).toBe('15');
@@ -148,8 +166,11 @@ describe('Excel 風の画面の試算（v2.5 の正式計算と同じ入力）',
     expect(percentToRate('12.5')).toBe('0.125');
     expect(percentToRate('100')).toBe('1');
     expect(percentToRate('0')).toBe('0');
-    // 読めない入力はそのまま（保存の前の確認で止まる）
-    expect(percentToRate('abc')).toBe('abc');
+    // 読めない入力（小数 3 桁以上の % を含む）は空にし、保存の前に % の文で案内する（生の率として使わない）
+    expect(percentToRate('abc')).toBe('');
+    expect(percentToRate('15.125')).toBe('');
+    expect(percentProblem({ sales_fee_rate: '107', expense_rate: '15.125', markup_rate: '150' })).toBe('経費率は % で、小数 2 桁までの数を入力してください');
+    expect(percentProblem({ sales_fee_rate: '107', expense_rate: '15', markup_rate: '150' })).toBeNull();
   });
 });
 
@@ -167,6 +188,7 @@ const preview: V25Preview = {
 const render = (readOnly: boolean) =>
   renderToStaticMarkup(
     createElement(StandardEstimateV25Workbench, {
+      resetKey: '00000000-0000-4000-8000-000000000001:3',
       revisionId: '00000000-0000-4000-8000-000000000001',
       lockVersion: 3,
       readOnly,
@@ -201,6 +223,31 @@ describe('Excel 風の画面（描画）', () => {
     expect(html).toContain('「要見直し」の明細が 1 行残っています');
   });
 
+  it('この仕様で選べなくなった商品の行も隠さずに出し、削除を促す', () => {
+    const html = renderToStaticMarkup(
+      createElement(StandardEstimateV25Workbench, {
+        resetKey: 'r:1',
+        revisionId: '00000000-0000-4000-8000-000000000001',
+        lockVersion: 1,
+        readOnly: false,
+        baseLines,
+        candidates: [
+          ...candidates,
+          { id: 'p8', name: '下書きに戻した商品', categoryId: '', categoryName: '設備', manufacturer: '', modelNo: '', section: 'option', retired: true, unavailable: true, variantGroups: [], defaultChoices: {} },
+        ],
+        initial: { ...initial, slots: [...initial.slots, { key: 'slot-b8', baseline_key: 'b8', option_id: 'p8', variant_choices: {}, quantity: '1', price_mode: 'manual', manual_unit_price: '1000' }] },
+        costs,
+        rule,
+        taxRule,
+        preview,
+        savedTotal: null,
+      })
+    );
+    expect(html).toContain('下書きに戻した商品');
+    expect(html).toContain('この仕様では選べない商品（削除してください）');
+    expect(html).toContain('この仕様では選べなくなった商品の行が 1 件あります');
+  });
+
   it('原価の列は初期値では出さない（本部の画面でも切り替えて見る）', () => {
     const html = render(false);
     expect(html).not.toContain('>原価単価<');
@@ -228,6 +275,11 @@ describe('見積書管理 ＞ 標準見積の画面（本部だけ・承認申�
     expect(page).toContain('loadStandardEstimateWorkspace(supabase, selected)');
     expect(page).toContain('startStandardEstimateV25DraftAction');
     expect(page).toContain('<input type="hidden" name="return_to" value="workbench" />');
+    // 保存・公開の後も結果の案内を残す（版が変わると中身だけ作り直す）
+    expect(page).toContain('resetKey={`${workspace.revision.id}:${workspace.revision.lockVersion}`}');
+    // 新しい標準見積は、本体マスターの公開版から作る画面（保存しない試作の画面へは案内しない）
+    expect(page).toContain('<Link href="/admin/standard-estimates" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>');
+    expect(page).not.toContain('href="/admin/estimate-templates/new"');
   });
 
   it('総代理店の承認申請は出さない（本部が編集・公開する）', () => {

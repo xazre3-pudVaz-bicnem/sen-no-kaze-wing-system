@@ -25,8 +25,8 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
   const sp = await searchParams;
   const headerActions = (
     <div className="flex flex-wrap gap-2">
-      <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>
-      <Link href="/admin/standard-estimates" className="btn-secondary btn-sm">標準見積の一覧・価格の切り替え</Link>
+      <Link href="/admin/standard-estimates" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>
+      <Link href="/admin/standard-estimates" className="btn-secondary btn-sm">価格の切り替え</Link>
       <Link href="/admin/estimate-templates/legacy" className="btn-secondary btn-sm">旧テンプレート（参照）</Link>
     </div>
   );
@@ -61,7 +61,7 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
 
       <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
         <nav aria-label="標準見積の一覧" className="space-y-1 rounded-lg border border-line bg-white p-2 lg:max-h-[78vh] lg:overflow-y-auto" data-testid="standard-estimate-selector">
-          {entries.length === 0 && <p className="px-2 py-4 text-sm text-muted">標準見積がまだありません。「新しい標準見積を作る」から作成してください。</p>}
+          {entries.length === 0 && <p className="px-2 py-4 text-sm text-muted">標準見積がまだありません。「新しい標準見積を作る」で、本体マスターの公開版から作成してください。</p>}
           {entries.map((entry) => (
             <EntryLink key={entry.masterId} entry={entry} active={entry.masterId === selected?.masterId} />
           ))}
@@ -85,7 +85,7 @@ export default async function EstimateTemplatesPage({ searchParams }: { searchPa
                     <StartDraftForm entry={selected} label="次の版の下書きを作る" title="次の版の下書きを作りますか？" message="公開中の版を土台に、v2.5 の下書きを作ります。公開中の版は変わりません。" />
                   )}
                   <StandardEstimateV25Workbench
-                    key={`${workspace.revision.id}:${workspace.revision.lockVersion}`}
+                    resetKey={`${workspace.revision.id}:${workspace.revision.lockVersion}`}
                     revisionId={workspace.revision.id}
                     lockVersion={workspace.revision.lockVersion}
                     readOnly={workspace.revision.status !== 'draft'}

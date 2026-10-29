@@ -71,7 +71,8 @@ describe('標準見積管理UI', () => {
     const standardPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'), 'utf8');
     expect(standardPage).toContain('title="見積書管理"');
     expect(standardPage).toContain('＋ 新しい標準見積を作る');
-    expect(standardPage).toContain('href="/admin/estimate-templates/new"');
+    // 新しい標準見積は本体マスターの公開版から作る（保存しない試作の画面へは案内しない）
+    expect(standardPage).toContain('<Link href="/admin/standard-estimates" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>');
     expect(standardPage).toContain('href="/admin/estimate-templates/legacy"');
     expect(listPage).toContain('title="旧テンプレート（参照）"');
     expect(listPage).not.toContain('lead="シミュレーター標準"');
@@ -227,7 +228,7 @@ describe('標準見積管理UI', () => {
     expect(newForm).toContain("window.confirm('本体を変更すると、現在表示中の本体明細は選択した本体の内容に置き換わります。変更しますか？')");
     expect(newForm).toContain('この本体を使う');
     expect(newPage).toContain('title="標準見積を新規作成"');
-    expect(newPage).toContain('label="標準見積一覧へ戻る"');
+    expect(newPage).toContain('label="旧テンプレート（参照）へ戻る"');
     expect(newPage).toContain('本体・仕様・適用地域を画面上部で設定し、そのまま明細を編集できます。');
     expect(newPage).toContain('estimateTemplatesFor(model).map');
     expect(newPage).toContain('loadPublishedBaseMasters()');

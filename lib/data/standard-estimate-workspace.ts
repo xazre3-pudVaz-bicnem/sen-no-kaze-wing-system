@@ -10,7 +10,13 @@ import { isQuoteSelectableProduct, productLedgerState } from '@/lib/domain/produ
 import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from '@/lib/domain/standard-estimate-pricing';
 import type { V25EditorState, V25Preview } from '@/lib/domain/standard-estimate-v25-view';
-import type { V25WorkbenchBaseLine, V25WorkbenchCandidate, V25WorkbenchCosts, V25WorkbenchSavedSlot } from '@/lib/domain/standard-estimate-v25-workbench';
+import {
+  slotIdentity,
+  type V25WorkbenchBaseLine,
+  type V25WorkbenchCandidate,
+  type V25WorkbenchCosts,
+  type V25WorkbenchPinnedCost,
+} from '@/lib/domain/standard-estimate-v25-workbench';
 import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
 
 /**
@@ -20,6 +26,20 @@ import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
  */
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type DbError = { code?: string } | null;
+
+const PAGE_SIZE = 1000;
+
+/** PostgREST は 1 回に返す行数に上限がある（既定 1,000 行）。黙って切れないよう、ページに分けて全件を読む */
+async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: DbError }>): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`原価を取得できませんでした: ${error.code ?? 'unknown'}`);
+    rows.push(...(data ?? []));
+    if (!data || data.length < PAGE_SIZE) return rows;
+  }
+}
 type Store = Awaited<ReturnType<typeof getStore>>;
 type PricingModel = 'legacy' | 'v2.5';
 
@@ -168,7 +188,7 @@ export async function loadStandardEstimateWorkspace(
       .order('sort_order'),
     supabase
       .from('standard_estimate_revision_baseline_items')
-      .select('baseline_key, option_id, standard_cost_version_id, standard_estimate_revision_baseline_variants(variant_choice_id, variant_cost_version_id)')
+      .select('baseline_key, option_id, price_mode, section_code, option_name_snapshot, category_name_snapshot, standard_cost_version_id, standard_estimate_revision_baseline_variants(variant_choice_id, variant_cost_version_id)')
       .eq('revision_id', revision.id),
     supabase
       .from('pricing_calculation_rule_versions')
@@ -237,21 +257,46 @@ export async function loadStandardEstimateWorkspace(
       };
     });
 
-  // 原価：保存済みの選択枠の固定した版と、候補の商品・選択肢の今の版（画面の試算だけに使う）
   type SavedRow = {
     baseline_key: string;
     option_id: string;
+    price_mode: 'auto' | 'manual' | 'por' | null;
+    section_code: 'interior_exterior' | 'option' | 'sitework';
+    option_name_snapshot: string | null;
+    category_name_snapshot: string | null;
     standard_cost_version_id: string | null;
     standard_estimate_revision_baseline_variants: { variant_choice_id: string; variant_cost_version_id: string | null }[] | null;
   };
   const savedRows = (savedResult.data ?? []) as unknown as SavedRow[];
-  const pinnedProductIds = savedRows.map((row) => row.standard_cost_version_id).filter((id): id is string => Boolean(id));
-  const pinnedChoiceIds = savedRows
+
+  // 保存済みの行の商品が今はこの仕様で選べない（下書きに戻した・カテゴリーが × になった等）ときも、行を隠さずに出して削除できるようにする
+  // （保存は DB が止める。区分は保存したときの区分）
+  const candidateIdSet = new Set(candidates.map((candidate) => candidate.id));
+  for (const row of savedRows) {
+    if (candidateIdSet.has(row.option_id)) continue;
+    candidateIdSet.add(row.option_id);
+    candidates.push({
+      id: row.option_id,
+      name: row.option_name_snapshot ?? '（商品が見つかりません）',
+      categoryId: '',
+      categoryName: row.category_name_snapshot ?? '',
+      manufacturer: '',
+      modelNo: '',
+      section: row.section_code,
+      retired: true,
+      unavailable: true,
+      variantGroups: [],
+      defaultChoices: {},
+    });
+  }
+
+  // 原価（画面の試算だけに使う）：保存済みの auto の選択枠の固定した版（DB の保存と同じく「商品＋選択肢」ごと）と、今の版
+  const autoRows = savedRows.filter((row) => row.price_mode === 'auto');
+  const pinnedProductIds = autoRows.map((row) => row.standard_cost_version_id).filter((id): id is string => Boolean(id));
+  const pinnedChoiceIds = autoRows
     .flatMap((row) => row.standard_estimate_revision_baseline_variants ?? [])
     .map((row) => row.variant_cost_version_id)
     .filter((id): id is string => Boolean(id));
-  const candidateIds = candidates.map((candidate) => candidate.id);
-  const choiceIds = candidates.flatMap((candidate) => candidate.variantGroups.flatMap((group) => group.choices.map((choice) => choice.id)));
   const [pinnedProducts, pinnedChoices, currentProducts, currentChoices] = await Promise.all([
     pinnedProductIds.length
       ? supabase.from('option_standard_cost_versions').select('id, standard_cost').in('id', pinnedProductIds)
@@ -259,42 +304,41 @@ export async function loadStandardEstimateWorkspace(
     pinnedChoiceIds.length
       ? supabase.from('option_variant_cost_versions').select('id, cost_adjustment').in('id', pinnedChoiceIds)
       : Promise.resolve({ data: [], error: null }),
-    candidateIds.length
-      ? supabase.from('option_standard_cost_versions').select('option_id, standard_cost').is('superseded_at', null).in('option_id', candidateIds)
-      : Promise.resolve({ data: [], error: null }),
-    choiceIds.length
-      ? supabase.from('option_variant_cost_versions').select('variant_choice_id, cost_adjustment').is('superseded_at', null).in('variant_choice_id', choiceIds)
-      : Promise.resolve({ data: [], error: null }),
+    // 今の版は全件を読む（候補の ID を URL に並べない）
+    readAll<{ option_id: string; standard_cost: number }>((from, to) =>
+      supabase.from('option_standard_cost_versions').select('option_id, standard_cost').is('superseded_at', null).order('option_id').range(from, to)
+    ),
+    readAll<{ variant_choice_id: string; cost_adjustment: number }>((from, to) =>
+      supabase.from('option_variant_cost_versions').select('variant_choice_id, cost_adjustment').is('superseded_at', null).order('variant_choice_id').range(from, to)
+    ),
   ]);
-  for (const result of [pinnedProducts, pinnedChoices, currentProducts, currentChoices]) {
+  for (const result of [pinnedProducts, pinnedChoices]) {
     if (result.error) throw new Error(`原価を取得できませんでした: ${result.error.code ?? 'unknown'}`);
   }
   const pinnedProductCost = new Map(((pinnedProducts.data ?? []) as { id: string; standard_cost: number }[]).map((row) => [row.id, Number(row.standard_cost)]));
   const pinnedChoiceCost = new Map(((pinnedChoices.data ?? []) as { id: string; cost_adjustment: number }[]).map((row) => [row.id, Number(row.cost_adjustment)]));
-  const saved: Record<string, V25WorkbenchSavedSlot> = Object.fromEntries(
-    savedRows.map((row) => [
-      row.baseline_key,
-      {
-        option_id: row.option_id,
-        variant_choice_ids: (row.standard_estimate_revision_baseline_variants ?? []).map((variant) => variant.variant_choice_id),
-        standard_cost: row.standard_cost_version_id ? (pinnedProductCost.get(row.standard_cost_version_id) ?? null) : null,
-        variant_adjustments: Object.fromEntries(
-          (row.standard_estimate_revision_baseline_variants ?? []).map((variant) => [
-            variant.variant_choice_id,
-            variant.variant_cost_version_id ? (pinnedChoiceCost.get(variant.variant_cost_version_id) ?? null) : null,
-          ])
-        ),
-      },
-    ])
+  const pinned: Record<string, V25WorkbenchPinnedCost> = Object.fromEntries(
+    autoRows.map((row) => {
+      const variants = row.standard_estimate_revision_baseline_variants ?? [];
+      return [
+        slotIdentity(row.option_id, variants.map((variant) => variant.variant_choice_id)),
+        {
+          standard_cost: row.standard_cost_version_id ? (pinnedProductCost.get(row.standard_cost_version_id) ?? null) : null,
+          variant_adjustments: Object.fromEntries(
+            variants.map((variant) => [
+              variant.variant_choice_id,
+              variant.variant_cost_version_id ? (pinnedChoiceCost.get(variant.variant_cost_version_id) ?? null) : null,
+            ])
+          ),
+        },
+      ];
+    })
   );
   const costs: V25WorkbenchCosts = {
-    saved,
-    currentProduct: Object.fromEntries(((currentProducts.data ?? []) as { option_id: string; standard_cost: number }[]).map((row) => [row.option_id, Number(row.standard_cost)])),
-    currentChoice: Object.fromEntries(
-      ((currentChoices.data ?? []) as { variant_choice_id: string; cost_adjustment: number }[]).map((row) => [row.variant_choice_id, Number(row.cost_adjustment)])
-    ),
+    pinned,
+    currentProduct: Object.fromEntries(currentProducts.map((row) => [row.option_id, Number(row.standard_cost)])),
+    currentChoice: Object.fromEntries(currentChoices.map((row) => [row.variant_choice_id, Number(row.cost_adjustment)])),
   };
-
   return {
     revision: summary,
     v25: {

@@ -45,21 +45,26 @@ describe('標準見積 v2.5 の編集（PR-B1b の処理を「見積書管理 �
   it('商品の候補は、その仕様でお客様が選べる販売中の商品と公開中の選択肢（保存済みの販売停止・廃番は表示・保持だけ）', () => {
     expect(workspace).toContain("isQuoteSelectableProduct(option) || (productLedgerState(option) === 'retired' && savedOptionIds.has(option.id))");
     expect(workspace).toContain('.filter((group) => group.option_id === option.id)');
-    expect(workbench).toContain('{candidate?.retired && <Badge tone="warn">販売停止</Badge>}');
+    expect(workbench).toContain('candidate?.retired && <Badge tone="warn">販売停止</Badge>');
+    // 今はこの仕様で選べない保存済みの商品も、行を隠さずに出して削除を促す
+    expect(workspace).toContain('unavailable: true,');
+    expect(workbench).toContain('この仕様では選べない商品（削除してください）');
     // 新しく選べるのは販売中の商品だけ
     expect(workbench).toContain('!candidate.retired &&');
   });
 
   it('別途見積は 0 円と表示せず「未確定」、原価の状態（最新・更新あり・未設定）と公開できない理由を示す', () => {
-    expect(workbench).toContain("slot.price_mode === 'por' ? <Badge tone=\"warn\">未確定</Badge>");
-    expect(workbench).toContain("line.price_mode === 'por' ? <Badge tone=\"warn\">未確定</Badge>");
+    expect(workbench).toContain("{slot.price_mode === 'por' ? (\n                              <Badge tone=\"warn\">未確定</Badge>");
+    expect(workbench).toContain("{line.price_mode === 'por' ? (\n                              <Badge tone=\"warn\">未確定</Badge>");
+    // 売価が未入力の行は 0 円と表示しない
+    expect(workbench).toContain('<Badge tone="danger">売価未入力</Badge>');
     expect(workbench).toContain('V25_COST_STATUS_LABEL[status]');
     expect(workbench).toContain('公開できない理由');
     expect(workbench).toContain('const blockers = v25PublishBlockers(preview, dirty);');
   });
 
   it('保存は入力の確認の後、最新原価の取り込みは未保存の変更が無いときだけ、公開は確認ダイアログを通す', () => {
-    expect(workbench).toContain('const problem = validateV25EditorState(state, sectionOf);');
+    expect(workbench).toContain('const problem = percentProblem(percents) ?? validateV25EditorState(state, sectionOf);');
     expect(workbench).toContain('disabled={pending || dirty} data-testid="v25-wb-refresh"');
     expect(workbench).toContain('<ConfirmActionButton');
     expect(workbench).toContain('disabled={pending || blockers.length > 0}');

@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+// 旧テンプレート（estimate_templates）の画面は参照用に移した。標準見積（v2.5）の編集は app/admin/estimate-templates/page.tsx
 const listPage = fs.readFileSync(
-  path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'),
+  path.resolve(process.cwd(), 'app/admin/estimate-templates/legacy/page.tsx'),
   'utf8'
 );
 const newPage = fs.readFileSync(
@@ -66,10 +67,14 @@ const adminActions = fs.readFileSync(
 
 describe('標準見積管理UI', () => {
   it('常設一覧からタブとExcel編集へ重複カードなしで直接つなぐ', () => {
-    expect(listPage).toContain('title="見積書管理"');
+    // 標準見積の画面（v2.5）から新しい標準見積を作り、旧テンプレートは参照用の画面へ分ける
+    const standardPage = fs.readFileSync(path.resolve(process.cwd(), 'app/admin/estimate-templates/page.tsx'), 'utf8');
+    expect(standardPage).toContain('title="見積書管理"');
+    expect(standardPage).toContain('＋ 新しい標準見積を作る');
+    expect(standardPage).toContain('href="/admin/estimate-templates/new"');
+    expect(standardPage).toContain('href="/admin/estimate-templates/legacy"');
+    expect(listPage).toContain('title="旧テンプレート（参照）"');
     expect(listPage).not.toContain('lead="シミュレーター標準"');
-    expect(listPage).toContain('＋ 新しい標準見積を作る');
-    expect(listPage).toContain('href="/admin/estimate-templates/new"');
     expect(listPage).not.toContain('＋ 標準見積を作成');
     expect(listPage).not.toContain('＋ 案件見積を作成');
     expect(listPage).toContain('<SavedEstimateMenu');
@@ -142,9 +147,10 @@ describe('標準見積管理UI', () => {
     expect(savedEstimateMenu).toContain('min-w-0 truncate');
   });
 
-  it('DB待ちの複製はdisabledのまま維持し、旧標準設定ボタンは表示しない', () => {
-    expect(listPage).toContain('複製');
-    expect(listPage).toContain('正式な複製保存の接続後に利用できます');
+  it('旧テンプレートの画面は参照用（保存・公開・複製はしない）で、旧標準設定ボタンは表示しない', () => {
+    expect(listPage).toContain('旧テンプレート（estimate_templates）の参照用です。保存・公開はできません。');
+    expect(listPage).toContain('標準見積（v2.5）へ戻る');
+    expect(listPage).not.toContain('正式な複製保存の接続後に利用できます');
     expect(listPage).not.toContain('シミュレーター標準に設定');
     expect(listPage).not.toContain('シミュレーターの選択対象となる標準指定の接続後に利用できます');
   });

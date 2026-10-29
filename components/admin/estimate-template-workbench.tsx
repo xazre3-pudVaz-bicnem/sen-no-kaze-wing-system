@@ -718,7 +718,7 @@ export function EstimateTemplateWorkbench({
                     下書きを保存
                   </Button>
                   <Button type="button" size="sm" className="h-7 min-h-7 px-3" disabled>
-                    {role === 'master_dealer' ? '本部へ承認申請' : '公開内容を確認'}
+                    公開内容を確認
                   </Button>
                 </>
               )}

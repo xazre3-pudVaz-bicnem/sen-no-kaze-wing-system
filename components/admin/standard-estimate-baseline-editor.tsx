@@ -16,7 +16,7 @@ export type BaselineCandidate = {
   priceOnRequest: boolean;
   /** 標準で選ばれる選択肢（壁色など）。登録時に一緒に送る */
   defaultVariantChoiceIds: string[];
-  /** 取扱終了。この Revision に保存済みの明細だけを表示・保持のために渡す（新しい行では選べない。DB でも拒否される） */
+  /** 販売停止・廃番。この Revision に保存済みの明細だけを表示・保持のために渡す（新しい行では選べない。DB でも拒否される） */
   retired?: boolean;
 };
 
@@ -146,7 +146,7 @@ export function StandardEstimateBaselineEditor({
                           <option value="">選んでください</option>
                           {candidate?.retired && (
                             <option value={candidate.id} disabled>
-                              {candidate.name}（取扱終了）
+                              {candidate.name}（販売停止）
                             </option>
                           )}
                           {grouped.map(([category, list]) => (

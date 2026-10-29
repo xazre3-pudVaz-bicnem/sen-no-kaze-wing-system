@@ -75,10 +75,13 @@ import {
   type MatrixRowCreateInput,
   type MatrixRowUpdateInput,
   type ProductLifecycleAction,
+  type SpecAcceptanceState,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
+import { EMPTY_POR_SELECTION_STATE, isReservedLineStateRemark, type QuotePorSelection, type QuotePorSelectionState } from '@/lib/domain/quote-por';
+import { assertQuoteLineGuardReady } from './quote-line-guard';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = SupabaseClient<any, 'public', any>;
@@ -257,7 +260,9 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const capability = await db.rpc('product_lifecycle_capability');
     if (!capability.error && capability.data) {
-      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards) };
+      // 廃番の印（20261016112000）があるか。無ければ廃番の操作は出さない
+      const discontinue = await db.from('options').select('id, discontinued_at').limit(1);
+      return { columns: true, guards: Boolean((capability.data as { guards?: boolean }).guards), discontinue: !discontinue.error };
     }
     const columns = await db.from('options').select('id, archived_at, simulator_visible').limit(1);
     return { columns: !columns.error, guards: false };
@@ -283,6 +288,38 @@ export class SupabaseStore implements DataStore {
       throw new StoreError('LOCKED', '他の画面で商品が更新されたため、操作できませんでした。再読み込みしてから、もう一度操作してください');
     }
     return { updated_at: rows[0].updated_at };
+  }
+  /** 廃番にする・取り消す（判定・権限・変更履歴は DB の set_option_discontinued とトリガーが行う） */
+  async setProductDiscontinued(input: { id: string; discontinued: boolean; reason: string; expectedUpdatedAt: string }) {
+    const db = await this.db();
+    const { data, error } = await db.rpc('set_option_discontinued', {
+      p_option_id: input.id,
+      p_expected_updated_at: input.expectedUpdatedAt,
+      p_discontinued: input.discontinued,
+      p_reason: input.reason,
+    });
+    if (error) {
+      if (isMissingNamedFunction(error, 'set_option_discontinued')) {
+        throw new StoreError('VALIDATION', '廃番の機能は、DB の更新が済むまで使えません。');
+      }
+      mapPgError(error);
+    }
+    return { updated_at: String(data) };
+  }
+  /** 仕様で新しい受付ができるか。migration の適用前は判定せず受け付ける（従来どおり） */
+  async getSpecAcceptanceState(modelId: string, specCode: string | null): Promise<SpecAcceptanceState> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_spec_acceptance_state', { p_model_id: modelId, p_spec_code: specCode });
+    if (error) {
+      if (isMissingNamedFunction(error, 'get_spec_acceptance_state')) return { accepting: true, stoppedNames: [], available: false };
+      mapPgError(error);
+    }
+    const value = (data ?? {}) as { accepting?: boolean; stopped_names?: string[] };
+    return {
+      accepting: value.accepting !== false,
+      stoppedNames: Array.isArray(value.stopped_names) ? value.stopped_names : [],
+      available: true,
+    };
   }
   /** 商品価格の一括更新（監査ログは DB トリガーが記録する） */
   async updateOptionPrices(items: { id: string; price: number }[]) {
@@ -713,6 +750,8 @@ export class SupabaseStore implements DataStore {
 
   async createManualQuoteDraftWithItems(_actor: SessionUser, input: ManualQuoteWorkbenchInput): Promise<QuoteDraft> {
     const db = await this.db();
+    // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
+    if (input.items.some((item) => isReservedLineStateRemark(item.remark))) await assertQuoteLineGuardReady(db);
     const { data, error } = await db.rpc('create_manual_quote_draft_with_items', {
       p_case_name: input.case_name,
       p_contact: {
@@ -787,6 +826,8 @@ export class SupabaseStore implements DataStore {
 
   async saveQuoteDraft(id: string, input: QuoteDraftSaveInput, _actor: SessionUser): Promise<number> {
     const db = await this.db();
+    // 「0円確定」「対象外」の印は、DB の更新（20261016111000）が済むまで保存しない
+    if (input.items.some((item) => isReservedLineStateRemark(item.remark))) await assertQuoteLineGuardReady(db);
     const { data, error } = await db.rpc('save_quote_draft', {
       p_draft_id: id,
       p_expected_lock_version: input.expected_lock_version,
@@ -806,6 +847,8 @@ export class SupabaseStore implements DataStore {
     if (!detail) throw new StoreError('NOT_FOUND', 'Draftが見つかりません');
 
     const db = await this.db();
+    // DB の更新（20261016111000）が済むまで、旧い関数で正式見積を発行しない
+    await assertQuoteLineGuardReady(db);
     const { data, error } = detail.draft.parent_quote_id
       ? await db.rpc('finalize_quote_revision_draft', {
           p_draft_id: id,
@@ -998,6 +1041,16 @@ export class SupabaseStore implements DataStore {
 
   async createDealerRevision(id: string, input: DealerRevisionInput) {
     const db = await this.db();
+    // DB の更新（20261016111000）が済むまで、旧い関数で正式見積（改訂）を発行しない
+    await assertQuoteLineGuardReady(db);
+    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる）
+    if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
+      const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+        p_quote_id: id,
+        p_selection_keys: input.por_confirmation_keys,
+      });
+      if (confirmError) mapPgError(confirmError);
+    }
     const { data, error } = await db.rpc('create_quote_revision', {
       p_quote_id: id,
       p_items: input.items,
@@ -1008,6 +1061,22 @@ export class SupabaseStore implements DataStore {
     const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', newId).single();
     if (e2) mapPgError(e2);
     return q as Quote;
+  }
+
+  async getQuotePorSelections(quoteId: string): Promise<QuotePorSelectionState> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_quote_por_selections', { p_quote_id: quoteId });
+    if (error) {
+      // migration の適用前は確認の仕組みが無い（画面は発行のボタンを止め、発行の処理も止める）
+      if (isMissingNamedFunction(error, 'get_quote_por_selections')) return EMPTY_POR_SELECTION_STATE;
+      mapPgError(error);
+    }
+    const value = (data ?? {}) as { selections?: QuotePorSelection[]; confirmed?: boolean };
+    return {
+      selections: Array.isArray(value.selections) ? value.selections : [],
+      confirmed: Boolean(value.confirmed),
+      available: true,
+    };
   }
 
   // ---------- PDF（service role） ----------
@@ -1198,9 +1267,9 @@ export class SupabaseStore implements DataStore {
     };
   }
   async upsertOption(input: OptionInput) {
-    // 取扱終了・シミュレーター表示は setProductLifecycle だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
-    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, ...rest } = input as OptionInput &
-      Pick<ProductOption, 'simulator_visible' | 'archived_at'>;
+    // 販売停止・廃番・シミュレーター表示は setProductLifecycle・setProductDiscontinued だけで変える（読み込んだ行を書き戻す呼び出しでも、古い値で上書きしない）
+    const { simulator_visible: _simulatorVisible, archived_at: _archivedAt, discontinued_at: _discontinuedAt, ...rest } = input as OptionInput &
+      Pick<ProductOption, 'simulator_visible' | 'archived_at' | 'discontinued_at'>;
     return this.upsert<ProductOption>('options', rest);
   }
   async deleteOption(id: string) {

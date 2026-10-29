@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getStore, type SessionUser } from '@/lib/data/store';
 import { QUOTE_STATUS_LABELS, type CaseDocument, type QuoteDraftItem } from '@/lib/domain/types';
 import { formatYen } from '@/lib/domain/pricing';
+import { isExcludedLineRemark } from '@/lib/domain/quote-por';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
 import { SmartImage } from '@/components/ui/smart-image';
@@ -178,6 +179,8 @@ function DraftItemTable({ items }: { items: QuoteDraftItem[] }) {
             .sort((a, b) => a.sort_order - b.sort_order)
             .map((item) => {
               const separate = item.unit_price === 0 && item.remark?.trim() === '別途見積';
+              // 対象外の行は金額欄を「対象外」にする（0 円の確定と区別する。D1 までの暫定）
+              const excluded = isExcludedLineRemark(item.remark);
               return (
                 <tr key={item.id} className="border-t border-line">
                   <td className="px-3 py-2 text-xs text-muted">{ITEM_KIND_LABELS[item.kind] ?? item.kind}</td>
@@ -185,7 +188,7 @@ function DraftItemTable({ items }: { items: QuoteDraftItem[] }) {
                   <td className="px-3 py-2 text-right tabular-nums">{item.quantity}</td>
                   <td className="px-3 py-2">{item.unit || '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{separate ? '別途見積' : formatYen(item.unit_price)}</td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{separate ? '—' : formatYen(item.amount)}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{separate ? '—' : excluded ? '対象外' : formatYen(item.amount)}</td>
                   <td className="px-3 py-2 text-xs text-muted">{item.remark || '—'}</td>
                 </tr>
               );

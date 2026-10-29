@@ -635,27 +635,6 @@ export function SimulatorApp({
     [standardEstimatePricing, v25Pricing]
   );
   const v25Calculating = missingV25Units.length > 0 && !v25UnitsFailed;
-  // 表に無い組み合わせは、サーバーで売価だけを計算してもらう（200 件ずつ。失敗した組み合わせは目安のまま、もう一度は頼まない）
-  useEffect(() => {
-    const wanted = missingV25Units
-      .filter((item) => !requestedV25Units.current.has(v25UnitKey(item.revision_id, item.option_id, item.choice_ids)))
-      .slice(0, 200);
-    if (wanted.length === 0) return;
-    for (const item of wanted) requestedV25Units.current.add(v25UnitKey(item.revision_id, item.option_id, item.choice_ids));
-    fetchSimulatorV25UnitsAction({ items: wanted })
-      .then((result) => {
-        if (!result.ok) {
-          setV25UnitsFailed(true);
-          return;
-        }
-        setV25Units((prev) => {
-          const next = new Map(prev);
-          for (const row of result.units) next.set(row.key, row.unit);
-          return next;
-        });
-      })
-      .catch(() => setV25UnitsFailed(true));
-  }, [missingV25Units]);
   /** 標準見積未登録の仕様だけ従来計算へフォールバックする。 */
   const baseOverride = useMemo(
     () => (activeSaleView || activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
@@ -685,26 +664,28 @@ export function SimulatorApp({
   const displayScopedOptions = useMemo(() => withDisplayPrices(scopedOptions), [withDisplayPrices, scopedOptions]);
   const displayAllOptions = useMemo(() => withDisplayPrices(bundle.options), [withDisplayPrices, bundle.options]);
   /** 各注文範囲を選んだ場合の概算合計（カードに出す目安）。現在の仕様の標準構成で計算する */
-  const levelTotals = useMemo(() => {
+  const { levelTotals, levelMissingUnits } = useMemo(() => {
     const preset = specSelections.find((x) => x.code === specCode) ?? specSelections[0];
     const base = preset?.ids ?? defaultSelection(activeSpecCtx);
     const out: Partial<Record<FinishLevel, number>> = {};
+    /** v2.5：ほかの注文範囲の目安でも、表に無い組み合わせはサーバーで計算してもらう */
+    const levelMissing: V25MissingUnit[] = [];
     for (const lv of FINISH_LEVELS) {
       const ids = pruneToScope(activeSpecCtx, lv === finishLevel ? selected : base, lv);
-      // v2.5 の売価：標準見積の売価の表で計算する（原価は使わない）。v2.5 の標準見積が無い仕様は準備中（0 円）。
+      // v2.5 の売価：標準見積の売価の表で計算する（原価は使わない）。v2.5 の標準見積が無い仕様は準備中（金額を出さない）。
       // 売価は選択肢の組み合わせで決まるので、今の注文範囲は今の選択肢、ほかは標準の選択肢で計算する
       if (v25Pricing) {
-        out[lv] =
-          activeSaleView && isV25SaleView(activeSaleView)
-            ? computeSaleViewPricing(
-                bundle,
-                activeSaleView,
-                ids,
-                lv === finishLevel ? variantIds : standardVariantIdsFor(specCode, ids),
-                lv === finishLevel ? exteriorFaces : [],
-                v25Units
-              ).pricing.total
-            : 0;
+        if (!activeSaleView || !isV25SaleView(activeSaleView)) continue;
+        const result = computeSaleViewPricing(
+          bundle,
+          activeSaleView,
+          ids,
+          lv === finishLevel ? variantIds : standardVariantIdsFor(specCode, ids),
+          lv === finishLevel ? exteriorFaces : [],
+          v25Units
+        );
+        out[lv] = result.pricing.total;
+        levelMissing.push(...(result.missing_units ?? []));
         continue;
       }
       out[lv] = computePricing(
@@ -718,8 +699,31 @@ export function SimulatorApp({
         lv === finishLevel ? exteriorFaces : []
       ).total;
     }
-    return out;
+    return { levelTotals: out, levelMissingUnits: levelMissing };
   }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds, v25Units, standardVariantIdsFor]);
+  // 表に無い組み合わせ（今の選択と、注文範囲のカードの目安の分）は、サーバーで売価だけを計算してもらう
+  // （200 件ずつ。失敗した組み合わせは目安のまま、もう一度は頼まない）
+  useEffect(() => {
+    const wanted = [...missingV25Units, ...levelMissingUnits]
+      .filter((item) => !requestedV25Units.current.has(v25UnitKey(item.revision_id, item.option_id, item.choice_ids)))
+      .filter((item, index, list) => list.findIndex((other) => v25UnitKey(other.revision_id, other.option_id, other.choice_ids) === v25UnitKey(item.revision_id, item.option_id, item.choice_ids)) === index)
+      .slice(0, 200);
+    if (wanted.length === 0) return;
+    for (const item of wanted) requestedV25Units.current.add(v25UnitKey(item.revision_id, item.option_id, item.choice_ids));
+    fetchSimulatorV25UnitsAction({ items: wanted })
+      .then((result) => {
+        if (!result.ok) {
+          setV25UnitsFailed(true);
+          return;
+        }
+        setV25Units((prev) => {
+          const next = new Map(prev);
+          for (const row of result.units) next.set(row.key, row.unit);
+          return next;
+        });
+      })
+      .catch(() => setV25UnitsFailed(true));
+  }, [missingV25Units, levelMissingUnits]);
 
   const independentInsulationCategoryIds = useMemo(
     () =>
@@ -859,10 +863,17 @@ export function SimulatorApp({
         if (!r.rejected) cur = r.next;
       }
       setSelected(cur);
-      // v2.5：足した商品にも標準の選択肢を選ぶ（選択肢が無いと標準見積の選択枠と一致せず、標準のままでも差額が出る）
+      // v2.5：足した商品にも標準の選択肢を選ぶ（選択肢が無いと標準見積の選択枠と一致せず、標準のままでも差額が出る）。
+      // 狭める前に選んでいた選択肢が残っている選択項目は、その選択肢のまま（同じ選択項目に 2 つ選ばない）
       if (v25Pricing) {
         const added = cur.filter((id) => !selected.includes(id));
-        if (added.length > 0) setVariantIds((prev) => [...prev, ...standardVariantIdsFor(specCode, added)]);
+        if (added.length > 0) {
+          setVariantIds((prev) => {
+            const groupOf = new Map(bundle.variantChoices.map((choice) => [choice.id, choice.group_id]));
+            const chosenGroups = new Set(prev.map((id) => groupOf.get(id)).filter(Boolean));
+            return [...prev, ...standardVariantIdsFor(specCode, added).filter((id) => !chosenGroups.has(groupOf.get(id)))];
+          });
+        }
       }
     } else {
       const kept = pruneToScope(activeSpecCtx, selected, level);

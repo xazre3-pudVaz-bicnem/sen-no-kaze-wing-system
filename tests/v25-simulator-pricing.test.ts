@@ -13,11 +13,12 @@ import {
   v25StandardVariantIds,
   v25UnitKey,
   withoutCatalogCosts,
+  withoutTemplatePrices,
   type StandardEstimateSaleView,
 } from '@/lib/domain/standard-estimate-sale-view';
 import { computePricing } from '@/lib/domain/pricing';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
-import type { CatalogBundle } from '@/lib/domain/types';
+import type { CatalogBundle, EstimateTemplateBundle } from '@/lib/domain/types';
 
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), 'utf8').split('\r').join('');
 
@@ -227,11 +228,31 @@ describe('v2.5 の売価の画面表示（PR-C1）', () => {
     expect(pending.choices.every((row) => row.extra_price === 0 && row.price_on_request)).toBe(true);
   });
 
-  it('お客様の画面へ渡すカタログから原価を外す（元のカタログは変えない）', () => {
-    const stripped = withoutCatalogCosts(bundle);
+  it('お客様の画面へ渡すカタログから原価・本体の価格・本体内訳を外す（元のカタログは変えない）', () => {
+    const withBase = { ...bundle, baseBreakdowns: [{ id: 'b1', base_model_id: 'model', spec_code: 'office', section: '1．金物', name: '伸縮脚', quantity: 12, unit: '本', unit_price: 18200, amount: 218400, remark: null, sort_order: 1 }] } as unknown as CatalogBundle;
+    const stripped = withoutCatalogCosts(withBase);
     expect(stripped.options.every((row) => row.price === 0)).toBe(true);
     expect(stripped.variantChoices.every((row) => row.extra_price === 0)).toBe(true);
+    expect(stripped.model.base_price).toBe(0);
+    expect(stripped.baseBreakdowns.map((row) => [row.unit_price, row.amount])).toEqual([[0, 0]]);
     expect(bundle.options.find((row) => row.id === 'p1')?.price).toBe(110000);
+    expect(withBase.baseBreakdowns[0].amount).toBe(218400);
+  });
+
+  it('旧テンプレートは仕様の選択肢・標準構成だけを渡し、金額を外す', () => {
+    const template = {
+      template: { id: 't', base_model_id: 'model', spec_code: 'office', name: '事務所', source_file_name: '', source_sheet_name: '', source_sha256: '', baseline_option_ids: ['p1'], tax_rate: 0.1, subtotal_raw: 900000, adjustment: -1000, subtotal: 899000, tax: 89900, total: 988900, imported_at: '', updated_at: '' },
+      sections: [{ id: 's', template_id: 't', code: 'option', label: 'オプション', line_subtotal: 100000, expense_label: '経費', expense_rate: 0.15, expense_amount: 15000, total: 115000, sort_order: 1 }],
+      lines: [{ id: 'l', template_id: 't', section_code: 'option', group_label: null, name: '照明', quantity: 1, unit: '式', unit_price: 100000, amount: 100000, remark: null, sort_order: 1 }],
+      base_breakdown_items: [{ id: 'b', base_model_id: 'model', spec_code: 'office', section: '1．金物', name: '伸縮脚', quantity: 12, unit: '本', unit_price: 18200, amount: 218400, remark: null, sort_order: 1 }],
+      baseline_option_ids: ['p1'],
+    } as unknown as EstimateTemplateBundle;
+    const [stripped] = withoutTemplatePrices([template]);
+    expect(stripped.template).toMatchObject({ spec_code: 'office', name: '事務所', baseline_option_ids: ['p1'], subtotal: 0, total: 0, tax: 0 });
+    expect(stripped.sections[0]).toMatchObject({ line_subtotal: 0, expense_amount: 0, total: 0 });
+    expect(stripped.lines[0]).toMatchObject({ name: '照明', unit_price: null, amount: 0 });
+    expect(stripped.base_breakdown_items[0]).toMatchObject({ unit_price: 0, amount: 0 });
+    expect(stripped.baseline_option_ids).toEqual(['p1']);
   });
 
   it('v2.5 の版が無い仕様は価格準備中：すべて 0 円・別途見積', () => {
@@ -327,14 +348,18 @@ describe('v2.5 の売価の差し込み（PR-C1）', () => {
     expect(page).toContain('const clientBundle = sale.v25 ? withoutCatalogCosts(bundle) : bundle;');
     expect(page).toContain('bundle={clientBundle}');
     expect(page).toContain('v25Pricing={sale.v25}');
-    // 仕様の選択肢・標準構成のため、旧テンプレートはそのまま渡す（価格の計算には使わない）
-    expect(page).toContain('estimateTemplates={estimateTemplates}');
+    // 旧テンプレートは仕様の選択肢・標準構成のためにだけ渡し、金額は外す
+    expect(page).toContain('estimateTemplates={sale.v25 ? withoutTemplatePrices(estimateTemplates) : estimateTemplates}');
   });
 
   it('シミュレーター：v2.5 の間は旧テンプレートで計算せず、版が無い仕様は価格準備中', () => {
     const app = read('components/simulator/simulator-app.tsx');
     expect(app).toContain(': activeEstimateTemplate && !v25Pricing');
     expect(app).toContain('return v25PricePending ? pendingSaleViewPricing(result) : result;');
+    // 価格準備中の仕様では、注文範囲のカードにも金額を出さない（0 円と出さない）
+    expect(app).toContain('if (!activeSaleView || !isV25SaleView(activeSaleView)) continue;');
+    // ほかの注文範囲の目安でも、表に無い組み合わせはサーバーで計算してもらう
+    expect(app).toContain('const wanted = [...missingV25Units, ...levelMissingUnits]');
     expect(app).toContain('data-testid="price-pending-banner"');
     expect(app).toContain('options={displayScopedOptions}');
     expect(app).toContain('variantChoices={displayVariantChoices}');
@@ -354,6 +379,8 @@ describe('v2.5 の売価の差し込み（PR-C1）', () => {
     expect(admin).toContain('const current = sale.v25');
     const product = read('app/(site)/products/[slug]/page.tsx');
     expect(product).toContain('const shownOptions = sale.v25');
+    // 先頭のプリセットの仕様に v2.5 の版が無くても、v2.5 の版がある仕様の売価を出す（すべて要見積にしない）
+    expect(product).toContain('const specCandidates = [...(model.presets ?? []).map((preset) => preset.code), ...sale.saleViews.map((view) => view.spec_code)];');
     expect(product).toContain('options: shownOptions.filter(');
   });
 
@@ -377,7 +404,12 @@ describe('v2.5 の売価の差し込み（PR-C1）', () => {
     expect(app).toContain('initial?.variant_choice_ids ?? standardVariantIdsFor(defaultSpecCode, initialSelection)');
     expect(app).toContain('const nextVariants = standardVariantIdsFor(code, nextSel);');
     expect(app).toContain('() => standardVariantIdsFor(specCode, activeSpecSelection),');
-    expect(app).toContain('setVariantIds((prev) => [...prev, ...standardVariantIdsFor(specCode, added)]);');
+    // 狭める前に選んでいた選択肢が残っている選択項目には足さない（同じ選択項目に 2 つ選ばない）
+    expect(app).toContain('return [...prev, ...standardVariantIdsFor(specCode, added).filter((id) => !chosenGroups.has(groupOf.get(id)))];');
+    // 商品を選び直したときも、標準の商品は標準見積の選択枠の選択肢から選ぶ
+    const picker = read('components/simulator/option-picker-dialog.tsx');
+    expect(picker).toContain('defaultVariants(groups, variantChoices, currentForProduct, baselineVariantIds)');
+    expect(picker).toContain('const standard = list.find((c) => preferred.includes(c.id));');
     expect(read('app/(site)/simulator/[slug]/page.tsx')).toContain('v25StandardVariantIds(');
     expect(read('lib/domain/simulator-entry.ts')).toContain('? standardVariantIds(choice.code, optionIds)');
   });

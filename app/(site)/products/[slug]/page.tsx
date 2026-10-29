@@ -50,16 +50,15 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const galleryKinds: ProductImageKind[] = ['exterior', 'interior', 'floorplan', 'transport'];
   const gallery = bundle.images.filter((i) => galleryKinds.includes(i.kind) && i.url !== hero?.url);
   const interior = bundle.images.find((i) => i.kind === 'interior') ?? null;
-  // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）を出さず、シミュレーターが最初に開く仕様の v2.5 の売価を出す
-  // （その仕様の v2.5 の標準見積が無ければ要見積）
+  // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）を出さず、v2.5 の売価を出す。
+  // 仕様はシミュレーターが最初に開く仕様（先頭のプリセット）を優先し、その版が無ければ v2.5 の版がある仕様（どれも無ければ要見積）
   const sale = await getSimulatorSaleViews(model.id, { preview: false });
+  const specCandidates = [...(model.presets ?? []).map((preset) => preset.code), ...sale.saleViews.map((view) => view.spec_code)];
+  const productView = sale.v25
+    ? (specCandidates.map((code) => pickSaleView(sale.saleViews, model.slug, code, false)).find((view) => view !== null) ?? null)
+    : null;
   const shownOptions = sale.v25
-    ? v25DisplayCatalog(
-        bundle.options,
-        bundle.variantGroups,
-        bundle.variantChoices,
-        pickSaleView(sale.saleViews, model.slug, model.presets?.[0]?.code ?? 'base', false)
-      ).options
+    ? v25DisplayCatalog(bundle.options, bundle.variantGroups, bundle.variantChoices, productView).options
     : bundle.options;
   const optionsByCategory = bundle.categories
     .filter((c) => c.code !== 'sitework')

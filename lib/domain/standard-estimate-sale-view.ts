@@ -220,13 +220,32 @@ export function pendingSaleViewPricing(pricing: PricingResult): PricingResult {
   };
 }
 
-/** 商品価格の列（原価）を、お客様の画面に渡すカタログから外す（v2.5 の売価を使うとき。表示用の売価は v25DisplayCatalog で作る） */
+/**
+ * v2.5 の売価を使うとき、お客様の画面に渡すカタログから旧来の金額を外す（表示用の売価は v25DisplayCatalog で作る）。
+ * 商品価格・追加金額の列は原価。本体の価格・本体内訳は旧来のサイト価格で、v2.5 では原価として率を掛ける元の数字のため、これも渡さない
+ */
 export function withoutCatalogCosts(bundle: CatalogBundle): CatalogBundle {
   return {
     ...bundle,
+    model: { ...bundle.model, base_price: 0 },
     options: bundle.options.map((option) => ({ ...option, price: 0 })),
     variantChoices: bundle.variantChoices.map((choice) => ({ ...choice, extra_price: 0 })),
+    baseBreakdowns: (bundle.baseBreakdowns ?? []).map((item) => ({ ...item, unit_price: 0, amount: 0 })),
   };
+}
+
+/**
+ * v2.5 の売価を使うとき、お客様の画面に渡す旧テンプレート（Excel の標準見積）から金額を外す。
+ * 仕様の選択肢・標準構成（spec_code・名前・標準選択の商品）だけを使い、金額は使わない
+ */
+export function withoutTemplatePrices(templates: EstimateTemplateBundle[]): EstimateTemplateBundle[] {
+  return templates.map((row) => ({
+    ...row,
+    template: { ...row.template, subtotal_raw: 0, adjustment: 0, subtotal: 0, tax: 0, total: 0 },
+    sections: row.sections.map((section) => ({ ...section, line_subtotal: 0, expense_amount: 0, total: 0 })),
+    lines: row.lines.map((line) => ({ ...line, unit_price: null, amount: 0 })),
+    base_breakdown_items: row.base_breakdown_items.map((item) => ({ ...item, unit_price: 0, amount: 0 })),
+  }));
 }
 
 /**

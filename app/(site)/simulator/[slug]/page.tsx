@@ -12,6 +12,7 @@ import {
   pickSaleView,
   v25StandardVariantIds,
   withoutCatalogCosts,
+  withoutTemplatePrices,
 } from '@/lib/domain/standard-estimate-sale-view';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
@@ -57,8 +58,8 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   ]);
   const saleViews = sale.saleViews;
   const pricingPreview = previewRequested && !sale.switchedOn;
-  // v2.5 の売価（v2.5 PR-C1）を使うときは、商品価格の列（原価）をブラウザへ渡さない。
-  // 旧テンプレートは仕様の選択肢・標準構成のためにそのまま渡す（価格の計算には使わない。SimulatorApp 側で判断）
+  // v2.5 の売価（v2.5 PR-C1）を使うときは、商品価格の列（原価）・本体の価格・本体内訳をブラウザへ渡さない。
+  // 旧テンプレートは仕様の選択肢・標準構成のためにだけ渡し、金額は外す（価格の計算には使わない）
   const clientBundle = sale.v25 ? withoutCatalogCosts(bundle) : bundle;
   const estimateTemplates = (
     await Promise.all(templateHeaders.map((row) => store.getEstimateTemplateBundle(model.id, row.spec_code)))
@@ -181,7 +182,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
         <SimulatorApp
           key={c ? `configuration:${c}` : plan ? `guest:${plan}` : spec ? `spec:${spec}` : resume === '1' ? 'resume' : 'new'}
           bundle={clientBundle}
-          estimateTemplates={estimateTemplates}
+          estimateTemplates={sale.v25 ? withoutTemplatePrices(estimateTemplates) : estimateTemplates}
           saleViews={saleViews}
           pricingPreview={pricingPreview}
           v25Pricing={sale.v25}

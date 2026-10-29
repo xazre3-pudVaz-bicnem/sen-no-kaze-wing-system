@@ -634,8 +634,9 @@ $$;
 
 -- ---------- DB 側の計算の入口：スイッチが入っている間は v2.5 の版だけを使う ----------
 
--- 保存済みの仕様に使う標準見積（売価だけの形）。スイッチが切れている間・v2.5 の版が無い仕様は NULL
--- （見積依頼の税率・備考もこの関数を見る）。v2.5 以前の版（商品価格の列で差額を出す）は使わない
+-- 保存済みの仕様に使う標準見積（売価だけの形）。スイッチが切れている間は NULL（見積依頼の税率・備考もこの関数を見る）。
+-- v2.5 以前の版（商品価格の列で差額を出す）は使わない。v2.5 の版が無い仕様は、価格準備中の印（pending）と今の税ルールの税率だけを返す
+-- （見積依頼が旧 Excel 標準見積の税率・備考を使わないように）
 create or replace function public.standard_estimate_sale_view_for_configuration(p_configuration_id uuid)
 returns jsonb
 language plpgsql
@@ -652,7 +653,8 @@ begin
   end if;
   v_revision := public.standard_estimate_v25_revision_for_configuration(p_configuration_id);
   if v_revision is null then
-    return null;
+    return pg_catalog.jsonb_build_object('pricing_model', 'v2.5', 'pending', true,
+      'tax_rate', (select t.tax_rate from public.tax_rule_versions t where t.superseded_at is null));
   end if;
   return public.standard_estimate_v25_sale_view(v_revision, false);
 end;
@@ -818,7 +820,8 @@ begin
 end;
 $write_quote_items$;
 
--- スイッチを入れられるのは、有効なすべての標準見積の公開中の版が v2.5 のときだけ（v2.5 以前の版は商品価格の列＝原価で差額を出すため）
+-- スイッチを入れられるのは、有効なすべての標準見積の公開中の版が v2.5 のときだけ（v2.5 以前の版は商品価格の列＝原価で差額を出すため）。
+-- あわせて、外壁の選択枠の数量が 4（面）であること（シミュレーターは外壁を 1 面ずつ 4 面数えるので、1 のままだと標準のままでも 3 面分の差額が出る）
 create or replace function public.set_simulator_standard_pricing(p_enabled boolean)
 returns boolean
 language plpgsql
@@ -829,6 +832,7 @@ declare
   v_uid uuid := auth.uid();
   v_before boolean;
   v_legacy text;
+  v_wall text;
 begin
   if v_uid is null then
     raise exception 'UNAUTHENTICATED' using errcode = '42501';
@@ -850,6 +854,17 @@ begin
     if v_legacy is not null then
       raise exception using errcode = 'P0001',
         message = 'VALIDATION: 公開中の版が v2.5 でない標準見積があるため切り替えられません（' || v_legacy || '）。v2.5 の版を公開してから切り替えてください';
+    end if;
+    select string_agg(distinct m.name, '、' order by m.name) into v_wall
+      from public.standard_estimate_masters m
+      join public.standard_estimate_revisions r on r.id = m.current_published_revision_id and r.status = 'published' and r.pricing_model = 'v2.5'
+      join public.standard_estimate_revision_baseline_items bi on bi.revision_id = r.id
+     where m.status = 'active'
+       and bi.selection_target_code = 'exterior-wall'
+       and bi.quantity <> 4;
+    if v_wall is not null then
+      raise exception using errcode = 'P0001',
+        message = 'VALIDATION: 外壁の選択枠の数量が 4（面）でない標準見積があるため切り替えられません（' || v_wall || '）。シミュレーターは外壁を 1 面ずつ 4 面数えるので、選択枠の数量を 4 にしてください';
     end if;
   end if;
 

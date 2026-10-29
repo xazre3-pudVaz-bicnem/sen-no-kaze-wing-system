@@ -272,6 +272,14 @@ begin
     pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text'));
   set local session_replication_role = replica;
   update public.standard_estimate_masters set status = 'archived' where id = v_master_hotel;
+  -- 外壁の選択枠の数量が 4 でない版があると切り替えられない（試験のため、選択枠の対象を外壁に書き換えて確かめ、元に戻す）
+  update public.standard_estimate_revision_baseline_items set selection_target_code = 'exterior-wall' where revision_id = v_rev and option_id = p1;
+  set local session_replication_role = origin;
+  v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
+  perform pg_temp.svp_expect_eq('外壁の選択枠の数量が 4（面）でない標準見積があると、スイッチを入れられない', 'true',
+    (v_out like 'ERROR P0001: VALIDATION: 外壁の選択枠の数量が 4（面）でない標準見積%')::text);
+  set local session_replication_role = replica;
+  update public.standard_estimate_revision_baseline_items set selection_target_code = 'runtime-svp-category' where revision_id = v_rev and option_id = p1;
   set local session_replication_role = origin;
   perform pg_temp.svp_expect_eq('有効な標準見積がすべて v2.5 なら、本部はスイッチを入れられる', 'true',
     pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text'));
@@ -295,6 +303,9 @@ begin
   perform pg_temp.svp_expect_eq('v2.5 の版が無い仕様は、商品価格の列（原価）で計算せず、金額を未確定（0 円）にする', 'true/0/0',
     v_out || '/' || (select base_price::text from public.configurations where id = cfg_nose)
     || '/' || (select total::text from public.configurations where id = cfg_nose));
+  perform pg_temp.svp_expect_eq('v2.5 の版が無い仕様の見積依頼は、今の税ルールの税率を使う（旧 Excel 標準見積の税率・備考は使わない）', 'true/0.100000',
+    (public.standard_estimate_sale_view_for_configuration(cfg_nose) ->> 'pending') || '/' ||
+    (public.standard_estimate_sale_view_for_configuration(cfg_nose) ->> 'tax_rate'));
 
   set local session_replication_role = replica;
   insert into public.quote_requests (id, configuration_id, user_id, quote_id, status)

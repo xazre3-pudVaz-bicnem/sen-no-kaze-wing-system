@@ -19,7 +19,7 @@
 import { computePricing } from './pricing';
 import { defaultVariantIdsFor } from './preset';
 import { truncMul, truncQuantity } from './standard-estimate-money';
-import type { StandardEstimatePricingResult, StandardEstimateSectionPricing } from './standard-estimate-pricing';
+import type { StandardEstimatePricingResult, StandardEstimateSectionPricing, V25MissingUnit } from './standard-estimate-pricing';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from './standard-estimate-pricing';
 import type { ExteriorFaceSelection } from './exterior-wall';
 import type { CatalogBundle, EstimateSectionCode, EstimateTemplateBundle, OptionVariantChoice, OptionVariantGroup, PricingResult, ProductOption } from './types';
@@ -37,9 +37,23 @@ export interface StandardEstimateSaleViewSection {
 
 /**
  * v2.5 の売価の表（商品 1 つ分）。groups は選択項目の順に、その項目の選択肢 ID を並べたもの。
- * units のキーは、選択項目の順に選んだ選択肢の位置（選ばないは -）を . でつないだもの。値は売価単価（null は価格未確定）
+ * units のキーは、選択項目の順に選んだ選択肢の位置（選ばないは -）を . でつないだもの。値は売価単価（null は価格未確定）。
+ * 組み合わせが多い商品は partial：標準の組み合わせ（default_key）と、そこから 1 つの選択項目だけを変えた組み合わせだけが入る。
+ * それ以外の組み合わせはサーバー（get_simulator_v25_units）で計算する
  */
-export type V25PriceTable = { por: true } | { groups: string[][]; units: Record<string, number | null> };
+export type V25PriceTable =
+  | { por: true }
+  | { groups: string[][]; units: Record<string, number | null>; partial?: boolean; default_key?: string };
+
+/** サーバーで計算した、表に無い「商品＋選択肢」の売価単価（キーは v25UnitKey。null は価格未確定） */
+export type V25UnitLookup = ReadonlyMap<string, number | null>;
+
+/** 表に無い「商品＋選択肢」の売価のキー（版ごとに違うので版を含める） */
+export function v25UnitKey(revisionId: string, optionId: string, choiceIds: string[]): string {
+  return `${revisionId}|${optionId}|${[...new Set(choiceIds)].sort().join(',')}`;
+}
+
+const hasUnit = (units: Record<string, number | null>, key: string) => Object.prototype.hasOwnProperty.call(units, key);
 
 export interface StandardEstimateSaleView {
   /** v2.5 の標準見積（v2.5 PR-C1）。無ければ v2.5 以前の形 */
@@ -108,9 +122,15 @@ export function v25PriceKey(table: { groups: string[][] }, choiceIds: string[]):
 
 /**
  * v2.5 の「商品＋選択肢」の売価単価（DB の standard_estimate_v25_selection_unit と同じ決まり）。null は価格未確定。
- * 版の選択枠と同じ「商品＋選択肢」は公開した版の売価、それ以外は売価の表
+ * 版の選択枠と同じ「商品＋選択肢」は公開した版の売価、それ以外は売価の表。
+ * undefined は、組み合わせが多い商品（partial）で表に無く、まだサーバーで計算していない組み合わせ
  */
-export function v25SelectionUnit(view: StandardEstimateSaleView, optionId: string, choiceIds: string[]): number | null {
+export function v25SelectionUnit(
+  view: StandardEstimateSaleView,
+  optionId: string,
+  choiceIds: string[],
+  lookup?: V25UnitLookup
+): number | null | undefined {
   const chosen = new Set(choiceIds);
   const slot = view.baseline.find(
     (item) => item.option_id === optionId && item.variant_choice_ids.length === chosen.size && item.variant_choice_ids.every((id) => chosen.has(id))
@@ -120,7 +140,59 @@ export function v25SelectionUnit(view: StandardEstimateSaleView, optionId: strin
   if (!table || 'por' in table) return null;
   const key = v25PriceKey(table, [...chosen]);
   if (key === null) return null;
-  return table.units[key] ?? null;
+  if (hasUnit(table.units, key)) return table.units[key];
+  if (!table.partial) return null;
+  return lookup?.get(v25UnitKey(view.revision_id, optionId, [...chosen]));
+}
+
+/**
+ * 組み合わせが多い商品（partial）の、表に無い組み合わせの売価の目安：標準の売価に、1 か所ずつ変えたときの差を足す。
+ * v2.5 の式は差額を足してから率を掛けるので数円ずれうる（正確な売価はサーバーで計算して置き換える）。null は目安も出せない
+ */
+function v25ApproxUnit(view: StandardEstimateSaleView, optionId: string, choiceIds: string[]): number | null {
+  const table = view.prices?.[optionId];
+  if (!table || 'por' in table || !table.partial || table.default_key === undefined) return null;
+  const key = v25PriceKey(table, choiceIds);
+  const base = table.units[table.default_key];
+  if (key === null || base === null || base === undefined) return null;
+  const baseParts = table.default_key.split('.');
+  const parts = key.split('.');
+  let sum = base;
+  for (let index = 0; index < parts.length; index++) {
+    if (parts[index] === baseParts[index]) continue;
+    const swap = [...baseParts.slice(0, index), parts[index], ...baseParts.slice(index + 1)].join('.');
+    const unit = table.units[swap];
+    if (unit === null || unit === undefined) return null;
+    sum += unit - base;
+  }
+  return sum;
+}
+
+/**
+ * v2.5 の標準見積での「標準の選択肢」：版の選択枠に同じ商品があれば、その選択枠の選択肢（標準のままなら差額 0）。
+ * 無ければ商品の標準の選択肢（defaultVariantIdsFor）。view が v2.5 でなければ商品の標準の選択肢だけ
+ */
+export function v25StandardVariantIds(
+  groups: OptionVariantGroup[],
+  choices: OptionVariantChoice[],
+  view: StandardEstimateSaleView | null,
+  optionIds: string[]
+): string[] {
+  const defaults = defaultVariantIdsFor(groups, choices, optionIds);
+  if (!view || !isV25SaleView(view)) return defaults;
+  const selected = new Set(optionIds);
+  const slotChoices = new Map<string, string[]>();
+  for (const item of view.baseline) {
+    if (selected.has(item.option_id) && !slotChoices.has(item.option_id)) slotChoices.set(item.option_id, item.variant_choice_ids);
+  }
+  if (slotChoices.size === 0) return defaults;
+  const optionOfGroup = new Map(groups.map((group) => [group.id, group.option_id]));
+  const optionOfChoice = new Map(choices.map((choice) => [choice.id, optionOfGroup.get(choice.group_id)]));
+  return [
+    ...defaults.filter((id) => !slotChoices.has(optionOfChoice.get(id) ?? '')),
+    // 選択枠の選択肢のうち、今のカタログにある（公開中の）ものだけ
+    ...[...slotChoices.entries()].flatMap(([optionId, ids]) => ids.filter((id) => optionOfChoice.get(id) === optionId)),
+  ];
 }
 
 /**
@@ -167,7 +239,8 @@ export function v25DisplayCatalog(
   options: ProductOption[],
   groups: OptionVariantGroup[],
   choices: OptionVariantChoice[],
-  view: StandardEstimateSaleView | null
+  view: StandardEstimateSaleView | null,
+  lookup?: V25UnitLookup
 ): { options: ProductOption[]; choices: OptionVariantChoice[] } {
   if (!view) {
     return {
@@ -186,17 +259,22 @@ export function v25DisplayCatalog(
     }
     return ids;
   };
+  // 売価の目安：表（またはサーバーで計算した値）に無ければ、標準と 1 か所だけ変えた売価から作る
+  const unitOf = (optionId: string, ids: string[]) => {
+    const unit = v25SelectionUnit(view, optionId, ids, lookup);
+    return unit === undefined ? v25ApproxUnit(view, optionId, ids) : unit;
+  };
   const displayOptions = options.map((option) => {
-    const unit = v25SelectionUnit(view, option.id, defaults(option.id));
+    const unit = unitOf(option.id, defaults(option.id));
     return { ...option, price: unit ?? 0, price_on_request: unit === null };
   });
   const displayChoices = choices.map((choice) => {
     const group = groupById.get(choice.group_id);
     if (!group) return { ...choice, extra_price: 0, price_on_request: true };
     const base = defaults(group.option_id);
-    const baseUnit = v25SelectionUnit(view, group.option_id, base);
+    const baseUnit = unitOf(group.option_id, base);
     const swapped = [...base.filter((id) => groupOfChoice.get(id) !== group.id), choice.id];
-    const unit = v25SelectionUnit(view, group.option_id, swapped);
+    const unit = unitOf(group.option_id, swapped);
     if (unit === null) return { ...choice, extra_price: 0, price_on_request: true };
     return { ...choice, extra_price: baseUnit === null ? 0 : unit - baseUnit, price_on_request: false };
   });
@@ -321,17 +399,28 @@ export function saleViewToTemplateBundle(view: StandardEstimateSaleView, modelId
   };
 }
 
-/** 売価だけの標準見積と、お客様の選択から価格を計算する（DB の見積依頼と同じ式） */
+/**
+ * 売価だけの標準見積と、お客様の選択から価格を計算する（DB の見積依頼と同じ式）。
+ * v2.5：lookup はサーバーで計算した表に無い組み合わせの売価。まだ無い組み合わせは目安で計算し、missing_units に挙げる
+ */
 export function computeSaleViewPricing(
   bundle: CatalogBundle,
   view: StandardEstimateSaleView,
   selectedOptionIds: string[],
   variantChoiceIds: string[],
-  exteriorFaces: ExteriorFaceSelection[]
+  exteriorFaces: ExteriorFaceSelection[],
+  lookup?: V25UnitLookup
 ): StandardEstimatePricingResult {
   const model = bundle.model;
   const taxRate = Number(view.tax_rate);
   const v25 = isV25SaleView(view);
+  const missing = new Map<string, V25MissingUnit>();
+  const unitOf = (optionId: string, choiceIds: string[]) => {
+    const unit = v25SelectionUnit(view, optionId, choiceIds, lookup);
+    if (unit !== undefined) return unit;
+    missing.set(v25UnitKey(view.revision_id, optionId, choiceIds), { revision_id: view.revision_id, option_id: optionId, choice_ids: choiceIds });
+    return v25ApproxUnit(view, optionId, choiceIds);
+  };
   const current = computePricing(
     model,
     bundle.options,
@@ -342,7 +431,7 @@ export function computeSaleViewPricing(
     0,
     exteriorFaces,
     // v2.5：商品価格の列（原価）を使わず、売価の表で決める
-    v25 ? (option, picked) => v25SelectionUnit(view, option.id, picked.map((choice) => choice.id)) : undefined
+    v25 ? (option, picked) => unitOf(option.id, picked.map((choice) => choice.id)) : undefined
   );
   // 防火の標準見積を使うときは、防火仕様の行（別途見積）は標準見積に含まれるので数えない
   const fireCategoryIds = new Set(bundle.categories.filter((category) => category.code === 'fireproof').map((category) => category.id));
@@ -411,6 +500,7 @@ export function computeSaleViewPricing(
     sections: sectionPricings,
     template: saleViewToTemplateBundle(view, model.id),
     has_changes: sectionPricings.some((section) => section.delta_line !== 0 || section.delta_expense !== 0),
+    ...(v25 ? { missing_units: [...missing.values()] } : {}),
   };
 }
 
@@ -427,15 +517,17 @@ export function isFireProofSelected(bundle: Pick<CatalogBundle, 'options'>, sele
 export function v25ConfigurationPricing(
   bundle: CatalogBundle,
   views: StandardEstimateSaleView[],
-  input: { specCode: string | null; optionIds: string[]; variantChoiceIds: string[]; exteriorFaces: ExteriorFaceSelection[] }
-): PricingResult {
+  input: { specCode: string | null; optionIds: string[]; variantChoiceIds: string[]; exteriorFaces: ExteriorFaceSelection[] },
+  lookup?: V25UnitLookup
+): { pricing: PricingResult; missing: V25MissingUnit[] } {
   const view = input.specCode
     ? pickSaleView(views, bundle.model.slug, input.specCode, isFireProofSelected(bundle, input.optionIds))
     : null;
   if (view && isV25SaleView(view)) {
-    return computeSaleViewPricing(bundle, view, input.optionIds, input.variantChoiceIds, input.exteriorFaces).pricing;
+    const result = computeSaleViewPricing(bundle, view, input.optionIds, input.variantChoiceIds, input.exteriorFaces, lookup);
+    return { pricing: result.pricing, missing: result.missing_units ?? [] };
   }
-  return pendingSaleViewPricing(
+  const pending = pendingSaleViewPricing(
     computePricing(
       bundle.model,
       bundle.options,
@@ -447,4 +539,5 @@ export function v25ConfigurationPricing(
       input.exteriorFaces
     )
   );
+  return { pricing: pending, missing: [] };
 }

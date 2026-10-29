@@ -12,14 +12,16 @@
 --   選んだ商品の売価単価（standard_estimate_v25_selection_unit）：
 --     - 版の選択枠と同じ「商品＋選択肢」なら、公開した版の売価（auto は固定した原価からの売価、manual は入力した売価、por は未確定）
 --     - それ以外は、今の商品標準原価・原価差額の Version とこの版の率で v2.5 の auto の式（trunc(trunc((原価＋差額) × 販売費率) × 掛率)）
---     - 未確定：別途見積の商品、自動計算の対象外の区分（別途工事）、原価の Version が無い商品・選択肢、組み合わせが 1,000 を超える商品
+--     - 未確定：別途見積の商品、自動計算の対象外の区分（別途工事）、原価の Version が無い商品・選択肢
 --   外壁は 4 面がそろっていれば面ごと（1 面ずつ）。防火の版を使うときは、防火仕様の行は版に含まれるので数えない
 -- * 区分の経費 = trunc(区分の明細小計 × 経費率)（版で経費の対象の区分だけ）。本体は版のまま
 -- * 税抜 = 区分の合計 ＋ 版の調整額、税 = trunc(税抜 × 税率)
 -- * 未確定の商品は 0 円として合計し、見積の明細は「価格未確定（別途お見積り）」と明記する（これまでと同じ）
 -- * 公開中の v2.5 の版が無い仕様は、これまでの計算（商品価格の列＝原価）を使わず、金額を未確定（0 円）にし、見積は別途お見積りの 1 行にする
 -- * シミュレーターには売価だけを返す（get_simulator_v25_sale_views。原価・率・原価の Version は返さない。service_role だけ）。
---   商品ごとの売価は、選択肢の組み合わせごとの表にして渡す（v2.5 の式は選択肢の差額を足してから率を掛けるので、差額の売価は足し算にならない）
+--   商品ごとの売価は、選択肢の組み合わせごとの表にして渡す（v2.5 の式は選択肢の差額を足してから率を掛けるので、差額の売価は足し算にならない）。
+--   組み合わせが多い商品（本番では玄関ドア・UB など）は、標準と 1 か所だけ変えた組み合わせを表に入れ、それ以外は選んだときに
+--   get_simulator_v25_units で計算する（売価だけ。service_role だけ）
 -- * スイッチを入れられるのは、有効なすべての標準見積の公開中の版が v2.5 のときだけ（set_simulator_standard_pricing）
 --
 -- 既存 migration は編集しない。発行済みの見積・保存済みの仕様の金額は、この migration では変えない（次に保存・見積依頼したときに計算する）。
@@ -44,8 +46,9 @@ begin
      or to_regprocedure('public.estimate_section_for_option(text, boolean)') is null then
     raise exception 'PRECONDITION: simulator standard estimate pricing (20261013200000・20261013210000) must be applied first';
   end if;
-  if to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null then
-    raise exception 'PRECONDITION: get_simulator_v25_sale_views already exists';
+  if to_regprocedure('public.get_simulator_v25_sale_views(uuid)') is not null
+     or to_regprocedure('public.get_simulator_v25_units(uuid, jsonb)') is not null then
+    raise exception 'PRECONDITION: simulator v2.5 pricing functions already exist';
   end if;
 end;
 $preflight$;
@@ -65,8 +68,6 @@ declare
   b record;
   v_choices uuid[];
   v_auto_sections text[];
-  v_combos numeric := 1;
-  g record;
   v_cost bigint;
   v_adjustment bigint := 0;
   v_one bigint;
@@ -108,17 +109,6 @@ begin
   if not (public.estimate_section_for_option(o.category_code, o.is_installation) = any(coalesce(v_auto_sections, '{}'::text[]))) then
     return null;
   end if;
-  -- シミュレーターの組み合わせの表と同じ上限（超える商品は画面でも未確定）
-  for g in
-    select (select count(*) from public.option_variant_choices vc where vc.group_id = vg.id and vc.status = 'published') as n
-      from public.option_variant_groups vg
-     where vg.option_id = o.id and vg.status = 'published'
-  loop
-    v_combos := v_combos * (g.n + 1);
-  end loop;
-  if v_combos > 1000 then
-    return null;
-  end if;
   select v.standard_cost into v_cost
     from public.option_standard_cost_versions v
    where v.option_id = o.id and v.superseded_at is null;
@@ -151,7 +141,10 @@ comment on function public.standard_estimate_v25_selection_unit(uuid, uuid, uuid
 
 -- 商品の選択肢の組み合わせごとの売価単価の表（シミュレーターに渡す。原価は含まない）
 -- { "groups": [[選択肢 ID…], …], "units": { "0.-": 123000, … } }。キーは選択項目の順に選んだ選択肢の位置（無しは -）を . でつないだもの。
--- 価格未確定の組み合わせは null。商品全体が未確定（別途見積・別途工事・原価未設定・組み合わせが多すぎる）なら { "por": true }
+-- 価格未確定の組み合わせは null。商品全体が未確定（別途見積・別途工事・原価未設定）なら { "por": true }。
+-- 組み合わせ（選ばないを含む）が 64 を超える商品は、標準の組み合わせ（default_key）と、そこから 1 つの選択項目だけを変えた組み合わせだけを入れる
+-- （"partial": true）。それ以外の組み合わせは、選んだときに get_simulator_v25_units で計算する（ページを重くしないため）。
+-- 標準の選択肢は、選択項目ごとに種類が標準・固定の最初の選択肢、無ければ先頭（シミュレーターの defaultVariantIdsFor と同じ）
 create function public.standard_estimate_v25_price_table(p_revision_id uuid, p_option_id uuid)
 returns jsonb
 language plpgsql
@@ -159,21 +152,55 @@ stable
 set search_path = ''
 as $$
 declare
-  v_groups uuid[][];
+  rev record;
+  o record;
+  v_auto_sections text[];
   v_group_lists jsonb := '[]'::jsonb;
   v_sizes integer[] := '{}';
-  v_total integer := 1;
+  v_base integer[] := '{}';
+  v_total numeric := 1;
+  v_partial boolean;
+  v_swap_pos integer[] := '{}';
+  v_swap_val integer[] := '{}';
+  v_count integer;
   v_index integer;
   v_rest integer;
   v_pos integer;
+  v_val integer;
+  v_vals integer[];
   v_parts text[];
   v_choices uuid[];
+  v_key text;
+  v_default_key text;
   v_units jsonb := '{}'::jsonb;
   v_unit integer;
   v_any boolean := false;
   g record;
   v_list uuid[];
+  v_default integer;
 begin
+  select r.id, r.calc_rule_version_id into rev
+    from public.standard_estimate_revisions r where r.id = p_revision_id and r.pricing_model = 'v2.5';
+  if not found then
+    return pg_catalog.jsonb_build_object('por', true);
+  end if;
+  -- 版の選択枠と同じ組み合わせ以外がすべて未確定になる商品は、表を作らない（選択枠の売価はシミュレーターが先に見る）
+  select x.price_on_request, x.is_installation, c.code as category_code
+    into o
+    from public.options x
+    join public.option_categories c on c.id = x.category_id
+   where x.id = p_option_id and x.status = 'published';
+  if not found then
+    return pg_catalog.jsonb_build_object('por', true);
+  end if;
+  select rv.auto_price_sections into v_auto_sections
+    from public.pricing_calculation_rule_versions rv where rv.id = rev.calc_rule_version_id;
+  if o.price_on_request
+     or not (public.estimate_section_for_option(o.category_code, o.is_installation) = any(coalesce(v_auto_sections, '{}'::text[])))
+     or not exists (select 1 from public.option_standard_cost_versions v where v.option_id = p_option_id and v.superseded_at is null) then
+    return pg_catalog.jsonb_build_object('por', true);
+  end if;
+
   for g in
     select vg.id
       from public.option_variant_groups vg
@@ -183,42 +210,80 @@ begin
     v_list := array(select vc.id from public.option_variant_choices vc
                      where vc.group_id = g.id and vc.status = 'published'
                      order by vc.sort_order, vc.id);
+    -- 標準の選択肢の位置（1 始まり。0 は選ばない）
+    select coalesce(min(x.ord), case when coalesce(array_length(v_list, 1), 0) > 0 then 1 else 0 end)::integer
+      into v_default
+      from unnest(v_list) with ordinality as x(id, ord)
+      join public.option_variant_choices vc on vc.id = x.id
+     where vc.kind in ('standard', 'fixed');
     v_group_lists := v_group_lists || pg_catalog.jsonb_build_array(pg_catalog.to_jsonb(v_list));
     v_sizes := v_sizes || (coalesce(array_length(v_list, 1), 0) + 1);
+    v_base := v_base || v_default;
     v_total := v_total * (coalesce(array_length(v_list, 1), 0) + 1);
-    if v_total > 1000 then
-      return pg_catalog.jsonb_build_object('por', true);
-    end if;
   end loop;
 
-  for v_index in 0 .. v_total - 1 loop
-    v_rest := v_index;
+  v_partial := v_total > 64;
+  if v_partial then
+    -- 標準の組み合わせから 1 つの選択項目だけを変えた組み合わせ
+    for v_pos in 1 .. coalesce(array_length(v_sizes, 1), 0) loop
+      for v_val in 0 .. v_sizes[v_pos] - 1 loop
+        if v_val <> v_base[v_pos] then
+          v_swap_pos := v_swap_pos || v_pos;
+          v_swap_val := v_swap_val || v_val;
+        end if;
+      end loop;
+    end loop;
+    v_count := coalesce(array_length(v_swap_pos, 1), 0) + 1;
+  else
+    v_count := v_total::integer;
+  end if;
+
+  for v_index in 0 .. v_count - 1 loop
+    -- 選択項目ごとの値（0 は選ばない、k は k 番目の選択肢）
+    if v_partial then
+      v_vals := v_base;
+      if v_index > 0 then
+        v_vals[v_swap_pos[v_index]] := v_swap_val[v_index];
+      end if;
+    else
+      v_rest := v_index;
+      v_vals := '{}';
+      for v_pos in 1 .. coalesce(array_length(v_sizes, 1), 0) loop
+        v_vals := v_vals || (v_rest % v_sizes[v_pos]);
+        v_rest := v_rest / v_sizes[v_pos];
+      end loop;
+    end if;
     v_parts := '{}';
     v_choices := '{}';
     for v_pos in 1 .. coalesce(array_length(v_sizes, 1), 0) loop
-      -- 0 は「選ばない」、1 以上はその選択項目の位置＋1
-      if v_rest % v_sizes[v_pos] = 0 then
+      if v_vals[v_pos] = 0 then
         v_parts := v_parts || '-'::text;
       else
-        v_parts := v_parts || ((v_rest % v_sizes[v_pos]) - 1)::text;
-        v_choices := v_choices || ((v_group_lists -> (v_pos - 1)) ->> ((v_rest % v_sizes[v_pos]) - 1))::uuid;
+        v_parts := v_parts || (v_vals[v_pos] - 1)::text;
+        v_choices := v_choices || ((v_group_lists -> (v_pos - 1)) ->> (v_vals[v_pos] - 1))::uuid;
       end if;
-      v_rest := v_rest / v_sizes[v_pos];
     end loop;
+    v_key := array_to_string(v_parts, '.');
+    if v_index = 0 and v_partial then
+      v_default_key := v_key;
+    end if;
     v_unit := public.standard_estimate_v25_selection_unit(p_revision_id, p_option_id, v_choices);
     v_any := v_any or v_unit is not null;
-    v_units := v_units || pg_catalog.jsonb_build_object(array_to_string(v_parts, '.'), v_unit);
+    v_units := v_units || pg_catalog.jsonb_build_object(v_key, v_unit);
   end loop;
 
-  if not v_any then
+  if not v_any and not v_partial then
     return pg_catalog.jsonb_build_object('por', true);
+  end if;
+  if v_partial then
+    return pg_catalog.jsonb_build_object('groups', v_group_lists, 'units', v_units, 'partial', true, 'default_key', v_default_key);
   end if;
   return pg_catalog.jsonb_build_object('groups', v_group_lists, 'units', v_units);
 end;
 $$;
 
 comment on function public.standard_estimate_v25_price_table(uuid, uuid) is
-  'シミュレーターに渡す、商品の選択肢の組み合わせごとの売価単価（原価は含まない）。内部の部品。';
+  'シミュレーターに渡す、商品の選択肢の組み合わせごとの売価単価（原価は含まない）。組み合わせが 64 を超える商品は標準と 1 か所だけ変えた組み合わせだけ。内部の部品。';
 
 -- ---------- 売価だけの形の v2.5 の標準見積（シミュレーター・保存・見積依頼で共通） ----------
 
@@ -360,6 +425,48 @@ $views$;
 
 comment on function public.get_simulator_v25_sale_views(uuid) is
   '公開中の v2.5 の標準見積を、売価だけの形（選択肢の組み合わせごとの売価の表つき）で返す。シミュレーターのページのサーバー側（service_role）だけが呼ぶ。';
+
+-- シミュレーター用：表に無い「商品＋選択肢」の売価単価（組み合わせが多い商品で、2 つ以上の選択項目を変えたとき）。
+-- サーバーが service_role で呼ぶ（スイッチが入っている間か、本部のプレビューのときだけ。判断はサーバー側）。売価だけを返す
+--   p_items：[{ option_id, choice_ids: [選択肢 ID…] }, …]（200 件まで）。結果は同じ順の売価単価の配列（未確定は null）
+create function public.get_simulator_v25_units(p_revision_id uuid, p_items jsonb)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $units$
+declare
+  v_item jsonb;
+  v_out jsonb := '[]'::jsonb;
+begin
+  -- 公開中（いまの版）の v2.5 の標準見積だけ。下書き・過去の版の売価は返さない
+  if not exists (
+    select 1
+      from public.standard_estimate_masters m
+      join public.standard_estimate_revisions r on r.id = m.current_published_revision_id and r.status = 'published' and r.pricing_model = 'v2.5'
+     where r.id = p_revision_id and m.status = 'active'
+  ) then
+    raise exception using errcode = 'P0002', message = 'NOT_FOUND: 公開中の v2.5 の標準見積が見つかりません';
+  end if;
+  if pg_catalog.jsonb_typeof(p_items) is distinct from 'array' or pg_catalog.jsonb_array_length(p_items) > 200 then
+    raise exception using errcode = 'P0001', message = 'VALIDATION: 商品の指定が正しくありません（200 件まで）';
+  end if;
+  for v_item in select e.value from pg_catalog.jsonb_array_elements(p_items) as e(value) loop
+    if pg_catalog.jsonb_typeof(v_item -> 'choice_ids') is distinct from 'array' or pg_catalog.jsonb_array_length(v_item -> 'choice_ids') > 30 then
+      raise exception using errcode = 'P0001', message = 'VALIDATION: 選択肢の指定が正しくありません（30 件まで）';
+    end if;
+    v_out := v_out || pg_catalog.jsonb_build_array(public.standard_estimate_v25_selection_unit(
+      p_revision_id,
+      (v_item ->> 'option_id')::uuid,
+      array(select c.value::uuid from pg_catalog.jsonb_array_elements_text(v_item -> 'choice_ids') as c(value))));
+  end loop;
+  return v_out;
+end;
+$units$;
+
+comment on function public.get_simulator_v25_units(uuid, jsonb) is
+  '公開中の v2.5 の標準見積で、表に無い「商品＋選択肢」の売価単価を返す（原価・率は返さない）。シミュレーターのサーバー側（service_role）だけが呼ぶ。';
 
 -- ---------- 保存した仕様に使う v2.5 の版（内部の部品） ----------
 
@@ -773,6 +880,7 @@ alter function public.standard_estimate_v25_selection_unit(uuid, uuid, uuid[]) o
 alter function public.standard_estimate_v25_price_table(uuid, uuid) owner to postgres;
 alter function public.standard_estimate_v25_sale_view(uuid, boolean) owner to postgres;
 alter function public.get_simulator_v25_sale_views(uuid) owner to postgres;
+alter function public.get_simulator_v25_units(uuid, jsonb) owner to postgres;
 alter function public.standard_estimate_v25_revision_for_configuration(uuid) owner to postgres;
 alter function public.standard_estimate_v25_configuration_money(uuid, uuid) owner to postgres;
 
@@ -780,11 +888,13 @@ revoke all on function public.standard_estimate_v25_selection_unit(uuid, uuid, u
 revoke all on function public.standard_estimate_v25_price_table(uuid, uuid) from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_sale_view(uuid, boolean) from public, anon, authenticated, service_role;
 revoke all on function public.get_simulator_v25_sale_views(uuid) from public, anon, authenticated, service_role;
+revoke all on function public.get_simulator_v25_units(uuid, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_revision_for_configuration(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.standard_estimate_v25_configuration_money(uuid, uuid) from public, anon, authenticated, service_role;
 
 -- シミュレーターのページ（サーバー側）だけが売価を読む
 grant execute on function public.get_simulator_v25_sale_views(uuid) to service_role;
+grant execute on function public.get_simulator_v25_units(uuid, jsonb) to service_role;
 
 -- ---------- postconditions ----------
 
@@ -798,7 +908,7 @@ begin
       from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
        and p.proname in ('standard_estimate_v25_selection_unit', 'standard_estimate_v25_price_table', 'standard_estimate_v25_sale_view',
-                         'get_simulator_v25_sale_views', 'standard_estimate_v25_revision_for_configuration',
+                         'get_simulator_v25_sale_views', 'get_simulator_v25_units', 'standard_estimate_v25_revision_for_configuration',
                          'standard_estimate_v25_configuration_money', 'standard_estimate_sale_view_for_configuration',
                          'apply_standard_estimate_to_configuration', 'write_standard_estimate_quote_items', 'set_simulator_standard_pricing')
   loop
@@ -816,13 +926,14 @@ begin
       raise exception 'POSTCONDITION: internal function % must not be executable by API roles', v_name;
     end if;
   end loop;
-  if has_function_privilege('authenticated', 'public.get_simulator_v25_sale_views(uuid)', 'EXECUTE')
-     or not has_function_privilege('service_role', 'public.get_simulator_v25_sale_views(uuid)', 'EXECUTE') then
-    raise exception 'POSTCONDITION: get_simulator_v25_sale_views must be executable by service_role only';
-  end if;
-  if not exists (select 1 from pg_catalog.pg_proc p where p.oid = 'public.get_simulator_v25_sale_views(uuid)'::regprocedure and p.prosecdef) then
-    raise exception 'POSTCONDITION: get_simulator_v25_sale_views must be SECURITY DEFINER';
-  end if;
+  foreach v_name in array array['public.get_simulator_v25_sale_views(uuid)', 'public.get_simulator_v25_units(uuid, jsonb)'] loop
+    if has_function_privilege('authenticated', v_name, 'EXECUTE') or not has_function_privilege('service_role', v_name, 'EXECUTE') then
+      raise exception 'POSTCONDITION: % must be executable by service_role only', v_name;
+    end if;
+    if not exists (select 1 from pg_catalog.pg_proc p where p.oid = v_name::regprocedure and p.prosecdef) then
+      raise exception 'POSTCONDITION: % must be SECURITY DEFINER', v_name;
+    end if;
+  end loop;
   -- この migration はスイッチを入れない
   if public.simulator_standard_pricing_enabled() then
     raise exception 'POSTCONDITION: the simulator pricing switch must stay off';

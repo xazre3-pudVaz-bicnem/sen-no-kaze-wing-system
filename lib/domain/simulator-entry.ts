@@ -35,7 +35,9 @@ const CURRENT_EXTERIOR_CODES = new Set([
 export function buildSimulatorEntryState(
   bundle: CatalogBundle,
   estimateTemplates: EstimateTemplateBundle[],
-  requestedSpecCode: string
+  requestedSpecCode: string,
+  /** 標準の選択肢の決め方（v2.5 の売価を使う間は標準見積の選択枠の選択肢。v2.5 PR-C1）。無ければ商品の標準の選択肢 */
+  standardVariantIds?: (specCode: string, optionIds: string[]) => string[]
 ): SimulatorEntryState | null {
   const { model } = bundle;
   const choice = simulatorEstimateChoices(model, estimateTemplates).find(
@@ -62,11 +64,9 @@ export function buildSimulatorEntryState(
     pruneToScope(ctx, baselineIds, finishLevel),
     baselineIds
   );
-  const variantChoiceIds = defaultVariantIdsFor(
-    bundle.variantGroups,
-    bundle.variantChoices,
-    optionIds
-  );
+  const variantChoiceIds = standardVariantIds
+    ? standardVariantIds(choice.code, optionIds)
+    : defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, optionIds);
 
   const exteriorWallCategory = bundle.categories.find((category) => category.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options

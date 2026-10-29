@@ -13,7 +13,9 @@ describe('平面図からシミュレーターへの仕様指定導線', () => {
     expect(simulatorPage).toContain('const [{ slug }, { c, resume, spec, preview, plan }]');
     expect(simulatorPage).toContain('if (c) {');
     expect(simulatorPage).toContain('} else if (spec) {');
-    expect(simulatorPage).toContain('buildSimulatorEntryState(bundle, estimateTemplates, spec)');
+    // v2.5 の売価を使う間は、標準の選択肢を標準見積の選択枠の選択肢にする（v2.5 PR-C1）
+    expect(simulatorPage).toContain('const entry = buildSimulatorEntryState(');
+    expect(simulatorPage).toContain('? (specCode, optionIds) =>');
     expect(simulatorPage.indexOf('if (c) {')).toBeLessThan(simulatorPage.indexOf('} else if (spec) {'));
     expect(simulatorPage.indexOf('if (c) {')).toBeLessThan(simulatorPage.indexOf('} else if (plan) {'));
   });

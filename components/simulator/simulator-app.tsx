@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ArrowRight, Save } from 'lucide-react';
 import { saveConfigurationWithExteriorAction } from '@/lib/actions/exterior-configurations';
+import { fetchSimulatorV25UnitsAction } from '@/lib/actions/simulator-v25-units';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
 import { resolvePreview, selectedPreviewKeys } from '@/lib/domain/preview';
 import { categoriesInScope, defaultSelection, explainBlocked, pruneToScope, toggleOption, validateSelection, type RuleContext } from '@/lib/domain/rules';
@@ -23,12 +24,15 @@ import {
 import {
   computeStandardEstimatePricing,
   type StandardEstimatePricingResult,
+  type V25MissingUnit,
 } from '@/lib/domain/standard-estimate-pricing';
 import {
   computeSaleViewPricing,
   isV25SaleView,
   pendingSaleViewPricing,
   v25DisplayCatalog,
+  v25StandardVariantIds,
+  v25UnitKey,
   isFireProofSelected,
   pickSaleView,
   type StandardEstimateSaleView,
@@ -253,6 +257,22 @@ export function SimulatorApp({
     pruneToScope(initialRuleCtx, eligibleInitialIds, initialLevel),
     initialBaselineIds
   );
+  /**
+   * 仕様の標準の選択肢。v2.5 の売価を使う間は、その仕様の v2.5 の標準見積の選択枠の選択肢（標準のままなら差額 0。v2.5 PR-C1）。
+   * 選択枠に無い商品・v2.5 以前は商品の標準の選択肢
+   */
+  const standardVariantIdsFor = useCallback(
+    (code: string, optionIds: string[]) =>
+      v25Pricing
+        ? v25StandardVariantIds(
+            bundle.variantGroups,
+            bundle.variantChoices,
+            pickSaleView(saleViews, model.slug, code, isFireProofSelected(bundle, optionIds)),
+            optionIds
+          )
+        : defaultVariantIds(bundle, optionIds),
+    [bundle, model.slug, saleViews, v25Pricing]
+  );
   // 編集できるプラン（保存した下書き・一時保存）は、台帳から外れた選択肢を外し、標準の選択肢で補って開く。
   // 見積依頼済みなどの読み取り専用の履歴は、保存された内容のまま表示する
   const initialVariants =
@@ -261,7 +281,7 @@ export function SimulatorApp({
       : pruneHiddenVariantChoices(
           bundle.variantGroups,
           bundle.variantChoices,
-          initial?.variant_choice_ids ?? defaultVariantIds(bundle, initialSelection)
+          initial?.variant_choice_ids ?? standardVariantIdsFor(defaultSpecCode, initialSelection)
         );
   const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options
@@ -572,10 +592,17 @@ export function SimulatorApp({
   );
   /** v2.5 の売価を使う間に、この仕様の v2.5 の標準見積が無い（価格は準備中・見積依頼でお見積り） */
   const v25PricePending = v25Pricing && !activeSaleView;
+  /**
+   * v2.5：売価の表に無い「商品＋選択肢」（組み合わせが多い商品）をサーバーで計算した売価（キーは v25UnitKey）。
+   * 計算するまでの金額は、標準と 1 か所だけ変えた売価から作った目安
+   */
+  const [v25Units, setV25Units] = useState<ReadonlyMap<string, number | null>>(() => new Map());
+  const [v25UnitsFailed, setV25UnitsFailed] = useState(false);
+  const requestedV25Units = useRef(new Set<string>());
   /** v2.5 の売価：画面に出す商品価格・選択肢の差額（原価は使わない。合計は computeSaleViewPricing で売価の表から計算） */
   const displayCatalog = useMemo(
-    () => (v25Pricing ? v25DisplayCatalog(bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView) : null),
-    [v25Pricing, bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView]
+    () => (v25Pricing ? v25DisplayCatalog(bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView, v25Units) : null),
+    [v25Pricing, bundle.options, bundle.variantGroups, bundle.variantChoices, activeSaleView, v25Units]
   );
   const displayOptionById = useMemo(
     () => (displayCatalog ? new Map(displayCatalog.options.map((option) => [option.id, option] as const)) : null),
@@ -589,7 +616,7 @@ export function SimulatorApp({
   const standardEstimatePricing = useMemo<StandardEstimatePricingResult | null>(
     () =>
       activeSaleView
-        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces)
+        ? computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces, v25Units)
         : activeEstimateTemplate && !v25Pricing
           ? computeStandardEstimatePricing(
               bundle,
@@ -600,8 +627,35 @@ export function SimulatorApp({
               finishLevel
             )
           : null,
-    [activeEstimateTemplate, activeSaleView, bundle, exteriorFaces, finishLevel, selected, variantIds, v25Pricing]
+    [activeEstimateTemplate, activeSaleView, bundle, exteriorFaces, finishLevel, selected, variantIds, v25Pricing, v25Units]
   );
+  /** v2.5：今の選択で、売価の表に無く、まだサーバーで計算していない「商品＋選択肢」 */
+  const missingV25Units = useMemo<V25MissingUnit[]>(
+    () => (v25Pricing ? (standardEstimatePricing?.missing_units ?? []) : []),
+    [standardEstimatePricing, v25Pricing]
+  );
+  const v25Calculating = missingV25Units.length > 0 && !v25UnitsFailed;
+  // 表に無い組み合わせは、サーバーで売価だけを計算してもらう（200 件ずつ。失敗した組み合わせは目安のまま、もう一度は頼まない）
+  useEffect(() => {
+    const wanted = missingV25Units
+      .filter((item) => !requestedV25Units.current.has(v25UnitKey(item.revision_id, item.option_id, item.choice_ids)))
+      .slice(0, 200);
+    if (wanted.length === 0) return;
+    for (const item of wanted) requestedV25Units.current.add(v25UnitKey(item.revision_id, item.option_id, item.choice_ids));
+    fetchSimulatorV25UnitsAction({ items: wanted })
+      .then((result) => {
+        if (!result.ok) {
+          setV25UnitsFailed(true);
+          return;
+        }
+        setV25Units((prev) => {
+          const next = new Map(prev);
+          for (const row of result.units) next.set(row.key, row.unit);
+          return next;
+        });
+      })
+      .catch(() => setV25UnitsFailed(true));
+  }, [missingV25Units]);
   /** 標準見積未登録の仕様だけ従来計算へフォールバックする。 */
   const baseOverride = useMemo(
     () => (activeSaleView || activeEstimateTemplate ? null : baseBreakdownTotal(bundle, specCode)),
@@ -646,8 +700,9 @@ export function SimulatorApp({
                 bundle,
                 activeSaleView,
                 ids,
-                lv === finishLevel ? variantIds : defaultVariantIds(bundle, ids),
-                lv === finishLevel ? exteriorFaces : []
+                lv === finishLevel ? variantIds : standardVariantIdsFor(specCode, ids),
+                lv === finishLevel ? exteriorFaces : [],
+                v25Units
               ).pricing.total
             : 0;
         continue;
@@ -664,7 +719,7 @@ export function SimulatorApp({
       ).total;
     }
     return out;
-  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds]);
+  }, [activeSpecCtx, model, bundle, specSelections, specCode, selected, finishLevel, exteriorFaces, v25Pricing, activeSaleView, variantIds, v25Units, standardVariantIdsFor]);
 
   const independentInsulationCategoryIds = useMemo(
     () =>
@@ -713,8 +768,8 @@ export function SimulatorApp({
   const blocked = useMemo(() => explainBlocked(activeSpecCtx, selected), [activeSpecCtx, selected]);
   const activeSpecSelection = specSelections.find((row) => row.code === specCode)?.ids ?? [];
   const baselineVariantIds = useMemo(
-    () => defaultVariantIds(bundle, activeSpecSelection),
-    [activeSpecSelection, bundle]
+    () => standardVariantIdsFor(specCode, activeSpecSelection),
+    [activeSpecSelection, specCode, standardVariantIdsFor]
   );
   const planChangeSummary = useMemo(() => summarizePlanChanges(
     bundle,
@@ -762,7 +817,7 @@ export function SimulatorApp({
     const nextLevel = finishLevelForEstimateSpec(code);
     const nextCtx = ruleContextForSpec(ctx, code, model.slug);
     const nextSel = pruneToScope(nextCtx, selection.ids, nextLevel);
-    const nextVariants = defaultVariantIds(bundle, nextSel);
+    const nextVariants = standardVariantIdsFor(code, nextSel);
     const nextExteriorOptions = nextCtx.options
       .filter((option) => option.category_id === exteriorWallCat?.id && option.status === 'published')
       .sort((a, b) => a.sort_order - b.sort_order);
@@ -804,6 +859,11 @@ export function SimulatorApp({
         if (!r.rejected) cur = r.next;
       }
       setSelected(cur);
+      // v2.5：足した商品にも標準の選択肢を選ぶ（選択肢が無いと標準見積の選択枠と一致せず、標準のままでも差額が出る）
+      if (v25Pricing) {
+        const added = cur.filter((id) => !selected.includes(id));
+        if (added.length > 0) setVariantIds((prev) => [...prev, ...standardVariantIdsFor(specCode, added)]);
+      }
     } else {
       const kept = pruneToScope(activeSpecCtx, selected, level);
       const dropped = selected.length - kept.length;
@@ -1247,6 +1307,11 @@ export function SimulatorApp({
             <Alert tone="info">この仕様の価格は準備中です。見積依頼をいただければ、担当者がお見積りします。</Alert>
           </div>
         )}
+        {v25UnitsFailed && (
+          <div className="mt-4" data-testid="price-estimate-banner">
+            <Alert tone="warn">一部の商品の金額を計算できませんでした。表示している金額は目安です（保存・見積依頼のときに計算し直します）。</Alert>
+          </div>
+        )}
         {pricingPreview && (
           <div className="mt-4" data-testid="pricing-preview-banner">
             <Alert tone="info">
@@ -1346,6 +1411,11 @@ export function SimulatorApp({
           onPickCategory={openPicker}
           showDealerFinder
         />
+        {v25Calculating && (
+          <p className="mt-3 text-xs text-muted" role="status" data-testid="price-calculating">
+            選んだ組み合わせの金額を計算しています…
+          </p>
+        )}
         <p className="mt-3 text-xs text-muted">{PRICE_DISCLAIMER}</p>
       </div>
 

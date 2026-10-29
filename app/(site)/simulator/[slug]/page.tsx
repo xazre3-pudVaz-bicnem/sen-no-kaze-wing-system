@@ -7,7 +7,12 @@ import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getPublicBundleBySlug, getPublicCatalog } from '@/lib/data/public-catalog';
 import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
-import { withoutCatalogCosts } from '@/lib/domain/standard-estimate-sale-view';
+import {
+  isFireProofSelected,
+  pickSaleView,
+  v25StandardVariantIds,
+  withoutCatalogCosts,
+} from '@/lib/domain/standard-estimate-sale-view';
 import { breadcrumbJsonLd, buildMetadata } from '@/lib/seo';
 import { ELEVATIONS, MODEL_WING01_ID } from '@/lib/seed/catalog';
 import { JsonLd } from '@/components/ui';
@@ -134,7 +139,20 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
   } else if (spec) {
     // /plans の平面図から入った場合は、該当仕様の標準構成を選択済みで開始する。
     // 未知の spec_code は helper 側で無視し、通常の既定仕様へ安全にフォールバックする。
-    const entry = buildSimulatorEntryState(bundle, estimateTemplates, spec);
+    const entry = buildSimulatorEntryState(
+      bundle,
+      estimateTemplates,
+      spec,
+      sale.v25
+        ? (specCode, optionIds) =>
+            v25StandardVariantIds(
+              bundle.variantGroups,
+              bundle.variantChoices,
+              pickSaleView(saleViews, model.slug, specCode, isFireProofSelected(bundle, optionIds)),
+              optionIds
+            )
+        : undefined
+    );
     if (entry) {
       initial = {
         // URL指定の新規下書きなので保存済みConfiguration IDは持たない。

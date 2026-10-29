@@ -1,6 +1,9 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
-import type { StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
+import type { V25MissingUnit } from '@/lib/domain/standard-estimate-pricing';
+import { v25ConfigurationPricing, v25UnitKey, type StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
+import type { CatalogBundle, PricingResult } from '@/lib/domain/types';
+import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import { CATALOG_TAG } from './public-catalog';
 import { isMissingNamedFunction } from './schema-compat';
 import { isLocalMode } from './store';
@@ -55,6 +58,47 @@ export const getSimulatorV25SaleViews = unstable_cache(fetchSimulatorV25SaleView
   tags: [CATALOG_TAG],
   revalidate: 300,
 });
+
+/**
+ * 売価の表に無い「商品＋選択肢」（組み合わせが多い商品）の v2.5 の売価を、サーバー（service role）で計算する（get_simulator_v25_units）。
+ * 売価だけを返す。版ごとに 200 件ずつ。結果のキーは v25UnitKey。呼んでよいか（スイッチ・本部のプレビュー）は呼び出し側で決める
+ */
+export async function fetchSimulatorV25Units(items: V25MissingUnit[]): Promise<Map<string, number | null>> {
+  const out = new Map<string, number | null>();
+  if (items.length === 0 || isLocalMode() || !process.env.SUPABASE_SERVICE_ROLE_KEY) return out;
+  const { createAdminClient } = await import('@/lib/supabase/admin');
+  const db = createAdminClient();
+  const byRevision = new Map<string, V25MissingUnit[]>();
+  for (const item of items) byRevision.set(item.revision_id, [...(byRevision.get(item.revision_id) ?? []), item]);
+  for (const [revisionId, list] of byRevision) {
+    for (let start = 0; start < list.length; start += 200) {
+      const chunk = list.slice(start, start + 200);
+      const { data, error } = await db.rpc('get_simulator_v25_units', {
+        p_revision_id: revisionId,
+        p_items: chunk.map((item) => ({ option_id: item.option_id, choice_ids: item.choice_ids })),
+      });
+      if (error) throw new Error(`simulator v2.5 units: ${error.message}`);
+      const units = (Array.isArray(data) ? data : []) as Array<number | null>;
+      // 結果が足りなければ価格未確定（null）として扱う（安全側）
+      chunk.forEach((item, index) => out.set(v25UnitKey(revisionId, item.option_id, item.choice_ids), units[index] ?? null));
+    }
+  }
+  return out;
+}
+
+/**
+ * 保存した仕様の画面に出す v2.5 の金額（見積依頼の確認画面・本部の保存プランの画面）。
+ * 売価の表に無い組み合わせは、サーバーで計算してから求める（金額の正本は DB の保存・見積依頼）
+ */
+export async function resolvedV25ConfigurationPricing(
+  bundle: CatalogBundle,
+  views: StandardEstimateSaleView[],
+  input: { specCode: string | null; optionIds: string[]; variantChoiceIds: string[]; exteriorFaces: ExteriorFaceSelection[] }
+): Promise<PricingResult> {
+  const first = v25ConfigurationPricing(bundle, views, input);
+  if (first.missing.length === 0) return first.pricing;
+  return v25ConfigurationPricing(bundle, views, input, await fetchSimulatorV25Units(first.missing)).pricing;
+}
 
 /**
  * シミュレーターの新価格へ切り替えるスイッチ（20261013210000）。本部が入れるまでは false（現在のサイト価格を維持する）。

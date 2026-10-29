@@ -10,6 +10,8 @@ import {
   v25DisplayCatalog,
   v25PriceKey,
   v25SelectionUnit,
+  v25StandardVariantIds,
+  v25UnitKey,
   withoutCatalogCosts,
   type StandardEstimateSaleView,
 } from '@/lib/domain/standard-estimate-sale-view';
@@ -241,9 +243,81 @@ describe('v2.5 の売価の画面表示（PR-C1）', () => {
 
   it('保存した仕様の画面の金額：v2.5 の版があればシミュレーターと同じ、無い仕様・用途が無い仕様は価格準備中', () => {
     const input = { optionIds: ['p1', 'p2'], variantChoiceIds: ['c2'], exteriorFaces: [] };
-    expect(v25ConfigurationPricing(bundle, [view], { ...input, specCode: 'office' }).total).toBe(772515);
-    expect(v25ConfigurationPricing(bundle, [view], { ...input, specCode: 'hotel' })).toMatchObject({ total: 0, has_price_on_request: true });
-    expect(v25ConfigurationPricing(bundle, [view], { ...input, specCode: null })).toMatchObject({ total: 0, has_price_on_request: true });
+    expect(v25ConfigurationPricing(bundle, [view], { ...input, specCode: 'office' }).pricing.total).toBe(772515);
+    expect(v25ConfigurationPricing(bundle, [view], { ...input, specCode: 'hotel' }).pricing).toMatchObject({ total: 0, has_price_on_request: true });
+    expect(v25ConfigurationPricing(bundle, [view], { ...input, specCode: null }).pricing).toMatchObject({ total: 0, has_price_on_request: true });
+  });
+});
+
+// 組み合わせが多い商品（partial）：選択項目 2 つ（a1 標準・a2・a3、b1 標準・b2・b3）。表は標準（0.0）と 1 か所だけ変えた組み合わせだけ
+const partialBundle = {
+  ...bundle,
+  options: [...bundle.options, option('p6', { price: 10000 })],
+  variantGroups: [
+    ...bundle.variantGroups,
+    { id: 'ga', option_id: 'p6', code: 'a', name: '項目A', sort_order: 1, is_required: true, status: 'published' },
+    { id: 'gb', option_id: 'p6', code: 'b', name: '項目B', sort_order: 2, is_required: true, status: 'published' },
+  ],
+  variantChoices: [
+    ...bundle.variantChoices,
+    ...['a1', 'a2', 'a3'].map((id, index) => ({ id, group_id: 'ga', code: id, name: id, kind: index === 0 ? 'standard' : 'option', extra_price: 0, price_on_request: false, status: 'published', sort_order: index + 1 })),
+    ...['b1', 'b2', 'b3'].map((id, index) => ({ id, group_id: 'gb', code: id, name: id, kind: index === 0 ? 'standard' : 'option', extra_price: 0, price_on_request: false, status: 'published', sort_order: index + 1 })),
+  ],
+} as unknown as CatalogBundle;
+// 原価 10,000、a2 +100・a3 +200、b2 +100・b3 +800 として DB が作った表（trunc(trunc(原価 × 1.07) × 1.5)）
+const partialView: StandardEstimateSaleView = {
+  ...view,
+  prices: {
+    ...view.prices,
+    p6: {
+      groups: [['a1', 'a2', 'a3'], ['b1', 'b2', 'b3']],
+      partial: true,
+      default_key: '0.0',
+      units: { '0.0': 16050, '-.0': 16050, '1.0': 16210, '2.0': 16371, '0.-': 16050, '0.1': 16210, '0.2': 17334 },
+    },
+  },
+};
+
+describe('組み合わせが多い商品の売価（PR-C1）', () => {
+  it('表に無い組み合わせは undefined（まだ計算していない）。サーバーで計算した値があればそれを使う', () => {
+    expect(v25SelectionUnit(partialView, 'p6', ['a1', 'b1'])).toBe(16050);
+    expect(v25SelectionUnit(partialView, 'p6', ['a2', 'b1'])).toBe(16210);
+    expect(v25SelectionUnit(partialView, 'p6', ['a2', 'b2'])).toBeUndefined();
+    const lookup = new Map([[v25UnitKey('rev-v25', 'p6', ['b2', 'a2']), 16371]]);
+    expect(v25SelectionUnit(partialView, 'p6', ['a2', 'b2'], lookup)).toBe(16371);
+    // 版が違えば別の値（キーに版を含める）
+    expect(v25SelectionUnit({ ...partialView, revision_id: 'other' }, 'p6', ['a2', 'b2'], lookup)).toBeUndefined();
+    // 全部の組み合わせの表で表に無いものは未確定（null）のまま
+    expect(v25SelectionUnit(partialView, 'p1', ['c1', 'c2'])).toBeNull();
+  });
+
+  it('まだ計算していない組み合わせは、1 か所ずつ変えた差を足した目安で計算し、missing_units に挙げる', () => {
+    const approx = computeSaleViewPricing(withoutCatalogCosts(partialBundle), partialView, ['p1', 'p2', 'p6'], ['c1', 'a2', 'b2'], []);
+    // 目安：16,050 ＋（16,210 − 16,050）×2 ＝ 16,370。正しい売価は原価 10,200 → trunc(trunc(10,200 × 1.07) × 1.5) ＝ 16,371
+    // （v2.5 の式は差額を足してから率を掛けるので、1 か所ずつの差の足し算は 1 円ずれる）
+    expect(approx.pricing.lines.find((line) => line.option_id === 'p6')?.unit_price).toBe(16370);
+    expect(approx.missing_units).toEqual([{ revision_id: 'rev-v25', option_id: 'p6', choice_ids: ['a2', 'b2'] }]);
+    const exact = computeSaleViewPricing(withoutCatalogCosts(partialBundle), partialView, ['p1', 'p2', 'p6'], ['c1', 'a2', 'b2'], [],
+      new Map([[v25UnitKey('rev-v25', 'p6', ['a2', 'b2']), 16371]]));
+    expect(exact.pricing.lines.find((line) => line.option_id === 'p6')?.unit_price).toBe(16371);
+    expect(exact.missing_units).toEqual([]);
+    // v2.5 以前の版では挙げない
+    expect(computeSaleViewPricing(bundle, { ...view, pricing_model: undefined }, ['p1'], ['c1'], []).missing_units).toBeUndefined();
+  });
+
+  it('画面の商品価格は標準の売価、選択肢の差額は 1 か所だけ変えた売価との差（partial の表から作る）', () => {
+    const display = v25DisplayCatalog(partialBundle.options, partialBundle.variantGroups, partialBundle.variantChoices, partialView);
+    expect(display.options.find((row) => row.id === 'p6')).toMatchObject({ price: 16050, price_on_request: false });
+    expect(display.choices.filter((row) => row.group_id === 'gb').map((row) => row.extra_price)).toEqual([0, 160, 1284]);
+  });
+
+  it('v2.5 の標準の選択肢は、版の選択枠に同じ商品があればその選択肢（無ければ商品の標準）', () => {
+    const slotted = { ...partialView, baseline: [...partialView.baseline, { ...partialView.baseline[0], option_id: 'p6', variant_choice_ids: ['a3', 'b1'], unit_price: 16371, amount: 16371 }] };
+    expect(v25StandardVariantIds(partialBundle.variantGroups, partialBundle.variantChoices, slotted, ['p1', 'p6']).sort()).toEqual(['a3', 'b1', 'c1']);
+    expect(v25StandardVariantIds(partialBundle.variantGroups, partialBundle.variantChoices, null, ['p1', 'p6']).sort()).toEqual(['a1', 'b1', 'c1']);
+    // カタログに無い（公開中でない）選択枠の選択肢は使わない
+    const unknownChoice = { ...partialView, baseline: [{ ...partialView.baseline[0], option_id: 'p6', variant_choice_ids: ['zz'] }] };
+    expect(v25StandardVariantIds(partialBundle.variantGroups, partialBundle.variantChoices, unknownChoice, ['p6'])).toEqual([]);
   });
 });
 
@@ -281,6 +355,31 @@ describe('v2.5 の売価の差し込み（PR-C1）', () => {
     const product = read('app/(site)/products/[slug]/page.tsx');
     expect(product).toContain('const shownOptions = sale.v25');
     expect(product).toContain('options: shownOptions.filter(');
+  });
+
+  it('表に無い組み合わせはサーバーで計算する：スイッチが切れている間は本部だけ・売価だけ返す・ページは計算してから出す', () => {
+    const action = read('lib/actions/simulator-v25-units.ts');
+    expect(action).toContain('if (!(await getSimulatorStandardPricingEnabled())) {');
+    expect(action).toContain("if (user?.role !== 'admin') return { ok: false };");
+    expect(action).toContain('.max(200)');
+    const data = read('lib/data/standard-estimate-sale-views.ts');
+    expect(data).toContain("db.rpc('get_simulator_v25_units', {");
+    expect(read('app/(site)/mypage/configurations/[id]/request-quote/page.tsx')).toContain('? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {');
+    expect(read('app/admin/configurations/[id]/page.tsx')).toContain('? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {');
+    const app = read('components/simulator/simulator-app.tsx');
+    expect(app).toContain('fetchSimulatorV25UnitsAction({ items: wanted })');
+    expect(app).toContain('data-testid="price-calculating"');
+    expect(app).toContain('data-testid="price-estimate-banner"');
+  });
+
+  it('v2.5 の間は、仕様の標準の選択肢を標準見積の選択枠の選択肢にする（最初の表示・仕様の切り替え・注文範囲を広げたとき・/plans から）', () => {
+    const app = read('components/simulator/simulator-app.tsx');
+    expect(app).toContain('initial?.variant_choice_ids ?? standardVariantIdsFor(defaultSpecCode, initialSelection)');
+    expect(app).toContain('const nextVariants = standardVariantIdsFor(code, nextSel);');
+    expect(app).toContain('() => standardVariantIdsFor(specCode, activeSpecSelection),');
+    expect(app).toContain('setVariantIds((prev) => [...prev, ...standardVariantIdsFor(specCode, added)]);');
+    expect(read('app/(site)/simulator/[slug]/page.tsx')).toContain('v25StandardVariantIds(');
+    expect(read('lib/domain/simulator-entry.ts')).toContain('? standardVariantIds(choice.code, optionIds)');
   });
 
   it('原価の Version を変えたら、シミュレーターの売価の表のキャッシュを捨てる', () => {

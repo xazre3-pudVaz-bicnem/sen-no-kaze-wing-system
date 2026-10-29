@@ -57,6 +57,7 @@ declare
   p3 constant uuid := '29000000-0000-4000-8000-000000000503';
   p4 constant uuid := '29000000-0000-4000-8000-000000000504';
   p5 constant uuid := '29000000-0000-4000-8000-000000000505';
+  p6 constant uuid := '29000000-0000-4000-8000-000000000506';
   g1 constant uuid := '29000000-0000-4000-8000-000000000601';
   c1 constant uuid := '29000000-0000-4000-8000-000000000701';
   c2 constant uuid := '29000000-0000-4000-8000-000000000702';
@@ -76,6 +77,9 @@ declare
   v_views jsonb;
   v_view jsonb;
   v_money jsonb;
+  v_i integer;
+  v_j integer;
+  v_choice uuid;
 begin
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
@@ -106,6 +110,19 @@ begin
   values (g1, p1, 'size', 'サイズ', 1, true, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status, sort_order)
   values (c1, g1, 'standard', '標準', 'standard', 0, 'published', 1), (c2, g1, 'large', '大', 'option', 5000, 'published', 2);
+  -- 選択項目 4 つ × 選択肢 5 つ（選ばないを含めて 6^4 = 1,296 通り）の商品。表は標準と 1 か所だけ変えた組み合わせだけになる
+  insert into public.options (id, category_id, code, name, price, price_on_request, status, product_no, is_installation)
+  values (p6, cat_opt, 'runtime-svp-p6', 'C1 商品6（組み合わせが多い）', 10000, false, 'published', 'PRD-929006', false);
+  for v_i in 1 .. 4 loop
+    insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
+    values (format('29000000-0000-4000-8000-%s', lpad((610 + v_i)::text, 12, '0'))::uuid, p6, 'g' || v_i, '項目' || v_i, v_i, true, 'published');
+    for v_j in 1 .. 5 loop
+      insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status, sort_order)
+      values (format('29000000-0000-4000-8000-%s', lpad((7000 + v_i * 10 + v_j)::text, 12, '0'))::uuid,
+              format('29000000-0000-4000-8000-%s', lpad((610 + v_i)::text, 12, '0'))::uuid,
+              'c' || v_j, '選択肢' || v_j, case when v_j = 1 then 'standard' else 'option' end, (v_j - 1) * 100 * v_i, 'published', v_j);
+    end loop;
+  end loop;
   set local session_replication_role = origin;
 
   -- 原価の Version（本部）
@@ -114,6 +131,14 @@ begin
   perform pg_temp.svp_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 15000, 0, ''検査'')', p4));
   perform pg_temp.svp_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 0, null, ''検査'')', c1));
   perform pg_temp.svp_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 5000, null, ''検査'')', c2));
+  perform pg_temp.svp_run_as('authenticated', u_admin, format('select changed::text from public.set_option_hq_standard_cost(%L, 10000, 0, ''検査'')', p6));
+  for v_i in 1 .. 4 loop
+    for v_j in 1 .. 5 loop
+      v_choice := format('29000000-0000-4000-8000-%s', lpad((7000 + v_i * 10 + v_j)::text, 12, '0'))::uuid;
+      perform pg_temp.svp_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, %s, null, ''検査'')',
+        v_choice, (v_j - 1) * 100 * v_i));
+    end loop;
+  end loop;
 
   -- 本体（基準原価 18,200 円 × 12 本）を公開し、標準見積（事務所用）を v2.5 で作って公開する
   v_bmr := pg_temp.svp_run_as('authenticated', u_editor,
@@ -161,6 +186,30 @@ begin
     (v_view #> array['prices', p1::text, 'groups'])::text);
   perform pg_temp.svp_expect_eq('原価未設定・別途工事・別途見積の商品は価格未確定（por）', 'true/true/true',
     (v_view #>> array['prices', p3::text, 'por']) || '/' || (v_view #>> array['prices', p4::text, 'por']) || '/' || (v_view #>> array['prices', p5::text, 'por']));
+  perform pg_temp.svp_expect_eq('組み合わせが 64 を超える商品の表は、標準と 1 か所だけ変えた組み合わせだけ（1 + 4 項目 × 5）', 'true/0.0.0.0/21/16050',
+    (v_view #>> array['prices', p6::text, 'partial']) || '/' || (v_view #>> array['prices', p6::text, 'default_key']) || '/' ||
+    (select count(*)::text from jsonb_object_keys(v_view #> array['prices', p6::text, 'units'])) || '/' ||
+    (v_view #>> array['prices', p6::text, 'units', '0.0.0.0']));
+  perform pg_temp.svp_expect_eq('1 か所だけ変えた組み合わせは表にある・2 か所変えた組み合わせは表に無い', '16210/(null)',
+    (v_view #>> array['prices', p6::text, 'units', '1.0.0.0']) || '/' ||
+    coalesce(v_view #>> array['prices', p6::text, 'units', '1.2.0.0'], '(null)'));
+  perform pg_temp.svp_expect_denied('ログインしていない人は表に無い組み合わせの売価を直接計算できない', '42501',
+    pg_temp.svp_run_as('anon', null, format('select public.get_simulator_v25_units(%L, ''[]''::jsonb)::text', v_rev)));
+  perform pg_temp.svp_expect_denied('ログインした人も直接は計算できない（ページのサーバーだけ）', '42501',
+    pg_temp.svp_run_as('authenticated', u_customer, format('select public.get_simulator_v25_units(%L, ''[]''::jsonb)::text', v_rev)));
+  -- 2 か所変えた組み合わせ：原価 10,000 ＋ 100 ＋ 400 = 10,500 → trunc(trunc(10,500 × 1.07) × 1.5) = 16,852（組み合わせが 1,000 を超えても計算する）
+  perform pg_temp.svp_expect_eq('表に無い組み合わせは、選んだときにサーバー（service_role）が売価だけを計算する', '[16852, null]',
+    pg_temp.svp_run_as('service_role', null, format('select public.get_simulator_v25_units(%L, %L::jsonb)::text', v_rev,
+      jsonb_build_array(
+        jsonb_build_object('option_id', p6, 'choice_ids', jsonb_build_array(
+          '29000000-0000-4000-8000-000000007012', '29000000-0000-4000-8000-000000007023',
+          '29000000-0000-4000-8000-000000007031', '29000000-0000-4000-8000-000000007041')),
+        jsonb_build_object('option_id', p3, 'choice_ids', '[]'::jsonb)))));
+  perform pg_temp.svp_expect_error('表に無い組み合わせの計算は 200 件まで', 'P0001', 'VALIDATION',
+    pg_temp.svp_run_as('service_role', null, format('select public.get_simulator_v25_units(%L, %L::jsonb)::text', v_rev,
+      (select jsonb_agg(jsonb_build_object('option_id', p2, 'choice_ids', '[]'::jsonb)) from generate_series(1, 201)))));
+  perform pg_temp.svp_expect_error('公開中でない版（存在しない版）の売価は計算しない', 'P0002', 'NOT_FOUND',
+    pg_temp.svp_run_as('service_role', null, format('select public.get_simulator_v25_units(%L, ''[]''::jsonb)::text', gen_random_uuid())));
   perform pg_temp.svp_expect_eq('差額の基準（版の選択枠）は公開した版の売価', '160500/32100',
     (select string_agg(x.value ->> 'unit_price', '/' order by x.ordinality) from jsonb_array_elements(v_view -> 'baseline') with ordinality as x(value, ordinality)));
 

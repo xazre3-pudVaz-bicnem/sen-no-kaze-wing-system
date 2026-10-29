@@ -3,9 +3,8 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
 import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getStore } from '@/lib/data/store';
-import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
+import { getSimulatorSaleViews, resolvedV25ConfigurationPricing } from '@/lib/data/standard-estimate-sale-views';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
-import { v25ConfigurationPricing } from '@/lib/domain/standard-estimate-sale-view';
 import { CONFIGURATION_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
@@ -24,7 +23,7 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
   // v2.5 の売価を使う間（v2.5 PR-C1）は、商品価格の列（原価）ではなく v2.5 の標準見積の売価で計算し直す（DB の保存と同じ）
   const sale = await getSimulatorSaleViews(bundle.model.id, { preview: false });
   const current = sale.v25
-    ? v25ConfigurationPricing(bundle, sale.saleViews, {
+    ? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {
         specCode: c.spec_code ?? null,
         optionIds: items.map((i) => i.option_id),
         variantChoiceIds: items.flatMap((i) => i.variant_choice_ids ?? []),

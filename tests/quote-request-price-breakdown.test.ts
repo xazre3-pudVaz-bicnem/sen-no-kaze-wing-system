@@ -43,7 +43,7 @@ describe('見積依頼：合計を先に表示し明細を整理する', () => {
   it('価格計算と見積依頼の送信・仕様変更リンクを変更しない', () => {
     // v2.5 の売価を使う間（v2.5 PR-C1）だけ v2.5 の標準見積の売価で出す。それ以外はこれまでの計算
     expect(page).toContain('const pricing = sale.v25');
-    expect(page).toContain('? v25ConfigurationPricing(bundle, sale.saleViews, {');
+    expect(page).toContain('? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {');
     expect(page).toContain(': computePricing(');
     expect(page).toContain('const exteriorFaces = await getExteriorFaces(configuration.id);');
     expect(page).toContain('<QuoteRequestForm');

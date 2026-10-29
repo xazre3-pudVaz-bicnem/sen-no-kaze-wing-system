@@ -82,7 +82,7 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(authoringUi).toContain('sticky left-[3.5rem] top-0 z-40');
     expect(authoringUi).toContain('w-[10.5rem]');
     expect(authoringUi).toContain('overflow-x-auto md:overflow-x-visible');
-    expect(authoringUi).toContain('w-full min-w-[46rem] table-fixed border-collapse');
+    expect(authoringUi).toContain("${showLineState ? 'min-w-[50rem]' : 'min-w-[46rem]'} table-fixed border-collapse");
     expect(authoringUi).toContain('md:min-w-0');
     expect(authoringUi).toContain('data-testid={`quote-section-summary-${section.key}`}');
     expect(authoringUi).toContain('const rowNumberByKey = useMemo');
@@ -255,8 +255,8 @@ describe('見積書管理の正式編集UI統合', () => {
     expect(preview).not.toContain('【別途計】');
     expect(preview).not.toContain("label: '現場工事', kinds: ['installation']");
     expect(preview).toContain("row.unitPrice === 0 && row.remark?.trim() === '別途見積'");
-    expect(preview).toContain("separate ? '別途見積' : formatYen(row.unitPrice)");
-    expect(preview).toContain("separate ? '—' : formatYen(row.amount)");
+    expect(preview).toContain("separate ? '別途見積' : excluded ? '' : formatYen(row.unitPrice)");
+    expect(preview).toContain("separate ? '—' : excluded ? '対象外' : formatYen(row.amount)");
     expect(preview).not.toContain('【本体＋オプション価格計】');
     expect(preview).not.toContain('【本体＋オプション計】');
     expect(preview).not.toContain('値引き・調整額');

@@ -58,9 +58,10 @@ export default async function AdminQuoteDraftPage({
   const parentQuoteDetail = detail.draft.parent_quote_id ? await store.getQuote(detail.draft.parent_quote_id, actor) : null;
   const targetRevision = parentQuoteDetail ? parentQuoteDetail.quote.revision + 1 : 1;
 
-  const [model, catalog] = await Promise.all([
+  const [model, catalog, allOptions] = await Promise.all([
     store.getModelById(detail.draft.base_model_id, { includeDraft: true }),
     store.getCatalogBundle(detail.draft.base_model_id),
+    store.listOptions(),
   ]);
 
   const categoryMap = new Map((catalog?.categories ?? []).map((category) => [category.id, category] as const));
@@ -131,7 +132,7 @@ export default async function AdminQuoteDraftPage({
       {sp.created && <Alert tone="success">案件を登録しました。まだ正式見積は発行していません。この見積下書きを編集・保存してください。</Alert>}
       {sp.revisionDraft && <Alert tone="success">現在の発行済み見積をもとに、次の見積下書きを開きました。下書きを保存しても発行済み見積は変わりません。</Alert>}
 
-      <QuoteDraftEditor detail={detail} modelName={model?.name ?? '商品モデル'} canEditBase={canEditCatalog(actor.role)} estimates={estimates} products={products} targetRevision={targetRevision} />
+      <QuoteDraftEditor detail={detail} modelName={model?.name ?? '商品モデル'} canEditBase={canEditCatalog(actor.role)} estimates={estimates} products={products} targetRevision={targetRevision} parentItems={parentQuoteDetail?.items ?? []} optionFlags={allOptions.map((option) => ({ id: option.id, price: option.price, priceOnRequest: option.price_on_request }))} />
     </div>
   );
 }

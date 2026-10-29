@@ -238,8 +238,40 @@ export async function revisionTotal(form: Locator): Promise<number> {
   return yen(text.match(/編集中\s*([^差]+)/)?.[1] ?? '');
 }
 
+/**
+ * 金額未確定の確認（正式見積の発行前に必要。D1 までの暫定）：未確定の行は「0円確定」を選んで理由を入れ、
+ * お客様が選んだ別途見積の商品の確認にチェックを入れる。初期データでは照明（別途見積）が標準で選ばれている
+ */
+export async function confirmPorBeforeIssue(form: Locator, reason = '現地確認の結果、ほかの明細に含む') {
+  const review = form.getByTestId('por-review');
+  if ((await review.count()) === 0) return;
+  await resolveUnresolvedPorRows(form, reason);
+  const confirm = review.getByTestId('por-confirm');
+  if ((await confirm.count()) > 0 && !(await confirm.isChecked())) await confirm.check();
+}
+
+/**
+ * 金額未確定の確認の欄で、未確定の行すべての扱いを選ぶ（既定は「0円確定」で理由を入れる。「対象外」はメモ）。
+ * 備考の自由記述では解消しない（2026-10-22 の確定事項 A-2-1）
+ */
+export async function resolveUnresolvedPorRows(form: Locator, reason: string, state: 'zero_confirmed' | 'excluded' = 'zero_confirmed') {
+  const review = form.getByTestId('por-review');
+  // 扱いを選べる未確定の行だけ（本体の行など選べない行は飛ばす）
+  const rows = review
+    .locator('[data-testid="por-review-row"][data-line-state="unresolved"]')
+    .filter({ has: form.page().getByTestId('por-review-state') });
+  // 扱いを選ぶと行の状態が変わり、未確定の一覧から外れる（選び終えるまで先頭の行を処理する。行は key で選び直す）
+  for (let guard = 0; guard < 50 && (await rows.count()) > 0; guard += 1) {
+    const first = rows.first();
+    const key = await first.getAttribute('data-row-key');
+    await first.getByTestId('por-review-state').selectOption(state);
+    await review.locator(`[data-testid="por-review-row"][data-row-key="${key}"]`).getByTestId('por-review-reason').fill(reason);
+  }
+}
+
 /** 編集中の内容を次の版として発行し、新しい版の見積 ID を返す（発行後は案件の画面へ戻る） */
 export async function issueRevision(page: Page, form: Locator): Promise<string> {
+  await confirmPorBeforeIssue(form);
   await form.getByRole('button', { name: /版を発行/ }).click();
   await page.waitForURL(/revised=1/);
   return new URL(page.url()).searchParams.get('case')!;

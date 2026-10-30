@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { requireCatalogEditor } from '@/lib/auth/session';
+import { requireAdmin } from '@/lib/auth/session';
 import { getStore } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
@@ -37,7 +37,8 @@ export default async function EstimateTemplateDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const actor = await requireCatalogEditor('/admin/estimate-templates');
+  // 旧テンプレートの参照用（標準見積の編集は「見積書管理 ＞ 標準見積」で本部が行う）
+  const actor = await requireAdmin('/admin/estimate-templates/legacy');
   const { id } = await params;
   const sp = await searchParams;
   const store = await getStore();
@@ -118,7 +119,7 @@ export default async function EstimateTemplateDetailPage({
         </div>
       }
     >
-      <BackLink href="/admin/estimate-templates" label="見積書作成・管理へ戻る" />
+      <BackLink href="/admin/estimate-templates/legacy" label="旧テンプレート（参照）へ戻る" />
 
       <Alert tone="info">
         既存の分類表見積データを使って、新しい編集画面を確認しています。

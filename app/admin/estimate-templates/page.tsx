@@ -1,206 +1,157 @@
 import Link from 'next/link';
-import { requireCatalogEditor } from '@/lib/auth/session';
-import { getStore } from '@/lib/data/store';
-import { isQuoteSelectableProduct } from '@/lib/domain/product-lifecycle';
-import { Alert } from '@/components/ui';
+import { requireAdmin } from '@/lib/auth/session';
+import { getStore, isLocalMode } from '@/lib/data/store';
+import { createClient } from '@/lib/supabase/server';
+import { listStandardEstimateWorkspaceEntries, loadStandardEstimateWorkspace, type StandardEstimateWorkspaceEntry } from '@/lib/data/standard-estimate-workspace';
+import { startStandardEstimateV25DraftAction } from '@/lib/actions/standard-estimate-v25';
+import { formatYen } from '@/lib/domain/pricing';
+import { Alert, Badge } from '@/components/ui';
 import { AdminPage } from '@/components/admin/ui';
-import {
-  EstimateTemplateWorkbench,
-  type EstimateTemplateWorkbenchLine,
-  type EstimateTemplateWorkbenchSection,
-} from '@/components/admin/estimate-template-workbench';
-import { EstimateTemplateDetailTabs } from '@/components/admin/estimate-template-detail-tabs';
-import { StandardEstimateSimulatorPreview } from '@/components/admin/standard-estimate-simulator-preview';
-import {
-  EstimateTemplateExcelDemo,
-  type EstimateTemplateExcelDemoProduct,
-} from '@/components/admin/estimate-template-excel-demo';
-import { ESTIMATE_DEMO_SAMPLES, estimateDemoSampleById } from '@/components/admin/estimate-template-demo-samples';
-import { SavedEstimateMenu } from '@/components/admin/saved-estimate-menu';
 import { QuoteManagementTabs } from '@/components/admin/quote-management-tabs';
+import { StandardEstimateV25Workbench } from '@/components/admin/standard-estimate-v25-workbench';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 
-const SECTION_LABELS = {
-  interior_exterior: '内外装工事',
-  option: 'オプション',
-  sitework: '別途',
-} as const;
+export const dynamic = 'force-dynamic';
 
-type SectionCode = keyof typeof SECTION_LABELS;
+const PRICING_LABEL = { 'v2.5': 'v2.5', legacy: 'v2.5 以前' } as const;
 
-export default async function EstimateTemplatesPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | undefined>>;
-}) {
-  const actor = await requireCatalogEditor('/admin/estimate-templates');
+/**
+ * 見積書管理 ＞ 標準見積（Excel 風の画面）。v2.5 の標準見積の正式な編集画面（2026-10-27 先方方針）。
+ * 本部が編集・保存・公開する（総代理店の確認の工程は持たない）。保存・計算・Revision・公開は DB の RPC（20261019100000）。
+ * 旧テンプレート（estimate_templates）は「旧テンプレート（参照）」に残す（正式な見積・Revision・Snapshot・履歴・参照は変えない）。
+ */
+export default async function EstimateTemplatesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  await requireAdmin('/admin/estimate-templates');
   const sp = await searchParams;
-  const store = await getStore();
-
-  const [models, templates, options, categories] = await Promise.all([
-    store.listModels({ includeDraft: true }),
-    store.listEstimateTemplates(),
-    store.listOptions(),
-    store.listCategories(),
-  ]);
-  const categoryMap = new Map(categories.map((category) => [category.id, category] as const));
-  const demoProducts: EstimateTemplateExcelDemoProduct[] = options
-    .filter(isQuoteSelectableProduct)
-    .map((option) => ({
-      id: option.id,
-      category: categoryMap.get(option.category_id)?.name ?? '未分類',
-      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
-      name: option.name,
-      manufacturer: option.manufacturer ?? '',
-      modelNo: option.model_no ?? '',
-      price: option.price,
-      priceOnRequest: option.price_on_request,
-      imageUrl: option.image_url,
-    }));
-
-  const savedEstimateSamples = ESTIMATE_DEMO_SAMPLES.map((sample) => ({
-    id: sample.id,
-    name: sample.name,
-    model: sample.model,
-    spec: sample.spec,
-    fireSpec: sample.fireSpec,
-    sourceSheet: sample.sourceSheet,
-    sourceTotal: sample.sourceTotal,
-  }));
-
-  const requestedSample = estimateDemoSampleById(sp.sample);
-  const selectedSample = requestedSample ?? (!sp.estimate && templates.length === 0 ? ESTIMATE_DEMO_SAMPLES[0] ?? null : null);
-  const selectedTemplate = selectedSample ? null : templates.find((template) => template.id === sp.estimate) ?? templates[0] ?? null;
-
-  if (!selectedTemplate) {
-    return (
-      <AdminPage title="見積書管理" actions={<Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>}>
-        <QuoteManagementTabs active="standard" />
-        <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedSampleId={selectedSample?.id} />
-        <EstimateTemplateExcelDemo key={selectedSample?.id ?? 'new-estimate-demo'} sampleId={selectedSample?.id} products={demoProducts} />
-      </AdminPage>
-    );
-  }
-
-  const [bundle, catalogBundle] = await Promise.all([
-    store.getEstimateTemplateBundle(selectedTemplate.base_model_id, selectedTemplate.spec_code),
-    store.getCatalogBundle(selectedTemplate.base_model_id),
-  ]);
-
-  if (!bundle) {
-    return (
-      <AdminPage title="見積書管理" actions={<Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>}>
-        <QuoteManagementTabs active="standard" />
-        <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-        <Alert tone="warn">選択した標準見積の明細を読み込めませんでした。一覧から別の標準見積を選択してください。</Alert>
-      </AdminPage>
-    );
-  }
-
-  const baseSection = bundle.sections.find((section) => section.code === 'base');
-  const baseTotal = baseSection?.total ?? bundle.base_breakdown_items.reduce((sum, row) => sum + row.amount, 0);
-
-  const sections: EstimateTemplateWorkbenchSection[] = (Object.keys(SECTION_LABELS) as SectionCode[]).map((code) => {
-    const section = bundle.sections.find((row) => row.code === code);
-    return {
-      code,
-      label: SECTION_LABELS[code],
-      expenseLabel: section?.expense_label ?? null,
-      expenseAmount: section?.expense_amount ?? 0,
-    };
-  });
-
-  const initialLines: EstimateTemplateWorkbenchLine[] = bundle.lines.map((line) => ({
-    id: line.id,
-    section: line.section_code,
-    groupLabel: line.group_label ?? '',
-    name: line.name,
-    quantity: line.quantity ?? 1,
-    unit: line.unit ?? '',
-    saleUnitPrice: line.unit_price ?? 0,
-    remark: line.remark ?? '',
-    source: 'legacy',
-    customerSelection: '—',
-  }));
-
-  const products = options
-    .filter(isQuoteSelectableProduct)
-    .map((option) => ({
-      id: option.id,
-      categoryId: option.category_id,
-      categoryCode: categoryMap.get(option.category_id)?.code ?? '',
-      categoryName: categoryMap.get(option.category_id)?.name ?? '未分類',
-      name: option.name,
-      manufacturer: option.manufacturer ?? '',
-      modelNo: option.model_no ?? '',
-      sizeNote: option.size_note ?? '',
-      price: option.price,
-      priceOnRequest: option.price_on_request,
-      imageUrl: option.image_url,
-    }));
-
-  const returnSection =
-    sp.return_section === 'interior_exterior' || sp.return_section === 'option' || sp.return_section === 'sitework'
-      ? sp.return_section
-      : undefined;
-
-  const workspaceReturnPath = `/admin/estimate-templates?estimate=${selectedTemplate.id}`;
-
-  const unavailablePreview = (
-    <section className="card px-5 py-8 text-center">
-      <p className="font-semibold">この標準見積の表示データを準備中です</p>
-      <p className="mt-1 text-sm text-muted">編集画面は利用できます。見積書・プランボード表示は正式接続後に確認できます。</p>
-    </section>
+  const headerActions = (
+    <div className="flex flex-wrap gap-2">
+      <Link href="/admin/standard-estimates" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>
+      <Link href="/admin/standard-estimates" className="btn-secondary btn-sm">価格の切り替え</Link>
+      <Link href="/admin/estimate-templates/legacy" className="btn-secondary btn-sm">旧テンプレート（参照）</Link>
+    </div>
   );
 
+  if (isLocalMode()) {
+    return (
+      <AdminPage title="見積書管理" actions={headerActions}>
+        <QuoteManagementTabs active="standard" />
+        <Alert tone="info">標準見積（v2.5）の編集はSupabase接続環境で利用できます。旧テンプレートは「旧テンプレート（参照）」で確認できます。</Alert>
+      </AdminPage>
+    );
+  }
+
+  const [supabase, store] = await Promise.all([createClient(), getStore()]);
+  const entries = await listStandardEstimateWorkspaceEntries(supabase, store);
+  if (!entries) {
+    return (
+      <AdminPage title="見積書管理" actions={headerActions}>
+        <QuoteManagementTabs active="standard" />
+        <Alert tone="warn">標準見積の仕組みがまだ使えません（DB の反映待ち）。</Alert>
+      </AdminPage>
+    );
+  }
+  const selected = entries.find((entry) => entry.masterId === sp.master) ?? entries[0] ?? null;
+  const workspace = selected ? await loadStandardEstimateWorkspace(supabase, selected) : null;
+
   return (
-    <AdminPage
-      title="見積書管理"
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <Link href="/admin/estimate-templates/new" className="btn-primary btn-sm">＋ 新しい標準見積を作る</Link>
-          <button type="button" className="btn-secondary btn-sm" disabled title="正式な複製保存の接続後に利用できます">複製</button>
-        </div>
-      }
-    >
+    <AdminPage title="見積書管理" lead="標準見積を Excel の表と同じ並びで編集し、本部が公開します。" actions={headerActions}>
       <QuoteManagementTabs active="standard" />
-      <SavedEstimateMenu templates={templates} models={models} samples={savedEstimateSamples} selectedId={selectedTemplate.id} />
-      <EstimateTemplateDetailTabs
-        editContent={
-          <EstimateTemplateWorkbench
-            templateId={selectedTemplate.id}
-            role={actor.role}
-            baseLines={bundle.base_breakdown_items.map((line) => ({
-              id: line.id,
-              section: line.section,
-              name: line.name,
-              quantity: line.quantity,
-              unit: line.unit ?? '',
-              unitPrice: line.unit_price,
-              amount: line.amount,
-              remark: line.remark ?? '',
-            }))}
-            baseTotal={baseTotal}
-            initialLines={initialLines}
-            sections={sections}
-            products={products}
-            createdOptionId={sp.created_option}
-            returnSection={returnSection}
-            returnPath={workspaceReturnPath}
-            taxRate={selectedTemplate.tax_rate}
-            adjustment={selectedTemplate.adjustment}
-          />
-        }
-        estimateContent={
-          catalogBundle ? (
-            <StandardEstimateSimulatorPreview bundle={catalogBundle} specCode={selectedTemplate.spec_code} template={bundle} initialContentTab="estimate" showContentTabs={false} showEditLink={false} previewOnly />
-          ) : unavailablePreview
-        }
-        planContent={
-          catalogBundle ? (
-            <StandardEstimateSimulatorPreview bundle={catalogBundle} specCode={selectedTemplate.spec_code} template={bundle} initialContentTab="plan" showContentTabs={false} showEditLink={false} previewOnly />
-          ) : unavailablePreview
-        }
-      />
+      {sp.started && <Alert tone="success">v2.5 の下書きを作りました。内容を確認して保存・公開してください。</Alert>}
+      {sp.error && <Alert tone="danger">{sp.error === 'local' ? '標準見積の管理はSupabase接続環境で利用できます。' : sp.error === 'invalid' ? '入力内容を確認してください。' : sp.error}</Alert>}
+
+      <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        <nav aria-label="標準見積の一覧" className="space-y-1 rounded-lg border border-line bg-white p-2 lg:max-h-[78vh] lg:overflow-y-auto" data-testid="standard-estimate-selector">
+          {entries.length === 0 && <p className="px-2 py-4 text-sm text-muted">標準見積がまだありません。「新しい標準見積を作る」で、本体マスターの公開版から作成してください。</p>}
+          {entries.map((entry) => (
+            <EntryLink key={entry.masterId} entry={entry} active={entry.masterId === selected?.masterId} />
+          ))}
+        </nav>
+
+        <div className="min-w-0 space-y-3">
+          {selected && workspace ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold">{selected.identity}</h2>
+                <Badge tone={workspace.revision.status === 'draft' ? 'warn' : 'success'}>
+                  第{workspace.revision.version}版・{workspace.revision.status === 'draft' ? '下書き' : '公開中'}
+                </Badge>
+                <Badge tone="neutral">{PRICING_LABEL[workspace.revision.pricingModel]}</Badge>
+                <Link href={`/admin/standard-estimates/${workspace.revision.id}`} className="text-xs text-navy underline">版の詳細</Link>
+              </div>
+
+              {workspace.v25 ? (
+                <>
+                  {workspace.revision.status === 'published' && (
+                    <StartDraftForm entry={selected} label="次の版の下書きを作る" title="次の版の下書きを作りますか？" message="公開中の版を土台に、v2.5 の下書きを作ります。公開中の版は変わりません。" />
+                  )}
+                  <StandardEstimateV25Workbench
+                    resetKey={`${workspace.revision.id}:${workspace.revision.lockVersion}`}
+                    revisionId={workspace.revision.id}
+                    lockVersion={workspace.revision.lockVersion}
+                    readOnly={workspace.revision.status !== 'draft'}
+                    baseLines={workspace.v25.baseLines}
+                    candidates={workspace.v25.candidates}
+                    initial={workspace.v25.initial}
+                    costs={workspace.v25.costs}
+                    rule={workspace.v25.rule}
+                    taxRule={workspace.v25.taxRule}
+                    preview={workspace.v25.preview}
+                    savedTotal={workspace.revision.hasPor ? null : workspace.revision.total}
+                  />
+                </>
+              ) : (
+                <section className="space-y-3 rounded-lg border border-line bg-white p-4 text-sm" data-testid="standard-estimate-legacy-notice">
+                  <p>
+                    この標準見積は v2.5 以前の方式です（第{workspace.revision.version}版・{workspace.revision.status === 'draft' ? '下書き' : '公開中'}・
+                    税込 {workspace.revision.hasPor ? `${formatYen(workspace.revision.total)}＋別途見積` : formatYen(workspace.revision.total)}）。
+                  </p>
+                  <p className="text-xs leading-5 text-muted">
+                    v2.5 の下書きに切り替えると、商品台帳の商品・原価 Version から計算します。v2.5 以前の明細は「要見直し」として写り、見直すまで公開できません。
+                    公開中の版・発行済みの見積は変わりません。
+                  </p>
+                  <StartDraftForm
+                    entry={selected}
+                    label="v2.5 の下書きにする"
+                    title="v2.5 の下書きにしますか？"
+                    message="この標準見積を v2.5 の下書きで編集します。v2.5 以前の下書きがあれば、その下書きを v2.5 に切り替えます（公開中の版は変わりません）。"
+                  />
+                </section>
+              )}
+            </>
+          ) : selected ? (
+            <Alert tone="warn">この標準見積には公開中の版・下書きがありません。</Alert>
+          ) : null}
+        </div>
+      </div>
     </AdminPage>
+  );
+}
+
+function EntryLink({ entry, active }: { entry: StandardEstimateWorkspaceEntry; active: boolean }) {
+  return (
+    <Link
+      href={`/admin/estimate-templates?master=${entry.masterId}`}
+      aria-current={active ? 'page' : undefined}
+      className={`block rounded-md px-2 py-1.5 text-xs leading-5 ${active ? 'bg-ink text-white' : 'text-ink hover:bg-sand'}`}
+    >
+      <span className="block font-semibold">{entry.identity}</span>
+      <span className={active ? 'text-white/80' : 'text-muted'}>
+        {entry.published ? `公開中 第${entry.published.version}版（${PRICING_LABEL[entry.published.pricingModel]}）` : '未公開'}
+        {entry.draft ? `・下書きあり（${PRICING_LABEL[entry.draft.pricingModel]}）` : ''}
+      </span>
+    </Link>
+  );
+}
+
+function StartDraftForm({ entry, label, title, message }: { entry: StandardEstimateWorkspaceEntry; label: string; title: string; message: string }) {
+  return (
+    <form action={startStandardEstimateV25DraftAction} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="master_id" value={entry.masterId} />
+      {entry.draft && <input type="hidden" name="expected_draft_lock_version" value={entry.draft.lockVersion} />}
+      <input type="hidden" name="return_to" value="workbench" />
+      <ConfirmSubmit className="btn-secondary btn-sm" dialogTitle={title} message={message} confirmLabel={label}>
+        {label}
+      </ConfirmSubmit>
+    </form>
   );
 }

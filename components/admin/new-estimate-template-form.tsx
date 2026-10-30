@@ -304,7 +304,7 @@ export function NewEstimateTemplateForm({
                 本体・仕様・適用地域をここで設定し、そのまま下の明細を編集できます。
               </p>
             </div>
-            <Link href="/admin/estimate-templates" className="btn-secondary btn-sm">標準見積一覧へ戻る</Link>
+            <Link href="/admin/estimate-templates/legacy" className="btn-secondary btn-sm">旧テンプレート（参照）へ戻る</Link>
           </div>
 
           <div className="space-y-3 p-4">

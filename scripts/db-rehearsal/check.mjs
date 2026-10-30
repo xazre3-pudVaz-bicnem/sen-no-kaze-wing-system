@@ -14,6 +14,8 @@ import pg from 'pg';
 import { checkExitCode, evaluate, inspect, mergeRuntime, printResult, printRuntime, runtimeSecurity } from './checks.mjs';
 import { runtimeConcurrency } from './runtime-concurrency.mjs';
 import { runtimeOptionHqStandardCost } from './runtime-option-hq-standard-cost.mjs';
+import { runtimeUnusedDraftVariantDelete } from './runtime-unused-draft-variant-delete.mjs';
+import { runtimeUnusedDraftVariantRace } from './runtime-unused-draft-variant-race.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
@@ -46,6 +48,8 @@ try {
     await client.query("set lock_timeout = '2s'");
     runtime = await runtimeSecurity(client);
     runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionDelete(client, { connectionString: url }));
+    runtime = mergeRuntime(runtime, await runtimeUnusedDraftVariantDelete(client));
+    runtime = mergeRuntime(runtime, await runtimeUnusedDraftVariantRace({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionArrayRace({ connectionString: url }));
     runtime = mergeRuntime(runtime, await runtimeUnusedPublishedOptionWriterOrder({ connectionString: url }));
     // 同時編集（optimistic locking）は 2 本の接続が必要なため、別の接続で実行する

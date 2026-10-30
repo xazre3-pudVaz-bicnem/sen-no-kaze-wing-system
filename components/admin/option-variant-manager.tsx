@@ -4,6 +4,8 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { SmartImage } from '@/components/ui/smart-image';
 import { ProductVariantGroupHeading } from '@/components/admin/product-variant-group-heading';
 import { ProductSectionHeading } from '@/components/admin/product-section-heading';
+import { ConfirmSubmit } from '@/components/admin/confirm-submit';
+import { deleteUnusedDraftVariantAction } from '@/lib/actions/unused-draft-variant-delete';
 import {
   saveVariantChoiceAction,
   saveVariantGroupAction,
@@ -180,11 +182,14 @@ function ChoiceEditor({
   group,
   choice,
   choiceCount,
+  deletable = false,
 }: {
   optionId: string;
   group: OptionVariantGroup;
   choice: OptionVariantChoice | null;
   choiceCount: number;
+  /** 未使用なら削除できる（下書きの商品だけ。最終の判断は DB） */
+  deletable?: boolean;
 }) {
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
   const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
@@ -437,7 +442,23 @@ function ChoiceEditor({
         </span>
         <span className="ml-auto shrink-0 text-xs font-semibold text-brown">編集 <span aria-hidden="true">▾</span></span>
       </summary>
-      <div className="border-t border-line p-3 sm:p-4">{form}</div>
+      <div className="border-t border-line p-3 sm:p-4">
+        {form}
+        {deletable && (
+        <form action={deleteUnusedDraftVariantAction} className="mt-4 border-t border-line pt-3" data-testid="delete-unused-variant-choice">
+          <input type="hidden" name="option_id" value={optionId} />
+          <input type="hidden" name="group_id" value={group.id} />
+          <input type="hidden" name="choice_id" value={choice.id} />
+          <input type="hidden" name="target" value="choice" />
+          <ConfirmSubmit
+            className="btn-ghost btn-sm text-danger"
+            message={`選択肢「${choice.name}」を完全に削除しますか？ 未使用とDBが確認できた場合だけ削除します。使用済みなら削除できません。`}
+          >
+            削除（未使用のみ）
+          </ConfirmSubmit>
+        </form>
+        )}
+      </div>
     </details>
   );
 }
@@ -455,7 +476,7 @@ export function OptionVariantManager({
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 
   return (
-    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-option-status={option.status}>
       <ProductSectionHeading
         label="5. お客様選択"
         description="部位・色・仕様などの選択項目を作り、各選択肢に追加金額（税別）を入力できます。"
@@ -522,6 +543,7 @@ export function OptionVariantManager({
                       group={group}
                       choice={choice}
                       choiceCount={groupChoices.length}
+                      deletable={option.status === 'draft'}
                     />
                   ))}
 
@@ -544,6 +566,19 @@ export function OptionVariantManager({
                   <summary className="cursor-pointer text-sm font-semibold">この項目の名前・詳細設定（非表示もここで設定）</summary>
                   <div className="mt-4">
                     <GroupFields optionId={option.id} group={group} groups={groups} choices={choices} />
+                    {option.status === 'draft' && (
+                    <form action={deleteUnusedDraftVariantAction} className="mt-4 border-t border-line pt-3" data-testid="delete-unused-variant-group">
+                      <input type="hidden" name="option_id" value={option.id} />
+                      <input type="hidden" name="group_id" value={group.id} />
+                      <input type="hidden" name="target" value="group" />
+                      <ConfirmSubmit
+                        className="btn-ghost btn-sm text-danger"
+                        message={`選択項目「${group.name}」と中の選択肢すべてを削除しますか？ 未使用の場合のみ削除し、依存・履歴があれば中止します。`}
+                      >
+                        この選択項目を削除（未使用のみ）
+                      </ConfirmSubmit>
+                    </form>
+                    )}
                   </div>
                   </details>
                 </div>
@@ -554,7 +589,9 @@ export function OptionVariantManager({
       )}
 
       <p className="text-xs text-muted">
-        選択項目や選択肢の物理削除は行いません。不要なら「お客様に表示する」をOFFにして保存してください（履歴は保持）。
+        {option.status === 'draft'
+          ? '未使用なら「削除（未使用のみ）」を選べます。履歴・参照がある場合は物理削除を行いません。「お客様に表示する」をOFFにして保存してください。'
+          : '登録済みの商品の選択項目・選択肢は削除できません。不要なら「お客様に表示する」をOFFにして保存してください（履歴は保持）。'}
       </p>
     </section>
   );

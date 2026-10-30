@@ -179,6 +179,7 @@ export default async function EditOptionPage({
       <OptionRegistrationSaveBoundary>
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
+        {sp.deleted_variant === '1' && <Alert tone="success">未使用の選択項目・選択肢を削除しました。</Alert>}
 
         <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
           <div className="flex flex-wrap items-end justify-between gap-3">

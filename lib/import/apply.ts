@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { getStore, StoreError, type CatalogImportBatch } from '@/lib/data/store';
+import { getStore, isLocalMode, StoreError, type CatalogImportBatch } from '@/lib/data/store';
 import {
   FREE_PRODUCT_CATEGORY_CODE,
   type OptionCategory,
@@ -105,7 +105,9 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   const byCode = new Map(categories.map((c) => [c.code, c]));
   const byName = new Map(categories.map((c) => [c.name, c]));
   const byId = new Map(categories.map((c) => [c.id, c]));
-  const existingOptions = await store.listOptions();
+  // 金額を反映しない本部商品（protectHqCost）は、今の金額をそのまま書き戻す。本部以外の画面の読み取りでは本部商品の金額が 0 になる
+  // （スイッチが入った後。v2.5 PR-C1b）ため、書き戻す金額だけはサーバーで読む（画面には出さない）
+  const existingOptions = await withWriteBackOptionPrices(await store.listOptions(), options.protectHqCost === true);
   const optionByCode = new Map(existingOptions.map((o) => [o.code, o]));
 
   const resolveCategory = (name: string): OptionCategory | undefined => {
@@ -246,7 +248,7 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   const existingChoiceById = new Map<string, OptionVariantChoice>();
   const existingProtectedIds = [...protectedOptionIds].filter((optionId) => existingOptions.some((row) => row.id === optionId));
   for (const variants of await Promise.all(existingProtectedIds.map((optionId) => store.getOptionVariants(optionId)))) {
-    for (const choice of variants.choices) existingChoiceById.set(choice.id, choice);
+    for (const choice of await withWriteBackChoicePrices(variants.choices, true)) existingChoiceById.set(choice.id, choice);
   }
 
   for (const c of plan.choices) {
@@ -325,4 +327,18 @@ export async function applyImportPlan(plan: ImportPlan, images: Map<string, stri
   }
 
   return result;
+}
+
+/** 書き戻すためだけに、今の商品価格を読む（ローカル検証モードはストアの値のまま） */
+async function withWriteBackOptionPrices(rows: ProductOption[], enabled: boolean): Promise<ProductOption[]> {
+  if (!enabled || isLocalMode()) return rows;
+  const { withLegacyOptionPrices } = await import('@/lib/data/legacy-prices');
+  return withLegacyOptionPrices(rows, 'all');
+}
+
+/** 書き戻すためだけに、今の選択肢の追加金額を読む（ローカル検証モードはストアの値のまま） */
+async function withWriteBackChoicePrices(rows: OptionVariantChoice[], enabled: boolean): Promise<OptionVariantChoice[]> {
+  if (!enabled || isLocalMode()) return rows;
+  const { withLegacyChoicePrices } = await import('@/lib/data/legacy-prices');
+  return withLegacyChoicePrices(rows, 'all');
 }

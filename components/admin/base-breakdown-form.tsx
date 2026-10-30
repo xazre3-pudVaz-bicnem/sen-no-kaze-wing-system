@@ -42,6 +42,7 @@ export function BaseBreakdownForm({
   items,
   expenseRate,
   lockedByTemplate = false,
+  hqOnly = false,
   expenseAmountOverride,
   totalOverride,
 }: {
@@ -50,9 +51,12 @@ export function BaseBreakdownForm({
   items: BaseBreakdownItem[];
   expenseRate: number;
   lockedByTemplate?: boolean;
+  /** 本部以外が見ているとき（本体内訳の金額は本部だけが登録・変更できる。v2.5 PR-C1b） */
+  hqOnly?: boolean;
   expenseAmountOverride?: number;
   totalOverride?: number;
 }) {
+  const editingLocked = lockedByTemplate || hqOnly;
   const [state, action, pending] = useActionState(saveBaseBreakdownAction, initial);
   const [sections, setSections] = useState<Section[]>(() => {
     const out: Section[] = [];
@@ -116,6 +120,11 @@ export function BaseBreakdownForm({
           変更する場合はExcelを修正して標準見積を再取込してください。
         </Alert>
       )}
+      {hqOnly && !lockedByTemplate && (
+        <div data-testid="breakdown-hq-only">
+          <Alert tone="info">本体内訳の金額は本部だけが登録・変更できます（ここでは表示だけです）。</Alert>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[58rem] text-sm">
@@ -141,11 +150,11 @@ export function BaseBreakdownForm({
                     aria-label={`${si + 1} 番目の工事区分名`}
                     className="max-w-md bg-white text-xs font-semibold"
                     required
-                    disabled={lockedByTemplate}
+                    disabled={editingLocked}
                   />
                 </td>
                 <td className="px-2 py-1.5 whitespace-nowrap">
-                  {!lockedByTemplate && (
+                  {!editingLocked && (
                     <button
                       type="button"
                       onClick={() => removeSection(sec.key)}
@@ -164,20 +173,20 @@ export function BaseBreakdownForm({
                   <tr key={r.key} className="bg-white" data-testid={`breakdown-row-${i}`}>
                     <td className="px-3 py-1.5">
                       <input type="hidden" name={`items.${i}.section`} value={sec.name} />
-                      <Input name={`items.${i}.name`} value={r.name} onChange={(e) => updateRow(sec.key, r.key, { name: e.target.value })} aria-label={`${i + 1} 行目の品名`} required disabled={lockedByTemplate} />
+                      <Input name={`items.${i}.name`} value={r.name} onChange={(e) => updateRow(sec.key, r.key, { name: e.target.value })} aria-label={`${i + 1} 行目の品名`} required disabled={editingLocked} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input name={`items.${i}.quantity`} type="number" min={0.1} step={0.1} value={r.quantity} onChange={(e) => updateRow(sec.key, r.key, { quantity: Number(e.target.value) })} aria-label={`${i + 1} 行目の数量`} className="text-right" disabled={lockedByTemplate} />
+                      <Input name={`items.${i}.quantity`} type="number" min={0.1} step={0.1} value={r.quantity} onChange={(e) => updateRow(sec.key, r.key, { quantity: Number(e.target.value) })} aria-label={`${i + 1} 行目の数量`} className="text-right" disabled={editingLocked} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input name={`items.${i}.unit`} value={r.unit} onChange={(e) => updateRow(sec.key, r.key, { unit: e.target.value })} aria-label={`${i + 1} 行目の単位`} className="min-w-[4.5rem]" disabled={lockedByTemplate} />
+                      <Input name={`items.${i}.unit`} value={r.unit} onChange={(e) => updateRow(sec.key, r.key, { unit: e.target.value })} aria-label={`${i + 1} 行目の単位`} className="min-w-[4.5rem]" disabled={editingLocked} />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input name={`items.${i}.unit_price`} type="number" min={0} value={r.unit_price} onChange={(e) => updateRow(sec.key, r.key, { unit_price: Number(e.target.value) })} aria-label={`${i + 1} 行目の単価`} className="text-right" disabled={lockedByTemplate} />
+                      <Input name={`items.${i}.unit_price`} type="number" min={0} value={r.unit_price} onChange={(e) => updateRow(sec.key, r.key, { unit_price: Number(e.target.value) })} aria-label={`${i + 1} 行目の単価`} className="text-right" disabled={editingLocked} />
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{formatYen(amountOf(r))}</td>
                     <td className="px-3 py-1.5">
-                      <Input name={`items.${i}.remark`} value={r.remark} onChange={(e) => updateRow(sec.key, r.key, { remark: e.target.value })} aria-label={`${i + 1} 行目の備考`} className="text-xs" disabled={lockedByTemplate} />
+                      <Input name={`items.${i}.remark`} value={r.remark} onChange={(e) => updateRow(sec.key, r.key, { remark: e.target.value })} aria-label={`${i + 1} 行目の備考`} className="text-xs" disabled={editingLocked} />
                     </td>
                     <td className="px-2 py-1.5 whitespace-nowrap">
                       {!lockedByTemplate && (
@@ -243,10 +252,12 @@ export function BaseBreakdownForm({
         </table>
       </div>
 
-      {lockedByTemplate ? (
-        <p className="text-xs text-muted">
-          標準見積は原本として固定されています。案件ごとの見積はこの原本をコピーした後に編集します。
-        </p>
+      {editingLocked ? (
+        lockedByTemplate && (
+          <p className="text-xs text-muted">
+            標準見積は原本として固定されています。案件ごとの見積はこの原本をコピーした後に編集します。
+          </p>
+        )
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { deleteProductImageAction } from '@/lib/actions/admin';
 import { getStore } from '@/lib/data/store';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
 import { IMAGE_KIND_LABELS } from '@/lib/domain/types';
 import { SmartImage } from '@/components/ui/smart-image';
 import { AdminPage, BackLink, FlashMessages } from '@/components/admin/ui';
@@ -33,6 +34,8 @@ export default async function EditModelPage({
   const sp = await searchParams;
   const store = await getStore();
   const bundle = await store.getCatalogBundle(id, { includeDraft: true });
+  // 本体価格は本部だけが登録・変更できる（v2.5 PR-C1b）
+  const canEditBasePrice = canEditCostField(await getCostRecordingAccess());
   if (!bundle) notFound();
 
   const { model, images } = bundle;
@@ -81,9 +84,9 @@ export default async function EditModelPage({
         </div>
       </nav>
 
-      {activeTab === 'basic' && <ModelForm model={model} mode="basic" />}
+      {activeTab === 'basic' && <ModelForm model={model} mode="basic" canEditBasePrice={canEditBasePrice} />}
 
-      {activeTab === 'plans' && <ModelForm model={model} mode="plans" />}
+      {activeTab === 'plans' && <ModelForm model={model} mode="plans" canEditBasePrice={canEditBasePrice} />}
 
       {activeTab === 'product-images' && (
         <section className="space-y-5">

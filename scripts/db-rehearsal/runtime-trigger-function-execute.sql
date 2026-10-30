@@ -9,6 +9,12 @@ grant all on _tfe_result to public;
 
 -- 対象（migration と同じ一覧）
 create temp table _tfe_expected (fn text not null, tbl text not null, trg text not null) on commit drop;
+
+-- 会員登録のトリガー関数を、実行の権限の無いロールの追加で動かすための一時表（auth.users の、関数が読む列だけ）。
+-- auth.users へ追加できるのは auth の管理ロールと接続ユーザーだけで、CI の接続は auth の管理ロールへ切り替えられないため
+create temp table _tfe_signup (id uuid primary key, email text, raw_user_meta_data jsonb) on commit drop;
+create trigger tfe_signup_profile after insert on _tfe_signup for each row execute function public.handle_new_user();
+grant insert on _tfe_signup to authenticated;
 insert into _tfe_expected (fn, tbl, trg) values
   ('public.assign_customer_no()', 'public.profiles', 'trg_profiles_customer_no'),
   ('public.enforce_base_master_owner_type()', 'public.base_masters', 'base_masters_owner_type'),
@@ -127,11 +133,14 @@ begin
   perform pg_temp.tfe_expect_eq('TFE-2 26 本を anon・authenticated・service_role が直接呼ぶと、どれも権限で拒否する（42501。拒否しなかった組み合わせが空）',
     '', v_direct);
 
-  perform pg_temp.tfe_expect_eq('TFE-3 31 本のトリガーは残っていて、すべて有効（関数・テーブル・名前は migration の一覧のとおり）', '31/31',
+  perform pg_temp.tfe_expect_eq('TFE-3 31 本のトリガーは残っていて、すべて有効（関数・テーブル・名前は migration の一覧のとおり。後の migration でこの 26 本を使って足したトリガーにも無効なものが無い）', '31/31/0',
     (select count(*) from _tfe_expected)::text || '/' ||
     (select count(*) from _tfe_expected e
        join pg_catalog.pg_trigger t on t.tgrelid = e.tbl::regclass and t.tgname = e.trg
-      where t.tgfoid = e.fn::regprocedure and t.tgenabled = 'O')::text);
+      where t.tgfoid = e.fn::regprocedure and t.tgenabled = 'O')::text || '/' ||
+    (select count(*) from pg_catalog.pg_trigger t
+      where not t.tgisinternal and t.tgenabled <> 'O'
+        and t.tgfoid in (select distinct e.fn::regprocedure from _tfe_expected e))::text);
 end;
 $privileges$;
 
@@ -142,6 +151,7 @@ declare
   u_cust constant uuid := '7c000000-0000-4000-8000-000000000002';
   u_dealer constant uuid := '7c000000-0000-4000-8000-000000000003';
   u_new constant uuid := '7c000000-0000-4000-8000-000000000004';
+  u_new2 constant uuid := '7c000000-0000-4000-8000-000000000005';
   m_model constant uuid := '7c100000-0000-4000-8000-000000000001';
   m_other constant uuid := '7c100000-0000-4000-8000-000000000002';
   c_items constant uuid := '7c200000-0000-4000-8000-000000000001';
@@ -184,6 +194,7 @@ declare
   v_out2 text;
   v_before integer;
   v_mid integer;
+  v_role_before integer;
   v_variant_sql constant text :=
     'insert into public.standard_estimate_revision_baseline_variants (baseline_item_id, variant_group_id, variant_choice_id, '
     || 'variant_group_code_snapshot, variant_group_name_snapshot, variant_choice_code_snapshot, variant_choice_name_snapshot, extra_price_snapshot) '
@@ -197,7 +208,9 @@ begin
   -- ---------- 検査用のデータ（トリガーと外部キー検査を止めて、必要な行だけを直接入れる） ----------
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
-  values (u_admin, 'tfe-admin@runtime.invalid', '{}'), (u_cust, 'tfe-cust@runtime.invalid', '{}'), (u_dealer, 'tfe-dealer@runtime.invalid', '{}');
+  values (u_admin, 'tfe-admin@runtime.invalid', '{}'), (u_cust, 'tfe-cust@runtime.invalid', '{}'), (u_dealer, 'tfe-dealer@runtime.invalid', '{}'),
+         -- TFE-10b の会員（プロフィールは auth.users を参照するため先に入れる。ここではトリガーが動かないのでプロフィールは作られない）
+         (u_new2, 'tfe-new2@runtime.invalid', '{}');
   insert into public.profiles (id, email, full_name, role_code)
   values (u_admin, 'tfe-admin@runtime.invalid', '本部', 'admin'), (u_cust, 'tfe-cust@runtime.invalid', 'お客様', 'customer'),
          (u_dealer, 'tfe-dealer@runtime.invalid', '代理店', 'dealer');
@@ -267,17 +280,25 @@ begin
     'false/ok/新しい会員/true',
     has_function_privilege('supabase_auth_admin', 'public.handle_new_user()', 'execute')::text || '/' || v_out || '/' ||
     coalesce((select full_name || '/' || (customer_no ~ '^C[0-9]{6}$')::text from public.profiles where id = u_new), 'プロフィールなし'));
+  -- どの環境でも、実行の権限の無いロール（ログインした利用者）の追加で同じ関数が動き、お客様番号も付く
+  v_out := pg_temp.tfe_run_as('authenticated', null, format(
+    $q$insert into pg_temp._tfe_signup (id, email, raw_user_meta_data) values (%L, 'tfe-new2@runtime.invalid', '{"full_name": "別の新しい会員"}'::jsonb) returning 'ok'$q$, u_new2));
+  perform pg_temp.tfe_expect_eq('TFE-10b 実行の権限の無いログインした利用者の追加でも、同じトリガー関数がプロフィールを作り、お客様番号を付ける（handle_new_user・assign_customer_no）',
+    'false/ok/別の新しい会員/true',
+    has_function_privilege('authenticated', 'public.handle_new_user()', 'execute')::text || '/' || v_out || '/' ||
+    coalesce((select full_name || '/' || (customer_no ~ '^C[0-9]{6}$')::text from public.profiles where id = u_new2), 'プロフィールなし'));
 
   v_before := (select count(*) from public.audit_logs where entity = 'profile' and entity_id = u_cust);
   v_out := pg_temp.tfe_run_as('authenticated', u_cust, format($q$update public.profiles set full_name = 'お客様（変更）' where id = %L returning 'ok'$q$, u_cust));
   v_mid := (select count(*) from public.audit_logs where entity = 'profile' and entity_id = u_cust);
+  v_role_before := (select count(*) from public.audit_logs where entity = 'profile' and entity_id = u_cust and action = 'role');
   v_out2 := pg_temp.tfe_run_as('authenticated', u_admin, format($q$update public.profiles set role_code = 'dealer' where id = %L returning 'ok'$q$, u_cust));
   perform pg_temp.tfe_expect_eq('TFE-11 お客様が自分の名前を変えても変更履歴は書かず、本部の管理者が権限を変えると変更履歴を書く（trg_audit_role）',
     'ok/0/ok/1', v_out || '/' || (v_mid - v_before)::text || '/' || v_out2 || '/' ||
-    ((select count(*) from public.audit_logs where entity = 'profile' and entity_id = u_cust and action = 'role') - v_before)::text);
+    ((select count(*) from public.audit_logs where entity = 'profile' and entity_id = u_cust and action = 'role') - v_role_before)::text);
 
   -- ---------- 本体価格・問い合わせ・見積の通知 ----------
-  v_before := (select count(*) from public.audit_logs where entity = 'base_model' and entity_id = m_model);
+  v_before := (select count(*) from public.audit_logs where entity = 'base_model' and entity_id = m_model and action = 'price');
   v_out := pg_temp.tfe_run_as('service_role', null, format('update public.base_models set base_price = base_price + 1000 where id = %L returning ''ok''', m_model));
   perform pg_temp.tfe_expect_eq('TFE-12 本体価格を変えると変更履歴を書く（trg_audit_model）', 'ok/1',
     v_out || '/' || ((select count(*) from public.audit_logs where entity = 'base_model' and entity_id = m_model and action = 'price') - v_before)::text);

@@ -1,4 +1,6 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -79,8 +81,35 @@ describe('トリガー専用の関数 26 本の EXECUTE を外す（202610161140
     expect(runtime).toContain("pg_temp.tfe_run_as('service_role'");
     expect(runtime).toContain("pg_temp.tfe_run_as('authenticated', u_cust");
     expect(runtime).toContain("has_function_privilege('supabase_auth_admin', 'public.handle_new_user()', 'execute')");
+    // CI の接続は auth の管理ロールへ切り替えられないため、同じ関数のトリガーを実行の権限の無いロールの追加でも動かす
+    expect(runtime).toContain('create trigger tfe_signup_profile after insert on _tfe_signup for each row execute function public.handle_new_user();');
+    expect(runtime).toContain("TFE-10b 実行の権限の無いログインした利用者の追加でも");
+    expect(runtime).toContain('$q$insert into pg_temp._tfe_signup (id, email, raw_user_meta_data)');
     expect(check).toContain("import { runtimeTriggerFunctionExecute } from './runtime-trigger-function-execute.mjs';");
     expect(check).toContain('runtime = mergeRuntime(runtime, await runtimeTriggerFunctionExecute(client));');
+  });
+
+  it('静的検査：API のロールから直接実行できる SECURITY DEFINER のトリガー関数があれば不合格にする（同じ状態に戻さない）', () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'wing-checks-'));
+    const failuresOf = (signature: Record<string, unknown>) => {
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import { evaluate } from './scripts/db-rehearsal/checks.mjs'; const r = evaluate({ tables: [], columns: {}, signatures: [${JSON.stringify(signature)}] }, ${JSON.stringify(empty)}); console.log(JSON.stringify(r.failures.map((f) => f.check)));`,
+        ],
+        { cwd: root, encoding: 'utf8' }
+      );
+      return JSON.parse(result.stdout.trim()) as string[];
+    };
+    const trigger = { name: 'some_guard', types: '', args: [], nargs: 0, ret: 'trigger', secdef: true, config: ['search_path=""'] };
+    expect(failuresOf({ ...trigger, anon: false, authenticated: false, service_role: true })).toContain('trigger-execute');
+    expect(failuresOf({ ...trigger, anon: true, authenticated: true, service_role: true })).toContain('trigger-execute');
+    expect(failuresOf({ ...trigger, anon: false, authenticated: false, service_role: false })).not.toContain('trigger-execute');
+    // SECURITY INVOKER のトリガー関数は対象にしない
+    expect(failuresOf({ ...trigger, secdef: false, anon: true, authenticated: true, service_role: true })).not.toContain('trigger-execute');
+    fs.rmSync(empty, { recursive: true, force: true });
   });
 
   it('本番の適用前後の確認 SQL は読み取りだけで、同じ一覧を使う', () => {

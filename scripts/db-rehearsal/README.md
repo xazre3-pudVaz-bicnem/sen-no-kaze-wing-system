@@ -45,6 +45,7 @@ npx supabase db query --linked --output-format json -f scripts/db-rehearsal/cata
 2. 未ログイン（`anon`）が実行できる `SECURITY DEFINER` 関数は許可リスト（RLS 判定用の 4 関数）の範囲だけ
 3. `SECURITY DEFINER` 関数は `search_path` を固定している
 4. アプリの Supabase 呼び出し（RPC 名と引数名・テーブル・列）が DB と一致している
+5. `SECURITY DEFINER` のトリガー関数は、`anon`／`authenticated`／`service_role` から直接実行できない（トリガー関数の EXECUTE はトリガーを作るときだけ確かめられ、動くときには要らない。新しいトリガー関数は既定の EXECUTE を外す）
 
 ## 権限境界の実行時検査（`runtime-security.sql`）
 

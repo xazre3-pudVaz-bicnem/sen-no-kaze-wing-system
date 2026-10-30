@@ -1,5 +1,6 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
+import { withLegacyChoicePrices, withLegacyOptionPrices } from './legacy-prices';
 import { getCostRecordingAccess } from '@/lib/data/option-cost-recording';
 import { isHqCostProduct } from '@/lib/domain/option-cost-access';
 
@@ -110,19 +111,20 @@ type ChoiceRow = { id: string; group_id: string; name: string; extra_price: numb
 
 function readCandidates(db: Db) {
   return Promise.all([
-    readAll<OptionRow>((from, to) =>
+    // 商品価格・追加金額（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで足す
+    readAll<Omit<OptionRow, 'price'>>((from, to) =>
       db
         .from('options')
-        .select('id, product_no, name, category_id, price, price_on_request, archived_at, manufacturer, model_no, sort_order')
+        .select('id, product_no, name, category_id, price_on_request, archived_at, manufacturer, model_no, sort_order')
         .eq('status', 'published')
         .order('id')
         .range(from, to)
-    ),
+    ).then((rows) => withLegacyOptionPrices(rows, 'all') as Promise<OptionRow[]>),
     readAll<{ id: string; name: string; code: string }>((from, to) => db.from('option_categories').select('id, name, code').order('id').range(from, to)),
     readAll<GroupRow>((from, to) => db.from('option_variant_groups').select('id, option_id, name, sort_order').order('id').range(from, to)),
-    readAll<ChoiceRow>((from, to) =>
-      db.from('option_variant_choices').select('id, group_id, name, extra_price, price_on_request, sort_order').order('id').range(from, to)
-    ),
+    readAll<Omit<ChoiceRow, 'extra_price'>>((from, to) =>
+      db.from('option_variant_choices').select('id, group_id, name, price_on_request, sort_order').order('id').range(from, to)
+    ).then((rows) => withLegacyChoicePrices(rows, 'all') as Promise<ChoiceRow[]>),
     readAll<{ option_id: string; standard_cost: number }>((from, to) =>
       db.from('option_standard_cost_versions').select('option_id, standard_cost').is('superseded_at', null).order('option_id').range(from, to)
     ),

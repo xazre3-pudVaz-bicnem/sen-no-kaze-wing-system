@@ -191,7 +191,8 @@ describe('v2.5 PR-A3：商品登録 STEP1 の商品標準原価・原価差額',
     expect(forms).toContain('data-testid="option-cost-hidden-note"');
     expect(variants).toContain('{canEditCost && (');
     expect(registered).toContain('price: showCostFields ? numberOrNull(data.get(\'price\')) ?? 0 : option.price,');
-    expect(actions).toContain("price: keepExistingPrice ? String(existingOption?.price ?? 0) : formData.get('price'),");
+    // 書き戻す金額は今の DB の値（v2.5 PR-C1b。スイッチの後は本部以外の読み取りで本部商品の金額が 0 になるため）
+    expect(actions).toContain("price: keepExistingPrice ? String(keptPrice) : formData.get('price'),");
     expect(actions).toContain("extra_price: keepExistingPrice ? keptChoicePrice.extra_price : formData.get('extra_price') || 0,");
     expect(actions).toContain("price_on_request: keepExistingPrice ? keptChoicePrice.price_on_request : formData.get('price_on_request'),");
   });
@@ -202,7 +203,9 @@ describe('v2.5 PR-A3：商品登録 STEP1 の商品標準原価・原価差額',
     expect(actions).toContain("const costResult = await recordPublishedOptionCost(optionId, 'publish', costAccess);");
     expect(actions).toContain("await recordPublishedChoiceCosts(optionId, 'publishChoice', undefined, costAccess)");
     const recording = read('lib/data/option-cost-recording.ts');
-    expect(recording).toContain("if (!option || option.status !== 'published' || option.price_on_request) return { status: 'skipped' };");
+    expect(recording).toContain("if (!optionRow || optionRow.status !== 'published' || optionRow.price_on_request) return { status: 'skipped' };");
+    // 商品価格は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
+    expect(recording).toContain("const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all');");
     // 下書きの 0 円は価格未確認。登録のときの確認済みの 0 円だけ記録する
     expect(recording).toContain("if (price < 0 || (price === 0 && kind !== 'publish')) return { status: 'skipped' };");
     // 原価の本部商品基準原価カードは入力欄を持たない（二重入力しない）

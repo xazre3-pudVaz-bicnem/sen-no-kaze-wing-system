@@ -1,0 +1,157 @@
+{
+  "options": {
+    "select": [
+      "id",
+      "base_model_id",
+      "category_id",
+      "code",
+      "name",
+      "description",
+      "image_url",
+      "selection_type",
+      "is_required",
+      "is_default",
+      "is_installation",
+      "price_on_request",
+      "preview_key",
+      "affects_views",
+      "sort_order",
+      "status",
+      "created_at",
+      "updated_at",
+      "spec_codes",
+      "owner_id",
+      "manufacturer",
+      "model_no",
+      "size_note",
+      "list_price",
+      "highlight",
+      "manufacturer_document_url",
+      "product_no",
+      "simulator_visible",
+      "archived_at",
+      "power_spec",
+      "price_unit",
+      "list_price_unit",
+      "discontinued_at"
+    ],
+    "price": [
+      "price"
+    ]
+  },
+  "option_variant_choices": {
+    "select": [
+      "id",
+      "group_id",
+      "code",
+      "name",
+      "kind",
+      "price_on_request",
+      "image_url",
+      "note",
+      "sort_order",
+      "status",
+      "created_at",
+      "updated_at"
+    ],
+    "price": [
+      "extra_price"
+    ]
+  },
+  "base_models": {
+    "select": [
+      "id",
+      "slug",
+      "name",
+      "tagline",
+      "description",
+      "status",
+      "sort_order",
+      "specs",
+      "features",
+      "standard_equipment",
+      "use_cases",
+      "created_at",
+      "updated_at",
+      "expense_rate",
+      "presets"
+    ],
+    "price": [
+      "base_price"
+    ]
+  },
+  "base_breakdown_items": {
+    "select": [
+      "id",
+      "base_model_id",
+      "spec_code",
+      "section",
+      "name",
+      "quantity",
+      "unit",
+      "remark",
+      "sort_order",
+      "created_at",
+      "updated_at"
+    ],
+    "price": [
+      "unit_price",
+      "amount"
+    ]
+  },
+  "estimate_templates": {
+    "select": [
+      "id",
+      "base_model_id",
+      "spec_code",
+      "name",
+      "source_file_name",
+      "source_sheet_name",
+      "source_sha256",
+      "tax_rate",
+      "imported_at",
+      "updated_at",
+      "baseline_option_ids"
+    ],
+    "price": [
+      "subtotal_raw",
+      "adjustment",
+      "subtotal",
+      "tax",
+      "total"
+    ]
+  },
+  "estimate_template_sections": {
+    "select": [
+      "id",
+      "template_id",
+      "code",
+      "label",
+      "expense_label",
+      "expense_rate",
+      "sort_order"
+    ],
+    "price": [
+      "line_subtotal",
+      "expense_amount",
+      "total"
+    ]
+  },
+  "estimate_template_lines": {
+    "select": [
+      "id",
+      "template_id",
+      "section_code",
+      "group_label",
+      "name",
+      "quantity",
+      "unit",
+      "remark",
+      "sort_order"
+    ],
+    "price": [
+      "unit_price",
+      "amount"
+    ]
+  }
+}

@@ -6,6 +6,7 @@ import { isMissingFunction, isMissingRelation } from '@/lib/data/schema-compat';
 import { isLocalMode } from '@/lib/data/store';
 export { canEditCostField, type CostRecordingAccess } from '@/lib/domain/option-cost-access';
 import { isHqCostProduct, type CostRecordingAccess } from '@/lib/domain/option-cost-access';
+import { withLegacyChoicePrices, withLegacyOptionPrices } from './legacy-prices';
 
 /**
  * 商品標準原価・原価差額の Version の記録（v2.5 PR-A3）。
@@ -93,13 +94,15 @@ export async function recordPublishedOptionCost(
   if (access.error) return { status: 'error', message: COST_ACCESS_ERROR_MESSAGE };
   if (!access.canManage) return { status: 'skipped' };
   const db = await createClient();
-  const { data: option, error } = await db
+  const { data: optionRow, error } = await db
     .from('options')
-    .select('id, status, price, price_on_request')
+    .select('id, status, price_on_request')
     .eq('id', optionId)
     .maybeSingle();
   if (error) return { status: 'error', message: errorMessage(error) };
-  if (!option || option.status !== 'published' || option.price_on_request) return { status: 'skipped' };
+  if (!optionRow || optionRow.status !== 'published' || optionRow.price_on_request) return { status: 'skipped' };
+  // 商品価格（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
+  const [option] = await withLegacyOptionPrices([optionRow as { id: string; status: string; price_on_request: boolean }], 'all');
   const price = Number(option.price ?? 0);
   // 下書きの 0 円は価格未確認。登録（公開）のときだけ、確認済みの 0 円として記録する
   if (price < 0 || (price === 0 && kind !== 'publish')) return { status: 'skipped' };
@@ -143,11 +146,15 @@ export async function recordPublishedChoiceCosts(
   if (groups.error) return { status: 'error', message: errorMessage(groups.error) };
   const groupIds = (groups.data ?? []).map((row) => row.id as string);
   if (!groupIds.length) return { status: 'skipped' };
-  let choiceQuery = db.from('option_variant_choices').select('id, extra_price, price_on_request').in('group_id', groupIds);
+  let choiceQuery = db.from('option_variant_choices').select('id, price_on_request').in('group_id', groupIds);
   if (choiceIds) choiceQuery = choiceQuery.in('id', choiceIds);
   const choices = await choiceQuery;
   if (choices.error) return { status: 'error', message: errorMessage(choices.error) };
-  const targets = (choices.data ?? []).filter((row) => !row.price_on_request);
+  // 追加金額（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。本部と確かめた後にサーバーで読む
+  const targets = await withLegacyChoicePrices(
+    ((choices.data ?? []) as { id: string; price_on_request: boolean }[]).filter((row) => !row.price_on_request),
+    'all'
+  );
   if (!targets.length) return { status: 'skipped' };
 
   const versions = await db

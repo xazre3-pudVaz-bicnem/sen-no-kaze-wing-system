@@ -294,7 +294,8 @@ begin
     ((select count(*) from public.notifications) > v_notifications_before)::text);
 
   select count(*) into v_audit_before from public.audit_logs;
-  perform pg_temp.run_as('authenticated', u_admin, $q$ update public.base_models set base_price = base_price + 1 where slug = 'runtime-check' returning 'updated' $q$);
+  -- 本体価格は利用者のロールから読めない（v2.5 PR-C1b）ため、今の値を読まずに新しい値を書く（管理画面と同じ）
+  perform pg_temp.run_as('authenticated', u_admin, $q$ update public.base_models set base_price = 1234567 where slug = 'runtime-check' returning 'updated' $q$);
   perform pg_temp.expect_eq('5-2 本部の価格変更で監査ログが作られる（trigger → write_audit）', 'true',
     ((select count(*) from public.audit_logs) > v_audit_before)::text);
 

@@ -446,7 +446,8 @@ describe('corrective migration and simulator contract', () => {
     expect(equipment).toContain("const shown = categories.filter((c) => c.code !== 'sitework');");
     expect(publicCatalog).toContain('applyCustomerCategoryApplicability');
     expect(publicCatalog).toContain('public-catalog-v5-spec-matrix');
-    expect(publicCatalog).toContain('buildCustomerCategoryMatrix(specMatrix, categoryRows, modelRows)');
+    // 本体の行は旧価格（v2.5 PR-C1b）を足した後のものを使う
+    expect(publicCatalog).toContain('buildCustomerCategoryMatrix(specMatrix, categoryRows, priced.models)');
   });
 
   it('filters baseline totals at calculation time without rewriting template or formal historical records', () => {

@@ -56,7 +56,16 @@ export function SubmitButton({ pending, label = '保存する', disabled = false
 type EditablePreset = ModelPreset & { _key: string };
 type ModelFormMode = 'all' | 'basic' | 'plans';
 
-export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mode?: ModelFormMode }) {
+export function ModelForm({
+  model,
+  mode = 'all',
+  canEditBasePrice = true,
+}: {
+  model: BaseModel | null;
+  mode?: ModelFormMode;
+  /** 本体価格は本部だけが登録・変更できる（v2.5 PR-C1b）。本部以外には表示だけにする（保存しても今の本体価格のまま） */
+  canEditBasePrice?: boolean;
+}) {
   const [state, action, pending] = useActionState(saveModelAction, initial);
   const e = state.fieldErrors ?? {};
   const joinPairs = (arr: { [k: string]: string }[] | undefined, a: string, b: string) => (arr ?? []).map((x) => `${x[a]}|${x[b]}`).join('\n');
@@ -169,7 +178,15 @@ export function ModelForm({ model, mode = 'all' }: { model: BaseModel | null; mo
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="商品名" htmlFor="name" required errors={e.name}><Input id="name" name="name" defaultValue={model?.name} required /></Field>
               <Field label="slug（URL）" htmlFor="slug" required hint="英小文字・数字・ハイフン" errors={e.slug}><Input id="slug" name="slug" defaultValue={model?.slug} required /></Field>
-              <Field label="本体一式（諸費用別・税別・円）" htmlFor="base_price" required hint="見積書テンプレートの本体明細合計（諸費用を除く）" errors={e.base_price}><Input id="base_price" name="base_price" type="number" min={0} step={1} defaultValue={model?.base_price ?? 0} required data-testid="model-base-price" /></Field>
+              <Field
+                label="本体一式（諸費用別・税別・円）"
+                htmlFor="base_price"
+                required
+                hint={canEditBasePrice ? '見積書テンプレートの本体明細合計（諸費用を除く）' : '本体価格は本部だけが登録・変更できます（表示だけ）'}
+                errors={e.base_price}
+              >
+                <Input id="base_price" name="base_price" type="number" min={0} step={1} defaultValue={model?.base_price ?? 0} required readOnly={!canEditBasePrice} data-testid="model-base-price" />
+              </Field>
               <Field label="諸費用率（%）" htmlFor="expense_rate" required hint="本体・オプションそれぞれの小計に掛ける（テンプレート: 15%）" errors={e.expense_rate}><Input id="expense_rate" name="expense_rate" type="number" min={0} max={100} step={0.1} defaultValue={expenseRatePercent} required /></Field>
               <Field label="公開状態" htmlFor="status" required errors={e.status}>
                 <Select id="status" name="status" defaultValue={model?.status ?? 'draft'}>

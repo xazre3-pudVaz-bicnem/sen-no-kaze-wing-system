@@ -46,6 +46,7 @@ import {
   recordPublishedChoiceCosts,
   recordPublishedOptionCost,
 } from '@/lib/data/option-cost-recording';
+import { currentChoicePriceForWriteBack, currentModelPriceForWriteBack, currentOptionPriceForWriteBack } from '@/lib/data/legacy-prices';
 import { isHqCostProduct, newChoicePriceWithoutCost } from '@/lib/domain/option-cost-access';
 const HQ_COST_IMPORT_NOTICE =
   '商品価格・追加金額の列は本部商品の原価のため、本部だけが反映できます。この一括登録では本部商品の金額を変えず、新しい本部商品は金額未登録の下書きで登録します（原価は本部が登録します）。';
@@ -124,6 +125,17 @@ async function editableOptionContext(actor: SessionUser, optionId: string) {
 
 export async function saveModelAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
+  // 本体価格（旧価格の列）は本部だけが登録・変更できる（v2.5 PR-C1b。DB のトリガーも止める）。
+  // 本部以外の保存では、今の本体価格をそのまま書き戻す（新しい本体は 0 円）
+  const costAccess = await getCostRecordingAccess();
+  if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  const modelId = nullableId(formData.get('id'));
+  let keptBasePrice: number | null = null;
+  if (!canEditCostField(costAccess)) {
+    const store = await getStore();
+    const current = modelId ? await store.getModelById(modelId, { includeDraft: true }) : null;
+    keptBasePrice = current ? await currentModelPriceForWriteBack(current) : 0;
+  }
 
   let presets: unknown[];
   const presetsJson = String(formData.get('presets_json') ?? '').trim();
@@ -147,7 +159,7 @@ export async function saveModelAction(_prev: AdminFormState, formData: FormData)
     name: formData.get('name'),
     tagline: formData.get('tagline'),
     description: formData.get('description'),
-    base_price: formData.get('base_price'),
+    base_price: keptBasePrice === null ? formData.get('base_price') : String(keptBasePrice),
     expense_rate: Number(formData.get('expense_rate') || 15) / 100,
     presets,
     status: formData.get('status'),
@@ -237,6 +249,8 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   // 権限を確認できないときは保存しない（本部の入力を、本部以外の保存として黙って捨てない）
   if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
   const keepExistingPrice = !canEditCostField(costAccess);
+  // 書き戻す金額は、画面の読み取り（スイッチの後は本部以外に 0）ではなく今の DB の値（v2.5 PR-C1b）
+  const keptPrice = keepExistingPrice && existingOption ? await currentOptionPriceForWriteBack(existingOption) : 0;
 
   // options.code は既存Preset / Import互換の技術キー。登録担当者には入力させず、
   // 既存商品では必ず保持し、新規手入力商品だけ内部で一意な値を作る。
@@ -256,7 +270,7 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     code: internalCode,
     name: formData.get('name'),
     description: formData.get('description'),
-    price: keepExistingPrice ? String(existingOption?.price ?? 0) : formData.get('price'),
+    price: keepExistingPrice ? String(keptPrice) : formData.get('price'),
     image_url,
     selection_type: formData.get('selection_type'),
     is_required: formData.get('is_required'),
@@ -383,6 +397,8 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     ? await getCostAccessForProduct(() => store.listCategories(), option.category_id)
     : NO_COST_RECORDING;
   if (costAccess.error) redirect(previewUrl({ error: COST_ACCESS_ERROR_MESSAGE }));
+  // 本部以外の公開：0 円の判定と書き戻しは、画面の読み取り（スイッチの後は本部以外に本部商品の金額が 0）ではなく今の DB の金額（v2.5 PR-C1b）
+  if (!canEditCostField(costAccess)) option.price = await currentOptionPriceForWriteBack(option);
   if (
     option.status !== 'published' &&
     requiresZeroPriceConfirmation(option) &&
@@ -553,7 +569,7 @@ export async function saveVariantChoiceAction(_prev: AdminFormState, formData: F
     // 本部以外が足す選択肢：追加の選択肢は原価差額が未登録（別途見積）、標準・固定は 0 円
     const requestedKind = formData.get('kind');
     const keptChoicePrice = existing
-      ? { extra_price: existing.extra_price, price_on_request: existing.price_on_request === true }
+      ? { extra_price: keepExistingPrice ? await currentChoicePriceForWriteBack(existing) : existing.extra_price, price_on_request: existing.price_on_request === true }
       : newChoicePriceWithoutCost(requestedKind === 'standard' || requestedKind === 'fixed' ? requestedKind : 'option');
 
     const file = formData.get('image_file');
@@ -1527,6 +1543,10 @@ export async function importEstimateTemplatesAction(
   formData: FormData
 ): Promise<EstimateTemplateImportState> {
   await requireCatalogEditor();
+  // 旧テンプレート（Excel の標準見積）の金額は本部だけが登録・変更できる（v2.5 PR-C1b。DB のトリガーも止める）
+  const templateCostAccess = await getCostRecordingAccess();
+  if (templateCostAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  if (!canEditCostField(templateCostAccess)) return { ok: false, error: '旧テンプレート（Excel の標準見積）の取込は本部だけができます。' };
   const apply = formData.get('mode') === 'apply';
   const file = formData.get('sheet');
   if (!(file instanceof File) || file.size === 0) {
@@ -1635,6 +1655,10 @@ export async function importEstimateTemplatesAction(
 /** 本体内訳マスター（分類表見積書）を丸ごと保存する（総代理店以上） */
 export async function saveBaseBreakdownAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   await requireCatalogEditor();
+  // 本体内訳の金額（旧価格の列）は本部だけが登録・変更できる（v2.5 PR-C1b。DB のトリガーも止める）
+  const costAccess = await getCostRecordingAccess();
+  if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  if (!canEditCostField(costAccess)) return { ok: false, error: '本体内訳の金額は本部だけが登録・変更できます。' };
   const rows: unknown[] = [];
   for (const [key] of formData.entries()) {
     const m = key.match(/^items\.(\d+)\.name$/);

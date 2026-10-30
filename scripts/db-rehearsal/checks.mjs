@@ -52,6 +52,35 @@ export function evaluate(schema, repo = REPO) {
     });
   }
 
+  // 旧価格の列（本部商品の原価。v2.5 PR-C1b）：DB の列が lib/data/legacy-price-columns.json と合い、
+  // 金額の列は anon・authenticated から読めず、ほかの列（アプリが列名で読む）は読める
+  if (schema.signatures.some((f) => f.name === 'legacy_price_write_allowed') && schema.price_table_columns) {
+    const spec = JSON.parse(fs.readFileSync(path.join(repo, 'lib/data/legacy-price-columns.json'), 'utf8'));
+    const issues = [];
+    const byTable = new Map();
+    for (const c of schema.price_table_columns) {
+      if (!byTable.has(c.t)) byTable.set(c.t, new Map());
+      byTable.get(c.t).set(c.col, c);
+    }
+    for (const [table, { select, price }] of Object.entries(spec)) {
+      const cols = byTable.get(table) ?? new Map();
+      for (const col of price) {
+        const c = cols.get(col);
+        if (!c) issues.push(`${table}.${col} が DB に無い（金額の列）`);
+        else if (c.anon || c.authenticated) issues.push(`${table}.${col} を anon・authenticated が読める（金額の列）`);
+      }
+      for (const col of select) {
+        const c = cols.get(col);
+        if (!c) issues.push(`${table}.${col} が DB に無い（アプリが読む列）`);
+        else if (!c.anon || !c.authenticated) issues.push(`${table}.${col} を anon・authenticated が読めない（アプリが読む列。列を足す migration で grant select する）`);
+      }
+      for (const col of cols.keys()) {
+        if (!select.includes(col) && !price.includes(col)) issues.push(`${table}.${col} が legacy-price-columns.json に無い（アプリが読まない。select か price に足す）`);
+      }
+    }
+    if (issues.length) failures.push({ check: 'legacy-price-columns', message: `旧価格の列の権限・一覧の不一致 ${issues.length} 件`, details: issues });
+  }
+
   const noSearchPath = callable.filter((f) => f.secdef && !(f.config ?? []).some((c) => c.startsWith('search_path=')));
   if (noSearchPath.length) failures.push({ check: 'search-path', message: `search_path を固定していない SECURITY DEFINER 関数: ${noSearchPath.map((f) => f.name).join(', ')}` });
 

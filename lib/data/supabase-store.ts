@@ -78,6 +78,18 @@ import {
   type SpecAcceptanceState,
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
+import {
+  getLegacyPriceScope,
+  legacyTableColumns,
+  withLegacyBreakdownPrices,
+  withLegacyChoicePrices,
+  withLegacyModelPrices,
+  withLegacyOptionPrices,
+  withLegacyTemplateLinePrices,
+  withLegacyTemplatePrices,
+  withLegacyTemplateSectionPrices,
+  type LegacyPriceScope,
+} from './legacy-prices';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 import { EMPTY_POR_SELECTION_STATE, isReservedLineStateRemark, type QuotePorSelection, type QuotePorSelectionState } from '@/lib/domain/quote-por';
@@ -169,30 +181,40 @@ export class SupabaseStore implements DataStore {
     return (await createClient()) as unknown as Db;
   }
 
+  /**
+   * 旧価格の列（本部商品の原価）を足す範囲（v2.5 PR-C1b）。
+   * このストアは全リクエストで共有するため、範囲は覚えておかず毎回確かめる（スイッチの状態はキャッシュ済み）
+   */
+  private legacyPriceScope(): Promise<LegacyPriceScope> {
+    return getLegacyPriceScope();
+  }
+
   // ---------- 商品 ----------
   async listModels(opts?: { includeDraft?: boolean }) {
     const db = await this.db();
-    let q = db.from('base_models').select('*').order('sort_order');
+    let q = db.from('base_models').select(legacyTableColumns('base_models')).order('sort_order');
     if (!opts?.includeDraft) q = q.eq('status', 'published');
     const { data, error } = await q;
     if (error) mapPgError(error);
-    return (data ?? []) as BaseModel[];
+    return withLegacyModelPrices((data ?? []) as unknown as BaseModel[], await this.legacyPriceScope());
   }
   async getModelBySlug(slug: string, opts?: { includeDraft?: boolean }) {
     const db = await this.db();
-    let q = db.from('base_models').select('*').eq('slug', slug);
+    let q = db.from('base_models').select(legacyTableColumns('base_models')).eq('slug', slug);
     if (!opts?.includeDraft) q = q.eq('status', 'published');
     const { data, error } = await q.maybeSingle();
     if (error) mapPgError(error);
-    return (data as BaseModel | null) ?? null;
+    const row = (data as unknown as BaseModel | null) ?? null;
+    return row ? (await withLegacyModelPrices([row], await this.legacyPriceScope()))[0] : null;
   }
   async getModelById(id: string, opts?: { includeDraft?: boolean }) {
     const db = await this.db();
-    let q = db.from('base_models').select('*').eq('id', id);
+    let q = db.from('base_models').select(legacyTableColumns('base_models')).eq('id', id);
     if (!opts?.includeDraft) q = q.eq('status', 'published');
     const { data, error } = await q.maybeSingle();
     if (error) mapPgError(error);
-    return (data as BaseModel | null) ?? null;
+    const row = (data as unknown as BaseModel | null) ?? null;
+    return row ? (await withLegacyModelPrices([row], await this.legacyPriceScope()))[0] : null;
   }
   async getCatalogBundle(modelId: string, opts?: { includeDraft?: boolean }): Promise<CatalogBundle | null> {
     const model = await this.getModelById(modelId, opts);
@@ -202,14 +224,15 @@ export class SupabaseStore implements DataStore {
     const [images, categories, options, previewRules, optionImages] = await Promise.all([
       db.from('product_images').select('*').eq('base_model_id', modelId).order('sort_order'),
       db.from('option_categories').select('*').order('sort_order'),
-      db.from('options').select('*').or(`base_model_id.is.null,base_model_id.eq.${modelId}`).order('sort_order'),
+      db.from('options').select(legacyTableColumns('options')).or(`base_model_id.is.null,base_model_id.eq.${modelId}`).order('sort_order'),
       db.from('preview_image_rules').select('*').eq('base_model_id', modelId),
       db.from('option_images').select('*').order('sort_order'),
     ]);
     for (const r of [images, categories, options, previewRules]) if (r.error) mapPgError(r.error);
     if (optionImages.error && !isMissingRelation(optionImages.error)) mapPgError(optionImages.error);
     const optionImageRows = (optionImages.error ? [] : (optionImages.data ?? [])) as OptionImage[];
-    const opts_ = normalizeOptions(pub((options.data ?? []) as ProductOption[])).map((option) => ({
+    const scope = await this.legacyPriceScope();
+    const opts_ = normalizeOptions(await withLegacyOptionPrices(pub((options.data ?? []) as unknown as ProductOption[]), scope)).map((option) => ({
       ...option,
       gallery_images: optionImageRows
         .filter((image) => image.option_id === option.id)
@@ -233,10 +256,10 @@ export class SupabaseStore implements DataStore {
     const vg = ids.length ? await db.from('option_variant_groups').select('*').in('option_id', ids).order('sort_order') : { data: [], error: null };
     if (vg.error && !isMissingRelation(vg.error)) mapPgError(vg.error);
     const gids = ((vg.data ?? []) as OptionVariantGroup[]).map((g) => g.id);
-    const vc = gids.length ? await db.from('option_variant_choices').select('*').in('group_id', gids).order('sort_order') : { data: [], error: null };
+    const vc = gids.length ? await db.from('option_variant_choices').select(legacyTableColumns('option_variant_choices')).in('group_id', gids).order('sort_order') : { data: [], error: null };
     if (vc.error && !isMissingRelation(vc.error)) mapPgError(vc.error);
     // 本体内訳マスター（0016 未適用の DB では「内訳なし」として扱う）
-    const bb = await db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).order('sort_order');
+    const bb = await db.from('base_breakdown_items').select(legacyTableColumns('base_breakdown_items')).eq('base_model_id', modelId).order('sort_order');
     if (bb.error && !isMissingRelation(bb.error)) mapPgError(bb.error);
     const idSet = new Set(ids);
     return {
@@ -250,8 +273,8 @@ export class SupabaseStore implements DataStore {
       previewRules: ruleRows,
       hotspots: (hs.error ? [] : (hs.data ?? [])) as PreviewHotspot[],
       variantGroups: (vg.error ? [] : (vg.data ?? [])) as OptionVariantGroup[],
-      variantChoices: (vc.error ? [] : (vc.data ?? [])) as OptionVariantChoice[],
-      baseBreakdowns: (bb.error ? [] : (bb.data ?? [])) as BaseBreakdownItem[],
+      variantChoices: await withLegacyChoicePrices((vc.error ? [] : (vc.data ?? [])) as unknown as OptionVariantChoice[], scope),
+      baseBreakdowns: (await withLegacyBreakdownPrices((bb.error ? [] : (bb.data ?? [])) as unknown as BaseBreakdownItem[], scope)) as BaseBreakdownItem[],
     };
   }
 
@@ -333,14 +356,14 @@ export class SupabaseStore implements DataStore {
   // ---------- 本体内訳マスター ----------
   async listBaseBreakdownItems(modelId?: string) {
     const db = await this.db();
-    let q = db.from('base_breakdown_items').select('*').order('spec_code').order('sort_order');
+    let q = db.from('base_breakdown_items').select(legacyTableColumns('base_breakdown_items')).order('spec_code').order('sort_order');
     if (modelId) q = q.eq('base_model_id', modelId);
     const { data, error } = await q;
     if (error) {
       if (isMissingRelation(error)) return [];
       mapPgError(error);
     }
-    return (data ?? []) as BaseBreakdownItem[];
+    return (await withLegacyBreakdownPrices((data ?? []) as unknown as BaseBreakdownItem[], await this.legacyPriceScope())) as BaseBreakdownItem[];
   }
   async saveBaseBreakdownItems(
     modelId: string,
@@ -364,9 +387,15 @@ export class SupabaseStore implements DataStore {
       remark: it.remark,
       sort_order: i + 1,
     }));
-    const ins = await db.from('base_breakdown_items').insert(rows).select('*');
+    const ins = await db.from('base_breakdown_items').insert(rows).select(legacyTableColumns('base_breakdown_items'));
     if (ins.error) mapPgError(ins.error);
-    return (ins.data ?? []) as BaseBreakdownItem[];
+    // 金額の列は読み返せない（v2.5 PR-C1b）。書いた金額をそのまま返す
+    const written = new Map(rows.map((row) => [row.sort_order, row]));
+    return ((ins.data ?? []) as unknown as BaseBreakdownItem[]).map((row) => ({
+      ...row,
+      unit_price: written.get(row.sort_order)?.unit_price ?? 0,
+      amount: written.get(row.sort_order)?.amount ?? 0,
+    }));
   }
 
   // ---------- 本体仕様マトリクス ----------
@@ -433,21 +462,21 @@ export class SupabaseStore implements DataStore {
   // ---------- 標準見積テンプレート ----------
   async listEstimateTemplates(modelId?: string): Promise<EstimateTemplate[]> {
     const db = await this.db();
-    let q = db.from('estimate_templates').select('*').order('base_model_id').order('spec_code');
+    let q = db.from('estimate_templates').select(legacyTableColumns('estimate_templates')).order('base_model_id').order('spec_code');
     if (modelId) q = q.eq('base_model_id', modelId);
     const { data, error } = await q;
     if (error) {
       if (isMissingRelation(error)) return [];
       mapPgError(error);
     }
-    return (data ?? []) as EstimateTemplate[];
+    return (await withLegacyTemplatePrices((data ?? []) as unknown as EstimateTemplate[], await this.legacyPriceScope())) as EstimateTemplate[];
   }
 
   async getEstimateTemplateBundle(modelId: string, specCode: string): Promise<EstimateTemplateBundle | null> {
     const db = await this.db();
     const templateResult = await db
       .from('estimate_templates')
-      .select('*')
+      .select(legacyTableColumns('estimate_templates'))
       .eq('base_model_id', modelId)
       .eq('spec_code', specCode)
       .maybeSingle();
@@ -455,19 +484,29 @@ export class SupabaseStore implements DataStore {
       if (isMissingRelation(templateResult.error)) return null;
       mapPgError(templateResult.error);
     }
-    const template = templateResult.data as EstimateTemplate | null;
-    if (!template) return null;
+    const templateRow = templateResult.data as unknown as EstimateTemplate | null;
+    if (!templateRow) return null;
+    const scope = await this.legacyPriceScope();
+    const [template] = (await withLegacyTemplatePrices([templateRow], scope)) as EstimateTemplate[];
     const [sections, lines, baseRows] = await Promise.all([
-      db.from('estimate_template_sections').select('*').eq('template_id', template.id).order('sort_order'),
-      db.from('estimate_template_lines').select('*').eq('template_id', template.id).order('sort_order'),
-      db.from('base_breakdown_items').select('*').eq('base_model_id', modelId).eq('spec_code', specCode).order('sort_order'),
+      db.from('estimate_template_sections').select(legacyTableColumns('estimate_template_sections')).eq('template_id', template.id).order('sort_order'),
+      db.from('estimate_template_lines').select(legacyTableColumns('estimate_template_lines')).eq('template_id', template.id).order('sort_order'),
+      db
+        .from('base_breakdown_items')
+        .select(legacyTableColumns('base_breakdown_items'))
+        .eq('base_model_id', modelId)
+        .eq('spec_code', specCode)
+        .order('sort_order'),
     ]);
     for (const result of [sections, lines, baseRows]) if (result.error) mapPgError(result.error);
     return {
       template,
-      sections: (sections.data ?? []) as EstimateTemplateBundle['sections'],
-      lines: (lines.data ?? []) as EstimateTemplateBundle['lines'],
-      base_breakdown_items: (baseRows.data ?? []) as EstimateTemplateBundle['base_breakdown_items'],
+      sections: (await withLegacyTemplateSectionPrices((sections.data ?? []) as unknown as EstimateTemplateBundle['sections'], scope)) as EstimateTemplateBundle['sections'],
+      lines: (await withLegacyTemplateLinePrices((lines.data ?? []) as unknown as EstimateTemplateBundle['lines'], scope)) as EstimateTemplateBundle['lines'],
+      base_breakdown_items: (await withLegacyBreakdownPrices(
+        (baseRows.data ?? []) as unknown as EstimateTemplateBundle['base_breakdown_items'],
+        scope
+      )) as EstimateTemplateBundle['base_breakdown_items'],
       baseline_option_ids: template.baseline_option_ids ?? [],
     };
   }
@@ -1194,6 +1233,16 @@ export class SupabaseStore implements DataStore {
     const { id, ...rest } = input;
     // 明示 ID は「更新専用」ではなく、決定的 UUID を使う新規行にも利用する。
     const q = id ? db.from(table).upsert({ id, ...rest }, { onConflict: 'id' }) : db.from(table).insert(rest);
+    if (table === 'options' || table === 'option_variant_choices' || table === 'base_models') {
+      // 旧価格の列は読み返せない（v2.5 PR-C1b）。金額のほかの列を返し、金額はサーバーで足す
+      const { data, error } = await q.select(legacyTableColumns(table)).single();
+      if (error) mapPgError(error);
+      const row = data as unknown as T & { id: string };
+      const scope = await this.legacyPriceScope();
+      if (table === 'options') return (await withLegacyOptionPrices([row], scope))[0] as T;
+      if (table === 'option_variant_choices') return (await withLegacyChoicePrices([row], scope))[0] as T;
+      return (await withLegacyModelPrices([row], scope))[0] as T;
+    }
     const { data, error } = await q.select('*').single();
     if (error) mapPgError(error);
     return data as T;
@@ -1223,12 +1272,12 @@ export class SupabaseStore implements DataStore {
     if (!groups.length) return { groups: [], choices: [] };
     const choicesResult = await db
       .from('option_variant_choices')
-      .select('*')
+      .select(legacyTableColumns('option_variant_choices'))
       .in('group_id', groups.map((group) => group.id))
       .order('sort_order')
       .order('id');
     if (choicesResult.error) mapPgError(choicesResult.error);
-    return { groups, choices: (choicesResult.data ?? []) as OptionVariantChoice[] };
+    return { groups, choices: await withLegacyChoicePrices((choicesResult.data ?? []) as unknown as OptionVariantChoice[], await this.legacyPriceScope()) };
   }
     async upsertVariantGroup(input: OptionVariantGroup) {
     return this.upsert<OptionVariantGroup>('option_variant_groups', input as unknown as Record<string, unknown> & { id?: string | null });
@@ -1247,20 +1296,21 @@ export class SupabaseStore implements DataStore {
   }
   async listOptions() {
     const db = await this.db();
-    const { data, error } = await db.from('options').select('*').order('sort_order');
+    const { data, error } = await db.from('options').select(legacyTableColumns('options')).order('sort_order');
     if (error) mapPgError(error);
-    return normalizeOptions((data ?? []) as ProductOption[]);
+    return normalizeOptions(await withLegacyOptionPrices((data ?? []) as unknown as ProductOption[], await this.legacyPriceScope()));
   }
   async getOption(id: string) {
     const db = await this.db();
     const [optionResult, imageResult] = await Promise.all([
-      db.from('options').select('*').eq('id', id).maybeSingle(),
+      db.from('options').select(legacyTableColumns('options')).eq('id', id).maybeSingle(),
       db.from('option_images').select('*').eq('option_id', id).order('sort_order'),
     ]);
     if (optionResult.error) mapPgError(optionResult.error);
     if (imageResult.error && !isMissingRelation(imageResult.error)) mapPgError(imageResult.error);
-    const option = (optionResult.data as ProductOption | null) ?? null;
-    if (!option) return null;
+    const optionRow = (optionResult.data as unknown as ProductOption | null) ?? null;
+    if (!optionRow) return null;
+    const [option] = await withLegacyOptionPrices([optionRow], await this.legacyPriceScope());
     return {
       ...option,
       gallery_images: (imageResult.error ? [] : (imageResult.data ?? [])) as OptionImage[],

@@ -100,6 +100,7 @@ declare
   o_hq constant uuid := '7d300000-0000-4000-8000-000000000001';
   o_free constant uuid := '7d300000-0000-4000-8000-000000000002';
   vg_hq constant uuid := '7d310000-0000-4000-8000-000000000001';
+  vg_free constant uuid := '7d310000-0000-4000-8000-000000000002';
   vc_hq constant uuid := '7d320000-0000-4000-8000-000000000001';
   v_out text;
   v_template jsonb;
@@ -125,7 +126,8 @@ begin
   insert into public.options (id, base_model_id, category_id, code, name, price, status, product_no, simulator_visible, owner_id)
   values (o_hq, m_model, c_items, 'runtime-lpg-hq', '本部商品', 10000, 'published', 'PRD-974001', true, null),
          (o_free, null, c_free, 'runtime-lpg-free', '代理店のフリー商品', 5000, 'published', 'PRD-974002', false, u_dealer);
-  insert into public.option_variant_groups (id, option_id, code, name, status) values (vg_hq, o_hq, 'color', '色', 'published');
+  insert into public.option_variant_groups (id, option_id, code, name, status)
+  values (vg_hq, o_hq, 'color', '色', 'published'), (vg_free, o_free, 'size', 'サイズ', 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status)
   values (vc_hq, vg_hq, 'black', '黒', 'option', 1000, 'published');
   insert into public.base_breakdown_items (base_model_id, spec_code, section, name, quantity, unit, unit_price, amount, sort_order)
@@ -188,6 +190,12 @@ begin
        like 'ERROR 42501: FORBIDDEN: 本体内訳 の金額は本部だけが登録・変更・削除できます%')::text || '/' ||
     pg_temp.lpg_run_as('authenticated', u_admin, format(
        $q$insert into public.base_breakdown_items (base_model_id, spec_code, section, name, quantity, unit_price, amount) values (%L, 'lpg-spec', 'base', '追加', 1, 500, 500) returning 'ok'$q$, m_model)));
+
+  perform pg_temp.lpg_expect_eq('LPG-29 総代理店は、本部商品と旧フリー商品の間で商品のカテゴリー・選択肢の選択項目を移せない（金額が変わらなくても。移すと本部以外が原価を読み書きできるため）', 'true/true',
+    (pg_temp.lpg_run_as('authenticated', u_md, format('update public.options set category_id = %L where id = %L returning ''ok''', c_free, o_hq))
+       like 'ERROR 42501: FORBIDDEN: 本部商品と旧フリー商品の間でカテゴリーを移せるのは本部だけです%')::text || '/' ||
+    (pg_temp.lpg_run_as('authenticated', u_md, format('update public.option_variant_choices set group_id = %L where id = %L returning ''ok''', vg_free, vc_hq))
+       like 'ERROR 42501: FORBIDDEN: 本部商品と旧フリー商品の間で選択肢を移せるのは本部だけです%')::text);
 
   -- ---------- SECURITY DEFINER の RPC の中でも、呼んだ利用者で判定する ----------
   perform pg_temp.lpg_expect_eq('LPG-30 一括登録（apply_catalog_import）：総代理店は本部商品の金額を変えられず、金額を変えない更新はできる', 'true/ok',

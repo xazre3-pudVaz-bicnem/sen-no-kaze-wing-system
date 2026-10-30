@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/session';
-import { getLegacyPriceScope, withLegacyOptionPrices } from '@/lib/data/legacy-prices';
+import { withLegacyOptionPrices } from '@/lib/data/legacy-prices';
 import { isLocalMode } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { findUnresolvedLines, quoteOptionFlagMap, type QuoteLineCheckLine } from '@/lib/domain/quote-por';
@@ -80,10 +80,11 @@ export default async function StandardQuoteDraftPage({
   const optionsRead = parentOptionIds.length
     ? await supabase.from('options').select('id, price_on_request').in('id', parentOptionIds)
     : { data: [], error: null };
-  // 台帳の価格（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。サーバーで足す（本部の画面）
+  // 台帳の価格（旧価格の列）は利用者のロールから読めない（v2.5 PR-C1b）。金額未確定の判定（DB の判定と同じ）にだけ使い、
+  // 画面には出さないので、今の DB の値をサーバーで読む
   const pricedOptions = optionsRead.error
     ? []
-    : await withLegacyOptionPrices((optionsRead.data ?? []) as { id: string; price_on_request: boolean }[], await getLegacyPriceScope());
+    : await withLegacyOptionPrices((optionsRead.data ?? []) as { id: string; price_on_request: boolean }[], 'all');
   const parentReadFailed = Boolean(parentRead.error || baselineRead.error || optionsRead.error);
   const optionFlags = quoteOptionFlagMap(
     pricedOptions.map((option) => ({

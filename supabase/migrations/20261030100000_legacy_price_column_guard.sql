@@ -134,9 +134,11 @@ begin
     raise exception using errcode = '42501',
       message = 'FORBIDDEN: 本部商品の商品標準原価（商品価格）は本部だけが変更できます';
   end if;
-  if v_new_hq and not v_old_hq and coalesce(new.price, 0) <> 0 then
+  -- 本部商品と旧フリー商品の間の移動は、金額が変わらなくても止める（移した後は本部以外が原価を読み書きできてしまうため。
+  -- 画面でも両者の間のカテゴリーの変更はできない）
+  if v_new_hq is distinct from v_old_hq then
     raise exception using errcode = '42501',
-      message = 'FORBIDDEN: 金額のある商品を本部商品のカテゴリーへ移せるのは本部だけです';
+      message = 'FORBIDDEN: 本部商品と旧フリー商品の間でカテゴリーを移せるのは本部だけです';
   end if;
   return new;
 end;
@@ -154,6 +156,7 @@ set search_path = ''
 as $$
 declare
   v_hq boolean;
+  v_old_hq boolean;
 begin
   if public.legacy_price_write_allowed() then
     return new;
@@ -163,7 +166,21 @@ begin
     from public.option_variant_groups g
     join public.options o on o.id = g.option_id
    where g.id = new.group_id;
-  if not coalesce(v_hq, true) then
+  v_hq := coalesce(v_hq, true);
+  if tg_op = 'UPDATE' then
+    -- 移動元（本部商品の選択項目）も見る。本部商品と旧フリー商品の間の移動は止める
+    select public.option_category_is_hq_cost(o.category_id)
+      into v_old_hq
+      from public.option_variant_groups g
+      join public.options o on o.id = g.option_id
+     where g.id = old.group_id;
+    v_old_hq := coalesce(v_old_hq, true);
+    if v_hq is distinct from v_old_hq then
+      raise exception using errcode = '42501',
+        message = 'FORBIDDEN: 本部商品と旧フリー商品の間で選択肢を移せるのは本部だけです';
+    end if;
+  end if;
+  if not v_hq then
     return new;
   end if;
   if tg_op = 'INSERT' then

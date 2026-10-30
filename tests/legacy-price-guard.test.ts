@@ -7,19 +7,19 @@ const mocks = vi.hoisted(() => ({
   pricingEnabled: vi.fn(),
   costAccess: vi.fn(),
   inCalls: [] as { table: string; ids: string[] }[],
+  clients: [] as string[],
   tables: {} as Record<string, Record<string, unknown>[]>,
 }));
 
-vi.mock('@/lib/data/store', () => ({ isLocalMode: mocks.isLocalMode }));
-vi.mock('@/lib/data/standard-estimate-sale-views', () => ({ getSimulatorStandardPricingEnabled: mocks.pricingEnabled }));
-vi.mock('@/lib/data/option-cost-recording', () => ({ getCostRecordingAccess: mocks.costAccess }));
-vi.mock('@/lib/supabase/admin', () => ({
-  // service_role のクライアントの代わり：select(列).in(列, 値) と eq(列, 値).maybeSingle() だけを、メモリの表で返す
-  createAdminClient: () => ({
+/** service_role・匿名キーのクライアントの代わり：select(列) と .in(列, 値)・eq(列, 値).maybeSingle() だけを、メモリの表で返す */
+function fakeClient(kind: string) {
+  mocks.clients.push(kind);
+  return {
     from: (table: string) => ({
       select: (columns: string) => {
         const pick = (row: Record<string, unknown>) =>
           Object.fromEntries(columns.split(',').map((c) => c.trim()).map((c) => [c, row[c]]));
+        const all = () => ({ data: (mocks.tables[table] ?? []).map(pick), error: null });
         return {
           in: async (key: string, ids: string[]) => {
             mocks.inCalls.push({ table, ids });
@@ -28,11 +28,18 @@ vi.mock('@/lib/supabase/admin', () => ({
           eq: (key: string, value: unknown) => ({
             maybeSingle: async () => ({ data: (mocks.tables[table] ?? []).filter((row) => row[key] === value).map(pick)[0] ?? null, error: null }),
           }),
+          then: (resolve: (value: ReturnType<typeof all>) => unknown) => resolve(all()),
         };
       },
     }),
-  }),
-}));
+  };
+}
+
+vi.mock('@/lib/data/store', () => ({ isLocalMode: mocks.isLocalMode }));
+vi.mock('@/lib/data/standard-estimate-sale-views', () => ({ getSimulatorStandardPricingEnabled: mocks.pricingEnabled }));
+vi.mock('@/lib/data/option-cost-recording', () => ({ getCostRecordingAccess: mocks.costAccess }));
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => fakeClient('service_role') }));
+vi.mock('@/lib/supabase/public', () => ({ createPublicClient: () => fakeClient('anon') }));
 
 import {
   currentChoicePriceForWriteBack,
@@ -61,7 +68,9 @@ const FREE_CATEGORY = 'cat-free';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key');
   mocks.inCalls.length = 0;
+  mocks.clients.length = 0;
   mocks.isLocalMode.mockReturnValue(false);
   mocks.pricingEnabled.mockResolvedValue(false);
   mocks.costAccess.mockResolvedValue({ available: true, canManage: false });
@@ -137,6 +146,15 @@ describe('旧価格の列をサーバーで足す', () => {
     expect(mocks.inCalls).toEqual([]);
   });
 
+  it('サーバーは service_role で読み、サービスキーの無い環境では匿名キーで読む（20261030100000 の適用前の DB だけで読める）', async () => {
+    await withLegacyModelPrices([{ id: 'm-1' }], 'all');
+    expect(mocks.clients).toEqual(['service_role']);
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+    mocks.clients.length = 0;
+    await expect(withLegacyModelPrices([{ id: 'm-1' }], 'all')).resolves.toEqual([{ id: 'm-1', base_price: 1000000 }]);
+    expect(mocks.clients).toEqual(['anon']);
+  });
+
   it('多くの行は 100 件ずつ読む（in の URL を長くしすぎない）', async () => {
     const rows = Array.from({ length: 250 }, (_, i) => ({ id: `o-${i}` }));
     await withLegacyOptionPrices(rows, 'all');
@@ -163,7 +181,11 @@ describe('本部以外の保存で今の金額を書き戻す（スイッチの�
     expect(actions).toContain('extra_price: keepExistingPrice ? await currentChoicePriceForWriteBack(existing) : existing.extra_price');
     expect(actions).toContain('keptBasePrice = current ? await currentModelPriceForWriteBack(current) : 0;');
     expect(actions).toContain("if (!canEditCostField(costAccess)) return { ok: false, error: '本体内訳の金額は本部だけが登録・変更できます。' };");
-    expect(read('lib/import/apply.ts')).toContain('withWriteBackOptionPrices(await store.listOptions(), options.protectHqCost === true)');
+    expect(read('lib/import/apply.ts')).toContain('const existingOptions = options.protectHqCost === true ? await withWriteBackOptionPrices(listedOptions) : listedOptions;');
+    // 本部以外の公開：0 円の判定と書き戻しは今の DB の金額
+    expect(actions).toContain('if (!canEditCostField(costAccess)) option.price = await currentOptionPriceForWriteBack(option);');
+    // 旧テンプレートの取込は本部だけ
+    expect(actions).toContain("if (!canEditCostField(templateCostAccess)) return { ok: false, error: '旧テンプレート（Excel の標準見積）の取込は本部だけができます。' };");
   });
 });
 

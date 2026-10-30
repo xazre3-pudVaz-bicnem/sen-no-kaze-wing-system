@@ -397,6 +397,8 @@ export async function publishOptionAction(formData: FormData): Promise<void> {
     ? await getCostAccessForProduct(() => store.listCategories(), option.category_id)
     : NO_COST_RECORDING;
   if (costAccess.error) redirect(previewUrl({ error: COST_ACCESS_ERROR_MESSAGE }));
+  // 本部以外の公開：0 円の判定と書き戻しは、画面の読み取り（スイッチの後は本部以外に本部商品の金額が 0）ではなく今の DB の金額（v2.5 PR-C1b）
+  if (!canEditCostField(costAccess)) option.price = await currentOptionPriceForWriteBack(option);
   if (
     option.status !== 'published' &&
     requiresZeroPriceConfirmation(option) &&
@@ -1541,6 +1543,10 @@ export async function importEstimateTemplatesAction(
   formData: FormData
 ): Promise<EstimateTemplateImportState> {
   await requireCatalogEditor();
+  // 旧テンプレート（Excel の標準見積）の金額は本部だけが登録・変更できる（v2.5 PR-C1b。DB のトリガーも止める）
+  const templateCostAccess = await getCostRecordingAccess();
+  if (templateCostAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+  if (!canEditCostField(templateCostAccess)) return { ok: false, error: '旧テンプレート（Excel の標準見積）の取込は本部だけができます。' };
   const apply = formData.get('mode') === 'apply';
   const file = formData.get('sheet');
   if (!(file instanceof File) || file.size === 0) {

@@ -31,6 +31,7 @@ describe('本部商品基準原価：ローカル検証モード', () => {
       canView: false,
       canManage: false,
       cost: null,
+      versions: null,
     });
     expect(mocks.createClient).not.toHaveBeenCalled();
   });

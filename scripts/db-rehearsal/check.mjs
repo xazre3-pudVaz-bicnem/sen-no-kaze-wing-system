@@ -18,6 +18,7 @@ import { runtimeOptionStandardCostVersions } from './runtime-option-standard-cos
 import { runtimeV25InitialCostImport } from './runtime-v25-initial-cost-import.mjs';
 import { runtimePricingV25 } from './runtime-pricing-v25.mjs';
 import { runtimeStandardEstimateV25 } from './runtime-standard-estimate-v25.mjs';
+import { runtimeSimulatorV25Pricing } from './runtime-simulator-v25-pricing.mjs';
 import { runtimeUnusedPublishedOptionDelete } from './runtime-unused-published-option-delete.mjs';
 import { runtimeUnusedPublishedOptionArrayRace } from './runtime-unused-published-option-array-race.mjs';
 import { runtimeUnusedPublishedOptionWriterOrder } from './runtime-unused-published-option-writer-order.mjs';
@@ -62,6 +63,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimePricingV25(client));
     // 標準見積の v2.5 の Revision（公開と原価の切替・保存と公開の同時実行は 2 本の接続で確かめる）
     runtime = mergeRuntime(runtime, await runtimeStandardEstimateV25(client, { connectionString: url }));
+    // v2.5 PR-C1：シミュレーター・保存した仕様・見積依頼の v2.5 の売価
+    runtime = mergeRuntime(runtime, await runtimeSimulatorV25Pricing(client));
     runtime = mergeRuntime(runtime, await runtimeConfigurationVariantAssignment(client));
     runtime = mergeRuntime(runtime, await runtimeProductLifecycle(client));
     // 取扱終了と保存・提出・発行の同時実行は 2 本の接続が必要なため、別の接続で実行する

@@ -1,7 +1,8 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { requireStaff } from '@/lib/auth/session';
+import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { isMissingFunction } from '@/lib/data/schema-compat';
 import { isLocalMode } from '@/lib/data/store';
 import { createClient } from '@/lib/supabase/server';
@@ -83,6 +84,8 @@ export async function saveOptionHqStandardCostAction(
 
   revalidatePath(`/admin/options/${optionId}`);
   revalidatePath('/admin/ledger');
+  // シミュレーターの v2.5 の売価の表は今の原価の Version から作る（v2.5 PR-C1）
+  if (row.changed) updateTag(CATALOG_TAG);
 
   return {
     ok: true,

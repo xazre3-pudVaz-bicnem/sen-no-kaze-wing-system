@@ -17,6 +17,10 @@ import type { StandardLineSectionCode } from './standard-estimate-view';
 /** 商品台帳の商品（その仕様で選べる商品）。画面の商品選択に使う */
 export interface V25WorkbenchCandidate extends V25ProductCandidate {
   categoryId: string;
+  /** カテゴリーのコード（外壁は exterior-wall。選択枠の数量の決まりに使う） */
+  categoryCode: string;
+  /** 1 つだけ選べるカテゴリー（シミュレーターで 1 つしか選べない） */
+  singleSelect: boolean;
   manufacturer: string;
   modelNo: string;
   /** 新しく入れるときの選択肢（選択項目 → 標準の選択肢） */
@@ -59,6 +63,48 @@ export interface V25WorkbenchCosts {
 export type V25WorkbenchSlotCost =
   | { status: 'ok'; standard_cost: number; variant_adjustment: number; pinned: boolean }
   | { status: 'missing'; reason: 'missing_standard_cost' | 'missing_variant_cost'; pinned: boolean };
+
+/**
+ * シミュレーターと連携する選択枠の数量（2026-10-29 先方回答）：外壁は front / right / back / left の 4 面を個別に変えられるので 4（面）、
+ * それ以外は 1（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にする）
+ */
+export function standardSlotQuantity(categoryCode: string): number {
+  return categoryCode === 'exterior-wall' ? 4 : 1;
+}
+
+/**
+ * 選択枠がシミュレーターと連携する決まりに合わない内容（公開できない理由。DB の standard_estimate_v25_slot_rule_issues と同じ決まり）。
+ * 外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターで標準構成を再現できるようにするため）
+ */
+export function v25SlotRuleIssues(
+  slots: Pick<V25SlotRow, 'option_id' | 'quantity'>[],
+  candidateOf: (
+    optionId: string
+  ) => Pick<V25WorkbenchCandidate, 'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'unavailable'> | undefined
+): string[] {
+  const wall: string[] = [];
+  const other: string[] = [];
+  const singles = new Map<string, { name: string; count: number }>();
+  for (const slot of slots) {
+    const candidate = candidateOf(slot.option_id);
+    // この仕様で選べなくなった商品の行は、削除してから保存する（別の案内を出す）
+    if (!candidate || candidate.unavailable) continue;
+    const want = standardSlotQuantity(candidate.categoryCode);
+    if (Number(slot.quantity.trim()) !== want) (want === 4 ? wall : other).push(`「${candidate.name}」`);
+    if (candidate.singleSelect) {
+      const row = singles.get(candidate.categoryId) ?? { name: candidate.categoryName, count: 0 };
+      singles.set(candidate.categoryId, { ...row, count: row.count + 1 });
+    }
+  }
+  const doubled = [...singles.values()].filter((row) => row.count > 1).map((row) => `「${row.name}」`);
+  return [
+    ...(wall.length > 0 ? [`外壁の選択枠は数量 4（面）にしてください：${wall.join('・')}`] : []),
+    ...(other.length > 0
+      ? [`外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：${other.join('・')}`]
+      : []),
+    ...(doubled.length > 0 ? [`1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：${doubled.join('・')}`] : []),
+  ];
+}
 
 /** 選択枠の選んだ選択肢（選択項目の順に並べる。保存の形と同じ） */
 export function slotChoiceIds(slot: Pick<V25SlotRow, 'variant_choices'>): string[] {

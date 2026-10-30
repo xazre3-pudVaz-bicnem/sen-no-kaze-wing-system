@@ -217,7 +217,6 @@ export function buildEstimateSpecSelection(
   specCode: string,
   savedBaselineIds: string[] = []
 ): string[] {
-  const level = finishLevelForEstimateSpec(specCode);
   const specCtx = ruleContextForSpec(ctx, specCode, model.slug);
   const validSavedIds = savedBaselineIds.filter((id) =>
     specCtx.options.some((option) => option.id === id && isQuoteSelectableProduct(option))
@@ -227,9 +226,39 @@ export function buildEstimateSpecSelection(
     .map((code) => optionByCode.get(code))
     .filter((id): id is string => Boolean(id));
   const sourceIds = validSavedIds.length > 0 ? validSavedIds : presetIds;
+  return assembleSpecSelection(ctx, specCtx, specCode, sourceIds, savedBaselineIds.length > 0 ? savedBaselineIds : presetIds);
+}
+
+/**
+ * v2.5 の売価を使う間の仕様の標準構成（2026-10-29 先方回答：公開中の標準見積の版の選択枠の商品・バリエーションを、
+ * そのモデル・仕様・防火条件のシミュレーターの初期構成にする）。選択枠の商品をそのまま使い、旧来のプリセット・
+ * Excel 標準見積の基準商品では補わない（選択枠が無い版は必須だけ）。fireOptionId は防火条件の商品（防火仕様。選択枠に無くても入れる）
+ */
+export function buildV25SpecSelection(
+  ctx: RuleContext,
+  model: Pick<BaseModel, 'slug' | 'presets'>,
+  specCode: string,
+  slotOptionIds: string[],
+  fireOptionId: string | null
+): string[] {
+  const specCtx = ruleContextForSpec(ctx, specCode, model.slug);
+  const sourceIds = [...slotOptionIds, ...(fireOptionId ? [fireOptionId] : [])].filter((id) =>
+    specCtx.options.some((option) => option.id === id && isQuoteSelectableProduct(option))
+  );
+  return assembleSpecSelection(ctx, specCtx, specCode, sourceIds, slotOptionIds);
+}
+
+function assembleSpecSelection(
+  ctx: RuleContext,
+  specCtx: RuleContext,
+  specCode: string,
+  sourceIds: string[],
+  stoppedSourceIds: string[]
+): string[] {
+  const level = finishLevelForEstimateSpec(specCode);
   // 販売停止・廃番の標準構成の商品のカテゴリーは、既定値で補わない（未承認の自動の差し替えをしない。その仕様は受付停止）
   const stoppedCategoryIds = new Set(
-    stoppedBaselineProducts(ctx.options, savedBaselineIds.length > 0 ? savedBaselineIds : presetIds).map((option) => option.category_id)
+    stoppedBaselineProducts(ctx.options, stoppedSourceIds).map((option) => option.category_id)
   );
 
   // 標準構成の商品は、シミュレーター非表示でも標準として入れる（販売停止・廃番は入れない。DB の product_lifecycle_baseline_option_ids と同じ）。

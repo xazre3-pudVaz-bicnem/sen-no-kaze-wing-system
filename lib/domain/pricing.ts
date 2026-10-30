@@ -53,7 +53,12 @@ export function computePricing(
   /** 本体一式の上書き（本体内訳マスターの合計）。null / 未指定なら model.base_price */
   baseOverride: number | null = null,
   /** 外壁4面の割当。4面そろっている場合は通常の外壁1件よりこちらを優先する */
-  exteriorFaces: ExteriorFaceSelection[] = []
+  exteriorFaces: ExteriorFaceSelection[] = [],
+  /**
+   * 単価の決め方の差し替え（v2.5 の標準見積の売価。原価を持たない売価だけのデータから決める）。
+   * 数値はその「商品＋選択肢」の売価単価、null は価格未確定。指定が無ければ商品価格と選択肢の追加金額の合計
+   */
+  unitPriceOf?: (option: ProductOption, picked: OptionVariantChoice[]) => number | null
 ): PricingResult {
   const groupById = new Map(variants.groups.map((g) => [g.id, g]));
   const choiceById = new Map(variants.choices.map((c) => [c.id, c]));
@@ -103,8 +108,9 @@ export function computePricing(
       extra_price: c.price_on_request ? 0 : c.extra_price,
     }));
     const variantExtra = variantLines.reduce((sum, v) => sum + v.extra_price, 0);
-    const priceOnRequest = opt.price_on_request || picked.some((choice) => choice.price_on_request);
-    const unit = (opt.price_on_request ? 0 : opt.price) + variantExtra;
+    const overridden = unitPriceOf ? unitPriceOf(opt, picked) : undefined;
+    const priceOnRequest = overridden !== undefined ? overridden === null : opt.price_on_request || picked.some((choice) => choice.price_on_request);
+    const unit = overridden !== undefined ? (overridden ?? 0) : (opt.price_on_request ? 0 : opt.price) + variantExtra;
     // フリー商品は代理店の自社商品のため、技術の杜の諸費用（15%）は乗せない
     const isFree = code === FREE_PRODUCT_CATEGORY_CODE;
     lines.push({
@@ -137,8 +143,9 @@ export function computePricing(
         extra_price: c.price_on_request ? 0 : c.extra_price,
       }));
       const variantExtra = variantLines.reduce((sum, v) => sum + v.extra_price, 0);
-      const priceOnRequest = opt.price_on_request || picked.some((choice) => choice.price_on_request);
-      const unit = (opt.price_on_request ? 0 : opt.price) + variantExtra;
+      const overridden = unitPriceOf ? unitPriceOf(opt, picked) : undefined;
+      const priceOnRequest = overridden !== undefined ? overridden === null : opt.price_on_request || picked.some((choice) => choice.price_on_request);
+      const unit = overridden !== undefined ? (overridden ?? 0) : (opt.price_on_request ? 0 : opt.price) + variantExtra;
       lines.push({
         option_id: opt.id,
         code: `${opt.code}__face_${faceInfo.code}`,

@@ -20,14 +20,22 @@ import { ProductDetail } from './product-detail';
 import { ProductList } from './product-list';
 import { cn } from '@/lib/utils';
 
-/** 選択項目ごとに、現在値 → 標準 → 固定 → 先頭の順で初期値を選ぶ */
-function defaultVariants(groups: OptionVariantGroup[], choices: OptionVariantChoice[], current: string[]): string[] {
+/**
+ * 選択項目ごとに、現在値 → 仕様の標準の選択肢（v2.5 の間は標準見積の選択枠の選択肢）→ 標準 → 固定 → 先頭の順で初期値を選ぶ
+ */
+function defaultVariants(
+  groups: OptionVariantGroup[],
+  choices: OptionVariantChoice[],
+  current: string[],
+  preferred: string[] = []
+): string[] {
   const out: string[] = [];
   for (const g of groups) {
     const list = choices.filter((c) => c.group_id === g.id).sort((a, b) => a.sort_order - b.sort_order);
     if (list.length === 0) continue;
     const already = list.find((c) => current.includes(c.id));
-    out.push((already ?? list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
+    const standard = list.find((c) => preferred.includes(c.id));
+    out.push((already ?? standard ?? list.find((c) => c.kind === 'standard' || c.kind === 'fixed') ?? list[0]).id);
   }
   return out;
 }
@@ -144,7 +152,7 @@ export function OptionPickerDialog({
     return pruneHiddenVariantChoices(
       groups,
       variantChoices,
-      defaultVariants(groups, variantChoices, currentForProduct)
+      defaultVariants(groups, variantChoices, currentForProduct, baselineVariantIds)
     );
   };
 
@@ -208,7 +216,7 @@ export function OptionPickerDialog({
       const groupId = variantChoices.find((choice) => choice.id === choiceId)?.group_id;
       return Boolean(groupId && groupIds.has(groupId));
     });
-    const defaults = defaultVariants(groups, variantChoices, currentForProduct);
+    const defaults = defaultVariants(groups, variantChoices, currentForProduct, baselineVariantIds);
     setDraftVariantIds(pruneHiddenVariantChoices(groups, variantChoices, defaults));
     setDetailOptionId(option.id);
   };
@@ -229,7 +237,7 @@ export function OptionPickerDialog({
       const visible = visibleVariantGroups(detailGroups, variantChoices, next);
       const withDefaults = [
         ...next,
-        ...defaultVariants(visible, variantChoices, next).filter((id) => !next.includes(id)),
+        ...defaultVariants(visible, variantChoices, next, baselineVariantIds).filter((id) => !next.includes(id)),
       ];
       return pruneHiddenVariantChoices(detailGroups, variantChoices, withDefaults);
     });

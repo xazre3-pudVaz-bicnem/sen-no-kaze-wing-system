@@ -236,6 +236,9 @@ export async function loadStandardEstimateWorkspace(
         name: option.name,
         categoryId: option.category_id,
         categoryName: category?.name ?? '未分類',
+        categoryCode: code,
+        // シミュレーターは「1 つだけ選べる」カテゴリーとエアコンを 1 つにまとめる（下書きの復元と同じ）
+        singleSelect: category?.selection_mode === 'single' || code === 'aircon',
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
         section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',
@@ -280,6 +283,8 @@ export async function loadStandardEstimateWorkspace(
       name: row.option_name_snapshot ?? '（商品が見つかりません）',
       categoryId: '',
       categoryName: row.category_name_snapshot ?? '',
+      categoryCode: '',
+      singleSelect: false,
       manufacturer: '',
       modelNo: '',
       section: row.section_code,

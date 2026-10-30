@@ -163,7 +163,8 @@ describe('シミュレーターの標準見積（PR C2）：画面', () => {
     expect(page).toContain('getSimulatorSaleViews(model.id, { preview: previewRequested })');
     expect(page).toContain('saleViews={saleViews}');
     expect(app).toContain('pickSaleView(saleViews, model.slug, specCode, fireSelected)');
-    expect(app).toContain('computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces)');
+    // v2.5：表に無い組み合わせはサーバーで計算した売価（v25Units）を使う（v2.5 PR-C1）
+    expect(app).toContain('computeSaleViewPricing(bundle, activeSaleView, selected, variantIds, exteriorFaces, v25Units)');
     expect(data).toContain("rpc('get_standard_estimate_sale_views'");
     expect(data).toContain("isMissingNamedFunction(error, 'get_standard_estimate_sale_views')");
     expect(data).toContain('if (isLocalMode()) return [];');

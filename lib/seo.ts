@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { absoluteUrl, COMPANY, getSiteUrl, SITE_NAME } from '@/lib/site';
 import type { BaseModel } from '@/lib/domain/types';
-import { baseTotalOf } from '@/lib/domain/pricing';
 
 interface BuildMetadataInput {
   title: string;
@@ -73,7 +72,12 @@ export function faqJsonLd(faqs: { q: string; a: string }[]) {
   };
 }
 
-export function productJsonLd(model: BaseModel, imageUrls: string[]) {
+/**
+ * baseTotal は本体価格計（getPublicBaseTotals。商品一覧・商品ページと同じ価格元）。
+ * null（金額を出さない）なら Product の構造化データ自体を出さない（offers・review・aggregateRating の無い Product は Google が不正として扱う）
+ */
+export function productJsonLd(model: BaseModel, imageUrls: string[], baseTotal: number | null) {
+  if (baseTotal === null) return null;
   const base = getSiteUrl();
   return {
     '@context': 'https://schema.org',
@@ -86,8 +90,8 @@ export function productJsonLd(model: BaseModel, imageUrls: string[]) {
     offers: {
       '@type': 'Offer',
       priceCurrency: 'JPY',
-      price: baseTotalOf(model),
-      priceSpecification: { '@type': 'UnitPriceSpecification', price: baseTotalOf(model), priceCurrency: 'JPY', valueAddedTaxIncluded: false },
+      price: baseTotal,
+      priceSpecification: { '@type': 'UnitPriceSpecification', price: baseTotal, priceCurrency: 'JPY', valueAddedTaxIncluded: false },
       availability: 'https://schema.org/PreOrder',
       description: '本体価格計（本体一式＋諸費用・税別）。オプション・別途工事は含みません。',
     },

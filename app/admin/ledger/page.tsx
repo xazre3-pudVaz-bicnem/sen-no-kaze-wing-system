@@ -3,6 +3,8 @@ import { ProductLedgerClient } from '@/components/admin/product-ledger-client';
 import { ProductLedgerOverlayDismiss } from '@/components/admin/product-ledger-overlay-dismiss';
 import { AdminPage, FlashMessages } from '@/components/admin/ui';
 import { requireStaff } from '@/lib/auth/session';
+import { canEditCostField, getCostRecordingAccess } from '@/lib/data/option-cost-recording';
+import { withoutChoiceCost, withoutOptionCost } from '@/lib/domain/option-cost-access';
 import { getProductConfigurationUsageCounts } from '@/lib/data/product-ledger-usage';
 import { getOptionHqStandardCostMap } from '@/lib/data/option-hq-standard-cost';
 import { getStore } from '@/lib/data/store';
@@ -26,16 +28,19 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const store = await getStore();
   const editor = canEditCatalog(actor.role);
-  const [options, categories, models, configurationUsageCounts, lifecycleCapability] = await Promise.all([
+  const [options, categories, models, configurationUsageCounts, lifecycleCapability, costAccess] = await Promise.all([
     store.listOptions(),
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     editor ? getProductConfigurationUsageCounts() : Promise.resolve(null),
     store.getProductLifecycleCapability(),
+    getCostRecordingAccess(),
   ]);
   // 販売停止・シミュレーター表示の操作は、DB の列と保存境界の migration が両方とも適用済みのときだけ出す。廃番は 20261016112000 の適用後だけ
   const lifecycleEnabled = productLifecycleEnabled(lifecycleCapability);
   const discontinueEnabled = lifecycleEnabled && Boolean(lifecycleCapability.discontinue);
+  // 商品標準原価（v2.5 PR-A3）：原価の Version の仕組みがある間は、原価を本部だけに出す（クライアントへ渡すデータからも外す）
+  const showCost = canEditCostField(costAccess);
   const catalogCategories = categories.filter((category) => category.code !== FREE_PRODUCT_CATEGORY_CODE && category.code !== LEGACY_FIRE_SPEC_CATEGORY_CODE);
   const ledgerCategories = catalogCategories.map((category) => {
     const displayGroup = productRegistrationCategoryGroup(category.code);
@@ -62,6 +67,7 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       {editor && <Link href="/admin/import" className="btn-secondary btn-sm">管理用：商品一括登録</Link>}
       {editor && <Link href="/admin/options/new?return_to=%2Fadmin%2Fledger" className="btn-primary btn-sm">＋ 商品を登録</Link>}
       {editor && <Link href="/admin/categories" className="btn-secondary btn-sm">カテゴリー・お客様表示設定</Link>}
+      {costAccess.available && costAccess.canManage && <Link href="/admin/options/cost-import" className="btn-secondary btn-sm">原価 Version の取り込み</Link>}
     </>}
   >
     <style>{`
@@ -130,11 +136,16 @@ export default async function AdminLedgerPage({ searchParams }: { searchParams: 
       discontinueEnabled={discontinueEnabled}
       canRestoreDiscontinued={actor.role === 'admin'}
       categories={ledgerCategories}
-      options={catalogOptions}
+      options={showCost ? catalogOptions : catalogOptions.map(withoutOptionCost)}
       models={models}
-      variantsByOptionId={Object.fromEntries(rows)}
+      variantsByOptionId={
+        showCost
+          ? Object.fromEntries(rows)
+          : Object.fromEntries(rows.map(([id, variants]) => [id, { ...variants, choices: variants.choices.map(withoutChoiceCost) }]))
+      }
       configurationUsageCounts={configurationUsageCounts}
       hqStandardCosts={hqStandardCosts}
+      showCost={showCost}
       initiallySelectedId={selected}
     />
   </AdminPage>;

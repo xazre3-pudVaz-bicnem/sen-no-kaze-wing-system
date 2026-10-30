@@ -68,7 +68,7 @@ function enhanceRegistrationCheckLinks() {
     const message = item.textContent ?? '';
     const target = message.includes('メイン画像') ? 'product-main-media'
       : message.includes('メーカー資料') ? 'manufacturer-documents'
-      : message.includes('商品価格') ? 'sales-settings'
+      : message.includes('商品価格') || message.includes('商品標準原価') ? 'sales-settings'
       : message.includes('選択肢') ? 'customer-selection'
       : message.includes('重複候補') ? 'product-identify'
       : null;

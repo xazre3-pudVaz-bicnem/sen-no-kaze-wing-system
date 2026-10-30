@@ -180,11 +180,14 @@ function ChoiceEditor({
   group,
   choice,
   choiceCount,
+  canEditCost = true,
 }: {
   optionId: string;
   group: OptionVariantGroup;
   choice: OptionVariantChoice | null;
   choiceCount: number;
+  /** 原価差額・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ） */
+  canEditCost?: boolean;
 }) {
   const [state, action, pending] = useActionState(saveVariantChoiceAction, initial);
   const [kind, setKind] = useState<OptionVariantChoice['kind']>(choice?.kind ?? 'option');
@@ -274,18 +277,25 @@ function ChoiceEditor({
               />
             </Field>
           </div>
-          <div className="w-36 shrink-0">
-            <Field label="追加金額（税別・円）" htmlFor={`variant-choice-price-${choice?.id ?? group.id}`} hint="選択肢ごとに設定します。追加がなければ0円です。" errors={e.extra_price}>
-              <Input
-                id={`variant-choice-price-${choice?.id ?? group.id}`}
-                name="extra_price"
-                type="number"
-                min={0}
-                step={100}
-                defaultValue={choice?.extra_price ?? 0}
-              />
-            </Field>
-          </div>
+          {canEditCost && (
+            <div className="w-36 shrink-0">
+              <Field
+                label="原価差額（税別・円）"
+                htmlFor={`variant-choice-price-${choice?.id ?? group.id}`}
+                hint="標準仕様からの調達想定の原価の差額です。標準と同じなら0円です。"
+                errors={e.extra_price}
+              >
+                <Input
+                  id={`variant-choice-price-${choice?.id ?? group.id}`}
+                  name="extra_price"
+                  type="number"
+                  min={0}
+                  step={100}
+                  defaultValue={choice?.extra_price ?? 0}
+                />
+              </Field>
+            </div>
+          )}
           <div className="pb-2">
             <Checkbox
               checked={kind === 'standard'}
@@ -368,7 +378,9 @@ function ChoiceEditor({
         </p>
         <div className="mt-4 space-y-4">
           <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl border border-line bg-white px-4 py-3">
-            <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
+            {canEditCost && (
+              <Checkbox name="price_on_request" defaultChecked={choice?.price_on_request ?? false} label="別途見積" />
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -429,7 +441,7 @@ function ChoiceEditor({
         )}
         <span className="min-w-0 flex-[1_1_8rem] break-words text-sm font-semibold text-ink">{choice.name}</span>
         <span className="shrink-0 text-xs font-medium text-ink-soft">
-          {choice.price_on_request ? '別途見積' : `追加金額 ¥${choice.extra_price.toLocaleString('ja-JP')}（税別）`}
+          {canEditCost ? (choice.price_on_request ? '別途見積' : `原価差額 ¥${choice.extra_price.toLocaleString('ja-JP')}（税別）`) : ''}
         </span>
         <span className="shrink-0 text-xs text-muted">
           {choice.kind === 'standard' ? '標準' : choice.kind === 'fixed' ? '固定' : '追加'}
@@ -446,25 +458,28 @@ export function OptionVariantManager({
   option,
   groups,
   choices,
+  canEditCost = true,
 }: {
   option: ProductOption;
   groups: OptionVariantGroup[];
   choices: OptionVariantChoice[];
+  /** 原価差額・別途見積の欄を出す（原価の Version の仕組みがある間は本部だけ） */
+  canEditCost?: boolean;
 }) {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const orderedGroups = [...groups].sort((a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id));
 
   return (
-    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6">
+    <section id="customer-selection" className="card space-y-4 p-4 sm:p-5 scroll-mt-6" data-can-edit-cost={canEditCost ? 'true' : 'false'}>
       <ProductSectionHeading
         label="5. お客様選択"
-        description="部位・色・仕様などの選択項目を作り、各選択肢に追加金額（税別）を入力できます。"
+        description="部位・色・仕様などの選択項目を作り、各選択肢に標準仕様からの原価差額（税別）を入力できます。"
         level="h2"
       />
 
       <div className="rounded-xl border border-line bg-white p-4 sm:p-5" data-testid="variant-quick-add" aria-label="選択項目を追加">
         <p className="text-sm font-semibold">選択項目を追加</p>
-        <p className="mt-1 text-xs text-muted">① 選択項目（例：水栓位置）を作成 → ② 選択肢（例：左・右）を追加 → ③ 各選択肢の追加金額（税別・円）を入力します。</p>
+        <p className="mt-1 text-xs text-muted">① 選択項目（例：水栓位置）を作成 → ② 選択肢（例：左・右）を追加 → ③ 各選択肢の原価差額（税別・円）を入力します。</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className="btn-secondary btn-sm" onClick={() => setNewGroupOpen(true)}>
             ＋ 選択項目を追加
@@ -491,7 +506,7 @@ export function OptionVariantManager({
 
       {orderedGroups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-white px-5 py-5 text-sm text-muted">
-          お客様が選ぶ項目はまだありません。上の「選択項目を追加」で項目を作成すると、各選択肢の名前と「追加金額（税別・円）」を入力できます。
+          お客様が選ぶ項目はまだありません。上の「選択項目を追加」で項目を作成すると、各選択肢の名前と「原価差額（税別・円）」を入力できます。
         </div>
       ) : (
         <div className="space-y-4">
@@ -517,6 +532,7 @@ export function OptionVariantManager({
                   <div className="space-y-2">
                   {groupChoices.map((choice) => (
                     <ChoiceEditor
+                      canEditCost={canEditCost}
                       key={`${choice.id}:${choice.image_url ?? ''}`}
                       optionId={option.id}
                       group={group}
@@ -527,10 +543,11 @@ export function OptionVariantManager({
 
                   <details className="rounded-xl border border-dashed border-line bg-ivory/20" open={firstChoice}>
                     <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
-                      {firstChoice ? '最初の選択肢を追加（追加金額も入力）' : '＋ 選択肢を追加（追加金額も入力）'}
+                      {firstChoice ? '最初の選択肢を追加（原価差額も入力）' : '＋ 選択肢を追加（原価差額も入力）'}
                     </summary>
                     <div className="border-t border-line p-4">
                       <ChoiceEditor
+                        canEditCost={canEditCost}
                         optionId={option.id}
                         group={group}
                         choice={null}

@@ -101,12 +101,14 @@ describe('本部商品基準原価', () => {
       .toBeLessThan(optionPage.indexOf('data-testid="option-registration-check"'));
     expect(optionLayout).not.toContain('OptionHqStandardCostCard');
     expect(optionLayout).not.toContain('getOptionHqStandardCostAccess');
-    expect(card).toContain('本部商品基準原価（税別）');
+    expect(card).toContain('商品標準原価の記録（税別）');
     expect(card).toContain('実仕入価格・案件実原価ではありません');
     expect(card).toContain('既存の見積・発行済みQuoteには自動反映されません');
-    expect(card).toContain("currentCost === undefined ? '設定' : '変更'");
-    expect(card).toContain('expected_lock_version');
-    expect(card).toContain('change_reason');
+    // v2.5 PR-A3：入力は「6. 価格・対象モデル」の商品標準原価にひとつにした。カードは記録を見るだけ（二重入力しない）
+    expect(card).not.toContain('<form');
+    expect(card).not.toContain('expected_lock_version');
+    expect(card).toContain('金額は「6. 価格・対象モデル」の商品標準原価（税別）で入力します');
+    expect(card).toContain('data-testid="option-hq-standard-cost-mismatch"');
     expect(card).not.toContain(' ／ version ');
   });
 
@@ -115,7 +117,7 @@ describe('本部商品基準原価', () => {
     expect(ledgerPage).toContain('hqStandardCosts={hqStandardCosts}');
     expect(ledgerClient).toContain('hqStandardCosts: Record<string, number> | null');
     expect(ledgerClient).toContain('hqStandardCosts !== null');
-    expect(ledgerClient).toContain('本部商品基準原価（税別）');
+    expect(ledgerClient).toContain('商品標準原価の記録（税別）');
     expect(ledgerClient).toContain('<Row label="仕入先" value={<PendingDbValue />}/>');
     expect(ledgerClient).toContain('<Row label="発注コード" value={<PendingDbValue />}/>');
     expect(ledgerClient).toContain('<Row label="発注単位" value={<PendingDbValue />}/>');

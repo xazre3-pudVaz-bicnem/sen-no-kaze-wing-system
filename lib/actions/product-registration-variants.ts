@@ -7,6 +7,14 @@ import { getStore, StoreError } from '@/lib/data/store';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { flattenErrors, variantChoiceSchema, variantGroupSchema, type FieldErrors } from '@/lib/validation';
 import { parseChoiceExtraPrice } from '@/lib/domain/product-variant-creation-prices';
+import {
+  canEditCostField,
+  COST_ACCESS_ERROR_MESSAGE,
+  costRecordingNotice,
+  getCostAccessForProduct,
+  recordPublishedChoiceCosts,
+} from '@/lib/data/option-cost-recording';
+import { newChoicePriceWithoutCost } from '@/lib/domain/option-cost-access';
 
 export interface ProductVariantCreateState {
   ok: boolean;
@@ -55,11 +63,15 @@ export async function createVariantGroupWithFirstChoiceAction(
 
   const optionId = String(formData.get('option_id') ?? '').trim();
   if (!optionId) return { ok: false, error: '商品が指定されていません。' };
-
   try {
     const store = await getStore();
     const option = await store.getOption(optionId);
     if (!option) return { ok: false, error: '商品が見つかりません。' };
+    // 原価差額（v2.5 PR-A3）：原価の Version の仕組みがある間は、本部商品の金額は本部だけが入れられる。それ以外の担当者の追加は 0 円。
+    // 本部商品の外（旧フリー商品）は従来どおり
+    const costAccess = await getCostAccessForProduct(() => store.listCategories(), option.category_id);
+    if (costAccess.error) return { ok: false, error: COST_ACCESS_ERROR_MESSAGE };
+    const canEditCost = canEditCostField(costAccess);
 
     const variants = await store.getOptionVariants(option.id);
     const requestedGroupName = normalizedName(formData.get('name'));
@@ -97,14 +109,14 @@ export async function createVariantGroupWithFirstChoiceAction(
 
     // 価格・画像は画面上の元の行番号で受け取る。標準を切り替えても選択肢と取り違えない。
     const choicePrices = Array.from({ length: additionalChoiceNames.length + 1 }, (_, index) =>
-      parseChoiceExtraPrice(formData, index)
+      canEditCost ? parseChoiceExtraPrice(formData, index) : 0
     );
     const invalidPriceIndex = choicePrices.findIndex((price) => price === null);
     if (invalidPriceIndex >= 0) {
       return {
         ok: false,
         fieldErrors: {
-          _form: [`選択肢${invalidPriceIndex + 1}の追加金額は、0〜100,000,000円の整数で入力してください。`],
+          _form: [`選択肢${invalidPriceIndex + 1}の原価差額は、0〜100,000,000円の整数で入力してください。`],
         },
       };
     }
@@ -122,7 +134,7 @@ export async function createVariantGroupWithFirstChoiceAction(
     ))) {
       return {
         ok: false,
-        fieldErrors: { additional_choice_name: ['画像または追加金額を指定した選択肢には名前を入力してください。'] },
+        fieldErrors: { additional_choice_name: ['画像または原価差額を指定した選択肢には名前を入力してください。'] },
       };
     }
     const choiceInputs = [
@@ -179,7 +191,8 @@ export async function createVariantGroupWithFirstChoiceAction(
         name: input.name,
         kind: input.kind,
         extra_price: input.extraPrice,
-        price_on_request: false,
+        // 本部以外が足す追加の選択肢は、原価差額が未登録（別途見積）。本部が原価差額を登録する
+        price_on_request: canEditCost ? false : newChoicePriceWithoutCost(input.kind).price_on_request,
         image_url: selectedChoiceImageUrl(formData, input.choiceIndex) || null,
         note: null,
         sort_order: input.sortOrder,
@@ -203,6 +216,7 @@ export async function createVariantGroupWithFirstChoiceAction(
     }
 
     let savedChoiceCount = 0;
+    const savedChoiceIds: string[] = [];
     try {
       for (const [index, choice] of choices.entries()) {
         const file = selectedChoiceImage(formData, choiceInputs[index].choiceIndex);
@@ -215,8 +229,9 @@ export async function createVariantGroupWithFirstChoiceAction(
               fileName: file.name,
             }, 'variant-choices');
           }
+          const choiceId = randomUUID();
           await store.upsertVariantChoice({
-            id: randomUUID(),
+            id: choiceId,
             group_id: choice.group_id,
             code: choice.code,
             name: choice.name,
@@ -229,6 +244,7 @@ export async function createVariantGroupWithFirstChoiceAction(
             status: choice.status,
           });
           savedChoiceCount += 1;
+          savedChoiceIds.push(choiceId);
         } catch (error) {
           // DB保存に失敗した場合、参照されないアップロード画像だけ回収する。
           if (uploadedUrl) await store.deleteUploadedImage(uploadedUrl).catch(() => undefined);
@@ -250,11 +266,17 @@ export async function createVariantGroupWithFirstChoiceAction(
     revalidatePath(`/admin/options/${option.id}`);
     revalidatePath('/', 'layout');
     updateTag(CATALOG_TAG);
+    // 登録済みの商品なら、本部が入れた原価差額（0 円を含む）を Version に記録する
+    const costNotice =
+      option.status === 'published' && costAccess.available && costAccess.canManage
+        ? costRecordingNotice(await recordPublishedChoiceCosts(option.id, 'choice', savedChoiceIds, costAccess))
+        : null;
+    const savedMessage = reusableGroup
+      ? `既存の選択項目へ選択肢${choices.length}件を追加しました。`
+      : `選択項目と選択肢${choices.length}件を追加しました。`;
     return {
       ok: true,
-      message: reusableGroup
-        ? `既存の選択項目へ選択肢${choices.length}件を追加しました。`
-        : `選択項目と選択肢${choices.length}件を追加しました。`,
+      message: costNotice ? `${savedMessage}${costNotice}` : savedMessage,
     };
   } catch (error) {
     return initialError(error);

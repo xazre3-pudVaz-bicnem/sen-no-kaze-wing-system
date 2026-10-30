@@ -19,7 +19,10 @@ describe('商品登録の商品価格入力', () => {
   });
 
   it('価格入力と別途見積の変更に合わせて0円警告を即時同期する', () => {
-    expect(priceSync).toContain('商品価格が0円です。正式な0円の場合はSTEP 2で確認が必要です');
+    expect(priceSync).toContain('が0円です。正式な0円の場合はSTEP 2で確認が必要です');
+    // 本部商品は「商品標準原価」、本部商品の外（旧フリー商品）は「商品価格」。入力欄の data-price-label で出し分ける
+    expect(priceSync).toContain("zeroPriceWarningText(priceInput.dataset.priceLabel ?? '商品標準原価')");
+    expect(priceSync).toContain('/(商品標準原価|商品価格)が0円です/');
     expect(priceSync).toContain("priceInput.addEventListener('input', sync);");
     expect(priceSync).toContain("priceOnRequest?.addEventListener('change', sync);");
     expect(priceSync).toContain("badge.textContent = '基本チェックOK';");

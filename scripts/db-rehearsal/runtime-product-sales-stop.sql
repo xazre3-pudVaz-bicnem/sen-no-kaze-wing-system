@@ -239,6 +239,26 @@ begin
 end;
 $test$;
 
+-- ---------- 商品の変更履歴のトリガー関数の EXECUTE（20261016113000）。商品マスターが空でない DB でも行う ----------
+do $trigger_only$
+declare
+  v_fn constant text := 'public.trg_audit_option()';
+begin
+  perform pg_temp.pss_expect_eq('PSS-27 商品の変更履歴のトリガー関数は、PUBLIC・anon・authenticated・service_role から直接実行できない', 'false/false/false/false',
+    exists (select 1 from pg_catalog.pg_proc p
+             cross join lateral pg_catalog.aclexplode(coalesce(p.proacl, pg_catalog.acldefault('f', p.proowner))) a
+             where p.oid = v_fn::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE')::text || '/' ||
+    has_function_privilege('anon', v_fn, 'execute')::text || '/' ||
+    has_function_privilege('authenticated', v_fn, 'execute')::text || '/' ||
+    has_function_privilege('service_role', v_fn, 'execute')::text);
+  perform pg_temp.pss_expect_error('PSS-28 ログインした利用者が直接呼ぶと、権限で拒否する', '42501', 'permission denied for function trg_audit_option',
+    pg_temp.pss_run_as('authenticated', null, 'select public.trg_audit_option()'));
+  perform pg_temp.pss_expect_eq('PSS-29 トリガーは有効のまま（商品の追加・更新で変更履歴を書く。書き込みは PSS-24）', 'O',
+    (select t.tgenabled::text from pg_catalog.pg_trigger t
+      where t.tgrelid = 'public.options'::regclass and t.tgname = 'trg_options_audit' and t.tgfoid = v_fn::regprocedure));
+end;
+$trigger_only$;
+
 select coalesce(json_agg(json_build_object('ok', ok, 'step', step, 'expected', expected, 'actual', actual) order by seq), '[]'::json) as j
   from _pss_result;
 

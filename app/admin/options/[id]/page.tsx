@@ -179,6 +179,13 @@ export default async function EditOptionPage({
       <OptionRegistrationSaveBoundary>
         <BackLink href={returnTo ?? (category?.code === FREE_PRODUCT_CATEGORY_CODE ? '/admin/free-products' : '/admin/options')} label={returnLabel} />
         <FlashMessages sp={sp} />
+        {sp.copy_missing && (
+          <Alert tone="info">
+            コピー元の一部のメディアは別ファイルとして複製できませんでした（{sp.copy_missing.split(',').filter((entry) =>
+              ['メイン画像', '追加画像', 'メーカーPDF'].includes(entry)
+            ).join('・')}）。外部URLの素材などは、公開前にこの商品の画像・メーカー資料として登録し直してください。
+          </Alert>
+        )}
 
         <section className="card p-4 sm:p-5" aria-label="商品登録の2ステップ">
           <div className="flex flex-wrap items-end justify-between gap-3">

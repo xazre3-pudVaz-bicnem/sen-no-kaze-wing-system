@@ -74,8 +74,9 @@ export default async function NewOptionPage({ searchParams }: { searchParams: Pr
       {copySource && (
         <Alert tone="info">
           「{copySource.name}」をもとに、新しい商品の下書きを作ります。基本情報・説明・表示用価格・対象モデルと仕様を引き継ぎます。
-          商品管理番号・選択肢・画像・メーカーPDF・原価Version・公開状態・商品間の条件設定は引き継ぎません。
-          保存後に内容と価格を確認し、必要な画像・資料・選択肢を登録してください。コピー元の商品は変更しません。
+          商品管理番号・選択肢・原価Version・公開状態・商品間の条件設定は引き継ぎません。
+          「基本情報を保存して続ける」の後で、千の風のStorage内のメイン画像・追加画像・メーカーPDFを新しいファイルとして複製します。
+          外部URLやStorage外のファイルは複製されません。コピー後の画面で不足を確認し、内容・価格と合わせて確認してください。コピー元は変更しません。
         </Alert>
       )}
       {returnTo && !returnToLedger && (

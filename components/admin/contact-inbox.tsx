@@ -6,8 +6,9 @@ import { formatDate } from '@/lib/utils';
 import type { ContactMessage } from '@/lib/domain/types';
 
 type StatusFilter = 'all' | 'new' | 'handled';
+type ContactInboxMessage = Omit<ContactMessage, 'attachment_path'> & { has_attachment: boolean };
 
-function matchesContact(message: ContactMessage, query: string, status: StatusFilter, topic: string) {
+function matchesContact(message: ContactInboxMessage, query: string, status: StatusFilter, topic: string) {
   if (status !== 'all' && message.status !== status) return false;
   if (topic && message.topic !== topic) return false;
   const normalized = query.trim().toLocaleLowerCase('ja-JP');
@@ -25,7 +26,7 @@ function matchesContact(message: ContactMessage, query: string, status: StatusFi
 }
 
 /** 一覧は短く表示し、本文・連絡先・添付ファイルは行の詳細で確認する。 */
-export function ContactInbox({ messages }: { messages: ContactMessage[] }) {
+export function ContactInbox({ messages }: { messages: ContactInboxMessage[] }) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [topic, setTopic] = useState('');
@@ -101,7 +102,7 @@ export function ContactInbox({ messages }: { messages: ContactMessage[] }) {
             {filtered.map((message) => {
               const expanded = expandedId === message.id;
               const attachmentUrl = `/api/admin/contacts/${encodeURIComponent(message.id)}/attachment`;
-              const hasAttachment = Boolean(message.attachment_path && message.attachment_name);
+              const hasAttachment = message.has_attachment;
               return (
                 <FragmentRow
                   key={message.id}
@@ -137,7 +138,7 @@ function FragmentRow({
   attachmentUrl,
   hasAttachment,
 }: {
-  message: ContactMessage;
+  message: ContactInboxMessage;
   expanded: boolean;
   onToggle: () => void;
   attachmentUrl: string;

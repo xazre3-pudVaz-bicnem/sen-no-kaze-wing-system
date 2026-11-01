@@ -903,7 +903,7 @@ export async function updateContactStatusAction(_prev: AdminFormState, formData:
   if (!/^[0-9a-f-]{36}$/i.test(id) || !['new', 'in_progress', 'handled'].includes(status)) return { ok: false, error: '入力内容が正しくありません' };
   try {
     const store = await getStore();
-    await store.updateContactStatus(id, status);
+    await store.updateContactStatus(id, status as 'new' | 'in_progress' | 'handled');
     revalidatePath('/admin/contacts');
     return { ok: true, message: '更新しました' };
   } catch (e) {

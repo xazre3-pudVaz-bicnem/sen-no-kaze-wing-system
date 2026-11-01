@@ -44,7 +44,7 @@ test('保存した仕様・外壁・設置予定地を再表示し、同じプ�
   await page.getByTestId('save-button').click();
   await page.getByTestId('config-name-input').fill('保存・再表示確認プラン');
   await page.getByTestId('save-confirm').click();
-  await expect(page).toHaveURL(/\\?c=[0-9a-f-]{36}/);
+  await expect(page).toHaveURL(/\?c=[0-9a-f-]{36}/);
   const configId = new URL(page.url()).searchParams.get('c')!;
   await expect(page.getByTestId('simulator')).toContainText('保存済み');
 

@@ -12,7 +12,8 @@ export default async function AdminContactsPage({
   const sp = await searchParams;
   const store = await getStore();
   const messages = await store.listContactMessages();
-  const newCount = messages.filter((message) => message.status === 'new').length;
+  const classificationReady = messages.every((message) => message.classification !== undefined);
+  const newCount = messages.filter((message) => message.status === 'new' && (message.classification ?? 'normal') === 'normal').length;
   // Storageの内部パスはClient Componentへ渡さない。表示には添付の有無だけあればよい。
   const inboxMessages = messages.map(({ attachment_path, ...message }) => ({
     ...message,
@@ -22,7 +23,7 @@ export default async function AdminContactsPage({
   return (
     <AdminPage title="問い合わせ受付" lead={`全 ${messages.length} 件（未対応 ${newCount} 件）`}>
       <FlashMessages sp={sp} />
-      <ContactInbox messages={inboxMessages} />
+      <ContactInbox messages={inboxMessages} classificationReady={classificationReady} />
     </AdminPage>
   );
 }

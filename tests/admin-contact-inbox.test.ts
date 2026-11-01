@@ -10,7 +10,7 @@ const route = fs.readFileSync(path.join(root, 'app/api/admin/contacts/[id]/attac
 describe('問い合わせ受付の実運用向け改善', () => {
   it('本部専用ページのまま一覧・検索・絞り込み・詳細表示を提供する', () => {
     expect(page).toContain('await requireAdmin()');
-    expect(page).toContain('<ContactInbox messages={inboxMessages} />');
+    expect(page).toContain('<ContactInbox messages={inboxMessages} classificationReady={classificationReady} />');
     expect(page).toContain('const inboxMessages = messages.map(({ attachment_path, ...message })');
     expect(inbox).toContain('message.has_attachment');
     expect(inbox).not.toContain('message.attachment_path');

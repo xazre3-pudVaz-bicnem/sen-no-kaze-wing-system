@@ -35,7 +35,7 @@ test('保存プランの見積依頼で住所を確認し、送信後に見積�
   await expect(page.getByTestId('quote-request-form')).toBeVisible();
   await expect(page.getByTestId('quote-request-selected-site-area')).toContainText('石川県 七尾市');
   expect(Number(((await page.getByTestId('quote-request-total').textContent()) ?? '').replace(/[^0-9]/g, ''))).toBe(simulatorTotal);
-  await page.getByTestId('quote-request-price-breakdown').locator('summary').click();
+  await page.getByTestId('quote-request-price-breakdown').locator('summary').first().click();
   await expect(page.getByTestId('quote-request-full-breakdown')).toContainText('ウッドデッキ');
 
   // 連絡先住所を設置先にも誤入力した場合、明示確認なしの依頼を防ぐ。

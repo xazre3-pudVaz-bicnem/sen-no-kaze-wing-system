@@ -13,11 +13,16 @@ export default async function AdminContactsPage({
   const store = await getStore();
   const messages = await store.listContactMessages();
   const newCount = messages.filter((message) => message.status === 'new').length;
+  // Storageの内部パスはClient Componentへ渡さない。表示には添付の有無だけあればよい。
+  const inboxMessages = messages.map(({ attachment_path, ...message }) => ({
+    ...message,
+    has_attachment: Boolean(attachment_path && message.attachment_name),
+  }));
 
   return (
     <AdminPage title="問い合わせ受付" lead={`全 ${messages.length} 件（未対応 ${newCount} 件）`}>
       <FlashMessages sp={sp} />
-      <ContactInbox messages={messages} />
+      <ContactInbox messages={inboxMessages} />
     </AdminPage>
   );
 }

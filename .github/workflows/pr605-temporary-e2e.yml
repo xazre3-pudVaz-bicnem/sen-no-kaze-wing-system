@@ -1,0 +1,38 @@
+name: PR605 temporary E2E verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - e2e/configuration-save-reload.spec.ts
+      - .github/workflows/pr605-temporary-e2e.yml
+
+permissions:
+  contents: read
+
+jobs:
+  simulator-save-reload-e2e:
+    if: ${{ github.event.pull_request.number == 605 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run saved plan round-trip E2E
+        run: npx playwright test e2e/configuration-save-reload.spec.ts --project=desktop
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pr605-e2e-failure
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 3

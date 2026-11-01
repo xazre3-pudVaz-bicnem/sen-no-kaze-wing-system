@@ -1,0 +1,36 @@
+name: PR607 temporary case-intake E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - e2e/case-intake-link.spec.ts
+      - .github/workflows/pr607-temporary-e2e.yml
+
+permissions:
+  contents: read
+
+jobs:
+  case-intake-e2e:
+    if: ${{ github.event.pull_request.number == 607 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run case intake E2E
+        run: npx playwright test e2e/case-intake-link.spec.ts --project=desktop
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pr607-e2e-failure
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 3

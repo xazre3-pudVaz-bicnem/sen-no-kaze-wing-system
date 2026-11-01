@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ContactStatusForm } from '@/components/admin/forms';
+import { ContactClassificationForm, ContactStatusForm } from '@/components/admin/forms';
 import { formatDate } from '@/lib/utils';
 import type { ContactMessage } from '@/lib/domain/types';
 
-type StatusFilter = 'all' | 'new' | 'handled';
+type StatusFilter = 'all' | 'new' | 'in_progress' | 'handled';
+type ClassificationFilter = 'normal' | 'sales' | 'spam' | 'all';
 type ContactInboxMessage = Omit<ContactMessage, 'attachment_path'> & { has_attachment: boolean };
 
 function matchesContact(message: ContactInboxMessage, query: string, status: StatusFilter, topic: string) {
@@ -26,9 +27,10 @@ function matchesContact(message: ContactInboxMessage, query: string, status: Sta
 }
 
 /** 一覧は短く表示し、本文・連絡先・添付ファイルは行の詳細で確認する。 */
-export function ContactInbox({ messages }: { messages: ContactInboxMessage[] }) {
+export function ContactInbox({ messages, classificationReady = true }: { messages: ContactInboxMessage[]; classificationReady?: boolean }) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [classificationFilter, setClassificationFilter] = useState<ClassificationFilter>('normal');
   const [topic, setTopic] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -37,12 +39,19 @@ export function ContactInbox({ messages }: { messages: ContactInboxMessage[] }) 
     [messages],
   );
   const filtered = useMemo(
-    () => messages.filter((message) => matchesContact(message, query, status, topic)),
-    [messages, query, status, topic],
+    () => messages.filter((message) =>
+      (classificationFilter === 'all' || (message.classification ?? 'normal') === classificationFilter) &&
+      matchesContact(message, query, status, topic)),
+    [messages, query, status, topic, classificationFilter],
   );
 
   return (
     <div className="space-y-3">
+      {!classificationReady && (
+        <p role="status" className="rounded-md border border-line bg-sand p-3 text-xs text-ink-soft">
+          分類・対応中の機能は本番DBの更新後に利用できます。従来の対応済み切替は利用可能です。
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_14rem]">
         <label className="flex flex-col gap-1 text-xs font-medium text-ink-soft">
           検索
@@ -64,6 +73,7 @@ export function ContactInbox({ messages }: { messages: ContactInboxMessage[] }) 
           >
             <option value="all">すべて</option>
             <option value="new">未対応</option>
+            {classificationReady && <option value="in_progress">対応中</option>}
             <option value="handled">対応済み</option>
           </select>
         </label>
@@ -82,9 +92,19 @@ export function ContactInbox({ messages }: { messages: ContactInboxMessage[] }) 
         </label>
       </div>
 
-      <p className="text-xs text-muted" role="status">
-        表示 {filtered.length} 件／全 {messages.length} 件
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <label className="flex min-w-44 flex-col gap-1 text-xs font-medium text-ink-soft">
+          分類
+          <select value={classificationFilter} onChange={(event) => setClassificationFilter(event.target.value as ClassificationFilter)}
+            className="rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink">
+            <option value="normal">通常（営業・迷惑を除外）</option>
+            <option value="sales" disabled={!classificationReady}>営業</option>
+            <option value="spam" disabled={!classificationReady}>迷惑</option>
+            <option value="all">すべて</option>
+          </select>
+        </label>
+        <p className="text-xs text-muted" role="status">表示 {filtered.length} 件／全 {messages.length} 件</p>
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
         <table className="w-full min-w-[64rem] table-fixed text-left text-xs">
@@ -111,6 +131,7 @@ export function ContactInbox({ messages }: { messages: ContactInboxMessage[] }) 
                   onToggle={() => setExpandedId(expanded ? null : message.id)}
                   attachmentUrl={attachmentUrl}
                   hasAttachment={hasAttachment}
+                  classificationReady={classificationReady}
                 />
               );
             })}
@@ -137,12 +158,14 @@ function FragmentRow({
   onToggle,
   attachmentUrl,
   hasAttachment,
+  classificationReady,
 }: {
   message: ContactInboxMessage;
   expanded: boolean;
   onToggle: () => void;
   attachmentUrl: string;
   hasAttachment: boolean;
+  classificationReady: boolean;
 }) {
   return (
     <>
@@ -163,8 +186,11 @@ function FragmentRow({
         <td className="px-3 py-3">
           <div className="flex flex-col items-start gap-1.5">
             <span className={message.status === 'new' ? 'font-semibold text-danger' : 'text-forest'}>
-              {message.status === 'new' ? '未対応' : '対応済み'}
+              {message.status === 'new' ? '未対応' : message.status === 'in_progress' ? '対応中' : '対応済み'}
             </span>
+            {(message.classification ?? 'normal') !== 'normal' && (
+              <span className="text-xs text-muted">{message.classification === 'sales' ? '営業' : '迷惑'}</span>
+            )}
             <button
               type="button"
               aria-expanded={expanded}
@@ -213,7 +239,8 @@ function FragmentRow({
                     </div>
                   </div>
                 )}
-                <ContactStatusForm id={message.id} status={message.status} />
+                <ContactStatusForm id={message.id} status={message.status} classificationReady={classificationReady} />
+                {classificationReady && <ContactClassificationForm id={message.id} classification={message.classification ?? 'normal'} />}
               </div>
             </div>
           </td>

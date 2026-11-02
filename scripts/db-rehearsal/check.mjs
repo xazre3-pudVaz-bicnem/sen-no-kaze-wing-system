@@ -23,6 +23,7 @@ import { runtimeLifecycleConcurrency } from './runtime-product-lifecycle-concurr
 import { runtimeQuoteFormalPorGuard } from './runtime-quote-formal-por-guard.mjs';
 import { runtimeProductSalesStop } from './runtime-product-sales-stop.mjs';
 import { runtimeConfigurationSpecGuard } from './runtime-configuration-spec-guard.mjs';
+import { runtimeTriggerFunctionExecute } from './runtime-trigger-function-execute.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -59,6 +60,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeProductSalesStop(client));
     // #389 の安全機構（本体分類表・明細の保護）を今のマトリクス方式で確かめる。同時実行は 2 本の接続を使う
     runtime = mergeRuntime(runtime, await runtimeConfigurationSpecGuard(client, { connectionString: url }));
+    // トリガー専用の関数 26 本は直接実行できず、外した後も 31 本のトリガーが動く（20261016114000）
+    runtime = mergeRuntime(runtime, await runtimeTriggerFunctionExecute(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

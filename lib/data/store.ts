@@ -41,6 +41,7 @@ import type {
   SpecMatrix,
   MatrixRow,
   SlotSelection,
+  WindowType,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { QuotePorSelectionState } from '@/lib/domain/quote-por';
@@ -365,6 +366,8 @@ export interface UploadInput {
 
 export type ModelInput = Omit<BaseModel, 'id' | 'created_at' | 'updated_at'> & { id?: string | null };
 export type CategoryInput = Omit<OptionCategory, 'id'> & { id?: string | null };
+/** 窓タイプの登録・変更（コードは新しく足すときだけ決め、後から変えない。v2.5 PR-S2） */
+export type WindowTypeInput = WindowType & { isNew: boolean };
 // 販売停止・廃番・シミュレーター表示は、商品の登録・編集では書き換えない（専用の setProductLifecycle・setProductDiscontinued だけで変える）
 export type OptionInput = Omit<ProductOption, 'id' | 'created_at' | 'updated_at' | 'gallery_images' | 'simulator_visible' | 'archived_at' | 'discontinued_at'> & { id?: string | null };
 
@@ -592,6 +595,10 @@ export interface DataStore {
   upsertModel(input: ModelInput): Promise<BaseModel>;
   listCategories(): Promise<OptionCategory[]>;
   upsertCategory(input: CategoryInput): Promise<OptionCategory>;
+  /** 窓タイプ（サッシの商品の開閉形式）。使われなくなったものも含めて並び順に。表が無い DB（migration の前）は空 */
+  listWindowTypes(): Promise<WindowType[]>;
+  /** 窓タイプを足す・名前や並び・使う／使わないを変える（本部だけ。DB の RLS でも止める） */
+  saveWindowType(input: WindowTypeInput): Promise<WindowType>;
   listOptions(): Promise<ProductOption[]>;
   getOption(id: string): Promise<ProductOption | null>;
   upsertOption(input: OptionInput): Promise<ProductOption>;

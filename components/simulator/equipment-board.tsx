@@ -13,6 +13,21 @@ import type {
 import { SmartImage } from '@/components/ui/smart-image';
 import { cn } from '@/lib/utils';
 
+/** 位置・用途の選択枠（v2.5 PR-S2）のタイル。位置ごとに選ぶカテゴリーは、カテゴリーのタイルの代わりに位置ごとに並べる */
+export interface EquipmentSlotTile {
+  slotCode: string;
+  categoryId: string;
+  /** 位置・用途の名前（掃出し窓など） */
+  label: string;
+  /** 今選んでいる商品（表示用の価格つき） */
+  option: ProductOption | null;
+  /** 選んだ選択肢の名前 */
+  variantNames: string[];
+  state: 'standard' | 'changed' | 'price-on-request';
+  /** 標準からの差額の表示（変えたときだけ） */
+  deltaLabel: string | null;
+}
+
 interface Props {
   categories: OptionCategory[];
   options: ProductOption[];
@@ -24,6 +39,8 @@ interface Props {
   variantChoices: OptionVariantChoice[];
   readOnly: boolean;
   onPickCategory: (categoryId: string) => void;
+  slotTiles?: EquipmentSlotTile[];
+  onPickSlot?: (slotCode: string) => void;
 }
 
 const INTERIOR_EXTERIOR_CATEGORY_ORDER = [
@@ -98,6 +115,8 @@ export function EquipmentBoard({
   variantChoices,
   readOnly,
   onPickCategory,
+  slotTiles = [],
+  onPickSlot,
 }: Props) {
   const selectedSet = new Set(selected);
   // categories は上位で本体分類表の「選択 / ×」を解決済み。
@@ -110,7 +129,76 @@ export function EquipmentBoard({
   );
   const otherProductCats = sortCategoriesForDisplay(shown.filter(isOtherProductCategory), OTHER_PRODUCT_CATEGORY_ORDER);
 
+  const slotTile = (cat: OptionCategory, tile: EquipmentSlotTile) => {
+    const badge =
+      tile.state === 'standard'
+        ? { label: '標準', className: 'border-gold/45 bg-sand/70 text-brown' }
+        : tile.state === 'changed'
+          ? { label: '変更済', className: 'border-brown/35 bg-ivory text-brown' }
+          : { label: '別途見積', className: 'border-line bg-white text-ink-soft' };
+    const main = tile.option;
+    return (
+      <li key={`slot-${tile.slotCode}`} className="bg-white">
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => onPickSlot?.(tile.slotCode)}
+          title={main?.description ?? cat.description ?? undefined}
+          className={cn(
+            'group grid h-full min-h-24 w-full grid-cols-2 items-stretch text-left transition-colors hover:bg-ivory disabled:cursor-not-allowed',
+            tile.state === 'changed' && 'bg-ivory/35'
+          )}
+          data-testid={`equip-slot-${tile.slotCode}`}
+        >
+          <span className="block min-h-24 w-full p-1.5 sm:p-2">
+            <span className="relative block h-full min-h-20 w-full overflow-hidden rounded bg-sand">
+              {main?.image_url ? (
+                <SmartImage
+                  src={main.image_url}
+                  alt={main.name}
+                  fill
+                  sizes="(min-width: 1024px) 12.5vw, (min-width: 640px) 16.7vw, 25vw"
+                  className="object-cover"
+                />
+              ) : (
+                <span className="flex h-full min-h-20 items-center justify-center bg-ivory px-2 text-center text-[0.65rem] text-muted">
+                  画像未登録
+                </span>
+              )}
+            </span>
+          </span>
+          <span className="flex min-w-0 flex-col justify-center p-2">
+            <span className="flex items-center justify-between gap-1">
+              <span className="truncate text-[0.65rem] font-semibold text-muted">
+                {cat.name}・{tile.label}
+              </span>
+              {!readOnly && <Pencil className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />}
+            </span>
+            <span
+              className={cn('mt-0.5 mb-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold leading-none', badge.className)}
+              data-testid={`equip-slot-state-${tile.slotCode}`}
+            >
+              {badge.label}
+            </span>
+            <span className={cn('block text-xs leading-snug font-semibold', !main && 'text-muted')}>{main ? main.name : '選択なし'}</span>
+            {tile.variantNames.length > 0 && (
+              <span className="mt-0.5 block truncate text-[0.62rem] text-muted">{tile.variantNames.join('・')}</span>
+            )}
+            {tile.state === 'changed' && tile.deltaLabel && (
+              <span className="mt-0.5 block text-[0.72rem] font-semibold text-brown" data-testid={`equip-slot-price-${tile.slotCode}`}>
+                {tile.deltaLabel}
+              </span>
+            )}
+          </span>
+        </button>
+      </li>
+    );
+  };
+
   const normalTile = (cat: OptionCategory) => {
+    // 位置ごとに選ぶカテゴリー（v2.5 PR-S2）は、位置ごとのタイルを並べる
+    const tiles = slotTiles.filter((tile) => tile.categoryId === cat.id);
+    if (tiles.length > 0) return tiles.map((tile) => slotTile(cat, tile));
     const chosen = options.filter((o) => o.category_id === cat.id && selectedSet.has(o.id));
     const main = chosen[0] ?? null;
     const extraCount = chosen.length - 1;

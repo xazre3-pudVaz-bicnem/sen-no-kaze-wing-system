@@ -20,7 +20,7 @@ import {
 import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle';
 import { ProductSalesStatusPanel } from './product-sales-status-panel';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
-import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption } from '@/lib/domain/types';
+import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption, WindowType } from '@/lib/domain/types';
 
 type Props = {
   canEdit: boolean;
@@ -39,6 +39,8 @@ type Props = {
   initiallySelectedId?: string;
   /** 商品標準原価（options.price）を出す。原価の Version の仕組みがある間は本部だけ（v2.5 PR-A3） */
   showCost?: boolean;
+  /** 窓タイプのマスター（v2.5 PR-S2）。窓タイプを使うカテゴリー（サッシ）の商品に名前を出す */
+  windowTypes?: WindowType[];
 };
 
 type LedgerSort =
@@ -195,7 +197,7 @@ function matchesLifecycle(option: ProductOption, lifecycle: '' | ProductLedgerSt
   return !lifecycle || productLedgerState(option) === lifecycle;
 }
 
-export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discontinueEnabled = false, canRestoreDiscontinued = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId, showCost = true }: Props) {
+export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discontinueEnabled = false, canRestoreDiscontinued = false, categories, options, models, variantsByOptionId, configurationUsageCounts, hqStandardCosts, initiallySelectedId, showCost = true, windowTypes = [] }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupCode, setGroupCode] = useState('');
@@ -212,6 +214,9 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
 
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
+  // 窓タイプ（v2.5 PR-S2）：設定済みの商品だけ名前を出す（マスターに無いコードはコードのまま）
+  const windowTypeMap = useMemo(() => new Map(windowTypes.map((x) => [x.code, x.label])), [windowTypes]);
+  const windowTypeLabelFor = (option: ProductOption) => (option.window_type_code ? windowTypeMap.get(option.window_type_code) ?? option.window_type_code : null);
   const categoryGroups = useMemo(() => {
     const groups = new Map<string, { code: string; name: string; sort: number; categories: OptionCategory[] }>();
     for (const category of categories) {
@@ -429,7 +434,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                 <tbody className="divide-y divide-line">
                   {pageOptions.map((o) => {
                     const itemCategory = categoryMap.get(o.category_id);
-                    const manufacturerModel = [o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash;
+                    const manufacturerModel = [o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash;
                     return <tr key={o.id} tabIndex={0} aria-selected={selectedId === o.id} onClick={() => openDetail(o.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(o.id); } }} className={(selectedId === o.id ? 'bg-ivory/55' : 'bg-white hover:bg-sand/25') + ' cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brown/50'} data-testid={'ledger-option-' + o.code}>
                       <td className="px-2.5 py-1.5"><div className="flex w-full min-w-0 items-center gap-2.5 text-left"><span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.62rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span><span className="min-w-0 flex-1"><span className="block line-clamp-2 text-[0.92rem] font-semibold leading-tight text-ink">{o.name}</span><span className="mt-0.5 block truncate text-xs leading-tight text-muted">{manufacturerModel}</span></span></div></td>
                       <td className="px-2.5 py-1.5 text-xs font-medium text-ink-soft">{itemCategory?.name ?? dash}</td>
@@ -451,7 +456,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
                   <div className="pointer-events-none relative z-20 flex gap-2.5 p-2.5">
                     <span className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.6rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="44px" className="object-contain" /> : '画像なし'}</span>
-                    <div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3><p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-ink">{showCost ? productPrice(o) : ''}</span><span className="text-muted">更新 {date(o.updated_at)}</span></div></div>
+                    <div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-tight">{o.name}</h3><p className="mt-0.5 truncate text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex items-center justify-between gap-2 text-xs"><span className="font-semibold text-ink">{showCost ? productPrice(o) : ''}</span><span className="text-muted">更新 {date(o.updated_at)}</span></div></div>
                     <ChevronRight className="absolute bottom-2.5 right-3 size-4 text-muted" aria-hidden="true" />
                   </div>
                 </article>;
@@ -467,7 +472,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
                 return <article key={o.id} className={'group relative overflow-visible rounded-xl border bg-white transition hover:border-ink/30 hover:shadow-soft ' + (selectedId === o.id ? 'border-brown bg-ivory/50 ring-1 ring-brown/20' : 'border-line')} data-testid={'ledger-option-' + o.code}>
                   <button type="button" aria-controls="ledger-product-detail-pane" aria-label={o.name + 'の商品詳細を表示'} className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brown focus-visible:ring-inset" onClick={() => openDetail(o.id)}><span className="sr-only">{o.name}の商品詳細を表示</span></button>
                   <div className="pointer-events-auto absolute right-2 top-2 z-30"><ProductLedgerActionsMenu optionId={o.id} optionName={o.name} status={o.status} canEdit={canEdit} configurationUsageCount={usageCountFor(o.id)} /></div>
-                  <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5"><span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}</span><div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3><p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{showCost ? productPrice(o) : ''}</p><p className="text-[0.68rem] text-muted">{targetModel}</p></div></div></div>
+                  <div className="pointer-events-none relative z-20 flex min-h-[6.25rem] gap-2.5 p-2.5"><span className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-sand/55 text-[0.65rem] text-muted">{o.image_url ? <SmartImage src={o.image_url} alt="" fill sizes="64px" className="object-contain" /> : '画像なし'}</span><div className="min-w-0 flex-1 pr-10"><div className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="max-w-full truncate rounded-full bg-sand px-1.5 py-0.5 text-[0.62rem] font-medium text-ink-soft">{itemCategory?.name ?? 'カテゴリー未設定'}</span><ProductStatus option={o} configurationUsageCount={usageCountFor(o.id)} /></div><h3 className="mt-1 line-clamp-2 text-[0.92rem] font-semibold leading-snug text-ink">{o.name}</h3><p className="mt-0.5 line-clamp-1 text-xs leading-tight text-muted">{[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean).join(' ／ ') || dash}</p><div className="mt-1.5 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{showCost ? productPrice(o) : ''}</p><p className="text-[0.68rem] text-muted">{targetModel}</p></div></div></div>
                 </article>;
               })}
             </div>
@@ -491,7 +496,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
           {detailTab === 'customer' ? <section id="ledger-customer-panel" role="tabpanel" aria-labelledby="ledger-customer-tab"><div className="mb-3 rounded-xl border border-brown/20 bg-ivory/70 px-3 py-2 text-xs text-ink-soft">商品詳細の確認画面です。販売停止・廃番・シミュレーター非表示の商品も商品台帳では確認できます。</div><div className="card p-4 sm:p-5"><ProductDetail key={selected.id} category={category} option={selected} groups={visiblePreviewGroups} choices={preview.choices} selectedVariantIds={previewVariantIds} isCurrentlySelected={false} compactMedia onVariantChange={onPreviewVariantChange} /></div></section> : (
             <section id="ledger-admin-panel" role="tabpanel" aria-labelledby="ledger-admin-tab" className="space-y-4">
               <div className="grid gap-4 min-[900px]:grid-cols-2">
-                <dl className="card p-4"><h3 className="mb-2 font-semibold">商品基本情報</h3><Row label="商品管理番号" value={selected.product_no || '未採番'}/><Row label="カテゴリー" value={category.name}/><Row label="メーカー" value={selected.manufacturer || dash}/><Row label="型番・品番" value={selected.model_no || '要設定'}/><Row label="サイズ・仕様" value={selected.size_note || dash}/><Row label="対象モデル" value={selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'}/><Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/></dl>
+                <dl className="card p-4"><h3 className="mb-2 font-semibold">商品基本情報</h3><Row label="商品管理番号" value={selected.product_no || '未採番'}/><Row label="カテゴリー" value={category.name}/><Row label="メーカー" value={selected.manufacturer || dash}/><Row label="型番・品番" value={selected.model_no || '要設定'}/>{(category.uses_window_type || selected.window_type_code) && <Row label="窓タイプ" value={windowTypeLabelFor(selected) ?? '未設定'}/>}<Row label="サイズ・仕様" value={selected.size_note || dash}/><Row label="対象モデル" value={selected.base_model_id ? modelMap.get(selected.base_model_id)?.name ?? '特定モデル' : '全モデル共通'}/><Row label="施工・手配区分" value={selected.is_installation ? '設置関連費用として集計' : dash}/></dl>
                 <dl className="card p-4"><h3 className="mb-2 font-semibold">利用先</h3><Row label="見積で選択" value={isQuoteSelectableProduct(selected) ? '選択可' : productLedgerState(selected) === 'retired' ? `選択不可（${productLedgerStateLabel(selected)}）` : '選択不可（下書き）'}/><Row label="シミュレーター" value={isQuoteSelectableProduct(selected) ? (productSimulatorVisibleSetting(selected) ? '表示する' : '表示しない') : '表示しない'}/>{showCost && <Row label="商品標準原価（税別）" value={productPrice(selected)}/>}<Row label="メーカー参考価格（税別）" value={selected.list_price == null ? '未設定' : formatPriceWithUnit(selected.list_price, selected.list_price_unit)}/></dl>
               </div>
 

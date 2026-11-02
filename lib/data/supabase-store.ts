@@ -36,6 +36,7 @@ import type {
   ContactClassification,
   SpecMatrix,
   MatrixRow,
+  WindowType,
 } from '@/lib/domain/types';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -48,6 +49,7 @@ import {
   StoreError,
   type ContactInput,
   type CategoryInput,
+  type WindowTypeInput,
   type DataStore,
   type CaseDealer,
   type DealerQuoteListItem,
@@ -1270,6 +1272,26 @@ export class SupabaseStore implements DataStore {
   }
   async upsertCategory(input: CategoryInput) {
     return this.upsert<OptionCategory>('option_categories', input);
+  }
+  async listWindowTypes() {
+    const db = await this.db();
+    const { data, error } = await db.from('window_types').select('code, label, sort_order, status').order('sort_order').order('code');
+    if (error) {
+      // 窓タイプの表（20261102100000）が無い DB では、窓タイプを使わない
+      if (isMissingRelation(error)) return [];
+      mapPgError(error);
+    }
+    return (data ?? []) as WindowType[];
+  }
+  async saveWindowType(input: WindowTypeInput) {
+    const db = await this.db();
+    const columns = 'code, label, sort_order, status';
+    const result = input.isNew
+      ? await db.from('window_types').insert({ code: input.code, label: input.label, sort_order: input.sort_order, status: input.status }).select(columns).single()
+      : await db.from('window_types').update({ label: input.label, sort_order: input.sort_order, status: input.status }).eq('code', input.code).select(columns).maybeSingle();
+    if (result.error) mapPgError(result.error);
+    if (!result.data) throw new StoreError('NOT_FOUND', '窓タイプが見つかりません');
+    return result.data as WindowType;
   }
   async getOptionVariants(optionId: string) {
     const db = await this.db();

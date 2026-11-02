@@ -185,7 +185,8 @@ describe('v2.5：公開中の版の選択枠をシミュレーターの標準構
   it('シミュレーターは仕様・防火の条件ごとの標準構成を使い、防火の切り替えでは標準構成のままなら新しい条件の標準構成を読み込む', () => {
     const app = read('components/simulator/simulator-app.tsx');
     expect(app).toContain('const slotOptionIds = v25Pricing ? v25SlotOptionIdsFor(saleViews, model.slug, choice.code, fire) : null;');
-    expect(app).toContain('buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null)');
+    // 版の位置・用途の選択枠のカテゴリーは、カテゴリー単位の標準構成に入れない（v2.5 PR-S2）
+    expect(app).toContain('buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, fire ? fireProofOptionId : null, positionCategoryIds)');
     // 新しいプランの最初の状態・仕様の読み込み・防火の切り替えは同じ関数で標準状態を作る（「標準構成のまま」の判定がずれない）
     expect(app).toContain('v25Pricing && !initial');
     expect(app).toContain('if (v25InitialState) return v25InitialState.exteriorFaces;');

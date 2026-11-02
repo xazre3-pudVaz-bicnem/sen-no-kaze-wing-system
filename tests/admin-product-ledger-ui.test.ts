@@ -97,7 +97,7 @@ describe('商品台帳の入口', () => {
     expect(client).not.toContain('>メーカー・型番</th>');
     expect(client).not.toContain('>操作</th>');
     expect(client).toContain('{itemCategory?.name ?? dash}');
-    expect(client).toContain('[o.manufacturer, o.model_no].filter(Boolean)');
+    expect(client).toContain('[o.manufacturer, o.model_no, windowTypeLabelFor(o)].filter(Boolean)');
     expect(client).not.toContain('商品管理番号 {o.product_no || dash}');
     expect(client).toContain('line-clamp-2 text-[0.92rem] font-semibold');
     expect(client).toContain('text-xs leading-tight text-muted');

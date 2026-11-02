@@ -35,7 +35,9 @@ export function buildSimulatorEntryState(
    * 標準構成の商品の決め方（v2.5 の売価を使う間は、公開中の v2.5 の版（非防火）の選択枠の商品。2026-10-29 先方回答）。
    * null を返す仕様（v2.5 の版が無い）と、未指定のときは旧来の標準構成
    */
-  standardOptionIds?: (specCode: string) => string[] | null
+  standardOptionIds?: (specCode: string) => string[] | null,
+  /** 版の位置・用途の選択枠のカテゴリー（v2.5 PR-S2）。位置ごとに選ぶので、カテゴリー単位の標準構成に入れない */
+  positionCategoryIds?: (specCode: string) => ReadonlySet<string>
 ): SimulatorEntryState | null {
   const { model } = bundle;
   const choice = simulatorEstimateChoices(model, estimateTemplates).find(
@@ -58,7 +60,12 @@ export function buildSimulatorEntryState(
   // v2.5：シミュレーターの新しいプラン・仕様の読み込みと同じ関数で、公開中の版の選択枠から標準状態を作る
   const slotOptionIds = standardOptionIds?.(choice.code) ?? null;
   if (slotOptionIds) {
-    const state = v25SimulatorStandardState(bundle, choice.code, buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, null), variantIdsFor);
+    const state = v25SimulatorStandardState(
+      bundle,
+      choice.code,
+      buildV25SpecSelection(ctx, model, choice.code, slotOptionIds, null, positionCategoryIds?.(choice.code)),
+      variantIdsFor
+    );
     return {
       spec_code: choice.code,
       finish_level: state.finishLevel,

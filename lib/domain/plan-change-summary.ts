@@ -1,6 +1,7 @@
-import type { CatalogBundle } from './types';
+import type { CatalogBundle, SlotSelection } from './types';
 import type { ExteriorFaceSelection } from './exterior-wall';
 import { makeDefaultExteriorFaces } from './exterior-wall';
+import { sameSlotSelection } from './simulator-position-slots';
 
 type Catalog = Pick<CatalogBundle, 'options' | 'categories' | 'variantGroups' | 'variantChoices'>;
 
@@ -38,15 +39,23 @@ function faceChanged(left: ExteriorFaceSelection[], right: ExteriorFaceSelection
   });
 }
 
+/** 位置・用途の選択枠ごとの、今の選択と標準（v2.5 PR-S2）。label は「サッシ（掃出し窓）」など */
+export interface PlanPositionChange {
+  label: string;
+  current: SlotSelection;
+  standard: SlotSelection;
+}
+
 /**
  * 表示専用: 「現在」の標準選択（シミュレーターと同じ baseline）との差分。
  * 保存時の標準Revisionや金額の証跡として使わない。
- * 変更数は明細行数ではなく商品カテゴリー数として数える。
+ * 変更数は明細行数ではなく商品カテゴリー数として数える（位置・用途の選択枠は位置ごとに数える）。
  */
 export function summarizePlanChanges(
   catalog: Catalog,
   current: PlanSelections,
-  baseline: PlanSelections
+  baseline: PlanSelections,
+  positions: PlanPositionChange[] = []
 ): PlanChangeSummary {
   const knownOptions = new Map(catalog.options.map((o) => [o.id, o]));
   const choices = new Map(catalog.variantChoices.map((c) => [c.id, c]));
@@ -58,8 +67,9 @@ export function summarizePlanChanges(
   const complete = [
     ...allIds,
     ...(current.exteriorFaces ?? []).map((face) => face.option_id),
+    ...positions.flatMap((row) => [row.current.option_id, row.standard.option_id]),
   ].every((id) => knownOptions.has(id)) &&
-    allChoices.every((id) => choices.has(id));
+    [...allChoices, ...positions.flatMap((row) => [...row.current.variant_choice_ids, ...row.standard.variant_choice_ids])].every((id) => choices.has(id));
   // カタログ外の商品を「削除した商品」と誤表示しない。比較不能なら項目数も表示しない。
   if (!complete) return { items: [], complete: false };
   const selectedByCategory = (ids: string[], categoryId: string) =>
@@ -110,6 +120,10 @@ export function summarizePlanChanges(
       !changes.some((x) => x.category === exteriorCategory.name)) {
       changes.push({ category: exteriorCategory.name, kind: '外壁4面変更', detail: null });
     }
+  }
+  for (const row of positions) {
+    if (sameSlotSelection(row.current, row.standard)) continue;
+    changes.push({ category: row.label, kind: row.current.option_id === row.standard.option_id ? '選択肢変更' : '商品変更', detail: null });
   }
   // 不明な商品・選択肢がある場合は、差分が0件でも「標準仕様のまま」と断定しない。
   return { items: changes, complete };

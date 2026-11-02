@@ -10,6 +10,8 @@ import { buildSimulatorEntryState } from '@/lib/domain/simulator-entry';
 import {
   isFireProofSelected,
   pickSaleView,
+  splitConfigurationItems,
+  v25PositionSlotCategoryIds,
   v25SlotOptionIdsFor,
   v25StandardVariantIds,
   withoutCatalogCosts,
@@ -94,11 +96,14 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       if (!found) loadError = '保存した仕様が見つからないか、閲覧権限がありません。';
       else {
         const exteriorFaces = await getExteriorFaces(found.configuration.id);
+        // 位置・用途の選択枠の明細（slot_code つき。v2.5 PR-S2）は、カテゴリー単位の選択と分けて渡す
+        const items = splitConfigurationItems(found.items);
         initial = {
           id: found.configuration.id,
           name: found.configuration.name,
-          option_ids: found.items.map((i) => i.option_id),
-          variant_choice_ids: found.items.flatMap((i) => i.variant_choice_ids ?? []),
+          option_ids: items.optionIds,
+          variant_choice_ids: items.variantChoiceIds,
+          slot_selections: items.slotSelections,
           exterior_faces: exteriorFaces,
           status: found.configuration.status,
           finish_level: found.configuration.finish_level ?? 'full',
@@ -135,6 +140,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
         site_municipality: guest.plan.site_municipality,
         site_location_undecided: guest.plan.site_location_undecided,
         lock_version: null,
+        slot_selections: guest.plan.slot_selections ?? [],
       };
       guestPlanExpiresAt = guest.expires_at;
     }
@@ -155,7 +161,9 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
             )
         : undefined,
       // v2.5：標準構成は公開中の v2.5 の版（非防火）の選択枠の商品（2026-10-29 先方回答）
-      sale.v25 ? (specCode) => v25SlotOptionIdsFor(saleViews, model.slug, specCode, false) : undefined
+      sale.v25 ? (specCode) => v25SlotOptionIdsFor(saleViews, model.slug, specCode, false) : undefined,
+      // 版の位置・用途の選択枠のカテゴリーは、位置ごとに選ぶ（カテゴリー単位の標準構成に入れない。v2.5 PR-S2）
+      sale.v25 ? (specCode) => v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, false)) : undefined
     );
     if (entry) {
       initial = {

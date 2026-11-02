@@ -66,6 +66,11 @@ interface Props {
   baselineVariantIds: string[];
   onClose: () => void;
   onApply: (nextSelectedInCategory: string[], variantIds: string[]) => void;
+  /**
+   * 位置・用途の選択枠（v2.5 PR-S2）の選び直し。その位置で 1 つだけ選び、外せない（位置ごとに必ず 1 つ）。
+   * options はその位置で選べる商品、selectedIds・baselineSelectedIds はその位置の今の商品と標準の商品
+   */
+  slot?: { label: string } | null;
 }
 
 /**
@@ -86,6 +91,7 @@ export function OptionPickerDialog({
   baselineVariantIds,
   onClose,
   onApply,
+  slot = null,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
@@ -95,7 +101,8 @@ export function OptionPickerDialog({
     () => options.filter((option) => selectedIds.includes(option.id)).map((option) => option.id),
     [options, selectedIds]
   );
-  const isWashbasinCategory = category.code === 'washbasin';
+  // 位置の枠は 1 商品ずつ選ぶので、標準洗面セット（2 商品で 1 つの表示）の扱いはしない
+  const isWashbasinCategory = category.code === 'washbasin' && !slot;
   const displayOptions = useMemo(
     () => (isWashbasinCategory ? washbasinDisplayOptions(options, baselineSelectedIds) : options),
     [baselineSelectedIds, isWashbasinCategory, options]
@@ -109,9 +116,10 @@ export function OptionPickerDialog({
         : selectedInCategory,
     [displayOptions, isWashbasinCategory, options, selectedInCategory]
   );
-  const isSingleSelection = isSimulatorSingleProductCategory(category);
-  const categoryDisplayName =
+  const isSingleSelection = Boolean(slot) || isSimulatorSingleProductCategory(category);
+  const baseCategoryName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
+  const categoryDisplayName = slot ? `${slot.label}（${baseCategoryName}）` : baseCategoryName;
 
   const detailOption = displayOptions.find((option) => option.id === detailOptionId) ?? null;
   const detailGroups = detailOption
@@ -157,7 +165,7 @@ export function OptionPickerDialog({
     isWashbasinCategory ? washbasinSelectionIdsForOption(option, options) : [option.id];
 
   const nextSelectedForOption = (option: ProductOption) =>
-    nextSimulatorSelectedProducts(category, selectedInCategory, option.id, selectionIdsForOption(option));
+    slot ? [option.id] : nextSimulatorSelectedProducts(category, selectedInCategory, option.id, selectionIdsForOption(option));
 
   const nextVariantsForOption = (option: ProductOption, optionVariants: string[]) => {
     const detailGroupIds = new Set(
@@ -283,6 +291,7 @@ export function OptionPickerDialog({
       : selectedInCategory.includes(detailOption.id)
     : false;
   const canRemove =
+    !slot &&
     Boolean(detailOption && isCurrentlySelected) &&
     (!category.is_required || displaySelectedIds.length > 1);
 

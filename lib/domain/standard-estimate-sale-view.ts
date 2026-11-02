@@ -256,6 +256,19 @@ function v25ApproxUnit(view: StandardEstimateSaleView, optionId: string, choiceI
 }
 
 /**
+ * 位置・用途の枠の「商品＋選択肢」の売価単価（画面の差額の表示用。v2.5 PR-S2）。その枠の標準のままなら公開した版の売価、
+ * それ以外は売価の表。表に無くまだサーバーで計算していない組み合わせは目安。null は価格未確定
+ */
+export function v25SlotUnitForDisplay(
+  view: StandardEstimateSaleView,
+  selection: SlotSelection,
+  lookup?: V25UnitLookup
+): number | null {
+  const unit = v25SelectionUnit(view, selection.option_id, selection.variant_choice_ids, lookup, selection.slot_code);
+  return unit === undefined ? v25ApproxUnit(view, selection.option_id, selection.variant_choice_ids) : unit;
+}
+
+/**
  * v2.5 の標準見積の版の選択枠の商品。シミュレーターの仕様・防火条件の標準構成にする（2026-10-29 先方回答。
  * 下書きは使わず、公開中の版だけ）。版が無い・v2.5 でなければ null（旧来の標準構成）。
  * 位置・用途の選択枠（v2.5 PR-S1）の商品は入れない（位置ごとの選択は v25StandardSlotSelections）
@@ -549,17 +562,23 @@ export function computeSaleViewPricing(
   };
   // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。版に無い位置（古い保存）は数えない。
   // 区分は DB の estimate_section_for_option と同じく、選んだ商品のカテゴリーと別途工事の印で決める（枠の標準の商品の区分ではない）
-  const positionCodes = new Set(v25PositionSlots(view).map((slot) => slot.slot_code));
+  const positionSlotByCode = new Map(v25PositionSlots(view).map((slot) => [slot.slot_code, slot] as const));
   const slotOptionById = new Map(bundle.options.map((option) => [option.id, option] as const));
-  const slotCategoryCode = new Map(bundle.categories.map((category) => [category.id, category.code] as const));
+  const slotCategoryById = new Map(bundle.categories.map((category) => [category.id, category] as const));
+  const slotChoiceById = new Map(bundle.variantChoices.map((choice) => [choice.id, choice] as const));
+  const slotGroupById = new Map(bundle.variantGroups.map((group) => [group.id, group] as const));
   const slotTotals = new Map<LineSection, number>();
+  /** 位置の枠の商品の行（画面の商品明細の表示用。v2.5 PR-S2。金額は区分の合計に slotTotals で入れる） */
+  const slotLines: PricingResult['lines'] = [];
   let slotPor = false;
   for (const selection of v25 ? slotSelections : []) {
-    if (!positionCodes.has(selection.slot_code)) continue;
+    const slot = positionSlotByCode.get(selection.slot_code);
+    if (!slot) continue;
     // 公開中でない商品の行は数えない（DB の configuration_money と同じ）
     const option = slotOptionById.get(selection.option_id);
     if (!option) continue;
-    const categoryCode = slotCategoryCode.get(option.category_id) ?? '';
+    const category = slotCategoryById.get(option.category_id);
+    const categoryCode = category?.code ?? '';
     const section: LineSection =
       option.is_installation || categoryCode === FREE_PRODUCT_CATEGORY_CODE
         ? 'sitework'
@@ -567,6 +586,25 @@ export function computeSaleViewPricing(
           ? 'interior_exterior'
           : 'option';
     const unit = unitOf(selection.option_id, selection.variant_choice_ids, selection.slot_code);
+    slotLines.push({
+      option_id: option.id,
+      code: `${option.code}__slot_${selection.slot_code}`,
+      name: `${option.name}（${slot.slot_label}）`,
+      category_name: category?.name ?? '',
+      category_code: categoryCode,
+      unit_price: unit ?? 0,
+      quantity: 1,
+      amount: unit ?? 0,
+      is_installation: option.is_installation,
+      is_free_product: categoryCode === FREE_PRODUCT_CATEGORY_CODE,
+      variants: selection.variant_choice_ids.flatMap((id) => {
+        const choice = slotChoiceById.get(id);
+        const group = choice ? slotGroupById.get(choice.group_id) : undefined;
+        return choice && group ? [{ group: group.name, choice: choice.name, extra_price: 0 }] : [];
+      }),
+      price_on_request: unit === null,
+      image_url: option.image_url,
+    });
     if (unit === null) {
       slotPor = true;
       continue;
@@ -631,8 +669,8 @@ export function computeSaleViewPricing(
     expense_rate: Number(view.expense_rate),
     base_expense: byCode('base').expense_amount,
     base_total: byCode('base').total,
-    // 画像・別途見積の判定などのため、現在の商品選択を残す（金額の正本は区分の合計）
-    lines: current.lines,
+    // 画像・別途見積の判定などのため、現在の商品選択を残す（金額の正本は区分の合計）。位置の枠の商品は位置ごとの行
+    lines: [...current.lines, ...slotLines],
     option_subtotal: byCode('interior_exterior').line_subtotal + byCode('option').line_subtotal,
     option_expense: byCode('interior_exterior').expense_amount + byCode('option').expense_amount,
     option_total: byCode('interior_exterior').total + byCode('option').total,

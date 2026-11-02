@@ -83,6 +83,17 @@ export const saveConfigurationSchema = z.object({
     .default(null),
   site_location_undecided: z.boolean().default(false),
   exterior_faces: z.array(exteriorFaceSchema).max(4).default([]),
+  /** 位置・用途の選択枠ごとの選択（v2.5 PR-S2）。版との照らし合わせは DB（save_configuration_atomic）が行う */
+  slot_selections: z
+    .array(
+      z.object({
+        slot_code: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
+        option_id: z.uuid(),
+        variant_choice_ids: z.array(z.uuid()).max(30).default([]),
+      })
+    )
+    .max(100)
+    .default([]),
   /** 既存の Draft を保存するとき、読み込んだ時点の版（同時編集の検知） */
   expected_lock_version: z.number().int().min(1).nullable().default(null),
 });
@@ -159,6 +170,15 @@ export const categorySchema = z.object({
   customer_visible: boolFromForm,
   sort_order: intFromForm,
   status: statusSchema,
+});
+
+/** 窓タイプ（サッシの商品の開閉形式。DB の window_types と同じ決まり。v2.5 PR-S2） */
+export const windowTypeSchema = z.object({
+  is_new: z.enum(['0', '1']),
+  code: trimmed(40).regex(/^[a-z][a-z0-9-]{0,39}$/, 'コードは英小文字で始まる英小文字・数字・ハイフン（40 字まで）で入力してください'),
+  label: trimmed(40).min(1, '名前を入力してください'),
+  sort_order: intFromForm,
+  status: z.enum(['active', 'retired']),
 });
 
 export const optionSchema = z.object({

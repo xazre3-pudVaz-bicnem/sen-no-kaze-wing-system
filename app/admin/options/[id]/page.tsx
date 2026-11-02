@@ -55,13 +55,14 @@ export default async function EditOptionPage({
   const returnToLedger = returnTo?.startsWith('/admin/ledger') ?? false;
   const returnLabel = returnToLedger ? '商品台帳へ戻る' : returnTo ? '見積テンプレートへ戻る' : '一覧へ戻る';
 
-  const [categories, models, options, variants, hqCostAccess, costAccess] = await Promise.all([
+  const [categories, models, options, variants, hqCostAccess, costAccess, windowTypes] = await Promise.all([
     store.listCategories(),
     store.listModels({ includeDraft: true }),
     store.listOptions(),
     store.getOptionVariants(id),
     getOptionHqStandardCostAccess(id),
     getCostRecordingAccess(),
+    store.listWindowTypes(),
   ]);
   const category = categories.find((row) => row.id === option.category_id);
   // 商品標準原価・原価差額の欄：原価の Version の仕組みがある間は、本部商品の原価は本部だけ（v2.5 PR-A3）。
@@ -131,6 +132,7 @@ export default async function EditOptionPage({
             key={option.updated_at}
             option={clientOption}
             canEditCost={canEditCost}
+            windowTypes={windowTypes}
             categories={registrationDisplayCategories}
             models={models}
             dependencies={deps}
@@ -276,6 +278,7 @@ export default async function EditOptionPage({
                 conflicts={confs}
                 returnTo={returnTo}
                 canEditCost={canEditCost}
+                windowTypes={windowTypes}
               />
 
               <ProductPriceUnitRegistrationField optionId={id} priceLabel={priceLabel} />

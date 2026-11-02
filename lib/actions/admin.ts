@@ -12,6 +12,7 @@ import { applyQuoteLineStates, parsePorSelectionKeys, QuoteLineStateInputError }
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
+  windowTypeSchema,
   modelSchema,
   optionSchema,
   optionImageSchema,
@@ -214,6 +215,33 @@ export async function saveCategoryAction(_prev: AdminFormState, formData: FormDa
   }
 }
 
+/**
+ * 窓タイプ（サッシの商品の開閉形式）を足す・名前や並び・使う／使わないを変える（本部だけ。v2.5 PR-S2）。
+ * コードは足すときだけ決め、後から変えない（商品が参照する）。消さずに「使わない」にする（既存の商品の表示は残す）
+ */
+export async function saveWindowTypeAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireAdmin('/admin/window-types');
+  const parsed = windowTypeSchema.safeParse({
+    is_new: formData.get('is_new'),
+    code: formData.get('code'),
+    label: formData.get('label'),
+    sort_order: formData.get('sort_order') || 0,
+    status: formData.get('status') || 'active',
+  });
+  if (!parsed.success) return { ok: false, fieldErrors: flattenErrors(parsed.error) };
+  try {
+    const store = await getStore();
+    const { is_new, ...rest } = parsed.data;
+    await store.saveWindowType({ ...rest, isNew: is_new === '1' });
+    revalidatePath('/admin/window-types');
+    revalidatePath('/admin/ledger');
+    updateTag(CATALOG_TAG);
+    return { ok: true, message: '保存しました' };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
 export async function saveOptionAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
   const actor = await requireStaff();
   const catalogEditor = canEditCatalog(actor.role);
@@ -330,10 +358,19 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
       conflicts_with_option_id,
       message: nullableId(formData.get(`conflicts_message_${conflicts_with_option_id}`)),
     }));
+  // 窓タイプ（v2.5 PR-S2）：窓タイプを使うカテゴリー（サッシ）の商品だけ。フォームに欄があるときだけ変え、欄の無い表示モードの保存では
+  // 今の値を保つ。窓タイプを使わないカテゴリーへ移したときは外す（DB のトリガーでも、使わないカテゴリーの商品には設定させない）
+  // （フォームにも今の商品にも窓タイプが無ければ、カテゴリーを読まずにそのまま）
+  const formWindowType = formData.has('window_type_code') ? String(formData.get('window_type_code') ?? '').trim() || null : undefined;
+  const targetUsesWindowType =
+    (formWindowType !== undefined || Boolean(existingOption?.window_type_code)) &&
+    (await store.listCategories()).find((row) => row.id === parsed.data.category_id)?.uses_window_type === true;
+  const windowTypeCode = targetUsesWindowType ? formWindowType : existingOption?.window_type_code ? null : undefined;
+  const optionInput = windowTypeCode === undefined ? parsed.data : { ...parsed.data, window_type_code: windowTypeCode };
   let createdId: string | null = null;
   let costNotice: string | null = null;
   try {
-    const o = await store.upsertOption(parsed.data);
+    const o = await store.upsertOption(optionInput);
     await store.setOptionRelations(
       o.id,
       dependencies.filter((d) => d.requires_option_id !== o.id),

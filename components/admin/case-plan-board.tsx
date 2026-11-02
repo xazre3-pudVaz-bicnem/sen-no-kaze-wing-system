@@ -9,7 +9,7 @@ import type {
 import { VIEW_KEYS } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { CasePlanConfigurationHeader, CasePlanConfigurationItem } from '@/lib/data/store';
-import { casePlanSlotTiles, type CasePlanPositionSlot } from '@/lib/domain/case-plan-position-slots';
+import { casePlanSlotView, type CasePlanPositionSlot } from '@/lib/domain/case-plan-position-slots';
 import { normalizeExteriorFaces } from '@/lib/domain/exterior-wall';
 import { categoriesInScope, defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
 import { resolvePreview, selectedPreviewKeys, type PreviewResolution } from '@/lib/domain/preview';
@@ -51,15 +51,8 @@ export function CasePlanBoard({
   caseFloorplan?: { url: string; title: string } | null;
 }) {
   const [view, setView] = useState<ViewKey>('exterior');
-  // 位置・用途の選択枠の明細（v2.5 PR-S2b）は位置ごとのタイルに出し、カテゴリー単位の選択には入れない（シミュレーターと同じ）。
-  // 完成イメージは、位置で選んだ商品も選んだ商品として数える
-  const categoryItems = useMemo(() => items.filter((item) => !item.slot_code), [items]);
-  const selected = useMemo(() => categoryItems.map((item) => item.option_id), [categoryItems]);
+  // 完成イメージは、位置で選んだ商品も選んだ商品として数える（シミュレーターと同じ）
   const previewSelected = useMemo(() => items.map((item) => item.option_id), [items]);
-  const selectedVariantIds = useMemo(
-    () => categoryItems.flatMap((item) => item.variant_choice_ids ?? []),
-    [categoryItems]
-  );
   const ctx = useMemo<RuleContext>(
     () => ({
       options: bundle.options,
@@ -119,9 +112,11 @@ export function CasePlanBoard({
     () => specOptions.filter((option) => scopedCategoryIds.has(option.category_id)),
     [scopedCategoryIds, specOptions]
   );
-  const slotTiles = useMemo(
+  // 位置・用途の選択枠（v2.5 PR-S2b）：位置の明細は位置ごとのタイルに出し、そのカテゴリーはカテゴリー単位の選択・標準との比較に入れない
+  // （位置の明細の無いカテゴリー・版の枠に合わない位置の明細は、カテゴリー単位のまま出す）
+  const slotView = useMemo(
     () =>
-      casePlanSlotTiles(positionSlots, items, {
+      casePlanSlotView(positionSlots, items, {
         options: bundle.options,
         variantGroups: bundle.variantGroups,
         variantChoices: bundle.variantChoices,
@@ -129,11 +124,24 @@ export function CasePlanBoard({
       }),
     [bundle.options, bundle.variantChoices, bundle.variantGroups, items, positionSlots, scopedCategoryIds]
   );
-
-  const atStandardSelection = sameSelection(
-    selected,
-    pruneToScope(ctx, baselineSelected, configuration.finish_level)
+  const selected = useMemo(() => slotView.categoryItems.map((item) => item.option_id), [slotView]);
+  const selectedVariantIds = useMemo(
+    () => slotView.categoryItems.flatMap((item) => item.variant_choice_ids ?? []),
+    [slotView]
   );
+  const categoryOfOption = useMemo(
+    () => new Map(bundle.options.map((option) => [option.id, option.category_id] as const)),
+    [bundle.options]
+  );
+
+  const atStandardSelection =
+    slotView.slotsAtStandard &&
+    sameSelection(
+      selected,
+      pruneToScope(ctx, baselineSelected, configuration.finish_level).filter(
+        (id) => !slotView.positionCategoryIds.has(categoryOfOption.get(id) ?? '')
+      )
+    );
   const preferredFloorplanKeys = useMemo<string[] | undefined>(() => {
     if (!atStandardSelection || !activePreset) return undefined;
     const presetSelection = buildPresetSelection(ctx, activePreset, defaults);
@@ -249,7 +257,7 @@ export function CasePlanBoard({
           variantChoices={bundle.variantChoices}
           readOnly
           onPickCategory={() => undefined}
-          slotTiles={slotTiles}
+          slotTiles={slotView.tiles}
         />
       </div>
     </SimulatorCaseImagesProvider>

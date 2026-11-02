@@ -743,7 +743,8 @@ export interface QuoteDraftItem {
   price_mode?: 'manual' | 'auto' | 'por';
 }
 
-export type ContactStatus = 'new' | 'handled';
+export type ContactStatus = 'new' | 'in_progress' | 'handled';
+export type ContactClassification = 'normal' | 'sales' | 'spam';
 
 /** お問い合わせ（トップ／お問い合わせページのフォーム） */
 export interface ContactMessage {
@@ -756,6 +757,8 @@ export interface ContactMessage {
   attachment_path: string | null;
   attachment_name: string | null;
   status: ContactStatus;
+  /** 本番migration未適用の期間はundefined */
+  classification?: ContactClassification;
   created_at: string;
 }
 

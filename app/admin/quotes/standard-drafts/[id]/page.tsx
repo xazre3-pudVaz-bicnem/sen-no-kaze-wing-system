@@ -64,7 +64,7 @@ export default async function StandardQuoteDraftPage({
   // 改訂の下書きは前の版、初回は元の標準見積の版の 0 円の行と突き合わせる（DB の assert_quote_draft_lines_resolved と同じ）。
   // v2.5 の版は、選択枠（価格の決め方のある行）と商品に紐づかない明細から（v2.5 PR-D1c。v2.5 でない版はどちらも 0 件）
   const sourceRevisionId = !parent ? draft.standard_estimate_revision_id : null;
-  const [parentRead, baselineRead, v25SlotsRead, v25LinesRead] = await Promise.all([
+  const [parentRead, baselineRead, v25SlotsRead, v25LinesRead, pricingRead] = await Promise.all([
     parent
       ? supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
       : Promise.resolve({ data: [], error: null }),
@@ -78,7 +78,7 @@ export default async function StandardQuoteDraftPage({
       ? supabase
           .from('standard_estimate_revision_baseline_items')
           .select(
-            'section_code, option_name_snapshot, category_name_snapshot, slot_label, price_mode, cost_unit_price, manual_unit_price, variants:standard_estimate_revision_baseline_variants(variant_choice_name_snapshot, sort_order)'
+            'section_code, option_name_snapshot, category_name_snapshot, slot_label, price_mode, cost_unit_price, manual_unit_price, variants:standard_estimate_revision_baseline_variants(id, variant_choice_name_snapshot, sort_order)'
           )
           .eq('revision_id', sourceRevisionId)
           .not('price_mode', 'is', null)
@@ -89,7 +89,12 @@ export default async function StandardQuoteDraftPage({
           .select('section_code, name, group_label, remark, price_mode, unit_price')
           .eq('revision_id', sourceRevisionId)
       : Promise.resolve({ data: [], error: null }),
+    // v2.5 の版から作った下書き（改訂の下書きも元の版を引き継ぐ）は、版の率で計算する（DB の保存も率の変更を止める）
+    draft.standard_estimate_revision_id
+      ? supabase.from('standard_estimate_revisions').select('pricing_model').eq('id', draft.standard_estimate_revision_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
+  const ratesLocked = (pricingRead.data as { pricing_model?: string } | null)?.pricing_model === 'v2.5';
   // 前の版の明細が指す商品の別途見積の設定・台帳の価格（DB の判定と同じく、販売停止・非公開の商品も含む）。
   // 件数の上限で取りこぼさないよう、明細が指す商品だけを読む
   const parentOptionIds = [
@@ -195,6 +200,7 @@ export default async function StandardQuoteDraftPage({
         lockVersion={draft.lock_version}
         taxRate={String(draft.tax_rate)}
         savedUnresolvedNames={savedUnresolvedNames}
+        ratesLocked={ratesLocked}
         initial={standardQuoteStateFromPayload(payload)}
       />
     </AdminPage>

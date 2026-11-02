@@ -14,8 +14,8 @@ export interface V25SourceSlot {
   price_mode: string | null;
   cost_unit_price: number | null;
   manual_unit_price: number | null;
-  /** 選んだ仕様（選択肢の名前の写し）。並び順の値つき */
-  variants: { variant_choice_name_snapshot: string; sort_order: number }[];
+  /** 選んだ仕様（選択肢の名前の写し）。並び順の値と行の ID つき */
+  variants: { id: string; variant_choice_name_snapshot: string; sort_order: number }[];
 }
 
 /** 版の商品に紐づかない明細（manual / por） */
@@ -33,9 +33,11 @@ const LINE_NAME_MAX = 120;
 
 const SECTION_KIND: Record<string, string> = { interior_exterior: 'interior_exterior', option: 'option', sitework: 'installation' };
 
-/** 選択枠の品名：「商品名 ／ 仕様・仕様」 */
+/** 選択枠の品名：「商品名 ／ 仕様・仕様」（仕様は並び順、同じ並び順なら行の ID の順。DB と同じ） */
 export function v25SourceSlotName(slot: Pick<V25SourceSlot, 'option_name_snapshot' | 'variants'>): string {
-  const names = [...slot.variants].sort((a, b) => a.sort_order - b.sort_order).map((variant) => variant.variant_choice_name_snapshot);
+  const names = [...slot.variants]
+    .sort((a, b) => a.sort_order - b.sort_order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((variant) => variant.variant_choice_name_snapshot);
   const full = names.length > 0 ? `${slot.option_name_snapshot} ／ ${names.join('・')}` : slot.option_name_snapshot;
   const chars = Array.from(full);
   return chars.length > LINE_NAME_MAX ? `${chars.slice(0, LINE_NAME_MAX - 1).join('')}…` : full;

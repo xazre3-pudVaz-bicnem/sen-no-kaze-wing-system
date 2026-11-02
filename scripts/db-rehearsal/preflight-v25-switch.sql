@@ -5,13 +5,14 @@
 -- 判定は docs/v25-switch-readiness.md。ready_for_switch が true でなければスイッチを入れない。
 select pg_catalog.jsonb_build_object(
   'switch_enabled', coalesce((select (s.value ->> 'enabled')::boolean from public.app_settings s where s.key = 'simulator_standard_pricing'), false),
-  'standard_quote_drafts_applied', to_regprocedure('public.standard_estimate_v25_quote_draft_lines(uuid)') is not null,
+  'standard_quote_drafts_applied', to_regprocedure('public.standard_estimate_v25_quote_draft_lines(uuid, boolean)') is not null,
   'active_masters', x.active_masters,
   'masters_without_published', x.masters_without_published,
   'masters_published_not_v25', x.masters_published_not_v25,
   'masters_published_v25', x.masters_published_v25,
   'v25_slot_rule_issue_masters', x.slot_rule_issue_masters,
-  'v25_incomplete_masters', x.incomplete_masters,
+  -- 参考（止める条件ではない）：公開の後に原価が改定された商品のある版（版の売価は公開の時の原価のまま。新しい原価にするなら新しい版を公開）
+  'v25_masters_with_newer_costs', x.newer_cost_masters,
   'v25_base_por_masters', x.base_por_masters,
   'v25_stopped_product_masters', x.stopped_product_masters,
   'v25_position_slots', x.position_slots,
@@ -19,13 +20,13 @@ select pg_catalog.jsonb_build_object(
   'legacy_price_readable_by_users', has_column_privilege('authenticated', 'public.options', 'price', 'SELECT')
                                     or has_column_privilege('anon', 'public.options', 'price', 'SELECT'),
   -- スイッチの関数と同じ条件（有効な標準見積の公開中の版がすべて v2.5、選択枠の決まりに合う）に、
-  -- D1c の適用・原価のそろい・本体の価格未確定・販売停止の商品・旧価格の列の保護を足したもの
-  'ready_for_switch', to_regprocedure('public.standard_estimate_v25_quote_draft_lines(uuid)') is not null
+  -- D1c の適用・本体の価格未確定・販売停止の商品・旧価格の列の保護を足したもの
+  -- （公開した v2.5 の版は原価がそろっていることを DB の制約が保証するので、ここでは数えない）
+  'ready_for_switch', to_regprocedure('public.standard_estimate_v25_quote_draft_lines(uuid, boolean)') is not null
                       and x.active_masters > 0
                       and x.masters_without_published = 0
                       and x.masters_published_not_v25 = 0
                       and x.slot_rule_issue_masters = 0
-                      and x.incomplete_masters = 0
                       and x.base_por_masters = 0
                       and x.stopped_product_masters = 0
                       and not has_column_privilege('authenticated', 'public.options', 'price', 'SELECT')
@@ -38,7 +39,14 @@ from (
          count(*) filter (where r.id is not null and r.pricing_model is distinct from 'v2.5') as masters_published_not_v25,
          count(*) filter (where r.pricing_model = 'v2.5') as masters_published_v25,
          count(*) filter (where r.pricing_model = 'v2.5' and public.standard_estimate_v25_slot_rule_issues(r.id) is not null) as slot_rule_issue_masters,
-         count(*) filter (where r.pricing_model = 'v2.5' and r.v25_pricing_complete is not true) as incomplete_masters,
+         count(*) filter (where r.pricing_model = 'v2.5' and (
+           exists (select 1 from public.standard_estimate_revision_baseline_items bi
+                     join public.option_standard_cost_versions v on v.id = bi.standard_cost_version_id
+                    where bi.revision_id = r.id and v.superseded_at is not null)
+           or exists (select 1 from public.standard_estimate_revision_baseline_items bi
+                        join public.standard_estimate_revision_baseline_variants bv on bv.baseline_item_id = bi.id
+                        join public.option_variant_cost_versions cv on cv.id = bv.variant_cost_version_id
+                       where bi.revision_id = r.id and cv.superseded_at is not null))) as newer_cost_masters,
          count(*) filter (where r.pricing_model = 'v2.5' and exists (
            select 1 from public.standard_estimate_revision_sections s
             where s.revision_id = r.id and s.section_code = 'base' and s.has_por)) as base_por_masters,

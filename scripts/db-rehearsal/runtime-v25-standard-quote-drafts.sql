@@ -225,6 +225,15 @@ begin
   perform pg_temp.sqd_expect_error('D1c-7 別途見積の行が残る間は正式保存できない（今と同じ）', 'P0001', 'VALIDATION',
     pg_temp.sqd_run_as('authenticated', u_admin, format('select public.finalize_quote_draft(%L, %s)::text', v_draft,
       (select lock_version from public.quote_drafts where id = v_draft))));
+  -- 版の率で計算する：掛率・経費の計算方法を変えた保存は止める（選択枠の原価単価は版で販売費率を掛けた後の値のため）
+  perform pg_temp.sqd_expect_error('D1c-7b v2.5 の版から作った下書きは、率（掛率）を変えて保存できない', 'P0001', 'VALIDATION: v2.5 の標準見積から作った見積は、版の率',
+    pg_temp.sqd_run_as('authenticated', u_admin, format(
+      $q$ select public.save_standard_quote_draft(%L, %s, 1.07, 0.15, 1.6, '{"base":"rate","interior_exterior":"rate","option":"rate","sitework":"none"}'::jsonb, %L::jsonb, 0, null, null)::text $q$,
+      v_draft, (select lock_version from public.quote_drafts where id = v_draft), pg_temp.sqd_lines(v_draft, '{}'::jsonb))));
+  perform pg_temp.sqd_expect_error('D1c-7c 区分の経費の計算方法（オプションの経費をなし）も変えられない', 'P0001', 'VALIDATION: v2.5 の標準見積から作った見積は、版の率',
+    pg_temp.sqd_run_as('authenticated', u_admin, format(
+      $q$ select public.save_standard_quote_draft(%L, %s, 1.07, 0.15, 1.5, '{"base":"rate","interior_exterior":"rate","option":"none","sitework":"none"}'::jsonb, %L::jsonb, 0, null, null)::text $q$,
+      v_draft, (select lock_version from public.quote_drafts where id = v_draft), pg_temp.sqd_lines(v_draft, '{}'::jsonb))));
   -- 別途見積の 2 行に金額を入れ、新しく 0 円の行を足す
   v_prices := jsonb_build_object('D1c 設備3（別途見積）', jsonb_build_object('sale', 5000, 'cost', 4000),
                                  '据付工事', jsonb_build_object('sale', 30000, 'cost', 30000));
@@ -270,9 +279,9 @@ begin
     public.standard_estimate_v25_quote_draft_lines(case when v_legacy ~ '^[0-9a-f-]{36}$' then v_legacy::uuid end)::text || '/' ||
     public.standard_estimate_v25_quote_draft_lines(gen_random_uuid())::text);
   perform pg_temp.sqd_expect_eq('D1c-13 権限：明細を作る関数は API のロールから実行できない', 'false/false/false',
-    has_function_privilege('anon', 'public.standard_estimate_v25_quote_draft_lines(uuid)', 'EXECUTE')::text || '/' ||
-    has_function_privilege('authenticated', 'public.standard_estimate_v25_quote_draft_lines(uuid)', 'EXECUTE')::text || '/' ||
-    has_function_privilege('service_role', 'public.standard_estimate_v25_quote_draft_lines(uuid)', 'EXECUTE')::text);
+    has_function_privilege('anon', 'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)', 'EXECUTE')::text || '/' ||
+    has_function_privilege('authenticated', 'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)', 'EXECUTE')::text || '/' ||
+    has_function_privilege('service_role', 'public.standard_estimate_v25_quote_draft_lines(uuid, boolean)', 'EXECUTE')::text);
 
   -- 単位が見積の明細に入らない長さの版：行の番号ではなく明細の名前で知らせ、案件も作らない
   v_rev2 := pg_temp.sqd_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L)::text', v_master))::uuid;
@@ -280,10 +289,12 @@ begin
     (select lock_version from public.standard_estimate_revisions where id = v_rev2),
     jsonb_set(v_payload, '{lines}', jsonb_build_array(
       jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1c 工事', 'name', '長い単位の工事',
-        'quantity', '1', 'unit', '一式（設置場所により変動します）', 'price_mode', 'manual', 'unit_price', 1000, 'remark', null, 'review_required', false)))));
+        'quantity', '1', 'unit', '一式（設置場所により変動します）', 'price_mode', 'manual', 'unit_price', 1000, 'remark', null, 'review_required', false),
+      jsonb_build_object('line_key', null, 'section_code', 'option', 'group_label', 'D1c 工事', 'name', 'ごく少量の部材',
+        'quantity', '0.005', 'unit', 'kg', 'price_mode', 'manual', 'unit_price', 1000, 'remark', null, 'review_required', false)))));
   v_out := pg_temp.sqd_run_as('authenticated', u_editor, format('select (public.publish_standard_estimate_v25_revision(%L, %s)).status', v_rev2,
     (select lock_version from public.standard_estimate_revisions where id = v_rev2)));
-  perform pg_temp.sqd_expect_error('D1c-14 見積の明細に入らない単位の版からは作れない（明細の名前を示す）', 'P0001', 'VALIDATION: 標準見積の明細（「長い単位の工事」）',
+  perform pg_temp.sqd_expect_error('D1c-14 見積の明細の決まり（単位の長さ・数量）に合わない版からは作れない（行の番号ではなく明細の名前を示す）', 'P0001', 'VALIDATION: 標準見積の明細（「長い単位の工事」・「ごく少量の部材」）',
     pg_temp.sqd_run_as('authenticated', u_admin,
       format($q$ select public.create_standard_quote_case('D1c 案件 2', '{"full_name":"検査 次郎"}'::jsonb, null, %L)::text $q$, v_rev2)));
   perform pg_temp.sqd_expect_eq('D1c-15 作れなかったときは、案件も下書きも残さない', '1/0',

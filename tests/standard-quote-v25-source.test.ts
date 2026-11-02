@@ -37,14 +37,23 @@ describe('v2.5 の標準見積の版から作る見積下書きの元の明細�
       category_name_snapshot: 'サッシ',
       slot_label: '掃出し窓',
       variants: [
-        { variant_choice_name_snapshot: '600×900', sort_order: 2 },
-        { variant_choice_name_snapshot: '白', sort_order: 1 },
+        { id: 'b', variant_choice_name_snapshot: '600×900', sort_order: 2 },
+        { id: 'a', variant_choice_name_snapshot: '白', sort_order: 1 },
       ],
     });
     expect(v25SourceSlotName(sash)).toBe('サッシ1 ／ 白・600×900');
     expect(v25SourceSlotGroupLabel(sash)).toBe('サッシ（掃出し窓）');
     expect(v25SourceSlotName(slot())).toBe('設備1');
     expect(v25SourceSlotGroupLabel(slot())).toBe('設備');
+  });
+
+  it('同じ並び順の仕様は行の ID の順（作るたびに同じ品名。DB の order by sort_order, id と同じ）', () => {
+    const variants = [
+      { id: 'bbbbbbbb-0000-4000-8000-000000000002', variant_choice_name_snapshot: '横張り', sort_order: 0 },
+      { id: 'aaaaaaaa-0000-4000-8000-000000000001', variant_choice_name_snapshot: '白', sort_order: 0 },
+    ];
+    expect(v25SourceSlotName(slot({ option_name_snapshot: '外壁', variants }))).toBe('外壁 ／ 白・横張り');
+    expect(v25SourceSlotName(slot({ option_name_snapshot: '外壁', variants: [...variants].reverse() }))).toBe('外壁 ／ 白・横張り');
   });
 
   it('品名が 120 文字を超えたら 119 文字＋「…」（DB の left と同じく文字数で数える）', () => {

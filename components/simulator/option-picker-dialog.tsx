@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { formatYen } from '@/lib/domain/pricing';
+import { isSimulatorSingleProductCategory, nextSimulatorSelectedProducts } from '@/lib/domain/simulator-single-product-selection';
 import {
   equipmentCategoryPriceBreakdown,
   type EquipmentCategoryPriceState,
@@ -108,11 +109,7 @@ export function OptionPickerDialog({
         : selectedInCategory,
     [displayOptions, isWashbasinCategory, options, selectedInCategory]
   );
-  const isSingleSelection =
-    category.code === 'boiler' ||
-    category.code === 'aircon' ||
-    isWashbasinCategory ||
-    category.selection_mode === 'single';
+  const isSingleSelection = isSimulatorSingleProductCategory(category);
   const categoryDisplayName =
     category.code === 'boiler' ? '給湯器' : category.code === 'ub' ? 'ユニットバス' : category.name;
 
@@ -160,11 +157,7 @@ export function OptionPickerDialog({
     isWashbasinCategory ? washbasinSelectionIdsForOption(option, options) : [option.id];
 
   const nextSelectedForOption = (option: ProductOption) =>
-    isSingleSelection
-      ? selectionIdsForOption(option)
-      : selectedInCategory.includes(option.id)
-        ? selectedInCategory
-        : [...selectedInCategory, option.id];
+    nextSimulatorSelectedProducts(category, selectedInCategory, option.id, selectionIdsForOption(option));
 
   const nextVariantsForOption = (option: ProductOption, optionVariants: string[]) => {
     const detailGroupIds = new Set(

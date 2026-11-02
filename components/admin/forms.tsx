@@ -3,6 +3,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addProductImageAction,
   updateContactStatusAction,
+  updateContactClassificationAction,
   saveCategoryAction,
   saveModelAction,
   saveOptionAction,
@@ -1211,17 +1212,63 @@ export function PreviewRuleForm({
 
 /* ---------- お問い合わせ ---------- */
 
-export function ContactStatusForm({ id, status }: { id: string; status: 'new' | 'handled' }) {
+export function ContactStatusForm({
+  id, status, classificationReady = true,
+}: { id: string; status: 'new' | 'in_progress' | 'handled'; classificationReady?: boolean }) {
   const [state, action, pending] = useActionState(updateContactStatusAction, initial);
-  const next = status === 'new' ? 'handled' : 'new';
+  if (!classificationReady) {
+    const next = status === 'new' ? 'handled' : 'new';
+    return (
+      <form action={action}>
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="status" value={next} />
+        <button type="submit" disabled={pending} className="text-xs underline underline-offset-4 hover:text-ink disabled:opacity-50">
+          {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
+        </button>
+        {state.error && <span role="alert" className="ml-2 text-xs text-danger">{state.error}</span>}
+      </form>
+    );
+  }
   return (
-    <form action={action}>
+    <form action={action} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="id" value={id} />
-      <input type="hidden" name="status" value={next} />
-      <button type="submit" disabled={pending} className="text-xs underline underline-offset-4 hover:text-ink disabled:opacity-50">
-        {next === 'handled' ? '対応済みにする' : '未対応に戻す'}
-      </button>
-      {state.error && <span className="ml-2 text-xs text-danger">{state.error}</span>}
+      <label htmlFor={`contact-status-${id}`} className="text-xs font-semibold">対応状況</label>
+      <select id={`contact-status-${id}`} key={status} name="status" defaultValue={status}
+        className="rounded-md border border-line bg-white px-2 py-1 text-xs">
+        <option value="new">未対応</option>
+        <option value="in_progress">対応中</option>
+        <option value="handled">対応済み</option>
+      </select>
+      <button type="submit" disabled={pending} className="text-xs font-semibold underline underline-offset-4 disabled:opacity-50">変更</button>
+      {state.error && <span role="alert" className="text-xs text-danger">{state.error}</span>}
+    </form>
+  );
+}
+
+export function ContactClassificationForm({
+  id, classification,
+}: { id: string; classification: 'normal' | 'sales' | 'spam' }) {
+  const [state, action, pending] = useActionState(updateContactClassificationAction, initial);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="id" value={id} />
+      <p className="text-xs font-semibold">問い合わせの分類</p>
+      <div className="flex flex-wrap gap-3">
+        {classification !== 'normal' && (
+          <button type="submit" name="classification" value="normal" disabled={pending}
+            className="text-xs underline underline-offset-4 disabled:opacity-50">通常に戻す</button>
+        )}
+        {classification !== 'sales' && (
+          <button type="submit" name="classification" value="sales" disabled={pending}
+            className="text-xs underline underline-offset-4 disabled:opacity-50">営業に分類</button>
+        )}
+        {classification !== 'spam' && (
+          <button type="submit" name="classification" value="spam" disabled={pending}
+            className="text-xs underline underline-offset-4 disabled:opacity-50">迷惑に分類</button>
+        )}
+      </div>
+      {state.error && <p role="alert" className="text-xs text-danger">{state.error}</p>}
+      {state.ok && state.message && <p role="status" className="text-xs text-forest">{state.message}</p>}
     </form>
   );
 }

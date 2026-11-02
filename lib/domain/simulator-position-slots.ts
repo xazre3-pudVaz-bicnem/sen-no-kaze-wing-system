@@ -14,7 +14,7 @@ import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOp
 
 /** 位置の枠の標準の選択（版の標準の商品と選択肢。今のカタログに無い（非公開の）選択肢は外す） */
 export function standardSlotSelection(
-  slot: V25PositionSlot,
+  slot: Pick<V25PositionSlot, 'slot_code' | 'standard_option_id' | 'standard_variant_choice_ids'>,
   variantGroups: OptionVariantGroup[],
   variantChoices: OptionVariantChoice[]
 ): SlotSelection {

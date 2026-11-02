@@ -9,6 +9,7 @@ import type {
 import { VIEW_KEYS } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { CasePlanConfigurationHeader, CasePlanConfigurationItem } from '@/lib/data/store';
+import { casePlanSlotTiles, type CasePlanPositionSlot } from '@/lib/domain/case-plan-position-slots';
 import { normalizeExteriorFaces } from '@/lib/domain/exterior-wall';
 import { categoriesInScope, defaultSelection, pruneToScope, type RuleContext } from '@/lib/domain/rules';
 import { resolvePreview, selectedPreviewKeys, type PreviewResolution } from '@/lib/domain/preview';
@@ -33,6 +34,7 @@ export function CasePlanBoard({
   bundle,
   configuration,
   items,
+  positionSlots = [],
   exteriorFaces,
   estimateTemplate,
   elevations,
@@ -41,16 +43,22 @@ export function CasePlanBoard({
   bundle: CatalogBundle;
   configuration: CasePlanConfigurationHeader;
   items: CasePlanConfigurationItem[];
+  /** 見積に固定した標準見積の版の位置・用途の選択枠（v2.5 PR-S2b。v2.5 の見積でなければ空） */
+  positionSlots?: CasePlanPositionSlot[];
   exteriorFaces: ExteriorFaceSelection[];
   estimateTemplate: EstimateTemplateBundle | null;
   elevations: { url: string; label: string; alt: string }[];
   caseFloorplan?: { url: string; title: string } | null;
 }) {
   const [view, setView] = useState<ViewKey>('exterior');
-  const selected = useMemo(() => items.map((item) => item.option_id), [items]);
+  // 位置・用途の選択枠の明細（v2.5 PR-S2b）は位置ごとのタイルに出し、カテゴリー単位の選択には入れない（シミュレーターと同じ）。
+  // 完成イメージは、位置で選んだ商品も選んだ商品として数える
+  const categoryItems = useMemo(() => items.filter((item) => !item.slot_code), [items]);
+  const selected = useMemo(() => categoryItems.map((item) => item.option_id), [categoryItems]);
+  const previewSelected = useMemo(() => items.map((item) => item.option_id), [items]);
   const selectedVariantIds = useMemo(
-    () => items.flatMap((item) => item.variant_choice_ids ?? []),
-    [items]
+    () => categoryItems.flatMap((item) => item.variant_choice_ids ?? []),
+    [categoryItems]
   );
   const ctx = useMemo<RuleContext>(
     () => ({
@@ -111,6 +119,16 @@ export function CasePlanBoard({
     () => specOptions.filter((option) => scopedCategoryIds.has(option.category_id)),
     [scopedCategoryIds, specOptions]
   );
+  const slotTiles = useMemo(
+    () =>
+      casePlanSlotTiles(positionSlots, items, {
+        options: bundle.options,
+        variantGroups: bundle.variantGroups,
+        variantChoices: bundle.variantChoices,
+        inScope: (categoryId) => scopedCategoryIds.has(categoryId),
+      }),
+    [bundle.options, bundle.variantChoices, bundle.variantGroups, items, positionSlots, scopedCategoryIds]
+  );
 
   const atStandardSelection = sameSelection(
     selected,
@@ -130,13 +148,13 @@ export function CasePlanBoard({
           resolvePreview(
             bundle.previewRules,
             key,
-            selectedPreviewKeys(bundle.options, selected, key),
+            selectedPreviewKeys(bundle.options, previewSelected, key),
             specCode,
             key === 'floorplan' ? preferredFloorplanKeys : undefined
           ),
         ])
       ) as Record<ViewKey, ReturnType<typeof resolvePreview>>,
-    [bundle.options, bundle.previewRules, preferredFloorplanKeys, selected, specCode]
+    [bundle.options, bundle.previewRules, preferredFloorplanKeys, previewSelected, specCode]
   );
 
   const displayedFloorplan: PreviewResolution = caseFloorplan
@@ -231,6 +249,7 @@ export function CasePlanBoard({
           variantChoices={bundle.variantChoices}
           readOnly
           onPickCategory={() => undefined}
+          slotTiles={slotTiles}
         />
       </div>
     </SimulatorCaseImagesProvider>

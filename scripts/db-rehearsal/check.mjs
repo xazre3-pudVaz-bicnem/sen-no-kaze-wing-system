@@ -32,6 +32,7 @@ import { runtimeTriggerFunctionExecute } from './runtime-trigger-function-execut
 import { runtimeLegacyPriceGuard } from './runtime-legacy-price-guard.mjs';
 import { runtimeV25PositionSlots } from './runtime-v25-position-slots.mjs';
 import { runtimeV25FormalQuotes } from './runtime-v25-formal-quotes.mjs';
+import { runtimeV25StandardQuoteDrafts } from './runtime-v25-standard-quote-drafts.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
@@ -85,6 +86,8 @@ try {
     runtime = mergeRuntime(runtime, await runtimeV25PositionSlots(client));
     // v2.5 の標準見積から作った見積の第 2 版以降（正式見積）をサーバーの v2.5 の計算で発行する（v2.5 PR-D1）
     runtime = mergeRuntime(runtime, await runtimeV25FormalQuotes(client));
+    // Web 以外の案件で、v2.5 の標準見積の版から見積下書きを作る・発行する・改訂する（v2.5 PR-D1c）
+    runtime = mergeRuntime(runtime, await runtimeV25StandardQuoteDrafts(client));
     printRuntime(runtime);
   }
   const out = arg('--out');

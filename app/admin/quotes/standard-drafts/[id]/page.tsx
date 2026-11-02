@@ -6,6 +6,7 @@ import { withLegacyOptionPrices } from '@/lib/data/legacy-prices';
 import { isLocalMode } from '@/lib/data/store';
 import { formatYen } from '@/lib/domain/pricing';
 import { findUnresolvedLines, quoteOptionFlagMap, type QuoteLineCheckLine } from '@/lib/domain/quote-por';
+import { v25SourceZeroLines, type V25SourceLine, type V25SourceSlot } from '@/lib/domain/standard-quote-v25-source';
 import { standardQuoteStateFromPayload, type StandardQuoteDraftPayload } from '@/lib/domain/standard-quote-view';
 import { createClient } from '@/lib/supabase/server';
 import { Alert, Badge } from '@/components/ui';
@@ -60,16 +61,33 @@ export default async function StandardQuoteDraftPage({
   const { draft, request, standard_estimate: source, parent, internals } = payload;
   // 金額が未確定の行（POR と、0 円の内外装・オプション・別途工事の行のうち、自動計算・前の版と同じ 0 円・0円確定・対象外のどれでもない行）。
   // 止めるのは DB の正式保存（D1 までの暫定）。前の版の明細は明細のキーで突き合わせる
-  // 改訂の下書きは前の版、初回は元の標準見積の版の 0 円の行と突き合わせる（DB の assert_quote_draft_lines_resolved と同じ）
-  const [parentRead, baselineRead] = await Promise.all([
+  // 改訂の下書きは前の版、初回は元の標準見積の版の 0 円の行と突き合わせる（DB の assert_quote_draft_lines_resolved と同じ）。
+  // v2.5 の版は、選択枠（価格の決め方のある行）と商品に紐づかない明細から（v2.5 PR-D1c。v2.5 でない版はどちらも 0 件）
+  const sourceRevisionId = !parent ? draft.standard_estimate_revision_id : null;
+  const [parentRead, baselineRead, v25SlotsRead, v25LinesRead] = await Promise.all([
     parent
       ? supabase.from('quote_items').select('line_key, kind, name, description, remark, unit_price, option_id').eq('quote_id', parent.id)
       : Promise.resolve({ data: [], error: null }),
-    !parent && draft.standard_estimate_revision_id
+    sourceRevisionId
       ? supabase
           .from('standard_estimate_revision_lines')
           .select('section_code, name, group_label, remark, price_mode, cost_unit_price, unit_price')
-          .eq('revision_id', draft.standard_estimate_revision_id)
+          .eq('revision_id', sourceRevisionId)
+      : Promise.resolve({ data: [], error: null }),
+    sourceRevisionId
+      ? supabase
+          .from('standard_estimate_revision_baseline_items')
+          .select(
+            'section_code, option_name_snapshot, category_name_snapshot, slot_label, price_mode, cost_unit_price, manual_unit_price, variants:standard_estimate_revision_baseline_variants(variant_choice_name_snapshot, sort_order)'
+          )
+          .eq('revision_id', sourceRevisionId)
+          .not('price_mode', 'is', null)
+      : Promise.resolve({ data: [], error: null }),
+    sourceRevisionId
+      ? supabase
+          .from('standard_estimate_revision_v25_lines')
+          .select('section_code, name, group_label, remark, price_mode, unit_price')
+          .eq('revision_id', sourceRevisionId)
       : Promise.resolve({ data: [], error: null }),
   ]);
   // 前の版の明細が指す商品の別途見積の設定・台帳の価格（DB の判定と同じく、販売停止・非公開の商品も含む）。
@@ -85,7 +103,7 @@ export default async function StandardQuoteDraftPage({
   const pricedOptions = optionsRead.error
     ? []
     : await withLegacyOptionPrices((optionsRead.data ?? []) as { id: string; price_on_request: boolean }[], 'all');
-  const parentReadFailed = Boolean(parentRead.error || baselineRead.error || optionsRead.error);
+  const parentReadFailed = Boolean(parentRead.error || baselineRead.error || v25SlotsRead.error || v25LinesRead.error || optionsRead.error);
   const optionFlags = quoteOptionFlagMap(
     pricedOptions.map((option) => ({
       id: option.id,
@@ -94,16 +112,19 @@ export default async function StandardQuoteDraftPage({
     }))
   );
   const baselineKind: Record<string, string> = { interior_exterior: 'interior_exterior', option: 'option', sitework: 'installation' };
-  const baselineLines: QuoteLineCheckLine[] = ((baselineRead.data ?? []) as StandardBaselineRow[])
-    .filter((row) => Object.hasOwn(baselineKind, row.section_code))
-    .filter((row) => (row.price_mode === 'auto' ? (row.cost_unit_price ?? 0) === 0 : row.price_mode === 'manual' && (row.unit_price ?? 0) === 0))
-    .map((row) => ({
-      kind: baselineKind[row.section_code],
-      name: row.name,
-      description: row.group_label,
-      remark: row.remark,
-      unit_price: 0,
-    }));
+  const baselineLines: QuoteLineCheckLine[] = [
+    ...((baselineRead.data ?? []) as StandardBaselineRow[])
+      .filter((row) => Object.hasOwn(baselineKind, row.section_code))
+      .filter((row) => (row.price_mode === 'auto' ? (row.cost_unit_price ?? 0) === 0 : row.price_mode === 'manual' && (row.unit_price ?? 0) === 0))
+      .map((row) => ({
+        kind: baselineKind[row.section_code],
+        name: row.name,
+        description: row.group_label,
+        remark: row.remark,
+        unit_price: 0,
+      })),
+    ...v25SourceZeroLines((v25SlotsRead.data ?? []) as V25SourceSlot[], (v25LinesRead.data ?? []) as V25SourceLine[]),
+  ];
   const unresolvedItems = parentReadFailed
     ? new Set<StandardQuoteDraftPayload['items'][number]>()
     : findUnresolvedLines(payload.items, {

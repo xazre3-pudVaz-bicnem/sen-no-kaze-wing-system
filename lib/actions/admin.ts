@@ -8,6 +8,7 @@ import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_C
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput, type SessionUser } from '@/lib/data/store';
+import { shouldKeepCopiedDraft } from '@/lib/storage/product-media-copy';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
@@ -212,11 +213,11 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
     const source = await store.getOption(copyFrom);
     const categories = await store.listCategories();
     const sourceCategory = categories.find((category) => category.id === source?.category_id);
+    // コピー元は存在し、フリー商品・旧防火仕様でないこと。複製先のカテゴリーは変えてよい（#592 と同じ。新規登録のカテゴリーの確認は下で行う）
     if (!source || !sourceCategory ||
         sourceCategory.code === FREE_PRODUCT_CATEGORY_CODE ||
-        sourceCategory.code === LEGACY_FIRE_SPEC_CATEGORY_CODE ||
-        source.category_id !== String(formData.get('category_id') ?? '').trim()) {
-      return { ok: false, error: 'コピー元の商品・カテゴリーが一致しません。商品台帳から選び直してください。' };
+        sourceCategory.code === LEGACY_FIRE_SPEC_CATEGORY_CODE) {
+      return { ok: false, error: 'この商品は複製できません。商品台帳から選び直してください。' };
     }
   }
 
@@ -338,7 +339,8 @@ export async function saveOptionAction(_prev: AdminFormState, formData: FormData
   } catch (e) {
     // メディアの複製に失敗した場合はコピー先の新規下書きだけ取り消す。
     // コピー元商品・コピー元ファイルには一切触れない。
-    if (copyFrom && createdId) {
+    // ただし複製の取り消し（DB）に失敗したときは、確認のため新しい下書きと複製したファイルを残す（消すとファイルが行方不明になる）
+    if (copyFrom && createdId && !shouldKeepCopiedDraft(e)) {
       try {
         await store.deleteOption(createdId);
       } catch (cleanupError) {

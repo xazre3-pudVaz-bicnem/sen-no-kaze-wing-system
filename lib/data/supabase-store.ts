@@ -79,7 +79,13 @@ import {
 } from './store';
 import { isLegacyConfigurationSaveCompatible, isMissingFunction, isMissingNamedFunction, isMissingRelation, normalizeCategories, normalizeOptions } from './schema-compat';
 import { assertOwnedPublicStoragePath, optionMediaPrefix } from '@/lib/storage/option-media';
-import { managedPublicObjectPath, safeCloneExtension, type ProductMediaCopySummary } from '@/lib/storage/product-media-copy';
+import {
+  managedPublicObjectPath,
+  markKeepCopiedDraft,
+  MAX_CLONE_GALLERY_IMAGES,
+  safeCloneExtension,
+  type ProductMediaCopySummary,
+} from '@/lib/storage/product-media-copy';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1241,64 +1247,84 @@ export class SupabaseStore implements DataStore {
     if (target.status !== 'draft' || target.image_url || target.manufacturer_document_url || target.gallery_images?.length) {
       throw new StoreError('VALIDATION', '複製先はメディア未登録の新しい下書きである必要があります。');
     }
-    const galleries = source.gallery_images ?? [];
-    if (galleries.length > 30) throw new StoreError('VALIDATION', '追加画像は30枚以下の商品だけ複製できます。');
+    // 追加画像は並び順で上限まで複製し、残りは「複製できなかったメディア」として知らせる（登録側に上限は無いため、複製を止めない）
+    const allGalleries = [...(source.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const galleries = allGalleries.slice(0, MAX_CLONE_GALLERY_IMAGES);
     const admin = createAdminClient();
     const imageBucket = admin.storage.from('product-images');
     const docBucket = admin.storage.from('product-documents');
     const imageProbe = imageBucket.getPublicUrl('__clone_probe__').data.publicUrl;
     const pdfProbe = docBucket.getPublicUrl('__clone_probe__').data.publicUrl;
     type Bucket = 'product-images' | 'product-documents';
-    type Copy = { bucket: Bucket; from: string; to: string; url: string };
+    // target：メイン画像・メーカー PDF・追加画像（galleries の添字）のどれのコピーか
+    type Copy = { bucket: Bucket; from: string; to: string; url: string; target: 'main' | 'pdf' | number; label: string };
     const jobs: Copy[] = [];
     const skipped: string[] = [];
+    if (allGalleries.length > galleries.length) skipped.push(`追加画像（${MAX_CLONE_GALLERY_IMAGES + 1}枚目以降）`);
     const createJob = (
       url: string | null | undefined,
       bucket: Bucket,
       kind: 'image' | 'pdf',
       destFolder: string,
+      target: Copy['target'],
+      label: string,
       sourcePrefix?: string
-    ): string | null => {
-      if (!url) return null;
+    ): boolean => {
+      if (!url) return false;
       const from = managedPublicObjectPath(url, bucket === 'product-images' ? imageProbe : pdfProbe);
-      if (!from || (sourcePrefix && (!from.startsWith(sourcePrefix) || from.slice(sourcePrefix.length).includes('/')))) return null;
+      if (!from || (sourcePrefix && (!from.startsWith(sourcePrefix) || from.slice(sourcePrefix.length).includes('/')))) return false;
       const ext = safeCloneExtension(from, kind);
-      if (!ext) return null;
+      if (!ext) return false;
       const to = `${destFolder}${randomUUID()}.${ext}`;
       const fileBucket = bucket === 'product-images' ? imageBucket : docBucket;
-      jobs.push({ bucket, from, to, url: fileBucket.getPublicUrl(to).data.publicUrl });
-      return jobs[jobs.length - 1].url;
+      jobs.push({ bucket, from, to, url: fileBucket.getPublicUrl(to).data.publicUrl, target, label });
+      return true;
     };
 
-    const mainUrl = createJob(source.image_url, 'product-images', 'image', `option-${newDraftId}/main/`);
-    if (source.image_url && !mainUrl) skipped.push('メイン画像');
-    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = [];
-    for (const image of galleries) {
-      const cloned = createJob(image.url, 'product-images', 'image', optionMediaPrefix(newDraftId, 'gallery'), optionMediaPrefix(sourceId, 'gallery'));
-      if (cloned) {
-        galleryRows.push({ option_id: newDraftId, url: cloned, alt: image.alt, caption: image.caption, sort_order: image.sort_order });
-      } else {
+    if (source.image_url && !createJob(source.image_url, 'product-images', 'image', `option-${newDraftId}/main/`, 'main', 'メイン画像')) {
+      skipped.push('メイン画像');
+    }
+    galleries.forEach((image, index) => {
+      if (!createJob(image.url, 'product-images', 'image', optionMediaPrefix(newDraftId, 'gallery'), index, '追加画像', optionMediaPrefix(sourceId, 'gallery'))) {
         skipped.push('追加画像');
       }
+    });
+    if (
+      source.manufacturer_document_url &&
+      !createJob(source.manufacturer_document_url, 'product-documents', 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), 'pdf', 'メーカーPDF', optionMediaPrefix(sourceId, 'manufacturer'))
+    ) {
+      skipped.push('メーカーPDF');
     }
-    const pdfUrl = createJob(source.manufacturer_document_url, 'product-documents', 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
-    if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
 
     if (!jobs.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
     const db = await this.db();
     const copied: Copy[] = [];
+    // 1 つのファイルのコピーに失敗しても（コピー元のファイルが無いなど）、そのファイルだけ飛ばして知らせる（下書きは作る）
+    for (const job of jobs) {
+      const bucket = job.bucket === 'product-images' ? imageBucket : docBucket;
+      const { error } = await bucket.copy(job.from, job.to);
+      if (error) {
+        console.error('[wing] product media copy skipped', { newDraftId, from: `${job.bucket}/${job.from}`, message: error.message });
+        skipped.push(job.label);
+        continue;
+      }
+      copied.push(job);
+    }
+    if (!copied.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
+    const mainUrl = copied.find((job) => job.target === 'main')?.url ?? null;
+    const pdfUrl = copied.find((job) => job.target === 'pdf')?.url ?? null;
+    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = galleries.flatMap((image, index) => {
+      const job = copied.find((row) => row.target === index);
+      return job ? [{ option_id: newDraftId, url: job.url, alt: image.alt, caption: image.caption, sort_order: image.sort_order }] : [];
+    });
+
     let changedDb = false;
     try {
-      for (const job of jobs) {
-        const bucket = job.bucket === 'product-images' ? imageBucket : docBucket;
-        const { error } = await bucket.copy(job.from, job.to);
-        if (error) throw new StoreError('INTERNAL', `商品メディアのコピーに失敗しました: ${error.message}`);
-        copied.push(job);
-      }
-      // 顧客画面へは draft の間は公開されない。現行DBの保存境界でコピー先のみ更新する。
+      // 顧客画面へは draft の間は公開されない。メイン画像・PDF がまだ空の下書きだけ更新する（別の画面での登録を上書きしない）
       const { data: updated, error: updateError } = await db.from('options')
         .update({ image_url: mainUrl, manufacturer_document_url: pdfUrl })
-        .eq('id', newDraftId).eq('status', 'draft').select('id');
+        .eq('id', newDraftId).eq('status', 'draft').is('image_url', null).is('manufacturer_document_url', null)
+        .select('id');
       if (updateError) mapPgError(updateError);
       if (updated?.length !== 1) throw new StoreError('LOCKED', '複製先の商品が更新されたためコピーを中止しました。');
       changedDb = true;
@@ -1308,11 +1334,17 @@ export class SupabaseStore implements DataStore {
       }
       return { copiedMain: Boolean(mainUrl), copiedGallery: galleryRows.length, copiedPdf: Boolean(pdfUrl), skipped };
     } catch (error) {
-      // DB更新後に失敗した場合はリンクを先に解除し、成功した場合のみ新規ファイルを削除する。
+      // DB更新後に失敗した場合はリンクを先に解除し（複製で入れた値だけ）、成功した場合のみ新規ファイルを削除する。
       let rollbackOk = true;
       if (changedDb) {
-        const clearGallery = await db.from('option_images').delete().eq('option_id', newDraftId);
-        const clearOption = await db.from('options').update({ image_url: null, manufacturer_document_url: null }).eq('id', newDraftId).eq('status', 'draft');
+        const galleryUrls = galleryRows.map((row) => row.url);
+        const clearGallery = galleryUrls.length
+          ? await db.from('option_images').delete().eq('option_id', newDraftId).in('url', galleryUrls)
+          : { error: null };
+        let clear = db.from('options').update({ image_url: null, manufacturer_document_url: null }).eq('id', newDraftId).eq('status', 'draft');
+        clear = mainUrl ? clear.eq('image_url', mainUrl) : clear.is('image_url', null);
+        clear = pdfUrl ? clear.eq('manufacturer_document_url', pdfUrl) : clear.is('manufacturer_document_url', null);
+        const clearOption = await clear;
         rollbackOk = !clearGallery.error && !clearOption.error;
       }
       if (rollbackOk) {
@@ -1322,10 +1354,16 @@ export class SupabaseStore implements DataStore {
           const { error: removeError } = await admin.storage.from(bucketName).remove(paths);
           if (removeError) console.error('[wing] failed to clean copied option media', removeError);
         }
-      } else {
-        console.error('[wing] copied media DB rollback failed; preserve new files for recovery', newDraftId);
+        throw error;
       }
-      throw error;
+      // 取り消しに失敗したときは、確認のため新しい下書きと複製したファイルを残す（呼び出し側は下書きを消さない）
+      console.error('[wing] copied media DB rollback failed; keep the new draft and files for recovery', {
+        newDraftId,
+        paths: copied.map((job) => `${job.bucket}/${job.to}`),
+      });
+      throw markKeepCopiedDraft(
+        new StoreError('INTERNAL', '商品メディアの複製の途中で失敗しました。確認のため新しい下書きを残しています。管理者に連絡してください。')
+      );
     }
   }
 

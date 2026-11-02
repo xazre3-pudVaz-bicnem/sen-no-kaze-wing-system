@@ -60,7 +60,12 @@ import {
   localCatalogImportUrl,
 } from '@/lib/import/catalog-import-images';
 import { assertOwnedLocalMediaPath, optionMediaPrefix } from '@/lib/storage/option-media';
-import { managedLocalObjectPath, safeCloneExtension, type ProductMediaCopySummary } from '@/lib/storage/product-media-copy';
+import {
+  managedLocalObjectPath,
+  MAX_CLONE_GALLERY_IMAGES,
+  safeCloneExtension,
+  type ProductMediaCopySummary,
+} from '@/lib/storage/product-media-copy';
 import { allocateLocalProductNo, filesDir, loadDb, saveDb, type LocalDb } from './local-db';
 import { isKnownMunicipality } from '@/data/japan-municipalities';
 import {
@@ -2134,32 +2139,42 @@ export class LocalStore implements DataStore {
     if (target.status !== 'draft' || target.image_url || target.manufacturer_document_url || target.gallery_images?.length) {
       throw new StoreError('VALIDATION', '複製先はメディア未登録の新しい下書きである必要があります。');
     }
-    const galleries = source.gallery_images ?? [];
-    if (galleries.length > 30) throw new StoreError('VALIDATION', '追加画像は30枚以下の商品だけ複製できます。');
+    // 追加画像は並び順で上限まで複製し、残りは「複製できなかったメディア」として知らせる（Supabase と同じ）
+    const allGalleries = [...(source.gallery_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const galleries = allGalleries.slice(0, MAX_CLONE_GALLERY_IMAGES);
     const root = path.resolve(filesDir());
-    const copied: string[] = [];
+    const copied: { to: string; url: string; target: 'main' | 'pdf' | number }[] = [];
     const skipped: string[] = [];
-    const jobs: { from: string; to: string }[] = [];
-    const createJob = (url: string | null | undefined, kind: 'image' | 'pdf', destFolder: string, sourcePrefix?: string) => {
-      if (!url) return null;
+    if (allGalleries.length > galleries.length) skipped.push(`追加画像（${MAX_CLONE_GALLERY_IMAGES + 1}枚目以降）`);
+    const jobs: { from: string; to: string; target: 'main' | 'pdf' | number; label: string }[] = [];
+    const createJob = (
+      url: string | null | undefined,
+      kind: 'image' | 'pdf',
+      destFolder: string,
+      jobTarget: 'main' | 'pdf' | number,
+      label: string,
+      sourcePrefix?: string
+    ): boolean => {
+      if (!url) return false;
       const relative = managedLocalObjectPath(url);
-      if (!relative || (sourcePrefix && (!relative.startsWith(sourcePrefix) || relative.slice(sourcePrefix.length).includes('/')))) return null;
+      if (!relative || (sourcePrefix && (!relative.startsWith(sourcePrefix) || relative.slice(sourcePrefix.length).includes('/')))) return false;
       const ext = safeCloneExtension(relative, kind);
-      if (!ext) return null;
-      const to = `${destFolder}${randomUUID()}.${ext}`;
-      jobs.push({ from: relative, to });
-      return `/api/local-files/${to}`;
+      if (!ext) return false;
+      jobs.push({ from: relative, to: `${destFolder}${randomUUID()}.${ext}`, target: jobTarget, label });
+      return true;
     };
-    const mainUrl = createJob(source.image_url, 'image', `option-${newDraftId}/main/`);
-    if (source.image_url && !mainUrl) skipped.push('メイン画像');
-    const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = [];
-    for (const image of galleries) {
-      const cloned = createJob(image.url, 'image', optionMediaPrefix(newDraftId, 'gallery'), optionMediaPrefix(sourceId, 'gallery'));
-      if (cloned) galleryRows.push({ option_id: newDraftId, url: cloned, alt: image.alt, caption: image.caption, sort_order: image.sort_order });
-      else skipped.push('追加画像');
+    if (source.image_url && !createJob(source.image_url, 'image', `option-${newDraftId}/main/`, 'main', 'メイン画像')) skipped.push('メイン画像');
+    galleries.forEach((image, index) => {
+      if (!createJob(image.url, 'image', optionMediaPrefix(newDraftId, 'gallery'), index, '追加画像', optionMediaPrefix(sourceId, 'gallery'))) {
+        skipped.push('追加画像');
+      }
+    });
+    if (
+      source.manufacturer_document_url &&
+      !createJob(source.manufacturer_document_url, 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), 'pdf', 'メーカーPDF', optionMediaPrefix(sourceId, 'manufacturer'))
+    ) {
+      skipped.push('メーカーPDF');
     }
-    const pdfUrl = createJob(source.manufacturer_document_url, 'pdf', optionMediaPrefix(newDraftId, 'manufacturer'), optionMediaPrefix(sourceId, 'manufacturer'));
-    if (source.manufacturer_document_url && !pdfUrl) skipped.push('メーカーPDF');
     if (!jobs.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
     try {
       for (const job of jobs) {
@@ -2168,10 +2183,24 @@ export class LocalStore implements DataStore {
         if (!from.startsWith(`${root}${path.sep}`) || !to.startsWith(`${root}${path.sep}`)) {
           throw new StoreError('FORBIDDEN', 'ファイルのコピー元またはコピー先が正しくありません。');
         }
-        fs.mkdirSync(path.dirname(to), { recursive: true });
-        fs.copyFileSync(from, to);
-        copied.push(to);
+        // 1 つのファイルのコピーに失敗しても（コピー元のファイルが無いなど）、そのファイルだけ飛ばして知らせる（下書きは作る）
+        try {
+          fs.mkdirSync(path.dirname(to), { recursive: true });
+          fs.copyFileSync(from, to);
+        } catch (copyError) {
+          console.error('[wing] local product media copy skipped', { newDraftId, from: job.from, copyError });
+          skipped.push(job.label);
+          continue;
+        }
+        copied.push({ to, url: `/api/local-files/${job.to}`, target: job.target });
       }
+      if (!copied.length) return { copiedMain: false, copiedGallery: 0, copiedPdf: false, skipped };
+      const mainUrl = copied.find((row) => row.target === 'main')?.url ?? null;
+      const pdfUrl = copied.find((row) => row.target === 'pdf')?.url ?? null;
+      const galleryRows: Omit<OptionImage, 'id' | 'created_at'>[] = galleries.flatMap((image, index) => {
+        const row = copied.find((entry) => entry.target === index);
+        return row ? [{ option_id: newDraftId, url: row.url, alt: image.alt, caption: image.caption, sort_order: image.sort_order }] : [];
+      });
       this.mutate((db) => {
         const current = db.options.find((option) => option.id === newDraftId);
         if (!current || current.status !== 'draft' || current.image_url || current.manufacturer_document_url || db.optionImages.some((row) => row.option_id === newDraftId)) {
@@ -2185,7 +2214,7 @@ export class LocalStore implements DataStore {
       return { copiedMain: Boolean(mainUrl), copiedGallery: galleryRows.length, copiedPdf: Boolean(pdfUrl), skipped };
     } catch (error) {
       for (const file of copied) {
-        try { fs.rmSync(file, { force: true }); } catch (removeError) { console.error('[wing] copied local media cleanup failed', removeError); }
+        try { fs.rmSync(file.to, { force: true }); } catch (removeError) { console.error('[wing] copied local media cleanup failed', removeError); }
       }
       throw error;
     }

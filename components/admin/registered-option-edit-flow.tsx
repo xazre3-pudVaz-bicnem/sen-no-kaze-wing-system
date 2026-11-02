@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveOptionAction, type AdminFormState } from '@/lib/actions/admin';
+import { windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { OptionCustomerPreview } from '@/components/admin/option-customer-preview';
 import { ProductDetailsFields } from '@/components/admin/product-details-fields';
 import { productSizeMeta, productRegistrationGuidance, ProductCategoryGuidance } from '@/components/admin/product-category-guidance';
@@ -161,10 +162,7 @@ export function RegisteredOptionEditFlow({
   const [sizeNoteValue, setSizeNoteValue] = useState(option.size_note ?? '');
   const selectedCategoryCode = categories.find((category) => category.id === selectedCategoryId)?.code ?? '';
   // 窓タイプ（v2.5 PR-S2）：窓タイプを使うカテゴリー（サッシ）の商品だけ欄を出す
-  const windowTypeLabel = useCallback(
-    (code: string | null | undefined) => (code ? (windowTypes.find((row) => row.code === code)?.label ?? code) : '—'),
-    [windowTypes]
-  );
+  const windowTypeLabel = useCallback((code: string | null | undefined) => windowTypeLabelOf(windowTypes, code) ?? '—', [windowTypes]);
   const selectedCategoryUsesWindowType = categories.find((category) => category.id === selectedCategoryId)?.uses_window_type === true;
   const sizeMeta = productSizeMeta(selectedCategoryCode);
   const sizeGuidance = productRegistrationGuidance(selectedCategoryCode);
@@ -513,8 +511,7 @@ export function RegisteredOptionEditFlow({
                 >
                   <Select id="registered-window-type" name="window_type_code" defaultValue={option.window_type_code ?? ''} onChange={() => setIdentityChanged(true)} data-testid="registered-window-type">
                     <option value="">未設定</option>
-                    {windowTypes
-                      .filter((row) => row.status === 'active' || row.code === option.window_type_code)
+                    {windowTypeChoices(windowTypes, option.window_type_code)
                       .map((row) => (
                         <option key={row.code} value={row.code}>
                           {row.label}

@@ -25,6 +25,7 @@ import {
   type ViewKey,
   type WindowType,
 } from '@/lib/domain/types';
+import { copiedWindowTypeCode, windowTypeChoices } from '@/lib/domain/window-types';
 import { Alert, Button, Checkbox, Field, Input, Select, Spinner, Textarea } from '@/components/ui';
 import { BASE_FLOORPLAN_NOTE, hasBaseFloorplanInternalMarker, presetFloorplanCode } from '@/lib/domain/preview-rule-meta';
 import { customerPlanName, normalizePlanDisplaySize, planDisplaySizeFromSpecs, publicSpecs } from '@/lib/domain/plan-display';
@@ -764,12 +765,12 @@ export function OptionForm({
                 <Select
                   id={`window_type_code-${mode}`}
                   name="window_type_code"
-                  defaultValue={option?.window_type_code ?? copySource?.window_type_code ?? ''}
+                  // 複製して新しく登録するときは、「使う」窓タイプだけ引き継ぐ（「使わない」窓タイプは新しく設定できない）
+                  defaultValue={option ? (option.window_type_code ?? '') : (copiedWindowTypeCode(windowTypes, copySource?.window_type_code) ?? '')}
                   data-testid="option-window-type"
                 >
                   <option value="">未設定</option>
-                  {windowTypes
-                    .filter((row) => row.status === 'active' || row.code === (option?.window_type_code ?? copySource?.window_type_code))
+                  {windowTypeChoices(windowTypes, option?.window_type_code)
                     .map((row) => (
                       <option key={row.code} value={row.code}>
                         {row.label}

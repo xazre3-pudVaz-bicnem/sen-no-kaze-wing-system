@@ -163,7 +163,7 @@ export default async function SimulatorPage({ params, searchParams }: { params: 
       // v2.5：標準構成は公開中の v2.5 の版（非防火）の選択枠の商品（2026-10-29 先方回答）
       sale.v25 ? (specCode) => v25SlotOptionIdsFor(saleViews, model.slug, specCode, false) : undefined,
       // 版の位置・用途の選択枠のカテゴリーは、位置ごとに選ぶ（カテゴリー単位の標準構成に入れない。v2.5 PR-S2）
-      sale.v25 ? (specCode) => v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, false)) : undefined
+      sale.v25 ? (specCode) => v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, false), bundle.options) : undefined
     );
     if (entry) {
       initial = {

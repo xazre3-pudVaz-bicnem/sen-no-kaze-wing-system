@@ -3,13 +3,21 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   activeV25SlotSelections,
+  mergeOrphanSlotSelections,
   sameSlotSelection,
   standardSlotSelection,
   switchPositionCategories,
   v25StandardLineNotes,
   withoutPositionCategoryOptions,
 } from '@/lib/domain/simulator-position-slots';
-import { computeSaleViewPricing, v25PositionSlots, v25SlotUnitForDisplay, type StandardEstimateSaleView } from '@/lib/domain/standard-estimate-sale-view';
+import {
+  computeSaleViewPricing,
+  v25PositionSlotCategoryIds,
+  v25PositionSlots,
+  v25SlotUnitForDisplay,
+  type StandardEstimateSaleView,
+} from '@/lib/domain/standard-estimate-sale-view';
+import { copiedWindowTypeCode, windowTypeChoices, windowTypeLabelOf } from '@/lib/domain/window-types';
 import { buildV25SpecSelection } from '@/lib/domain/estimate-template';
 import { summarizePlanChanges } from '@/lib/domain/plan-change-summary';
 import { normalizeGuestPlanInput } from '@/lib/domain/case-flow';
@@ -103,7 +111,7 @@ const category = (id: string, code: string, extra: Partial<OptionCategory> = {})
 const bundle = {
   model: { id: 'model', slug: 'runtime-psl-model', base_price: 0, presets: [] },
   categories: [category('cat-opt', 'runtime-psl-option'), category('cat-sash', 'runtime-psl-sash', { is_required: true })],
-  options: [option('o1', 'cat-opt'), option('s1', 'cat-sash', { is_default: true }), option('s2', 'cat-sash'), option('s3', 'cat-sash')],
+  options: [option('o1', 'cat-opt'), option('o2', 'cat-opt'), option('s1', 'cat-sash', { is_default: true }), option('s2', 'cat-sash'), option('s3', 'cat-sash')],
   variantGroups: [{ id: 'g-color', option_id: 's1', code: 'color', name: '色', sort_order: 1, is_required: true, status: 'published' }],
   variantChoices: [
     { id: 'white', group_id: 'g-color', code: 'white', name: '白', kind: 'standard', extra_price: 0, price_on_request: false, status: 'published', sort_order: 1 },
@@ -231,6 +239,8 @@ describe('v2.5 PR-S2：御見積書の標準の明細の注記・変更点の一
     optionName: (id: string) => bundle.options.find((row) => row.id === id)?.name,
     choiceName: (id: string) => bundle.variantChoices.find((row) => row.id === id)?.name,
     optionOfChoice: (id: string) => (['white', 'black'].includes(id) ? 's1' : undefined),
+    categoryOf: (id: string) => bundle.options.find((row) => row.id === id)?.category_id,
+    inScope: () => true,
   };
   const standardSlots: SlotSelection[] = activeV25SlotSelections(slots, [], context()).selections;
 
@@ -252,8 +262,15 @@ describe('v2.5 PR-S2：御見積書の標準の明細の注記・変更点の一
       'rev-s1-line-0': '選択から外しています（変更差額に含みます）',
       'rev-s1-line-1': '変更：S1 s2（変更差額に含みます）',
       'rev-s1-line-2': '変更：S1 s1（黒）（変更差額に含みます）',
-      'rev-s1-line-3': '選択なし（変更差額に含みます）',
+      'rev-s1-line-3': '注文範囲の外のため含めません（変更差額に含みます）',
     });
+  });
+
+  it('同じカテゴリーの別の商品に替えた行は替えた先を、注文範囲の外の行はそのことを示す', () => {
+    const replaced = v25StandardLineNotes(view, { optionIds: ['o2'], variantChoiceIds: [], slotSelections: standardSlots }, catalog);
+    expect(replaced['rev-s1-line-0']).toBe('変更：S1 o2（変更差額に含みます）');
+    const outside = v25StandardLineNotes(view, { optionIds: [], variantChoiceIds: [], slotSelections: [] }, { ...catalog, inScope: () => false });
+    expect(outside['rev-s1-line-0']).toBe('注文範囲の外のため含めません（変更差額に含みます）');
   });
 
   it('保存の前の変更点の一覧：位置ごとに数える（標準のままの位置は数えない）', () => {
@@ -272,6 +289,49 @@ describe('v2.5 PR-S2：御見積書の標準の明細の注記・変更点の一
       { category: 'サッシ（掃出し窓）', kind: '商品変更', detail: null },
       { category: 'サッシ（開き窓①）', kind: '選択肢変更', detail: null },
     ]);
+  });
+});
+
+describe('v2.5 PR-S2：今の版に無い位置の選択・位置のカテゴリー・窓タイプの選択肢', () => {
+  it('今の版に無い位置の選択は、カテゴリー単位の選択に戻す（価格の切り替えを戻したときに黙って消さない）', () => {
+    const plan = {
+      optionIds: ['o1'],
+      variantChoiceIds: [],
+      slotSelections: [
+        { slot_code: 'hakidashi', option_id: 's2', variant_choice_ids: [] },
+        { slot_code: 'hiraki-2', option_id: 's1', variant_choice_ids: ['black'] },
+      ],
+    };
+    // 版が無い（スイッチが切れている）：位置の商品をカテゴリー単位に戻す。サッシは 1 つだけ選べないカテゴリーなので両方
+    const none = mergeOrphanSlotSelections(bundle, plan, { positionCodes: new Set(), positionCategoryIds: new Set() });
+    expect(none).toEqual({ optionIds: ['o1', 's2', 's1'], variantChoiceIds: ['black'], slotSelections: [] });
+    // 今の版にある位置は位置ごとのまま。版で位置ごとに選ぶカテゴリーの、版に無い位置の商品は戻さない（標準で補う）
+    const kept = mergeOrphanSlotSelections(bundle, plan, { positionCodes: new Set(['hakidashi']), positionCategoryIds: new Set(['cat-sash']) });
+    expect(kept).toEqual({ optionIds: ['o1'], variantChoiceIds: [], slotSelections: [plan.slotSelections[0]] });
+    // 1 つだけ選べるカテゴリーは、すでに選んでいる商品があれば足さない
+    const singleBundle = { ...bundle, categories: bundle.categories.map((row) => (row.id === 'cat-sash' ? { ...row, selection_mode: 'single' as const } : row)) };
+    const single = mergeOrphanSlotSelections(singleBundle, plan, { positionCodes: new Set(), positionCategoryIds: new Set() });
+    expect(single.optionIds).toEqual(['o1', 's2']);
+  });
+
+  it('位置のカテゴリーは、枠のカテゴリーが無いとき標準の商品のカテゴリーで補う', () => {
+    const withoutCategory = { ...view, baseline: view.baseline.map((row) => ({ ...row, category_id: row.slot_code ? null : row.category_id })) };
+    expect([...v25PositionSlotCategoryIds(withoutCategory)]).toEqual([]);
+    expect([...v25PositionSlotCategoryIds(withoutCategory, bundle.options)]).toEqual(['cat-sash']);
+  });
+
+  it('窓タイプ：新しく選べるのは「使う」だけ。設定済みの「使わない」は残せる。複製で新しく登録するときは「使う」だけ引き継ぐ', () => {
+    const types = [
+      { code: 'fix', label: 'FIX窓', sort_order: 10, status: 'active' as const },
+      { code: 'old', label: '旧タイプ', sort_order: 20, status: 'retired' as const },
+    ];
+    expect(windowTypeChoices(types, null).map((row) => row.code)).toEqual(['fix']);
+    expect(windowTypeChoices(types, 'old').map((row) => row.code)).toEqual(['fix', 'old']);
+    expect(copiedWindowTypeCode(types, 'old')).toBeNull();
+    expect(copiedWindowTypeCode(types, 'fix')).toBe('fix');
+    expect(windowTypeLabelOf(types, 'fix')).toBe('FIX窓');
+    expect(windowTypeLabelOf(types, 'unknown')).toBe('unknown');
+    expect(windowTypeLabelOf(types, null)).toBeNull();
   });
 });
 

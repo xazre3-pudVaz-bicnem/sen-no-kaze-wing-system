@@ -47,6 +47,7 @@ import {
 } from '@/lib/domain/standard-estimate-sale-view';
 import {
   activeV25SlotSelections,
+  mergeOrphanSlotSelections,
   sameSlotSelection,
   standardSlotSelection,
   switchPositionCategories,
@@ -244,7 +245,7 @@ export function SimulatorApp({
       simulatorSpecChoices.map((choice) => {
         const slotOptionIds = v25Pricing ? v25SlotOptionIdsFor(saleViews, model.slug, choice.code, fire) : null;
         // 版の位置・用途の選択枠のカテゴリー（v2.5 PR-S2）は位置ごとに選ぶので、カテゴリー単位の標準構成には入れない
-        const positionCategoryIds = v25Pricing ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, choice.code, fire)) : undefined;
+        const positionCategoryIds = v25Pricing ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, choice.code, fire), bundle.options) : undefined;
         return {
           code: choice.code,
           ids: slotOptionIds
@@ -254,7 +255,7 @@ export function SimulatorApp({
               : buildEstimateSpecSelection(ctx, model, choice.code),
         };
       }),
-    [ctx, fireProofOptionId, model, saleViews, simulatorSpecChoices, v25Pricing]
+    [bundle.options, ctx, fireProofOptionId, model, saleViews, simulatorSpecChoices, v25Pricing]
   );
   const nonFireSpecSelections = useMemo(() => specSelectionsFor(false), [specSelectionsFor]);
   // 防火仕様の商品が無いモデル・v2.5 以前は、防火の条件で標準構成が変わらない
@@ -305,8 +306,22 @@ export function SimulatorApp({
   const preserveLegacyInitialSelection =
     Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);
   const preserveReadOnlyHistoricalSelection = Boolean(initial && initial.status !== 'draft');
+  // 保存した位置ごとの選択のうち、今の版に無い位置の分（価格の切り替えを戻した・版に位置の枠が無いなど）は、
+  // カテゴリー単位の選択に戻す（v2.5 PR-S2。画面・金額・保存し直しから黙って消さない）
+  const initialSaleView =
+    v25Pricing && initial ? pickSaleView(saleViews, model.slug, defaultSpecCode, isFireProofSelected(bundle, initial.option_ids)) : null;
+  const initialPlan = initial
+    ? mergeOrphanSlotSelections(
+        bundle,
+        { optionIds: initial.option_ids, variantChoiceIds: initial.variant_choice_ids, slotSelections: initial.slot_selections ?? [] },
+        {
+          positionCodes: new Set(v25PositionSlots(initialSaleView).map((slot) => slot.slot_code)),
+          positionCategoryIds: v25PositionSlotCategoryIds(initialSaleView, bundle.options),
+        }
+      )
+    : null;
   const initialSourceIds = preserveLegacyInitialSelection
-    ? (initial?.option_ids ?? initialBaselineIds)
+    ? (initialPlan?.optionIds ?? initialBaselineIds)
     : initialBaselineIds;
   const initialRuleCtx = preserveReadOnlyHistoricalSelection ? ctx : initialSpecCtx;
   const eligibleInitialIds = preserveReadOnlyHistoricalSelection
@@ -337,7 +352,7 @@ export function SimulatorApp({
   );
   const initialPositionCategoryIds =
     v25Pricing && !preserveReadOnlyHistoricalSelection
-      ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, defaultSpecCode, isFireProofSelected(bundle, initialNormalizedSelection)))
+      ? v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, defaultSpecCode, isFireProofSelected(bundle, initialNormalizedSelection)), bundle.options)
       : new Set<string>();
   const initialSelection =
     v25InitialState?.optionIds ?? withoutPositionCategoryOptions(bundle.options, initialNormalizedSelection, initialPositionCategoryIds);
@@ -346,12 +361,12 @@ export function SimulatorApp({
   // 見積依頼済みなどの読み取り専用の履歴は、保存された内容のまま表示する
   const initialVariants =
     v25InitialState?.variantChoiceIds ??
-    (initial && !preserveReadOnlyHistoricalSelection
-      ? reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initial.variant_choice_ids)
+    (initialPlan && !preserveReadOnlyHistoricalSelection
+      ? reconcileVariantChoices(bundle.variantGroups, bundle.variantChoices, initialSelection, initialPlan.variantChoiceIds)
       : pruneHiddenVariantChoices(
           bundle.variantGroups,
           bundle.variantChoices,
-          initial?.variant_choice_ids ?? standardVariantIdsFor(defaultSpecCode, initialSelection)
+          initialPlan?.variantChoiceIds ?? standardVariantIdsFor(defaultSpecCode, initialSelection)
         ));
   const exteriorWallCat = bundle.categories.find((c) => c.code === 'exterior-wall');
   const allExteriorWallOptions = bundle.options
@@ -374,7 +389,7 @@ export function SimulatorApp({
    * 位置・用途の選択枠（掃出し窓・洗面窓など）ごとに、お客様が選んだもの（v2.5 PR-S2）。
    * 選んでいない位置・選べなくなった商品は版の標準（activeSlotSelections でそろえる）
    */
-  const [slotSelections, setSlotSelections] = useState<SlotSelection[]>(initial?.slot_selections ?? []);
+  const [slotSelections, setSlotSelections] = useState<SlotSelection[]>(initialPlan?.slotSelections ?? []);
   const [exteriorFaces, setExteriorFaces] = useState<ExteriorFaceSelection[]>(() => {
     // 保存済み旧Configurationの exterior_faces=[] は従来1商品方式を表す互換状態。
     // 外壁を明示変更するまで [] を維持し、価格や保存内容を4面方式へ自動変換しない。
@@ -458,8 +473,8 @@ export function SimulatorApp({
   // ---- 位置・用途の選択枠（v2.5 PR-S2。公開中の v2.5 の版の窓などの位置ごとに 1 つ選ぶ） ----
   const positionSlots = useMemo(() => (v25Pricing ? v25PositionSlots(activeSaleView) : []), [activeSaleView, v25Pricing]);
   const positionCategoryIds = useMemo(
-    () => (v25Pricing ? v25PositionSlotCategoryIds(activeSaleView) : new Set<string>()),
-    [activeSaleView, v25Pricing]
+    () => (v25Pricing ? v25PositionSlotCategoryIds(activeSaleView, bundle.options) : new Set<string>()),
+    [activeSaleView, bundle.options, v25Pricing]
   );
   const optionById = useMemo(() => new Map(bundle.options.map((option) => [option.id, option] as const)), [bundle.options]);
   const specOptionIds = useMemo(() => new Set(activeSpecCtx.options.map((option) => option.id)), [activeSpecCtx.options]);
@@ -499,10 +514,6 @@ export function SimulatorApp({
       positionSlots.filter(slotInScope(level)).map((slot) => standardSlotSelection(slot, bundle.variantGroups, bundle.variantChoices)),
     [bundle.variantChoices, bundle.variantGroups, positionSlots, slotInScope]
   );
-  const slotsAtStandard = activeSlotSelections.every((selection) => {
-    const slot = positionSlots.find((row) => row.slot_code === selection.slot_code);
-    return Boolean(slot && sameSlotSelection(selection, standardSlotSelection(slot, bundle.variantGroups, bundle.variantChoices)));
-  });
   const eligibleExteriorWallOptions = useMemo(
     () =>
       activeSpecCtx.options
@@ -600,11 +611,14 @@ export function SimulatorApp({
           }
           // 位置・用途の選択枠（v2.5 PR-S2）：版で位置ごとに選ぶカテゴリーの商品は、カテゴリー単位の選択に持ち込まない
           if (v25Pricing) {
+            const beforeStrip = restoredSelection.length;
             restoredSelection = withoutPositionCategoryOptions(
               bundle.options,
               restoredSelection,
-              v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, restoredSpec, isFireProofSelected(bundle, restoredSelection)))
+              v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, restoredSpec, isFireProofSelected(bundle, restoredSelection)), bundle.options)
             );
+            // 位置の枠ができる前の下書き：そろえたことを案内する（保存した後に消える）
+            if (restoredSelection.length < beforeStrip) setPositionNotice(true);
           }
           const restoredSlotSelections = Array.isArray(draft.slotSelections)
             ? draft.slotSelections.filter(
@@ -950,6 +964,7 @@ export function SimulatorApp({
       }),
     [activeSlotSelections, bundle.variantChoices, bundle.variantGroups, optionById, positionSlots]
   );
+  const slotsAtStandard = slotRows.every((row) => sameSlotSelection(row.selection, row.standard));
   /** 設備の一覧の位置ごとのタイル（差額は、その位置の標準の売価との差。表に無い組み合わせは目安） */
   const slotTiles = useMemo<EquipmentSlotTile[]>(
     () =>
@@ -999,6 +1014,7 @@ export function SimulatorApp({
     if (!activeSaleView || !isV25SaleView(activeSaleView)) return {};
     const choiceById = new Map(bundle.variantChoices.map((choice) => [choice.id, choice] as const));
     const optionOfGroup = new Map(bundle.variantGroups.map((group) => [group.id, group.option_id] as const));
+    const inScopeCategoryIds = new Set(categoriesInScope(bundle.categories, finishLevel).map((category) => category.id));
     return v25StandardLineNotes(
       activeSaleView,
       { optionIds: selected, variantChoiceIds: variantIds, slotSelections: activeSlotSelections },
@@ -1009,9 +1025,11 @@ export function SimulatorApp({
           const choice = choiceById.get(id);
           return choice ? optionOfGroup.get(choice.group_id) : undefined;
         },
+        categoryOf: (id) => optionById.get(id)?.category_id,
+        inScope: (id) => inScopeCategoryIds.has(optionById.get(id)?.category_id ?? ''),
       }
     );
-  }, [activeSaleView, activeSlotSelections, bundle.variantChoices, bundle.variantGroups, optionById, selected, variantIds]);
+  }, [activeSaleView, activeSlotSelections, bundle.categories, bundle.variantChoices, bundle.variantGroups, finishLevel, optionById, selected, variantIds]);
   const planChangeSummary = useMemo(() => summarizePlanChanges(
     bundle,
     { optionIds: selected, variantChoiceIds: variantIds, exteriorFaces },
@@ -1128,7 +1146,7 @@ export function SimulatorApp({
         return;
       }
       // 標準構成から変えている：変えた内容を残し、使う版が変わる分だけ、位置ごとに選ぶカテゴリーをそろえる（v2.5 PR-S2）
-      const nextPositionCategoryIds = v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, nextFire));
+      const nextPositionCategoryIds = v25PositionSlotCategoryIds(pickSaleView(saleViews, model.slug, specCode, nextFire), bundle.options);
       applyPicker(fireproofCategoryId, [nextId], [], (ids) =>
         switchPositionCategories(activeSpecCtx, ids, positionCategoryIds, nextPositionCategoryIds, next?.selection ?? [])
       );
@@ -1153,6 +1171,8 @@ export function SimulatorApp({
         const r = toggleOption(activeSpecCtx, cur, oid);
         if (!r.rejected) cur = r.next;
       }
+      // 位置ごとに選ぶカテゴリーの商品は、前提の自動追加で入っても、カテゴリー単位の選択に残さない（v2.5 PR-S2。位置の選択で選ぶ）
+      cur = withoutPositionCategoryOptions(bundle.options, cur, positionCategoryIds);
       setSelected(cur);
       // v2.5：足した商品にも標準の選択肢を選ぶ（選択肢が無いと標準見積の選択枠と一致せず、標準のままでも差額が出る）。
       // 狭める前に選んでいた選択肢が残っている選択項目は、その選択肢のまま（同じ選択項目に 2 つ選ばない）
@@ -1231,9 +1251,21 @@ export function SimulatorApp({
       if (cur.includes(oid)) notices.push(notice);
     }
     const picked = cur;
-    if (adjustSelection) cur = adjustSelection(cur);
+    // 位置ごとに選ぶカテゴリーの商品は、前提の自動追加で入っても、カテゴリー単位の選択に残さない（v2.5 PR-S2。位置の選択で選ぶ）
+    cur = adjustSelection ? adjustSelection(cur) : withoutPositionCategoryOptions(bundle.options, cur, positionCategoryIds);
     const adjustedIn = cur.filter((id) => !picked.includes(id));
     const adjustedOut = new Set(picked.filter((id) => !cur.includes(id)));
+    const positionCategoryNames = [
+      ...new Set(
+        [...adjustedOut]
+          .map((id) => optionById.get(id)?.category_id)
+          .filter((categoryId): categoryId is string => Boolean(categoryId && positionCategoryIds.has(categoryId)))
+          .map((categoryId) => bundle.categories.find((category) => category.id === categoryId)?.name ?? '')
+      ),
+    ].filter(Boolean);
+    if (!adjustSelection && positionCategoryNames.length > 0) {
+      notices.push(`「${positionCategoryNames.join('・')}」は位置ごとに選びます。設備の一覧の位置のタイルから選んでください`);
+    }
 
     setSelected(cur);
     // このカテゴリーの商品に紐づく選択肢を入れ替える（そろえて外した商品の選択肢も外し、足した商品は標準の選択肢）

@@ -72,7 +72,9 @@ describe('本番migration前のConfiguration互換', () => {
   it('spec未設定の旧Configurationでも保存済みoption_idsを初期選択として維持する', () => {
     expect(simulatorSource).toContain('const preserveLegacyInitialSelection =');
     expect(simulatorSource).toContain('Boolean(initial) && (Boolean(validInitialSpecCode) || !initial?.spec_code);');
-    expect(simulatorSource).toContain('? (initial?.option_ids ?? initialBaselineIds)');
+    // 保存した位置ごとの選択のうち今の版に無い位置の分は、カテゴリー単位の選択に戻してから使う（v2.5 PR-S2）
+    expect(simulatorSource).toContain('{ optionIds: initial.option_ids, variantChoiceIds: initial.variant_choice_ids, slotSelections: initial.slot_selections ?? [] }');
+    expect(simulatorSource).toContain('? (initialPlan?.optionIds ?? initialBaselineIds)');
   });
 
   it('旧外壁のDB正本は空4面のまま、表示だけ保存済み1商品から4面復元する', () => {

@@ -18,6 +18,7 @@ import {
   type ProductLedgerState,
 } from '@/lib/domain/product-lifecycle';
 import { setProductLifecycleAction } from '@/lib/actions/product-lifecycle';
+import { windowTypeLabelOf } from '@/lib/domain/window-types';
 import { ProductSalesStatusPanel } from './product-sales-status-panel';
 import { defaultVariantIdsFor, pruneHiddenVariantChoices, visibleVariantGroups } from '@/lib/domain/preset';
 import type { BaseModel, OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption, WindowType } from '@/lib/domain/types';
@@ -215,8 +216,7 @@ export function ProductLedgerClient({ canEdit, lifecycleEnabled = false, discont
   const categoryMap = useMemo(() => new Map(categories.map((x) => [x.id, x])), [categories]);
   const modelMap = useMemo(() => new Map(models.map((x) => [x.id, x])), [models]);
   // 窓タイプ（v2.5 PR-S2）：設定済みの商品だけ名前を出す（マスターに無いコードはコードのまま）
-  const windowTypeMap = useMemo(() => new Map(windowTypes.map((x) => [x.code, x.label])), [windowTypes]);
-  const windowTypeLabelFor = (option: ProductOption) => (option.window_type_code ? windowTypeMap.get(option.window_type_code) ?? option.window_type_code : null);
+  const windowTypeLabelFor = (option: ProductOption) => windowTypeLabelOf(windowTypes, option.window_type_code);
   const categoryGroups = useMemo(() => {
     const groups = new Map<string, { code: string; name: string; sort: number; categories: OptionCategory[] }>();
     for (const category of categories) {

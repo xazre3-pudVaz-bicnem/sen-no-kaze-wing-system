@@ -175,9 +175,19 @@ export function splitConfigurationItems(
   };
 }
 
-/** 位置の枠のあるカテゴリー（そのカテゴリーの商品は位置ごとに選び、カテゴリー単位では選ばない） */
-export function v25PositionSlotCategoryIds(view: StandardEstimateSaleView | null | undefined): Set<string> {
-  return new Set(v25PositionSlots(view).map((slot) => slot.category_id).filter((id): id is string => Boolean(id)));
+/**
+ * 位置の枠のあるカテゴリー（そのカテゴリーの商品は位置ごとに選び、カテゴリー単位では選ばない）。
+ * 枠のカテゴリーが無いときは、枠の標準の商品のカテゴリーで補う（options を渡したとき。画面の位置のタイルと同じ決め方）
+ */
+export function v25PositionSlotCategoryIds(
+  view: StandardEstimateSaleView | null | undefined,
+  options: Pick<ProductOption, 'id' | 'category_id'>[] = []
+): Set<string> {
+  return new Set(
+    v25PositionSlots(view)
+      .map((slot) => slot.category_id ?? options.find((option) => option.id === slot.standard_option_id)?.category_id)
+      .filter((id): id is string => Boolean(id))
+  );
 }
 
 /** v2.5 の標準見積か（v2.5 PR-C1） */

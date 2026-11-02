@@ -9,7 +9,7 @@ import { getSimulatorSaleViews } from '@/lib/data/standard-estimate-sale-views';
 import { buildEstimateSpecSelection, buildV25SpecSelection } from '@/lib/domain/estimate-template';
 import { defaultVariantIdsFor } from '@/lib/domain/preset';
 import { summarizePlanChanges, type PlanChangeSummary, type PlanPositionChange } from '@/lib/domain/plan-change-summary';
-import { standardSlotSelection } from '@/lib/domain/simulator-position-slots';
+import { mergeOrphanSlotSelections, standardSlotSelection, withoutPositionCategoryOptions } from '@/lib/domain/simulator-position-slots';
 import {
   FIRE_PROOF_OPTION_CODE,
   isFireProofSelected,
@@ -258,21 +258,29 @@ export default async function MypagePage({ searchParams }: { searchParams: Promi
       const view = sale.v25 ? pickSaleView(sale.saleViews, bundle.model.slug, specCode, fire) : null;
       const slotOptionIds = v25SlotOptionIds(view);
       const fireOptionId = bundle.options.find((option) => option.code === FIRE_PROOF_OPTION_CODE)?.id ?? null;
+      const positionCategoryIds = v25PositionSlotCategoryIds(view, bundle.options);
+      // シミュレーターで開いたときと同じにそろえる：今の版に無い位置の選択はカテゴリー単位に戻し、
+      // 版で位置ごとに選ぶカテゴリーの商品はカテゴリー単位から外す（位置の枠ができる前の保存）
+      const plan = mergeOrphanSlotSelections(bundle, items, {
+        positionCodes: new Set(v25PositionSlots(view).map((slot) => slot.slot_code)),
+        positionCategoryIds,
+      });
       const baselineIds = slotOptionIds
-        ? buildV25SpecSelection(ctx, bundle.model, specCode, slotOptionIds, fire ? fireOptionId : null, v25PositionSlotCategoryIds(view))
+        ? buildV25SpecSelection(ctx, bundle.model, specCode, slotOptionIds, fire ? fireOptionId : null, positionCategoryIds)
         : buildEstimateSpecSelection(ctx, bundle.model, specCode, template?.baseline_option_ids ?? []);
       const baselineVariants = view
         ? v25StandardVariantIds(bundle.variantGroups, bundle.variantChoices, view, baselineIds)
         : defaultVariantIdsFor(bundle.variantGroups, bundle.variantChoices, baselineIds);
       const positions: PlanPositionChange[] = v25PositionSlots(view).flatMap((slot) => {
-        const current = items.slotSelections.find((row) => row.slot_code === slot.slot_code);
+        const current = plan.slotSelections.find((row) => row.slot_code === slot.slot_code);
         if (!current) return [];
-        const categoryName = bundle.categories.find((category) => category.id === slot.category_id)?.name ?? '';
+        const categoryId = slot.category_id ?? bundle.options.find((option) => option.id === slot.standard_option_id)?.category_id;
+        const categoryName = bundle.categories.find((category) => category.id === categoryId)?.name ?? '';
         return [{ label: `${categoryName}（${slot.slot_label}）`, current, standard: standardSlotSelection(slot, bundle.variantGroups, bundle.variantChoices) }];
       });
       const summary = summarizePlanChanges(
         bundle,
-        { optionIds: items.optionIds, variantChoiceIds: items.variantChoiceIds, exteriorFaces },
+        { optionIds: withoutPositionCategoryOptions(bundle.options, plan.optionIds, positionCategoryIds), variantChoiceIds: plan.variantChoiceIds, exteriorFaces },
         { optionIds: baselineIds, variantChoiceIds: baselineVariants },
         positions
       );

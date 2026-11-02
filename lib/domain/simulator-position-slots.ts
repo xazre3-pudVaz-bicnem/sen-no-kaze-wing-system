@@ -9,7 +9,8 @@
 import { reconcileVariantChoices } from './preset';
 import { toggleOption, type RuleContext } from './rules';
 import type { StandardEstimateSaleView, V25PositionSlot } from './standard-estimate-sale-view';
-import type { OptionVariantChoice, OptionVariantGroup, ProductOption, SlotSelection } from './types';
+import { isSimulatorSingleProductCategory } from './simulator-single-product-selection';
+import type { OptionCategory, OptionVariantChoice, OptionVariantGroup, ProductOption, SlotSelection } from './types';
 
 /** 位置の枠の標準の選択（版の標準の商品と選択肢。今のカタログに無い（非公開の）選択肢は外す） */
 export function standardSlotSelection(
@@ -130,6 +131,10 @@ export function v25StandardLineNotes(
     choiceName: (choiceId: string) => string | undefined;
     /** 選択肢の商品（今のカタログに無い選択肢は undefined） */
     optionOfChoice: (choiceId: string) => string | undefined;
+    /** 商品のカテゴリー（標準の商品を別の商品に替えたことを示すのに使う） */
+    categoryOf: (optionId: string) => string | undefined;
+    /** 商品のカテゴリーが今の注文範囲の内か */
+    inScope: (optionId: string) => boolean;
   }
 ): Record<string, string> {
   const notes: Record<string, string> = {};
@@ -138,6 +143,9 @@ export function v25StandardLineNotes(
     const choices = choicesOf(optionId, ids).map(catalog.choiceName).filter(Boolean).join('・');
     return `${catalog.optionName(optionId) ?? '選んだ商品'}${choices ? `（${choices}）` : ''}`;
   };
+  // 版のカテゴリー単位の枠の商品（替えた先の商品を見つけるとき、標準の商品は除く）
+  const baselineCategoryOptionIds = new Set(view.baseline.filter((row) => !row.slot_code).map((row) => row.option_id));
+  const outOfScope = '注文範囲の外のため含めません（変更差額に含みます）';
   view.lines.forEach((line, index) => {
     if (!line.option_id) return;
     const id = `${view.revision_id}-line-${index}`;
@@ -147,16 +155,65 @@ export function v25StandardLineNotes(
     const standard = { option_id: line.option_id, variant_choice_ids: choicesOf(line.option_id, item?.variant_choice_ids ?? []) };
     if (slotCode) {
       const selection = current.slotSelections.find((row) => row.slot_code === slotCode);
-      if (!selection) notes[id] = '選択なし（変更差額に含みます）';
+      // 位置の選択が無いのは、注文範囲の外の位置だけ（範囲の内の位置は標準で補う）
+      if (!selection) notes[id] = outOfScope;
       else if (!sameSlotSelection(selection, standard)) notes[id] = `変更：${describe(selection.option_id, selection.variant_choice_ids)}（変更差額に含みます）`;
       return;
     }
     if (!current.optionIds.includes(line.option_id)) {
-      notes[id] = '選択から外しています（変更差額に含みます）';
+      if (!catalog.inScope(line.option_id)) {
+        notes[id] = outOfScope;
+        return;
+      }
+      // 同じカテゴリーの別の商品に替えたときは、替えた先を示す（外しただけなら「外しています」）
+      const categoryId = catalog.categoryOf(line.option_id);
+      const replacements = current.optionIds.filter(
+        (optionId) => !baselineCategoryOptionIds.has(optionId) && categoryId !== undefined && catalog.categoryOf(optionId) === categoryId
+      );
+      notes[id] =
+        replacements.length > 0
+          ? `変更：${replacements.map((optionId) => describe(optionId, current.variantChoiceIds)).join('・')}（変更差額に含みます）`
+          : '選択から外しています（変更差額に含みます）';
       return;
     }
     const chosen = { option_id: line.option_id, variant_choice_ids: choicesOf(line.option_id, current.variantChoiceIds) };
     if (!sameSlotSelection(chosen, standard)) notes[id] = `仕様を変更：${describe(line.option_id, chosen.variant_choice_ids)}（変更差額に含みます）`;
   });
   return notes;
+}
+
+/**
+ * 保存した位置ごとの選択のうち、今の版に無い位置の選択（価格の切り替えを戻した・新しい版に位置の枠が無いなど）を、
+ * カテゴリー単位の選択に戻す（画面・金額・保存し直しから黙って消さない）。今の版で位置ごとに選ぶカテゴリーの商品は戻さない
+ * （その位置は版の標準で補う）。1 つだけ選べるカテゴリーは、すでに選んでいる商品があれば足さない。選択肢は、まだ選んでいない
+ * 選択項目のものだけ足す
+ */
+export function mergeOrphanSlotSelections(
+  catalog: {
+    options: Pick<ProductOption, 'id' | 'category_id'>[];
+    categories: Pick<OptionCategory, 'id' | 'code' | 'selection_mode'>[];
+    variantChoices: Pick<OptionVariantChoice, 'id' | 'group_id'>[];
+  },
+  plan: { optionIds: string[]; variantChoiceIds: string[]; slotSelections: SlotSelection[] },
+  view: { positionCodes: ReadonlySet<string>; positionCategoryIds: ReadonlySet<string> }
+): { optionIds: string[]; variantChoiceIds: string[]; slotSelections: SlotSelection[] } {
+  const categoryOf = new Map(catalog.options.map((option) => [option.id, option.category_id] as const));
+  const groupOf = new Map(catalog.variantChoices.map((choice) => [choice.id, choice.group_id] as const));
+  const optionIds = [...plan.optionIds];
+  const variantChoiceIds = [...plan.variantChoiceIds];
+  const slotSelections: SlotSelection[] = [];
+  for (const selection of plan.slotSelections) {
+    if (view.positionCodes.has(selection.slot_code)) {
+      slotSelections.push(selection);
+      continue;
+    }
+    const categoryId = categoryOf.get(selection.option_id);
+    if (!categoryId || view.positionCategoryIds.has(categoryId) || optionIds.includes(selection.option_id)) continue;
+    const category = catalog.categories.find((row) => row.id === categoryId);
+    if (category && isSimulatorSingleProductCategory(category) && optionIds.some((id) => categoryOf.get(id) === categoryId)) continue;
+    optionIds.push(selection.option_id);
+    const chosenGroups = new Set(variantChoiceIds.map((id) => groupOf.get(id)));
+    variantChoiceIds.push(...selection.variant_choice_ids.filter((id) => groupOf.has(id) && !chosenGroups.has(groupOf.get(id))));
+  }
+  return { optionIds, variantChoiceIds, slotSelections };
 }

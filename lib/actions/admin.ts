@@ -8,7 +8,6 @@ import { canEditCatalog, FREE_PRODUCT_CATEGORY_CODE, LEGACY_FIRE_SPEC_CATEGORY_C
 import { flushNotificationsSafely } from '@/lib/mail/send';
 import { CATALOG_TAG } from '@/lib/data/public-catalog';
 import { getStore, isLocalMode, StoreError, type EstimateTemplateImportInput, type SessionUser } from '@/lib/data/store';
-import { shouldKeepCopiedDraft } from '@/lib/storage/product-media-copy';
 import { catalogImportPathFromImageUrl, isCatalogImportPathForUser } from '@/lib/import/catalog-import-images';
 import {
   categorySchema,
@@ -33,6 +32,7 @@ import {
   userRoleSchema,
 } from '@/lib/validation';
 import { BASE_FLOORPLAN_NOTE, enforceDedicatedBaseFloorplanFields, enforcePresetFloorplanFields } from '@/lib/domain/preview-rule-meta';
+import { shouldKeepCopiedDraft } from '@/lib/storage/product-media-copy';
 import { estimateBaselineOptionCodes } from '@/lib/domain/estimate-template';
 import { withPlanDisplaySize } from '@/lib/domain/plan-display';
 import { introducesUnconfirmedZeroPrice, requiresZeroPriceConfirmation } from '@/lib/domain/product-publication';

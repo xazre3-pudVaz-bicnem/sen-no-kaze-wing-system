@@ -44,6 +44,7 @@ import type {
   WindowType,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
+import type { QuoteV25Context } from '@/lib/domain/quote-v25';
 import type { QuotePorSelectionState } from '@/lib/domain/quote-por';
 
 export interface SessionUser {
@@ -231,6 +232,58 @@ export interface DealerRevisionItem {
   quantity: number;
   /** 元の明細から引き継ぐ商品画像（見積書下部の画像一覧に使う） */
   image_url?: string | null;
+}
+
+/** v2.5 の見積の編集画面に渡す値（売価・経費率・税率だけ。原価・販売費率・掛率は渡さない。v2.5 PR-D1） */
+export interface QuoteV25EditContext {
+  revisionId: string;
+  revisionVersion: number;
+  baseModelId: string;
+  modelSlug: string;
+  specCode: string;
+  money: QuoteV25Context;
+  /** 標準見積の調整額の理由（前の版の調整額のままなら引き継ぐ） */
+  standardAdjustmentReason: string | null;
+}
+
+/** v2.5 の見積の第 2 版以降の行（DB の create_quote_revision_v25 の p_lines と同じ形） */
+export type QuoteV25RevisionLine =
+  | {
+      source: 'parent';
+      parent_item_id: string;
+      quantity?: string | null;
+      /** 前の版で別途見積（価格未確定）の行だけ */
+      unit_price?: number | null;
+      state?: 'zero_confirmed' | 'excluded' | null;
+      state_reason?: string | null;
+    }
+  | {
+      source: 'catalog';
+      section: 'interior_exterior' | 'option' | 'sitework';
+      option_id: string;
+      variant_choice_ids: string[];
+      quantity: string;
+    }
+  | {
+      source: 'manual';
+      section: 'base' | 'interior_exterior' | 'option' | 'sitework';
+      name: string;
+      description?: string | null;
+      unit?: string | null;
+      quantity: string;
+      unit_price: number;
+      remark?: string | null;
+      state?: 'zero_confirmed' | 'excluded' | null;
+      state_reason?: string | null;
+    };
+
+export interface QuoteV25RevisionInput {
+  lines: QuoteV25RevisionLine[];
+  adjustment: number;
+  adjustment_reason: string | null;
+  dealer_note: string | null;
+  /** お客様が選んだ別途見積の商品を確認した、として画面が送る一覧の key（確認欄にチェックがあるときだけ。#529 と同じ） */
+  por_confirmation_keys?: string[] | null;
 }
 
 export interface DealerRevisionInput {
@@ -502,6 +555,12 @@ export interface DataStore {
   listDealerQuotes(dealerId: string): Promise<DealerQuoteListItem[]>;
   /** 代理店が別途工事・フリー商品を入れた確定見積（次の版）を発行する。元の版は改訂済みとして残る */
   createDealerRevision(id: string, input: DealerRevisionInput, actor: SessionUser): Promise<Quote>;
+  /** v2.5 の見積の編集画面に渡す値。v2.5 の見積でない・権限が無い・DB の更新の前は null（v2.5 PR-D1） */
+  getQuoteV25Context(quoteId: string, actor: SessionUser): Promise<QuoteV25EditContext | null>;
+  /** v2.5 の見積に固定した版での「商品＋選択肢」の売価単価（価格未確定は null。300 件まで） */
+  getQuoteV25Units(quoteId: string, items: { option_id: string; choice_ids: string[] }[], actor: SessionUser): Promise<(number | null)[]>;
+  /** v2.5 の見積の第 2 版以降を、固定した版の v2.5 の決まりで発行する（金額はサーバーが作る） */
+  createQuoteRevisionV25(quoteId: string, input: QuoteV25RevisionInput, actor: SessionUser): Promise<Quote>;
   /**
    * 改訂・確定見積の画面用：Web の案件でお客様が選んだ別途見積の商品と、自分の確認が済んでいるか。
    * 本部と担当の代理店・総代理店だけ（DB の get_quote_por_selections。D1 までの暫定）

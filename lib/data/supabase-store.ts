@@ -38,6 +38,7 @@ import type {
   MatrixRow,
   WindowType,
 } from '@/lib/domain/types';
+import { QUOTE_V25_SECTIONS, type QuoteV25Section } from '@/lib/domain/quote-v25';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
@@ -50,6 +51,8 @@ import {
   type ContactInput,
   type CategoryInput,
   type WindowTypeInput,
+  type QuoteV25EditContext,
+  type QuoteV25RevisionInput,
   type DataStore,
   type CaseDealer,
   type DealerQuoteListItem,
@@ -1114,6 +1117,70 @@ export class SupabaseStore implements DataStore {
     const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', newId).single();
     if (e2) mapPgError(e2);
     return q as Quote;
+  }
+
+  async getQuoteV25Context(quoteId: string): Promise<QuoteV25EditContext | null> {
+    const db = await this.db();
+    const { data, error } = await db.rpc('get_quote_v25_context', { p_quote_id: quoteId });
+    if (error) {
+      // DB の更新（20261102120000）の前・v2.5 の見積でない・権限が無いときは、これまでの編集画面
+      if (isMissingNamedFunction(error, 'get_quote_v25_context') || error.code === 'P0002') return null;
+      mapPgError(error);
+    }
+    const value = (data ?? null) as Record<string, unknown> | null;
+    if (!value) return null;
+    const sections = Array.isArray(value.expense_sections) ? (value.expense_sections as string[]) : [];
+    return {
+      revisionId: String(value.revision_id),
+      revisionVersion: Number(value.revision_version),
+      baseModelId: String(value.base_model_id),
+      modelSlug: String(value.model_slug),
+      specCode: String(value.spec_code),
+      money: {
+        expenseRate: String(value.expense_rate),
+        expenseSections: sections.filter((code): code is QuoteV25Section => (QUOTE_V25_SECTIONS as string[]).includes(code)),
+        taxRate: String(value.tax_rate),
+      },
+      standardAdjustmentReason: typeof value.standard_adjustment_reason === 'string' ? value.standard_adjustment_reason : null,
+    };
+  }
+
+  async getQuoteV25Units(quoteId: string, items: { option_id: string; choice_ids: string[] }[]): Promise<(number | null)[]> {
+    if (items.length === 0) return [];
+    const db = await this.db();
+    const out: (number | null)[] = [];
+    for (let start = 0; start < items.length; start += 300) {
+      const chunk = items.slice(start, start + 300);
+      const { data, error } = await db.rpc('get_quote_v25_units', { p_quote_id: quoteId, p_items: chunk });
+      if (error) mapPgError(error);
+      const units = (Array.isArray(data) ? data : []) as Array<number | null>;
+      // 結果が足りなければ価格未確定（null）として扱う（安全側）
+      chunk.forEach((_, index) => out.push(typeof units[index] === 'number' ? units[index] : null));
+    }
+    return out;
+  }
+
+  async createQuoteRevisionV25(quoteId: string, input: QuoteV25RevisionInput): Promise<Quote> {
+    const db = await this.db();
+    // お客様が選んだ別途見積の商品を確認したことを、発行の前に記録する（DB が発行時に担当者自身の記録を確かめる。#529 と同じ）
+    if (input.por_confirmation_keys && input.por_confirmation_keys.length > 0) {
+      const { error: confirmError } = await db.rpc('confirm_quote_por_selections', {
+        p_quote_id: quoteId,
+        p_selection_keys: input.por_confirmation_keys,
+      });
+      if (confirmError) mapPgError(confirmError);
+    }
+    const { data, error } = await db.rpc('create_quote_revision_v25', {
+      p_quote_id: quoteId,
+      p_lines: input.lines,
+      p_adjustment: input.adjustment,
+      p_adjustment_reason: input.adjustment_reason,
+      p_dealer_note: input.dealer_note,
+    });
+    if (error) mapPgError(error);
+    const { data: q, error: e2 } = await db.from('quotes').select('*').eq('id', data as string).single();
+    if (e2) mapPgError(e2);
+    return toQuote(q as Record<string, unknown>);
   }
 
   async getQuotePorSelections(quoteId: string): Promise<QuotePorSelectionState> {

@@ -5,6 +5,7 @@ import { getExteriorFaces } from '@/lib/data/exterior-faces';
 import { getStore } from '@/lib/data/store';
 import { getSimulatorSaleViews, resolvedV25ConfigurationPricing } from '@/lib/data/standard-estimate-sale-views';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
+import { splitConfigurationItems } from '@/lib/domain/standard-estimate-sale-view';
 import { CONFIGURATION_STATUS_LABELS } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { Alert, Badge } from '@/components/ui';
@@ -25,8 +26,8 @@ export default async function AdminConfigurationDetailPage({ params }: { params:
   const current = sale.v25
     ? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {
         specCode: c.spec_code ?? null,
-        optionIds: items.map((i) => i.option_id),
-        variantChoiceIds: items.flatMap((i) => i.variant_choice_ids ?? []),
+        // 位置・用途の枠ごとの行（v2.5 PR-S1）は、カテゴリー単位の選択と分けて、その枠の売価で計算する
+        ...splitConfigurationItems(items),
         exteriorFaces: await getExteriorFaces(c.id),
       })
     : computePricing(bundle.model, bundle.options, bundle.categories, items.map((i) => ({ option_id: i.option_id, quantity: i.quantity })));

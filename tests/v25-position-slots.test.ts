@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   computeSaleViewPricing,
+  splitConfigurationItems,
   v25PositionSlotCategoryIds,
   v25PositionSlots,
   v25SelectionUnit,
@@ -150,6 +151,41 @@ describe('v2.5 PR-S1：位置・用途ごとの選択枠（シミュレーター
     expect(swapped.sections.find((section) => section.code === 'option')?.delta_line).toBe(1605);
   });
 
+  it('位置の選択の区分は、DB と同じく選んだ商品のカテゴリーと別途工事の印で決める（枠の標準の商品の区分ではない）', () => {
+    const withInstall = {
+      ...bundle,
+      options: [...bundle.options, { ...option('s7', 'cat-sash'), is_installation: true }],
+    } as unknown as CatalogBundle;
+    const viewWithTable = { ...view, prices: { ...view.prices, s7: { groups: [], units: { '': 10000 } } } } as StandardEstimateSaleView;
+    const result = computeSaleViewPricing(withInstall, viewWithTable, ['o1'], [], [], undefined, [
+      { slot_code: 'hakidashi', option_id: 's7', variant_choice_ids: [] },
+      ...standard().slice(1),
+    ]);
+    // 別途工事の印の商品は別途工事の区分に数える（オプションの区分からは、掃出し窓の標準 48,150 円が減る）
+    expect(result.sections.find((section) => section.code === 'sitework')?.delta_line).toBe(10000);
+    expect(result.sections.find((section) => section.code === 'option')?.delta_line).toBe(-48150);
+  });
+
+  it('保存したプランの明細を、カテゴリー単位の選択と位置ごとの選択に分ける（見積依頼の確認・本部の保存プランの画面）', () => {
+    expect(
+      splitConfigurationItems([
+        { option_id: 'o1', variant_choice_ids: [], slot_code: null },
+        { option_id: 's1', variant_choice_ids: ['white'], slot_code: 'hiraki-1' },
+        { option_id: 's1', variant_choice_ids: ['black'], slot_code: 'hiraki-2' },
+      ])
+    ).toEqual({
+      optionIds: ['o1'],
+      variantChoiceIds: [],
+      slotSelections: [
+        { slot_code: 'hiraki-1', option_id: 's1', variant_choice_ids: ['white'] },
+        { slot_code: 'hiraki-2', option_id: 's1', variant_choice_ids: ['black'] },
+      ],
+    });
+    for (const page of ['app/(site)/mypage/configurations/[id]/request-quote/page.tsx', 'app/admin/configurations/[id]/page.tsx']) {
+      expect(read(page)).toContain('...splitConfigurationItems(items),');
+    }
+  });
+
   it('価格未確定の商品は 0 円として別途見積の印を付け、版に無い位置（古い保存）は数えない', () => {
     const por = computeSaleViewPricing(bundle, view, ['o1'], [], [], undefined, [
       { slot_code: 'hakidashi', option_id: 's3', variant_choice_ids: [] },
@@ -292,10 +328,11 @@ describe('v2.5 PR-S1：DB（migration）と保存の受け渡し', () => {
   });
 
   it('注文範囲の外の位置（本体のみのときの室内など）は選ばない。範囲の内の位置だけをすべて求める（保存・見積依頼）', () => {
+    // 保存と見積依頼で共通の照らし合わせ：注文範囲の内の位置だけを求める
     expect(migration).toContain(
-      '         and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(v_level)\n         and not (bi.slot_code = any(v_slot_codes));'
+      '       and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(cfg.finish_level)\n       and not exists (select 1 from public.configuration_items ci where ci.configuration_id = cfg.id and ci.slot_code = bi.slot_code)'
     );
-    expect(migration).toContain('       and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(cfg.finish_level)');
+    // 位置の選択の商品は、プランの注文範囲の内のカテゴリーだけ
     expect(migration).toContain('         and public.finish_level_rank(c.finish_level) <= public.finish_level_rank(v_level)');
   });
 
@@ -313,9 +350,27 @@ describe('v2.5 PR-S1：DB（migration）と保存の受け渡し', () => {
     expect(migration).toContain('LOCKED: 標準の構成（窓などの位置ごとの選択）が更新されています。シミュレーターでプランを開いて保存し直してから、見積を依頼してください');
   });
 
+  it('保存と見積依頼は、同じ関数で版の位置の枠と照らす（注文範囲・選べる商品・カテゴリー単位との重なり）', () => {
+    expect(migration).toContain('create function public.standard_estimate_v25_configuration_slot_issue(p_configuration_id uuid, p_revision_id uuid)');
+    expect(migration).toContain('v_missing := public.standard_estimate_v25_configuration_slot_issue(v_id, v_revision);');
+    expect(migration).toContain('if public.standard_estimate_v25_configuration_slot_issue(cfg.id, v_revision) is not null then');
+    expect(migration).toContain('revoke all on function public.standard_estimate_v25_configuration_slot_issue(uuid, uuid) from public, anon, authenticated, service_role;');
+  });
+
+  it('選べる商品は、この仕様で選べる商品だけ（保存と公開の決まり）。原価の固定は同じ行なら識別子を変えても引き継ぐ', () => {
+    expect(migration).toContain('or not public.customer_product_spec_selectable(v_model.slug, m.spec_code, v_alt.spec_codes) then');
+    expect(migration).toContain("'位置・用途の選択枠の商品と選べる商品は、この仕様で選べる商品にしてください：'");
+    expect(migration).toContain("coalesce(pg_catalog.jsonb_object_agg(x.baseline_key || '#' || x.identity, x.pins), '{}'::jsonb)");
+    expect(migration).toContain("then coalesce(v_old_rows -> (coalesce(v_baseline_key::text, '') || '#' || v_identity), v_old -> v_identity) end;");
+  });
+
   it('アプリの保存：位置の選択があるときだけ渡す（migration の無い DB でも、これまでの保存は動く）。ローカル検証モードは受け付けない', () => {
     expect(read('lib/data/supabase-store.ts')).toContain(
       '...(input.slot_selections && input.slot_selections.length > 0 ? { p_slot_selections: input.slot_selections } : {}),'
+    );
+    // 古い保存の経路では位置の選択を持てないので、黙って落とさずに止める
+    expect(read('lib/data/supabase-store.ts')).toContain(
+      "throw new StoreError('VALIDATION', '位置ごとの選択を保存できませんでした。時間をおいてもう一度保存してください。');"
     );
     expect(read('lib/data/local-store.ts')).toContain("throw new StoreError('VALIDATION', '位置ごとの選択は、新しい価格の標準見積でだけ保存できます');");
   });

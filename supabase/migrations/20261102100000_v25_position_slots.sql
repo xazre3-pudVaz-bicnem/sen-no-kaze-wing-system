@@ -388,6 +388,7 @@ declare
   v_alt_id uuid;
   v_alt public.options%rowtype;
   v_alt_index integer;
+  v_old_rows jsonb;
 begin
   if v_uid is null then
     raise exception using errcode = '42501', message = 'UNAUTHENTICATED: ログインが必要です';
@@ -451,10 +452,11 @@ begin
     from public.pricing_calculation_rule_versions rule where rule.id = rev.calc_rule_version_id;
 
   -- 保存前の auto の選択枠の固定（商品＋選択肢の組み合わせごと）
-  select coalesce(pg_catalog.jsonb_object_agg(x.identity, x.pins), '{}'::jsonb)
-    into v_old
+  select coalesce(pg_catalog.jsonb_object_agg(x.identity, x.pins), '{}'::jsonb),
+         coalesce(pg_catalog.jsonb_object_agg(x.baseline_key || '#' || x.identity, x.pins), '{}'::jsonb)
+    into v_old, v_old_rows
     from (
-      select coalesce(b.slot_code, '') || '#' || b.option_id::text || '|' || coalesce((
+      select b.baseline_key::text as baseline_key, b.option_id::text || '|' || coalesce((
                select string_agg(bv.variant_choice_id::text, ',' order by bv.variant_choice_id)
                  from public.standard_estimate_revision_baseline_variants bv
                 where bv.baseline_item_id = b.id), '') as identity,
@@ -598,7 +600,8 @@ begin
       v_groups := array_append(v_groups, g.id);
     end loop;
     v_identity := o.id::text || '|' || coalesce(array_to_string(array(select z from unnest(v_choice_ids) z order by z), ','), '');
-    v_prev := case when v_mode = 'auto' then v_old -> (coalesce(v_slot_code, '') || '#' || v_identity) end;
+    v_prev := case when v_mode = 'auto'
+                   then coalesce(v_old_rows -> (coalesce(v_baseline_key::text, '') || '#' || v_identity), v_old -> v_identity) end;
     v_reuse := v_prev is not null;
 
     v_cost_pin := case
@@ -664,9 +667,10 @@ begin
         end if;
         select * into v_alt from public.options x where x.id = v_alt_id;
         if not found or v_alt.status <> 'published' or v_alt.category_id <> o.category_id
-           or (v_alt.base_model_id is not null and v_alt.base_model_id <> m.base_model_id) then
+           or (v_alt.base_model_id is not null and v_alt.base_model_id <> m.base_model_id)
+           or not public.customer_product_spec_selectable(v_model.slug, m.spec_code, v_alt.spec_codes) then
           raise exception using errcode = 'P0001',
-            message = format('VALIDATION: 商品 %s 件目：選べる商品は、標準の商品と同じカテゴリーの、この商品モデルで使える登録済みの商品にしてください', v_index);
+            message = format('VALIDATION: 商品 %s 件目：選べる商品は、標準の商品と同じカテゴリーの、この商品モデル・仕様で使える登録済みの商品にしてください', v_index);
         end if;
         v_alt_index := v_alt_index + 1;
         insert into public.standard_estimate_revision_slot_options (revision_id, slot_code, option_id, sort_order)
@@ -747,8 +751,15 @@ language sql
 stable
 set search_path = ''
 as $slot_rules$
-  with slots as (
-    select bi.option_name_snapshot as name, bi.quantity, bi.slot_code, bi.slot_label,
+  with rev as (
+    select m.spec_code, bm.slug as model_slug
+      from public.standard_estimate_revisions r
+      join public.standard_estimate_masters m on m.id = r.standard_estimate_master_id
+      join public.base_models bm on bm.id = m.base_model_id
+     where r.id = p_revision_id
+  ),
+  slots as (
+    select bi.option_name_snapshot as name, bi.quantity, bi.slot_code, bi.slot_label, o.spec_codes,
            c.id as category_id, c.name as category_name, c.code as category_code,
            (c.selection_mode = 'single' or c.code in ('boiler', 'aircon', 'washbasin', 'toilet', 'kitchen')) as single_select,
            case when o.code in ('washbasin-kb', 'faucet-kb') then 'washbasin-standard-set' else bi.id::text end as display_key
@@ -758,7 +769,7 @@ as $slot_rules$
      where bi.revision_id = p_revision_id
   ),
   slot_options as (
-    select so.slot_code, o.name, o.category_id, o.status, o.archived_at, o.discontinued_at, s.category_id as slot_category_id
+    select so.slot_code, o.name, o.category_id, o.status, o.archived_at, o.discontinued_at, o.spec_codes, s.category_id as slot_category_id
       from public.standard_estimate_revision_slot_options so
       join public.options o on o.id = so.option_id
       join slots s on s.slot_code = so.slot_code
@@ -790,7 +801,14 @@ as $slot_rules$
             || string_agg(distinct '「' || so.name || '」', '・')
        from slot_options so
       where so.category_id <> so.slot_category_id or so.status <> 'published'
-         or so.archived_at is not null or so.discontinued_at is not null)
+         or so.archived_at is not null or so.discontinued_at is not null),
+    -- 位置の枠の標準の商品と選べる商品は、この標準見積の仕様でお客様が選べる商品（選べないと、お客様の保存で止まる）
+    (select '位置・用途の選択枠の商品と選べる商品は、この仕様で選べる商品にしてください：' || string_agg(distinct '「' || x.name || '」', '・')
+       from (select s.name, s.spec_codes from slots s where s.slot_code is not null
+             union all
+             select so.name, so.spec_codes from slot_options so) x
+      cross join rev
+      where not public.customer_product_spec_selectable(rev.model_slug, rev.spec_code, x.spec_codes))
   ), '');
 $slot_rules$;
 
@@ -1141,6 +1159,61 @@ begin
 end;
 $$;
 
+-- ---------- 保存したプランの位置ごとの選択と、版の位置の枠の照らし合わせ（保存・見積依頼で共通。v2.5 PR-S1） ----------
+
+-- 問題が無ければ null。内部の部品
+-- * 'missing:<位置の名前>'：注文範囲の内の位置の選択が無い（範囲の外の位置＝本体のみのときの室内などは選ばない）
+-- * 'not_allowed'：版に無い位置、またはその位置で選べない商品（標準の商品と選べる商品のほか）
+-- * 'category_mixed'：位置で選ぶカテゴリーの商品を、カテゴリー単位でも選んでいる（同じ商品を二重に数えない）
+create function public.standard_estimate_v25_configuration_slot_issue(p_configuration_id uuid, p_revision_id uuid)
+returns text
+language sql
+stable
+set search_path = ''
+as $slot_issue$
+  with cfg as (
+    select c.id, c.finish_level from public.configurations c where c.id = p_configuration_id
+  ),
+  missing as (
+    select string_agg(bi.slot_label, '・' order by bi.sort_order) as labels
+      from public.standard_estimate_revision_baseline_items bi
+      join public.options bo on bo.id = bi.option_id
+      join public.option_categories bc on bc.id = bo.category_id
+      cross join cfg
+     where bi.revision_id = p_revision_id and bi.slot_code is not null
+       and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(cfg.finish_level)
+       and not exists (select 1 from public.configuration_items ci where ci.configuration_id = cfg.id and ci.slot_code = bi.slot_code)
+  )
+  select case
+    when (select m.labels from missing m) is not null then 'missing:' || (select m.labels from missing m)
+    when exists (
+      select 1 from public.configuration_items ci
+       where ci.configuration_id = p_configuration_id and ci.slot_code is not null
+         and not exists (
+           select 1 from public.standard_estimate_revision_baseline_items bi
+            where bi.revision_id = p_revision_id and bi.slot_code = ci.slot_code
+              and (bi.option_id = ci.option_id or exists (
+                     select 1 from public.standard_estimate_revision_slot_options so
+                      where so.revision_id = p_revision_id and so.slot_code = bi.slot_code and so.option_id = ci.option_id))
+         )
+    ) then 'not_allowed'
+    when exists (
+      select 1
+        from public.configuration_items ci
+        join public.options o on o.id = ci.option_id
+       where ci.configuration_id = p_configuration_id and ci.slot_code is null
+         and exists (
+           select 1 from public.standard_estimate_revision_baseline_items bi
+            where bi.revision_id = p_revision_id and bi.slot_code is not null and bi.option_category_id = o.category_id
+         )
+    ) then 'category_mixed'
+  end;
+$slot_issue$;
+
+comment on function public.standard_estimate_v25_configuration_slot_issue(uuid, uuid) is
+  '保存したプランの位置ごとの選択が、v2.5 の版の位置の枠と合うか（注文範囲の内の位置はすべて 1 つずつ・その位置で選べる商品・位置で選ぶカテゴリーをカテゴリー単位で選ばない）。問題が無ければ null。保存と見積依頼で使う内部の部品。';
+
+
 -- ---------- 見積依頼の明細：位置ごとの選択の確認と写し（v2.5 PR-S1） ----------
 
 create or replace function public.write_standard_estimate_quote_items(p_configuration_id uuid, p_quote_id uuid)
@@ -1177,25 +1250,8 @@ begin
   end if;
   -- 位置・用途の選択枠（v2.5 PR-S1）：保存したプランの選択が、今の公開中の版の位置の枠と 1 対 1 で、その枠で選べる商品か。
   -- 版が変わった後の古い保存は、シミュレーターで開いて保存し直してから（保存で、位置ごとに選べる商品を確かめ直す）
-  if exists (
-    -- 注文範囲の内の位置は、すべて選んでいること（範囲の外の位置は選ばない）
-    select 1 from public.standard_estimate_revision_baseline_items bi
-      join public.options bo on bo.id = bi.option_id
-      join public.option_categories bc on bc.id = bo.category_id
-     where bi.revision_id = v_revision and bi.slot_code is not null
-       and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(cfg.finish_level)
-       and not exists (select 1 from public.configuration_items ci where ci.configuration_id = cfg.id and ci.slot_code = bi.slot_code)
-  ) or exists (
-    select 1 from public.configuration_items ci
-     where ci.configuration_id = cfg.id and ci.slot_code is not null
-       and not exists (
-         select 1 from public.standard_estimate_revision_baseline_items bi
-          where bi.revision_id = v_revision and bi.slot_code = ci.slot_code
-            and (bi.option_id = ci.option_id or exists (
-                   select 1 from public.standard_estimate_revision_slot_options so
-                    where so.revision_id = v_revision and so.slot_code = bi.slot_code and so.option_id = ci.option_id))
-       )
-  ) then
+  -- （注文範囲の内の位置はすべて 1 つずつ・その位置で選べる商品・位置で選ぶカテゴリーをカテゴリー単位で選ばない。保存と同じ確認）
+  if public.standard_estimate_v25_configuration_slot_issue(cfg.id, v_revision) is not null then
     raise exception using errcode = 'P0001',
       message = 'LOCKED: 標準の構成（窓などの位置ごとの選択）が更新されています。シミュレーターでプランを開いて保存し直してから、見積を依頼してください';
   end if;
@@ -1956,40 +2012,13 @@ begin
         raise exception 'VALIDATION: この仕様の標準見積には、位置ごとの選択がありません' using errcode = 'P0001';
       end if;
     else
-      -- 注文範囲の外の位置（本体のみのときの室内など）は選ばない。範囲の内の位置は、すべて 1 つずつ
-      select string_agg(bi.slot_label, '・' order by bi.sort_order) into v_missing
-        from public.standard_estimate_revision_baseline_items bi
-        join public.options bo on bo.id = bi.option_id
-        join public.option_categories bc on bc.id = bo.category_id
-       where bi.revision_id = v_revision and bi.slot_code is not null
-         and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(v_level)
-         and not (bi.slot_code = any(v_slot_codes));
-      if v_missing is not null then
-        raise exception 'VALIDATION: 位置ごとの選択がそろっていません（%）。シミュレーターで開き直してください', v_missing using errcode = 'P0001';
-      end if;
-      if exists (
-        select 1 from public.configuration_items ci
-         where ci.configuration_id = v_id and ci.slot_code is not null
-           and not exists (
-             select 1 from public.standard_estimate_revision_baseline_items bi
-              where bi.revision_id = v_revision and bi.slot_code = ci.slot_code
-                and (bi.option_id = ci.option_id or exists (
-                       select 1 from public.standard_estimate_revision_slot_options so
-                        where so.revision_id = v_revision and so.slot_code = bi.slot_code and so.option_id = ci.option_id))
-           )
-      ) then
+      -- 注文範囲の内の位置はすべて 1 つずつ・その位置で選べる商品・位置で選ぶカテゴリーをカテゴリー単位で選ばない（見積依頼と同じ確認）
+      v_missing := public.standard_estimate_v25_configuration_slot_issue(v_id, v_revision);
+      if v_missing like 'missing:%' then
+        raise exception 'VALIDATION: 位置ごとの選択がそろっていません（%）。シミュレーターで開き直してください', substr(v_missing, 9) using errcode = 'P0001';
+      elsif v_missing = 'not_allowed' then
         raise exception 'VALIDATION: その位置では選べない商品が含まれています。シミュレーターで開き直してください' using errcode = 'P0001';
-      end if;
-      if exists (
-        select 1
-          from public.configuration_items ci
-          join public.options o on o.id = ci.option_id
-         where ci.configuration_id = v_id and ci.slot_code is null
-           and exists (
-             select 1 from public.standard_estimate_revision_baseline_items bi
-              where bi.revision_id = v_revision and bi.slot_code is not null and bi.option_category_id = o.category_id
-           )
-      ) then
+      elsif v_missing = 'category_mixed' then
         raise exception 'VALIDATION: 位置ごとに選ぶカテゴリーの商品は、位置ごとに選んでください。シミュレーターで開き直してください' using errcode = 'P0001';
       end if;
     end if;
@@ -2131,6 +2160,8 @@ alter function public.option_categories_window_type_guard() owner to postgres;
 alter function public.standard_estimate_v25_selection_unit(uuid, uuid, uuid[], text) owner to postgres;
 alter function public.validate_configuration_items(uuid, uuid[], text, uuid[]) owner to postgres;
 alter function public.save_configuration_atomic(uuid, uuid, text, uuid[], text, text, text, uuid[], text, jsonb, text, text, boolean, integer, jsonb) owner to postgres;
+alter function public.standard_estimate_v25_configuration_slot_issue(uuid, uuid) owner to postgres;
+revoke all on function public.standard_estimate_v25_configuration_slot_issue(uuid, uuid) from public, anon, authenticated, service_role;
 
 -- 内部の部品・トリガー関数は API のロールから直接実行させない（Supabase は public の関数へ既定で EXECUTE を付けるため明示して外す）
 revoke all on function public.options_window_type_guard() from public, anon, authenticated, service_role;

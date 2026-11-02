@@ -22,15 +22,16 @@ import { truncMul, truncQuantity } from './standard-estimate-money';
 import type { StandardEstimatePricingResult, StandardEstimateSectionPricing, V25MissingUnit } from './standard-estimate-pricing';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from './standard-estimate-pricing';
 import type { ExteriorFaceSelection } from './exterior-wall';
-import type {
-  CatalogBundle,
-  EstimateSectionCode,
-  EstimateTemplateBundle,
-  OptionVariantChoice,
-  OptionVariantGroup,
-  PricingResult,
-  ProductOption,
-  SlotSelection,
+import {
+  FREE_PRODUCT_CATEGORY_CODE,
+  type CatalogBundle,
+  type EstimateSectionCode,
+  type EstimateTemplateBundle,
+  type OptionVariantChoice,
+  type OptionVariantGroup,
+  type PricingResult,
+  type ProductOption,
+  type SlotSelection,
 } from './types';
 
 type LineSection = Exclude<EstimateSectionCode, 'base'>;
@@ -155,6 +156,23 @@ export function v25StandardSlotSelections(view: StandardEstimateSaleView | null 
     option_id: slot.standard_option_id,
     variant_choice_ids: [...slot.standard_variant_choice_ids],
   }));
+}
+
+/**
+ * 保存したプランの明細を、カテゴリー単位の選択（slot_code なし）と、位置・用途の枠ごとの選択（slot_code つき）に分ける（v2.5 PR-S1）。
+ * 位置の行を商品の選択として混ぜると、同じ商品の 2 つの位置がまとまり、金額も版の枠の売価と照らせない
+ */
+export function splitConfigurationItems(
+  items: { option_id: string; variant_choice_ids?: string[] | null; slot_code?: string | null }[]
+): { optionIds: string[]; variantChoiceIds: string[]; slotSelections: SlotSelection[] } {
+  const categoryItems = items.filter((item) => !item.slot_code);
+  return {
+    optionIds: categoryItems.map((item) => item.option_id),
+    variantChoiceIds: categoryItems.flatMap((item) => item.variant_choice_ids ?? []),
+    slotSelections: items
+      .filter((item): item is typeof item & { slot_code: string } => Boolean(item.slot_code))
+      .map((item) => ({ slot_code: item.slot_code, option_id: item.option_id, variant_choice_ids: [...(item.variant_choice_ids ?? [])] })),
+  };
 }
 
 /** 位置の枠のあるカテゴリー（そのカテゴリーの商品は位置ごとに選び、カテゴリー単位では選ばない） */
@@ -529,13 +547,25 @@ export function computeSaleViewPricing(
     missing.set(v25UnitKey(view.revision_id, optionId, choiceIds), { revision_id: view.revision_id, option_id: optionId, choice_ids: choiceIds });
     return v25ApproxUnit(view, optionId, choiceIds);
   };
-  // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。区分は版のその枠の区分
-  const slotSection = new Map(v25PositionSlots(view).map((slot) => [slot.slot_code, slot.section_code] as const));
+  // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。版に無い位置（古い保存）は数えない。
+  // 区分は DB の estimate_section_for_option と同じく、選んだ商品のカテゴリーと別途工事の印で決める（枠の標準の商品の区分ではない）
+  const positionCodes = new Set(v25PositionSlots(view).map((slot) => slot.slot_code));
+  const slotOptionById = new Map(bundle.options.map((option) => [option.id, option] as const));
+  const slotCategoryCode = new Map(bundle.categories.map((category) => [category.id, category.code] as const));
   const slotTotals = new Map<LineSection, number>();
   let slotPor = false;
   for (const selection of v25 ? slotSelections : []) {
-    const section = slotSection.get(selection.slot_code);
-    if (!section) continue;
+    if (!positionCodes.has(selection.slot_code)) continue;
+    // 公開中でない商品の行は数えない（DB の configuration_money と同じ）
+    const option = slotOptionById.get(selection.option_id);
+    if (!option) continue;
+    const categoryCode = slotCategoryCode.get(option.category_id) ?? '';
+    const section: LineSection =
+      option.is_installation || categoryCode === FREE_PRODUCT_CATEGORY_CODE
+        ? 'sitework'
+        : INTERIOR_EXTERIOR_CATEGORY_CODES.has(categoryCode)
+          ? 'interior_exterior'
+          : 'option';
     const unit = unitOf(selection.option_id, selection.variant_choice_ids, selection.slot_code);
     if (unit === null) {
       slotPor = true;

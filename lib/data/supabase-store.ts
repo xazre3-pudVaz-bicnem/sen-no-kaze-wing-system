@@ -689,6 +689,10 @@ export class SupabaseStore implements DataStore {
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;
     if (!isMissingNamedFunction(atomic.error, 'save_configuration_atomic')) mapPgError(atomic.error);
+    // 位置ごとの選択（v2.5 PR-S1）は、古い保存の経路では持てない。黙って落とさずに止める（DB の更新の直後で関数の一覧が古いときも）
+    if ((input.slot_selections ?? []).length > 0) {
+      throw new StoreError('VALIDATION', '位置ごとの選択を保存できませんでした。時間をおいてもう一度保存してください。');
+    }
 
     // Temporary deployment compatibility: only a definitely missing RPC uses
     // the old save path. The fallback is allowed only when the requested state

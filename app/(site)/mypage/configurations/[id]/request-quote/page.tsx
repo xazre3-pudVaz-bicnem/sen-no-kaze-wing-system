@@ -9,6 +9,7 @@ import { todayInJapan } from '@/lib/data/case-flow/preferences-from-form';
 import { dealerServesArea } from '@/lib/domain/case-flow';
 import { getSimulatorSaleViews, resolvedV25ConfigurationPricing } from '@/lib/data/standard-estimate-sale-views';
 import { computePricing, formatYen } from '@/lib/domain/pricing';
+import { splitConfigurationItems } from '@/lib/domain/standard-estimate-sale-view';
 import { groupQuoteRequestLines } from '@/lib/domain/quote-request-line-groups';
 import { PRICE_DISCLAIMER } from '@/lib/site';
 import { Alert, Container, Section } from '@/components/ui';
@@ -52,8 +53,8 @@ export default async function RequestQuotePage({ params }: { params: Promise<{ i
   const pricing = sale.v25
     ? await resolvedV25ConfigurationPricing(bundle, sale.saleViews, {
         specCode: configuration.spec_code ?? null,
-        optionIds: items.map((i) => i.option_id),
-        variantChoiceIds: items.flatMap((i) => i.variant_choice_ids ?? []),
+        // 位置・用途の枠ごとの行（v2.5 PR-S1）は、カテゴリー単位の選択と分けて、その枠の売価で計算する
+        ...splitConfigurationItems(items),
         exteriorFaces,
       })
     : computePricing(

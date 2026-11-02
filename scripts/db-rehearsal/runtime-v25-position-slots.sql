@@ -84,6 +84,7 @@ declare
   s3 constant uuid := '29100000-0000-4000-8000-000000000503';
   s4 constant uuid := '29100000-0000-4000-8000-000000000504';
   s5 constant uuid := '29100000-0000-4000-8000-000000000505';
+  s6 constant uuid := '29100000-0000-4000-8000-000000000508';
   o1 constant uuid := '29100000-0000-4000-8000-000000000506';
   o2 constant uuid := '29100000-0000-4000-8000-000000000507';
   g_color constant uuid := '29100000-0000-4000-8000-000000000601';
@@ -96,6 +97,8 @@ declare
   v_master uuid;
   v_rev uuid;
   v_rev2 uuid;
+  v_rev3 uuid;
+  v_pin uuid;
   v_out text;
   v_view jsonb;
   v_money jsonb;
@@ -136,8 +139,11 @@ begin
     (s3, cat_sash, 'runtime-psl-s3', 'S1 サッシ3（選べる商品に入れない）', 50000, false, 'published', 'PRD-939003', false),
     (s4, cat_sash, 'runtime-psl-s4', 'S1 サッシ4（販売停止にする）', 45000, false, 'published', 'PRD-939004', false),
     (s5, cat_sash, 'runtime-psl-s5', 'S1 サッシ5（削除の確認）', 46000, false, 'published', 'PRD-939005', false),
+    (s6, cat_sash, 'runtime-psl-s6', 'S1 サッシ6（ホテル用）', 47000, false, 'published', 'PRD-939008', false),
     (o1, cat_opt, 'runtime-psl-o1', 'S1 設備1', 20000, false, 'published', 'PRD-939006', false),
     (o2, cat_opt, 'runtime-psl-o2', 'S1 設備2', 10000, false, 'published', 'PRD-939007', false);
+  -- サッシ6 はホテル用の仕様だけの商品（事務所用の標準見積の選べる商品にはできない）
+  update public.options set spec_codes = '{hotel}' where id = s6;
   insert into public.option_variant_groups (id, option_id, code, name, sort_order, is_required, status)
   values (g_color, s1, 'color', '色', 1, true, 'published'), (g_o2, o2, 'size', 'サイズ', 1, false, 'published');
   insert into public.option_variant_choices (id, group_id, code, name, kind, extra_price, status, sort_order)
@@ -421,6 +427,7 @@ begin
   -- ---------- 商品の安全な削除 ----------
   -- 下書きの版の選べる商品にだけ入っている商品（サッシ5）も、使っている商品として削除しない
   v_out := pg_temp.psl_run_as('authenticated', u_editor, format('select public.start_standard_estimate_v25_draft(%L, null)::text', v_master));
+  v_rev3 := v_out::uuid;
   perform pg_temp.psl_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, %s, %L::jsonb)).lock_version::text', v_out::uuid,
     (select lock_version from public.standard_estimate_revisions where id::text = v_out),
     pg_temp.psl_payload(jsonb_build_array(
@@ -455,6 +462,39 @@ begin
     pg_temp.psl_run_as('service_role', null, format($q$ select public.create_guest_plan(%L, %L, %L::jsonb)::text $q$,
       repeat('b', 64), m_model,
       jsonb_build_object('spec_code', 'office', 'slot_selections', jsonb_build_array(jsonb_build_object('slot_code', 'Bad Code', 'option_id', s1))))));
+
+  -- ---------- 仕様で選べない商品・原価の固定の引き継ぎ（独立レビューの指摘への対応） ----------
+  perform pg_temp.psl_expect_error('S1-54 この仕様（事務所用）で選べない商品は、選べる商品にできない', 'P0001', 'VALIDATION',
+    pg_temp.psl_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, %s, %L::jsonb)).lock_version::text', v_rev3,
+      (select lock_version from public.standard_estimate_revisions where id = v_rev3),
+      pg_temp.psl_payload(jsonb_build_array(
+        pg_temp.psl_slot(o1, '[]'::jsonb, null, null, '[]'::jsonb),
+        pg_temp.psl_slot(s1, jsonb_build_array(c_white), 'hakidashi', '掃出し窓', jsonb_build_array(s6)),
+        pg_temp.psl_slot(s1, jsonb_build_array(c_white), 'hiraki-3', '開き窓③', '[]'::jsonb),
+        pg_temp.psl_slot(s1, jsonb_build_array(c_black), 'hiraki-2', '開き窓②', '[]'::jsonb))))));
+  -- 下書きの開き窓② の黒は 4,000 円の原価差額に固定されている。原価差額を 5,000 円に改定した後、位置の識別子だけを変えて保存し直しても、
+  -- 同じ行（baseline_key）の同じ「商品＋選択肢」なので固定を引き継ぐ（v2.5 の「原価 Version は黙って更新しない」）
+  select bv.variant_cost_version_id into v_pin
+    from public.standard_estimate_revision_baseline_items bi
+    join public.standard_estimate_revision_baseline_variants bv on bv.baseline_item_id = bi.id
+   where bi.revision_id = v_rev3 and bi.slot_code = 'hiraki-2';
+  perform pg_temp.psl_run_as('authenticated', u_admin, format('select changed::text from public.set_option_variant_cost_adjustment(%L, 5000, %L, ''改定'')', c_black,
+    (select v.id from public.option_variant_cost_versions v where v.variant_choice_id = c_black and v.superseded_at is null)));
+  perform pg_temp.psl_run_as('authenticated', u_editor, format('select (public.save_standard_estimate_v25_draft(%L, %s, %L::jsonb)).lock_version::text', v_rev3,
+    (select lock_version from public.standard_estimate_revisions where id = v_rev3),
+    pg_temp.psl_payload(jsonb_build_array(
+      pg_temp.psl_slot(o1, '[]'::jsonb, null, null, '[]'::jsonb),
+      pg_temp.psl_slot(s1, jsonb_build_array(c_white), 'hakidashi', '掃出し窓', jsonb_build_array(s2)),
+      pg_temp.psl_slot(s1, jsonb_build_array(c_white), 'hiraki-3', '開き窓③', '[]'::jsonb),
+      pg_temp.psl_slot(s1, jsonb_build_array(c_black), 'hiraki-2b', '開き窓②', '[]'::jsonb)
+        || jsonb_build_object('baseline_key', (select bi.baseline_key from public.standard_estimate_revision_baseline_items bi
+                                                where bi.revision_id = v_rev3 and bi.slot_code = 'hiraki-2'))))));
+  perform pg_temp.psl_expect_eq('S1-55 位置の識別子だけを変えて保存し直しても、同じ行の原価の固定は変わらない（原価を改定した後でも）', 'true/true',
+    coalesce((select (bv.variant_cost_version_id = v_pin)::text
+       from public.standard_estimate_revision_baseline_items bi
+       join public.standard_estimate_revision_baseline_variants bv on bv.baseline_item_id = bi.id
+      where bi.revision_id = v_rev3 and bi.slot_code = 'hiraki-2b'), 'none') || '/' ||
+    (v_pin is not null)::text);
 end;
 $test$;
 

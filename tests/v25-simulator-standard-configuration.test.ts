@@ -322,9 +322,44 @@ describe('シミュレーターと連携する選択枠の数量（2026-10-29 �
     expect(migration).toContain('create function public.standard_estimate_v25_slot_rule_issues(p_revision_id uuid)');
     // カテゴリーは商品の今のカテゴリー（編集画面と同じ）。エアコンもシミュレーターは 1 つにまとめる
     expect(migration).toContain("      join public.options o on o.id = bi.option_id\n      join public.option_categories c on c.id = o.category_id");
-    expect(migration).toContain("(c.selection_mode = 'single' or c.code = 'aircon') as single_select");
-    expect(read('lib/data/standard-estimate-workspace.ts')).toContain("singleSelect: category?.selection_mode === 'single' || code === 'aircon',");
+    expect(migration).toContain(
+      "(c.selection_mode = 'single' or c.code in ('boiler', 'aircon', 'washbasin', 'toilet', 'kitchen')) as single_select"
+    );
+    expect(migration).toContain("case when o.code in ('washbasin-kb', 'faucet-kb') then 'washbasin-standard-set' else bi.id::text end as display_key");
+    expect(migration).toContain('having count(distinct s.display_key) > 1) x)');
+    const workspace = read('lib/data/standard-estimate-workspace.ts');
+    expect(workspace).toContain('singleSelect: category ? isSimulatorSingleProductCategory(category) : false,');
+    expect(workspace).toContain("displayGroup: isLegacyWashbasinOption(option) ? 'washbasin-standard-set' : null,");
     expect(migration).toContain("when (new.status = 'published' and old.status is distinct from 'published' and new.pricing_model = 'v2.5')");
     expect(migration).toContain('cross join lateral (select public.standard_estimate_v25_slot_rule_issues(r.id) as issues) x');
+  });
+
+  it('1 つだけ選べるカテゴリー・標準洗面セットの判定は、シミュレーターの商品の選択（#604）と DB で同じ一覧を使う', () => {
+    const migration = read('supabase/migrations/20261029100000_simulator_v25_pricing.sql');
+    const single = read('lib/domain/simulator-single-product-selection.ts').match(/SINGLE_PRODUCT_CATEGORY_CODES = new Set\(\[([^\]]+)\]\)/);
+    const sqlSingle = migration.match(/c\.code in \(([^)]+)\)\) as single_select/);
+    const codes = (text: string | undefined) => (text ?? '').split(',').map((code) => code.trim().replace(/^'|'$/g, '')).sort();
+    expect(codes(single?.[1])).toEqual(codes(sqlSingle?.[1]));
+    const washbasin = read('lib/domain/washbasin-selection.ts').match(/LEGACY_WASHBASIN_CODES = \[([^\]]+)\] as const/);
+    const sqlWashbasin = migration.match(/when o\.code in \(([^)]+)\) then 'washbasin-standard-set'/);
+    expect(codes(washbasin?.[1])).toEqual(codes(sqlWashbasin?.[1]));
+  });
+
+  it('標準洗面セット（洗面器＋混合水栓）の 2 枠は 1 つと数え、別々の 2 商品は止める（トイレなども同じ）', () => {
+    const set = new Map([
+      ['basin', { ...candidate('洗面器', 'washbasin', true), displayGroup: 'washbasin-standard-set' }],
+      ['faucet', { ...candidate('混合水栓', 'washbasin', true), displayGroup: 'washbasin-standard-set' }],
+      ['basin2', candidate('別の洗面器', 'washbasin', true)],
+      ['toilet', candidate('トイレA', 'toilet', true)],
+      ['toilet2', candidate('トイレB', 'toilet', true)],
+    ]);
+    const ofSet = (id: string) => set.get(id);
+    expect(v25SlotRuleIssues([{ option_id: 'basin', quantity: '1' }, { option_id: 'faucet', quantity: '1' }], ofSet)).toEqual([]);
+    expect(
+      v25SlotRuleIssues([{ option_id: 'basin', quantity: '1' }, { option_id: 'faucet', quantity: '1' }, { option_id: 'basin2', quantity: '1' }], ofSet)
+    ).toEqual(['1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「washbasin」']);
+    expect(v25SlotRuleIssues([{ option_id: 'toilet', quantity: '1' }, { option_id: 'toilet2', quantity: '1' }], ofSet)).toEqual([
+      '1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「toilet」',
+    ]);
   });
 });

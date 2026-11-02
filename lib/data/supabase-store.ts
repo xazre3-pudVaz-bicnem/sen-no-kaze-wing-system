@@ -33,6 +33,7 @@ import type {
   QuoteRequestStatus,
   ContactMessage,
   ContactStatus,
+  ContactClassification,
   SpecMatrix,
   MatrixRow,
 } from '@/lib/domain/types';
@@ -1034,9 +1035,14 @@ export class SupabaseStore implements DataStore {
   }
   async getNewContactMessageCount() {
     const db = await this.db();
-    const { count, error } = await db.from('contact_messages').select('*', { count: 'exact', head: true }).eq('status', 'new');
-    if (error) mapPgError(error);
-    return count ?? 0;
+    // migration適用前は旧カラムで集計。適用後は営業・迷惑を通常の未対応件数から除外。
+    const scoped = await db.from('contact_messages').select('*', { count: 'exact', head: true })
+      .eq('status', 'new').eq('classification', 'normal');
+    if (!scoped.error) return scoped.count ?? 0;
+    if (!['42703', 'PGRST204'].includes(scoped.error.code ?? '')) mapPgError(scoped.error);
+    const legacy = await db.from('contact_messages').select('*', { count: 'exact', head: true }).eq('status', 'new');
+    if (legacy.error) mapPgError(legacy.error);
+    return legacy.count ?? 0;
   }
   async assignQuoteDealer(id: string, dealerId: string | null) {
     const db = await this.db();
@@ -1432,6 +1438,13 @@ export class SupabaseStore implements DataStore {
     const db = await this.db();
     const { error } = await db.from('contact_messages').update({ status }).eq('id', id);
     if (error) mapPgError(error);
+  }
+  async updateContactClassification(id: string, classification: ContactClassification) {
+    const db = await this.db();
+    const { data, error } = await db.from('contact_messages')
+      .update({ classification }).eq('id', id).select('id').maybeSingle();
+    if (error) mapPgError(error);
+    if (!data) throw new StoreError('NOT_FOUND', 'お問い合わせが見つからないか、更新権限がありません');
   }
 
   async uploadImage(file: UploadInput, folder: string) {

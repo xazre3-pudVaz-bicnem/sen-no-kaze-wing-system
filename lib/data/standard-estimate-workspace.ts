@@ -8,6 +8,7 @@ import { ruleContextForSpec } from '@/lib/domain/estimate-template';
 import { defaultVariantIdsFor } from '@/lib/domain/preset';
 import { isQuoteSelectableProduct, productLedgerState } from '@/lib/domain/product-lifecycle';
 import type { PricingCalculationRule, PricingTaxRule } from '@/lib/domain/pricing-v25';
+import { isSimulatorSingleProductCategory } from '@/lib/domain/simulator-single-product-selection';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from '@/lib/domain/standard-estimate-pricing';
 import type { V25EditorState, V25Preview } from '@/lib/domain/standard-estimate-v25-view';
 import {
@@ -18,6 +19,7 @@ import {
   type V25WorkbenchPinnedCost,
 } from '@/lib/domain/standard-estimate-v25-workbench';
 import { FREE_PRODUCT_CATEGORY_CODE } from '@/lib/domain/types';
+import { isLegacyWashbasinOption } from '@/lib/domain/washbasin-selection';
 
 /**
  * 見積書管理 ＞ 標準見積（Excel 風の画面）の読み込み（2026-10-27 先方方針：この画面を v2.5 の標準見積の正式な編集画面にする）。
@@ -237,8 +239,10 @@ export async function loadStandardEstimateWorkspace(
         categoryId: option.category_id,
         categoryName: category?.name ?? '未分類',
         categoryCode: code,
-        // シミュレーターは「1 つだけ選べる」カテゴリーとエアコンを 1 つにまとめる（下書きの復元と同じ）
-        singleSelect: category?.selection_mode === 'single' || code === 'aircon',
+        // シミュレーターの商品の選択と同じ判定（「1 つだけ選べる」の設定か、給湯器・エアコン・洗面・トイレ・キッチン）
+        singleSelect: category ? isSimulatorSingleProductCategory(category) : false,
+        // 標準洗面セット（洗面器＋混合水栓）は、シミュレーターでは 1 つの表示商品
+        displayGroup: isLegacyWashbasinOption(option) ? 'washbasin-standard-set' : null,
         manufacturer: option.manufacturer ?? '',
         modelNo: option.model_no ?? '',
         section: option.is_installation || code === FREE_PRODUCT_CATEGORY_CODE ? 'sitework' : INTERIOR_EXTERIOR_CATEGORY_CODES.has(code) ? 'interior_exterior' : 'option',

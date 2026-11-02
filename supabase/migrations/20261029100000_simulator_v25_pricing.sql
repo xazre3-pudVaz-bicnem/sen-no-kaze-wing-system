@@ -503,7 +503,10 @@ comment on function public.get_public_v25_base_totals() is
 -- * 外壁は front / right / back / left の 4 面を個別に変えられるので、外壁の選択枠は数量 4（面）
 -- * それ以外の選択枠は数量 1。お客様が個別に変えるもの（サッシ①・②など）は選択対象ごとに別の選択枠にし、
 --   お客様が個別に選ばない数量の明細は、選択枠ではなく明細にする（数量 2 以上の選択枠は、具体例が出たときに改めて決める）
--- * 1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターは 1 つしか選べないので、標準構成を再現できない。エアコンもシミュレーターは 1 つにまとめる）
+-- * 1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターは 1 つしか選べないので、標準構成を再現できない）
+--   1 つだけ選べるカテゴリーは、シミュレーターの商品の選択と同じ判定（lib/domain/simulator-single-product-selection.ts）：
+--   「1 つだけ選べる」の設定か、給湯器・エアコン・洗面・トイレ・キッチン
+--   洗面の標準洗面セット（洗面器＋混合水栓。lib/domain/washbasin-selection.ts）は、シミュレーターと同じく 1 つと数える
 -- 公開中の版の選択枠をシミュレーターの初期構成にするため、標準構成のままなら公開した版の標準価格になるよう、公開とスイッチで確かめる。
 -- カテゴリーは商品の今のカテゴリーで見る（保存したときの写しではなく、編集画面の表示と同じ）。
 -- 問題が無ければ null、あれば内容の文。内部の部品
@@ -515,7 +518,8 @@ set search_path = ''
 as $slot_rules$
   with slots as (
     select bi.option_name_snapshot as name, bi.quantity, c.id as category_id, c.name as category_name, c.code as category_code,
-           (c.selection_mode = 'single' or c.code = 'aircon') as single_select
+           (c.selection_mode = 'single' or c.code in ('boiler', 'aircon', 'washbasin', 'toilet', 'kitchen')) as single_select,
+           case when o.code in ('washbasin-kb', 'faucet-kb') then 'washbasin-standard-set' else bi.id::text end as display_key
       from public.standard_estimate_revision_baseline_items bi
       join public.options o on o.id = bi.option_id
       join public.option_categories c on c.id = o.category_id
@@ -532,12 +536,12 @@ as $slot_rules$
                from slots s
               where s.single_select
               group by s.category_id, s.category_name
-             having count(*) > 1) x)
+             having count(distinct s.display_key) > 1) x)
   ), '');
 $slot_rules$;
 
 comment on function public.standard_estimate_v25_slot_rule_issues(uuid) is
-  'v2.5 の版の選択枠が、シミュレーターと連携する決まり（外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリー・エアコンは 1 枠。カテゴリーは商品の今のカテゴリー）に合うか。合わなければ内容の文。内部の部品。';
+  'v2.5 の版の選択枠が、シミュレーターと連携する決まり（外壁は数量 4、それ以外は数量 1、シミュレーターで 1 つだけ選べるカテゴリー（設定・給湯器・エアコン・洗面・トイレ・キッチン）は 1 枠。標準洗面セットは 1 つと数える。カテゴリーは商品の今のカテゴリー）に合うか。合わなければ内容の文。内部の部品。';
 
 -- v2.5 の版の公開で確かめる（公開した版は変えられないため。スイッチが入った後に公開する版も同じ）
 create function public.standard_estimate_v25_publish_slot_rule_guard()

@@ -82,6 +82,8 @@ declare
   v_choice uuid;
   v_wall_cat uuid;
   v_aircon_cat uuid;
+  v_toilet_cat uuid;
+  v_washbasin_cat uuid;
 begin
   set local session_replication_role = replica;
   insert into auth.users (id, email, raw_user_meta_data)
@@ -345,6 +347,43 @@ begin
   perform pg_temp.svp_expect_eq('エアコンのカテゴリーに選択枠が 2 つある標準見積があると、スイッチを入れられない（複数選べる設定でも）', 'true',
     (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「%')::text);
   set local session_replication_role = replica;
+  -- トイレもシミュレーターは 1 つだけ選べる（#604）ので、「複数選べる」設定でも選択枠は 1 つ（試験のため、商品1・2 をトイレのカテゴリーへ移して確かめる）
+  select id into v_toilet_cat from public.option_categories where code = 'toilet';
+  if v_toilet_cat is null then
+    insert into public.option_categories (id, code, name, selection_mode, status) values ('29000000-0000-4000-8000-000000000404', 'toilet', 'トイレ（検査）', 'multi', 'published');
+    v_toilet_cat := '29000000-0000-4000-8000-000000000404';
+  end if;
+  update public.option_categories set selection_mode = 'multi' where id = v_toilet_cat;
+  update public.options set category_id = v_toilet_cat where id in (p1, p2);
+  set local session_replication_role = origin;
+  v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
+  perform pg_temp.svp_expect_eq('トイレのカテゴリーに選択枠が 2 つある標準見積があると、スイッチを入れられない（シミュレーターが 1 つだけ選べるカテゴリー。複数選べる設定でも）', 'true',
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「%')::text);
+  set local session_replication_role = replica;
+  -- 洗面：別々の 2 商品の選択枠は止める。標準洗面セット（洗面器 washbasin-kb＋混合水栓 faucet-kb）の 2 つの選択枠は、
+  -- シミュレーターと同じく 1 つの表示商品と数えて止めない（試験のため、商品1・2 を洗面のカテゴリーへ移し、コードを一時的に変えて確かめる）
+  select id into v_washbasin_cat from public.option_categories where code = 'washbasin';
+  if v_washbasin_cat is null then
+    insert into public.option_categories (id, code, name, selection_mode, status) values ('29000000-0000-4000-8000-000000000405', 'washbasin', '洗面（検査）', 'multi', 'published');
+    v_washbasin_cat := '29000000-0000-4000-8000-000000000405';
+  end if;
+  update public.option_categories set selection_mode = 'multi' where id = v_washbasin_cat;
+  update public.options set category_id = v_washbasin_cat where id in (p1, p2);
+  set local session_replication_role = origin;
+  v_out := pg_temp.svp_run_as('authenticated', u_admin, 'select public.set_simulator_standard_pricing(true)::text');
+  perform pg_temp.svp_expect_eq('洗面のカテゴリーに別々の商品の選択枠が 2 つある標準見積があると、スイッチを入れられない', 'true',
+    (v_out like 'ERROR P0001: VALIDATION: シミュレーターの選択枠の決まりに合わない標準見積%1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：「%')::text);
+  perform pg_temp.svp_expect_eq('検査の DB には標準洗面セットのコードの商品が無い（この検査で一時的に使う）', '0',
+    (select count(*)::text from public.options where code in ('washbasin-kb', 'faucet-kb')));
+  set local session_replication_role = replica;
+  update public.options set code = 'washbasin-kb' where id = p1;
+  update public.options set code = 'faucet-kb' where id = p2;
+  set local session_replication_role = origin;
+  perform pg_temp.svp_expect_eq('標準洗面セット（洗面器＋混合水栓）の 2 つの選択枠は 1 つと数え、選択枠の決まりに合う', '',
+    coalesce(public.standard_estimate_v25_slot_rule_issues(v_rev), ''));
+  set local session_replication_role = replica;
+  update public.options set code = 'runtime-svp-p1' where id = p1;
+  update public.options set code = 'runtime-svp-p2' where id = p2;
   update public.options set category_id = cat_opt where id in (p1, p2);
   set local session_replication_role = origin;
   perform pg_temp.svp_expect_eq('有効な標準見積がすべて v2.5 なら、本部はスイッチを入れられる', 'true',

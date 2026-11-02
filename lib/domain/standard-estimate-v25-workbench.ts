@@ -21,6 +21,11 @@ export interface V25WorkbenchCandidate extends V25ProductCandidate {
   categoryCode: string;
   /** 1 つだけ選べるカテゴリー（シミュレーターで 1 つしか選べない） */
   singleSelect: boolean;
+  /**
+   * シミュレーターで 1 つの表示商品にまとめる商品の組（標準洗面セットの洗面器＋混合水栓）。
+   * 1 つだけ選べるカテゴリーの選択枠を数えるとき、同じ組は 1 つと数える（DB の standard_estimate_v25_slot_rule_issues と同じ）
+   */
+  displayGroup?: string | null;
   manufacturer: string;
   modelNo: string;
   /** 新しく入れるときの選択肢（選択項目 → 標準の選択肢） */
@@ -80,23 +85,27 @@ export function v25SlotRuleIssues(
   slots: Pick<V25SlotRow, 'option_id' | 'quantity'>[],
   candidateOf: (
     optionId: string
-  ) => Pick<V25WorkbenchCandidate, 'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'unavailable'> | undefined
+  ) =>
+    | Pick<V25WorkbenchCandidate, 'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'displayGroup' | 'unavailable'>
+    | undefined
 ): string[] {
   const wall: string[] = [];
   const other: string[] = [];
-  const singles = new Map<string, { name: string; count: number }>();
-  for (const slot of slots) {
+  const singles = new Map<string, { name: string; keys: Set<string> }>();
+  slots.forEach((slot, index) => {
     const candidate = candidateOf(slot.option_id);
     // この仕様で選べなくなった商品の行は、削除してから保存する（別の案内を出す）
-    if (!candidate || candidate.unavailable) continue;
+    if (!candidate || candidate.unavailable) return;
     const want = standardSlotQuantity(candidate.categoryCode);
     if (Number(slot.quantity.trim()) !== want) (want === 4 ? wall : other).push(`「${candidate.name}」`);
     if (candidate.singleSelect) {
-      const row = singles.get(candidate.categoryId) ?? { name: candidate.categoryName, count: 0 };
-      singles.set(candidate.categoryId, { ...row, count: row.count + 1 });
+      const row = singles.get(candidate.categoryId) ?? { name: candidate.categoryName, keys: new Set<string>() };
+      // 標準洗面セット（洗面器＋混合水栓）は、シミュレーターと同じく 1 つと数える
+      row.keys.add(candidate.displayGroup ?? `slot-${index}`);
+      singles.set(candidate.categoryId, row);
     }
-  }
-  const doubled = [...singles.values()].filter((row) => row.count > 1).map((row) => `「${row.name}」`);
+  });
+  const doubled = [...singles.values()].filter((row) => row.keys.size > 1).map((row) => `「${row.name}」`);
   return [
     ...(wall.length > 0 ? [`外壁の選択枠は数量 4（面）にしてください：${wall.join('・')}`] : []),
     ...(other.length > 0

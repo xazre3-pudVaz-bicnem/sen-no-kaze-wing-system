@@ -5,6 +5,7 @@
  *   2. 未ログイン（anon）が実行できる SECURITY DEFINER 関数は許可リストの範囲だけ
  *   3. SECURITY DEFINER 関数は search_path を固定している
  *   4. アプリの Supabase 呼び出し（RPC／テーブル／列）が DB と一致している
+ *   5. SECURITY DEFINER のトリガー関数は、anon・authenticated・service_role から直接実行できない
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -79,6 +80,17 @@ export function evaluate(schema, repo = REPO) {
       }
     }
     if (issues.length) failures.push({ check: 'legacy-price-columns', message: `旧価格の列の権限・一覧の不一致 ${issues.length} 件`, details: issues });
+  }
+
+  // トリガー関数の EXECUTE はトリガーを作るときだけ確かめられ、トリガーが動くときには要らない。
+  // SECURITY DEFINER のトリガー関数に API のロールの EXECUTE を残さない（20261016113000・20261016114000 で閉じたものを戻さない）
+  const triggerOpen = schema.signatures.filter((f) => f.ret === 'trigger' && f.secdef && (f.anon || f.authenticated || f.service_role));
+  if (triggerOpen.length) {
+    failures.push({
+      check: 'trigger-execute',
+      message: `API のロールから直接実行できる SECURITY DEFINER のトリガー関数: ${[...new Set(triggerOpen.map((f) => f.name))].join(', ')}`,
+      hint: '新しいトリガー関数は `revoke execute on function ... from public, anon, authenticated, service_role` で既定の EXECUTE を外す（create or replace は権限を引き継ぐが、drop して作り直すと既定権限に戻る）。',
+    });
   }
 
   const noSearchPath = callable.filter((f) => f.secdef && !(f.config ?? []).some((c) => c.startsWith('search_path=')));

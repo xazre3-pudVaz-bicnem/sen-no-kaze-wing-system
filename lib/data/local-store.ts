@@ -33,6 +33,7 @@ import type {
   QuoteRequest,
   ContactMessage,
   ContactStatus,
+  ContactClassification,
   SpecMatrix,
   MatrixRow,
 } from '@/lib/domain/types';
@@ -1655,7 +1656,7 @@ export class LocalStore implements DataStore {
     return this.read((db) => db.configurations.length);
   }
   async getNewContactMessageCount() {
-    return this.read((db) => db.contactMessages.filter((message) => message.status === 'new').length);
+    return this.read((db) => db.contactMessages.filter((message) => message.status === 'new' && (message.classification ?? 'normal') === 'normal').length);
   }
   async assignQuoteDealer(id: string, dealerId: string | null, actor: SessionUser) {
     return this.mutate((db) => {
@@ -2380,6 +2381,7 @@ export class LocalStore implements DataStore {
         attachment_path,
         attachment_name: input.attachment?.fileName ?? null,
         status: 'new',
+        classification: 'normal',
         created_at: nowIso(),
       };
       db.contactMessages.push(row);
@@ -2395,13 +2397,22 @@ export class LocalStore implements DataStore {
     });
   }
   async listContactMessages() {
-    return this.read((db) => [...db.contactMessages].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+    return this.read((db) => db.contactMessages
+      .map((message) => ({ ...message, classification: message.classification ?? 'normal' as const }))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at)));
   }
   async updateContactStatus(id: string, status: ContactStatus) {
     this.mutate((db) => {
       const m = db.contactMessages.find((x) => x.id === id);
       if (!m) throw new StoreError('NOT_FOUND', 'お問い合わせが見つかりません');
       m.status = status;
+    });
+  }
+  async updateContactClassification(id: string, classification: ContactClassification) {
+    this.mutate((db) => {
+      const m = db.contactMessages.find((x) => x.id === id);
+      if (!m) throw new StoreError('NOT_FOUND', 'お問い合わせが見つかりません');
+      m.classification = classification;
     });
   }
 

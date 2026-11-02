@@ -967,12 +967,30 @@ export async function updateContactStatusAction(_prev: AdminFormState, formData:
   await requireAdmin();
   const id = String(formData.get('id') ?? '');
   const status = String(formData.get('status') ?? '');
-  if (!id || (status !== 'new' && status !== 'handled')) return { ok: false, error: '入力内容が正しくありません' };
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !['new', 'in_progress', 'handled'].includes(status)) return { ok: false, error: '入力内容が正しくありません' };
   try {
     const store = await getStore();
-    await store.updateContactStatus(id, status);
+    await store.updateContactStatus(id, status as 'new' | 'in_progress' | 'handled');
     revalidatePath('/admin/contacts');
     return { ok: true, message: '更新しました' };
+  } catch (e) {
+    return errState(e);
+  }
+}
+
+/** 本部だけが営業・迷惑を手動で分類できる。勝手に削除しない。 */
+export async function updateContactClassificationAction(_prev: AdminFormState, formData: FormData): Promise<AdminFormState> {
+  await requireAdmin();
+  const id = String(formData.get('id') ?? '');
+  const classification = String(formData.get('classification') ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !['normal', 'sales', 'spam'].includes(classification)) {
+    return { ok: false, error: '入力内容が正しくありません' };
+  }
+  try {
+    const store = await getStore();
+    await store.updateContactClassification(id, classification as 'normal' | 'sales' | 'spam');
+    revalidatePath('/admin/contacts');
+    return { ok: true, message: '分類を更新しました' };
   } catch (e) {
     return errState(e);
   }

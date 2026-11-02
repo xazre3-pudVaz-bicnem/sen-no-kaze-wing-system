@@ -33,6 +33,7 @@ import type {
   RoleCode,
   ContactMessage,
   ContactStatus,
+  ContactClassification,
   EstimateTemplate,
   EstimateTemplateBundle,
   EstimateTemplateLine,
@@ -626,6 +627,7 @@ export interface DataStore {
   createContactMessage(input: ContactInput): Promise<ContactMessage>;
   listContactMessages(): Promise<ContactMessage[]>;
   updateContactStatus(id: string, status: ContactStatus): Promise<void>;
+  updateContactClassification(id: string, classification: ContactClassification): Promise<void>;
 }
 
 function hasSupabaseEnv(): boolean {

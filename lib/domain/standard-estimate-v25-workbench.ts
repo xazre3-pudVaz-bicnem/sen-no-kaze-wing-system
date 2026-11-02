@@ -77,41 +77,73 @@ export function standardSlotQuantity(categoryCode: string): number {
   return categoryCode === 'exterior-wall' ? 4 : 1;
 }
 
+/** 位置・用途の選択枠を作れないカテゴリー（外壁は 4 面の専用の仕組み、防火仕様は版で決まる。DB と同じ） */
+const NO_POSITION_SLOT_CATEGORY_CODES = new Set(['exterior-wall', 'fireproof']);
+
 /**
  * 選択枠がシミュレーターと連携する決まりに合わない内容（公開できない理由。DB の standard_estimate_v25_slot_rule_issues と同じ決まり）。
- * 外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーの選択枠は 1 つ（シミュレーターで標準構成を再現できるようにするため）
+ * 外壁は数量 4、それ以外は数量 1、1 つだけ選べるカテゴリーのカテゴリー単位の選択枠は 1 つ（シミュレーターで標準構成を再現できるようにするため）。
+ * 位置・用途の選択枠（v2.5 PR-S1）：外壁・防火仕様には作らない、カテゴリー単位の枠と同じカテゴリーに混ぜない、
+ * 1 つだけ選べるカテゴリーでも位置ごとに 1 つ選ぶので何枠でもよい、選べる商品は同じカテゴリーの販売中の商品
  */
 export function v25SlotRuleIssues(
-  slots: Pick<V25SlotRow, 'option_id' | 'quantity'>[],
+  slots: (Pick<V25SlotRow, 'option_id' | 'quantity'> & Partial<Pick<V25SlotRow, 'slot_code' | 'selectable_option_ids'>>)[],
   candidateOf: (
     optionId: string
   ) =>
-    | Pick<V25WorkbenchCandidate, 'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'displayGroup' | 'unavailable'>
+    | (Pick<V25WorkbenchCandidate, 'name' | 'categoryId' | 'categoryName' | 'categoryCode' | 'singleSelect' | 'displayGroup' | 'unavailable'> & {
+        retired?: boolean;
+      })
     | undefined
 ): string[] {
   const wall: string[] = [];
   const other: string[] = [];
+  const noPosition: string[] = [];
+  const badSelectable: string[] = [];
   const singles = new Map<string, { name: string; keys: Set<string> }>();
+  const kinds = new Map<string, { name: string; category: boolean; position: boolean }>();
   slots.forEach((slot, index) => {
     const candidate = candidateOf(slot.option_id);
     // この仕様で選べなくなった商品の行は、削除してから保存する（別の案内を出す）
     if (!candidate || candidate.unavailable) return;
+    const position = Boolean(slot.slot_code?.trim());
     const want = standardSlotQuantity(candidate.categoryCode);
     if (Number(slot.quantity.trim()) !== want) (want === 4 ? wall : other).push(`「${candidate.name}」`);
-    if (candidate.singleSelect) {
+    if (position && NO_POSITION_SLOT_CATEGORY_CODES.has(candidate.categoryCode)) noPosition.push(`「${candidate.name}」`);
+    const kind = kinds.get(candidate.categoryId) ?? { name: candidate.categoryName, category: false, position: false };
+    kinds.set(candidate.categoryId, { ...kind, category: kind.category || !position, position: kind.position || position });
+    if (candidate.singleSelect && !position) {
       const row = singles.get(candidate.categoryId) ?? { name: candidate.categoryName, keys: new Set<string>() };
       // 標準洗面セット（洗面器＋混合水栓）は、シミュレーターと同じく 1 つと数える
       row.keys.add(candidate.displayGroup ?? `slot-${index}`);
       singles.set(candidate.categoryId, row);
     }
+    if (position) {
+      for (const id of slot.selectable_option_ids ?? []) {
+        if (id === slot.option_id) continue;
+        const alternative = candidateOf(id);
+        if (!alternative || alternative.unavailable || alternative.retired || alternative.categoryId !== candidate.categoryId) {
+          badSelectable.push(`「${alternative?.name ?? '選べない商品'}」`);
+        }
+      }
+    }
   });
   const doubled = [...singles.values()].filter((row) => row.keys.size > 1).map((row) => `「${row.name}」`);
+  const mixed = [...kinds.values()].filter((row) => row.category && row.position).map((row) => `「${row.name}」`);
+  const unique = (values: string[]) => [...new Set(values)];
   return [
     ...(wall.length > 0 ? [`外壁の選択枠は数量 4（面）にしてください：${wall.join('・')}`] : []),
     ...(other.length > 0
       ? [`外壁以外の選択枠は数量 1 にしてください（個別に変えるものは選択枠を分け、個別に選ばない数量は明細にします）：${other.join('・')}`]
       : []),
-    ...(doubled.length > 0 ? [`1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：${doubled.join('・')}`] : []),
+    ...(noPosition.length > 0 ? [`外壁・防火仕様には位置・用途の選択枠を作れません：${unique(noPosition).join('・')}`] : []),
+    ...(mixed.length > 0 ? [`カテゴリー単位の選択枠と位置・用途の選択枠を、同じカテゴリーに混ぜられません：${mixed.join('・')}`] : []),
+    ...(doubled.length > 0
+      ? [`1 つだけ選べるカテゴリーの選択枠は 1 つにしてください：${doubled.join('・')}（位置ごとに分けるときは、位置・用途の選択枠にします）`]
+      : []),
+    ...(badSelectable.length > 0
+      ? [`選べる商品は、その枠の標準の商品と同じカテゴリーの、公開中で販売停止・廃番でない商品にしてください：${unique(badSelectable).join('・')}`]
+      : []),
   ];
 }
 

@@ -75,9 +75,9 @@ const initial: V25EditorState = {
   adjustment: '0',
   adjustment_reason: '',
   slots: [
-    { key: 'slot-b1', baseline_key: 'b1', option_id: 'p1', variant_choices: { g1: 'c2' }, quantity: '2', price_mode: 'auto', manual_unit_price: '' },
-    { key: 'slot-b2', baseline_key: 'b2', option_id: 'p2', variant_choices: {}, quantity: '1', price_mode: 'auto', manual_unit_price: '' },
-    { key: 'slot-b3', baseline_key: 'b3', option_id: 'p3', variant_choices: {}, quantity: '3', price_mode: 'manual', manual_unit_price: '9000' },
+    { key: 'slot-b1', baseline_key: 'b1', option_id: 'p1', variant_choices: { g1: 'c2' }, quantity: '2', price_mode: 'auto', manual_unit_price: '', slot_code: '', slot_label: '', selectable_option_ids: [] },
+    { key: 'slot-b2', baseline_key: 'b2', option_id: 'p2', variant_choices: {}, quantity: '1', price_mode: 'auto', manual_unit_price: '', slot_code: '', slot_label: '', selectable_option_ids: [] },
+    { key: 'slot-b3', baseline_key: 'b3', option_id: 'p3', variant_choices: {}, quantity: '3', price_mode: 'manual', manual_unit_price: '9000', slot_code: '', slot_label: '', selectable_option_ids: [] },
   ],
   lines: [
     {
@@ -139,7 +139,7 @@ describe('Excel 風の画面の試算（v2.5 の正式計算と同じ入力）',
   it('別途工事の商品を自動にすると計算できない（DB の保存でも止まる）', () => {
     const state: V25EditorState = {
       ...initial,
-      slots: [...initial.slots, { key: 'slot-n1', baseline_key: null, option_id: 'p5', variant_choices: {}, quantity: '1', price_mode: 'auto', manual_unit_price: '' }],
+      slots: [...initial.slots, { key: 'slot-n1', baseline_key: null, option_id: 'p5', variant_choices: {}, quantity: '1', price_mode: 'auto', manual_unit_price: '', slot_code: '', slot_label: '', selectable_option_ids: [] }],
     };
     const calc = calculateV25Workbench(rule, taxRule, state, baseLines, { ...costs, currentProduct: { ...costs.currentProduct, p5: 10_000 } }, sectionOf);
     expect(calc.result).toBeNull();
@@ -237,7 +237,7 @@ describe('Excel 風の画面（描画）', () => {
           ...candidates,
           { id: 'p8', name: '下書きに戻した商品', categoryId: '', categoryName: '設備', categoryCode: '', singleSelect: false, manufacturer: '', modelNo: '', section: 'option', retired: true, unavailable: true, variantGroups: [], defaultChoices: {} },
         ],
-        initial: { ...initial, slots: [...initial.slots, { key: 'slot-b8', baseline_key: 'b8', option_id: 'p8', variant_choices: {}, quantity: '1', price_mode: 'manual', manual_unit_price: '1000' }] },
+        initial: { ...initial, slots: [...initial.slots, { key: 'slot-b8', baseline_key: 'b8', option_id: 'p8', variant_choices: {}, quantity: '1', price_mode: 'manual', manual_unit_price: '1000', slot_code: '', slot_label: '', selectable_option_ids: [] }] },
         costs,
         rule,
         taxRule,

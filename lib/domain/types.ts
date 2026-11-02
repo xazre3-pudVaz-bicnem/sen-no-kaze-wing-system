@@ -169,8 +169,31 @@ export interface OptionCategory {
   is_required: boolean;
   /** false ならシミュレーターに出さない（台帳・代理店の見積編集では使える）。サッシは本体に含めるため非表示 */
   customer_visible: boolean;
+  /** 商品に窓タイプ（window_types）を設定するカテゴリー（サッシ。20261102100000。migration 前は未取得＝使わない） */
+  uses_window_type?: boolean;
   sort_order: number;
   status: PublishStatus;
+}
+
+/**
+ * 窓タイプ（サッシの商品の開閉形式。FIX窓・引違い窓・縦すべり出し窓・横すべり出し窓など。2026-10-30 先方回答）。
+ * 商品ごとに 1 つ（ProductOption.window_type_code）。「掃出し窓」などの用途・形状は入れない
+ */
+export interface WindowType {
+  code: string;
+  label: string;
+  sort_order: number;
+  status: 'active' | 'retired';
+}
+
+/**
+ * 標準見積の版の位置・用途の選択枠（slot_code）ごとの、お客様の選択（v2.5 PR-S1）。
+ * 保存したプランの明細の 1 行（configuration_items.slot_code）になる
+ */
+export interface SlotSelection {
+  slot_code: string;
+  option_id: string;
+  variant_choice_ids: string[];
 }
 
 /**
@@ -384,6 +407,8 @@ export interface ProductOption {
   archived_at?: string | null;
   /** 廃番の日時（20261016112000。廃番は販売停止の商品だけ）。原則再開しない。本部の管理者が理由を記録して取り消すと販売停止に戻る */
   discontinued_at?: string | null;
+  /** サッシの商品の窓タイプ（window_types.code。20261102100000。窓タイプを使うカテゴリーの商品だけ・任意） */
+  window_type_code?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -547,6 +572,11 @@ export interface ConfigurationItem {
   quantity: number;
   /** 選ばれたバリエーション（壁色・扉色など） */
   variant_choice_ids: string[];
+  /**
+   * 標準見積の版の位置・用途の選択枠（v2.5 PR-S1。20261102100000）。null・未取得はカテゴリー単位の選択（これまでどおり）。
+   * 位置の枠ごとに 1 行なので、同じ商品が別の位置で複数行になることがある
+   */
+  slot_code?: string | null;
 }
 
 export interface ConfigurationSnapshot {

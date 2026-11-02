@@ -186,6 +186,10 @@ function WorkbenchBody({
             quantity,
             price_mode: priceMode,
             manual_unit_price: '',
+            // 位置・用途の選択枠（v2.5 PR-S1）。新しい行はカテゴリー単位の枠から始める
+            slot_code: '',
+            slot_label: '',
+            selectable_option_ids: [],
           },
         ],
       }));

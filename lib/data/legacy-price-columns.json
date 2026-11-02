@@ -33,7 +33,8 @@
       "power_spec",
       "price_unit",
       "list_price_unit",
-      "discontinued_at"
+      "discontinued_at",
+      "window_type_code"
     ],
     "price": [
       "price"

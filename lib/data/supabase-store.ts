@@ -683,6 +683,8 @@ export class SupabaseStore implements DataStore {
       p_site_location_undecided: undecided,
       // 同時編集の検知。既存 Draft の保存で版が一致しなければ DB が LOCKED で拒否する
       p_expected_lock_version: input.expected_lock_version ?? null,
+      // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。位置の選択があるときだけ渡す（20261102100000 が無い DB でも、これまでの保存は動く）
+      ...(input.slot_selections && input.slot_selections.length > 0 ? { p_slot_selections: input.slot_selections } : {}),
     };
     const atomic = await db.rpc('save_configuration_atomic', atomicInput);
     if (!atomic.error) return atomic.data as Configuration;

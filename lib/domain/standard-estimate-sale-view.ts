@@ -22,7 +22,16 @@ import { truncMul, truncQuantity } from './standard-estimate-money';
 import type { StandardEstimatePricingResult, StandardEstimateSectionPricing, V25MissingUnit } from './standard-estimate-pricing';
 import { INTERIOR_EXTERIOR_CATEGORY_CODES } from './standard-estimate-pricing';
 import type { ExteriorFaceSelection } from './exterior-wall';
-import type { CatalogBundle, EstimateSectionCode, EstimateTemplateBundle, OptionVariantChoice, OptionVariantGroup, PricingResult, ProductOption } from './types';
+import type {
+  CatalogBundle,
+  EstimateSectionCode,
+  EstimateTemplateBundle,
+  OptionVariantChoice,
+  OptionVariantGroup,
+  PricingResult,
+  ProductOption,
+  SlotSelection,
+} from './types';
 
 type LineSection = Exclude<EstimateSectionCode, 'base'>;
 
@@ -85,6 +94,9 @@ export interface StandardEstimateSaleView {
     unit_price: number | null;
     amount: number | null;
     is_por: boolean;
+    /** v2.5 PR-S1：選択枠の明細の商品と位置（工事費などの明細は null。位置の無い選択枠は slot_code が null） */
+    option_id?: string | null;
+    slot_code?: string | null;
   }>;
   baseline: Array<{
     option_id: string;
@@ -97,7 +109,57 @@ export interface StandardEstimateSaleView {
     variant_extra: number;
     /** v2.5：版の選択枠の金額（未確定は null） */
     amount?: number | null;
+    /** v2.5 PR-S1：位置・用途の選択枠（null・未取得はカテゴリー単位の選択枠） */
+    slot_code?: string | null;
+    slot_label?: string | null;
+    category_id?: string | null;
+    /** v2.5 PR-S1：位置の枠で選べる商品（標準の商品が先頭）。カテゴリー単位の枠は null */
+    selectable_option_ids?: string[] | null;
   }>;
+}
+
+/** v2.5 PR-S1：版の位置・用途の選択枠（シミュレーターで位置ごとに 1 つ選ぶ） */
+export interface V25PositionSlot {
+  slot_code: string;
+  slot_label: string;
+  section_code: LineSection;
+  category_id: string | null;
+  /** 標準の商品と選択肢（標準のままなら公開した版のその枠の売価） */
+  standard_option_id: string;
+  standard_variant_choice_ids: string[];
+  /** 選べる商品（標準の商品が先頭。指定が無ければ標準の商品だけ） */
+  selectable_option_ids: string[];
+}
+
+/** 版の位置・用途の選択枠（無ければ空。v2.5 でなければ空） */
+export function v25PositionSlots(view: StandardEstimateSaleView | null | undefined): V25PositionSlot[] {
+  if (!view || !isV25SaleView(view)) return [];
+  return view.baseline
+    .filter((item): item is typeof item & { slot_code: string } => typeof item.slot_code === 'string' && item.slot_code !== '')
+    .map((item) => ({
+      slot_code: item.slot_code,
+      slot_label: item.slot_label ?? item.slot_code,
+      section_code: item.section_code,
+      category_id: item.category_id ?? null,
+      standard_option_id: item.option_id,
+      standard_variant_choice_ids: item.variant_choice_ids,
+      selectable_option_ids:
+        item.selectable_option_ids && item.selectable_option_ids.length > 0 ? item.selectable_option_ids : [item.option_id],
+    }));
+}
+
+/** 版の位置の枠を、すべて標準の商品・選択肢で選んだ状態（シミュレーターの標準構成の位置の分） */
+export function v25StandardSlotSelections(view: StandardEstimateSaleView | null | undefined): SlotSelection[] {
+  return v25PositionSlots(view).map((slot) => ({
+    slot_code: slot.slot_code,
+    option_id: slot.standard_option_id,
+    variant_choice_ids: [...slot.standard_variant_choice_ids],
+  }));
+}
+
+/** 位置の枠のあるカテゴリー（そのカテゴリーの商品は位置ごとに選び、カテゴリー単位では選ばない） */
+export function v25PositionSlotCategoryIds(view: StandardEstimateSaleView | null | undefined): Set<string> {
+  return new Set(v25PositionSlots(view).map((slot) => slot.category_id).filter((id): id is string => Boolean(id)));
 }
 
 /** v2.5 の標準見積か（v2.5 PR-C1） */
@@ -123,17 +185,24 @@ export function v25PriceKey(table: { groups: string[][] }, choiceIds: string[]):
 /**
  * v2.5 の「商品＋選択肢」の売価単価（DB の standard_estimate_v25_selection_unit と同じ決まり）。null は価格未確定。
  * 版の選択枠と同じ「商品＋選択肢」は公開した版の売価、それ以外は売価の表。
+ * 位置・用途の枠（slotCode）はその枠の標準とだけ、カテゴリー単位（null・未指定）はカテゴリー単位の枠とだけ照らす（v2.5 PR-S1）。
  * undefined は、組み合わせが多い商品（partial）で表に無く、まだサーバーで計算していない組み合わせ
  */
 export function v25SelectionUnit(
   view: StandardEstimateSaleView,
   optionId: string,
   choiceIds: string[],
-  lookup?: V25UnitLookup
+  lookup?: V25UnitLookup,
+  slotCode?: string | null
 ): number | null | undefined {
   const chosen = new Set(choiceIds);
+  const wantSlot = slotCode ?? null;
   const slot = view.baseline.find(
-    (item) => item.option_id === optionId && item.variant_choice_ids.length === chosen.size && item.variant_choice_ids.every((id) => chosen.has(id))
+    (item) =>
+      (item.slot_code ?? null) === wantSlot &&
+      item.option_id === optionId &&
+      item.variant_choice_ids.length === chosen.size &&
+      item.variant_choice_ids.every((id) => chosen.has(id))
   );
   if (slot) return slot.price_on_request ? null : slot.unit_price;
   const table = view.prices?.[optionId];
@@ -170,11 +239,12 @@ function v25ApproxUnit(view: StandardEstimateSaleView, optionId: string, choiceI
 
 /**
  * v2.5 の標準見積の版の選択枠の商品。シミュレーターの仕様・防火条件の標準構成にする（2026-10-29 先方回答。
- * 下書きは使わず、公開中の版だけ）。版が無い・v2.5 でなければ null（旧来の標準構成）
+ * 下書きは使わず、公開中の版だけ）。版が無い・v2.5 でなければ null（旧来の標準構成）。
+ * 位置・用途の選択枠（v2.5 PR-S1）の商品は入れない（位置ごとの選択は v25StandardSlotSelections）
  */
 export function v25SlotOptionIds(view: StandardEstimateSaleView | null): string[] | null {
   if (!view || !isV25SaleView(view)) return null;
-  return [...new Set(view.baseline.map((item) => item.option_id))];
+  return [...new Set(view.baseline.filter((item) => !item.slot_code).map((item) => item.option_id))];
 }
 
 /** シミュレーターの仕様・防火の条件で使う v2.5 の版（pickSaleView）の選択枠の商品。シミュレーターと /plans の入口で同じ決め方にする */
@@ -197,6 +267,8 @@ export function v25StandardVariantIds(
   const selected = new Set(optionIds);
   const slotChoices = new Map<string, string[]>();
   for (const item of view.baseline) {
+    // 位置・用途の選択枠の選択肢は位置ごと（v25StandardSlotSelections）。カテゴリー単位の選択枠だけを見る
+    if (item.slot_code) continue;
     if (selected.has(item.option_id) && !slotChoices.has(item.option_id)) slotChoices.set(item.option_id, item.variant_choice_ids);
   }
   if (slotChoices.size === 0) return defaults;
@@ -434,7 +506,9 @@ export function saleViewToTemplateBundle(view: StandardEstimateSaleView, modelId
 
 /**
  * 売価だけの標準見積と、お客様の選択から価格を計算する（DB の見積依頼と同じ式）。
- * v2.5：lookup はサーバーで計算した表に無い組み合わせの売価。まだ無い組み合わせは目安で計算し、missing_units に挙げる
+ * v2.5：lookup はサーバーで計算した表に無い組み合わせの売価。まだ無い組み合わせは目安で計算し、missing_units に挙げる。
+ * v2.5 PR-S1：slotSelections は位置・用途の選択枠ごとの選択（DB の standard_estimate_v25_configuration_money と同じく、
+ * その枠の標準と同じなら公開した版のその枠の売価、それ以外は売価の表。版に無い位置は数えない）
  */
 export function computeSaleViewPricing(
   bundle: CatalogBundle,
@@ -442,18 +516,33 @@ export function computeSaleViewPricing(
   selectedOptionIds: string[],
   variantChoiceIds: string[],
   exteriorFaces: ExteriorFaceSelection[],
-  lookup?: V25UnitLookup
+  lookup?: V25UnitLookup,
+  slotSelections: SlotSelection[] = []
 ): StandardEstimatePricingResult {
   const model = bundle.model;
   const taxRate = Number(view.tax_rate);
   const v25 = isV25SaleView(view);
   const missing = new Map<string, V25MissingUnit>();
-  const unitOf = (optionId: string, choiceIds: string[]) => {
-    const unit = v25SelectionUnit(view, optionId, choiceIds, lookup);
+  const unitOf = (optionId: string, choiceIds: string[], slotCode: string | null = null) => {
+    const unit = v25SelectionUnit(view, optionId, choiceIds, lookup, slotCode);
     if (unit !== undefined) return unit;
     missing.set(v25UnitKey(view.revision_id, optionId, choiceIds), { revision_id: view.revision_id, option_id: optionId, choice_ids: choiceIds });
     return v25ApproxUnit(view, optionId, choiceIds);
   };
+  // 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。区分は版のその枠の区分
+  const slotSection = new Map(v25PositionSlots(view).map((slot) => [slot.slot_code, slot.section_code] as const));
+  const slotTotals = new Map<LineSection, number>();
+  let slotPor = false;
+  for (const selection of v25 ? slotSelections : []) {
+    const section = slotSection.get(selection.slot_code);
+    if (!section) continue;
+    const unit = unitOf(selection.option_id, selection.variant_choice_ids, selection.slot_code);
+    if (unit === null) {
+      slotPor = true;
+      continue;
+    }
+    slotTotals.set(section, (slotTotals.get(section) ?? 0) + unit);
+  }
   const current = computePricing(
     model,
     bundle.options,
@@ -473,7 +562,7 @@ export function computeSaleViewPricing(
     (line) => !(view.fire_spec_code === 'fire' && fireCategoryIds.has(optionById.get(line.option_id)?.category_id ?? ''))
   );
   const currentTotal = (section: LineSection) =>
-    currentLines.filter((line) => sectionForLine(line) === section).reduce((sum, line) => sum + line.amount, 0);
+    currentLines.filter((line) => sectionForLine(line) === section).reduce((sum, line) => sum + line.amount, 0) + (slotTotals.get(section) ?? 0);
 
   const sectionPricings: StandardEstimateSectionPricing[] = (['base', 'interior_exterior', 'option', 'sitework'] as const).map((code) => {
     const section = view.sections.find((row) => row.code === code);
@@ -525,7 +614,7 @@ export function computeSaleViewPricing(
     tax_rate: taxRate,
     tax,
     total: subtotal + tax,
-    has_price_on_request: view.has_por || currentLines.some((line) => line.price_on_request),
+    has_price_on_request: view.has_por || currentLines.some((line) => line.price_on_request) || slotPor,
   };
 
   return {
@@ -550,14 +639,29 @@ export function isFireProofSelected(bundle: Pick<CatalogBundle, 'options'>, sele
 export function v25ConfigurationPricing(
   bundle: CatalogBundle,
   views: StandardEstimateSaleView[],
-  input: { specCode: string | null; optionIds: string[]; variantChoiceIds: string[]; exteriorFaces: ExteriorFaceSelection[] },
+  input: {
+    specCode: string | null;
+    optionIds: string[];
+    variantChoiceIds: string[];
+    exteriorFaces: ExteriorFaceSelection[];
+    /** 位置・用途の選択枠ごとの選択（v2.5 PR-S1。保存した明細の slot_code つきの行） */
+    slotSelections?: SlotSelection[];
+  },
   lookup?: V25UnitLookup
 ): { pricing: PricingResult; missing: V25MissingUnit[] } {
   const view = input.specCode
     ? pickSaleView(views, bundle.model.slug, input.specCode, isFireProofSelected(bundle, input.optionIds))
     : null;
   if (view && isV25SaleView(view)) {
-    const result = computeSaleViewPricing(bundle, view, input.optionIds, input.variantChoiceIds, input.exteriorFaces, lookup);
+    const result = computeSaleViewPricing(
+      bundle,
+      view,
+      input.optionIds,
+      input.variantChoiceIds,
+      input.exteriorFaces,
+      lookup,
+      input.slotSelections ?? []
+    );
     return { pricing: result.pricing, missing: result.missing_units ?? [] };
   }
   const pending = pendingSaleViewPricing(

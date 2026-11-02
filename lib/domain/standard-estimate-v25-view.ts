@@ -46,7 +46,19 @@ export interface V25SlotRow {
   price_mode: V25SlotPriceMode;
   /** manual のときの売価単価（税別・経費別）。入力中の文字列 */
   manual_unit_price: string;
+  /**
+   * 位置・用途の選択枠の識別子（英小文字・数字・ハイフン。新しい版へ引き継ぎ、将来の平面図の位置と紐づける）。
+   * 空はカテゴリー単位の選択枠（v2.5 PR-S1。2026-10-30 先方回答）
+   */
+  slot_code: string;
+  /** 位置・用途の名前（掃出し窓・洗面窓・開き窓① など）。slot_code と両方入れる */
+  slot_label: string;
+  /** 位置の枠で、お客様が標準の商品の代わりに選べる商品（標準の商品は常に選べるので入れない）。空なら標準の商品だけ */
+  selectable_option_ids: string[];
 }
+
+/** 位置・用途の選択枠の識別子の形（DB の check と同じ） */
+export const V25_SLOT_CODE_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /** 商品に紐づかない明細（工事費など） */
 export interface V25LineRow {
@@ -141,11 +153,29 @@ export function validateV25EditorState(
   if (state.lines.length > 300) return '明細は 300 行までです';
 
   const seen = new Set<string>();
+  const seenSlots = new Set<string>();
   for (const [index, slot] of state.slots.entries()) {
     const label = `商品 ${index + 1} 件目`;
     if (!slot.option_id) return `${label}の商品を選んでください`;
-    if (seen.has(slot.option_id)) return `${label}：同じ商品が重複しています`;
-    seen.add(slot.option_id);
+    // 位置・用途の選択枠（v2.5 PR-S1）：識別子と名前は両方。同じ商品は位置が違えば複数の枠で使える
+    const slotCode = slot.slot_code.trim();
+    const slotLabel = slot.slot_label.trim();
+    if (Boolean(slotCode) !== Boolean(slotLabel)) return `${label}：位置・用途の識別子と名前は両方入力してください`;
+    if (slotCode && !V25_SLOT_CODE_PATTERN.test(slotCode)) {
+      return `${label}：位置・用途の識別子は英小文字・数字・ハイフン（40 字まで。先頭は英小文字か数字）で入力してください`;
+    }
+    if (slotLabel.length > 40) return `${label}：位置・用途の名前は 40 文字までです`;
+    if (slotCode) {
+      if (seenSlots.has(slotCode)) return `${label}：位置・用途の識別子が重複しています（${slotCode}）`;
+      seenSlots.add(slotCode);
+    } else if (slot.selectable_option_ids.length > 0) {
+      return `${label}：選べる商品は、位置・用途の選択枠にだけ指定できます`;
+    }
+    if (slot.selectable_option_ids.length > 50) return `${label}：選べる商品は 50 件までです`;
+    const slotKey = `${slot.option_id}#${slotCode}`;
+    if (seen.has(slotKey)) return `${label}：同じ商品が重複しています（位置ごとに分けるときは、位置・用途の選択枠にします）`;
+    seen.add(slotKey);
+    if (slotCode && Number(slot.quantity) !== 1) return `${label}：位置・用途の選択枠の数量は 1 です`;
     if (!decimalOk(slot.quantity) || Number(slot.quantity) <= 0 || Number(slot.quantity) > 99999) {
       return `${label}の数量は 0 より大きく 99999 以下・小数 4 桁以内で入力してください`;
     }
@@ -187,6 +217,12 @@ export function buildV25SavePayload(state: V25EditorState) {
       quantity: slot.quantity.trim(),
       price_mode: slot.price_mode,
       manual_unit_price: slot.price_mode === 'manual' ? Number(slot.manual_unit_price.trim()) : null,
+      // 位置・用途の選択枠（v2.5 PR-S1）。カテゴリー単位の枠は null と空の選べる商品
+      slot_code: slot.slot_code.trim() || null,
+      slot_label: slot.slot_code.trim() ? slot.slot_label.trim() : null,
+      selectable_option_ids: slot.slot_code.trim()
+        ? [...new Set(slot.selectable_option_ids.filter((id) => id && id !== slot.option_id))]
+        : [],
     })),
     lines: state.lines.map((line) => ({
       line_key: line.line_key,

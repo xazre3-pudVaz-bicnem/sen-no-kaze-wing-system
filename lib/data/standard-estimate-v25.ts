@@ -53,10 +53,20 @@ export async function loadStandardEstimateV25(
   revision: { id: string; sales_fee_rate: number | string; markup_rate: number | string; expense_rate: number | string; standard_adjustment_amount: number; standard_adjustment_reason: string | null },
   header: StandardEstimateV25Header
 ): Promise<StandardEstimateV25Data> {
-  const [slotsResult, linesResult, previewResult, calcResult, taxResult] = await Promise.all([
+  // 位置・用途の選択枠（v2.5 PR-S1。20261102100000）の列と、枠ごとの選べる商品も読む。migration が無い DB では読まずに続ける
+  const slotColumns = (withPositions: boolean) =>
+    `id, baseline_key, option_id, quantity, price_mode, manual_unit_price, sale_unit_price, amount, sort_order,${withPositions ? ' slot_code, slot_label,' : ''} standard_estimate_revision_baseline_variants(variant_group_id, variant_choice_id, sort_order)`;
+  const readSlots = (withPositions: boolean) =>
     supabase
       .from('standard_estimate_revision_baseline_items')
-      .select('id, baseline_key, option_id, quantity, price_mode, manual_unit_price, sale_unit_price, amount, sort_order, standard_estimate_revision_baseline_variants(variant_group_id, variant_choice_id, sort_order)')
+      .select(slotColumns(withPositions))
+      .eq('revision_id', revision.id)
+      .order('sort_order');
+  const [firstSlotsResult, slotOptionsResult, linesResult, previewResult, calcResult, taxResult] = await Promise.all([
+    readSlots(true),
+    supabase
+      .from('standard_estimate_revision_slot_options')
+      .select('slot_code, option_id, sort_order')
       .eq('revision_id', revision.id)
       .order('sort_order'),
     supabase
@@ -72,7 +82,11 @@ export async function loadStandardEstimateV25(
       ? supabase.from('tax_rule_versions').select('code, tax_rate').eq('id', header.tax_rule_version_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
+  const slotsResult = firstSlotsResult.error && isMissingColumn(firstSlotsResult.error) ? await readSlots(false) : firstSlotsResult;
   if (slotsResult.error) throw new Error(`標準見積の商品を取得できませんでした: ${slotsResult.error.code ?? 'unknown'}`);
+  if (slotOptionsResult.error && !isMissingRelation(slotOptionsResult.error)) {
+    throw new Error(`標準見積の選べる商品を取得できませんでした: ${slotOptionsResult.error.code ?? 'unknown'}`);
+  }
   if (linesResult.error && !isMissingRelation(linesResult.error)) {
     throw new Error(`標準見積の明細を取得できませんでした: ${linesResult.error.code ?? 'unknown'}`);
   }
@@ -89,6 +103,8 @@ export async function loadStandardEstimateV25(
     manual_unit_price: number | null;
     sale_unit_price: number | null;
     amount: number | null;
+    slot_code?: string | null;
+    slot_label?: string | null;
     standard_estimate_revision_baseline_variants: { variant_group_id: string; variant_choice_id: string; sort_order: number }[] | null;
   };
   type LineRow = {
@@ -106,6 +122,9 @@ export async function loadStandardEstimateV25(
   };
   const slots = (slotsResult.data ?? []) as unknown as SlotRow[];
   const lines = (linesResult.error ? [] : (linesResult.data ?? [])) as unknown as LineRow[];
+  const slotOptions = (slotOptionsResult.error ? [] : (slotOptionsResult.data ?? [])) as unknown as { slot_code: string; option_id: string; sort_order: number }[];
+  const selectableOf = (slotCode: string | null | undefined) =>
+    slotCode ? slotOptions.filter((row) => row.slot_code === slotCode).sort((a, b) => a.sort_order - b.sort_order).map((row) => row.option_id) : [];
 
   const initial: V25EditorState = {
     sales_fee_rate: String(revision.sales_fee_rate),
@@ -125,6 +144,9 @@ export async function loadStandardEstimateV25(
       quantity: String(Number(slot.quantity)),
       price_mode: slot.price_mode ?? 'auto',
       manual_unit_price: slot.manual_unit_price === null ? '' : String(slot.manual_unit_price),
+      slot_code: slot.slot_code ?? '',
+      slot_label: slot.slot_label ?? '',
+      selectable_option_ids: selectableOf(slot.slot_code),
     })),
     lines: lines.map((line) => ({
       key: `line-${line.line_key}`,
@@ -146,7 +168,8 @@ export async function loadStandardEstimateV25(
     savedSlotAmounts: Object.fromEntries(slots.map((slot) => [slot.baseline_key, { amount: slot.amount, sale_unit_price: slot.sale_unit_price }])),
     savedLineAmounts: Object.fromEntries(lines.map((line) => [line.line_key, line.amount])),
     preview: previewUnavailable ? null : ((previewResult.data ?? null) as V25Preview | null),
-    slotOptionIds: slots.map((slot) => slot.option_id),
+    // 保存済みの行の商品と、位置の枠の選べる商品（販売停止になっても表示・削除のために候補に残す）
+    slotOptionIds: [...new Set([...slots.map((slot) => slot.option_id), ...slotOptions.map((row) => row.option_id)])],
     rules: {
       calcCode: (calcResult.data as { code?: string } | null)?.code ?? null,
       taxCode: (taxResult.data as { code?: string } | null)?.code ?? null,

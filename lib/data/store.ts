@@ -40,6 +40,7 @@ import type {
   EstimateTemplateSection,
   SpecMatrix,
   MatrixRow,
+  SlotSelection,
 } from '@/lib/domain/types';
 import type { ExteriorFaceSelection } from '@/lib/domain/exterior-wall';
 import type { QuotePorSelectionState } from '@/lib/domain/quote-por';
@@ -201,6 +202,11 @@ export interface SaveConfigurationInput {
   variant_choice_ids?: string[];
   /** 外壁4面の割当。未指定は既存互換用に空配列として保存する */
   exterior_faces?: ExteriorFaceSelection[];
+  /**
+   * 標準見積の版の位置・用途の選択枠ごとの選択（v2.5 PR-S1）。新しい価格（スイッチ）の間だけ保存できる。
+   * 版に位置の枠があるときは、すべての位置を 1 つずつ（DB が版と照らして確かめる）。空・未指定は位置の選択なし
+   */
+  slot_selections?: SlotSelection[];
 }
 
 /** 見積の1行。代理店は base / base_expense を編集不可。総代理店・本部は全区分編集可。 */

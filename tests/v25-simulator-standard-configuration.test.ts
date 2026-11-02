@@ -265,7 +265,15 @@ describe('本体価格計〜は公開中の v2.5 の版に統一する（2026-10
 });
 
 describe('シミュレーターと連携する選択枠の数量（2026-10-29 先方回答 ③）', () => {
-  type Candidate = { name: string; categoryId: string; categoryName: string; categoryCode: string; singleSelect: boolean; unavailable?: boolean };
+  type Candidate = {
+    name: string;
+    categoryId: string;
+    categoryName: string;
+    categoryCode: string;
+    singleSelect: boolean;
+    displayGroup?: string | null;
+    unavailable?: boolean;
+  };
   const candidate = (id: string, categoryCode: string, singleSelect = false, categoryId = categoryCode): Candidate => ({
     name: id,
     categoryId,

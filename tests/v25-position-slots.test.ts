@@ -291,6 +291,20 @@ describe('v2.5 PR-S1：DB（migration）と保存の受け渡し', () => {
     );
   });
 
+  it('注文範囲の外の位置（本体のみのときの室内など）は選ばない。範囲の内の位置だけをすべて求める（保存・見積依頼）', () => {
+    expect(migration).toContain(
+      '         and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(v_level)\n         and not (bi.slot_code = any(v_slot_codes));'
+    );
+    expect(migration).toContain('       and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(cfg.finish_level)');
+    expect(migration).toContain('         and public.finish_level_rank(c.finish_level) <= public.finish_level_rank(v_level)');
+  });
+
+  it('ログインなしの一時保存にも位置ごとの選択を持てる（形だけ確かめ、版との照らし合わせは保存のとき）', () => {
+    expect(migration).toContain("'public.create_guest_plan(text, uuid, jsonb)'::regprocedure");
+    expect(migration).toContain("'site_prefecture', 'site_municipality', 'site_location_undecided', 'slot_selections')$new$");
+    expect(migration).toContain("raise exception 'VALIDATION: 位置ごとの選択の形式が正しくありません' using errcode = 'P0001';");
+  });
+
   it('見積依頼・複製・商品の削除：既存の関数は目印を確かめて差し込む（本体を丸ごと写さない）', () => {
     expect(migration).toContain("'public.create_quote_from_configuration(uuid, jsonb, text, integer)'::regprocedure");
     expect(migration).toContain("'public.duplicate_configuration(uuid)'::regprocedure");

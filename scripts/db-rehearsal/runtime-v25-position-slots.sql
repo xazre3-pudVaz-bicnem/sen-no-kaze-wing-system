@@ -56,16 +56,17 @@ language sql as $fn$
 $fn$;
 
 -- お客様のプランの保存（新しいプラン。カテゴリー単位の選択は o1、位置の選択は p_slots）
-create function pg_temp.psl_save(p_customer uuid, p_model uuid, p_option_ids uuid[], p_slots jsonb, p_id uuid default null, p_lock integer default null)
+create function pg_temp.psl_save(p_customer uuid, p_model uuid, p_option_ids uuid[], p_slots jsonb, p_id uuid default null, p_lock integer default null,
+                                  p_level text default 'full')
 returns text
 language sql as $fn$
   select pg_temp.psl_run_as('authenticated', p_customer, format(
     $q$ select (public.save_configuration_atomic(
           p_configuration_id => %L, p_base_model_id => %L, p_name => 'S1 検査', p_option_ids => %L::uuid[],
-          p_preview_image_url => null, p_notes => null, p_finish_level => 'full', p_variant_choice_ids => '{}'::uuid[],
+          p_preview_image_url => null, p_notes => null, p_finish_level => %L, p_variant_choice_ids => '{}'::uuid[],
           p_spec_code => 'office', p_exterior_faces => '[]'::jsonb, p_expected_lock_version => %L::integer,
           p_slot_selections => %L::jsonb)).id::text $q$,
-    p_id, p_model, p_option_ids, p_lock, p_slots));
+    p_id, p_model, p_option_ids, p_level, p_lock, p_slots));
 $fn$;
 
 do $test$
@@ -433,6 +434,27 @@ begin
   perform pg_temp.psl_expect_error('S1-48 選べる商品で使っている商品は、未使用の登録済み商品の削除でも削除できない（使っている商品と同じ案内）', 'P0001', 'VALIDATION',
     pg_temp.psl_run_as('authenticated', u_admin, format('select public.delete_unused_published_option(%L)::text', s5)));
   perform pg_temp.psl_expect_eq('S1-49 前提：削除されずに残っている', '1', (select count(*)::text from public.options where id = s5));
+
+  -- ---------- 注文範囲の外の位置 ----------
+  -- サッシ・設備のカテゴリーは注文範囲「すべて（full）」。「設備まで（equipment）」に狭めたプランでは、位置を選ばない・選ばせない
+  v_out := pg_temp.psl_save(u_customer, m_model, '{}'::uuid[], '[]'::jsonb, null, null, 'equipment');
+  perform pg_temp.psl_expect_eq('S1-50 注文範囲の外の位置は選ばなくてよい（範囲を狭めたプランを保存できる）', 'true',
+    (v_out ~ '^[0-9a-f-]{36}$')::text);
+  perform pg_temp.psl_expect_error('S1-51 注文範囲の外の位置は選べない', 'P0001', 'VALIDATION',
+    pg_temp.psl_save(u_customer, m_model, '{}'::uuid[], jsonb_build_array(
+      jsonb_build_object('slot_code', 'hakidashi', 'option_id', s1, 'variant_choice_ids', jsonb_build_array(c_white))), null, null, 'equipment'));
+
+  -- ---------- ログインなしの一時保存 ----------
+  perform pg_temp.psl_expect_eq('S1-52 一時保存に位置ごとの選択を持てる（形だけ確かめる。版との照らし合わせは保存のとき）', 'true',
+    (pg_temp.psl_run_as('service_role', null, format($q$ select public.create_guest_plan(%L, %L, %L::jsonb)::text $q$,
+      repeat('a', 64), m_model,
+      jsonb_build_object('option_ids', jsonb_build_array(o1), 'spec_code', 'office', 'slot_selections', jsonb_build_array(
+        jsonb_build_object('slot_code', 'hakidashi', 'option_id', s1, 'variant_choice_ids', jsonb_build_array(c_white))))))
+     not like 'ERROR%')::text);
+  perform pg_temp.psl_expect_error('S1-53 一時保存の位置ごとの選択の形が正しくなければ止める', 'P0001', 'VALIDATION',
+    pg_temp.psl_run_as('service_role', null, format($q$ select public.create_guest_plan(%L, %L, %L::jsonb)::text $q$,
+      repeat('b', 64), m_model,
+      jsonb_build_object('spec_code', 'office', 'slot_selections', jsonb_build_array(jsonb_build_object('slot_code', 'Bad Code', 'option_id', s1))))));
 end;
 $test$;
 

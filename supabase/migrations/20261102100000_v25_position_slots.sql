@@ -1178,8 +1178,12 @@ begin
   -- 位置・用途の選択枠（v2.5 PR-S1）：保存したプランの選択が、今の公開中の版の位置の枠と 1 対 1 で、その枠で選べる商品か。
   -- 版が変わった後の古い保存は、シミュレーターで開いて保存し直してから（保存で、位置ごとに選べる商品を確かめ直す）
   if exists (
+    -- 注文範囲の内の位置は、すべて選んでいること（範囲の外の位置は選ばない）
     select 1 from public.standard_estimate_revision_baseline_items bi
+      join public.options bo on bo.id = bi.option_id
+      join public.option_categories bc on bc.id = bo.category_id
      where bi.revision_id = v_revision and bi.slot_code is not null
+       and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(cfg.finish_level)
        and not exists (select 1 from public.configuration_items ci where ci.configuration_id = cfg.id and ci.slot_code = bi.slot_code)
   ) or exists (
     select 1 from public.configuration_items ci
@@ -1952,9 +1956,13 @@ begin
         raise exception 'VALIDATION: この仕様の標準見積には、位置ごとの選択がありません' using errcode = 'P0001';
       end if;
     else
+      -- 注文範囲の外の位置（本体のみのときの室内など）は選ばない。範囲の内の位置は、すべて 1 つずつ
       select string_agg(bi.slot_label, '・' order by bi.sort_order) into v_missing
         from public.standard_estimate_revision_baseline_items bi
+        join public.options bo on bo.id = bi.option_id
+        join public.option_categories bc on bc.id = bo.category_id
        where bi.revision_id = v_revision and bi.slot_code is not null
+         and public.finish_level_rank(bc.finish_level) <= public.finish_level_rank(v_level)
          and not (bi.slot_code = any(v_slot_codes));
       if v_missing is not null then
         raise exception 'VALIDATION: 位置ごとの選択がそろっていません（%）。シミュレーターで開き直してください', v_missing using errcode = 'P0001';
@@ -2082,6 +2090,35 @@ select pg_temp.s1_patch_function(
   ) then
     raise exception using errcode = 'P0001', message = v_used_message;
   end if;$new$
+);
+
+-- ログインなしの一時保存：位置・用途の選択枠ごとの選択も持てるようにする（形だけ確かめる。版との照らし合わせは保存のとき）
+select pg_temp.s1_patch_function(
+  'public.create_guest_plan(text, uuid, jsonb)'::regprocedure,
+  $old$     where k not in ('name', 'option_ids', 'variant_choice_ids', 'exterior_faces', 'finish_level', 'spec_code',
+                     'site_prefecture', 'site_municipality', 'site_location_undecided')$old$,
+  $new$     where k not in ('name', 'option_ids', 'variant_choice_ids', 'exterior_faces', 'finish_level', 'spec_code',
+                     'site_prefecture', 'site_municipality', 'site_location_undecided', 'slot_selections')$new$
+);
+select pg_temp.s1_patch_function(
+  'public.create_guest_plan(text, uuid, jsonb)'::regprocedure,
+  $old$  if coalesce(p_plan ->> 'finish_level', 'full') not in ('shell', 'equipment', 'full')$old$,
+  $new$  -- 位置・用途の選択枠ごとの選択（v2.5 PR-S1）。版との照らし合わせは、ログインして保存するとき（save_configuration_atomic）に行う
+  if p_plan ? 'slot_selections' and jsonb_typeof(p_plan -> 'slot_selections') <> 'null' then
+    if jsonb_typeof(p_plan -> 'slot_selections') <> 'array' or jsonb_array_length(p_plan -> 'slot_selections') > 100 then
+      raise exception 'VALIDATION: 位置ごとの選択の形式が正しくありません' using errcode = 'P0001';
+    end if;
+    for v_face in select value from jsonb_array_elements(p_plan -> 'slot_selections')
+    loop
+      if jsonb_typeof(v_face) <> 'object'
+         or coalesce(v_face ->> 'slot_code', '') !~ '^[a-z0-9][a-z0-9-]{0,39}$'
+         or not public.cf_uuid_array_valid(jsonb_build_array(v_face -> 'option_id'), 1)
+         or not public.cf_uuid_array_valid(v_face -> 'variant_choice_ids', 20) then
+        raise exception 'VALIDATION: 位置ごとの選択の形式が正しくありません' using errcode = 'P0001';
+      end if;
+    end loop;
+  end if;
+  if coalesce(p_plan ->> 'finish_level', 'full') not in ('shell', 'equipment', 'full')$new$
 );
 
 drop function pg_temp.s1_patch_function(regprocedure, text, text);
